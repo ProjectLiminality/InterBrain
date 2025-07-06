@@ -1,0 +1,95 @@
+name: Task
+description: Atomic work units that can be completed in 1-3 days
+title: "Task: [Specific Development Task]"
+labels: ["task"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task Template
+        Use this template to create focused, atomic tasks that can be completed in 1-3 days.
+        
+  - type: input
+    id: parent-feature
+    attributes:
+      label: Parent Feature
+      description: Link to the parent Feature issue
+      placeholder: "#123"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Focused, atomic task description
+      placeholder: Describe the specific task to be completed...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: technical-details
+    attributes:
+      label: Technical Details
+      description: Specific technical implementation details
+      placeholder: |
+        - Files to modify
+        - Functions to implement
+        - Specific changes needed
+    validations:
+      required: true
+      
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Specific, testable outcomes
+      placeholder: |
+        - [ ] Specific, testable outcome
+        - [ ] Code meets standards
+        - [ ] PR ready for review
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: Type of development task
+      options:
+        - "Implementation"
+        - "Testing"
+        - "Documentation"
+        - "Refactoring"
+        - "Bug Fix"
+        - "Research"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature Area
+      description: Primary feature area
+      options:
+        - "DreamNode"
+        - "Spatial"
+        - "UI"
+        - "AI"
+        - "Git"
+        - "DevOps"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity
+      description: Task complexity (1-3 days)
+      options:
+        - "1 - Simple (1 day)"
+        - "2 - Medium (2 days)"
+        - "3 - Complex (3 days)"
+    validations:
+      required: true
