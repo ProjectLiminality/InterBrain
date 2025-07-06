@@ -1,0 +1,119 @@
+name: Specification
+description: Detailed technical design documents for epic implementation
+title: "Spec: [Epic Name] Technical Specification"
+labels: ["specification"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Specification Template
+        Use this template to create detailed technical design documents for implementing epics.
+        
+  - type: input
+    id: parent-epic
+    attributes:
+      label: Parent Epic
+      description: Link to the parent Epic issue
+      placeholder: "#123"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: overview
+    attributes:
+      label: Overview
+      description: Comprehensive technical design for implementing the Epic's vision
+      placeholder: Provide a comprehensive overview of the technical design...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: architecture
+    attributes:
+      label: Architecture
+      description: Technical architecture details
+      placeholder: |
+        - Component structure
+        - Data flow diagrams
+        - API interfaces
+        - Integration points
+    validations:
+      required: true
+      
+  - type: textarea
+    id: implementation-plan
+    attributes:
+      label: Implementation Plan
+      description: Detailed implementation approach
+      placeholder: |
+        - File structure
+        - Key algorithms
+        - External dependencies
+        - Performance considerations
+    validations:
+      required: true
+      
+  - type: textarea
+    id: user-experience
+    attributes:
+      label: User Experience
+      description: User interaction and experience design
+      placeholder: |
+        - Interaction flows
+        - Error handling
+        - Edge cases
+    validations:
+      required: true
+      
+  - type: textarea
+    id: feature-breakdown
+    attributes:
+      label: Feature Breakdown
+      description: List of Features that will implement this specification
+      placeholder: |
+        - [ ] Feature 1: [Name]
+        - [ ] Feature 2: [Name]
+        - [ ] Feature 3: [Name]
+    validations:
+      required: true
+      
+  - type: textarea
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: Criteria for considering this specification complete
+      placeholder: |
+        - [ ] All child Features completed
+        - [ ] Integration tested
+        - [ ] Documentation complete
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature Area
+      description: Primary feature area for this specification
+      options:
+        - "DreamNode"
+        - "Spatial"
+        - "UI"
+        - "AI"
+        - "Git"
+        - "DevOps"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: spec-status
+    attributes:
+      label: Specification Status
+      description: Current status of the specification
+      options:
+        - "Not Started"
+        - "In Progress"
+        - "Complete"
+        - "Approved"
+    validations:
+      required: true

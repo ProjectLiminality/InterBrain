@@ -1,0 +1,86 @@
+name: Epic
+description: High-level vision for major feature areas
+title: "Epic: [Major Feature Area]"
+labels: ["epic"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Epic Template
+        Use this template to create high-level vision issues for major feature areas.
+        
+  - type: input
+    id: epic-name
+    attributes:
+      label: Epic Name
+      description: Name of the major feature area
+      placeholder: e.g., "Plugin Infrastructure", "3D Spatial Visualization"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: vision
+    attributes:
+      label: Vision
+      description: High-level description of the major feature area and its role in InterBrain's overall vision
+      placeholder: Describe the high-level vision for this epic...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success Criteria
+      description: Major outcomes that define success for this epic
+      placeholder: |
+        - [ ] Major outcome 1
+        - [ ] Major outcome 2
+        - [ ] Major outcome 3
+    validations:
+      required: true
+      
+  - type: textarea
+    id: related-epics
+    attributes:
+      label: Related Epics
+      description: Links to other epics this depends on or enables
+      placeholder: Links to related epic issues...
+      
+  - type: textarea
+    id: child-specifications
+    attributes:
+      label: Child Specifications
+      description: List of specifications that will implement this epic
+      placeholder: |
+        - [ ] Specification 1
+        - [ ] Specification 2
+        - [ ] Specification 3
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: wave
+    attributes:
+      label: Development Wave
+      description: Which development wave does this epic belong to?
+      options:
+        - "Wave 1: Foundation (Month 1)"
+        - "Wave 2: Core Features (Month 2)"
+        - "Wave 3: Advanced Features (Month 3)"
+        - "Wave 4: Polish & Launch (Beyond Month 3)"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Priority level for this epic
+      options:
+        - "P0-Critical"
+        - "P1-High"
+        - "P2-Medium"
+        - "P3-Low"
+    validations:
+      required: true

@@ -1,0 +1,120 @@
+name: Feature
+description: Concrete implementation chunks from specifications
+title: "Feature: [Specific Feature Name]"
+labels: ["feature"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Template
+        Use this template to create concrete implementation issues for specific parts of specifications.
+        
+  - type: input
+    id: parent-specification
+    attributes:
+      label: Parent Specification
+      description: Link to the parent Specification issue
+      placeholder: "#123"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Concrete implementation of a specific part of the Specification
+      placeholder: Describe the specific feature implementation...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Specific, testable criteria for completion
+      placeholder: |
+        - [ ] User can perform X action
+        - [ ] System responds with Y behavior
+        - [ ] Performance meets Z threshold
+    validations:
+      required: true
+      
+  - type: textarea
+    id: implementation-tasks
+    attributes:
+      label: Implementation Tasks
+      description: Breakdown of tasks needed to implement this feature
+      placeholder: |
+        - [ ] Task 1: Create command stubs
+        - [ ] Task 2: Build UI components
+        - [ ] Task 3: Implement command services
+        - [ ] Task 4: Write unit tests
+        - [ ] Task 5: Update documentation
+        - [ ] Task 6: Code review
+    validations:
+      required: true
+      
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Links to other features or external dependencies
+      placeholder: |
+        - Links to other features that must be completed first
+        - External dependencies (libraries, APIs)
+        
+  - type: textarea
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: Criteria for considering this feature complete
+      placeholder: |
+        - [ ] All tasks complete
+        - [ ] Tests passing
+        - [ ] Documentation updated
+        - [ ] Code reviewed and merged
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature Area
+      description: Primary feature area
+      options:
+        - "DreamNode"
+        - "Spatial"
+        - "UI"
+        - "AI"
+        - "Git"
+        - "DevOps"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Priority level for this feature
+      options:
+        - "P0-Critical"
+        - "P1-High"
+        - "P2-Medium"
+        - "P3-Low"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity
+      description: Story point estimation (1-8)
+      options:
+        - "1"
+        - "2"
+        - "3"
+        - "5"
+        - "8"
+    validations:
+      required: true
