@@ -41,21 +41,6 @@ body:
       required: true
       
   - type: textarea
-    id: implementation-tasks
-    attributes:
-      label: Implementation Tasks
-      description: Breakdown of tasks needed to implement this feature
-      placeholder: |
-        - [ ] Task 1: Create command stubs
-        - [ ] Task 2: Build UI components
-        - [ ] Task 3: Implement command services
-        - [ ] Task 4: Write unit tests
-        - [ ] Task 5: Update documentation
-        - [ ] Task 6: Code review
-    validations:
-      required: true
-      
-  - type: textarea
     id: dependencies
     attributes:
       label: Dependencies
@@ -89,19 +74,6 @@ body:
         - "AI"
         - "Git"
         - "DevOps"
-    validations:
-      required: true
-      
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority
-      description: Priority level for this feature
-      options:
-        - "P0-Critical"
-        - "P1-High"
-        - "P2-Medium"
-        - "P3-Low"
     validations:
       required: true
       

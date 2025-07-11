@@ -1,5 +1,5 @@
 name: Task
-description: Atomic work units that can be completed in 1-3 days
+description: Atomic work units that can be completed in 1-3 days (dynamically generated during development)
 title: "Task: [Specific Development Task]"
 labels: ["task"]
 assignees: []
@@ -7,8 +7,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        ## Task Template
-        Use this template to create focused, atomic tasks that can be completed in 1-3 days.
+        ## Task Template (AI-Generated)
+        This template is used for dynamically generated tasks created by AI during development.
+        Tasks are not predefined but emerge naturally when development focus hits each feature area.
         
   - type: input
     id: parent-feature
