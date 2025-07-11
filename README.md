@@ -6,22 +6,28 @@ The InterBrain is an innovative knowledge gardening system that aims to revoluti
 
 ## Project Status & Roadmap
 
-> ⚡️ **Current Status:**  
-The InterBrain is currently in its initial MVP phase, implemented as a standalone Electron/React desktop app. This implementation served as a rapid prototype to explore and validate core interaction patterns and ideas.
+> ⚡️ **Current Status: Fresh Development Start**  
+This repository represents a **clean slate implementation** of the InterBrain vision, beginning with native **Obsidian Plugin** development. We've transitioned from prototype exploration to structured, production-ready development.
 
-> 🚧 **Next Step:**  
-The project is now entering a transition phase: migrating from an Electron-based standalone app to a native **Obsidian Plugin**, preserving the React-based frontend while refactoring the backend logic for full integration into the Obsidian ecosystem.
+> 🔬 **Previous Exploration:**  
+Earlier exploration work including screenshots and recordings can be found at [**InterBrain-Prototype**](https://github.com/ProjectLiminality/InterBrain-Prototype). This repository contains the conceptual foundation and visual demonstrations that inform the current development approach.
+
+> 🚧 **Active Development:**  
+This repository focuses on building the **Obsidian Plugin** implementation with:
+- GitHub-native issue tracking and project management
+- AI-centered development workflow
+- Clean architecture optimized for production use
+- Comprehensive testing and distribution infrastructure
 
 > 🌱 **Beyond the Plugin:**  
-The InterBrain is designed as the foundation for a larger vision — **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.  
-DreamOS will evolve into its own repository once the core functionality stabilizes.
+The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
 
-> 💡 **Roadmap Overview:**
-1. ✅ Electron MVP (completed)  
-2. 🔜 Obsidian Plugin implementation (in progress)  
-3. 🪐 DreamOS system (future repository)  
+> 💡 **Development Roadmap:**
+1. ✅ Electron Prototype ([InterBrain-Prototype](https://github.com/ProjectLiminality/InterBrain-Prototype))  
+2. 🔜 Obsidian Plugin implementation (this repository)  
+3. 🪐 DreamOS system (future evolution)  
 
-A detailed technical and conceptual roadmap for the Obsidian plugin development can be found in [`ROADMAP.md`](./ROADMAP.md).
+Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2).
 
 ## Core Concepts
 
