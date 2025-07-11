@@ -5,8 +5,14 @@ This section contains development planning, processes, and organizational docume
 ## Documents
 
 - [**Roadmap**](roadmap.md) - 3-month development timeline and milestones
-- [**Issue Hierarchy**](issue-hierarchy.md) - Visual structure of development items and relationships
-- [**Kanban Board**](kanban.md) - Complete 163-item development breakdown with 4-tier hierarchy
+
+## Project Tracking
+
+All development now happens through **GitHub Issues and Project Boards**:
+
+- **GitHub Issues**: [InterBrainMVP Issues](https://github.com/ProjectLiminality/InterBrainMVP/issues) - Detailed specifications with parent-child relationships
+- **GitHub Project**: [InterBrain Development](https://github.com/users/ProjectLiminality/projects/2) - Strategic Epic-level workflow tracking
+- **Sub-issue Navigation**: Native GitHub feature shows hierarchy and progress
 
 ## Development Philosophy
 
@@ -18,13 +24,16 @@ InterBrain follows a **wave-like development workflow** where high-level feature
 - **Wave 3**: Advanced Features (Full DreamWalk, Coherence Beacon, DreamOS Operations)
 - **Wave 4**: Polish & Launch (Onboarding, Testing Infrastructure)
 
-### 4-Tier Issue Hierarchy
-- **Epics**: High-level vision for major feature areas
-- **Specifications**: Detailed technical design documents
-- **Features**: Concrete implementation chunks
-- **Tasks**: Atomic work units (1-3 days each)
+### 4-Tier Issue Hierarchy (AI-Centered)
+- **Epics**: High-level vision for major feature areas (12 items)
+- **Specifications**: Detailed technical design documents (12 items)  
+- **Features**: Essential implementation chunks (27 items)
+- **Tasks**: Generated dynamically during development (0 predefined)
 
-### Professional Development Integration
-- **Testing**: Every Feature includes unit testing tasks
-- **Documentation**: Every Feature includes documentation update tasks
-- **AI Collaboration**: Issues structured for optimal AI assistant comprehension
+**Total: 51 structured development items** managed through GitHub Issues with native parent-child relationships.
+
+### AI-Centered Development Integration
+- **Dynamic Task Generation**: Tasks created just-in-time based on current development context
+- **Reduced Cognitive Overhead**: Only essential features preserved, eliminating AI-generated filler
+- **Wave-Based Development**: Detail emerges as development waves hit each area
+- **AI Pair-Programming Ready**: Clean structure optimized for AI collaboration
