@@ -434,6 +434,13 @@ mutation {
 - **Active → Integration**: When all features complete, begin epic-level testing
 - **Integration → Complete**: When epic fully tested and merged to main
 
+**Feature Completion Workflow**:
+1. **Complete Implementation**: All acceptance criteria met
+2. **Merge to Epic Branch**: Professional merge with clean history
+3. **Update Acceptance Criteria**: Check off all completed items in issue body
+4. **Close Feature Issue**: `gh issue close ISSUE_NUMBER --comment "completion summary"`
+5. **Clean Up**: Delete feature branch, update project memory
+
 ### Current Status
 - Project uses AI-assisted development (Claude Code as primary partner)
 - Epic + Feature branch workflow established and tested
