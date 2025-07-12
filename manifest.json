@@ -1,0 +1,11 @@
+{
+  "id": "interbrain",
+  "name": "InterBrain",
+  "version": "0.0.1",
+  "minAppVersion": "0.15.0",
+  "description": "A revolutionary knowledge management system that transcends traditional Second Brain paradigms using spatial visualization and AI-powered collaboration.",
+  "author": "Project Liminality",
+  "authorUrl": "https://github.com/ProjectLiminality",
+  "fundingUrl": "https://opencollective.com/projectliminality",
+  "isDesktopOnly": false
+}
