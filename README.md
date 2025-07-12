@@ -261,6 +261,52 @@ this.app.commands.executeCommandById('interbrain:save-dreamnode');
 
 This architecture ensures all functionality remains accessible to both power users (via command palette) and regular users (via UI buttons), while maintaining a clean separation between presentation and business logic.
 
+### State Management with Zustand
+
+The plugin uses Zustand for centralized, reactive state management that integrates seamlessly with the command-driven architecture.
+
+#### Store Structure
+
+```typescript
+interface InterBrainState {
+  selectedNode: DreamNode | null;        // Currently selected node
+  searchResults: DreamNode[];            // Search/filter results
+  spatialLayout: 'constellation' | 'search' | 'focused'; // 3D layout mode
+}
+```
+
+#### Integration Pattern
+
+**Commands → Services → Zustand State → UI Reactivity**
+
+```typescript
+// 1. Command executes
+this.addCommand({
+  id: 'save-dreamnode',
+  callback: async () => {
+    const currentNode = this.dreamNodeService.getCurrentNode(); // 2. Service provides state
+    // ... business logic
+  }
+});
+
+// 3. Service updates both internal and reactive state
+setCurrentNode(node: DreamNode | null): void {
+  this.currentNode = node; // Internal state
+  useInterBrainStore.getState().setSelectedNode(node); // Reactive state
+}
+
+// 4. Future UI components read reactively
+const selectedNode = useInterBrainStore(state => state.selectedNode);
+```
+
+#### Testing Commands
+
+The plugin includes test commands to verify state synchronization:
+- `[TEST] Select Mock DreamNode` - Creates a test node and updates state
+- `[TEST] Clear DreamNode Selection` - Clears selection and updates state
+
+These demonstrate the complete flow from command execution to state updates that future UI components can react to.
+
 ## License
 
 Project Liminality is released under the [GNU AFFERO GENERAL PUBLIC LICENSE](LICENSE).
