@@ -1,3 +1,5 @@
+import { useInterBrainStore } from '../store/interbrain-store';
+
 export interface DreamNode {
   id: string;
   name: string;
@@ -16,6 +18,8 @@ export class DreamNodeService {
 
   setCurrentNode(node: DreamNode | null): void {
     this.currentNode = node;
+    // Sync with Zustand store
+    useInterBrainStore.getState().setSelectedNode(node);
   }
 
   getSelectedNodes(): DreamNode[] {
