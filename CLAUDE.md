@@ -329,6 +329,59 @@ gh pr create --title "Epic X: Title" --body "Description"
 gh issue list --assignee @me --state open
 ```
 
+**Create New Feature Issue**:
+```bash
+gh issue create --title "Feature Title" --label feature --body "## Description
+
+Feature description here
+
+## Acceptance Criteria
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+
+## Dependencies
+
+- Parent specification must be approved
+
+## Definition of Done
+
+- [ ] Implementation complete
+- [ ] Tests passing
+- [ ] Documentation updated
+- [ ] Code reviewed and merged"
+```
+
+**Get Issue IDs for Sub-Issue Linking**:
+```bash
+gh api graphql -f query='
+{
+  repository(owner: "ProjectLiminality", name: "InterBrain") {
+    issues(last: 5, states: OPEN) {
+      nodes {
+        number
+        title
+        id
+      }
+    }
+  }
+}' | jq -r '.data.repository.issues.nodes[] | "#\(.number): \(.title) -> \(.id)"'
+```
+
+**Link Feature as Sub-Issue to Specification**:
+```bash
+gh api graphql -H "GraphQL-Features: sub_issues" -f query='
+mutation {
+  addSubIssue(input: { 
+    issueId: "PARENT_ISSUE_ID", 
+    subIssueId: "CHILD_ISSUE_ID" 
+  }) {
+    issue { title }
+    subIssue { title }
+  }
+}'
+```
+
 ### Current Status
 - Project uses AI-assisted development (Claude Code as primary partner)
 - Epic + Feature branch workflow established
