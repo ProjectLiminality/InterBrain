@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { VaultService } from './vault-service'
-import { MockTFile, MockTFolder } from '../../tests/mocks/obsidian'
+import { TFile, TFolder } from 'obsidian'
 
 describe('VaultService', () => {
   let vaultService: VaultService
@@ -17,6 +17,7 @@ describe('VaultService', () => {
     }
     
     vaultService = new VaultService(mockVault)
+    vi.clearAllMocks()
   })
 
   describe('createFolder', () => {
@@ -32,7 +33,7 @@ describe('VaultService', () => {
   describe('fileExists', () => {
     it('should return true when file exists', async () => {
       const path = '/test/file.txt'
-      mockVault.getAbstractFileByPath.mockReturnValue(new MockTFile(path))
+      mockVault.getAbstractFileByPath.mockReturnValue(new TFile(path))
       
       const exists = await vaultService.fileExists(path)
       
@@ -51,7 +52,7 @@ describe('VaultService', () => {
 
     it('should return false when path is a folder', async () => {
       const path = '/test/folder'
-      mockVault.getAbstractFileByPath.mockReturnValue(new MockTFolder(path))
+      mockVault.getAbstractFileByPath.mockReturnValue(new TFolder(path))
       
       const exists = await vaultService.fileExists(path)
       
@@ -62,7 +63,7 @@ describe('VaultService', () => {
   describe('folderExists', () => {
     it('should return true when folder exists', async () => {
       const path = '/test/folder'
-      mockVault.getAbstractFileByPath.mockReturnValue(new MockTFolder(path))
+      mockVault.getAbstractFileByPath.mockReturnValue(new TFolder(path))
       
       const exists = await vaultService.folderExists(path)
       
@@ -80,7 +81,7 @@ describe('VaultService', () => {
 
     it('should return false when path is a file', async () => {
       const path = '/test/file.txt'
-      mockVault.getAbstractFileByPath.mockReturnValue(new MockTFile(path))
+      mockVault.getAbstractFileByPath.mockReturnValue(new TFile(path))
       
       const exists = await vaultService.folderExists(path)
       
@@ -92,7 +93,7 @@ describe('VaultService', () => {
     it('should read file content when file exists', async () => {
       const path = '/test/file.txt'
       const content = 'test content'
-      const mockFile = new MockTFile(path)
+      const mockFile = new TFile(path)
       
       mockVault.getAbstractFileByPath.mockReturnValue(mockFile)
       mockVault.read.mockResolvedValue(content)
@@ -112,7 +113,7 @@ describe('VaultService', () => {
 
     it('should throw error when path is a folder', async () => {
       const path = '/test/folder'
-      mockVault.getAbstractFileByPath.mockReturnValue(new MockTFolder(path))
+      mockVault.getAbstractFileByPath.mockReturnValue(new TFolder(path))
       
       await expect(vaultService.readFile(path)).rejects.toThrow('File not found: /test/folder')
     })
@@ -122,7 +123,7 @@ describe('VaultService', () => {
     it('should modify existing file', async () => {
       const path = '/test/file.txt'
       const content = 'new content'
-      const mockFile = new MockTFile(path)
+      const mockFile = new TFile(path)
       
       mockVault.getAbstractFileByPath.mockReturnValue(mockFile)
       
@@ -148,7 +149,7 @@ describe('VaultService', () => {
   describe('deleteFile', () => {
     it('should delete existing file', async () => {
       const path = '/test/file.txt'
-      const mockFile = new MockTFile(path)
+      const mockFile = new TFile(path)
       
       mockVault.getAbstractFileByPath.mockReturnValue(mockFile)
       
@@ -168,7 +169,7 @@ describe('VaultService', () => {
 
     it('should do nothing when path is a folder', async () => {
       const path = '/test/folder'
-      mockVault.getAbstractFileByPath.mockReturnValue(new MockTFolder(path))
+      mockVault.getAbstractFileByPath.mockReturnValue(new TFolder(path))
       
       await vaultService.deleteFile(path)
       
