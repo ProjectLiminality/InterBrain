@@ -177,11 +177,97 @@ This project is designed for AI-first development:
 
 ## Development Workflow
 
+### Epic + Feature Branch Architecture ✅
+
+**Core Strategy**: 3-tier GitHub Issues + Dynamic AI Task Management + Epic-Level Testing/Documentation
+
+### GitHub Issue Structure (3-Tier, Not 4-Tier)
+- **Epic**: High-level functionality units (stable structure)
+- **Specification**: Detailed implementation plans (explicated when development wave hits)
+- **Feature**: User-facing functionality (concrete enough to test)
+- **Tasks**: AI handles dynamically via TodoWrite (no GitHub task issues needed)
+
+### Git Branch Strategy
+```
+main → epic/1-plugin-infrastructure
+         ├── feature/dreamspace-view-registration
+         ├── feature/command-palette-setup  
+         ├── feature/ribbon-icon-integration
+         └── feature/basic-ui-framework
+```
+
+### Epic Development Cycle
+
+**Phase 1: Feature Implementation**
+- Create epic branch off main for complete epic scope
+- Create feature branches off epic branch for individual features
+- Implement all features within epic scope using TodoWrite for task management
+- Merge completed features back to epic branch
+
+**Phase 2: Epic Integration**
+- Test complete epic functionality on epic branch
+- Write documentation for integrated capabilities  
+- Final integration testing and polish
+
+**Phase 3: Epic Completion**
+- Merge tested, documented epic to main branch
+- Tag release if appropriate
+- Epic represents coherent functionality unit
+
+### Cross-Session Memory Pattern
+- **Strategic Planning**: GitHub Issues (Epic/Spec/Feature) 
+- **Tactical Execution**: Claude's native TodoWrite for in-session tasks
+- **Persistent Memory**: Incomplete tasks written to CLAUDE.md at session end
+- **Historical Record**: Git commits document actual work completed
+
+### Session Restart Protocol
+1. Read project CLAUDE.md for incomplete tasks from previous session
+2. `gh issue list --assignee @me --state open` - Check GitHub issue status
+3. `git branch --show-current` - Confirm current branch context
+4. Recreate TodoWrite tasks based on session goals
+5. `git log --oneline -10` - Review recent progress
+
+### Epic-by-Epic Development Flow
+
+**Epic Selection & Planning**:
+1. `gh issue view [epic-number]` - Review epic scope and requirements
+2. `gh issue view [spec-number]` - Explicate specification with current context
+3. `gh issue list --label "epic-X"` - Review and refine feature set
+4. Update spec issue with detailed implementation plan
+
+**Feature Development**:
+1. `git checkout epic/X-name && git checkout -b feature/feature-name`
+2. `gh issue view [feature-number]` - Read feature requirements  
+3. Use TodoWrite to break feature into implementation tasks dynamically
+4. Implement with frequent commits and TodoWrite progress tracking
+5. `git checkout epic/X-name && git merge feature/feature-name`
+
+**Epic Integration & Completion**:
+1. Test complete epic functionality (all features working together)
+2. Write epic-level documentation covering integrated capabilities
+3. Update CHANGELOG.md with epic-level changes
+4. `git checkout main && git merge epic/X-name`
+
+### Why Epic-Level Testing/Documentation
+- **Coherent Functionality**: Epics represent complete user capabilities
+- **Integration Testing**: Features work together as intended
+- **Complete User Story**: Documentation covers end-to-end workflows
+- **Clean Main Branch**: Only fully tested, documented functionality
+- **Efficient Process**: Avoid premature documentation of incomplete features
+
+### Benefits of This Workflow
+✅ **Right-sized Planning**: Strategic on GitHub, tactical with AI  
+✅ **Sustainable Development**: No redundant task creation overhead  
+✅ **Cross-Session Continuity**: Multiple memory layers working together  
+✅ **GitHub-Native**: Leverages existing issue structure effectively  
+✅ **Professional Integration**: Clean testing and documentation cycles
+✅ **AI-Optimized**: Leverages Claude's dynamic task breakdown capabilities
+
 ### Current Status
 - Project uses AI-assisted development (Claude Code as primary partner)
-- Repository migration strategy defined for clean transition
-- Professional workflow with testing and documentation at Feature level
-- 4-tier issue hierarchy: Epic → Specification → Feature → Task
+- Epic + Feature branch workflow established
+- Professional workflow with testing and documentation at Epic level
+- Ready to begin Epic 1: Plugin Infrastructure implementation
 
 ### Next Steps (Per ROADMAP.md)
 1. **Month 1**: Create Obsidian plugin foundation, implement custom view type for 3D space
