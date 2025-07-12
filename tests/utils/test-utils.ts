@@ -46,9 +46,10 @@ export const createMockVaultService = () => ({
 // Store test utilities
 export const resetStore = async () => {
   const { useInterBrainStore } = await import('../../src/store/interbrain-store')
-  useInterBrainStore.getState().setSelectedNode(null)
-  useInterBrainStore.getState().setSearchResults([])
-  useInterBrainStore.getState().setSpatialLayout('constellation')
+  const state = useInterBrainStore.getState()
+  state.setSelectedNode(null)
+  state.setSearchResults([])
+  state.setSpatialLayout('constellation')
 }
 
 // Async test helpers
