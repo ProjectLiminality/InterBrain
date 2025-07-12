@@ -114,6 +114,35 @@ export default class InterBrainPlugin extends Plugin {
         this.uiService.showPlaceholder('Coherence Beacon coming soon!');
       }
     });
+
+    // Test command: Select mock DreamNode
+    this.addCommand({
+      id: 'select-mock-dreamnode',
+      name: '[TEST] Select Mock DreamNode',
+      callback: () => {
+        const mockNode = {
+          id: 'test-123',
+          name: 'Test DreamNode',
+          type: 'dream' as const,
+          path: '/test/path',
+          hasUnsavedChanges: false
+        };
+        this.dreamNodeService.setCurrentNode(mockNode);
+        this.uiService.showSuccess(`Selected: ${mockNode.name}`);
+        console.log('Mock node selected - Zustand state should be updated');
+      }
+    });
+
+    // Test command: Clear selection
+    this.addCommand({
+      id: 'clear-dreamnode-selection',
+      name: '[TEST] Clear DreamNode Selection',
+      callback: () => {
+        this.dreamNodeService.setCurrentNode(null);
+        this.uiService.showSuccess('Selection cleared');
+        console.log('Selection cleared - Zustand state should be null');
+      }
+    });
   }
 
   onunload() {
