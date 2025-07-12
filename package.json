@@ -30,15 +30,20 @@
   "homepage": "https://github.com/ProjectLiminality/InterBrain#readme",
   "devDependencies": {
     "@eslint/js": "^9.31.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^24.0.13",
     "@typescript-eslint/eslint-plugin": "^8.36.0",
     "@typescript-eslint/parser": "^8.36.0",
     "@vitejs/plugin-react": "^4.6.0",
     "eslint": "^9.31.0",
+    "jsdom": "^26.1.0",
     "obsidian": "^1.8.7",
     "tslib": "^2.8.1",
     "typescript": "^5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@react-three/fiber": "^9.2.0",
