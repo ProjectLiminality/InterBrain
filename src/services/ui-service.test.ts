@@ -1,27 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { UIService } from './ui-service'
 
-// Mock the Notice constructor globally
-const mockNoticeHide = vi.fn()
-global.Notice = vi.fn().mockImplementation(() => ({
-  hide: mockNoticeHide,
+// Mock obsidian module
+vi.mock('obsidian', () => ({
+  Notice: vi.fn().mockImplementation(() => ({
+    hide: vi.fn(),
+  }))
 }))
 
 describe('UIService', () => {
   let uiService: UIService
 
-  beforeEach(() => {
+  beforeEach(async () => {
     uiService = new UIService()
     vi.clearAllMocks()
   })
 
   describe('showSuccess', () => {
-    it('should create a Notice with success message', () => {
+    it('should create a Notice with success message', async () => {
       const message = 'Operation successful!'
+      const { Notice } = await import('obsidian')
       
       uiService.showSuccess(message)
       
-      expect(global.Notice).toHaveBeenCalledWith(message)
+      expect(Notice).toHaveBeenCalledWith(message)
     })
   })
 

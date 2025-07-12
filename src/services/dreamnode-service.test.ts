@@ -7,6 +7,8 @@ vi.mock('../store/interbrain-store', () => ({
   useInterBrainStore: {
     getState: () => ({
       setSelectedNode: vi.fn(),
+      setSearchResults: vi.fn(),
+      setSpatialLayout: vi.fn(),
     }),
   },
 }))
@@ -14,9 +16,8 @@ vi.mock('../store/interbrain-store', () => ({
 describe('DreamNodeService', () => {
   let service: DreamNodeService
 
-  beforeEach(async () => {
+  beforeEach(() => {
     service = new DreamNodeService()
-    await resetStore()
   })
 
   describe('getCurrentNode', () => {
