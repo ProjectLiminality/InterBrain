@@ -3,12 +3,16 @@ import { DreamNodeService } from './dreamnode-service'
 import { createMockDreamNode, createMockDreamerNode, resetStore } from '../../tests/utils/test-utils'
 
 // Mock the store
+const mockSetSelectedNode = vi.fn()
+const mockSetSearchResults = vi.fn()
+const mockSetSpatialLayout = vi.fn()
+
 vi.mock('../store/interbrain-store', () => ({
   useInterBrainStore: {
     getState: () => ({
-      setSelectedNode: vi.fn(),
-      setSearchResults: vi.fn(),
-      setSpatialLayout: vi.fn(),
+      setSelectedNode: mockSetSelectedNode,
+      setSearchResults: mockSetSearchResults,
+      setSpatialLayout: mockSetSpatialLayout,
     }),
   },
 }))
@@ -18,6 +22,7 @@ describe('DreamNodeService', () => {
 
   beforeEach(() => {
     service = new DreamNodeService()
+    vi.clearAllMocks()
   })
 
   describe('getCurrentNode', () => {
@@ -49,10 +54,7 @@ describe('DreamNodeService', () => {
       expect(service.getCurrentNode()).toBeNull()
     })
 
-    it('should sync with Zustand store', async () => {
-      const { useInterBrainStore } = await import('../store/interbrain-store')
-      const mockSetSelectedNode = vi.mocked(useInterBrainStore.getState().setSelectedNode)
-      
+    it('should sync with Zustand store', () => {
       const mockNode = createMockDreamNode()
       service.setCurrentNode(mockNode)
       
