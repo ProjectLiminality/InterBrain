@@ -227,6 +227,40 @@ InterBrain addresses the echo chamber problem through a unique **holographic app
 
 **Future-Proofing**: As the system evolves toward DreamOS, the git foundation enables unprecedented composability between different applications and knowledge domains.
 
+## Command Architecture
+
+The InterBrain plugin uses Obsidian's command palette as the primary abstraction layer between UI interactions and backend operations. All functionality is accessible via keyboard shortcuts (Cmd/Ctrl+P) and can be triggered programmatically.
+
+### Available Commands
+
+All commands are prefixed with `InterBrain:` in the command palette:
+
+- **Open DreamSpace** - Opens the 3D spatial visualization view
+- **Save DreamNode (commit changes)** - Commits current changes with AI assistance
+- **Create new DreamNode** - Creates a new Dream or Dreamer node
+- **Weave Dreams into higher-order node** - Combines selected nodes via git submodules
+- **Toggle DreamNode selection** - Select/deselect nodes for bulk operations
+- **Share DreamNode via Coherence Beacon** - Share nodes through the social resonance network
+
+### Service Layer Architecture
+
+The plugin implements a clean separation of concerns through dedicated services:
+
+- **UIService** - User notifications and feedback (success, error, loading states)
+- **GitService** - Git operations abstraction (commit, create, weave)
+- **DreamNodeService** - DreamNode state management and selection
+- **VaultService** - Obsidian Vault API wrapper for file operations
+
+### Programmatic Access
+
+UI components can trigger commands programmatically:
+
+```typescript
+this.app.commands.executeCommandById('interbrain:save-dreamnode');
+```
+
+This architecture ensures all functionality remains accessible to both power users (via command palette) and regular users (via UI buttons), while maintaining a clean separation between presentation and business logic.
+
 ## License
 
 Project Liminality is released under the [GNU AFFERO GENERAL PUBLIC LICENSE](LICENSE).
