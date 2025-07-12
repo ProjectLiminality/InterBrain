@@ -307,6 +307,59 @@ The plugin includes test commands to verify state synchronization:
 
 These demonstrate the complete flow from command execution to state updates that future UI components can react to.
 
+### Testing Framework
+
+The plugin uses Vitest for comprehensive testing with co-located test patterns following our vertical slice architecture.
+
+#### Test Organization
+
+Tests are co-located with the code they test:
+```
+src/
+├── services/
+│   ├── dreamnode-service.ts
+│   ├── dreamnode-service.test.ts    # Co-located tests
+│   └── ui-service.test.ts
+├── store/
+│   ├── interbrain-store.ts
+│   └── interbrain-store.test.ts
+└── features/                        # Future vertical slices
+    └── dream-weaving/
+        ├── DreamWeaving.tsx
+        └── DreamWeaving.test.tsx
+```
+
+#### Test Categories
+
+**Unit Tests**: Service methods, store actions, pure functions
+**Integration Tests**: Command → Service → State flow
+**Component Tests**: React components with user interactions (future)
+
+#### Running Tests
+
+```bash
+npm run test          # Run all tests
+npm run test:watch    # Watch mode for development  
+npm run test:coverage # Generate coverage reports
+npm run check-all     # Lint + typecheck + test
+```
+
+#### Test Utilities
+
+**Mock Factories**:
+```typescript
+const mockNode = createMockDreamNode({ name: 'Custom Name' })
+const mockService = createMockUIService()
+```
+
+**Store Testing**:
+```typescript
+// Store tests verify reactive state management
+expect(useInterBrainStore.getState().selectedNode).toBe(mockNode)
+```
+
+**Obsidian Mocking**: All Obsidian APIs are mocked for isolated testing without dependencies on the Obsidian environment.
+
 ## License
 
 Project Liminality is released under the [GNU AFFERO GENERAL PUBLIC LICENSE](LICENSE).
