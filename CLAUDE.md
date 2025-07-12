@@ -27,6 +27,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ **Repository Reorganization**: Clean naming structure with prototype preserved
 - ✅ **Development Workflow**: GitHub-native issue tracking as single source of truth
 
+## Epic Development Order
+
+**Sequential Implementation Required (Epics 1-4)**:
+The following epics must be completed in order due to technical dependencies:
+
+1. **Epic 1: Plugin Infrastructure** - Foundation for everything else
+2. **Epic 2: 3D Spatial Visualization System** - Core UI framework
+3. **Epic 3: DreamNode Management System** - Data layer and operations
+4. **Epic 4: Git Operations Abstraction** - Backend for all git interactions
+
+After Epic 4, development can branch out based on priorities and opportunities.
+
 **Current Infrastructure**:
 - **Repository**: [InterBrain](https://github.com/ProjectLiminality/InterBrain) (renamed from InterBrainMVP)
 - **Project Board**: [InterBrain Development](https://github.com/users/ProjectLiminality/projects/2)
