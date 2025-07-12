@@ -382,6 +382,58 @@ mutation {
 }'
 ```
 
+**Get Project Status and IDs for Updates**:
+```bash
+gh api graphql -f query='
+{
+  repository(owner: "ProjectLiminality", name: "InterBrain") {
+    issue(number: ISSUE_NUMBER) {
+      projectItems(first: 5) {
+        nodes {
+          id
+          project { id title }
+          fieldValues(first: 10) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field {
+                  ... on ProjectV2SingleSelectField {
+                    id name
+                    options { id name }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+**Update Project Status** (Planning → Active → Integration → Complete):
+```bash
+gh api graphql -f query='
+mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "PROJECT_ID"
+    itemId: "ITEM_ID"
+    fieldId: "FIELD_ID"
+    value: {
+      singleSelectOptionId: "STATUS_OPTION_ID"
+    }
+  }) {
+    projectV2Item { id }
+  }
+}'
+```
+
+**Project Status Workflow**:
+- **Planning → Active**: When starting implementation (create first feature branch)
+- **Active → Integration**: When all features complete, begin epic-level testing
+- **Integration → Complete**: When epic fully tested and merged to main
+
 ### Current Status
 - Project uses AI-assisted development (Claude Code as primary partner)
 - Epic + Feature branch workflow established
