@@ -9,7 +9,10 @@
     "plugin-build": "vite build && cp dist/main.js .",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "check-all": "npm run lint && npm run typecheck"
+    "check-all": "npm run lint && npm run typecheck && npm run test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
