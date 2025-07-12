@@ -263,10 +263,77 @@ main → epic/1-plugin-infrastructure
 ✅ **Professional Integration**: Clean testing and documentation cycles
 ✅ **AI-Optimized**: Leverages Claude's dynamic task breakdown capabilities
 
+### GitHub CLI Commands Reference
+
+**List All Open Epics**:
+```bash
+gh issue list --repo ProjectLiminality/InterBrain --label epic --state open
+```
+
+**List All Open Specifications**:
+```bash
+gh issue list --repo ProjectLiminality/InterBrain --label specification --state open
+```
+
+**List All Open Features**:
+```bash
+gh issue list --repo ProjectLiminality/InterBrain --label feature --state open
+```
+
+**Get Sub-Issues of Any Issue** (Epic → Spec or Spec → Features):
+```bash
+gh api graphql -H "GraphQL-Features: sub_issues" -f query='
+{
+  repository(owner: "ProjectLiminality", name: "InterBrain") {
+    issue(number: ISSUE_NUMBER) {
+      title
+      number
+      subIssues(first: 20) {
+        nodes {
+          title
+          number
+          labels(first: 5) {
+            nodes {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+**Assign Yourself to an Issue**:
+```bash
+gh issue edit ISSUE_NUMBER --add-assignee @me
+```
+
+**View Issue Details**:
+```bash
+gh issue view ISSUE_NUMBER
+```
+
+**Update Issue Body** (for specification explication):
+```bash
+gh issue edit ISSUE_NUMBER --body-file specification.md
+```
+
+**Create Pull Request**:
+```bash
+gh pr create --title "Epic X: Title" --body "Description"
+```
+
+**Check Your Assigned Issues**:
+```bash
+gh issue list --assignee @me --state open
+```
+
 ### Current Status
 - Project uses AI-assisted development (Claude Code as primary partner)
 - Epic + Feature branch workflow established
 - Professional workflow with testing and documentation at Epic level
+- GitHub CLI commands documented for clean workflow execution
 - Ready to begin Epic 1: Plugin Infrastructure implementation
 
 ### Next Steps (Per ROADMAP.md)
