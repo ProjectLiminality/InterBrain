@@ -39,40 +39,64 @@ export default function DreamNode3D({
 
   const { camera, size } = useThree();
 
-  // Calculate visual state based on distance from camera
+  // Throttled frame update for performance
+  let frameCount = 0;
+  const updateFrequency = 3; // Update every 3rd frame
+  
   useFrame(() => {
+    frameCount++;
+    if (frameCount % updateFrequency !== 0) return;
+    
     const nodePosition = new Vector3(...dreamNode.position);
     const distance = camera.position.distanceTo(nodePosition);
     
-    // LOD thresholds
-    const starThreshold = 2000;
-    const detailedThreshold = 500;
-    
-    // Calculate scale based on distance (Gaussian drop-off from prototype)
-    const maxDistance = Math.sqrt(size.width * size.width + size.height * size.height) / 2;
+    // Project to screen space to get actual visual size
     const screenPosition = nodePosition.clone().project(camera);
-    const distanceFromCenter = Math.sqrt(
-      Math.pow((screenPosition.x * size.width / 2), 2) + 
-      Math.pow((screenPosition.y * size.height / 2), 2)
+    
+    // Convert from normalized device coordinates to screen pixels
+    const screenX = (screenPosition.x * 0.5 + 0.5) * size.width;
+    const screenY = (-screenPosition.y * 0.5 + 0.5) * size.height;
+    
+    // Calculate distance from screen center in pixels
+    const centerX = size.width / 2;
+    const centerY = size.height / 2;
+    const pixelDistanceFromCenter = Math.sqrt(
+      Math.pow(screenX - centerX, 2) + 
+      Math.pow(screenY - centerY, 2)
     );
-    const normalizedDistance = distanceFromCenter / maxDistance;
-    const scale = Math.max(0.25, 2 * (1 - Math.min(1, normalizedDistance * 2)));
-
-    // Determine LOD level
+    
+    // More aggressive scaling - exponential drop-off
+    const maxPixelDistance = Math.sqrt(centerX * centerX + centerY * centerY);
+    const normalizedDistance = pixelDistanceFromCenter / maxPixelDistance;
+    
+    // Exponential scaling for more dramatic size changes
+    const scale = Math.max(0.1, Math.pow(1 - normalizedDistance, 2) * 3);
+    
+    // LOD based on visual scale, not distance
     let lod: VisualState['lod'] = 'node';
-    if (distance > starThreshold) {
+    if (scale < 0.2) {
       lod = 'star';
-    } else if (distance < detailedThreshold) {
+    } else if (scale > 1.5 && distance < 500) {
       lod = 'detailed';
     }
 
-    setVisualState(prev => ({
-      ...prev,
-      lod,
-      scale,
-      distanceFromCamera: distance,
-      isHovered
-    }));
+    setVisualState(prev => {
+      // Only update if values have changed significantly
+      if (
+        Math.abs(prev.scale - scale) > 0.05 ||
+        prev.lod !== lod ||
+        prev.isHovered !== isHovered
+      ) {
+        return {
+          ...prev,
+          lod,
+          scale,
+          distanceFromCamera: distance,
+          isHovered
+        };
+      }
+      return prev;
+    });
   });
 
   // Handle mouse events
@@ -117,14 +141,19 @@ export default function DreamNode3D({
       >
         <div
           style={{
-            width: '8px',
-            height: '8px',
+            width: '4px',
+            height: '4px',
             borderRadius: '50%',
-            background: borderColor,
-            border: `1px solid ${borderColor}`,
-            boxShadow: `0 0 10px ${borderColor}`,
+            background: '#FFFFFF',
+            boxShadow: `
+              0 0 8px ${borderColor},
+              0 0 16px ${borderColor},
+              0 0 24px ${borderColor},
+              0 0 32px ${borderColor}
+            `,
             cursor: 'pointer',
-            transition: 'all 0.2s ease'
+            opacity: 0.9,
+            transition: 'all 0.1s ease'
           }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
