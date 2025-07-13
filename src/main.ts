@@ -3,6 +3,7 @@ import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
 import { DreamNodeService } from './services/dreamnode-service';
 import { VaultService } from './services/vault-service';
+import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -16,6 +17,9 @@ export default class InterBrainPlugin extends Plugin {
     
     // Initialize services
     this.initializeServices();
+    
+    // Register view types
+    this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     
     // Register commands
     this.registerCommands();
@@ -38,9 +42,14 @@ export default class InterBrainPlugin extends Plugin {
     this.addCommand({
       id: 'open-dreamspace',
       name: 'Open DreamSpace',
-      callback: () => {
+      callback: async () => {
         console.log('Open DreamSpace command executed');
-        this.uiService.showPlaceholder('DreamSpace view coming soon!');
+        const leaf = this.app.workspace.getLeaf(true);
+        await leaf.setViewState({
+          type: DREAMSPACE_VIEW_TYPE,
+          active: true
+        });
+        this.app.workspace.revealLeaf(leaf);
       }
     });
 
