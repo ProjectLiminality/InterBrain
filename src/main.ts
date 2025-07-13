@@ -57,8 +57,8 @@ export default class InterBrainPlugin extends Plugin {
           }
           await this.gitService.commitWithAI(currentNode.path);
           this.uiService.showSuccess('DreamNode saved successfully');
-        } catch (error: any) {
-          this.uiService.showError(error.message);
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Unknown error occurred');
         } finally {
           loadingNotice.hide();
         }
