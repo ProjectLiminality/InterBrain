@@ -1,6 +1,33 @@
 import { Canvas } from '@react-three/fiber';
+import { generateMockDreamNodes, getMockDreamNode, getEmptyMockDreamNode } from '../mock/dreamnode-mock-data';
+import DreamNode3D from './DreamNode3D';
+import { DreamNode } from '../types/dreamnode';
 
 export default function DreamspaceCanvas() {
+  // Generate mock data for testing
+  const dreamNodes = generateMockDreamNodes(12);
+  
+  // Add a few special test nodes
+  const testNodes = [
+    getMockDreamNode(),
+    getEmptyMockDreamNode()
+  ];
+  
+  const allNodes = [...dreamNodes, ...testNodes];
+
+  const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
+    console.log(`Node ${node.name} hover:`, isHovered);
+  };
+
+  const handleNodeClick = (node: DreamNode) => {
+    console.log(`Node clicked:`, node.name, node.type);
+  };
+
+  const handleNodeDoubleClick = (node: DreamNode) => {
+    console.log(`Node double-clicked:`, node.name);
+    // TODO: Open DreamSong view
+  };
+
   return (
     <div className="dreamspace-canvas-container">
       <Canvas
@@ -16,8 +43,19 @@ export default function DreamspaceCanvas() {
           background: '#000000'
         }}
       >
-        {/* Empty scene - foundation for future DreamNode objects */}
-        {/* Camera is automatically created by R3F based on camera prop */}
+        {/* Render all DreamNodes */}
+        {allNodes.map((node) => (
+          <DreamNode3D
+            key={node.id}
+            dreamNode={node}
+            onHover={handleNodeHover}
+            onClick={handleNodeClick}
+            onDoubleClick={handleNodeDoubleClick}
+          />
+        ))}
+        
+        {/* Ambient lighting for any 3D elements (minimal) */}
+        <ambientLight intensity={0.1} />
       </Canvas>
     </div>
   );
