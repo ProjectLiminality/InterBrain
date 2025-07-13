@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import { generateMockDreamNodes, getMockDreamNode, getEmptyMockDreamNode } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
 import { DreamNode } from '../types/dreamnode';
@@ -53,6 +54,16 @@ export default function DreamspaceCanvas() {
             onDoubleClick={handleNodeDoubleClick}
           />
         ))}
+        
+        {/* Camera controls for navigation */}
+        <OrbitControls 
+          enablePan={true} 
+          enableZoom={true} 
+          enableRotate={true}
+          zoomSpeed={0.5}
+          rotateSpeed={0.5}
+          panSpeed={0.5}
+        />
         
         {/* Ambient lighting for any 3D elements (minimal) */}
         <ambientLight intensity={0.1} />
