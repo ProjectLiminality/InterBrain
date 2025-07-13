@@ -245,6 +245,14 @@ main → epic/1-plugin-infrastructure
 2. Write epic-level documentation covering integrated capabilities
 3. Update CHANGELOG.md with epic-level changes
 4. `git checkout main && git merge epic/X-name`
+5. **GitHub Issue Completion**:
+   - Add detailed completion summary to Specification issue
+   - Close Specification issue (architectural reference complete)
+   - Close Epic issue (work delivery complete)
+6. **Release Process**:
+   - Update package.json version (semantic versioning)
+   - Create release commit with comprehensive summary
+   - Tag release: `git tag -a vX.Y.Z -m "release notes"`
 
 ### Why Epic-Level Testing/Documentation
 - **Coherent Functionality**: Epics represent complete user capabilities
