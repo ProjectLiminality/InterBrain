@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { VaultService } from './vault-service'
-import { TFile, TFolder } from 'obsidian'
-
-import type { Vault } from 'obsidian'
+import { TFile, TFolder, type Vault } from 'obsidian'
 
 describe('VaultService', () => {
   let vaultService: VaultService
-  let mockVault: Partial<Vault>
+  let mockVault: {
+    createFolder: ReturnType<typeof vi.fn>
+    getAbstractFileByPath: ReturnType<typeof vi.fn>
+    read: ReturnType<typeof vi.fn>
+    create: ReturnType<typeof vi.fn>
+    modify: ReturnType<typeof vi.fn>
+    delete: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     mockVault = {
@@ -18,7 +23,7 @@ describe('VaultService', () => {
       delete: vi.fn(),
     }
     
-    vaultService = new VaultService(mockVault as Vault)
+    vaultService = new VaultService(mockVault as unknown as Vault)
     vi.clearAllMocks()
   })
 

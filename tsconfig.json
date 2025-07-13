@@ -6,7 +6,7 @@
     "allowJs": true,
     "checkJs": false,
     "outDir": "./",
-    "rootDir": "./src",
+    "rootDir": "./",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -23,5 +23,5 @@
     "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "main.js"]
+  "exclude": ["node_modules", "main.js", "**/*.test.ts", "tests/**/*"]
 }
