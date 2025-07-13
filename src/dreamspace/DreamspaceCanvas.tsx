@@ -1,20 +1,12 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { generateMockDreamNodes, getMockDreamNode, getEmptyMockDreamNode } from '../mock/dreamnode-mock-data';
+import { generateMockDreamNodes } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
 import { DreamNode } from '../types/dreamnode';
 
 export default function DreamspaceCanvas() {
-  // Generate mock data for testing
+  // Generate mock data for testing - only Fibonacci sphere nodes
   const dreamNodes = generateMockDreamNodes(12);
-  
-  // Add a few special test nodes
-  const testNodes = [
-    getMockDreamNode(),
-    getEmptyMockDreamNode()
-  ];
-  
-  const allNodes = [...dreamNodes, ...testNodes];
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -33,7 +25,7 @@ export default function DreamspaceCanvas() {
     <div className="dreamspace-canvas-container">
       <Canvas
         camera={{
-          position: [0, 0, 1000],
+          position: [0, 0, 0],
           fov: 75,
           near: 0.1,
           far: 10000
@@ -45,7 +37,7 @@ export default function DreamspaceCanvas() {
         }}
       >
         {/* Render all DreamNodes */}
-        {allNodes.map((node) => (
+        {dreamNodes.map((node) => (
           <DreamNode3D
             key={node.id}
             dreamNode={node}
@@ -55,14 +47,15 @@ export default function DreamspaceCanvas() {
           />
         ))}
         
-        {/* Camera controls for navigation */}
+        {/* Camera controls for navigation - camera at origin */}
         <OrbitControls 
-          enablePan={true} 
-          enableZoom={true} 
+          enablePan={false}  // No panning, only rotation at origin
+          enableZoom={false} // No zoom, camera stays at origin
           enableRotate={true}
-          zoomSpeed={0.5}
           rotateSpeed={0.5}
-          panSpeed={0.5}
+          minDistance={0}
+          maxDistance={0}
+          target={[0, 0, 0]}
         />
         
         {/* Ambient lighting for any 3D elements (minimal) */}
