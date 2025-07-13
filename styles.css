@@ -1,0 +1,43 @@
+/* DreamSpace - Edge-to-edge black space styling */
+
+.dreamspace-container {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000000;
+  position: relative;
+}
+
+.dreamspace-canvas-container {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #000000;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Ensure the view container fills the workspace */
+.workspace-leaf-content[data-type="dreamspace-view"] {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.workspace-leaf-content[data-type="dreamspace-view"] .view-content {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 100%;
+  background: #000000;
+}
+
+/* Remove any default Obsidian styling that might interfere */
+.workspace-leaf-content[data-type="dreamspace-view"] .view-header {
+  background: #000000;
+  border-bottom: none;
+}

@@ -196,18 +196,30 @@ main → epic/1-plugin-infrastructure
 
 ### Epic Development Cycle
 
-**Phase 1: Feature Implementation**
+**Phase 1: Epic Planning & Specification**
 - Create epic branch off main for complete epic scope
+- **CRITICAL FIRST STEP**: Flesh out specification issue through conversational clarity
+  - Review existing features for coherence (add/remove/modify as needed)
+  - Ask potent questions to understand requirements deeply
+  - Update specification issue body with detailed implementation plan
+  - Ensure alignment between specification and refined feature list
+- Only proceed to implementation after specification is clear
+
+**Phase 2: Feature Implementation**
 - Create feature branches off epic branch for individual features
-- Implement all features within epic scope using TodoWrite for task management
+- **CRITICAL FIRST STEP**: Flesh out feature issue before coding
+  - Conversationally arrive at clarity on implementation details
+  - Update feature issue body while respecting existing structure
+  - Add specific acceptance criteria and technical approach
+- Implement features using TodoWrite for task management
 - Merge completed features back to epic branch
 
-**Phase 2: Epic Integration**
+**Phase 3: Epic Integration**
 - Test complete epic functionality on epic branch
 - Write documentation for integrated capabilities  
 - Final integration testing and polish
 
-**Phase 3: Epic Completion**
+**Phase 4: Epic Completion**
 - Merge tested, documented epic to main branch
 - Tag release if appropriate
 - Epic represents coherent functionality unit
@@ -253,6 +265,24 @@ main → epic/1-plugin-infrastructure
    - Update package.json version (semantic versioning)
    - Create release commit with comprehensive summary
    - Tag release: `git tag -a vX.Y.Z -m "release notes"`
+
+### Core Workflow Pattern: Issue Clarity Before Implementation
+
+**DEEP PATTERN - ALWAYS FOLLOW**:
+1. **Epic Branch Creation**: Start every epic by creating the epic branch
+2. **Specification Clarity**: BEFORE any coding, flesh out specification issue through:
+   - Conversational interview to understand requirements
+   - Review/refine feature list (add/remove/modify for coherence)
+   - Update specification issue body with detailed plan
+   - Ensure alignment between specification and features
+3. **Feature Branch Creation**: Only after specification is clear
+4. **Feature Clarity**: BEFORE coding each feature, flesh out feature issue through:
+   - Conversational clarity on implementation details
+   - Update feature issue body while respecting existing structure
+   - Add specific acceptance criteria and technical approach
+5. **Implementation**: Only after both specification and feature issues are detailed
+
+**Key Principle**: Always start with fleshing out issues before diving into implementation. Use potent questions and conversational clarity to arrive at understanding effortlessly.
 
 ### Why Epic-Level Testing/Documentation
 - **Coherent Functionality**: Epics represent complete user capabilities
