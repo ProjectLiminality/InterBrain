@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { DreamNodeService } from './dreamnode-service'
-import { createMockDreamNode, createMockDreamerNode, resetStore } from '../../tests/utils/test-utils'
+import { createMockDreamNode } from '../../tests/utils/test-utils'
 
 // Mock the store
 const mockSetSelectedNode = vi.fn()

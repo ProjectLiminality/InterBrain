@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { VaultService } from './vault-service'
 import { TFile, TFolder } from 'obsidian'
 
+import type { Vault } from 'obsidian'
+
 describe('VaultService', () => {
   let vaultService: VaultService
-  let mockVault: any
+  let mockVault: Partial<Vault>
 
   beforeEach(() => {
     mockVault = {
@@ -16,7 +18,7 @@ describe('VaultService', () => {
       delete: vi.fn(),
     }
     
-    vaultService = new VaultService(mockVault)
+    vaultService = new VaultService(mockVault as Vault)
     vi.clearAllMocks()
   })
 
