@@ -1,6 +1,6 @@
 ---
-allowed-tools: Bash(git:*), Bash(gh:*), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep
-description: Comprehensive development continuation - analyze state, plan next feature, execute workflow
+allowed-tools: Bash(git:*), Bash(gh:*), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages
+description: Comprehensive development continuation - analyze state, plan next feature, execute workflow with Playwright testing
 ---
 
 # Continue Development Workflow
@@ -108,11 +108,31 @@ Using TodoWrite, create comprehensive feature implementation plan:
 ### Phase 5: Execute Development
 Begin systematic implementation following AI-first development patterns:
 
-1. **Commands Before UI**: Create command palette commands first
-2. **Service Layer**: Implement business logic in services
-3. **Feature Slice**: Build UI components in feature folder
-4. **Testing**: Write tests as implementation progresses
-5. **Documentation**: Update docs with new functionality
+1. **Development Environment Check**:
+   - Verify dev server is running: !`lsof -i :5173 || echo "Dev server not running"`
+   - If not running: **PROMPT USER** to start dev server (`npm run dev`) - DO NOT start automatically
+   - Confirm Obsidian development vault is ready for testing
+
+2. **Implementation Cycle**:
+   - **Commands Before UI**: Create command palette commands first
+   - **Service Layer**: Implement business logic in services
+   - **Feature Slice**: Build UI components in feature folder
+   - **Unit Testing**: Write tests as implementation progresses
+
+3. **Playwright MCP Integration Testing**:
+   - Navigate to development environment: `http://localhost:5173`
+   - Test implemented functionality using browser automation
+   - Capture screenshots of working features
+   - Verify console logs for errors or successful operations
+   - Take snapshots for accessibility and interaction testing
+
+4. **Validation & Debugging**:
+   - Use Playwright MCP to verify feature works as expected
+   - Debug any issues found through browser automation
+   - Iterate implementation until Playwright tests pass
+   - Ensure no console errors or broken functionality
+
+5. **Documentation**: Update docs with new functionality only after testing confirms it works
 
 ## Execution Protocol
 
@@ -133,10 +153,27 @@ Begin systematic implementation following AI-first development patterns:
 
 ### Success Criteria
 - [ ] Feature implementation follows project architecture
-- [ ] All acceptance criteria met and tested
+- [ ] All acceptance criteria met and tested with Playwright MCP
+- [ ] Browser testing confirms functionality works without errors
+- [ ] Console logs clean (no errors or warnings)
+- [ ] Screenshots/snapshots captured showing working feature
 - [ ] Documentation updated for new functionality
 - [ ] Feature ready for epic integration
 - [ ] Clear next steps identified
+
+### Commit & GitHub Operations Protocol
+**CRITICAL**: Only proceed with git commits and GitHub operations AFTER:
+- [ ] Playwright MCP testing confirms feature works
+- [ ] All console errors resolved
+- [ ] Screenshots show successful functionality
+- [ ] No broken agentic loop (dev server remains running)
+
+**Git Workflow**:
+1. Test feature thoroughly with Playwright MCP
+2. Fix any issues found during testing
+3. Re-test until everything works cleanly
+4. THEN commit with comprehensive summary
+5. THEN update GitHub issues with completion status
 
 ## AI Behavior Integration
 

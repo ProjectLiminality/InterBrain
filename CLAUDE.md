@@ -81,6 +81,7 @@ interbrain-plugin/
 5. **Dreamspace is Core Engine**: `/dreamspace` contains fundamental 3D/spatial logic only
 6. **UI Calls Commands**: UI components use `executeCommandById()`, never call services directly
 7. **Document for AI**: Every feature folder needs a `README.md` with high-level summary
+8. **Testing Before Commits**: Use Playwright MCP to validate features work in browser before any git operations
 
 ## Technology Stack
 
@@ -231,6 +232,14 @@ This project is designed for AI-first development:
 - Each feature slice contains complete context for AI understanding
 - Avoid scattering related functionality across multiple directories
 - Use descriptive folder and file names for AI comprehension
+
+### Playwright MCP Testing Integration
+- **Dev Server Management**: User starts dev server (`npm run dev`) - AI never starts it to avoid breaking agentic loop
+- **Browser Testing**: Use Playwright MCP to validate functionality at `http://localhost:5173`
+- **Validation Protocol**: Test features in actual browser environment before commits
+- **Console Monitoring**: Ensure clean console logs (no errors/warnings)
+- **Screenshot Documentation**: Capture visual proof of working features
+- **Testing-First Completion**: No git operations until browser testing confirms functionality works
 
 ## Obsidian Plugin Integration Approach
 

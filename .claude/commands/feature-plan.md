@@ -1,6 +1,6 @@
 ---
-allowed-tools: Bash(gh:*), Read, TodoWrite
-description: Create comprehensive plan for implementing a specific feature
+allowed-tools: Bash(gh:*), Read, TodoWrite, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages
+description: Create comprehensive plan for implementing a specific feature with Playwright testing validation
 ---
 
 # Feature Implementation Planning
@@ -92,13 +92,22 @@ Create TodoWrite task list with specific, actionable items:
 5. **Testing & Validation**:
    - Write unit tests for services
    - Test command functionality
-   - Validate UI interactions
-   - Check integration with existing features
+   - **Playwright MCP Browser Testing**:
+     - Verify dev server is running: !`lsof -i :5173 || echo "Dev server not running"`
+     - If not running: **PROMPT USER** to start dev server - DO NOT start automatically
+     - Navigate to `http://localhost:5173` for testing
+     - Test feature interactions using browser automation
+     - Capture screenshots of working functionality
+     - Verify console logs are clean (no errors)
+     - Take accessibility snapshots
+   - Debug and fix any issues found through browser testing
+   - Re-test until feature works perfectly in browser
 
 6. **Documentation & Integration**:
-   - Update feature issue with completion notes
+   - Update feature issue with completion notes only AFTER browser testing passes
    - Document any new patterns or learnings
-   - Prepare for epic integration
+   - Include Playwright test results and screenshots
+   - Prepare for epic integration with confirmed working feature
 
 ### Phase 4: Quality Checklist
 Ensure implementation follows project patterns:
@@ -108,16 +117,35 @@ Ensure implementation follows project patterns:
 - [ ] **Feature Slice**: Components in appropriate feature folder
 - [ ] **AI Documentation**: Feature folder has README.md
 - [ ] **Zustand Integration**: State management properly integrated
-- [ ] **Testing**: Comprehensive test coverage
-- [ ] **Git Philosophy**: Frequent, granular commits
+- [ ] **Unit Testing**: Comprehensive test coverage
+- [ ] **Playwright Browser Testing**: Feature validated in actual browser environment
+- [ ] **Console Clean**: No errors or warnings in browser console
+- [ ] **Screenshots Captured**: Visual proof of working functionality
+- [ ] **Git Philosophy**: Frequent, granular commits (only AFTER testing passes)
 
 ## Execution Readiness
 After planning:
 
-1. **Branch Management**: Create feature branch if needed
-2. **Issue Updates**: Update GitHub feature issue with detailed plan
-3. **TodoWrite**: Comprehensive task breakdown ready
-4. **Context**: All development rules and patterns clear
-5. **Begin**: Start with command implementation following plan
+1. **Environment Setup**: 
+   - Ensure dev server is running (`npm run dev`) - prompt user if not
+   - Confirm Playwright MCP access for browser testing
+2. **Branch Management**: Create feature branch if needed
+3. **Issue Updates**: Update GitHub feature issue with detailed plan
+4. **TodoWrite**: Comprehensive task breakdown ready including Playwright testing steps
+5. **Context**: All development rules and patterns clear
+6. **Begin**: Start with command implementation following plan
 
-This planning approach ensures systematic, architecture-compliant feature development that integrates seamlessly with the existing codebase and follows established patterns.
+## Testing-First Completion Protocol
+**CRITICAL**: Feature is NOT complete until:
+- [ ] Playwright MCP browser testing confirms functionality works
+- [ ] Screenshots captured showing successful operation
+- [ ] Console logs are clean (no errors/warnings)
+- [ ] All user interactions work as expected in actual browser
+- [ ] No broken agentic loop (dev server keeps running)
+
+Only AFTER successful browser testing:
+- [ ] Commit changes with test results summary
+- [ ] Update GitHub issues with completion status
+- [ ] Mark TodoWrite tasks as complete
+
+This planning approach ensures systematic, architecture-compliant feature development that is thoroughly tested and validated before any git or GitHub operations.
