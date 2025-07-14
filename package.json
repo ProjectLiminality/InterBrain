@@ -49,6 +49,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@react-three/drei": "^10.5.0",
     "@react-three/fiber": "^9.2.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
