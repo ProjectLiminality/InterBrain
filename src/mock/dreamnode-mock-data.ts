@@ -82,21 +82,23 @@ const mockCanvasFiles: CanvasFile[] = [
 
 /**
  * Generate mock DreamNode data using Fibonacci sphere distribution
- * Similar to the prototype's positioning algorithm
+ * Now uses the core FibonacciSphereLayout algorithm
  */
 export function generateMockDreamNodes(count: number = 12): DreamNode[] {
-  const goldenRatio = (1 + Math.sqrt(5)) / 2;
-  const sphereRadius = 1000;
+  // Import the core algorithm (dynamic import for proper module loading)
+  /* eslint-disable-next-line no-undef */
+  const { calculateFibonacciSpherePositions } = require('../dreamspace/FibonacciSphereLayout');
+  
+  const spherePositions = calculateFibonacciSpherePositions({
+    radius: 1000,
+    nodeCount: count,
+    center: [0, 0, 0]
+  });
   
   const dreamNodes: DreamNode[] = [];
   
   for (let i = 0; i < count; i++) {
-    const phi = Math.acos(1 - 2 * i / (count + 1));
-    const theta = 2 * Math.PI * i / goldenRatio;
-    
-    const x = sphereRadius * Math.sin(phi) * Math.cos(theta);
-    const y = sphereRadius * Math.sin(phi) * Math.sin(theta);
-    const z = sphereRadius * Math.cos(phi);
+    const [x, y, z] = spherePositions[i].position;
     
     // Alternate between dreams and dreamers
     const isDream = i % 3 !== 0; // More dreams than dreamers

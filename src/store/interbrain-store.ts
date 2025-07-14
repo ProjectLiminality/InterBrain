@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DreamNode } from '../services/dreamnode-service';
+import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 
 export interface InterBrainState {
   // Selected DreamNode state
@@ -13,6 +14,11 @@ export interface InterBrainState {
   // Spatial layout state
   spatialLayout: 'constellation' | 'search' | 'focused';
   setSpatialLayout: (layout: 'constellation' | 'search' | 'focused') => void;
+  
+  // Fibonacci sphere layout configuration
+  fibonacciConfig: FibonacciSphereConfig;
+  setFibonacciConfig: (config: Partial<FibonacciSphereConfig>) => void;
+  resetFibonacciConfig: () => void;
   
   // Camera state management
   camera: {
@@ -39,6 +45,7 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   selectedNode: null,
   searchResults: [],
   spatialLayout: 'constellation',
+  fibonacciConfig: DEFAULT_FIBONACCI_CONFIG,
   
   // Camera initial state
   camera: {
@@ -65,6 +72,12 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
       previousLayout: state.spatialLayout,
     }
   })),
+  
+  // Fibonacci sphere configuration actions
+  setFibonacciConfig: (config) => set(state => ({
+    fibonacciConfig: { ...state.fibonacciConfig, ...config }
+  })),
+  resetFibonacciConfig: () => set({ fibonacciConfig: DEFAULT_FIBONACCI_CONFIG }),
   
   // Camera actions
   setCameraPosition: (position) => set(state => ({ 
