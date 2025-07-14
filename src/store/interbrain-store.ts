@@ -13,6 +13,25 @@ export interface InterBrainState {
   // Spatial layout state
   spatialLayout: 'constellation' | 'search' | 'focused';
   setSpatialLayout: (layout: 'constellation' | 'search' | 'focused') => void;
+  
+  // Camera state management
+  camera: {
+    position: [number, number, number];
+    target: [number, number, number];
+    isTransitioning: boolean;
+    transitionDuration: number;
+  };
+  setCameraPosition: (position: [number, number, number]) => void;
+  setCameraTarget: (target: [number, number, number]) => void;
+  setCameraTransition: (isTransitioning: boolean, duration?: number) => void;
+  
+  // Layout transition state
+  layoutTransition: {
+    isTransitioning: boolean;
+    progress: number;
+    previousLayout: 'constellation' | 'search' | 'focused' | null;
+  };
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'focused' | null) => void;
 }
 
 export const useInterBrainStore = create<InterBrainState>((set) => ({
@@ -21,8 +40,49 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   searchResults: [],
   spatialLayout: 'constellation',
   
+  // Camera initial state
+  camera: {
+    position: [0, 0, 1000], // Default camera position from prototype
+    target: [0, 0, 0],      // Looking at origin
+    isTransitioning: false,
+    transitionDuration: 1000, // 1 second default
+  },
+  
+  // Layout transition initial state
+  layoutTransition: {
+    isTransitioning: false,
+    progress: 0,
+    previousLayout: null,
+  },
+  
   // Actions
   setSelectedNode: (node) => set({ selectedNode: node }),
   setSearchResults: (results) => set({ searchResults: results }),
-  setSpatialLayout: (layout) => set({ spatialLayout: layout }),
+  setSpatialLayout: (layout) => set(state => ({ 
+    spatialLayout: layout,
+    layoutTransition: {
+      ...state.layoutTransition,
+      previousLayout: state.spatialLayout,
+    }
+  })),
+  
+  // Camera actions
+  setCameraPosition: (position) => set(state => ({ 
+    camera: { ...state.camera, position } 
+  })),
+  setCameraTarget: (target) => set(state => ({ 
+    camera: { ...state.camera, target } 
+  })),
+  setCameraTransition: (isTransitioning, duration = 1000) => set(state => ({ 
+    camera: { ...state.camera, isTransitioning, transitionDuration: duration } 
+  })),
+  
+  // Layout transition actions
+  setLayoutTransition: (isTransitioning, progress = 0, previousLayout = null) => set(state => ({ 
+    layoutTransition: { 
+      isTransitioning, 
+      progress, 
+      previousLayout: previousLayout || state.layoutTransition.previousLayout 
+    } 
+  })),
 }));
