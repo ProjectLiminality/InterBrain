@@ -493,6 +493,12 @@ mutation {
 - ✅ Clean architecture with service layers
 - 🎯 **Next**: Epic 2 - 3D Spatial Visualization System
 
+**GitHub App Integration Decision**:
+- **Status**: Deferred until Epic 4+ (Git Operations, AI Integration phase)
+- **Rationale**: Current GitHub CLI workflow is smooth for active development
+- **Trigger Point**: When we begin self-healing codebase features and production monitoring
+- **Reminder**: Suggest GitHub App installation at Epic 4 start for automated workflows and AI-powered issue management
+
 ### Next Steps (Per ROADMAP.md)
 1. **Month 1**: Create Obsidian plugin foundation, implement custom view type for 3D space
 2. **Month 2**: Add AI features (transcription, semantic search, video calls)
