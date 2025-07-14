@@ -26,31 +26,17 @@ description: Comprehensive development continuation - analyze state, plan next f
 - **Package.json status**: @package.json
 - **Recent test results**: !`npm run test 2>/dev/null | tail -5 || echo "Tests not run recently"`
 
-## Interview Process: Allow Pure Signal to Emerge
+## Interview Process: Implementation Clarity Check
 
-Before any technical analysis, engage in the **Question-First Approach** from user memory:
+Quick clarity assessment before proceeding with workflow:
 
-### Opening Questions (Choose based on context):
-- **Vision Check**: "What feels most alive or exciting to work on right now in this project?"
-- **Direction Sensing**: "When you imagine the next piece of development, what comes to mind first?"
-- **Energy Assessment**: "Where do you feel the natural momentum wanting to flow in the codebase?"
-- **Completion Intuition**: "Does anything feel incomplete or calling for attention from our recent work?"
-- **Feature Clarity**: "What would make this project feel more complete or closer to the vision?"
+### Context Questions (As needed):
+- **Current Priority**: "What should we focus on next for this epic?"
+- **Implementation Clarity**: "Are the current feature requirements clear, or do we need to flesh anything out?"
+- **Scope Confirmation**: "Does the planned next feature match your current thinking?"
+- **Technical Approach**: "Any specific implementation preferences or constraints I should know about?"
 
-### Deepening Questions (Based on responses):
-- **Vision Expansion**: "What would that look like when it's working beautifully?"
-- **User Experience**: "How would someone interact with this? What would that feel like?"
-- **Integration Sensing**: "How does this connect with what we've already built?"
-- **Scope Refinement**: "What's the simplest version that would still feel meaningful?"
-- **Implementation Intuition**: "Does any particular technical approach feel right to you?"
-
-### Clarification Questions (As needed):
-- **Requirement Details**: "When you say [specific functionality], can you walk me through that?"
-- **Priority Sensing**: "If we could only build one part of this, what would be most important?"
-- **Boundary Setting**: "What definitely should NOT be included in this feature?"
-- **Success Metrics**: "How will we know when this is working well?"
-
-**CRITICAL**: Wait for David's responses to these questions before proceeding with technical analysis. Allow his pure signal to emerge unbiased. Only after understanding his current vision and intuition should you move to the technical workflow state analysis.
+**Note**: If everything is clear from the technical context and GitHub issues, proceed directly to workflow execution. Only ask questions when clarification is genuinely needed for implementation.
 
 ## Technical Context Analysis (After Interview)
 
@@ -60,19 +46,16 @@ Based on both the interview insights AND gathered context, determine:
 - Which epic are we in? (Epic 1: Complete, Epic 2: Active, Epic 3+: Future)
 - Is the epic branch created and current?
 - Are we mid-feature or between features?
-- **How does this align with David's expressed vision?**
 
 ### 2. **Specification Status**
 - Is the current epic specification clear and detailed?
 - Do we need to flesh out the spec before proceeding?
 - Are feature requirements well-defined?
-- **Does the spec match David's current understanding?**
 
 ### 3. **Feature Pipeline**
 - What's the next logical feature to implement?
 - Is there an active feature branch or do we need to create one?
 - Are there completed features awaiting integration?
-- **Does this feel right based on the interview?**
 
 ### 4. **Technical Readiness**
 - Are there uncommitted changes that need attention?
