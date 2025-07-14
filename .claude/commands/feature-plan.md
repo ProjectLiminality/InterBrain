@@ -15,41 +15,29 @@ Execute this command with a specific feature: `/feature-plan #ISSUE_NUMBER` or `
 - **Development rules**: @CLAUDE.md (lines 75-85)
 - **Current branch**: !`git branch --show-current`
 
-## Interview Process: Feature Vision Clarity
+## Implementation Clarity Check
 
-Before technical planning, engage in **Question-First Approach** to understand David's current vision:
+Quick assessment of feature requirements before technical planning:
 
-### Feature Vision Questions:
-- **Core Purpose**: "What is this feature trying to enable or make possible for users?"
-- **User Experience**: "Walk me through how someone would use this - what would their journey look like?"
-- **Integration Vision**: "How do you see this fitting with what we've already built?"
-- **Simplicity Check**: "What's the most essential part of this feature - the thing that would make it valuable even in its simplest form?"
+### Clarification Questions (Only if needed):
+- **Feature Scope**: "Is the scope of this feature clear from the issue, or should we clarify anything?"
+- **User Interaction**: "Any specific user experience requirements I should know about?"
+- **Technical Constraints**: "Any implementation preferences or technical approaches to consider?"
+- **Integration Points**: "How should this integrate with existing functionality?"
 
-### Implementation Intuition Questions:
-- **Technical Feeling**: "Does any particular technical approach feel right to you for this?"
-- **Scope Boundary**: "What should definitely NOT be included in this feature to keep it focused?"
-- **Success Criteria**: "How will we know when this feature is working beautifully?"
-- **Priority Elements**: "If we could only build part of this feature, what would be most important?"
+**Note**: If the feature requirements are clear from the GitHub issue and context, proceed directly to technical planning.
 
-### Clarification Questions (Based on responses):
-- **Specific Interactions**: "When you say [specific functionality], can you show me or describe exactly what that would look like?"
-- **Edge Cases**: "What happens when [scenario]? How should that feel?"
-- **State Management**: "What information needs to be remembered or tracked?"
-- **User Feedback**: "How should the system communicate with users during this process?"
-
-**CRITICAL**: Wait for David's responses before moving to technical analysis. Let his pure vision emerge first, then use technical knowledge to serve that vision.
-
-## Planning Framework (After Interview)
+## Planning Framework
 
 ### Phase 1: Feature Analysis
-Based on David's vision AND technical requirements:
+Based on feature requirements and technical context:
 
-1. **Scope Definition** (Vision-Aligned):
-   - What exactly does this feature do for users? (From interview)
+1. **Scope Definition**:
+   - What exactly does this feature do for users?
    - How does it integrate with existing functionality?
-   - What are the clear acceptance criteria? (Based on David's success criteria)
+   - What are the clear acceptance criteria?
 
-2. **Architecture Mapping** (Serving the Vision):
+2. **Architecture Mapping**:
    - Which services need to be created/modified?
    - What command palette commands are needed?
    - Where does the UI fit in the feature slice structure?
@@ -59,7 +47,6 @@ Based on David's vision AND technical requirements:
    - Does this feature depend on other incomplete features?
    - Are there any technical prerequisites?
    - Do we need to update specifications first?
-   - **Does anything conflict with David's expressed vision?**
 
 ### Phase 2: Implementation Strategy
 Following the **Commands Before UI** and **Service Layer Abstraction** rules:
