@@ -4,6 +4,8 @@ import { GitService } from './services/git-service';
 import { DreamNodeService } from './services/dreamnode-service';
 import { VaultService } from './services/vault-service';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
+import { useInterBrainStore } from './store/interbrain-store';
+import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -199,6 +201,70 @@ export default class InterBrainPlugin extends Plugin {
         this.dreamNodeService.resetCamera();
         this.uiService.showSuccess('Camera position reset');
         console.log('Camera reset to default position');
+      }
+    });
+
+    // Fibonacci sphere layout commands
+    this.addCommand({
+      id: 'fibonacci-expand-sphere',
+      name: 'Expand Fibonacci Sphere',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const currentRadius = store.fibonacciConfig.radius;
+        const newRadius = Math.min(currentRadius * 1.5, 5000); // Max radius of 5000
+        store.setFibonacciConfig({ radius: newRadius });
+        this.uiService.showSuccess(`Sphere expanded to radius ${Math.round(newRadius)}`);
+        console.log('Fibonacci sphere radius increased to:', newRadius);
+      }
+    });
+
+    this.addCommand({
+      id: 'fibonacci-contract-sphere',
+      name: 'Contract Fibonacci Sphere',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const currentRadius = store.fibonacciConfig.radius;
+        const newRadius = Math.max(currentRadius / 1.5, 200); // Min radius of 200
+        store.setFibonacciConfig({ radius: newRadius });
+        this.uiService.showSuccess(`Sphere contracted to radius ${Math.round(newRadius)}`);
+        console.log('Fibonacci sphere radius decreased to:', newRadius);
+      }
+    });
+
+    this.addCommand({
+      id: 'fibonacci-reset-config',
+      name: 'Reset Fibonacci Sphere to Default',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        store.resetFibonacciConfig();
+        this.uiService.showSuccess('Fibonacci sphere reset to default configuration');
+        console.log('Fibonacci sphere configuration reset to default:', DEFAULT_FIBONACCI_CONFIG);
+      }
+    });
+
+    this.addCommand({
+      id: 'fibonacci-increase-nodes',
+      name: 'Increase Node Count',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const currentCount = store.fibonacciConfig.nodeCount;
+        const newCount = Math.min(currentCount + 6, 100); // Max 100 nodes
+        store.setFibonacciConfig({ nodeCount: newCount });
+        this.uiService.showSuccess(`Node count increased to ${newCount}`);
+        console.log('Fibonacci sphere node count increased to:', newCount);
+      }
+    });
+
+    this.addCommand({
+      id: 'fibonacci-decrease-nodes',
+      name: 'Decrease Node Count',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const currentCount = store.fibonacciConfig.nodeCount;
+        const newCount = Math.max(currentCount - 6, 6); // Min 6 nodes
+        store.setFibonacciConfig({ nodeCount: newCount });
+        this.uiService.showSuccess(`Node count decreased to ${newCount}`);
+        console.log('Fibonacci sphere node count decreased to:', newCount);
       }
     });
   }
