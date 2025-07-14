@@ -510,6 +510,7 @@ mutation {
 - #278 ✅ React Three Fiber integration (CLOSED - completed)
 - #306 DreamNode 3D Component (current work)
 - #307 Layout State Management (next priority)
+- #308 Advanced Camera Controls (smooth navigation)
 - #279 Fibonacci Sphere Layout (mathematical positioning)
 - #281 Dynamic View Scaling (attention-based scaling + LOD - later in Epic 2)
 
