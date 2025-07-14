@@ -472,10 +472,33 @@ mutation {
 
 **Feature Completion Workflow**:
 1. **Complete Implementation**: All acceptance criteria met
-2. **Merge to Epic Branch**: Professional merge with clean history
-3. **Update Acceptance Criteria**: Check off all completed items in issue body
-4. **Close Feature Issue**: `gh issue close ISSUE_NUMBER --comment "completion summary"`
-5. **Clean Up**: Delete feature branch, update project memory
+2. **Update Issue Body**: Edit issue to check off `[x]` all completed acceptance criteria and definition of done items
+3. **Close with Session Summary**: `gh issue close ISSUE_NUMBER --comment "session summary"`
+   - **Comment Format**: Session summary of what was actually accomplished
+   - **Comment Structure**: 
+     - ✅ Feature name complete
+     - Bullet points of acceptance criteria met
+     - Testing results
+     - Implementation notes (branch ready for merge, next steps)
+4. **Clean Up**: Delete feature branch after epic integration, update project memory
+
+**Example Feature Completion Comment**:
+```
+✅ **Layout State Management implementation complete!**
+
+All acceptance criteria successfully implemented and tested:
+- Extended Zustand store with camera and layout transition state
+- Command palette commands for all layout switching operations working
+- Service layer integration following Commands → Services → Store pattern
+
+**Testing Results:**
+- All 4 commands functional via Cmd+P
+- State management working correctly with proper error handling
+
+**Implementation:**
+- Feature branch ready for merge to epic branch
+- Ready for next Epic 2 feature
+```
 
 ### Current Status
 - Project uses AI-assisted development (Claude Code as primary partner)
