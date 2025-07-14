@@ -43,4 +43,43 @@ export class DreamNodeService {
   isSelected(nodeId: string): boolean {
     return this.selectedNodes.has(nodeId);
   }
+
+  // Layout management methods
+  setLayout(layout: 'constellation' | 'search' | 'focused'): void {
+    const store = useInterBrainStore.getState();
+    store.setSpatialLayout(layout);
+  }
+
+  getCurrentLayout(): 'constellation' | 'search' | 'focused' {
+    return useInterBrainStore.getState().spatialLayout;
+  }
+
+  // Camera management methods
+  resetCamera(): void {
+    const store = useInterBrainStore.getState();
+    // Reset to default position from prototype
+    store.setCameraPosition([0, 0, 1000]);
+    store.setCameraTarget([0, 0, 0]);
+    store.setCameraTransition(false);
+  }
+
+  setCameraPosition(position: [number, number, number]): void {
+    const store = useInterBrainStore.getState();
+    store.setCameraPosition(position);
+  }
+
+  setCameraTarget(target: [number, number, number]): void {
+    const store = useInterBrainStore.getState();
+    store.setCameraTarget(target);
+  }
+
+  startCameraTransition(duration: number = 1000): void {
+    const store = useInterBrainStore.getState();
+    store.setCameraTransition(true, duration);
+  }
+
+  endCameraTransition(): void {
+    const store = useInterBrainStore.getState();
+    store.setCameraTransition(false);
+  }
 }
