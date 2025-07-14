@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import DreamspaceManager from '../dreamspace/DreamspaceManager';
+import DreamNode3D from '../dreamspace/DreamNode3D';
 import { generateMockDreamNodes } from '../mock/dreamnode-mock-data';
 import { DreamNode } from '../types/dreamnode';
 
@@ -57,8 +57,8 @@ function BrowserDemo() {
         pointerEvents: 'none'
       }}>
         <div>DreamSpace Browser Demo</div>
-        <div>Drag to rotate • Look at nodes to call them closer</div>
-        <div>12 nodes on Fibonacci sphere • Stars emerge as DreamNodes</div>
+        <div>Drag to rotate • Fixed 240px DreamNodes</div>
+        <div>12 nodes on Fibonacci sphere • Clean foundational version</div>
       </div>
 
       {/* Direct Canvas implementation to avoid Obsidian dependencies */}
@@ -75,13 +75,16 @@ function BrowserDemo() {
           background: '#000000'
         }}
       >
-        {/* Efficient LOD rendering - only active nodes get full components */}
-        <DreamspaceManager
-          dreamNodes={dreamNodes}
-          onNodeHover={handleNodeHover}
-          onClick={handleNodeClick}
-          onDoubleClick={handleNodeDoubleClick}
-        />
+        {/* Render all DreamNodes directly */}
+        {dreamNodes.map((node) => (
+          <DreamNode3D
+            key={node.id}
+            dreamNode={node}
+            onHover={handleNodeHover}
+            onClick={handleNodeClick}
+            onDoubleClick={handleNodeDoubleClick}
+          />
+        ))}
         
         {/* Camera controls - natural drag feeling */}
         <OrbitControls 
