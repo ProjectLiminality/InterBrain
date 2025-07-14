@@ -499,6 +499,40 @@ mutation {
 - **Trigger Point**: When we begin self-healing codebase features and production monitoring
 - **Reminder**: Suggest GitHub App installation at Epic 4 start for automated workflows and AI-powered issue management
 
+## GitHub Issue Quick Reference
+
+**Core Epics (Sequential Implementation Required)**:
+- **Epic 2**: #253 - 3D Spatial Visualization System | Spec: #265
+- **Epic 3**: #254 - DreamNode Management System | Spec: #266  
+- **Epic 4**: #255 - Git Operations Abstraction | Spec: #267
+
+**Epic 2: 3D Spatial Visualization Features**:
+- #278 ✅ React Three Fiber integration (CLOSED - completed)
+- #306 DreamNode 3D Component (current work)
+- #307 Layout State Management (next priority)
+- #279 Fibonacci Sphere Layout (mathematical positioning)
+- #281 Dynamic View Scaling (attention-based scaling + LOD - later in Epic 2)
+
+**Epic 3: DreamNode Management Features**:
+- #285 DreamTalk component (media upload/editing)
+- #286 DreamWeaving canvas integration (.canvas file parsing)
+- #296 Pop-out operation (content extraction)
+
+**Future Epics**:
+- #256 Semantic Search System
+- #257 DreamWalk Co-pilot System  
+- #258 Coherence Beacon System
+- #259 DreamOS Foundational Operations
+- #260 Shamanic Onboarding Experience
+- #261 Testing & Quality Infrastructure
+- #262 Relationship Buffer System  
+- #263 AI Integration & Self-Healing
+
+**Epic Scope Clarity**:
+- **Epic 2**: Visual representation and navigation of DreamNodes in 3D space (the theater)
+- **Epic 3**: Creating, editing, and organizing DreamNodes as data entities (the content management)
+- **Epic 4**: User-friendly Save/Share paradigm hiding git complexity (the backend)
+
 ### Next Steps (Per ROADMAP.md)
 1. **Month 1**: Create Obsidian plugin foundation, implement custom view type for 3D space
 2. **Month 2**: Add AI features (transcription, semantic search, video calls)
