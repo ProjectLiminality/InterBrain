@@ -152,6 +152,55 @@ export default class InterBrainPlugin extends Plugin {
         console.log('Selection cleared - Zustand state should be null');
       }
     });
+
+    // Layout command: Switch to constellation view
+    this.addCommand({
+      id: 'layout-constellation',
+      name: 'Switch to Constellation View',
+      callback: () => {
+        this.dreamNodeService.setLayout('constellation');
+        this.uiService.showSuccess('Switched to constellation view');
+        console.log('Layout switched to constellation');
+      }
+    });
+
+    // Layout command: Switch to search view
+    this.addCommand({
+      id: 'layout-search',
+      name: 'Switch to Search View',
+      callback: () => {
+        this.dreamNodeService.setLayout('search');
+        this.uiService.showSuccess('Switched to search view');
+        console.log('Layout switched to search');
+      }
+    });
+
+    // Layout command: Switch to focused view
+    this.addCommand({
+      id: 'layout-focused',
+      name: 'Switch to Focused View',
+      callback: () => {
+        const currentNode = this.dreamNodeService.getCurrentNode();
+        if (!currentNode) {
+          this.uiService.showError('No DreamNode selected - select a node first');
+          return;
+        }
+        this.dreamNodeService.setLayout('focused');
+        this.uiService.showSuccess(`Focused on: ${currentNode.name}`);
+        console.log('Layout switched to focused on:', currentNode.name);
+      }
+    });
+
+    // Camera command: Reset camera position
+    this.addCommand({
+      id: 'camera-reset',
+      name: 'Reset Camera Position',
+      callback: () => {
+        this.dreamNodeService.resetCamera();
+        this.uiService.showSuccess('Camera position reset');
+        console.log('Camera reset to default position');
+      }
+    });
   }
 
   onunload() {
