@@ -1,7 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Html } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3 } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 
 interface DreamNode3DProps {
@@ -12,13 +10,13 @@ interface DreamNode3DProps {
 }
 
 /**
- * 3D DreamNode component with continuous attention-based scaling
+ * 3D DreamNode component with constant size for foundational development
  * 
  * Features:
- * - Smooth scaling from tiny star to full DreamNode
- * - Continuous size based on how centered node is in view
- * - Smooth position transitions along ray from sphere to camera
- * - No discrete jumps - everything interpolated smoothly
+ * - Fixed 240px size for consistent visual development
+ * - Static positioning on Fibonacci sphere
+ * - Clean interaction patterns (hover, click, double-click)
+ * - Color coding: blue for Dreams, red for Dreamers
  */
 export default function DreamNode3D({ 
   dreamNode, 
@@ -27,108 +25,6 @@ export default function DreamNode3D({
   onDoubleClick 
 }: DreamNode3DProps) {
   const [isHovered, setIsHovered] = useState(false);
-  
-  // Continuous scale state (0 = tiny star, 1 = full node)
-  const [scale, setScale] = useState(0);
-  const [centeredness, setCenteredness] = useState(0);
-  
-  // Dynamic position that moves along ray from sphere to camera
-  const [dynamicPosition, setDynamicPosition] = useState<[number, number, number]>(dreamNode.position);
-  
-  // Change-based logging with frame tracking
-  const [lastLoggedValues, setLastLoggedValues] = useState({ angle: 0, scale: 0 });
-  const [framesSinceChange, setFramesSinceChange] = useState(0);
-  const lastFrameTime = useRef(Date.now());
-  
-  const { camera } = useThree();
-  
-  // Fixed position on Fibonacci sphere
-  const spherePosition = new Vector3(...dreamNode.position);
-  const sphereRadius = spherePosition.length();
-  
-  // Real-time frame updates for smooth multi-node scaling
-  useFrame(() => {
-    
-    // Get camera forward direction
-    const cameraDirection = new Vector3(0, 0, -1);
-    cameraDirection.applyQuaternion(camera.quaternion);
-    
-    // Calculate angle between camera direction and node direction
-    const nodeDirection = spherePosition.clone().normalize();
-    const dotProduct = cameraDirection.dot(nodeDirection);
-    
-    // Convert to angle in degrees (0-90, where 0 is directly ahead)
-    const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct))) * (180 / Math.PI);
-    
-    // Attention thresholds
-    const maxAttentionAngle = 45; // 45 degrees from center - start growing
-    const fullSizeAngle = 15; // 15 degrees from center - reach full size and stay there
-    
-    // Calculate centeredness with deadzone
-    let centeredness = 0;
-    if (angle <= fullSizeAngle) {
-      // Within deadzone - full size (1.0)
-      centeredness = 1.0;
-    } else if (angle <= maxAttentionAngle) {
-      // Transition zone - scale from full size down to zero
-      const transitionProgress = (angle - fullSizeAngle) / (maxAttentionAngle - fullSizeAngle);
-      centeredness = 1.0 - transitionProgress;
-    }
-    // Outside maxAttentionAngle = centeredness stays 0
-    
-    // Apply smoother easing curve for higher resolution scaling
-    let easedCenteredness;
-    if (angle <= fullSizeAngle) {
-      easedCenteredness = 1.0;
-    } else {
-      // Smoother easing: smoothstep function (3t² - 2t³) instead of cubic
-      const t = centeredness;
-      easedCenteredness = t * t * (3 - 2 * t);
-    }
-    
-    // High-resolution direct updates (no interpolation)
-    setCenteredness(easedCenteredness);
-    setScale(easedCenteredness);
-    
-    // Change-based console feedback for smoothness debugging
-    const currentTime = Date.now();
-    lastFrameTime.current = currentTime;
-    
-    // Check if values have changed significantly (threshold to avoid float precision noise)
-    const angleChanged = Math.abs(angle - lastLoggedValues.angle) > 0.1;
-    const scaleChanged = Math.abs(easedCenteredness - lastLoggedValues.scale) > 0.001;
-    
-    if (easedCenteredness > 0.01) { // Only track when visible
-      if (angleChanged || scaleChanged) {
-        // Log the change with time information
-        const timeInfo = framesSinceChange > 0 ? ` (${framesSinceChange} frames, ${(framesSinceChange * 16.67).toFixed(0)}ms since last change)` : '';
-        console.log(`[${dreamNode.name}] angle: ${angle.toFixed(1)}° | scale: ${easedCenteredness.toFixed(3)}${timeInfo}`);
-        
-        // Update tracked values and reset frame counter
-        setLastLoggedValues({ angle, scale: easedCenteredness });
-        setFramesSinceChange(0);
-      } else {
-        // Increment frame counter for unchanged values
-        setFramesSinceChange(prev => prev + 1);
-      }
-    }
-    
-    // Continuous position - move closer based on attention
-    // At center: come close (20% of radius), at edge: stay on sphere
-    const minDistance = sphereRadius * 0.15; // Come even closer for more drama
-    const targetDistance = sphereRadius - (easedCenteredness * (sphereRadius - minDistance));
-    
-    // Calculate new position along ray
-    const rayDirection = spherePosition.clone().normalize();
-    const newPosition = rayDirection.multiplyScalar(targetDistance);
-    
-    // High-resolution position updates with minimal smoothing
-    setDynamicPosition(prev => {
-      const current = new Vector3(...prev);
-      current.lerp(newPosition, 0.25); // Higher resolution position updates
-      return [current.x, current.y, current.z];
-    });
-  });
 
   // Handle mouse events
   const handleMouseEnter = () => {
@@ -154,53 +50,43 @@ export default function DreamNode3D({
   // Color coding: blue for Dreams, red for Dreamers
   const borderColor = dreamNode.type === 'dream' ? '#00a2ff' : '#FF644E';
   
-  // Continuous size calculation
-  const minSize = 3; // Tiny star size
-  const maxSize = 240; // Full DreamNode size (doubled from 120)
-  const currentSize = minSize + (scale * (maxSize - minSize));
+  // Constant size for foundational development
+  const nodeSize = 240;
+  const borderWidth = Math.max(1, nodeSize * 0.04); // ~10px border
   
-  // Show DreamTalk symbol only when large enough
-  const showSymbol = scale > 0.3; // Show symbol when more than 30% size
-  const symbolOpacity = Math.min(1, Math.max(0, (scale - 0.3) / 0.7)); // Fade in from 30% to 100%
-  
-  // Show detailed label when very centered
-  const showLabel = centeredness > 0.8;
-
   return (
     <Html
-      position={dynamicPosition}
+      position={dreamNode.position}
       center
       sprite
       style={{
-        pointerEvents: scale > 0.1 ? 'auto' : 'none', // Only clickable when large enough
+        pointerEvents: 'auto',
         userSelect: 'none'
       }}
     >
       <div
         style={{
-          width: `${currentSize}px`,
-          height: `${currentSize}px`,
+          width: `${nodeSize}px`,
+          height: `${nodeSize}px`,
           borderRadius: '50%',
-          border: currentSize > 10 ? `${Math.max(1, currentSize * 0.04)}px solid ${borderColor}` : 'none',
-          background: currentSize <= 10 ? '#FFFFFF' : '#000000', // White dot when tiny, black when large
+          border: `${borderWidth}px solid ${borderColor}`,
+          background: '#000000',
           overflow: 'hidden',
           position: 'relative',
-          cursor: scale > 0.3 ? 'pointer' : 'default',
-          transition: 'all 0.1s ease',
-          transform: isHovered && scale > 0.5 ? 'scale(1.1)' : 'scale(1)',
-          boxShadow: currentSize <= 10 
-            ? `0 0 ${currentSize * 2}px ${borderColor}, 0 0 ${currentSize * 4}px ${borderColor}` // Star glow
-            : isHovered 
-              ? `0 0 20px ${borderColor}` 
-              : `0 0 10px rgba(${borderColor.slice(1)}, 0.5)` // Node glow
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+          boxShadow: isHovered 
+            ? `0 0 20px ${borderColor}` 
+            : `0 0 10px rgba(${borderColor.slice(1)}, 0.5)`
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >
-        {/* DreamTalk Media Container - only visible when large enough */}
-        {showSymbol && dreamNode.dreamTalkMedia[0] && (
+        {/* DreamTalk Media Container */}
+        {dreamNode.dreamTalkMedia[0] && (
           <div
             style={{
               width: '80%',
@@ -211,16 +97,15 @@ export default function DreamNode3D({
               transform: 'translate(-50%, -50%)',
               borderRadius: '50%',
               overflow: 'hidden',
-              background: 'rgba(0, 0, 0, 0.8)',
-              opacity: symbolOpacity
+              background: 'rgba(0, 0, 0, 0.8)'
             }}
           >
             <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
           </div>
         )}
 
-        {/* Empty state text - only when large enough and no media */}
-        {showSymbol && !dreamNode.dreamTalkMedia[0] && (
+        {/* Empty state text - when no media */}
+        {!dreamNode.dreamTalkMedia[0] && (
           <div
             style={{
               width: '100%',
@@ -229,10 +114,9 @@ export default function DreamNode3D({
               alignItems: 'center',
               justifyContent: 'center',
               color: '#FFFFFF',
-              fontSize: `${Math.max(8, currentSize * 0.1)}px`,
+              fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
               textAlign: 'center',
-              padding: '8px',
-              opacity: symbolOpacity
+              padding: '8px'
             }}
           >
             {dreamNode.name}
@@ -240,43 +124,38 @@ export default function DreamNode3D({
         )}
 
         {/* Circular fade overlay */}
-        {showSymbol && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '10%',
-              left: '10%',
-              width: '80%',
-              height: '80%',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,1) 70%)',
-              pointerEvents: 'none',
-              opacity: symbolOpacity
-            }}
-          />
-        )}
+        <div
+          style={{
+            position: 'absolute',
+            top: '10%',
+            left: '10%',
+            width: '80%',
+            height: '80%',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,1) 70%)',
+            pointerEvents: 'none'
+          }}
+        />
 
-        {/* Detailed label - appears when very centered */}
-        {showLabel && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: `-${currentSize * 0.25}px`,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              color: '#FFFFFF',
-              fontSize: `${Math.max(10, currentSize * 0.12)}px`,
-              textAlign: 'center',
-              background: 'rgba(0, 0, 0, 0.8)',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              whiteSpace: 'nowrap',
-              pointerEvents: 'none'
-            }}
-          >
-            {dreamNode.name}
-          </div>
-        )}
+        {/* Node label */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: `-${nodeSize * 0.25}px`,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            color: '#FFFFFF',
+            fontSize: `${Math.max(12, nodeSize * 0.1)}px`,
+            textAlign: 'center',
+            background: 'rgba(0, 0, 0, 0.8)',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none'
+          }}
+        >
+          {dreamNode.name}
+        </div>
       </div>
     </Html>
   );
