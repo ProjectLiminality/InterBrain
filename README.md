@@ -15,7 +15,7 @@ Earlier exploration work including screenshots and recordings can be found at [*
 > ✅ **Epic 1 Complete:**  
 Foundation infrastructure with:
 - Vite dual development workflow (browser + plugin)
-- Command palette architecture (8 commands)  
+- Command palette architecture (6 core commands)  
 - Service layer abstraction (UI, Git, DreamNode, Vault)
 - Zustand reactive state management
 - Vitest testing framework (47 tests passing)

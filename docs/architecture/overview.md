@@ -1,6 +1,6 @@
 Of course. This is an excellent and crucial point in your development process. You've correctly identified the central tension between traditional front-end architectures optimized for component reusability (Layered/Atomic) and modern architectures optimized for AI context and maintainability (Vertical Slice).
 
-Let's synthesize the insights from both answers and forge a definitive architectural guide for your DreamVault project. The goal is to create a document that is not only clear for you but can be pasted directly into your AI assistant's context window to ensure every development session starts with a shared understanding of "how we build things here."
+Let's synthesize the insights from both answers and forge a definitive architectural guide for your InterBrain project. The goal is to create a document that is not only clear for you but can be pasted directly into your AI assistant's context window to ensure every development session starts with a shared understanding of "how we build things here."
 
 ---
 
