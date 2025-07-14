@@ -1,4 +1,5 @@
 import { DreamNode, MediaFile, CanvasFile } from '../types/dreamnode';
+import { calculateFibonacciSpherePositions } from '../dreamspace/FibonacciSphereLayout';
 
 /**
  * Mock DreamNode data for testing the 3D visualization
@@ -85,10 +86,6 @@ const mockCanvasFiles: CanvasFile[] = [
  * Now uses the core FibonacciSphereLayout algorithm
  */
 export function generateMockDreamNodes(count: number = 12): DreamNode[] {
-  // Import the core algorithm (dynamic import for proper module loading)
-  /* eslint-disable-next-line no-undef */
-  const { calculateFibonacciSpherePositions } = require('../dreamspace/FibonacciSphereLayout');
-  
   const spherePositions = calculateFibonacciSpherePositions({
     radius: 1000,
     nodeCount: count,
