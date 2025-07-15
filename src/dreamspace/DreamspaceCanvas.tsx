@@ -1,12 +1,21 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { useRef } from 'react';
+import { Group } from 'three';
 import { generateMockDreamNodes } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
+import SphereRotationControls from './SphereRotationControls';
 import { DreamNode } from '../types/dreamnode';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 export default function DreamspaceCanvas() {
   // Generate mock data for testing - only Fibonacci sphere nodes
   const dreamNodes = generateMockDreamNodes(12);
+  
+  // Reference to the group containing all DreamNodes for rotation
+  const dreamWorldRef = useRef<Group>(null);
+  
+  // Debug wireframe sphere state from store
+  const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -25,7 +34,7 @@ export default function DreamspaceCanvas() {
     <div className="dreamspace-canvas-container">
       <Canvas
         camera={{
-          position: [0, 0, 0],
+          position: [0, 0, 0],  // Static camera at origin
           fov: 75,
           near: 0.1,
           far: 10000
@@ -36,27 +45,29 @@ export default function DreamspaceCanvas() {
           background: '#000000'
         }}
       >
-        {/* Render all DreamNodes */}
-        {dreamNodes.map((node) => (
-          <DreamNode3D
-            key={node.id}
-            dreamNode={node}
-            onHover={handleNodeHover}
-            onClick={handleNodeClick}
-            onDoubleClick={handleNodeDoubleClick}
-          />
-        ))}
+        {/* Rotatable group containing all DreamNodes */}
+        <group ref={dreamWorldRef}>
+          {/* Debug wireframe sphere - toggleable via Obsidian commands */}
+          {debugWireframeSphere && (
+            <mesh>
+              <sphereGeometry args={[1000, 32, 32]} />
+              <meshBasicMaterial color="#00ff00" wireframe={true} transparent={true} opacity={0.3} />
+            </mesh>
+          )}
+          
+          {dreamNodes.map((node) => (
+            <DreamNode3D
+              key={node.id}
+              dreamNode={node}
+              onHover={handleNodeHover}
+              onClick={handleNodeClick}
+              onDoubleClick={handleNodeDoubleClick}
+            />
+          ))}
+        </group>
         
-        {/* Camera controls for navigation - camera at origin */}
-        <OrbitControls 
-          enablePan={false}  // No panning, only rotation at origin
-          enableZoom={false} // No zoom, camera stays at origin
-          enableRotate={true}
-          rotateSpeed={0.5}
-          minDistance={0}
-          maxDistance={0}
-          target={[0, 0, 0]}
-        />
+        {/* Mouse drag controls for rotating the sphere */}
+        <SphereRotationControls groupRef={dreamWorldRef} />
         
         {/* Ambient lighting for any 3D elements (minimal) */}
         <ambientLight intensity={0.1} />
