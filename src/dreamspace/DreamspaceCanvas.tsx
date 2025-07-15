@@ -43,6 +43,12 @@ export default function DreamspaceCanvas() {
       >
         {/* Rotatable group containing all DreamNodes */}
         <group ref={dreamWorldRef}>
+          {/* Wireframe sphere for debugging - shows the Fibonacci sphere structure */}
+          <mesh>
+            <sphereGeometry args={[1000, 32, 32]} />
+            <meshBasicMaterial color="#00ff00" wireframe={true} transparent={true} opacity={0.3} />
+          </mesh>
+          
           {dreamNodes.map((node) => (
             <DreamNode3D
               key={node.id}
