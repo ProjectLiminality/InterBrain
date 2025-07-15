@@ -81,7 +81,7 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   const currentRotation = useRef<Quaternion>(new Quaternion(0, 0, 0, 1));
   
   // Physics-based momentum (Google Earth style)
-  const angularVelocity = useRef<Quaternion>(new Quaternion(0, 0, 0, 1));
+  const angularVelocity = useRef<{ axis: Vector3; speed: number }>({ axis: new Vector3(), speed: 0 });
   const dampingTimeConstant = 325; // milliseconds (based on iOS momentum scrolling research)
   
   // Velocity estimation with moving average
@@ -102,7 +102,7 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     lastTrackballPos.current = virtualTrackballProjection(mouseX, mouseY, rect.width, rect.height);
     
     // Stop any existing momentum
-    angularVelocity.current.set(0, 0, 0, 1);
+    angularVelocity.current.speed = 0;
     velocityHistory.current = [];
   };
   
@@ -126,8 +126,15 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     // Set group rotation from quaternion (prevents accumulation errors)
     groupRef.current.setRotationFromQuaternion(currentRotation.current);
     
-    // Velocity storage disabled for debugging
-    // velocityHistory.current.push({...})
+    // Store velocity for momentum calculation
+    velocityHistory.current.push({
+      quaternion: rotationQuaternion.clone(),
+      timestamp: Date.now()
+    });
+    
+    // Keep only recent history (last 100ms for smooth velocity estimation)
+    const cutoffTime = Date.now() - 100;
+    velocityHistory.current = velocityHistory.current.filter(entry => entry.timestamp > cutoffTime);
     
     // Update last position for next frame
     lastTrackballPos.current.copy(currentTrackballPos);
@@ -137,8 +144,46 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     event.preventDefault();
     setIsDragging(false);
     
-    // Momentum calculation disabled for debugging
-    // angularVelocity.current.set(0, 0, 0, 1);
+    // Calculate final angular velocity for momentum
+    if (velocityHistory.current.length >= 2) {
+      // Get recent velocity samples for smoothing
+      const recentSamples = velocityHistory.current.slice(-5); // Last 5 samples
+      let totalAxis = new Vector3();
+      let totalSpeed = 0;
+      let totalWeight = 0;
+      
+      // Weighted average with exponential decay (more recent = higher weight)
+      for (let i = 0; i < recentSamples.length - 1; i++) {
+        const weight = Math.exp(-velocityFilterAlpha * (recentSamples.length - 1 - i));
+        const deltaQuaternion = recentSamples[i + 1].quaternion;
+        const deltaTime = (recentSamples[i + 1].timestamp - recentSamples[i].timestamp) / 1000; // Convert to seconds
+        
+        // Extract axis and angle from quaternion
+        const axis = new Vector3(deltaQuaternion.x, deltaQuaternion.y, deltaQuaternion.z);
+        const angle = 2 * Math.acos(Math.abs(deltaQuaternion.w));
+        
+        if (axis.length() > 0.000001 && deltaTime > 0) {
+          axis.normalize();
+          const speed = angle / deltaTime; // Angular speed in radians per second
+          
+          // Accumulate weighted averages
+          totalAxis.add(axis.clone().multiplyScalar(weight * speed));
+          totalSpeed += weight * speed;
+          totalWeight += weight;
+        }
+      }
+      
+      // Set final angular velocity
+      if (totalWeight > 0 && totalSpeed > 0) {
+        angularVelocity.current.axis = totalAxis.divideScalar(totalSpeed).normalize();
+        angularVelocity.current.speed = totalSpeed / totalWeight;
+      } else {
+        angularVelocity.current.speed = 0;
+      }
+    } else {
+      // No momentum if insufficient data
+      angularVelocity.current.speed = 0;
+    }
   };
   
   // Prevent context menu on right click
@@ -167,10 +212,27 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     };
   }, [isDragging]); // Re-run when isDragging changes
   
-  // Momentum disabled for debugging
+  // Physics-based momentum with exponential damping
   useFrame((state, delta) => {
-    // Momentum system disabled
-    return;
+    if (isDragging || !groupRef.current) return;
+    
+    // Check if there's any angular velocity
+    if (angularVelocity.current.speed < 0.001) {
+      return; // No momentum
+    }
+    
+    // Apply exponential damping: v(t) = v₀ * e^(-t/τ)
+    // Where τ = dampingTimeConstant = 325ms
+    const dampingFactor = Math.exp(-delta * 1000 / dampingTimeConstant);
+    angularVelocity.current.speed *= dampingFactor;
+    
+    // Calculate rotation for this frame using the SAME method as drag
+    const frameAngle = angularVelocity.current.speed * delta; // Angle for this frame
+    const frameRotation = new Quaternion().setFromAxisAngle(angularVelocity.current.axis, frameAngle);
+    
+    // Apply momentum rotation using IDENTICAL mathematics to drag system
+    currentRotation.current.multiplyQuaternions(frameRotation, currentRotation.current);
+    groupRef.current.setRotationFromQuaternion(currentRotation.current);
   });
   
   return null; // This component only handles interactions, no visual rendering
