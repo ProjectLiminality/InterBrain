@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { Group } from 'three';
 import DreamNode3D from '../dreamspace/DreamNode3D';
+import SphereRotationControls from '../dreamspace/SphereRotationControls';
 import { generateMockDreamNodes } from '../mock/dreamnode-mock-data';
 import { DreamNode } from '../types/dreamnode';
 
@@ -20,6 +21,9 @@ import { DreamNode } from '../types/dreamnode';
 function BrowserDemo() {
   // Generate mock data directly in browser demo
   const dreamNodes = generateMockDreamNodes(12);
+  
+  // Reference to the group containing all DreamNodes for rotation
+  const dreamWorldRef = useRef<Group>(null);
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -57,14 +61,14 @@ function BrowserDemo() {
         pointerEvents: 'none'
       }}>
         <div>DreamSpace Browser Demo</div>
-        <div>Drag to rotate • Fixed 240px DreamNodes</div>
-        <div>12 nodes on Fibonacci sphere • Clean foundational version</div>
+        <div>Click & drag to rotate sphere • Static camera architecture</div>
+        <div>12 nodes on Fibonacci sphere • Natural sphere interaction</div>
       </div>
 
       {/* Direct Canvas implementation to avoid Obsidian dependencies */}
       <Canvas
         camera={{
-          position: [0, 0, 0],
+          position: [0, 0, 0],  // Static camera at origin
           fov: 75,
           near: 0.1,
           far: 10000
@@ -75,29 +79,21 @@ function BrowserDemo() {
           background: '#000000'
         }}
       >
-        {/* Render all DreamNodes directly */}
-        {dreamNodes.map((node) => (
-          <DreamNode3D
-            key={node.id}
-            dreamNode={node}
-            onHover={handleNodeHover}
-            onClick={handleNodeClick}
-            onDoubleClick={handleNodeDoubleClick}
-          />
-        ))}
+        {/* Rotatable group containing all DreamNodes */}
+        <group ref={dreamWorldRef}>
+          {dreamNodes.map((node) => (
+            <DreamNode3D
+              key={node.id}
+              dreamNode={node}
+              onHover={handleNodeHover}
+              onClick={handleNodeClick}
+              onDoubleClick={handleNodeDoubleClick}
+            />
+          ))}
+        </group>
         
-        {/* Camera controls - natural drag feeling */}
-        <OrbitControls 
-          enablePan={false}
-          enableZoom={true}
-          enableRotate={true}
-          rotateSpeed={-0.5}  // Negative to invert drag direction
-          zoomSpeed={0.3}
-          minDistance={10}
-          maxDistance={200}
-          target={[0, 0, 0]}
-          reverseOrbit={true}  // Additional inversion for natural feel
-        />
+        {/* Mouse drag controls for rotating the sphere */}
+        <SphereRotationControls groupRef={dreamWorldRef} />
         
         {/* Minimal ambient lighting */}
         <ambientLight intensity={0.1} />
