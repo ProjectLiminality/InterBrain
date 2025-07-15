@@ -126,6 +126,18 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Debug: Toggle wireframe sphere
+    this.addCommand({
+      id: 'toggle-debug-wireframe-sphere',
+      name: 'Toggle Debug Wireframe Sphere',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const newState = !store.debugWireframeSphere;
+        store.setDebugWireframeSphere(newState);
+        this.uiService.showSuccess(`Debug wireframe sphere ${newState ? 'enabled' : 'disabled'}`);
+      }
+    });
+
     // Test command: Select mock DreamNode
     this.addCommand({
       id: 'select-mock-dreamnode',

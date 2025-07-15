@@ -38,6 +38,10 @@ export interface InterBrainState {
     previousLayout: 'constellation' | 'search' | 'focused' | null;
   };
   setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'focused' | null) => void;
+  
+  // Debug wireframe sphere toggle
+  debugWireframeSphere: boolean;
+  setDebugWireframeSphere: (visible: boolean) => void;
 }
 
 export const useInterBrainStore = create<InterBrainState>((set) => ({
@@ -61,6 +65,9 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
     progress: 0,
     previousLayout: null,
   },
+  
+  // Debug wireframe sphere initial state (off by default)
+  debugWireframeSphere: false,
   
   // Actions
   setSelectedNode: (node) => set({ selectedNode: node }),
@@ -98,4 +105,7 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
       previousLayout: previousLayout || state.layoutTransition.previousLayout 
     } 
   })),
+  
+  // Debug wireframe sphere actions
+  setDebugWireframeSphere: (visible) => set({ debugWireframeSphere: visible }),
 }));
