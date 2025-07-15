@@ -5,6 +5,7 @@ import { generateMockDreamNodes } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
 import SphereRotationControls from './SphereRotationControls';
 import { DreamNode } from '../types/dreamnode';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 export default function DreamspaceCanvas() {
   // Generate mock data for testing - only Fibonacci sphere nodes
@@ -12,6 +13,9 @@ export default function DreamspaceCanvas() {
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
+  
+  // Debug wireframe sphere state from store
+  const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -43,11 +47,13 @@ export default function DreamspaceCanvas() {
       >
         {/* Rotatable group containing all DreamNodes */}
         <group ref={dreamWorldRef}>
-          {/* Wireframe sphere for debugging - shows the Fibonacci sphere structure */}
-          <mesh>
-            <sphereGeometry args={[1000, 32, 32]} />
-            <meshBasicMaterial color="#00ff00" wireframe={true} transparent={true} opacity={0.3} />
-          </mesh>
+          {/* Debug wireframe sphere - toggleable via Obsidian commands */}
+          {debugWireframeSphere && (
+            <mesh>
+              <sphereGeometry args={[1000, 32, 32]} />
+              <meshBasicMaterial color="#00ff00" wireframe={true} transparent={true} opacity={0.3} />
+            </mesh>
+          )}
           
           {dreamNodes.map((node) => (
             <DreamNode3D
