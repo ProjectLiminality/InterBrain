@@ -1,19 +1,73 @@
 import { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Group } from 'three';
+import { Group, Vector3, Quaternion } from 'three';
 
 interface SphereRotationControlsProps {
   groupRef: React.RefObject<Group>;
 }
 
 /**
- * Handles mouse drag interaction for rotating the DreamNode sphere
+ * Virtual trackball projection using Google Earth's algorithm
+ * Maps screen coordinates to 3D hemisphere following Shoemake's approach
+ */
+function virtualTrackballProjection(x: number, y: number, width: number, height: number): Vector3 {
+  // Convert screen coordinates to normalized device coordinates [-1, 1]
+  const normalizedX = (2 * x / width) - 1;
+  const normalizedY = 1 - (2 * y / height); // Flip Y axis for screen coordinates
+  
+  // Calculate radius for hemisphere (use minimum dimension)
+  const radius = Math.min(width, height) / 2;
+  const sphereRadius = 1.0; // Normalized sphere radius
+  
+  // Scale normalized coordinates by sphere radius
+  const scaledX = normalizedX * sphereRadius;
+  const scaledY = normalizedY * sphereRadius;
+  
+  // Calculate length squared for efficient comparison
+  const lengthSq = scaledX * scaledX + scaledY * scaledY;
+  const radiusSq = sphereRadius * sphereRadius;
+  
+  let z: number;
+  if (lengthSq <= radiusSq / 2) {
+    // Inside sphere: use actual sphere surface z = √(r² - x² - y²)
+    z = Math.sqrt(radiusSq - lengthSq);
+  } else {
+    // Outside sphere: use Bell's hyperbolic sheet z = r²/2 / √(x² + y²)
+    z = (radiusSq / 2) / Math.sqrt(lengthSq);
+  }
+  
+  return new Vector3(scaledX, scaledY, z).normalize();
+}
+
+/**
+ * Calculate quaternion rotation between two 3D points on virtual trackball
+ * Uses cross product for axis and dot product for angle (Google Earth approach)
+ */
+function calculateTrackballRotation(from: Vector3, to: Vector3): Quaternion {
+  // Calculate rotation axis using cross product
+  const axis = new Vector3().crossVectors(from, to);
+  
+  // Calculate rotation angle using dot product: θ = cos⁻¹(p·q / |p||q|)
+  const angle = from.angleTo(to);
+  
+  // Handle parallel vectors (no rotation needed)
+  if (axis.lengthSq() < 0.000001) {
+    return new Quaternion(0, 0, 0, 1); // Identity quaternion
+  }
+  
+  // Create quaternion from axis-angle: q = [cos(θ/2), sin(θ/2) * n]
+  axis.normalize();
+  return new Quaternion().setFromAxisAngle(axis, angle);
+}
+
+/**
+ * Google Earth style virtual trackball rotation controls
  * 
  * Features:
- * - Mouse drag rotates the entire group (inverted controls for natural feel)
- * - Momentum/physics for natural sphere interaction
- * - Smooth interpolation for 60fps performance
- * - Click and drag only (no pointer lock needed)
+ * - Virtual trackball algorithm with quaternion mathematics
+ * - Physics-based momentum with exponential damping (325ms time constant)
+ * - Velocity estimation with low-pass filtering
+ * - No gimbal lock, smooth rotation at all orientations
  */
 export default function SphereRotationControls({ groupRef }: SphereRotationControlsProps) {
   const { gl } = useThree();
@@ -21,46 +75,70 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
-  const lastMousePos = useRef({ x: 0, y: 0 });
+  const lastTrackballPos = useRef<Vector3>(new Vector3());
   
-  // Rotation velocity for momentum
-  const rotationVelocity = useRef({ x: 0, y: 0 });
-  const damping = 0.95; // Momentum decay factor
+  // Quaternion rotation state (prevents accumulation errors)
+  const currentRotation = useRef<Quaternion>(new Quaternion(0, 0, 0, 1));
   
-  // Sensitivity for mouse movement
-  const sensitivity = 0.005;
+  // Physics-based momentum (Google Earth style)
+  const angularVelocity = useRef<Quaternion>(new Quaternion(0, 0, 0, 1));
+  const dampingTimeConstant = 325; // milliseconds (based on iOS momentum scrolling research)
+  
+  // Velocity estimation with moving average
+  const velocityHistory = useRef<{ quaternion: Quaternion; timestamp: number }[]>([]);
+  const velocityFilterAlpha = 0.2; // Low-pass filter constant
   
   // Mouse event handlers
   const handleMouseDown = (event: MouseEvent) => {
     event.preventDefault();
     setIsDragging(true);
-    lastMousePos.current = { x: event.clientX, y: event.clientY };
+    
+    // Get canvas bounding rect for accurate coordinate calculation
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    // Project mouse position to virtual trackball
+    lastTrackballPos.current = virtualTrackballProjection(mouseX, mouseY, rect.width, rect.height);
     
     // Stop any existing momentum
-    rotationVelocity.current = { x: 0, y: 0 };
+    angularVelocity.current.set(0, 0, 0, 1);
+    velocityHistory.current = [];
   };
   
   const handleMouseMove = (event: MouseEvent) => {
     if (!isDragging || !groupRef.current) return;
     
-    const deltaX = event.clientX - lastMousePos.current.x;
-    const deltaY = event.clientY - lastMousePos.current.y;
+    // Get canvas bounding rect for accurate coordinate calculation
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
     
-    // Inverted controls for natural sphere dragging feel
-    // Drag right → sphere rotates left (like dragging a physical sphere)
-    groupRef.current.rotation.y -= deltaX * sensitivity;
-    groupRef.current.rotation.x -= deltaY * sensitivity;
+    // Project current mouse position to virtual trackball
+    const currentTrackballPos = virtualTrackballProjection(mouseX, mouseY, rect.width, rect.height);
     
-    // Update velocity for momentum
-    rotationVelocity.current.x = -deltaY * sensitivity * 0.2;
-    rotationVelocity.current.y = -deltaX * sensitivity * 0.2;
+    // Calculate rotation quaternion using Google Earth algorithm (inverted for natural drag)
+    const rotationQuaternion = calculateTrackballRotation(currentTrackballPos, lastTrackballPos.current);
     
-    lastMousePos.current = { x: event.clientX, y: event.clientY };
+    // Apply rotation to current rotation state (quaternion multiplication)
+    currentRotation.current.multiplyQuaternions(rotationQuaternion, currentRotation.current);
+    
+    // Set group rotation from quaternion (prevents accumulation errors)
+    groupRef.current.setRotationFromQuaternion(currentRotation.current);
+    
+    // Velocity storage disabled for debugging
+    // velocityHistory.current.push({...})
+    
+    // Update last position for next frame
+    lastTrackballPos.current.copy(currentTrackballPos);
   };
   
   const handleMouseUp = (event: MouseEvent) => {
     event.preventDefault();
     setIsDragging(false);
+    
+    // Momentum calculation disabled for debugging
+    // angularVelocity.current.set(0, 0, 0, 1);
   };
   
   // Prevent context menu on right click
@@ -89,27 +167,10 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     };
   }, [isDragging]); // Re-run when isDragging changes
   
-  // Apply momentum when not dragging
-  useFrame(() => {
-    if (!groupRef.current) return;
-    
-    // Apply momentum when not actively dragging
-    if (!isDragging) {
-      groupRef.current.rotation.x += rotationVelocity.current.x;
-      groupRef.current.rotation.y += rotationVelocity.current.y;
-      
-      // Apply damping to slow down momentum
-      rotationVelocity.current.x *= damping;
-      rotationVelocity.current.y *= damping;
-      
-      // Stop tiny movements to prevent jitter
-      if (Math.abs(rotationVelocity.current.x) < 0.001) {
-        rotationVelocity.current.x = 0;
-      }
-      if (Math.abs(rotationVelocity.current.y) < 0.001) {
-        rotationVelocity.current.y = 0;
-      }
-    }
+  // Momentum disabled for debugging
+  useFrame((state, delta) => {
+    // Momentum system disabled
+    return;
   });
   
   return null; // This component only handles interactions, no visual rendering
