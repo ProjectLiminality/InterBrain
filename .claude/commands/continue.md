@@ -26,21 +26,46 @@ description: Comprehensive development continuation - analyze state, plan next f
 - **Package.json status**: @package.json
 - **Recent test results**: !`npm run test 2>/dev/null | tail -5 || echo "Tests not run recently"`
 
-## Interview Process: Implementation Clarity Check
+## CRITICAL PHASE 1: Feature Issue Analysis & Knowledge Transfer
 
-Quick clarity assessment before proceeding with workflow:
+**⚠️ MANDATORY FIRST STEPS - NEVER SKIP THIS PHASE ⚠️**
 
-### Context Questions (As needed):
-- **Current Priority**: "What should we focus on next for this epic?"
-- **Implementation Clarity**: "Are the current feature requirements clear, or do we need to flesh anything out?"
-- **Scope Confirmation**: "Does the planned next feature match your current thinking?"
-- **Technical Approach**: "Any specific implementation preferences or constraints I should know about?"
+### 1. Read Current Feature Issue
+- Use `gh issue view ISSUE_NUMBER` to read the current feature issue body
+- Understand existing requirements and acceptance criteria
+- Note any gaps or areas needing clarification
 
-**Note**: If everything is clear from the technical context and GitHub issues, proceed directly to workflow execution. Only ask questions when clarification is genuinely needed for implementation.
+### 2. Knowledge Transfer Interview Process
+**Present the feature issue summary and ask potent questions:**
+- "Based on the current issue body for [FEATURE], here's what I understand: [SUMMARY]. What specific implementation details have you already thought about?"
+- "What are the key interaction patterns you envision for this feature?"
+- "Are there performance requirements or constraints I should consider?"
+- "What edge cases or potential issues should we handle?"
+- "How should this integrate with our existing [RELEVANT_FEATURES]?"
+- "What aspects of this feature are most important to get right?"
 
-## Technical Context Analysis (After Interview)
+### 3. Clarification Discussion
+- Have a short conversation to align understanding
+- Let user articulate their vision and requirements
+- Capture any additional insights or constraints
 
-Based on both the interview insights AND gathered context, determine:
+### 4. Issue Body Refinement
+- Based on the discussion, update the GitHub issue with:
+  - Detailed implementation plan
+  - Specific technical approach
+  - Enhanced acceptance criteria
+  - Edge cases and constraints
+  - Integration points
+
+### 5. Get Explicit Approval
+- Present the refined issue plan: "Here's the updated implementation plan based on our discussion: [PLAN]. Does this capture what you want?"
+- Only proceed to implementation after user confirms
+
+## Technical Context Analysis
+
+**Only proceed here AFTER completing Phase 1 above**
+
+Based on the knowledge transfer insights AND gathered context, determine:
 
 ### 1. **Epic Position** 
 - Which epic are we in? (Epic 1: Complete, Epic 2: Active, Epic 3+: Future)
@@ -85,16 +110,17 @@ Based on current epic and specification:
 1. **Identify Next Feature**: 
    - From epic's feature list in GitHub issues
    - Consider dependencies and logical implementation order
-   - Check feature issue clarity and requirements
+   - **STOP HERE** - Do not proceed without feature issue analysis
 
-2. **Feature Branch Strategy**:
+2. **Return to Phase 1**: 
+   - **MANDATORY**: Go back to "CRITICAL PHASE 1" above
+   - Complete full feature issue analysis and knowledge transfer
+   - Only continue after user approval of refined issue
+
+3. **Feature Branch Strategy** (After Phase 1 Complete):
    - Create feature branch off epic branch
    - Follow naming: `feature/feature-name-from-issue`
-
-3. **Feature Issue Clarity**: 
-   - **CRITICAL FIRST STEP**: Flesh out feature issue before coding
-   - Add specific acceptance criteria and technical approach
-   - Ensure alignment with epic specification
+   - Begin implementation with clear, approved plan
 
 ### Phase 4: Implementation Planning
 Using TodoWrite, create comprehensive feature implementation plan:
@@ -161,6 +187,21 @@ Begin systematic implementation following AI-first development patterns:
 - [ ] Feature ready for epic integration
 - [ ] Clear next steps identified
 
+## CRITICAL USER TESTING PHASE
+
+**⚠️ MANDATORY BEFORE ANY COMMITS ⚠️**
+
+### Stop for User Testing
+1. **Complete implementation and local testing**
+2. **STOP and request user testing**: "The feature implementation is complete. Please test the following functionality and provide feedback:"
+   - List specific features to test
+   - Mention any special interactions or edge cases
+   - Ask user to check for any issues or unexpected behavior
+3. **Wait for user feedback** - DO NOT PROCEED WITHOUT IT
+4. **Iterate based on feedback** - Fix any issues found
+5. **Re-test with user** until they confirm it works correctly
+6. **Only then proceed to commit**
+
 ### Commit & GitHub Operations Protocol
 **CRITICAL**: Only proceed with git commits and GitHub operations AFTER:
 - [ ] Playwright MCP testing confirms feature works
@@ -172,8 +213,11 @@ Begin systematic implementation following AI-first development patterns:
 1. Test feature thoroughly with Playwright MCP
 2. Fix any issues found during testing
 3. Re-test until everything works cleanly
-4. THEN commit with comprehensive summary
-5. THEN update GitHub issues with completion status
+4. **STOP FOR USER TESTING** - Get explicit confirmation feature works
+5. THEN commit with comprehensive summary
+6. Merge feature branch to epic branch
+7. Update GitHub issue body with completed checkboxes
+8. **ONLY close issue after successful merge** - NEVER before
 
 ## AI Behavior Integration
 
