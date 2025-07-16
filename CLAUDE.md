@@ -161,8 +161,12 @@ main → epic/2-spatial-visualization
 1. **Epic Branch Creation**: Start every epic by creating the epic branch
 2. **Specification Clarity**: BEFORE any coding, flesh out specification issue
 3. **Feature Branch Creation**: Only after specification is clear
-4. **Feature Clarity**: BEFORE coding each feature, flesh out feature issue
-5. **Implementation**: Only after both specification and feature issues are detailed
+4. **Feature Issue Analysis**: Read current GitHub issue body to understand requirements
+5. **Knowledge Transfer Interview**: Conduct interview with potent questions to gain clarity
+6. **Feature Issue Planning**: Flesh out refined issue body with detailed implementation plan
+7. **Implementation**: Only after feature issue is properly planned and detailed
+8. **User Testing Protocol**: ALWAYS stop for user feedback before committing
+9. **Issue Closing**: Only close after successful merge to epic branch - NEVER before
 
 ### Cross-Session Memory Pattern
 - **Strategic Planning**: GitHub Issues (Epic/Spec/Feature) 
@@ -176,6 +180,59 @@ main → epic/2-spatial-visualization
 3. `git branch --show-current` - Confirm current branch context
 4. Recreate TodoWrite tasks based on session goals
 5. `git log --oneline -10` - Review recent progress
+
+## CRITICAL FEATURE DEVELOPMENT WORKFLOW
+
+### Phase 1: Issue Analysis & Knowledge Transfer
+**MANDATORY FIRST STEPS - NEVER SKIP**:
+1. **Read Feature Issue**: Use `gh issue view ISSUE_NUMBER` to understand current requirements
+2. **Interview Process**: Ask potent questions to transfer knowledge and gain clarity:
+   - What specific functionality is needed?
+   - What are the key interaction patterns?
+   - What are the performance requirements?
+   - What are potential edge cases or constraints?
+   - How should this integrate with existing features?
+3. **Clarification Discussion**: Short conversation to align understanding
+4. **Issue Body Refinement**: Update GitHub issue with detailed implementation plan
+5. **User Approval**: Get explicit approval before proceeding to implementation
+
+### Phase 2: Implementation
+**AFTER ISSUE CLARITY ACHIEVED**:
+1. **Feature Branch Creation**: Create feature branch off epic branch
+2. **TodoWrite Planning**: Create comprehensive task breakdown
+3. **Implementation**: Follow development rules and patterns
+4. **Unit Tests**: Ensure all tests pass
+5. **Lint & Type Check**: Clean code validation
+
+### Phase 3: User Testing & Validation
+**MANDATORY BEFORE COMMITTING**:
+1. **Stop Implementation**: Never commit without user feedback
+2. **Request User Testing**: Ask user to test the feature and provide feedback
+3. **Iterate Based on Feedback**: Address any issues found during testing
+4. **Commit Only After Validation**: Only commit when user confirms feature works
+
+### Phase 4: Feature Completion
+**FINAL STEPS**:
+1. **Merge to Epic Branch**: Merge feature branch to epic branch
+2. **Update Issue**: Mark all acceptance criteria as complete
+3. **Close Issue**: ONLY close after successful merge - never before
+4. **Clean Up**: Delete feature branch after epic integration
+
+## WORKFLOW ANTI-PATTERNS TO AVOID
+
+### ❌ Never Do These:
+- Skip issue analysis and jump straight to implementation
+- Commit changes without user testing and feedback
+- Close issues before merging to epic branch
+- Assume changes work without validation
+- Plan implementation without understanding requirements
+
+### ✅ Always Do These:
+- Start with issue analysis and knowledge transfer interview
+- Flesh out issue body with detailed planning
+- Stop for user testing before any commits
+- Only close issues after successful merge
+- Validate that features actually work as intended
 
 ## Epic Quick Reference
 
