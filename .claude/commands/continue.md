@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git:*), Bash(gh:*), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages
+allowed-tools: Bash(git:status), Bash(git:branch), Bash(git:log), Bash(git:show), Bash(git:diff), Bash(git:ls-files), Bash(gh:issue:list), Bash(gh:issue:view), Bash(gh:repo:view), Bash(gh:pr:list), Bash(gh:pr:view), Bash(gh:auth:status), Bash(lsof), Bash(find), Bash(npm:run:test), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages
 description: Comprehensive development continuation - analyze state, plan next feature, execute workflow with Playwright testing
 ---
 
