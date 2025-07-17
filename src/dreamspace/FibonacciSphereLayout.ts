@@ -115,9 +115,14 @@ export function getFibonacciSpherePosition(
 
 /**
  * Default configuration values based on prototype testing
+ * 
+ * NIGHT SKY SCALING: Radius significantly increased for true night sky proportions
+ * - Current DreamNode size: 240px
+ * - At 5000 radius: Nodes appear appropriately small for stargazing experience
+ * - Allows for distance-based scaling without CSS complications
  */
 export const DEFAULT_FIBONACCI_CONFIG: FibonacciSphereConfig = {
-  radius: 1000,
+  radius: 5000,
   nodeCount: 12,
   center: [0, 0, 0]
 };

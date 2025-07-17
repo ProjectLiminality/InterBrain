@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Html } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { Vector3, Group } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
+import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 
 interface DreamNode3DProps {
   dreamNode: DreamNode;
   onHover?: (node: DreamNode, isHovered: boolean) => void;
   onClick?: (node: DreamNode) => void;
   onDoubleClick?: (node: DreamNode) => void;
+  enableDynamicScaling?: boolean;
 }
 
 /**
@@ -22,9 +26,15 @@ export default function DreamNode3D({
   dreamNode, 
   onHover, 
   onClick, 
-  onDoubleClick 
+  onDoubleClick,
+  enableDynamicScaling = false
 }: DreamNode3DProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [dynamicState, setDynamicState] = useState({ 
+    renderMode: 'dreamnode' as 'dreamnode' | 'star', 
+    radialOffset: 0 
+  });
+  const groupRef = useRef<Group>(null);
 
   // Handle mouse events
   const handleMouseEnter = () => {
@@ -46,6 +56,26 @@ export default function DreamNode3D({
     e.stopPropagation();
     onDoubleClick?.(dreamNode);
   };
+  
+  // Calculate dynamic scaling on every frame when enabled
+  useFrame(() => {
+    if (enableDynamicScaling && groupRef.current) {
+      // Get world position of this node (includes rotation from parent group)
+      const worldPosition = new Vector3();
+      groupRef.current.getWorldPosition(worldPosition);
+      
+      // Calculate dynamic scaling based on world position
+      const { radialOffset, renderMode } = calculateDynamicScaling(
+        worldPosition,
+        DEFAULT_SCALING_CONFIG
+      );
+      
+      // Update state if changed
+      if (dynamicState.radialOffset !== radialOffset || dynamicState.renderMode !== renderMode) {
+        setDynamicState({ radialOffset, renderMode });
+      }
+    }
+  });
 
   // Color coding: blue for Dreams, red for Dreamers
   const borderColor = dreamNode.type === 'dream' ? '#00a2ff' : '#FF644E';
@@ -54,16 +84,74 @@ export default function DreamNode3D({
   const nodeSize = 240;
   const borderWidth = Math.max(1, nodeSize * 0.04); // ~10px border
   
+  // Calculate visual component position with radial offset
+  // Anchor point stays at dreamNode.position, visual component moves radially toward camera
+  const anchorPosition = dreamNode.position;
+  const radialOffset = dynamicState.radialOffset;
+  const renderMode = dynamicState.renderMode;
+  
+  const visualPosition = useMemo(() => {
+    const direction = [
+      -anchorPosition[0], // Direction toward camera (origin)
+      -anchorPosition[1],
+      -anchorPosition[2]
+    ];
+    const directionLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
+    const normalizedDirection = [
+      direction[0] / directionLength,
+      direction[1] / directionLength,
+      direction[2] / directionLength
+    ];
+    
+    // Apply radial offset to visual component
+    return [
+      anchorPosition[0] + normalizedDirection[0] * radialOffset,
+      anchorPosition[1] + normalizedDirection[1] * radialOffset,
+      anchorPosition[2] + normalizedDirection[2] * radialOffset
+    ] as [number, number, number];
+  }, [anchorPosition, radialOffset]);
+  
+  // Wrap in group at anchor position for world position calculations
   return (
-    <Html
-      position={dreamNode.position}
-      center
-      sprite
-      style={{
-        pointerEvents: 'auto',
-        userSelect: 'none'
-      }}
-    >
+    <group ref={groupRef} position={anchorPosition}>
+      {/* Star mode rendering - simple white dot */}
+      {renderMode === 'star' ? (
+        <Html
+          position={[0, 0, radialOffset]}
+          center
+          sprite
+          style={{
+            pointerEvents: 'auto',
+            userSelect: 'none'
+          }}
+        >
+          <div
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: '#FFFFFF',
+              cursor: 'pointer',
+              opacity: isHovered ? 0.8 : 0.6,
+              transition: 'opacity 0.2s ease'
+            }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+          />
+        </Html>
+      ) : (
+        // DreamNode mode rendering
+        <Html
+          position={[0, 0, radialOffset]}
+          center
+          sprite
+          style={{
+            pointerEvents: 'auto',
+            userSelect: 'none'
+          }}
+        >
       <div
         style={{
           width: `${nodeSize}px`,
@@ -158,6 +246,8 @@ export default function DreamNode3D({
         </div>
       </div>
     </Html>
+      )}
+    </group>
   );
 }
 

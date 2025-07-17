@@ -158,7 +158,7 @@ describe('FibonacciSphereLayout', () => {
     });
 
     it('should match expected default values', () => {
-      expect(DEFAULT_FIBONACCI_CONFIG.radius).toBe(1000);
+      expect(DEFAULT_FIBONACCI_CONFIG.radius).toBe(5000); // Updated for night sky scaling
       expect(DEFAULT_FIBONACCI_CONFIG.nodeCount).toBe(12);
       expect(DEFAULT_FIBONACCI_CONFIG.center).toEqual([0, 0, 0]);
     });
