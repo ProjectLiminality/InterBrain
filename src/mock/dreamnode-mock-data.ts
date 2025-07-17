@@ -145,7 +145,7 @@ function generateLiminalConnections(index: number, totalCount: number, type: 'dr
 /**
  * Mock data configuration types
  */
-export type MockDataConfig = 'single-node' | 'fibonacci-12';
+export type MockDataConfig = 'single-node' | 'fibonacci-12' | 'fibonacci-50' | 'fibonacci-100';
 
 /**
  * Get mock data based on configuration
@@ -156,6 +156,10 @@ export function getMockDataForConfig(config: MockDataConfig): DreamNode[] {
       return [getSingleTestNode()];
     case 'fibonacci-12':
       return generateMockDreamNodes(12);
+    case 'fibonacci-50':
+      return generateMockDreamNodes(50);
+    case 'fibonacci-100':
+      return generateMockDreamNodes(100);
     default:
       return [getSingleTestNode()];
   }

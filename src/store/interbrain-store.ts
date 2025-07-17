@@ -55,6 +55,10 @@ export interface InterBrainState {
   // Mock data configuration
   mockDataConfig: MockDataConfig;
   setMockDataConfig: (config: MockDataConfig) => void;
+  
+  // Drag state management (prevents hover interference during sphere rotation)
+  isDragging: boolean;
+  setIsDragging: (dragging: boolean) => void;
 }
 
 export const useInterBrainStore = create<InterBrainState>((set) => ({
@@ -66,8 +70,8 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   
   // Camera initial state
   camera: {
-    position: [0, 0, 1000], // Default camera position from prototype
-    target: [0, 0, 0],      // Looking at origin
+    position: [0, 0, 0], // Camera at origin for proper Dynamic View Scaling
+    target: [0, 0, 0],   // Looking at origin
     isTransitioning: false,
     transitionDuration: 1000, // 1 second default
   },
@@ -80,16 +84,19 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   },
   
   // Debug wireframe sphere initial state (on by default for development)
-  debugWireframeSphere: true,
+  debugWireframeSphere: false,
   
   // Debug intersection point initial state (on by default for development)
-  debugIntersectionPoint: true,
+  debugIntersectionPoint: false,
   
   // Debug flying camera controls initial state (off by default)
   debugFlyingControls: false,
   
   // Mock data configuration initial state (single node for testing)
-  mockDataConfig: 'single-node',
+  mockDataConfig: 'fibonacci-100',
+  
+  // Drag state initial state (not dragging)
+  isDragging: false,
   
   // Actions
   setSelectedNode: (node) => set({ selectedNode: node }),
@@ -139,4 +146,7 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   
   // Mock data configuration actions
   setMockDataConfig: (config) => set({ mockDataConfig: config }),
+  
+  // Drag state actions
+  setIsDragging: (dragging) => set({ isDragging: dragging }),
 }));

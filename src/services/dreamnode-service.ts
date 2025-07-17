@@ -57,8 +57,8 @@ export class DreamNodeService {
   // Camera management methods
   resetCamera(): void {
     const store = useInterBrainStore.getState();
-    // Reset to default position from prototype
-    store.setCameraPosition([0, 0, 1000]);
+    // Reset to origin for proper Dynamic View Scaling geometry
+    store.setCameraPosition([0, 0, 0]);
     store.setCameraTarget([0, 0, 0]);
     store.setCameraTransition(false);
   }

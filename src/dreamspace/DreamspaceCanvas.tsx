@@ -1,9 +1,11 @@
+import React from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useRef, useEffect } from 'react';
 import { Group } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
+import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -59,7 +61,7 @@ export default function DreamspaceCanvas() {
         {/* Debug intersection point - STATIONARY relative to camera (outside rotatable group) */}
         {debugIntersectionPoint && (
           <mesh position={[CAMERA_INTERSECTION_POINT.x, CAMERA_INTERSECTION_POINT.y, CAMERA_INTERSECTION_POINT.z]}>
-            <sphereGeometry args={[300, 16, 16]} />
+            <sphereGeometry args={[60, 16, 16]} />
             <meshBasicMaterial color="#ff0000" />
           </mesh>
         )}
@@ -75,14 +77,24 @@ export default function DreamspaceCanvas() {
           )}
           
           {dreamNodes.map((node) => (
-            <DreamNode3D
-              key={node.id}
-              dreamNode={node}
-              onHover={handleNodeHover}
-              onClick={handleNodeClick}
-              onDoubleClick={handleNodeDoubleClick}
-              enableDynamicScaling={spatialLayout === 'constellation'}
-            />
+            <React.Fragment key={node.id}>
+              {/* Star component - purely visual, positioned slightly closer than anchor */}
+              {spatialLayout === 'constellation' && (
+                <Star3D
+                  position={node.position}
+                  size={5000}
+                />
+              )}
+              
+              {/* DreamNode component - handles all interactions and dynamic positioning */}
+              <DreamNode3D
+                dreamNode={node}
+                onHover={handleNodeHover}
+                onClick={handleNodeClick}
+                onDoubleClick={handleNodeDoubleClick}
+                enableDynamicScaling={spatialLayout === 'constellation'}
+              />
+            </React.Fragment>
           ))}
         </group>
         

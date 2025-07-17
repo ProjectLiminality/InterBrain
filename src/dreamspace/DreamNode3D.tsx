@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import { Vector3, Group } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 interface DreamNode3DProps {
   dreamNode: DreamNode;
@@ -30,29 +31,37 @@ export default function DreamNode3D({
   enableDynamicScaling = false
 }: DreamNode3DProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [dynamicState, setDynamicState] = useState({ 
-    renderMode: 'dreamnode' as 'dreamnode' | 'star', 
-    radialOffset: 0 
-  });
+  const [radialOffset, setRadialOffset] = useState(0);
   const groupRef = useRef<Group>(null);
+  
+  // Check global drag state to prevent hover interference during sphere rotation
+  const isDragging = useInterBrainStore(state => state.isDragging);
 
-  // Handle mouse events
+  // Handle mouse events (suppress during sphere rotation to prevent interference)
   const handleMouseEnter = () => {
+    if (isDragging) {
+      return; // Suppress hover during drag operations
+    }
     setIsHovered(true);
     onHover?.(dreamNode, true);
   };
 
   const handleMouseLeave = () => {
+    if (isDragging) {
+      return; // Suppress hover during drag operations
+    }
     setIsHovered(false);
     onHover?.(dreamNode, false);
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    if (isDragging) return; // Suppress click during drag operations
     e.stopPropagation();
     onClick?.(dreamNode);
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isDragging) return; // Suppress double-click during drag operations
     e.stopPropagation();
     onDoubleClick?.(dreamNode);
   };
@@ -60,19 +69,27 @@ export default function DreamNode3D({
   // Calculate dynamic scaling on every frame when enabled
   useFrame(() => {
     if (enableDynamicScaling && groupRef.current) {
-      // Get world position of this node (includes rotation from parent group)
+      // Get world position of the anchor (includes rotation from parent group)
       const worldPosition = new Vector3();
       groupRef.current.getWorldPosition(worldPosition);
       
-      // Calculate dynamic scaling based on world position
-      const { radialOffset, renderMode } = calculateDynamicScaling(
-        worldPosition,
+      // But we need to get the world position of the ANCHOR, not the current final position
+      // So we need to calculate where the anchor would be in world space
+      const anchorGroup = groupRef.current.parent; // Get the rotatable group
+      const anchorVector = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
+      if (anchorGroup) {
+        anchorGroup.localToWorld(anchorVector);
+      }
+      
+      // Calculate dynamic scaling based on anchor's world position
+      const { radialOffset: newRadialOffset } = calculateDynamicScaling(
+        anchorVector,
         DEFAULT_SCALING_CONFIG
       );
       
       // Update state if changed
-      if (dynamicState.radialOffset !== radialOffset || dynamicState.renderMode !== renderMode) {
-        setDynamicState({ radialOffset, renderMode });
+      if (radialOffset !== newRadialOffset) {
+        setRadialOffset(newRadialOffset);
       }
     }
   });
@@ -80,75 +97,52 @@ export default function DreamNode3D({
   // Color coding: blue for Dreams, red for Dreamers
   const borderColor = dreamNode.type === 'dream' ? '#00a2ff' : '#FF644E';
   
-  // Constant size for foundational development
-  const nodeSize = 240;
+  // Base size for 3D scaling - will scale with distance due to distanceFactor
+  const nodeSize = 1000; // Base size since it will scale down significantly with distance
   const borderWidth = Math.max(1, nodeSize * 0.04); // ~10px border
   
   // Calculate visual component position with radial offset
   // Anchor point stays at dreamNode.position, visual component moves radially toward camera
   const anchorPosition = dreamNode.position;
-  const radialOffset = dynamicState.radialOffset;
-  const renderMode = dynamicState.renderMode;
   
-  const visualPosition = useMemo(() => {
+  // Calculate normalized direction toward origin (radially inward)
+  const normalizedDirection = useMemo(() => {
     const direction = [
-      -anchorPosition[0], // Direction toward camera (origin)
+      -anchorPosition[0], // Direction toward origin (radially inward)
       -anchorPosition[1],
       -anchorPosition[2]
     ];
     const directionLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-    const normalizedDirection = [
+    return [
       direction[0] / directionLength,
       direction[1] / directionLength,
       direction[2] / directionLength
     ];
-    
-    // Apply radial offset to visual component
-    return [
-      anchorPosition[0] + normalizedDirection[0] * radialOffset,
-      anchorPosition[1] + normalizedDirection[1] * radialOffset,
-      anchorPosition[2] + normalizedDirection[2] * radialOffset
-    ] as [number, number, number];
-  }, [anchorPosition, radialOffset]);
+  }, [anchorPosition]);
   
-  // Wrap in group at anchor position for world position calculations
+  // Calculate final position (anchor + radial offset)
+  const finalPosition = useMemo(() => [
+    anchorPosition[0] - normalizedDirection[0] * radialOffset,
+    anchorPosition[1] - normalizedDirection[1] * radialOffset,
+    anchorPosition[2] - normalizedDirection[2] * radialOffset
+  ] as [number, number, number], [anchorPosition, normalizedDirection, radialOffset]);
+  
+  // Using sprite mode for automatic billboarding - no manual rotation needed
+  
+  // Debug logging removed for cleaner console
+  
+  // Wrap in group at final position for world position calculations
   return (
-    <group ref={groupRef} position={anchorPosition}>
-      {/* Star mode rendering - simple white dot */}
-      {renderMode === 'star' ? (
+    <group ref={groupRef} position={finalPosition}>
+      {/* DreamNode rendering - always visible */}
         <Html
-          position={[0, 0, radialOffset]}
+          position={[0, 0, 0]}
           center
-          sprite
+          transform  // Enable 3D transformations
+          sprite     // Always face camera (billboarding)
+          distanceFactor={10}  // Scale based on distance from camera
           style={{
-            pointerEvents: 'auto',
-            userSelect: 'none'
-          }}
-        >
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#FFFFFF',
-              cursor: 'pointer',
-              opacity: isHovered ? 0.8 : 0.6,
-              transition: 'opacity 0.2s ease'
-            }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            onClick={handleClick}
-            onDoubleClick={handleDoubleClick}
-          />
-        </Html>
-      ) : (
-        // DreamNode mode rendering
-        <Html
-          position={[0, 0, radialOffset]}
-          center
-          sprite
-          style={{
-            pointerEvents: 'auto',
+            pointerEvents: isDragging ? 'none' : 'auto', // Disable all mouse events during drag
             userSelect: 'none'
           }}
         >
@@ -246,7 +240,6 @@ export default function DreamNode3D({
         </div>
       </div>
     </Html>
-      )}
     </group>
   );
 }

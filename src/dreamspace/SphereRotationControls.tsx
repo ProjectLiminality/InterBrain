@@ -1,6 +1,7 @@
-import { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Group, Vector3, Quaternion } from 'three';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 interface SphereRotationControlsProps {
   groupRef: React.RefObject<Group | null>;
@@ -16,7 +17,6 @@ function virtualTrackballProjection(x: number, y: number, width: number, height:
   const normalizedY = 1 - (2 * y / height); // Flip Y axis for screen coordinates
   
   // Calculate radius for hemisphere (use minimum dimension)
-  const radius = Math.min(width, height) / 2;
   const sphereRadius = 1.0; // Normalized sphere radius
   
   // Scale normalized coordinates by sphere radius
@@ -73,7 +73,10 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   const { gl } = useThree();
   const canvas = gl.domElement;
   
-  // Drag state
+  // Global drag state for hover interference prevention
+  const setGlobalDragState = useInterBrainStore(state => state.setIsDragging);
+  
+  // Local drag state
   const [isDragging, setIsDragging] = useState(false);
   const lastTrackballPos = useRef<Vector3>(new Vector3());
   
@@ -89,9 +92,10 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   const velocityFilterAlpha = 0.2; // Low-pass filter constant
   
   // Mouse event handlers
-  const handleMouseDown = (event: MouseEvent) => {
+  const handleMouseDown = (event: globalThis.MouseEvent) => {
     event.preventDefault();
     setIsDragging(true);
+    setGlobalDragState(true); // Suppress hover detection globally
     
     // Get canvas bounding rect for accurate coordinate calculation
     const rect = canvas.getBoundingClientRect();
@@ -106,8 +110,9 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     velocityHistory.current = [];
   };
   
-  const handleMouseMove = (event: MouseEvent) => {
+  const handleMouseMove = (event: globalThis.MouseEvent) => {
     if (!isDragging || !groupRef.current) return;
+    
     
     // Get canvas bounding rect for accurate coordinate calculation
     const rect = canvas.getBoundingClientRect();
@@ -140,9 +145,10 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     lastTrackballPos.current.copy(currentTrackballPos);
   };
   
-  const handleMouseUp = (event: MouseEvent) => {
+  const handleMouseUp = (event: globalThis.MouseEvent) => {
     event.preventDefault();
     setIsDragging(false);
+    setGlobalDragState(false); // Re-enable hover detection
     
     // Calculate final angular velocity for momentum
     if (velocityHistory.current.length >= 2) {
@@ -187,28 +193,28 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   };
   
   // Prevent context menu on right click
-  const handleContextMenu = (event: MouseEvent) => {
+  const handleContextMenu = (event: globalThis.MouseEvent) => {
     event.preventDefault();
   };
   
   // Set up mouse event listeners
   useEffect(() => {
-    const handleMouseLeave = () => {
-      setIsDragging(false);
-    };
+    // Add global mouse listeners to handle drag outside canvas
+    const handleGlobalMouseMove = (event: globalThis.MouseEvent) => handleMouseMove(event);
+    const handleGlobalMouseUp = (event: globalThis.MouseEvent) => handleMouseUp(event);
     
     canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mouseleave', handleMouseLeave);
     canvas.addEventListener('contextmenu', handleContextMenu);
+    
+    // Use global listeners for move/up to handle dragging outside canvas
+    globalThis.document.addEventListener('mousemove', handleGlobalMouseMove);
+    globalThis.document.addEventListener('mouseup', handleGlobalMouseUp);
     
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseup', handleMouseUp);
-      canvas.removeEventListener('mouseleave', handleMouseLeave);
       canvas.removeEventListener('contextmenu', handleContextMenu);
+      globalThis.document.removeEventListener('mousemove', handleGlobalMouseMove);
+      globalThis.document.removeEventListener('mouseup', handleGlobalMouseUp);
     };
   }, [isDragging]); // Re-run when isDragging changes
   

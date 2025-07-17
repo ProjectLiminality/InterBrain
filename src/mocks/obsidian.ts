@@ -8,7 +8,7 @@ export interface MockVault {
   adapter: {
     fs: {
       promises: {
-        readFile: (path: string) => Promise<Buffer>;
+        readFile: (path: string) => Promise<Uint8Array>;
         writeFile: (path: string, data: string) => Promise<void>;
         mkdir: (path: string) => Promise<void>;
       };
@@ -32,10 +32,10 @@ export interface MockWorkspaceLeaf {
 }
 
 export class ItemView {
-  containerEl: HTMLElement;
+  containerEl: any;
   
-  constructor(leaf: MockWorkspaceLeaf) {
-    this.containerEl = document.createElement('div');
+  constructor(_leaf: MockWorkspaceLeaf) {
+    this.containerEl = (globalThis as any).document?.createElement('div') || {};
   }
   
   getViewType(): string { return 'mock-view'; }
@@ -60,11 +60,11 @@ export class Plugin {
     console.log('Mock addCommand:', command.name);
   }
   
-  addRibbonIcon(icon: string, title: string, callback: () => void) {
+  addRibbonIcon(icon: string, title: string, _callback: () => void) {
     console.log('Mock addRibbonIcon:', title);
   }
   
-  registerView(type: string, viewCreator: (leaf: MockWorkspaceLeaf) => ItemView) {
+  registerView(type: string, _viewCreator: (leaf: MockWorkspaceLeaf) => ItemView) {
     console.log('Mock registerView:', type);
   }
 }
