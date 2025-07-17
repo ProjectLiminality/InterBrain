@@ -87,7 +87,7 @@ const mockCanvasFiles: CanvasFile[] = [
  */
 export function generateMockDreamNodes(count: number = 12): DreamNode[] {
   const spherePositions = calculateFibonacciSpherePositions({
-    radius: 1000,
+    radius: 5000, // Updated to match night sky sphere radius
     nodeCount: count,
     center: [0, 0, 0]
   });
@@ -143,17 +143,38 @@ function generateLiminalConnections(index: number, totalCount: number, type: 'dr
 }
 
 /**
- * Get a single mock DreamNode for focused testing
+ * Mock data configuration types
  */
-export function getMockDreamNode(): DreamNode {
+export type MockDataConfig = 'single-node' | 'fibonacci-12';
+
+/**
+ * Get mock data based on configuration
+ */
+export function getMockDataForConfig(config: MockDataConfig): DreamNode[] {
+  switch (config) {
+    case 'single-node':
+      return [getSingleTestNode()];
+    case 'fibonacci-12':
+      return generateMockDreamNodes(12);
+    default:
+      return [getSingleTestNode()];
+  }
+}
+
+/**
+ * Get a single mock DreamNode on sphere surface for focused testing
+ */
+export function getSingleTestNode(): DreamNode {
+  // Position on sphere surface - using sphere radius 5000
+  // Place at 90 degrees from intersection point for clear scaling test
   return {
     id: 'mock-test-dream',
     type: 'dream',
     name: 'Test Dream',
-    position: [0, 0, 0],
+    position: [5000, 0, 0], // On sphere surface, perpendicular to intersection point
     dreamTalkMedia: [mockMediaFiles[0]],
     dreamSongContent: mockCanvasFiles,
-    liminalWebConnections: ['mock-dreamer-1'],
+    liminalWebConnections: [],
     repoPath: '/mock/repos/test-dream',
     hasUnsavedChanges: false
   };

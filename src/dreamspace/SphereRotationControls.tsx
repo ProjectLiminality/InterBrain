@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Group, Vector3, Quaternion } from 'three';
 
 interface SphereRotationControlsProps {
-  groupRef: React.RefObject<Group>;
+  groupRef: React.RefObject<Group | null>;
 }
 
 /**

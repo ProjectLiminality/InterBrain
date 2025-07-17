@@ -138,6 +138,42 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Debug: Toggle intersection point
+    this.addCommand({
+      id: 'toggle-debug-intersection-point',
+      name: 'Toggle Debug Intersection Point',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const newState = !store.debugIntersectionPoint;
+        store.setDebugIntersectionPoint(newState);
+        this.uiService.showSuccess(`Debug intersection point ${newState ? 'enabled' : 'disabled'}`);
+      }
+    });
+
+    // Debug: Toggle flying camera controls
+    this.addCommand({
+      id: 'toggle-debug-flying-controls',
+      name: 'Toggle Debug Flying Camera Controls',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const newState = !store.debugFlyingControls;
+        store.setDebugFlyingControls(newState);
+        this.uiService.showSuccess(`Debug flying controls ${newState ? 'enabled' : 'disabled'}`);
+      }
+    });
+
+    // Mock data: Toggle between single node and fibonacci-12
+    this.addCommand({
+      id: 'toggle-mock-data',
+      name: 'Toggle Mock Data (Single Node ↔ Fibonacci 12)',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const newConfig = store.mockDataConfig === 'single-node' ? 'fibonacci-12' : 'single-node';
+        store.setMockDataConfig(newConfig);
+        this.uiService.showSuccess(`Mock data: ${newConfig === 'single-node' ? 'Single Node' : 'Fibonacci 12 Nodes'}`);
+      }
+    });
+
     // Test command: Select mock DreamNode
     this.addCommand({
       id: 'select-mock-dreamnode',

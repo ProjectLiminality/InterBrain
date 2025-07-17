@@ -1,43 +1,38 @@
 import React from 'react'
+import DreamspaceCanvas from './dreamspace/DreamspaceCanvas'
 
 export function InterBrainApp() {
   return (
     <div style={{ 
-      padding: '80px 20px 20px', 
-      textAlign: 'center',
       height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center'
+      width: '100vw',
+      position: 'relative'
     }}>
-      <h1 style={{ 
-        fontSize: '3rem', 
-        marginBottom: '1rem',
-        background: 'linear-gradient(45deg, #00a2ff, #ff644e)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent'
-      }}>
-        InterBrain
-      </h1>
-      <p style={{ fontSize: '1.2rem', opacity: 0.8, marginBottom: '2rem' }}>
-        Revolutionary Knowledge Management System
-      </p>
+      {/* Development banner */}
       <div style={{
-        padding: '20px',
-        border: '1px solid #333',
-        borderRadius: '8px',
-        backgroundColor: '#2a2a2a',
-        maxWidth: '600px'
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: '#ff6b6b',
+        color: 'white',
+        textAlign: 'center',
+        padding: '8px',
+        fontSize: '14px',
+        zIndex: 1000
       }}>
-        <h3>🚀 Vite + React Development Environment</h3>
-        <p>This is the browser development mode for InterBrain. You can develop React components here with instant hot reload!</p>
-        <ul style={{ textAlign: 'left', paddingLeft: '20px' }}>
-          <li>✅ Vite configured for instant hot reload</li>
-          <li>✅ React + TypeScript integration</li>
-          <li>✅ Obsidian API mocked for browser development</li>
-          <li>🔄 Ready for React Three Fiber components</li>
-        </ul>
+        🚀 InterBrain Browser Development Mode - React 3 Fiber Hot Reload Enabled
+      </div>
+      
+      {/* DreamSpace canvas - same as Obsidian plugin */}
+      <div style={{
+        position: 'absolute',
+        top: '40px', // Account for dev banner
+        left: 0,
+        right: 0,
+        bottom: 0
+      }}>
+        <DreamspaceCanvas />
       </div>
     </div>
   )

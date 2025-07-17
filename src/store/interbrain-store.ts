@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { DreamNode } from '../services/dreamnode-service';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
+import { MockDataConfig } from '../mock/dreamnode-mock-data';
 
 export interface InterBrainState {
   // Selected DreamNode state
@@ -42,6 +43,18 @@ export interface InterBrainState {
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;
   setDebugWireframeSphere: (visible: boolean) => void;
+  
+  // Debug intersection point toggle
+  debugIntersectionPoint: boolean;
+  setDebugIntersectionPoint: (visible: boolean) => void;
+  
+  // Debug flying camera controls toggle
+  debugFlyingControls: boolean;
+  setDebugFlyingControls: (enabled: boolean) => void;
+  
+  // Mock data configuration
+  mockDataConfig: MockDataConfig;
+  setMockDataConfig: (config: MockDataConfig) => void;
 }
 
 export const useInterBrainStore = create<InterBrainState>((set) => ({
@@ -66,8 +79,17 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
     previousLayout: null,
   },
   
-  // Debug wireframe sphere initial state (off by default)
-  debugWireframeSphere: false,
+  // Debug wireframe sphere initial state (on by default for development)
+  debugWireframeSphere: true,
+  
+  // Debug intersection point initial state (on by default for development)
+  debugIntersectionPoint: true,
+  
+  // Debug flying camera controls initial state (off by default)
+  debugFlyingControls: false,
+  
+  // Mock data configuration initial state (single node for testing)
+  mockDataConfig: 'single-node',
   
   // Actions
   setSelectedNode: (node) => set({ selectedNode: node }),
@@ -108,4 +130,13 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   
   // Debug wireframe sphere actions
   setDebugWireframeSphere: (visible) => set({ debugWireframeSphere: visible }),
+  
+  // Debug intersection point actions
+  setDebugIntersectionPoint: (visible) => set({ debugIntersectionPoint: visible }),
+  
+  // Debug flying camera controls actions
+  setDebugFlyingControls: (enabled) => set({ debugFlyingControls: enabled }),
+  
+  // Mock data configuration actions
+  setMockDataConfig: (config) => set({ mockDataConfig: config }),
 }));
