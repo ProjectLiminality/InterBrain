@@ -49,7 +49,7 @@ function BrowserDemo() {
 }
 
 // Mount the demo
-const container = document.getElementById('root');
+const container = (globalThis as any).document?.getElementById('root');
 if (container) {
   const root = createRoot(container);
   root.render(<BrowserDemo />);

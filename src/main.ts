@@ -162,15 +162,38 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Mock data: Toggle between single node and fibonacci-12
+    // Mock data: Cycle through single node, fibonacci-12, fibonacci-50, and fibonacci-100
     this.addCommand({
       id: 'toggle-mock-data',
-      name: 'Toggle Mock Data (Single Node ↔ Fibonacci 12)',
+      name: 'Toggle Mock Data (Single → 12 → 50 → 100)',
       callback: () => {
         const store = useInterBrainStore.getState();
-        const newConfig = store.mockDataConfig === 'single-node' ? 'fibonacci-12' : 'single-node';
+        const currentConfig = store.mockDataConfig;
+        let newConfig: 'single-node' | 'fibonacci-12' | 'fibonacci-50' | 'fibonacci-100';
+        let displayName: string;
+        
+        switch (currentConfig) {
+          case 'single-node':
+            newConfig = 'fibonacci-12';
+            displayName = 'Fibonacci 12 Nodes';
+            break;
+          case 'fibonacci-12':
+            newConfig = 'fibonacci-50';
+            displayName = 'Fibonacci 50 Nodes';
+            break;
+          case 'fibonacci-50':
+            newConfig = 'fibonacci-100';
+            displayName = 'Fibonacci 100 Nodes';
+            break;
+          case 'fibonacci-100':
+          default:
+            newConfig = 'single-node';
+            displayName = 'Single Node';
+            break;
+        }
+        
         store.setMockDataConfig(newConfig);
-        this.uiService.showSuccess(`Mock data: ${newConfig === 'single-node' ? 'Single Node' : 'Fibonacci 12 Nodes'}`);
+        this.uiService.showSuccess(`Mock data: ${displayName}`);
       }
     });
 

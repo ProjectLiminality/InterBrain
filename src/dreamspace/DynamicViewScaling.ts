@@ -49,19 +49,19 @@ export const CAMERA_INTERSECTION_POINT = new Vector3(0, 0, -NIGHT_SKY_SPHERE_RAD
  */
 export const DEFAULT_SCALING_CONFIG: DynamicViewScalingConfig = {
   sphereRadius: NIGHT_SKY_SPHERE_RADIUS,
-  innerRadius: 1500,  // Center plateau - 30% of sphere radius
-  outerRadius: 3000,  // Scaling zone boundary - 60% of sphere radius
+  innerRadius: 750,   // Center plateau - 15% of sphere radius (half the previous size)
+  outerRadius: 2250,  // Scaling zone boundary - 45% of sphere radius (75% of previous)
   intersectionPoint: CAMERA_INTERSECTION_POINT,
-  minDistance: 1000,  // Closest nodes can get to camera
-  maxDistance: 4000   // Farthest nodes can get from camera
+  minDistance: 75,    // Closest to camera - slightly farther for better UX
+  maxDistance: NIGHT_SKY_SPHERE_RADIUS  // Stars exactly on sphere surface
 };
 
 
 /**
  * Calculate radial distance based on 3D distance from intersection point
  * 
- * Maps actual 3D distance to radial offset using smooth curve for
- * natural Apple Watch-style scaling.
+ * Maps actual 3D distance to radial offset using perspective-corrected scaling
+ * for linear perceived size changes (compensates for 1/distance perspective effect).
  */
 export function calculateRadialDistance(
   distance3D: number,
@@ -79,13 +79,25 @@ export function calculateRadialDistance(
     return maxDistance;
   }
   
-  // Scaling zone - smooth interpolation between min and max distance
-  const scalingProgress = (distance3D - innerRadius) / (outerRadius - innerRadius);
+  // Scaling zone - perspective-corrected interpolation for linear perceived scaling
+  // Fix: progress should be 0 at outerRadius (far/small) and 1 at innerRadius (close/large)
+  const scalingProgress = (outerRadius - distance3D) / (outerRadius - innerRadius);
   
-  // Apply smooth curve (ease-in-out)
+  // Apply smooth curve (ease-in-out) to the progress
   const smoothProgress = smoothstep(scalingProgress);
   
-  return minDistance + (maxDistance - minDistance) * smoothProgress;
+  // Perspective correction: compensate for 1/distance scaling
+  // For linear perceived scaling, we need to adjust the distance non-linearly
+  const minInverse = 1 / minDistance;
+  const maxInverse = 1 / maxDistance;
+  
+  // Linear interpolation in "apparent size space" (1/distance)
+  // smoothProgress=0 (outerRadius) → maxDistance (small/far)
+  // smoothProgress=1 (innerRadius) → minDistance (large/close)
+  const targetInverse = maxInverse + smoothProgress * (minInverse - maxInverse);
+  
+  // Convert back to distance
+  return 1 / targetInverse;
 }
 
 /**
@@ -97,53 +109,29 @@ function smoothstep(t: number): number {
   return clampedT * clampedT * (3 - 2 * clampedT);
 }
 
-/**
- * Determine render mode based on 3D distance from intersection point
- */
-export function getRenderMode(
-  distance3D: number,
-  config: DynamicViewScalingConfig
-): 'dreamnode' | 'star' {
-  return distance3D <= config.outerRadius ? 'dreamnode' : 'star';
-}
 
 /**
  * Calculate radial offset for DreamNode based on dynamic scaling
  * 
- * Returns offset distance from anchor point (toward camera) and render mode.
+ * Returns offset distance from anchor point (toward camera).
  * Anchor point stays at original Fibonacci sphere position.
  */
 export function calculateDynamicScaling(
   anchorPosition: Vector3,
   config: DynamicViewScalingConfig
-): { radialOffset: number; renderMode: 'dreamnode' | 'star' } {
+): { radialOffset: number } {
   // Calculate simple 3D distance from anchor to intersection point
   const distance3D = anchorPosition.distanceTo(config.intersectionPoint);
-  
-  // Determine render mode based on 3D distance
-  const renderMode = getRenderMode(distance3D, config);
   
   // Calculate radial distance for this node
   const radialDistance = calculateRadialDistance(distance3D, config);
   
   // Calculate radial offset from anchor point
   // Anchor is at sphereRadius distance, we want to move it to radialDistance
-  const radialOffset = config.sphereRadius - radialDistance;
-  
-  // Debug logging
-  if (Math.random() < 0.05) { // Log ~5% of calculations
-    console.log('Dynamic Scaling Debug:', {
-      anchor: [anchorPosition.x, anchorPosition.y, anchorPosition.z],
-      intersection: [config.intersectionPoint.x, config.intersectionPoint.y, config.intersectionPoint.z],
-      distance3D: Math.round(distance3D),
-      radialDistance: Math.round(radialDistance),
-      radialOffset: Math.round(radialOffset),
-      renderMode
-    });
-  }
+  // Negative offset moves toward camera (origin), positive moves away
+  const radialOffset = radialDistance - config.sphereRadius;
   
   return {
-    radialOffset,
-    renderMode
+    radialOffset
   };
 }
