@@ -31,6 +31,16 @@ export default [
     }
   },
   {
+    files: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/dev/*.tsx', 'src/mocks/*.ts'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        HTMLElement: 'readonly'
+      }
+    }
+  },
+  {
     ignores: ['main.js', 'node_modules/', '*.d.ts']
   }
 ];

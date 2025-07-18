@@ -18,6 +18,36 @@ export class TFolder {
   name = this.path.split('/').pop() || ''
 }
 
+// Mock WorkspaceLeaf class
+export class WorkspaceLeaf {
+  view: any = null
+  app: any = {}
+}
+
+// Mock ItemView class
+export class ItemView {
+  containerEl = {
+    children: [{}, {}]
+  }
+  
+  constructor(public leaf: WorkspaceLeaf) {}
+  
+  getViewType(): string {
+    return ''
+  }
+  
+  getDisplayText(): string {
+    return ''
+  }
+  
+  getIcon(): string {
+    return ''
+  }
+  
+  async onOpen(): Promise<void> {}
+  async onClose(): Promise<void> {}
+}
+
 // Mock Plugin class
 export class Plugin {
   app = {

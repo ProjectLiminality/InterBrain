@@ -32,10 +32,10 @@ export interface MockWorkspaceLeaf {
 }
 
 export class ItemView {
-  containerEl: any;
+  containerEl: HTMLElement | Record<string, never>;
   
   constructor(_leaf: MockWorkspaceLeaf) {
-    this.containerEl = (globalThis as any).document?.createElement('div') || {};
+    this.containerEl = (globalThis as typeof window).document?.createElement('div') || {};
   }
   
   getViewType(): string { return 'mock-view'; }
@@ -56,7 +56,7 @@ export class Plugin {
   async onload() {}
   onunload() {}
   
-  addCommand(command: any) {
+  addCommand(command: { name: string; [key: string]: unknown }) {
     console.log('Mock addCommand:', command.name);
   }
   
