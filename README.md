@@ -1,5 +1,7 @@
 # The InterBrain: From Personal Knowledge Management to Collective Knowledge Gardening
 
+![InterBrain Logo](./InterBrain.png)
+
 ## Introduction
 
 The InterBrain is an innovative knowledge gardening system that aims to revolutionize the way we collectively relate to our ideas and stories. It transcends the traditional "Second Brain" paradigm, popularized by PKM tools like Obsidian, shifting to a dynamic, relational approach to organizing knowledge as opposed to static, top-down categorization.
