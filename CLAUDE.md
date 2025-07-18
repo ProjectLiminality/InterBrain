@@ -327,6 +327,14 @@ This project is designed for AI-first development:
 - Watch for changes to .canvas files via Obsidian's file events
 - Parse canvas topology on git commits to update DreamSong UI
 
+## Testing Best Practices
+
+**Comprehensive Validation Command**:
+- Always use `npm run check-all` for complete code validation
+- This single command runs tests, linting, and type checking
+- Replaces the need to run separate npm commands
+- Run this before committing changes or completing features
+
 ## Key Files
 
 - `README.md`: Comprehensive project documentation with features and vision
