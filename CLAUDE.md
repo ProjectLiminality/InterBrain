@@ -157,6 +157,7 @@ main → epic/2-spatial-visualization
 
 **Phase 4: Epic Completion**
 - Merge tested, documented epic to main branch
+- **MANDATORY**: Update CHANGELOG.md with epic details via release branch
 - Tag release if appropriate
 - Epic represents coherent functionality unit
 
@@ -339,6 +340,14 @@ This project is designed for AI-first development:
 - This single command runs tests, linting, and type checking
 - Replaces the need to run separate npm commands
 - Run this before committing changes or completing features
+
+**Epic Completion Workflow**:
+- **MANDATORY**: Update CHANGELOG.md before merging epic to main
+- Use release branch pattern: `release/vX.Y.Z` from main
+- Include comprehensive epic details, features, and technical achievements
+- Bump version in package.json as part of release
+- Merge release branch to main, then create git tag
+- Create GitHub releases with release notes based on changelog
 
 ## Key Files
 
