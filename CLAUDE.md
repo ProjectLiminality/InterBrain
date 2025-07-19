@@ -14,11 +14,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Development Status
 
-**Phase**: Epic 2 Integration Complete
+**Phase**: Epic 3 Active Development
 - ✅ **Epic 1 Complete**: Plugin Infrastructure foundation established
 - ✅ **Epic 2 Complete**: 3D Spatial Visualization System with all features implemented
-- 🚀 **Epic 3 Next**: DreamNode Management System
+- 🚀 **Epic 3 Active**: DreamNode Management System (branch: epic/3-dreamnode-management)
 - 🔮 **Epic 4 Future**: Git Operations Abstraction
+
+### Epic 3 Current Status (July 19, 2025)
+**Specification Complete**: #266 - DreamNode Lifecycle Specification with comprehensive implementation plan
+- ✅ Epic branch created: `epic/3-dreamnode-management`
+- ✅ Service layer architecture defined with mock/real swapping capability
+- ✅ Three-phase implementation strategy established
+- ✅ Feature boundaries clarified and roadmap reorganized
+- 🚀 **Ready for Feature Implementation**: Starting with Phase A (UI Layer with Mock Data)
 
 ### Epic 1 Achievements (July 13, 2025)
 - ✅ Obsidian plugin boilerplate with Vite dual workflow
@@ -93,12 +101,28 @@ interbrain-plugin/
 
 1. **Commands Before UI**: Create command palette commands before building UI components
 2. **Service Layer Abstraction**: Commands delegate to services, never direct git operations
-3. **Default to Feature Slice**: New components go inside their feature folder first
-4. **Promote to Shared Only on Second Use**: Move to `/components` only when needed by multiple features
-5. **Dreamspace is Core Engine**: `/dreamspace` contains fundamental 3D/spatial logic only
-6. **UI Calls Commands**: UI components use `executeCommandById()`, never call services directly
-7. **Document for AI**: Every feature folder needs a `README.md` with high-level summary
-8. **Testing Before Commits**: Use Playwright MCP to validate features work in browser before any git operations
+3. **Mock/Real Service Swapping**: Use service interface pattern with MockDreamNodeService and GitDreamNodeService for fast UI iteration
+4. **Default to Feature Slice**: New components go inside their feature folder first
+5. **Promote to Shared Only on Second Use**: Move to `/components` only when needed by multiple features
+6. **Dreamspace is Core Engine**: `/dreamspace` contains fundamental 3D/spatial logic only
+7. **UI Calls Commands**: UI components use `executeCommandById()`, never call services directly
+8. **Document for AI**: Every feature folder needs a `README.md` with high-level summary
+9. **Testing Before Commits**: Use Playwright MCP to validate features work in browser before any git operations
+
+### Epic 3 Service Layer Pattern
+```typescript
+interface DreamNodeService {
+  create(title: string, type: NodeType, dreamTalk?: File): Promise<DreamNode>
+  update(id: string, changes: Partial<DreamNode>): Promise<void>
+  delete(id: string): Promise<void>
+  list(): Promise<DreamNode[]>
+}
+
+// Runtime switching for development:
+// - MockDreamNodeService: Fast UI iteration, no file system
+// - GitDreamNodeService: Real git operations with DreamNode template
+// - Command palette toggle: "Switch to Mock Data" / "Switch to Real Data"
+```
 
 ## Technology Stack
 
@@ -109,6 +133,13 @@ interbrain-plugin/
 - **Testing**: Vitest with comprehensive mocking
 - **Services**: UI, Git, DreamNode, and Vault service layers
 - **Commands**: 6 core commands via Obsidian command palette
+
+### Epic 3 Implementation (Active Development)
+- **Service Layer**: Interface-based architecture with mock/real implementations
+- **DreamNode Template**: Git template system stored in plugin directory with hooks
+- **Auto-Save Pattern**: Auto-stash on file changes, convert to commit on user "Save"
+- **Mock Development**: Dynamic Zustand store for fast UI iteration without git complexity
+- **Git Operations**: `git init --template` for clean DreamNode repo creation
 
 ### Planned Technologies (Future Epics)
 - **Frontend**: React + React Three Fiber (R3F) for 3D visualization
@@ -247,10 +278,16 @@ main → epic/2-spatial-visualization
 - **Epic 3**: #254 - DreamNode Management System | Spec: #266  
 - **Epic 4**: #255 - Git Operations Abstraction | Spec: #267
 
-**Epic Scope Clarity**:
-- **Epic 2**: Visual representation and navigation of DreamNodes in 3D space (the theater)
-- **Epic 3**: Creating, editing, and organizing DreamNodes as data entities (the content management)
-- **Epic 4**: User-friendly Save/Share paradigm hiding git complexity (the backend)
+**Epic Scope Clarity** (Updated July 19, 2025):
+- **Epic 2**: Visual representation and navigation of DreamNodes in 3D space (the theater) ✅ Complete
+- **Epic 3**: Basic CRUD operations and DreamNode creation workflows (minimal scope - foundation)
+- **Epic 4**: User-friendly Save/Share paradigm building on Epic 3's service layer (abstractions)
+- **Epic 8**: Advanced DreamNode operations (Pop-out, Merge, Process/Substance categorization)
+
+**Feature Reorganization**:
+- **Honeycomb search (#280)** → Epic 5 (Semantic Search System)
+- **Constellation view (#282)** → Epic 5+ (Advanced visualization)
+- **Advanced operations (#296-298)** → Epic 8 (DreamOS Foundational Operations)
 
 ## Technical Documentation References
 
@@ -332,6 +369,41 @@ This project is designed for AI-first development:
 - Leverage existing Obsidian canvas files for DreamSong content
 - Watch for changes to .canvas files via Obsidian's file events
 - Parse canvas topology on git commits to update DreamSong UI
+
+## Epic 3 Git Workflow Patterns
+
+### DreamNode Template System
+```bash
+# Template stored in plugin directory (outside vault)
+DreamNode-template/
+├── .udd/
+│   └── metadata.json     # UUID, title, type, dreamTalk, relationships
+├── hooks/
+│   ├── pre-commit        # Coherence beacon updates
+│   ├── post-commit       # Relationship tracking
+│   └── post-merge        # Submodule sync for DreamSong integration
+└── README.md            # DreamNode documentation
+
+# DreamNode creation:
+git init --template=${pluginPath}/DreamNode-template
+```
+
+### Auto-Save Workflow
+```bash
+# On every file change (auto-stash - replaces previous):
+git add -A && git stash push -m "InterBrain autosave"
+
+# On user "Save" action:
+git stash pop && git add -A && git commit -m "User commit message"
+```
+
+### Development Mode Switching
+```typescript
+// Command palette commands for development:
+// "InterBrain: Switch to Mock Data" - Fast UI iteration
+// "InterBrain: Switch to Real Data" - Full git integration
+// "InterBrain: Reset Mock Store" - Clean slate for testing
+```
 
 ## Testing Best Practices
 
