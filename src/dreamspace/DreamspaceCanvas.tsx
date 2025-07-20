@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useRef, useEffect } from 'react';
 import { Group } from 'three';
@@ -16,7 +16,13 @@ import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
 export default function DreamspaceCanvas() {
   // Get mock data configuration from store
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
-  const dreamNodes = getMockDataForConfig(mockDataConfig);
+  
+  // State for dynamic nodes from mock service
+  const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
+  
+  // Combine static mock data with dynamic service nodes
+  const staticNodes = getMockDataForConfig(mockDataConfig);
+  const dreamNodes = [...staticNodes, ...dynamicNodes];
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
@@ -31,6 +37,22 @@ export default function DreamspaceCanvas() {
   
   // Creation state for proto-node rendering
   const { creationState, completeCreation, cancelCreation } = useInterBrainStore();
+  
+  // Load dynamic nodes from mock service on mount and after creation
+  useEffect(() => {
+    const loadDynamicNodes = async () => {
+      try {
+        const service = serviceManager.getActive();
+        const nodes = await service.list();
+        setDynamicNodes(nodes);
+        console.log('DreamspaceCanvas: Loaded dynamic nodes:', nodes.length);
+      } catch (error) {
+        console.error('Failed to load dynamic nodes:', error);
+      }
+    };
+    
+    loadDynamicNodes();
+  }, []);
   
   // Debug logging for creation state
   React.useEffect(() => {
@@ -68,12 +90,13 @@ export default function DreamspaceCanvas() {
       
       console.log('DreamNode created successfully:', newNode);
       
+      // Refresh the dynamic nodes list to include the new node
+      const updatedNodes = await service.list();
+      setDynamicNodes(updatedNodes);
+      console.log('DreamspaceCanvas: Refreshed nodes after creation, total:', updatedNodes.length);
+      
       // Complete the creation flow (this will hide the proto-node)
       completeCreation();
-      
-      // TODO: Trigger re-render of the dreamNodes list
-      // For now, the mock service stores the nodes but we need to
-      // integrate with the mock data source to see the new nodes
       
     } catch (error) {
       console.error('Failed to create DreamNode:', error);
