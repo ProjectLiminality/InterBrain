@@ -1,7 +1,26 @@
 import { create } from 'zustand';
-import { DreamNode } from '../services/dreamnode-service';
+import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
+
+// Creation state types
+export interface ProtoNode {
+  title: string;
+  type: 'dream' | 'dreamer';
+  dreamTalkFile?: globalThis.File;
+  position: [number, number, number];
+}
+
+export interface ValidationErrors {
+  title?: string;
+  dreamTalk?: string;
+}
+
+export interface CreationState {
+  isCreating: boolean;
+  protoNode: ProtoNode | null;
+  validationErrors: ValidationErrors;
+}
 
 export interface InterBrainState {
   // Selected DreamNode state
@@ -59,6 +78,14 @@ export interface InterBrainState {
   // Drag state management (prevents hover interference during sphere rotation)
   isDragging: boolean;
   setIsDragging: (dragging: boolean) => void;
+  
+  // Creation state management
+  creationState: CreationState;
+  startCreation: (position: [number, number, number]) => void;
+  updateProtoNode: (updates: Partial<ProtoNode>) => void;
+  setValidationErrors: (errors: ValidationErrors) => void;
+  completeCreation: () => void;
+  cancelCreation: () => void;
 }
 
 export const useInterBrainStore = create<InterBrainState>((set) => ({
@@ -97,6 +124,13 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   
   // Drag state initial state (not dragging)
   isDragging: false,
+  
+  // Creation state initial state (not creating)
+  creationState: {
+    isCreating: false,
+    protoNode: null,
+    validationErrors: {}
+  },
   
   // Actions
   setSelectedNode: (node) => set({ selectedNode: node }),
@@ -149,4 +183,50 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   
   // Drag state actions
   setIsDragging: (dragging) => set({ isDragging: dragging }),
+  
+  // Creation state actions
+  startCreation: (position) => set((_state) => ({
+    creationState: {
+      isCreating: true,
+      protoNode: {
+        title: '',
+        type: 'dream', // Default to dream type
+        position,
+        dreamTalkFile: undefined
+      },
+      validationErrors: {}
+    }
+  })),
+  
+  updateProtoNode: (updates) => set(state => ({
+    creationState: {
+      ...state.creationState,
+      protoNode: state.creationState.protoNode 
+        ? { ...state.creationState.protoNode, ...updates }
+        : null
+    }
+  })),
+  
+  setValidationErrors: (errors) => set(state => ({
+    creationState: {
+      ...state.creationState,
+      validationErrors: errors
+    }
+  })),
+  
+  completeCreation: () => set((_state) => ({
+    creationState: {
+      isCreating: false,
+      protoNode: null,
+      validationErrors: {}
+    }
+  })),
+  
+  cancelCreation: () => set((_state) => ({
+    creationState: {
+      isCreating: false,
+      protoNode: null,
+      validationErrors: {}
+    }
+  })),
 }));

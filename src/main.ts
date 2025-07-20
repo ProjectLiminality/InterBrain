@@ -6,6 +6,7 @@ import { VaultService } from './services/vault-service';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
+import { DreamNode } from './types/dreamnode';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -66,7 +67,7 @@ export default class InterBrainPlugin extends Plugin {
           if (!currentNode) {
             throw new Error('No DreamNode selected');
           }
-          await this.gitService.commitWithAI(currentNode.path);
+          await this.gitService.commitWithAI(currentNode.repoPath);
           this.uiService.showSuccess('DreamNode saved successfully');
         } catch (error) {
           this.uiService.showError(error instanceof Error ? error.message : 'Unknown error occurred');
@@ -76,13 +77,33 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Create DreamNode command
+    // Create DreamNode command (Command+N)
     this.addCommand({
       id: 'create-dreamnode',
       name: 'Create new DreamNode',
+      hotkeys: [{ modifiers: ['Mod'], key: 'n' }],
       callback: async () => {
-        console.log('Create DreamNode command executed');
-        this.uiService.showPlaceholder('DreamNode creation UI coming soon!');
+        console.log('Create DreamNode command executed (Command+N)');
+        
+        // Check if DreamSpace is open
+        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+        if (!dreamspaceLeaf) {
+          // Open DreamSpace first if not already open
+          this.uiService.showError('Please open DreamSpace first');
+          await this.app.commands.executeCommandById('interbrain:open-dreamspace');
+          return;
+        }
+        
+        // Trigger creation mode in the store
+        const store = useInterBrainStore.getState();
+        
+        // Calculate spawn position (close to camera/center)
+        const spawnPosition: [number, number, number] = [0, 0, 2000];
+        
+        // Start creation mode
+        store.startCreation(spawnPosition);
+        
+        console.log('Creation mode activated - proto-node should appear in DreamSpace');
       }
     });
 
@@ -202,11 +223,15 @@ export default class InterBrainPlugin extends Plugin {
       id: 'select-mock-dreamnode',
       name: '[TEST] Select Mock DreamNode',
       callback: () => {
-        const mockNode = {
+        const mockNode: DreamNode = {
           id: 'test-123',
           name: 'Test DreamNode',
           type: 'dream' as const,
-          path: '/test/path',
+          position: [0, 0, 0],
+          dreamTalkMedia: [],
+          dreamSongContent: [],
+          liminalWebConnections: [],
+          repoPath: '/test/path',
           hasUnsavedChanges: false
         };
         this.dreamNodeService.setCurrentNode(mockNode);

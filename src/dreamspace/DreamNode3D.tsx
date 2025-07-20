@@ -5,6 +5,7 @@ import { Vector3, Group } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { dreamNodeStyles, getNodeColors, getNodeGlow } from './dreamNodeStyles';
 
 interface DreamNode3DProps {
   dreamNode: DreamNode;
@@ -94,11 +95,11 @@ export default function DreamNode3D({
     }
   });
 
-  // Color coding: blue for Dreams, red for Dreamers
-  const borderColor = dreamNode.type === 'dream' ? '#00a2ff' : '#FF644E';
+  // Get consistent colors from shared styles
+  const nodeColors = getNodeColors(dreamNode.type);
   
   // Base size for 3D scaling - will scale with distance due to distanceFactor
-  const nodeSize = 1000; // Base size since it will scale down significantly with distance
+  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = Math.max(1, nodeSize * 0.04); // ~10px border
   
   // Calculate visual component position with radial offset
@@ -150,17 +151,17 @@ export default function DreamNode3D({
         style={{
           width: `${nodeSize}px`,
           height: `${nodeSize}px`,
-          borderRadius: '50%',
-          border: `${borderWidth}px solid ${borderColor}`,
-          background: '#000000',
+          borderRadius: dreamNodeStyles.dimensions.borderRadius,
+          border: `${borderWidth}px solid ${nodeColors.border}`,
+          background: nodeColors.fill,
           overflow: 'hidden',
           position: 'relative',
           cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+          transition: dreamNodeStyles.transitions.default,
+          transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
           boxShadow: isHovered 
-            ? `0 0 20px ${borderColor}` 
-            : `0 0 10px rgba(${borderColor.slice(1)}, 0.5)`
+            ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity)
+            : getNodeGlow(dreamNode.type, 10)
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -195,7 +196,8 @@ export default function DreamNode3D({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#FFFFFF',
+              color: dreamNodeStyles.colors.text.primary,
+              fontFamily: dreamNodeStyles.typography.fontFamily,
               fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
               textAlign: 'center',
               padding: '8px'
@@ -226,7 +228,8 @@ export default function DreamNode3D({
             bottom: `-${nodeSize * 0.25}px`,
             left: '50%',
             transform: 'translateX(-50%)',
-            color: '#FFFFFF',
+            color: dreamNodeStyles.colors.text.primary,
+            fontFamily: dreamNodeStyles.typography.fontFamily,
             fontSize: `${Math.max(12, nodeSize * 0.1)}px`,
             textAlign: 'center',
             background: 'rgba(0, 0, 0, 0.8)',

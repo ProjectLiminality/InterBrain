@@ -1,12 +1,5 @@
 import { useInterBrainStore } from '../store/interbrain-store';
-
-export interface DreamNode {
-  id: string;
-  name: string;
-  type: 'dream' | 'dreamer';
-  path: string;
-  hasUnsavedChanges?: boolean;
-}
+import { DreamNode } from '../types/dreamnode';
 
 export class DreamNodeService {
   private selectedNodes: Set<string> = new Set();
