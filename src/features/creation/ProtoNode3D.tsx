@@ -38,8 +38,8 @@ export default function ProtoNode3D({
   }
   
   const nodeColors = getNodeColors(protoNode.type);
-  const nodeSize = dreamNodeStyles.dimensions.nodeSize; // Use UI size for creation
-  const borderWidth = dreamNodeStyles.dimensions.borderWidth;
+  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD; // Use 3D size to match existing nodes
+  const borderWidth = Math.max(1, nodeSize * 0.04); // Same calculation as DreamNode3D
   
   // Validation handlers
   const validateTitle = useCallback((title: string) => {
