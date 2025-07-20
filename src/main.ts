@@ -77,13 +77,13 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Create DreamNode command (Option+N)
+    // Create DreamNode command (no hotkey for now - use command palette)
     this.addCommand({
       id: 'create-dreamnode',
       name: 'Create new DreamNode',
-      hotkeys: [{ modifiers: ['Alt'], key: 'n' }],
+      // hotkeys: [{ modifiers: ['Alt'], key: 'n' }], // Commented out - Obsidian hotkey issues
       callback: async () => {
-        console.log('Create DreamNode command executed (Option+N)');
+        console.log('Create DreamNode command executed (via command palette)');
         
         // Check if DreamSpace is open
         const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
@@ -97,8 +97,8 @@ export default class InterBrainPlugin extends Plugin {
         // Trigger creation mode in the store
         const store = useInterBrainStore.getState();
         
-        // Calculate spawn position (close to camera/center)
-        const spawnPosition: [number, number, number] = [0, 0, 2000];
+        // Calculate spawn position (close to camera/center) - negative Z to be in front of camera
+        const spawnPosition: [number, number, number] = [0, 0, -2000];
         
         // Start creation mode
         store.startCreation(spawnPosition);
