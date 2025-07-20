@@ -7,8 +7,10 @@ import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
 import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
+import ProtoNode3D from '../features/creation/ProtoNode3D';
 import { DreamNode } from '../types/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
+import { serviceManager } from '../services/service-manager';
 import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
 
 export default function DreamspaceCanvas() {
@@ -26,6 +28,9 @@ export default function DreamspaceCanvas() {
   
   // Layout state for controlling dynamic view scaling
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
+  
+  // Creation state for proto-node rendering
+  const { creationState, completeCreation, cancelCreation } = useInterBrainStore();
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -38,6 +43,38 @@ export default function DreamspaceCanvas() {
   const handleNodeDoubleClick = (node: DreamNode) => {
     console.log(`Node double-clicked:`, node.name);
     // TODO: Open DreamSong view
+  };
+
+  const handleProtoNodeComplete = async (protoNode: ProtoNode) => {
+    try {
+      console.log('Creating DreamNode:', protoNode);
+      
+      // Use the service manager to create the node
+      const service = serviceManager.getActive();
+      const newNode = await service.create(
+        protoNode.title,
+        protoNode.type,
+        protoNode.dreamTalkFile
+      );
+      
+      console.log('DreamNode created successfully:', newNode);
+      
+      // Complete the creation flow (this will hide the proto-node)
+      completeCreation();
+      
+      // TODO: Trigger re-render of the dreamNodes list
+      // For now, the mock service stores the nodes but we need to
+      // integrate with the mock data source to see the new nodes
+      
+    } catch (error) {
+      console.error('Failed to create DreamNode:', error);
+      // TODO: Show error message to user
+    }
+  };
+
+  const handleProtoNodeCancel = () => {
+    console.log('Proto-node creation cancelled');
+    cancelCreation();
   };
 
   return (
@@ -97,6 +134,15 @@ export default function DreamspaceCanvas() {
             </React.Fragment>
           ))}
         </group>
+        
+        {/* Proto-node for creation - stationary relative to camera */}
+        {creationState.isCreating && creationState.protoNode && (
+          <ProtoNode3D
+            position={creationState.protoNode.position}
+            onComplete={handleProtoNodeComplete}
+            onCancel={handleProtoNodeCancel}
+          />
+        )}
         
         {/* Flying camera controls for debugging - toggleable */}
         {debugFlyingControls && (
