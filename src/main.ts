@@ -77,13 +77,13 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Create DreamNode command (Command+N)
+    // Create DreamNode command (Option+N)
     this.addCommand({
       id: 'create-dreamnode',
       name: 'Create new DreamNode',
-      hotkeys: [{ modifiers: ['Mod'], key: 'n' }],
+      hotkeys: [{ modifiers: ['Alt'], key: 'n' }],
       callback: async () => {
-        console.log('Create DreamNode command executed (Command+N)');
+        console.log('Create DreamNode command executed (Option+N)');
         
         // Check if DreamSpace is open
         const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
@@ -103,7 +103,14 @@ export default class InterBrainPlugin extends Plugin {
         // Start creation mode
         store.startCreation(spawnPosition);
         
-        console.log('Creation mode activated - proto-node should appear in DreamSpace');
+        // Debug logging to verify state
+        const newState = useInterBrainStore.getState();
+        console.log('Creation mode activated - state:', {
+          isCreating: newState.creationState.isCreating,
+          protoNode: newState.creationState.protoNode,
+          position: spawnPosition
+        });
+        console.log('Proto-node should appear in DreamSpace');
       }
     });
 
