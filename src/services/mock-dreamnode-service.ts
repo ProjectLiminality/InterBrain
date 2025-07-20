@@ -158,21 +158,19 @@ export class MockDreamNodeService {
 
   /**
    * Calculate position for new nodes
-   * Places them near the center with slight randomization
+   * Places them on the night sky sphere (5000 units) for proper dynamic scaling
    */
   private calculateNewNodePosition(): [number, number, number] {
-    // Place new nodes in a cluster near the origin with some variation
-    const baseDistance = 2000; // Close to camera for immediate visibility
-    const variation = 500; // Random variation
+    // Place new nodes on the night sky sphere surface (same as other nodes)
+    const sphereRadius = 5000; // Night sky sphere radius from DynamicViewScaling
     
-    const theta = Math.random() * Math.PI * 2; // Random angle
-    const phi = Math.acos(2 * Math.random() - 1); // Random inclination
+    const theta = Math.random() * Math.PI * 2; // Random angle around sphere
+    const phi = Math.acos(2 * Math.random() - 1); // Random inclination (uniform distribution)
     
-    const distance = baseDistance + (Math.random() - 0.5) * variation;
-    
-    const x = distance * Math.sin(phi) * Math.cos(theta);
-    const y = distance * Math.sin(phi) * Math.sin(theta);
-    const z = distance * Math.cos(phi);
+    // Position exactly on sphere surface for consistent behavior with other nodes
+    const x = sphereRadius * Math.sin(phi) * Math.cos(theta);
+    const y = sphereRadius * Math.sin(phi) * Math.sin(theta);
+    const z = sphereRadius * Math.cos(phi);
     
     return [x, y, z];
   }
