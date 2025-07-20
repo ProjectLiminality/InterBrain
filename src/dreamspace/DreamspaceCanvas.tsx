@@ -31,6 +31,15 @@ export default function DreamspaceCanvas() {
   
   // Creation state for proto-node rendering
   const { creationState, completeCreation, cancelCreation } = useInterBrainStore();
+  
+  // Debug logging for creation state
+  React.useEffect(() => {
+    console.log('DreamspaceCanvas - Creation state changed:', {
+      isCreating: creationState.isCreating,
+      hasProtoNode: !!creationState.protoNode,
+      protoNode: creationState.protoNode
+    });
+  }, [creationState]);
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -137,11 +146,14 @@ export default function DreamspaceCanvas() {
         
         {/* Proto-node for creation - stationary relative to camera */}
         {creationState.isCreating && creationState.protoNode && (
-          <ProtoNode3D
-            position={creationState.protoNode.position}
-            onComplete={handleProtoNodeComplete}
-            onCancel={handleProtoNodeCancel}
-          />
+          <>
+            {console.log('Rendering ProtoNode3D at position:', creationState.protoNode.position)}
+            <ProtoNode3D
+              position={creationState.protoNode.position}
+              onComplete={handleProtoNodeComplete}
+              onCancel={handleProtoNodeCancel}
+            />
+          </>
         )}
         
         {/* Flying camera controls for debugging - toggleable */}
