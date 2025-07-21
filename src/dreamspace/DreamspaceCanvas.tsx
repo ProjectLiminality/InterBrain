@@ -97,10 +97,10 @@ export default function DreamspaceCanvas() {
         // Scale to sphere radius to get world position
         const worldPosition = cameraForward.multiplyScalar(sphereRadius);
         
-        // Fix axis orientation - flip X axis for correct left/right mapping
+        // Fix axis orientation - flip X and Y axes for correct positioning
         const correctedPosition: [number, number, number] = [
           -worldPosition.x,  // Flip X axis (left/right)
-          worldPosition.y,   // Keep Y axis (up/down)
+          -worldPosition.y,  // Flip Y axis (up/down)
           worldPosition.z    // Keep Z axis (forward/back)
         ];
         finalPosition = correctedPosition;
