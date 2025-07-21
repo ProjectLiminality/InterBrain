@@ -64,7 +64,8 @@ export class MockDreamNodeService {
     
     this.nodes.set(id, node);
     
-    console.log(`MockDreamNodeService: Created ${type} "${title}" with ID ${id}`);
+    console.log(`MockDreamNodeService: Created ${type} "${title}" with ID ${id} at position:`, nodePosition);
+    console.log(`MockDreamNodeService: Total nodes in service: ${this.nodes.size}`);
     return node;
   }
 
@@ -168,17 +169,23 @@ export class MockDreamNodeService {
     const sphereRadius = 5000; // Night sky sphere radius from DynamicViewScaling
     const [x, y, z] = position;
     
+    console.log(`MockDreamNodeService: Projecting position [${x}, ${y}, ${z}] to sphere`);
+    
     // Calculate distance from origin (camera position)
     const distance = Math.sqrt(x * x + y * y + z * z);
     
     // If position is at origin, default to forward direction
     if (distance === 0) {
+      console.log('MockDreamNodeService: Position at origin, defaulting to forward');
       return [0, 0, -sphereRadius];
     }
     
     // Normalize the direction and scale to sphere radius
     const scale = sphereRadius / distance;
-    return [x * scale, y * scale, z * scale];
+    const projected: [number, number, number] = [x * scale, y * scale, z * scale];
+    
+    console.log(`MockDreamNodeService: Projected to sphere position:`, projected);
+    return projected;
   }
   
   /**
