@@ -93,6 +93,13 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   
   // Mouse event handlers
   const handleMouseDown = (event: globalThis.MouseEvent) => {
+    // Check if the mouse event is over UI elements (like proto-node HTML)
+    const target = event.target as globalThis.HTMLElement;
+    if (target && (target.closest('[data-ui-element]') || target.style?.pointerEvents === 'auto')) {
+      console.log('Mouse down over UI element, skipping rotation controls');
+      return; // Don't handle rotation if over UI elements
+    }
+    
     event.preventDefault();
     setIsDragging(true);
     setGlobalDragState(true); // Suppress hover detection globally

@@ -24,6 +24,7 @@ export default function ProtoNode3D({
 }: ProtoNode3DProps) {
   const groupRef = useRef<Group>(null);
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
+  const fileInputRef = useRef<globalThis.HTMLInputElement>(null);
   
   // Get creation state from store
   const { creationState, updateProtoNode, setValidationErrors } = useInterBrainStore();
@@ -94,11 +95,18 @@ export default function ProtoNode3D({
   };
   
   const handleFileSelect = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    console.log('File input changed, files:', e.target.files);
     const file = e.target.files?.[0];
-    if (file && isValidMediaFile(file)) {
-      updateProtoNode({ dreamTalkFile: file });
-      const previewUrl = globalThis.URL.createObjectURL(file);
-      setPreviewMedia(previewUrl);
+    if (file) {
+      console.log('Selected file:', file.name, file.type);
+      if (isValidMediaFile(file)) {
+        console.log('File is valid, updating proto-node');
+        updateProtoNode({ dreamTalkFile: file });
+        const previewUrl = globalThis.URL.createObjectURL(file);
+        setPreviewMedia(previewUrl);
+      } else {
+        console.warn('File type not valid:', file.type);
+      }
     }
   };
   
@@ -142,7 +150,7 @@ export default function ProtoNode3D({
           userSelect: 'none'
         }}
       >
-        <div onKeyDown={handleKeyDown}>
+        <div onKeyDown={handleKeyDown} data-ui-element="proto-node">
           {/* Main Proto-Node Circle */}
           <div
             style={{
@@ -204,9 +212,22 @@ export default function ProtoNode3D({
                   padding: '20px',
                   cursor: 'pointer',
                   border: isDragOver ? '2px dashed rgba(255,255,255,0.5)' : 'none',
-                  borderRadius: '50%'
+                  borderRadius: '50%',
+                  zIndex: 9999,
+                  pointerEvents: 'auto',
+                  backgroundColor: 'rgba(255,0,0,0.1)' // Temporary: make it visible for debugging
                 }}
-                onClick={() => globalThis.document.getElementById('dreamtalk-file-input')?.click()}
+                onClick={(e) => {
+                  console.log('File picker area clicked');
+                  e.stopPropagation(); // Prevent event bubbling
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }}
+                onMouseDown={(e) => {
+                  console.log('File picker area mouse down');
+                  e.stopPropagation(); // Prevent rotation controls from capturing
+                  e.preventDefault();
+                }}
               >
                 <div>Drop image here</div>
                 <div>or click to browse</div>
@@ -225,7 +246,8 @@ export default function ProtoNode3D({
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: 'rgba(0, 0, 0, 0.7)',
-                borderRadius: '50%'
+                borderRadius: '50%',
+                pointerEvents: 'none' // Allow clicks through to underlying elements
               }}
             >
               <input
@@ -244,14 +266,15 @@ export default function ProtoNode3D({
                   textAlign: 'center',
                   outline: 'none',
                   width: '80%',
-                  padding: '8px'
+                  padding: '8px',
+                  pointerEvents: 'auto' // Re-enable pointer events for the input itself
                 }}
               />
             </div>
             
             {/* Hidden file input */}
             <input
-              id="dreamtalk-file-input"
+              ref={fileInputRef}
               type="file"
               accept="image/*,video/*"
               onChange={handleFileSelect}
