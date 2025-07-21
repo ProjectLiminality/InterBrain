@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useRef, useEffect } from 'react';
-import { Group, Vector3 } from 'three';
+import { Group, Vector3, Raycaster, Sphere } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
@@ -81,37 +81,43 @@ export default function DreamspaceCanvas() {
     try {
       console.log('Creating DreamNode:', protoNode);
       
-      // Calculate where camera ray intersects the rotated sphere
+      // Use raycasting to find intersection with rotated sphere (more robust approach)
       let finalPosition = protoNode.position;
       if (dreamWorldRef.current) {
-        // Camera ray: origin [0,0,0], direction [0,0,-1] (forward)
-        // We want the intersection with sphere at radius 5000
+        // Create raycaster from camera position forward
+        const raycaster = new Raycaster();
+        const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
+        const cameraDirection = new Vector3(0, 0, -1); // Forward direction
+        
+        raycaster.set(cameraPosition, cameraDirection);
+        
+        // Create sphere geometry in world space (accounting for rotation)
         const sphereRadius = 5000;
-        const cameraForward = new Vector3(0, 0, -1);
+        const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
         
-        // Apply sphere rotation to the camera forward vector
-        // This gives us the direction in world space that intersects the rotated sphere
-        const sphereRotation = dreamWorldRef.current.quaternion;
-        cameraForward.applyQuaternion(sphereRotation);
+        // Find intersection points
+        const intersectionPoint = new Vector3();
+        const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
         
-        // Scale to sphere radius to get world position
-        const worldPosition = cameraForward.multiplyScalar(sphereRadius);
-        
-        // Fix axis orientation - flip X and Y axes for correct positioning
-        const correctedPosition: [number, number, number] = [
-          -worldPosition.x,  // Flip X axis (left/right)
-          -worldPosition.y,  // Flip Y axis (up/down)
-          worldPosition.z    // Keep Z axis (forward/back)
-        ];
-        finalPosition = correctedPosition;
-        
-        console.log('Camera ray intersection with rotated sphere:', {
-          sphereRotation: sphereRotation.toArray(),
-          cameraForward: [0, 0, -1],
-          rotatedForward: cameraForward.clone().normalize().toArray(),
-          worldPosition: worldPosition.toArray(),
-          correctedPosition: finalPosition
-        });
+        if (hasIntersection) {
+          // Transform intersection point by the sphere's rotation
+          // This accounts for the fact that the sphere is rotated in world space
+          const sphereRotation = dreamWorldRef.current.quaternion;
+          intersectionPoint.applyQuaternion(sphereRotation);
+          
+          finalPosition = intersectionPoint.toArray() as [number, number, number];
+          
+          console.log('Raycaster intersection with rotated sphere:', {
+            sphereRotation: sphereRotation.toArray(),
+            rayOrigin: cameraPosition.toArray(),
+            rayDirection: cameraDirection.toArray(),
+            intersectionPoint: intersectionPoint.toArray(),
+            finalPosition: finalPosition
+          });
+        } else {
+          console.warn('No intersection found with sphere - using default position');
+          finalPosition = [0, 0, -5000]; // Fallback to forward position
+        }
       }
       
       // Use the service manager to create the node
