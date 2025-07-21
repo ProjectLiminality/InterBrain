@@ -33,6 +33,13 @@ export default function ProtoNode3D({
   // Local UI state
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
+
+  // Maintain persistent focus on text input when type changes
+  React.useEffect(() => {
+    if (protoNode && titleInputRef.current) {
+      titleInputRef.current.focus();
+    }
+  }, [protoNode?.type]);
   
   if (!protoNode) {
     return null; // Should not render if no proto node exists
@@ -67,6 +74,10 @@ export default function ProtoNode3D({
   
   const handleTypeChange = (type: 'dream' | 'dreamer') => {
     updateProtoNode({ type });
+    // Refocus text input after type change to maintain persistent focus
+    globalThis.setTimeout(() => {
+      titleInputRef.current?.focus();
+    }, 0);
   };
   
   const handleDragOver = (e: React.DragEvent) => {
@@ -150,7 +161,14 @@ export default function ProtoNode3D({
           userSelect: 'none'
         }}
       >
-        <div onKeyDown={handleKeyDown} data-ui-element="proto-node">
+        <div 
+          onKeyDown={handleKeyDown} 
+          data-ui-element="proto-node"
+          onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
+          onMouseMove={(e) => e.stopPropagation()} // Prevent sphere rotation
+          onMouseUp={(e) => e.stopPropagation()} // Prevent sphere rotation
+          onClick={(e) => e.stopPropagation()} // Prevent any click propagation
+        >
           {/* Main Proto-Node Circle */}
           <div
             style={{
@@ -215,7 +233,6 @@ export default function ProtoNode3D({
                   borderRadius: '50%',
                   zIndex: 9999,
                   pointerEvents: 'auto',
-                  backgroundColor: 'rgba(255,0,0,0.1)' // Temporary: make it visible for debugging
                 }}
                 onClick={(e) => {
                   console.log('File picker area clicked');
@@ -261,12 +278,13 @@ export default function ProtoNode3D({
                   background: 'transparent',
                   border: 'none',
                   color: dreamNodeStyles.colors.text.primary,
-                  fontSize: `${dreamNodeStyles.typography.fontSize.base}px`,
+                  fontSize: `${Math.max(12, nodeSize * 0.08)}px`, // Match DreamNode3D text sizing
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
                   outline: 'none',
                   width: '80%',
-                  padding: '8px',
+                  height: `${Math.max(40, nodeSize * 0.08)}px`, // Explicit height for proper text display
+                  padding: `${Math.max(8, nodeSize * 0.02)}px`, // Scale padding with node size for proper text height
                   pointerEvents: 'auto' // Re-enable pointer events for the input itself
                 }}
               />
@@ -316,13 +334,17 @@ export default function ProtoNode3D({
             }}
           >
             <button
-              onClick={() => handleTypeChange('dream')}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent sphere rotation
+                handleTypeChange('dream');
+              }}
+              onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
               style={{
-                padding: '8px 16px',
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
                 border: 'none',
                 background: protoNode.type === 'dream' ? getNodeColors('dream').border : 'transparent',
                 color: 'white',
-                fontSize: '14px',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 cursor: 'pointer',
                 transition: dreamNodeStyles.transitions.default
@@ -331,13 +353,17 @@ export default function ProtoNode3D({
               Dream
             </button>
             <button
-              onClick={() => handleTypeChange('dreamer')}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent sphere rotation
+                handleTypeChange('dreamer');
+              }}
+              onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
               style={{
-                padding: '8px 16px',
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
                 border: 'none',
                 background: protoNode.type === 'dreamer' ? getNodeColors('dreamer').border : 'transparent',
                 color: 'white',
-                fontSize: '14px',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 cursor: 'pointer',
                 transition: dreamNodeStyles.transitions.default
@@ -351,7 +377,7 @@ export default function ProtoNode3D({
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (validationErrors.title ? 80 : 60)}px`,
+              top: `${nodeSize + (validationErrors.title ? 120 : 100)}px`, // Increased gap from 60/80 to 100/120
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
@@ -359,15 +385,19 @@ export default function ProtoNode3D({
             }}
           >
             <button
-              onClick={handleCancel}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent sphere rotation
+                handleCancel();
+              }}
+              onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
               style={{
-                padding: '8px 16px',
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
                 border: '1px solid rgba(255,255,255,0.5)',
                 background: 'transparent',
                 color: 'white',
-                fontSize: '14px',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
-                borderRadius: '4px',
+                borderRadius: `${Math.max(4, nodeSize * 0.01)}px`, // Scale border radius
                 cursor: 'pointer',
                 transition: dreamNodeStyles.transitions.default
               }}
@@ -375,18 +405,22 @@ export default function ProtoNode3D({
               Cancel
             </button>
             <button
-              onClick={handleCreate}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent sphere rotation
+                handleCreate();
+              }}
+              onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
               disabled={isCreateDisabled}
               style={{
-                padding: '8px 16px',
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
                 border: 'none',
                 background: isCreateDisabled 
                   ? 'rgba(255,255,255,0.3)' 
                   : nodeColors.border,
                 color: isCreateDisabled ? 'rgba(255,255,255,0.5)' : 'white',
-                fontSize: '14px',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
-                borderRadius: '4px',
+                borderRadius: `${Math.max(4, nodeSize * 0.01)}px`, // Scale border radius
                 cursor: isCreateDisabled ? 'not-allowed' : 'pointer',
                 transition: dreamNodeStyles.transitions.default
               }}
