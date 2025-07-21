@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useRef, useEffect } from 'react';
-import { Group } from 'three';
+import { Group, Vector3 } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
@@ -81,13 +81,28 @@ export default function DreamspaceCanvas() {
     try {
       console.log('Creating DreamNode:', protoNode);
       
+      // Apply sphere rotation to the proto-node position
+      let rotatedPosition = protoNode.position;
+      if (dreamWorldRef.current) {
+        const sphereRotation = dreamWorldRef.current.quaternion;
+        const positionVector = new Vector3(...protoNode.position);
+        // Apply the sphere's rotation to get world position
+        positionVector.applyQuaternion(sphereRotation);
+        rotatedPosition = positionVector.toArray() as [number, number, number];
+        console.log('Applied sphere rotation:', {
+          original: protoNode.position,
+          rotated: rotatedPosition,
+          sphereRotation: sphereRotation.toArray()
+        });
+      }
+      
       // Use the service manager to create the node
       const service = serviceManager.getActive();
       const newNode = await service.create(
         protoNode.title,
         protoNode.type,
         protoNode.dreamTalkFile,
-        protoNode.position // Pass proto-node position to project onto sphere
+        rotatedPosition // Pass rotated position to project onto sphere
       );
       
       console.log('DreamNode created successfully:', newNode);
