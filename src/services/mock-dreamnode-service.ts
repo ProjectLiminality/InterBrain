@@ -20,7 +20,8 @@ export class MockDreamNodeService {
     type: 'dream' | 'dreamer', 
     dreamTalk?: globalThis.File
   ): Promise<DreamNode> {
-    const id = `mock-${type}-${this.idCounter++}`;
+    // Use 'dynamic' prefix to avoid conflicts with static mock data IDs
+    const id = `dynamic-${type}-${this.idCounter++}`;
     
     // Store file reference if provided
     let dreamTalkMedia: Array<{ 

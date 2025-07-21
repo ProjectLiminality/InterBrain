@@ -43,6 +43,11 @@ export default function DreamspaceCanvas() {
     const loadDynamicNodes = async () => {
       try {
         const service = serviceManager.getActive();
+        // Reset mock service on mount to ensure clean state
+        if ('reset' in service && typeof service.reset === 'function') {
+          service.reset();
+          console.log('DreamspaceCanvas: Reset mock service');
+        }
         const nodes = await service.list();
         setDynamicNodes(nodes);
         console.log('DreamspaceCanvas: Loaded dynamic nodes:', nodes.length);
