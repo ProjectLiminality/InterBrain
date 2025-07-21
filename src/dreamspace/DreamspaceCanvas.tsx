@@ -81,18 +81,28 @@ export default function DreamspaceCanvas() {
     try {
       console.log('Creating DreamNode:', protoNode);
       
-      // Apply sphere rotation to the proto-node position
-      let rotatedPosition = protoNode.position;
+      // Calculate where camera ray intersects the rotated sphere
+      let finalPosition = protoNode.position;
       if (dreamWorldRef.current) {
+        // Camera ray: origin [0,0,0], direction [0,0,-1] (forward)
+        // We want the intersection with sphere at radius 5000
+        const sphereRadius = 5000;
+        const cameraForward = new Vector3(0, 0, -1);
+        
+        // Apply sphere rotation to the camera forward vector
+        // This gives us the direction in world space that intersects the rotated sphere
         const sphereRotation = dreamWorldRef.current.quaternion;
-        const positionVector = new Vector3(...protoNode.position);
-        // Apply the sphere's rotation to get world position
-        positionVector.applyQuaternion(sphereRotation);
-        rotatedPosition = positionVector.toArray() as [number, number, number];
-        console.log('Applied sphere rotation:', {
-          original: protoNode.position,
-          rotated: rotatedPosition,
-          sphereRotation: sphereRotation.toArray()
+        cameraForward.applyQuaternion(sphereRotation);
+        
+        // Scale to sphere radius to get world position
+        const worldPosition = cameraForward.multiplyScalar(sphereRadius);
+        finalPosition = worldPosition.toArray() as [number, number, number];
+        
+        console.log('Camera ray intersection with rotated sphere:', {
+          sphereRotation: sphereRotation.toArray(),
+          cameraForward: [0, 0, -1],
+          rotatedForward: cameraForward.clone().normalize().toArray(),
+          worldPosition: finalPosition
         });
       }
       
@@ -102,7 +112,7 @@ export default function DreamspaceCanvas() {
         protoNode.title,
         protoNode.type,
         protoNode.dreamTalkFile,
-        rotatedPosition // Pass rotated position to project onto sphere
+        finalPosition // Pass rotation-adjusted position to project onto sphere
       );
       
       console.log('DreamNode created successfully:', newNode);
