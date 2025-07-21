@@ -5,7 +5,7 @@ import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-ser
  * Service interface that both mock and real implementations will follow
  */
 export interface IDreamNodeService {
-  create(title: string, type: 'dream' | 'dreamer', dreamTalk?: globalThis.File): Promise<DreamNode>;
+  create(title: string, type: 'dream' | 'dreamer', dreamTalk?: globalThis.File, position?: [number, number, number]): Promise<DreamNode>;
   update(id: string, changes: Partial<DreamNode>): Promise<void>;
   delete(id: string): Promise<void>;
   list(): Promise<DreamNode[]>;
@@ -17,7 +17,7 @@ export interface IDreamNodeService {
  * Currently just extends the existing DreamNodeService with required methods
  */
 class RealDreamNodeService implements IDreamNodeService {
-  async create(_title: string, _type: 'dream' | 'dreamer', _dreamTalk?: globalThis.File): Promise<DreamNode> {
+  async create(_title: string, _type: 'dream' | 'dreamer', _dreamTalk?: globalThis.File, _position?: [number, number, number]): Promise<DreamNode> {
     // TODO: Implement real git-based creation in Phase B
     throw new Error('Real DreamNode creation not yet implemented - use mock mode');
   }

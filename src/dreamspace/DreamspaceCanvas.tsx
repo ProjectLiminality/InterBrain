@@ -90,7 +90,8 @@ export default function DreamspaceCanvas() {
       const newNode = await service.create(
         protoNode.title,
         protoNode.type,
-        protoNode.dreamTalkFile
+        protoNode.dreamTalkFile,
+        protoNode.position // Pass proto-node position to project onto sphere
       );
       
       console.log('DreamNode created successfully:', newNode);
