@@ -18,7 +18,8 @@ export class MockDreamNodeService {
   async create(
     title: string, 
     type: 'dream' | 'dreamer', 
-    dreamTalk?: globalThis.File
+    dreamTalk?: globalThis.File,
+    position?: [number, number, number]
   ): Promise<DreamNode> {
     // Use 'dynamic' prefix to avoid conflicts with static mock data IDs
     const id = `dynamic-${type}-${this.idCounter++}`;
@@ -44,14 +45,16 @@ export class MockDreamNodeService {
       }];
     }
     
-    // Calculate position near center for new nodes
-    const position = this.calculateNewNodePosition();
+    // Use provided position or calculate based on camera line of sight
+    const nodePosition = position 
+      ? this.projectPositionToSphere(position)
+      : this.calculateNewNodePosition();
     
     const node: DreamNode = {
       id,
       type,
       name: title,
-      position,
+      position: nodePosition,
       dreamTalkMedia,
       dreamSongContent: [], // Empty for new nodes
       liminalWebConnections: [], // Will be populated as more nodes are created
@@ -157,6 +160,27 @@ export class MockDreamNodeService {
     });
   }
 
+  /**
+   * Project a position onto the night sky sphere
+   * Takes a position (like the proto-node position) and projects it onto the sphere surface
+   */
+  private projectPositionToSphere(position: [number, number, number]): [number, number, number] {
+    const sphereRadius = 5000; // Night sky sphere radius from DynamicViewScaling
+    const [x, y, z] = position;
+    
+    // Calculate distance from origin (camera position)
+    const distance = Math.sqrt(x * x + y * y + z * z);
+    
+    // If position is at origin, default to forward direction
+    if (distance === 0) {
+      return [0, 0, -sphereRadius];
+    }
+    
+    // Normalize the direction and scale to sphere radius
+    const scale = sphereRadius / distance;
+    return [x * scale, y * scale, z * scale];
+  }
+  
   /**
    * Calculate position for new nodes
    * Places them on the night sky sphere (5000 units) for proper dynamic scaling
