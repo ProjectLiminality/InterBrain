@@ -96,13 +96,21 @@ export default function DreamspaceCanvas() {
         
         // Scale to sphere radius to get world position
         const worldPosition = cameraForward.multiplyScalar(sphereRadius);
-        finalPosition = worldPosition.toArray() as [number, number, number];
+        
+        // Fix axis orientation - flip X axis for correct left/right mapping
+        const correctedPosition: [number, number, number] = [
+          -worldPosition.x,  // Flip X axis (left/right)
+          worldPosition.y,   // Keep Y axis (up/down)
+          worldPosition.z    // Keep Z axis (forward/back)
+        ];
+        finalPosition = correctedPosition;
         
         console.log('Camera ray intersection with rotated sphere:', {
           sphereRotation: sphereRotation.toArray(),
           cameraForward: [0, 0, -1],
           rotatedForward: cameraForward.clone().normalize().toArray(),
-          worldPosition: finalPosition
+          worldPosition: worldPosition.toArray(),
+          correctedPosition: finalPosition
         });
       }
       
