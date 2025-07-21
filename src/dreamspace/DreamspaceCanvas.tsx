@@ -43,14 +43,10 @@ export default function DreamspaceCanvas() {
     const loadDynamicNodes = async () => {
       try {
         const service = serviceManager.getActive();
-        // Reset mock service on mount to ensure clean state
-        if ('reset' in service && typeof service.reset === 'function') {
-          service.reset();
-          console.log('DreamspaceCanvas: Reset mock service');
-        }
+        // Don't reset on mount - preserve nodes across re-renders
         const nodes = await service.list();
         setDynamicNodes(nodes);
-        console.log('DreamspaceCanvas: Loaded dynamic nodes:', nodes.length);
+        console.log('DreamspaceCanvas: Loaded dynamic nodes on mount:', nodes.length);
       } catch (error) {
         console.error('Failed to load dynamic nodes:', error);
       }
@@ -98,6 +94,11 @@ export default function DreamspaceCanvas() {
       
       // Refresh the dynamic nodes list to include the new node
       const updatedNodes = await service.list();
+      console.log('DreamspaceCanvas: Service returned nodes:', updatedNodes.map(n => ({
+        id: n.id,
+        name: n.name,
+        position: n.position
+      })));
       setDynamicNodes(updatedNodes);
       console.log('DreamspaceCanvas: Refreshed nodes after creation, total:', updatedNodes.length);
       
