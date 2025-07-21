@@ -100,10 +100,11 @@ export default function DreamspaceCanvas() {
         const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
         
         if (hasIntersection) {
-          // Transform intersection point by the sphere's rotation
-          // This accounts for the fact that the sphere is rotated in world space
+          // Since the sphere rotates but the camera ray is fixed, we need to apply
+          // the INVERSE rotation to get the correct position on the rotated sphere
           const sphereRotation = dreamWorldRef.current.quaternion;
-          intersectionPoint.applyQuaternion(sphereRotation);
+          const inverseRotation = sphereRotation.clone().invert();
+          intersectionPoint.applyQuaternion(inverseRotation);
           
           finalPosition = intersectionPoint.toArray() as [number, number, number];
           
