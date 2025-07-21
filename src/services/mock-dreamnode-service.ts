@@ -45,9 +45,9 @@ export class MockDreamNodeService {
       }];
     }
     
-    // Use provided position or calculate based on camera line of sight
+    // Use provided position (already world coordinates) or calculate random position
     const nodePosition = position 
-      ? this.projectPositionToSphere(position)
+      ? position // Position is already calculated in world coordinates
       : this.calculateNewNodePosition();
     
     const node: DreamNode = {
@@ -65,6 +65,7 @@ export class MockDreamNodeService {
     this.nodes.set(id, node);
     
     console.log(`MockDreamNodeService: Created ${type} "${title}" with ID ${id} at position:`, nodePosition);
+    console.log(`MockDreamNodeService: Position was ${position ? 'provided (world coords)' : 'calculated (random)'}`);
     console.log(`MockDreamNodeService: Total nodes in service: ${this.nodes.size}`);
     return node;
   }
