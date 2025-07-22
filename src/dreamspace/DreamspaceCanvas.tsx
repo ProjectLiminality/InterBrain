@@ -21,7 +21,7 @@ export default function DreamspaceCanvas() {
   const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
   
   // Drag and drop state
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
   
   // Combine static mock data with dynamic service nodes
@@ -40,7 +40,7 @@ export default function DreamspaceCanvas() {
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   
   // Creation state for proto-node rendering
-  const { creationState, completeCreation, cancelCreation } = useInterBrainStore();
+  const { creationState, startCreation, updateProtoNode, completeCreation, cancelCreation } = useInterBrainStore();
   
   // Load dynamic nodes from mock service on mount and after creation
   useEffect(() => {
@@ -82,19 +82,38 @@ export default function DreamspaceCanvas() {
    * Calculate 3D position from mouse coordinates projected onto sphere
    */
   const calculateDropPosition = (mouseX: number, mouseY: number): [number, number, number] => {
+    // Get the canvas element specifically for accurate bounds
+    const canvasElement = globalThis.document.querySelector('.dreamspace-canvas-container canvas') as globalThis.HTMLCanvasElement;
+    if (!canvasElement) return [0, 0, -5000]; // Fallback position
+    
+    const rect = canvasElement.getBoundingClientRect();
+    
     // Convert screen coordinates to normalized device coordinates (-1 to 1)
-    const rect = globalThis.document.querySelector('.dreamspace-canvas-container')?.getBoundingClientRect();
-    if (!rect) return [0, 0, -5000]; // Fallback position
-    
+    // Note: Canvas coordinate system has origin at top-left, but NDC has origin at center
     const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1;
+    const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1; // Flip Y for NDC
     
-    // Create raycaster from camera position
+    console.log('Position calculation:', {
+      mouse: { x: mouseX, y: mouseY },
+      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      ndc: { x: ndcX, y: ndcY }
+    });
+    
+    // Create ray direction accounting for camera FOV (75 degrees)
+    const fov = 75 * Math.PI / 180; // Convert to radians
+    const aspect = rect.width / rect.height;
+    const tanHalfFov = Math.tan(fov / 2);
+    
+    // Calculate proper ray direction with perspective projection
+    const rayDirection = new Vector3(
+      ndcX * tanHalfFov * aspect,
+      ndcY * tanHalfFov,
+      -1 // Forward direction from camera
+    ).normalize();
+    
     const raycaster = new Raycaster();
     const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
-    const cameraDirection = new Vector3(ndcX, ndcY, -1).normalize();
-    
-    raycaster.set(cameraPosition, cameraDirection);
+    raycaster.set(cameraPosition, rayDirection);
     
     // Find intersection with sphere
     const sphereRadius = 5000;
@@ -109,9 +128,15 @@ export default function DreamspaceCanvas() {
       const inverseRotation = sphereRotation.clone().invert();
       intersectionPoint.applyQuaternion(inverseRotation);
       
+      console.log('Intersection found:', {
+        worldPosition: intersectionPoint.toArray(),
+        sphereRotation: sphereRotation.toArray()
+      });
+      
       return intersectionPoint.toArray() as [number, number, number];
     }
     
+    console.warn('No intersection found with sphere - using fallback');
     // Fallback to forward position
     return [0, 0, -5000];
   };
@@ -295,19 +320,26 @@ export default function DreamspaceCanvas() {
       const file = files[0]; // Use first file for pre-filling
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
       
-      console.log('Opening ProtoNode with pre-filled file:', { title: fileNameWithoutExt, file: file.name });
+      console.log('Opening ProtoNode with pre-filled file:', { title: fileNameWithoutExt, file: file.name, position });
       
-      // Start creation process
-      const { startCreation, updateProtoNode } = useInterBrainStore.getState();
+      // Start creation process using the hook methods
       startCreation(position);
       
-      // Pre-fill the proto node with file data
-      const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
-      updateProtoNode({
-        title: fileNameWithoutExt,
-        type: 'dream',
-        dreamTalkFile: dreamTalkFile
-      });
+      // Add a small delay to ensure creation state is set before updating proto node
+      globalThis.setTimeout(() => {
+        // Pre-fill the proto node with file data
+        const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
+        updateProtoNode({
+          title: fileNameWithoutExt,
+          type: 'dream',
+          dreamTalkFile: dreamTalkFile
+        });
+        
+        console.log('ProtoNode state updated:', {
+          isCreating: creationState.isCreating,
+          protoNode: creationState.protoNode
+        });
+      }, 10); // Small delay to ensure state update
       
     } catch (error) {
       console.error('Failed to start creation from drop:', error);
@@ -322,10 +354,6 @@ export default function DreamspaceCanvas() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{
-        opacity: isDragOver ? 0.8 : 1,
-        transition: 'opacity 0.2s ease'
-      }}
     >
       <Canvas
         camera={{
