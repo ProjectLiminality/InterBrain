@@ -342,7 +342,8 @@ export default function ProtoNode3D({
                   height: `${Math.max(40, nodeSize * 0.08)}px`, // Explicit height for proper text display
                   padding: `${Math.max(8, nodeSize * 0.02)}px`, // Scale padding with node size for proper text height
                   pointerEvents: 'auto', // Re-enable pointer events for the input itself
-                  caretColor: 'transparent' // Hide the text cursor
+                  boxShadow: 'none', // Remove any potential box shadow
+                  borderRadius: '0' // Remove any border radius that might show an outline
                 }}
               />
             </div>
