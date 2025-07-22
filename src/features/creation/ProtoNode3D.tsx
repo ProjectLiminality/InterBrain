@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { Group } from 'three';
-import { useSpring, animated } from '@react-spring/three';
+import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore, ProtoNode } from '../../store/interbrain-store';
 
@@ -37,11 +37,44 @@ export default function ProtoNode3D({
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentOpacity, setCurrentOpacity] = useState<number>(dreamNodeStyles.states.creation.opacity);
   
-  // Animation spring for position (Three.js)
-  const [positionSprings, positionApi] = useSpring(() => ({
-    position: position,
-    config: { tension: 120, friction: 40 } // Smooth ease-in-out
-  }));
+  // Manual animation state
+  const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
+  const animationRef = useRef<{
+    startTime: number;
+    startPosition: [number, number, number];
+    endPosition: [number, number, number];
+    duration: number;
+    isAnimating: boolean;
+  } | null>(null);
+  
+  // useFrame for smooth manual animation
+  useFrame(() => {
+    if (!animationRef.current || !animationRef.current.isAnimating) return;
+    
+    const { startTime, startPosition, endPosition, duration } = animationRef.current;
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // Ease-in-out function
+    const easeInOut = progress < 0.5 
+      ? 2 * progress * progress 
+      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+    
+    // Interpolate position
+    const newPosition: [number, number, number] = [
+      startPosition[0] + (endPosition[0] - startPosition[0]) * easeInOut,
+      startPosition[1] + (endPosition[1] - startPosition[1]) * easeInOut,
+      startPosition[2] + (endPosition[2] - startPosition[2]) * easeInOut,
+    ];
+    
+    setAnimatedPosition(newPosition);
+    
+    // Stop animation when complete
+    if (progress >= 1) {
+      animationRef.current.isAnimating = false;
+      setAnimatedPosition(endPosition);
+    }
+  });
 
   // Maintain persistent focus on text input when type changes
   React.useEffect(() => {
@@ -144,11 +177,17 @@ export default function ProtoNode3D({
       ];
       
       // Start position animation
-      console.log('ProtoNode3D: Starting position animation from', position, 'to', finalPosition);
-      positionApi.start({
-        position: finalPosition,
-        config: { tension: 120, friction: 40, duration: 1000 } // 1 second duration
-      });
+      console.log('ProtoNode3D: Starting manual position animation from', position, 'to', finalPosition);
+      console.log('ProtoNode3D: Current animated position:', animatedPosition);
+      
+      // Start manual animation
+      animationRef.current = {
+        startTime: Date.now(),
+        startPosition: position,
+        endPosition: finalPosition,
+        duration: 1000, // 1 second
+        isAnimating: true
+      };
       
       // After animation completes, call onComplete
       // The parent will handle hiding the proto-node after node creation
@@ -207,7 +246,10 @@ export default function ProtoNode3D({
   const isCreateDisabled = !protoNode.title.trim() || !!validationErrors.title || isAnimating;
   
   return (
-    <animated.group ref={groupRef} position={positionSprings.position}>
+    <group 
+      ref={groupRef} 
+      position={animatedPosition}
+    >
       <Html
         position={[0, 0, 0]}
         center
@@ -489,7 +531,7 @@ export default function ProtoNode3D({
           </div>
         </div>
       </Html>
-    </animated.group>
+    </group>
   );
 }
 
