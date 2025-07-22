@@ -20,6 +20,10 @@ export default function DreamspaceCanvas() {
   // State for dynamic nodes from mock service
   const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
   
+  // Drag and drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
+  
   // Combine static mock data with dynamic service nodes
   const staticNodes = getMockDataForConfig(mockDataConfig);
   const dreamNodes = [...staticNodes, ...dynamicNodes];
@@ -56,6 +60,61 @@ export default function DreamspaceCanvas() {
   }, []);
   
   // Debug logging for creation state (removed excessive logging)
+
+  /**
+   * Validate media file types for DreamTalk
+   */
+  const isValidMediaFile = (file: globalThis.File): boolean => {
+    const validTypes = [
+      'image/png',
+      'image/jpeg', 
+      'image/jpg',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+      'video/webm'
+    ];
+    
+    return validTypes.includes(file.type);
+  };
+
+  /**
+   * Calculate 3D position from mouse coordinates projected onto sphere
+   */
+  const calculateDropPosition = (mouseX: number, mouseY: number): [number, number, number] => {
+    // Convert screen coordinates to normalized device coordinates (-1 to 1)
+    const rect = globalThis.document.querySelector('.dreamspace-canvas-container')?.getBoundingClientRect();
+    if (!rect) return [0, 0, -5000]; // Fallback position
+    
+    const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1;
+    
+    // Create raycaster from camera position
+    const raycaster = new Raycaster();
+    const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
+    const cameraDirection = new Vector3(ndcX, ndcY, -1).normalize();
+    
+    raycaster.set(cameraPosition, cameraDirection);
+    
+    // Find intersection with sphere
+    const sphereRadius = 5000;
+    const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
+    
+    const intersectionPoint = new Vector3();
+    const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
+    
+    if (hasIntersection && dreamWorldRef.current) {
+      // Apply inverse rotation to account for sphere rotation
+      const sphereRotation = dreamWorldRef.current.quaternion;
+      const inverseRotation = sphereRotation.clone().invert();
+      intersectionPoint.applyQuaternion(inverseRotation);
+      
+      return intersectionPoint.toArray() as [number, number, number];
+    }
+    
+    // Fallback to forward position
+    return [0, 0, -5000];
+  };
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -144,8 +203,130 @@ export default function DreamspaceCanvas() {
     cancelCreation();
   };
 
+  // Drag and drop event handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Track mouse position for drop positioning
+    setDragMousePosition({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only clear drag state if leaving the container (not just moving between children)
+    if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node)) {
+      setIsDragOver(false);
+      setDragMousePosition(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    
+    const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
+    const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
+    const position = calculateDropPosition(mousePos.x, mousePos.y);
+    
+    console.log('Drop detected:', {
+      fileCount: files.length,
+      isCommandDrop,
+      position,
+      files: files.map(f => ({ name: f.name, type: f.type, size: f.size }))
+    });
+    
+    if (isCommandDrop) {
+      // Command+Drop: Open ProtoNode3D with file pre-filled
+      await handleCommandDrop(files, position);
+    } else {
+      // Normal Drop: Create node instantly
+      await handleNormalDrop(files, position);
+    }
+    
+    setDragMousePosition(null);
+  };
+
+  const handleNormalDrop = async (files: globalThis.File[], position: [number, number, number]) => {
+    try {
+      const file = files[0]; // Use first file for single node creation
+      const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
+      
+      console.log('Creating node instantly:', { title: fileNameWithoutExt, position });
+      
+      // Use service to create node
+      const service = serviceManager.getActive();
+      const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
+      
+      const newNode = await service.create(
+        fileNameWithoutExt,
+        'dream', // Always create Dream-type for normal drops
+        dreamTalkFile,
+        position
+      );
+      
+      console.log('Node created successfully:', newNode);
+      
+      // Refresh dynamic nodes list
+      const updatedNodes = await service.list();
+      setDynamicNodes(updatedNodes);
+      
+    } catch (error) {
+      console.error('Failed to create node from drop:', error);
+      // TODO: Show user error message
+    }
+  };
+
+  const handleCommandDrop = async (files: globalThis.File[], position: [number, number, number]) => {
+    try {
+      const file = files[0]; // Use first file for pre-filling
+      const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
+      
+      console.log('Opening ProtoNode with pre-filled file:', { title: fileNameWithoutExt, file: file.name });
+      
+      // Start creation process
+      const { startCreation, updateProtoNode } = useInterBrainStore.getState();
+      startCreation(position);
+      
+      // Pre-fill the proto node with file data
+      const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
+      updateProtoNode({
+        title: fileNameWithoutExt,
+        type: 'dream',
+        dreamTalkFile: dreamTalkFile
+      });
+      
+    } catch (error) {
+      console.error('Failed to start creation from drop:', error);
+      // TODO: Show user error message
+    }
+  };
+
   return (
-    <div className="dreamspace-canvas-container">
+    <div 
+      className="dreamspace-canvas-container"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      style={{
+        opacity: isDragOver ? 0.8 : 1,
+        transition: 'opacity 0.2s ease'
+      }}
+    >
       <Canvas
         camera={{
           position: [0, 0, 0],  // Static camera at origin
