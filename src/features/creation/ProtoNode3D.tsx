@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
-import { Group } from 'three';
 import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore, ProtoNode } from '../../store/interbrain-store';
@@ -23,7 +22,6 @@ export default function ProtoNode3D({
   onComplete,
   onCancel
 }: ProtoNode3DProps) {
-  const groupRef = useRef<Group>(null);
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
   const fileInputRef = useRef<globalThis.HTMLInputElement>(null);
   
@@ -35,44 +33,41 @@ export default function ProtoNode3D({
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [currentOpacity, setCurrentOpacity] = useState<number>(dreamNodeStyles.states.creation.opacity);
   
-  // Manual animation state
+  // Unified animation state - position and opacity in one system
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
-  const animationRef = useRef<{
-    startTime: number;
-    startPosition: [number, number, number];
-    endPosition: [number, number, number];
-    duration: number;
-    isAnimating: boolean;
-  } | null>(null);
+  const [animatedOpacity, setAnimatedOpacity] = useState<number>(dreamNodeStyles.states.creation.opacity);
+  const animationStartTime = useRef<number | null>(null);
   
-  // useFrame for smooth manual animation
+  // Single useFrame for both position and opacity animation
   useFrame(() => {
-    if (!animationRef.current || !animationRef.current.isAnimating) return;
+    if (!animationStartTime.current) return;
     
-    const { startTime, startPosition, endPosition, duration } = animationRef.current;
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / duration, 1);
+    const elapsed = Date.now() - animationStartTime.current;
+    const progress = Math.min(elapsed / 1000, 1); // 1 second duration
     
     // Ease-in-out function
     const easeInOut = progress < 0.5 
       ? 2 * progress * progress 
       : 1 - Math.pow(-2 * progress + 2, 2) / 2;
     
-    // Interpolate position
-    const newPosition: [number, number, number] = [
-      startPosition[0] + (endPosition[0] - startPosition[0]) * easeInOut,
-      startPosition[1] + (endPosition[1] - startPosition[1]) * easeInOut,
-      startPosition[2] + (endPosition[2] - startPosition[2]) * easeInOut,
-    ];
+    // Animate position: [0,0,-25] → [0,0,-75]
+    const startZ = position[2]; // -25
+    const endZ = -75;
+    const newZ = startZ + (endZ - startZ) * easeInOut;
+    setAnimatedPosition([position[0], position[1], newZ]);
     
-    setAnimatedPosition(newPosition);
+    // Animate opacity: 0.7 → 1.0
+    const startOpacity = dreamNodeStyles.states.creation.opacity;
+    const endOpacity = 1.0;
+    const newOpacity = startOpacity + (endOpacity - startOpacity) * easeInOut;
+    setAnimatedOpacity(newOpacity);
     
-    // Stop animation when complete
+    // Complete animation
     if (progress >= 1) {
-      animationRef.current.isAnimating = false;
-      setAnimatedPosition(endPosition);
+      animationStartTime.current = null;
+      setAnimatedPosition([position[0], position[1], endZ]);
+      setAnimatedOpacity(endOpacity);
     }
   });
 
@@ -165,62 +160,18 @@ export default function ProtoNode3D({
   
   const handleCreate = () => {
     if (validateTitle(protoNode.title)) {
-      console.log('ProtoNode3D: handleCreate called, starting animation');
-      // Start animation from current position (25 units) to final position (75 units)
+      console.log('ProtoNode3D: Starting creation animation');
       setIsAnimating(true);
       
-      // Calculate final position (move Z from -25 to -75, keeping X and Y same)
-      const finalPosition: [number, number, number] = [
-        position[0], 
-        position[1], 
-        -75  // Move further from camera
-      ];
+      // Start unified animation (position + opacity)
+      animationStartTime.current = Date.now();
       
-      // Start position animation
-      console.log('ProtoNode3D: Starting manual position animation from', position, 'to', finalPosition);
-      console.log('ProtoNode3D: Current animated position:', animatedPosition);
-      
-      // Start manual animation
-      animationRef.current = {
-        startTime: Date.now(),
-        startPosition: position,
-        endPosition: finalPosition,
-        duration: 1000, // 1 second
-        isAnimating: true
-      };
-      
-      // After animation completes, call onComplete
-      // The parent will handle hiding the proto-node after node creation
+      // Complete after animation finishes
       globalThis.setTimeout(() => {
         console.log('ProtoNode3D: Animation complete, calling onComplete');
         setIsAnimating(false);
         onComplete(protoNode);
-      }, 1100); // Slightly after animation completes to ensure smooth transition
-      
-      // Animate opacity from 0.7 to 1.0 over 1 second using simple interpolation
-      const startOpacity = dreamNodeStyles.states.creation.opacity;
-      const endOpacity = 1.0;
-      const duration = 1000; // 1 second
-      const startTime = Date.now();
-      
-      const animateOpacity = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        // Ease-in-out function (similar to React Spring's default)
-        const easeInOut = progress < 0.5 
-          ? 2 * progress * progress 
-          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-        
-        const newOpacity = startOpacity + (endOpacity - startOpacity) * easeInOut;
-        setCurrentOpacity(newOpacity);
-        
-        if (progress < 1) {
-          globalThis.requestAnimationFrame(animateOpacity);
-        }
-      };
-      
-      globalThis.requestAnimationFrame(animateOpacity);
+      }, 1100); // Slightly after 1 second animation
     }
   };
   
@@ -246,10 +197,7 @@ export default function ProtoNode3D({
   const isCreateDisabled = !protoNode.title.trim() || !!validationErrors.title || isAnimating;
   
   return (
-    <group 
-      ref={groupRef} 
-      position={animatedPosition}
-    >
+    <group position={animatedPosition}>
       <Html
         position={[0, 0, 0]}
         center
@@ -279,7 +227,7 @@ export default function ProtoNode3D({
               background: nodeColors.fill,
               overflow: 'hidden',
               position: 'relative',
-              opacity: currentOpacity,
+              opacity: animatedOpacity,
               transition: dreamNodeStyles.transitions.creation,
               boxShadow: getNodeGlow(protoNode.type, 15),
               fontFamily: dreamNodeStyles.typography.fontFamily
