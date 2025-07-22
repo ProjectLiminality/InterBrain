@@ -64,6 +64,14 @@ export const dreamNodeStyles = {
     default: 'all 0.2s ease',
     creation: 'opacity 0.3s ease',
     hover: 'transform 0.2s ease, box-shadow 0.2s ease'
+  },
+  
+  // Media file effects
+  media: {
+    // Radial fade-to-black gradient for circular media display
+    fadeToBlackGradient: 'radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,1) 70%)',
+    containerSize: '80%', // Media container size within node
+    borderRadius: '50%'   // Circular container
   }
 } as const;
 
@@ -80,6 +88,38 @@ export function getNodeColors(type: 'dream' | 'dreamer') {
 export function getNodeGlow(type: 'dream' | 'dreamer', intensity: number = 10) {
   const colors = getNodeColors(type);
   return `0 0 ${intensity}px ${colors.border}`;
+}
+
+/**
+ * Helper function to generate media container styling with fade-to-black effect
+ */
+export function getMediaContainerStyle() {
+  return {
+    width: dreamNodeStyles.media.containerSize,
+    height: dreamNodeStyles.media.containerSize,
+    position: 'absolute' as const,
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    borderRadius: dreamNodeStyles.media.borderRadius,
+    overflow: 'hidden' as const,
+    background: 'rgba(0, 0, 0, 0.8)'
+  };
+}
+
+/**
+ * Helper function to generate media overlay with fade-to-black gradient
+ */
+export function getMediaOverlayStyle() {
+  return {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    background: dreamNodeStyles.media.fadeToBlackGradient,
+    pointerEvents: 'none' as const
+  };
 }
 
 /**

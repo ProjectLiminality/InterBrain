@@ -5,7 +5,7 @@ import { Vector3, Group } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { dreamNodeStyles, getNodeColors, getNodeGlow } from './dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from './dreamNodeStyles';
 
 interface DreamNode3DProps {
   dreamNode: DreamNode;
@@ -170,20 +170,10 @@ export default function DreamNode3D({
       >
         {/* DreamTalk Media Container */}
         {dreamNode.dreamTalkMedia[0] && (
-          <div
-            style={{
-              width: '80%',
-              height: '80%',
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              borderRadius: '50%',
-              overflow: 'hidden',
-              background: 'rgba(0, 0, 0, 0.8)'
-            }}
-          >
+          <div style={getMediaContainerStyle()}>
             <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
+            {/* Fade-to-black overlay */}
+            <div style={getMediaOverlayStyle()} />
           </div>
         )}
 
@@ -207,19 +197,6 @@ export default function DreamNode3D({
           </div>
         )}
 
-        {/* Circular fade overlay */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '10%',
-            left: '10%',
-            width: '80%',
-            height: '80%',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,1) 70%)',
-            pointerEvents: 'none'
-          }}
-        />
 
         {/* Node label */}
         <div
