@@ -37,6 +37,7 @@ export default function ProtoNode3D({
   // Unified animation state - position and opacity in one system
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(dreamNodeStyles.states.creation.opacity);
+  const [animatedUIOpacity, setAnimatedUIOpacity] = useState<number>(1.0); // UI elements start fully visible
   const animationStartTime = useRef<number | null>(null);
   
   // Single useFrame for both position and opacity animation
@@ -57,17 +58,24 @@ export default function ProtoNode3D({
     const newZ = startZ + (endZ - startZ) * easeInOut;
     setAnimatedPosition([position[0], position[1], newZ]);
     
-    // Animate opacity: 0.7 → 1.0
+    // Animate main node opacity: 0.7 → 1.0
     const startOpacity = dreamNodeStyles.states.creation.opacity;
     const endOpacity = 1.0;
     const newOpacity = startOpacity + (endOpacity - startOpacity) * easeInOut;
     setAnimatedOpacity(newOpacity);
+    
+    // Animate UI elements opacity: 1.0 → 0.0 (fade out buttons/controls)
+    const startUIOpacity = 1.0;
+    const endUIOpacity = 0.0;
+    const newUIOpacity = startUIOpacity + (endUIOpacity - startUIOpacity) * easeInOut;
+    setAnimatedUIOpacity(newUIOpacity);
     
     // Complete animation
     if (progress >= 1) {
       animationStartTime.current = null;
       setAnimatedPosition([position[0], position[1], endZ]);
       setAnimatedOpacity(endOpacity);
+      setAnimatedUIOpacity(endUIOpacity);
     }
   });
 
@@ -333,7 +341,8 @@ export default function ProtoNode3D({
                   width: '80%',
                   height: `${Math.max(40, nodeSize * 0.08)}px`, // Explicit height for proper text display
                   padding: `${Math.max(8, nodeSize * 0.02)}px`, // Scale padding with node size for proper text height
-                  pointerEvents: 'auto' // Re-enable pointer events for the input itself
+                  pointerEvents: 'auto', // Re-enable pointer events for the input itself
+                  caretColor: 'transparent' // Hide the text cursor
                 }}
               />
             </div>
@@ -361,7 +370,8 @@ export default function ProtoNode3D({
                 padding: '4px 8px',
                 borderRadius: '4px',
                 fontSize: '12px',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                opacity: animatedUIOpacity // Fade out during animation
               }}
             >
               {validationErrors.title}
@@ -378,7 +388,8 @@ export default function ProtoNode3D({
               display: 'flex',
               borderRadius: '20px',
               overflow: 'hidden',
-              border: '2px solid rgba(255,255,255,0.3)'
+              border: '2px solid rgba(255,255,255,0.3)',
+              opacity: animatedUIOpacity // Fade out during animation
             }}
           >
             <button
@@ -429,7 +440,8 @@ export default function ProtoNode3D({
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
-              gap: '12px'
+              gap: '12px',
+              opacity: animatedUIOpacity // Fade out during animation
             }}
           >
             <button
