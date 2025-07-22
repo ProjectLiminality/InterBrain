@@ -46,7 +46,7 @@ export default function DreamspaceCanvas() {
         // Don't reset on mount - preserve nodes across re-renders
         const nodes = await service.list();
         setDynamicNodes(nodes);
-        console.log('DreamspaceCanvas: Loaded dynamic nodes on mount:', nodes.length);
+        // Loaded dynamic nodes successfully
       } catch (error) {
         console.error('Failed to load dynamic nodes:', error);
       }
@@ -55,14 +55,7 @@ export default function DreamspaceCanvas() {
     loadDynamicNodes();
   }, []);
   
-  // Debug logging for creation state
-  React.useEffect(() => {
-    console.log('DreamspaceCanvas - Creation state changed:', {
-      isCreating: creationState.isCreating,
-      hasProtoNode: !!creationState.protoNode,
-      protoNode: creationState.protoNode
-    });
-  }, [creationState]);
+  // Debug logging for creation state (removed excessive logging)
 
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
@@ -134,17 +127,10 @@ export default function DreamspaceCanvas() {
       
       // Refresh the dynamic nodes list to include the new node
       const updatedNodes = await service.list();
-      console.log('DreamspaceCanvas: Service returned nodes:', updatedNodes.map(n => ({
-        id: n.id,
-        name: n.name,
-        position: n.position
-      })));
       setDynamicNodes(updatedNodes);
-      console.log('DreamspaceCanvas: Refreshed nodes after creation, total:', updatedNodes.length);
       
       // Add small delay to ensure new DreamNode renders before hiding proto-node
       globalThis.setTimeout(() => {
-        console.log('DreamspaceCanvas: Completing creation after render delay');
         completeCreation();
       }, 100); // 100ms delay for rendering
       
@@ -155,7 +141,6 @@ export default function DreamspaceCanvas() {
   };
 
   const handleProtoNodeCancel = () => {
-    console.log('Proto-node creation cancelled');
     cancelCreation();
   };
 
@@ -220,7 +205,6 @@ export default function DreamspaceCanvas() {
         {/* Proto-node for creation - stationary relative to camera */}
         {creationState.isCreating && creationState.protoNode && (
           <>
-            {console.log('Rendering ProtoNode3D at position:', creationState.protoNode.position)}
             <ProtoNode3D
               position={creationState.protoNode.position}
               onComplete={handleProtoNodeComplete}

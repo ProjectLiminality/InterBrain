@@ -89,7 +89,7 @@ export default function ProtoNode3D({
   
   const nodeColors = getNodeColors(protoNode.type);
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD; // Use 3D size to match existing nodes
-  const borderWidth = Math.max(1, nodeSize * 0.04); // Same calculation as DreamNode3D
+  const borderWidth = dreamNodeStyles.dimensions.borderWidth; // Use shared border width
   
   // Validation handlers
   const validateTitle = useCallback((title: string) => {
@@ -148,24 +148,18 @@ export default function ProtoNode3D({
   };
   
   const handleFileSelect = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    console.log('File input changed, files:', e.target.files);
     const file = e.target.files?.[0];
     if (file) {
-      console.log('Selected file:', file.name, file.type);
       if (isValidMediaFile(file)) {
-        console.log('File is valid, updating proto-node');
         updateProtoNode({ dreamTalkFile: file });
         const previewUrl = globalThis.URL.createObjectURL(file);
         setPreviewMedia(previewUrl);
-      } else {
-        console.warn('File type not valid:', file.type);
       }
     }
   };
   
   const handleCreate = () => {
     if (validateTitle(protoNode.title)) {
-      console.log('ProtoNode3D: Starting creation animation');
       setIsAnimating(true);
       
       // Start unified animation (position + opacity)
@@ -173,7 +167,6 @@ export default function ProtoNode3D({
       
       // Complete exactly when animation finishes
       globalThis.setTimeout(() => {
-        console.log('ProtoNode3D: Animation complete, calling onComplete');
         setIsAnimating(false);
         onComplete(protoNode);
       }, 1000); // Exactly when animation completes
@@ -280,7 +273,7 @@ export default function ProtoNode3D({
                 <div
                   style={{
                     position: 'absolute',
-                    top: '62.5%', // 50% (center) + 12.5% = 62.5% (25% of the way to bottom)
+                    top: '75%', // Move down more
                     left: '50%',
                     transform: 'translate(-50%, -50%)',
                     color: dreamNodeStyles.colors.text.secondary,
@@ -289,13 +282,11 @@ export default function ProtoNode3D({
                     whiteSpace: 'nowrap'
                   }}
                   onClick={(e) => {
-                    console.log('File picker area clicked');
                     e.stopPropagation(); // Prevent event bubbling
                     e.preventDefault();
                     fileInputRef.current?.click();
                   }}
                   onMouseDown={(e) => {
-                    console.log('File picker area mouse down');
                     e.stopPropagation(); // Prevent rotation controls from capturing
                     e.preventDefault();
                   }}
@@ -328,7 +319,7 @@ export default function ProtoNode3D({
                 type="text"
                 value={protoNode.title}
                 onChange={handleTitleChange}
-                placeholder="Node title..."
+                placeholder="Name"
                 autoFocus
                 style={{
                   background: 'transparent',
@@ -387,9 +378,6 @@ export default function ProtoNode3D({
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
-              borderRadius: '20px',
-              overflow: 'hidden',
-              border: '2px solid rgba(255,255,255,0.3)',
               opacity: animatedUIOpacity // Fade out during animation
             }}
           >
@@ -401,13 +389,18 @@ export default function ProtoNode3D({
               onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
               style={{
                 padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
-                border: 'none',
-                background: protoNode.type === 'dream' ? getNodeColors('dream').border : 'transparent',
+                border: `${dreamNodeStyles.dimensions.toggleBorderWidth}px solid ${getNodeColors('dream').border}`, // Use shared toggle border width
+                background: protoNode.type === 'dream' ? getNodeColors('dream').border : 'transparent', // Fill when selected
                 color: 'white',
                 fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 cursor: 'pointer',
-                transition: dreamNodeStyles.transitions.default
+                transition: 'background 0.2s ease', // Only animate background fill
+                flex: '1', // Equal width
+                minWidth: '60px', // Ensure minimum width for symmetry
+                borderRadius: `${Math.max(4, nodeSize * 0.01)}px 0 0 ${Math.max(4, nodeSize * 0.01)}px`, // Individual rounded left corners
+                boxSizing: 'border-box',
+                marginRight: '0.5px' // Minimal gap to show both border colors without black space
               }}
             >
               Dream
@@ -420,13 +413,17 @@ export default function ProtoNode3D({
               onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
               style={{
                 padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
-                border: 'none',
-                background: protoNode.type === 'dreamer' ? getNodeColors('dreamer').border : 'transparent',
+                border: `${dreamNodeStyles.dimensions.toggleBorderWidth}px solid ${getNodeColors('dreamer').border}`, // Use shared toggle border width
+                background: protoNode.type === 'dreamer' ? getNodeColors('dreamer').border : 'transparent', // Fill when selected
                 color: 'white',
                 fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 cursor: 'pointer',
-                transition: dreamNodeStyles.transitions.default
+                transition: 'background 0.2s ease', // Only animate background fill
+                flex: '1', // Equal width
+                minWidth: '60px', // Ensure minimum width for symmetry
+                borderRadius: `0 ${Math.max(4, nodeSize * 0.01)}px ${Math.max(4, nodeSize * 0.01)}px 0`, // Individual rounded right corners
+                boxSizing: 'border-box'
               }}
             >
               Dreamer

@@ -100,7 +100,7 @@ export default function DreamNode3D({
   
   // Base size for 3D scaling - will scale with distance due to distanceFactor
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
-  const borderWidth = Math.max(1, nodeSize * 0.04); // ~10px border
+  const borderWidth = dreamNodeStyles.dimensions.borderWidth; // Use shared border width
   
   // Calculate visual component position with radial offset
   // Anchor point stays at dreamNode.position, visual component moves radially toward camera
