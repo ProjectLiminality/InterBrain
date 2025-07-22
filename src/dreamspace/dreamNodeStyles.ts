@@ -26,7 +26,8 @@ export const dreamNodeStyles = {
   dimensions: {
     nodeSize: 240,        // Base size in pixels for UI elements
     nodeSizeThreeD: 1000, // Base size for 3D nodes (scales with distance)
-    borderWidth: 2,       // Border thickness
+    borderWidth: 25,      // Main node border thickness
+    toggleBorderWidth: 2, // Toggle button border thickness
     borderRadius: '50%'   // Perfect circle
   },
   
@@ -70,7 +71,7 @@ export const dreamNodeStyles = {
   media: {
     // Radial fade-to-black gradient for circular media display
     fadeToBlackGradient: 'radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,1) 70%)',
-    containerSize: '80%', // Media container size within node
+    containerSize: '100%', // Media container matches full node size
     borderRadius: '50%'   // Circular container
   }
 } as const;
