@@ -83,6 +83,16 @@ export default function ProtoNode3D({
     }
   }, [protoNode?.type]);
   
+  // Handle pre-filled dreamTalkFile
+  React.useEffect(() => {
+    if (protoNode?.dreamTalkFile && !previewMedia) {
+      // Create preview URL for pre-filled media
+      const previewUrl = globalThis.URL.createObjectURL(protoNode.dreamTalkFile);
+      setPreviewMedia(previewUrl);
+      console.log('Created preview for pre-filled media:', protoNode.dreamTalkFile.name);
+    }
+  }, [protoNode?.dreamTalkFile, previewMedia]);
+  
   if (!protoNode) {
     return null; // Should not render if no proto node exists
   }
