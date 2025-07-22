@@ -36,7 +36,7 @@ export default function ProtoNode3D({
   
   // Unified animation state - position and opacity in one system
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
-  const [animatedOpacity, setAnimatedOpacity] = useState<number>(dreamNodeStyles.states.creation.opacity);
+  const [animatedOpacity, setAnimatedOpacity] = useState<number>(1.0); // Start at full opacity
   const [animatedUIOpacity, setAnimatedUIOpacity] = useState<number>(1.0); // UI elements start fully visible
   const animationStartTime = useRef<number | null>(null);
   
@@ -54,15 +54,12 @@ export default function ProtoNode3D({
     
     // Animate position: [0,0,-25] → [0,0,-75]
     const startZ = position[2]; // -25
-    const endZ = -75;
+    const endZ = -75; // Move to final position
     const newZ = startZ + (endZ - startZ) * easeInOut;
     setAnimatedPosition([position[0], position[1], newZ]);
     
-    // Animate main node opacity: 0.7 → 1.0
-    const startOpacity = dreamNodeStyles.states.creation.opacity;
-    const endOpacity = 1.0;
-    const newOpacity = startOpacity + (endOpacity - startOpacity) * easeInOut;
-    setAnimatedOpacity(newOpacity);
+    // Keep main node opacity at 1.0 (no animation)
+    setAnimatedOpacity(1.0);
     
     // Animate UI elements opacity: 1.0 → 0.0 (fade out buttons/controls)
     const startUIOpacity = 1.0;
@@ -74,7 +71,7 @@ export default function ProtoNode3D({
     if (progress >= 1) {
       animationStartTime.current = null;
       setAnimatedPosition([position[0], position[1], endZ]);
-      setAnimatedOpacity(endOpacity);
+      setAnimatedOpacity(1.0); // Stay at full opacity
       setAnimatedUIOpacity(endUIOpacity);
     }
   });
@@ -174,12 +171,12 @@ export default function ProtoNode3D({
       // Start unified animation (position + opacity)
       animationStartTime.current = Date.now();
       
-      // Complete after animation finishes
+      // Complete exactly when animation finishes
       globalThis.setTimeout(() => {
         console.log('ProtoNode3D: Animation complete, calling onComplete');
         setIsAnimating(false);
         onComplete(protoNode);
-      }, 1100); // Slightly after 1 second animation
+      }, 1000); // Exactly when animation completes
     }
   };
   
@@ -256,7 +253,8 @@ export default function ProtoNode3D({
                   transform: 'translate(-50%, -50%)',
                   borderRadius: '50%',
                   overflow: 'hidden',
-                  background: 'rgba(0, 0, 0, 0.8)'
+                  background: 'rgba(0, 0, 0, 0.8)',
+                  opacity: animatedOpacity // Animate media opacity with main node
                 }}
               >
                 {previewMedia && (
@@ -276,34 +274,41 @@ export default function ProtoNode3D({
                 style={{
                   width: '100%',
                   height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: dreamNodeStyles.colors.text.secondary,
-                  fontSize: '12px',
-                  textAlign: 'center',
-                  padding: '20px',
+                  position: 'relative',
                   cursor: 'pointer',
                   border: isDragOver ? '2px dashed rgba(255,255,255,0.5)' : 'none',
                   borderRadius: '50%',
                   zIndex: 9999,
                   pointerEvents: 'auto',
-                }}
-                onClick={(e) => {
-                  console.log('File picker area clicked');
-                  e.stopPropagation(); // Prevent event bubbling
-                  e.preventDefault();
-                  fileInputRef.current?.click();
-                }}
-                onMouseDown={(e) => {
-                  console.log('File picker area mouse down');
-                  e.stopPropagation(); // Prevent rotation controls from capturing
-                  e.preventDefault();
+                  opacity: animatedUIOpacity // Fade out drag-drop text with other UI
                 }}
               >
-                <div>Drop image here</div>
-                <div>or click to browse</div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '62.5%', // 50% (center) + 12.5% = 62.5% (25% of the way to bottom)
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    color: dreamNodeStyles.colors.text.secondary,
+                    fontSize: '24px', // Double the size
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onClick={(e) => {
+                    console.log('File picker area clicked');
+                    e.stopPropagation(); // Prevent event bubbling
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }}
+                  onMouseDown={(e) => {
+                    console.log('File picker area mouse down');
+                    e.stopPropagation(); // Prevent rotation controls from capturing
+                    e.preventDefault();
+                  }}
+                >
+                  <div>Drop image here</div>
+                  <div>or click to browse</div>
+                </div>
               </div>
             )}
             
@@ -320,7 +325,8 @@ export default function ProtoNode3D({
                 justifyContent: 'center',
                 background: 'rgba(0, 0, 0, 0.7)',
                 borderRadius: '50%',
-                pointerEvents: 'none' // Allow clicks through to underlying elements
+                pointerEvents: 'none', // Allow clicks through to underlying elements
+                opacity: animatedUIOpacity // Fade out title overlay during animation
               }}
             >
               <input
