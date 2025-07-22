@@ -326,7 +326,7 @@ export default function ProtoNode3D({
                 background: 'rgba(0, 0, 0, 0.7)',
                 borderRadius: '50%',
                 pointerEvents: 'none', // Allow clicks through to underlying elements
-                opacity: animatedUIOpacity // Fade out title overlay during animation
+                opacity: (previewMedia || protoNode.dreamTalkFile) ? animatedUIOpacity : 1.0 // Only fade out if there's media behind
               }}
             >
               <input
