@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { Group } from 'three';
+import { useSpring, animated } from '@react-spring/three';
 import { dreamNodeStyles, getNodeColors, getNodeGlow } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore, ProtoNode } from '../../store/interbrain-store';
 
@@ -33,6 +34,14 @@ export default function ProtoNode3D({
   // Local UI state
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [currentOpacity, setCurrentOpacity] = useState<number>(dreamNodeStyles.states.creation.opacity);
+  
+  // Animation spring for position (Three.js)
+  const [positionSprings, positionApi] = useSpring(() => ({
+    position: position,
+    config: { tension: 120, friction: 40 } // Smooth ease-in-out
+  }));
 
   // Maintain persistent focus on text input when type changes
   React.useEffect(() => {
@@ -123,7 +132,56 @@ export default function ProtoNode3D({
   
   const handleCreate = () => {
     if (validateTitle(protoNode.title)) {
-      onComplete(protoNode);
+      console.log('ProtoNode3D: handleCreate called, starting animation');
+      // Start animation from current position (25 units) to final position (75 units)
+      setIsAnimating(true);
+      
+      // Calculate final position (move Z from -25 to -75, keeping X and Y same)
+      const finalPosition: [number, number, number] = [
+        position[0], 
+        position[1], 
+        -75  // Move further from camera
+      ];
+      
+      // Start position animation
+      console.log('ProtoNode3D: Starting position animation from', position, 'to', finalPosition);
+      positionApi.start({
+        position: finalPosition,
+        config: { tension: 120, friction: 40, duration: 1000 } // 1 second duration
+      });
+      
+      // After animation completes, call onComplete
+      // The parent will handle hiding the proto-node after node creation
+      globalThis.setTimeout(() => {
+        console.log('ProtoNode3D: Animation complete, calling onComplete');
+        setIsAnimating(false);
+        onComplete(protoNode);
+      }, 1100); // Slightly after animation completes to ensure smooth transition
+      
+      // Animate opacity from 0.7 to 1.0 over 1 second using simple interpolation
+      const startOpacity = dreamNodeStyles.states.creation.opacity;
+      const endOpacity = 1.0;
+      const duration = 1000; // 1 second
+      const startTime = Date.now();
+      
+      const animateOpacity = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Ease-in-out function (similar to React Spring's default)
+        const easeInOut = progress < 0.5 
+          ? 2 * progress * progress 
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+        
+        const newOpacity = startOpacity + (endOpacity - startOpacity) * easeInOut;
+        setCurrentOpacity(newOpacity);
+        
+        if (progress < 1) {
+          globalThis.requestAnimationFrame(animateOpacity);
+        }
+      };
+      
+      globalThis.requestAnimationFrame(animateOpacity);
     }
   };
   
@@ -146,10 +204,10 @@ export default function ProtoNode3D({
     }
   };
   
-  const isCreateDisabled = !protoNode.title.trim() || !!validationErrors.title;
+  const isCreateDisabled = !protoNode.title.trim() || !!validationErrors.title || isAnimating;
   
   return (
-    <group ref={groupRef} position={position}>
+    <animated.group ref={groupRef} position={positionSprings.position}>
       <Html
         position={[0, 0, 0]}
         center
@@ -179,7 +237,7 @@ export default function ProtoNode3D({
               background: nodeColors.fill,
               overflow: 'hidden',
               position: 'relative',
-              opacity: dreamNodeStyles.states.creation.opacity,
+              opacity: currentOpacity,
               transition: dreamNodeStyles.transitions.creation,
               boxShadow: getNodeGlow(protoNode.type, 15),
               fontFamily: dreamNodeStyles.typography.fontFamily
@@ -390,15 +448,16 @@ export default function ProtoNode3D({
                 handleCancel();
               }}
               onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
+              disabled={isAnimating}
               style={{
                 padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`, // Scale with node size
                 border: '1px solid rgba(255,255,255,0.5)',
                 background: 'transparent',
-                color: 'white',
+                color: isAnimating ? 'rgba(255,255,255,0.5)' : 'white',
                 fontSize: `${Math.max(14, nodeSize * 0.035)}px`, // Scale font with node size
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 borderRadius: `${Math.max(4, nodeSize * 0.01)}px`, // Scale border radius
-                cursor: 'pointer',
+                cursor: isAnimating ? 'not-allowed' : 'pointer',
                 transition: dreamNodeStyles.transitions.default
               }}
             >
@@ -425,12 +484,12 @@ export default function ProtoNode3D({
                 transition: dreamNodeStyles.transitions.default
               }}
             >
-              Create
+              {isAnimating ? 'Creating...' : 'Create'}
             </button>
           </div>
         </div>
       </Html>
-    </group>
+    </animated.group>
   );
 }
 
