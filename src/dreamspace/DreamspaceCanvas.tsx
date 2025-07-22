@@ -142,8 +142,11 @@ export default function DreamspaceCanvas() {
       setDynamicNodes(updatedNodes);
       console.log('DreamspaceCanvas: Refreshed nodes after creation, total:', updatedNodes.length);
       
-      // Complete the creation flow (this will hide the proto-node)
-      completeCreation();
+      // Add small delay to ensure new DreamNode renders before hiding proto-node
+      globalThis.setTimeout(() => {
+        console.log('DreamspaceCanvas: Completing creation after render delay');
+        completeCreation();
+      }, 100); // 100ms delay for rendering
       
     } catch (error) {
       console.error('Failed to create DreamNode:', error);
