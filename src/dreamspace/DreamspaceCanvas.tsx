@@ -40,7 +40,7 @@ export default function DreamspaceCanvas() {
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   
   // Creation state for proto-node rendering
-  const { creationState, startCreation, updateProtoNode, completeCreation, cancelCreation } = useInterBrainStore();
+  const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
   
   // Load dynamic nodes from mock service on mount and after creation
   useEffect(() => {
@@ -264,21 +264,21 @@ export default function DreamspaceCanvas() {
     if (files.length === 0) return;
     
     const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
-    const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
-    const position = calculateDropPosition(mousePos.x, mousePos.y);
     
     console.log('Drop detected:', {
       fileCount: files.length,
       isCommandDrop,
-      position,
       files: files.map(f => ({ name: f.name, type: f.type, size: f.size }))
     });
     
     if (isCommandDrop) {
       // Command+Drop: Open ProtoNode3D with file pre-filled
-      await handleCommandDrop(files, position);
+      // Use the same position as the Create DreamNode command
+      await handleCommandDrop(files);
     } else {
-      // Normal Drop: Create node instantly
+      // Normal Drop: Create node instantly at mouse position
+      const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
+      const position = calculateDropPosition(mousePos.x, mousePos.y);
       await handleNormalDrop(files, position);
     }
     
@@ -315,31 +315,31 @@ export default function DreamspaceCanvas() {
     }
   };
 
-  const handleCommandDrop = async (files: globalThis.File[], position: [number, number, number]) => {
+  const handleCommandDrop = async (files: globalThis.File[]) => {
     try {
       const file = files[0]; // Use first file for pre-filling
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
       
-      console.log('Opening ProtoNode with pre-filled file:', { title: fileNameWithoutExt, file: file.name, position });
+      // Use the EXACT same position as the Create DreamNode command
+      const spawnPosition: [number, number, number] = [0, 0, -25];
       
-      // Start creation process using the hook methods
-      startCreation(position);
+      console.log('Opening ProtoNode with pre-filled file:', { 
+        title: fileNameWithoutExt, 
+        file: file.name, 
+        position: spawnPosition 
+      });
       
-      // Add a small delay to ensure creation state is set before updating proto node
-      globalThis.setTimeout(() => {
-        // Pre-fill the proto node with file data
-        const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
-        updateProtoNode({
-          title: fileNameWithoutExt,
-          type: 'dream',
-          dreamTalkFile: dreamTalkFile
-        });
-        
-        console.log('ProtoNode state updated:', {
-          isCreating: creationState.isCreating,
-          protoNode: creationState.protoNode
-        });
-      }, 10); // Small delay to ensure state update
+      // Pre-fill the proto node with file data
+      const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
+      
+      // Start creation with pre-filled data in a single action
+      startCreationWithData(spawnPosition, {
+        title: fileNameWithoutExt,
+        type: 'dream',
+        dreamTalkFile: dreamTalkFile
+      });
+      
+      console.log('ProtoNode creation started with data at standard position');
       
     } catch (error) {
       console.error('Failed to start creation from drop:', error);

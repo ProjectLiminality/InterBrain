@@ -100,8 +100,8 @@ export default class InterBrainPlugin extends Plugin {
         // Calculate spawn position (same distance as focused nodes) - negative Z to be in front of camera  
         const spawnPosition: [number, number, number] = [0, 0, -25];
         
-        // Start creation mode
-        store.startCreation(spawnPosition);
+        // Start creation mode (using the same method for consistency)
+        store.startCreationWithData(spawnPosition);
         
         // Debug logging to verify state
         const newState = useInterBrainStore.getState();

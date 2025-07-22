@@ -82,6 +82,7 @@ export interface InterBrainState {
   // Creation state management
   creationState: CreationState;
   startCreation: (position: [number, number, number]) => void;
+  startCreationWithData: (position: [number, number, number], initialData?: Partial<ProtoNode>) => void;
   updateProtoNode: (updates: Partial<ProtoNode>) => void;
   setValidationErrors: (errors: ValidationErrors) => void;
   completeCreation: () => void;
@@ -193,6 +194,19 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
         type: 'dream', // Default to dream type
         position,
         dreamTalkFile: undefined
+      },
+      validationErrors: {}
+    }
+  })),
+  
+  startCreationWithData: (position, initialData) => set((_state) => ({
+    creationState: {
+      isCreating: true,
+      protoNode: {
+        title: initialData?.title || '',
+        type: initialData?.type || 'dream',
+        position,
+        dreamTalkFile: initialData?.dreamTalkFile || undefined
       },
       validationErrors: {}
     }
