@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { dreamNodeStyles, getNodeColors, getNodeGlow } from '../../dreamspace/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore, ProtoNode } from '../../store/interbrain-store';
 
 interface ProtoNode3DProps {
@@ -245,15 +245,7 @@ export default function ProtoNode3D({
             {previewMedia || protoNode.dreamTalkFile ? (
               <div
                 style={{
-                  width: '80%',
-                  height: '80%',
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  borderRadius: '50%',
-                  overflow: 'hidden',
-                  background: 'rgba(0, 0, 0, 0.8)',
+                  ...getMediaContainerStyle(),
                   opacity: animatedOpacity // Animate media opacity with main node
                 }}
               >
@@ -268,6 +260,8 @@ export default function ProtoNode3D({
                     }}
                   />
                 )}
+                {/* Fade-to-black overlay (same as DreamNode3D) */}
+                <div style={getMediaOverlayStyle()} />
               </div>
             ) : (
               <div
