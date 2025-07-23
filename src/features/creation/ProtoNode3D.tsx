@@ -175,7 +175,7 @@ export default function ProtoNode3D({
       // Start unified animation (position + opacity)
       animationStartTime.current = Date.now();
       
-      // Complete exactly when animation finishes
+      // Complete exactly when animation finishes (node will be fully faded out)
       globalThis.setTimeout(() => {
         setIsAnimating(false);
         onComplete(protoNode);
