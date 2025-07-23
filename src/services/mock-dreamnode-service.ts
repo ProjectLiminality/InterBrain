@@ -10,6 +10,7 @@ import { DreamNode } from '../types/dreamnode';
 export class MockDreamNodeService {
   private nodes = new Map<string, DreamNode>();
   private fileRefs = new Map<string, globalThis.File>();
+  private repositoryFiles = new Map<string, globalThis.File[]>(); // All files in each node's repo
   private idCounter = 1;
 
   /**
@@ -19,12 +20,16 @@ export class MockDreamNodeService {
     title: string, 
     type: 'dream' | 'dreamer', 
     dreamTalk?: globalThis.File,
-    position?: [number, number, number]
+    position?: [number, number, number],
+    additionalFiles?: globalThis.File[]
   ): Promise<DreamNode> {
     // Use 'dynamic' prefix to avoid conflicts with static mock data IDs
     const id = `dynamic-${type}-${this.idCounter++}`;
     
-    // Store file reference if provided
+    // Store all files for this node
+    const allFiles: globalThis.File[] = [];
+    
+    // Handle dreamTalk media
     let dreamTalkMedia: Array<{ 
       path: string; 
       absolutePath: string; 
@@ -35,6 +40,7 @@ export class MockDreamNodeService {
     
     if (dreamTalk) {
       this.fileRefs.set(id, dreamTalk);
+      allFiles.push(dreamTalk);
       const dataUrl = await this.fileToDataUrl(dreamTalk);
       dreamTalkMedia = [{
         path: `mock/${dreamTalk.name}`,
@@ -44,6 +50,14 @@ export class MockDreamNodeService {
         size: dreamTalk.size
       }];
     }
+    
+    // Handle additional files
+    if (additionalFiles && additionalFiles.length > 0) {
+      allFiles.push(...additionalFiles);
+    }
+    
+    // Store all files for this repository
+    this.repositoryFiles.set(id, allFiles);
     
     // Use provided position (already world coordinates) or calculate random position
     const nodePosition = position 
@@ -66,6 +80,11 @@ export class MockDreamNodeService {
     
     console.log(`MockDreamNodeService: Created ${type} "${title}" with ID ${id} at position:`, nodePosition);
     console.log(`MockDreamNodeService: Position was ${position ? 'provided (world coords)' : 'calculated (random)'}`);
+    console.log(`MockDreamNodeService: Repository files for ${id}:`, {
+      dreamTalk: dreamTalk ? `${dreamTalk.name} (${dreamTalk.type})` : 'none',
+      additionalFiles: additionalFiles?.map(f => `${f.name} (${f.type})`).join(', ') || 'none',
+      totalFiles: allFiles.length
+    });
     console.log(`MockDreamNodeService: Total nodes in service: ${this.nodes.size}`);
     return node;
   }
@@ -123,6 +142,70 @@ export class MockDreamNodeService {
   }
 
   /**
+   * Add files to an existing DreamNode
+   * Media files will update/replace dreamTalk, others are added to repository
+   */
+  async addFilesToNode(nodeId: string, files: globalThis.File[]): Promise<void> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const existingFiles = this.repositoryFiles.get(nodeId) || [];
+    const mediaFiles = files.filter(f => this.isMediaFile(f));
+    const otherFiles = files.filter(f => !this.isMediaFile(f));
+
+    // Update dreamTalk if media files are provided
+    if (mediaFiles.length > 0) {
+      const primaryMedia = mediaFiles[0]; // Use first media file as dreamTalk
+      this.fileRefs.set(nodeId, primaryMedia);
+      
+      const dataUrl = await this.fileToDataUrl(primaryMedia);
+      node.dreamTalkMedia = [{
+        path: `mock/${primaryMedia.name}`,
+        absolutePath: `/mock/${nodeId}/${primaryMedia.name}`,
+        type: primaryMedia.type,
+        data: dataUrl,
+        size: primaryMedia.size
+      }];
+
+      console.log(`MockDreamNodeService: ${node.dreamTalkMedia.length > 0 ? 'Replaced' : 'Added'} dreamTalk for ${nodeId}: ${primaryMedia.name}`);
+    }
+
+    // Add all files to repository
+    const updatedFiles = [...existingFiles, ...files];
+    this.repositoryFiles.set(nodeId, updatedFiles);
+
+    // Update the node in storage
+    this.nodes.set(nodeId, node);
+
+    // Log complete file inventory
+    console.log(`MockDreamNodeService: Files added to ${nodeId}:`, {
+      mediaFiles: mediaFiles.map(f => `${f.name} (${f.type})`).join(', ') || 'none',
+      otherFiles: otherFiles.map(f => `${f.name} (${f.type})`).join(', ') || 'none',
+      totalRepoFiles: updatedFiles.length,
+      allFiles: updatedFiles.map(f => `${f.name} (${f.type})`).join(', ')
+    });
+  }
+
+  /**
+   * Check if a file is a media file (image or video)
+   */
+  private isMediaFile(file: globalThis.File): boolean {
+    const validTypes = [
+      'image/png',
+      'image/jpeg', 
+      'image/jpg',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+      'video/webm'
+    ];
+    
+    return validTypes.includes(file.type);
+  }
+
+  /**
    * Reset all mock data (useful for testing)
    */
   reset(): void {
@@ -132,6 +215,7 @@ export class MockDreamNodeService {
     
     this.nodes.clear();
     this.fileRefs.clear();
+    this.repositoryFiles.clear();
     this.idCounter = 1;
     
     console.log('MockDreamNodeService: Reset all data');

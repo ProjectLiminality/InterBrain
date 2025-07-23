@@ -141,6 +141,76 @@ export default function DreamspaceCanvas() {
     return [0, 0, -5000];
   };
 
+  /**
+   * Detect what's under the drop position - either a DreamNode or empty space
+   */
+  const detectDropTarget = (mouseX: number, mouseY: number): { type: 'empty' | 'node'; position: [number, number, number]; node?: DreamNode } => {
+    // Get the canvas element for accurate bounds
+    const canvasElement = globalThis.document.querySelector('.dreamspace-canvas-container canvas') as globalThis.HTMLCanvasElement;
+    if (!canvasElement) {
+      return { type: 'empty', position: [0, 0, -5000] };
+    }
+    
+    const rect = canvasElement.getBoundingClientRect();
+    
+    // Convert to normalized device coordinates
+    const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1;
+    
+    // Create ray for intersection testing
+    const fov = 75 * Math.PI / 180;
+    const aspect = rect.width / rect.height;
+    const tanHalfFov = Math.tan(fov / 2);
+    
+    const rayDirection = new Vector3(
+      ndcX * tanHalfFov * aspect,
+      ndcY * tanHalfFov,
+      -1
+    ).normalize();
+    
+    const raycaster = new Raycaster();
+    const cameraPosition = new Vector3(0, 0, 0);
+    raycaster.set(cameraPosition, rayDirection);
+    
+    // Check intersection with DreamNodes
+    // For now, we'll use a simple distance check since we don't have access to Three.js scene here
+    // In a real implementation, we'd use raycaster.intersectObjects()
+    
+    let closestNode: DreamNode | undefined;
+    let closestDistance = Infinity;
+    
+    // Check all nodes for intersection
+    dreamNodes.forEach(node => {
+      // Calculate node position in world space
+      const nodeWorldPos = new Vector3(...node.position);
+      
+      // Apply rotation if sphere is rotated
+      if (dreamWorldRef.current) {
+        nodeWorldPos.applyQuaternion(dreamWorldRef.current.quaternion);
+      }
+      
+      // Simple sphere intersection test (nodes are ~240px spheres)
+      const nodeRadius = 120; // Half of node size in world units
+      const distanceToRay = raycaster.ray.distanceToPoint(nodeWorldPos);
+      
+      if (distanceToRay < nodeRadius && raycaster.ray.origin.distanceTo(nodeWorldPos) < closestDistance) {
+        closestNode = node;
+        closestDistance = raycaster.ray.origin.distanceTo(nodeWorldPos);
+      }
+    });
+    
+    // Calculate drop position on sphere
+    const dropPosition = calculateDropPosition(mouseX, mouseY);
+    
+    if (closestNode) {
+      console.log('Drop target: DreamNode', closestNode.name, closestNode.id);
+      return { type: 'node', position: dropPosition, node: closestNode };
+    } else {
+      console.log('Drop target: Empty space at', dropPosition);
+      return { type: 'empty', position: dropPosition };
+    }
+  };
+
   const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
     console.log(`Node ${node.name} hover:`, isHovered);
   };
@@ -228,6 +298,33 @@ export default function DreamspaceCanvas() {
     cancelCreation();
   };
 
+  const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
+    try {
+      console.log('Dropping files on node:', {
+        nodeId: node.id,
+        nodeName: node.name,
+        totalFiles: files.length,
+        files: files.map(f => `${f.name} (${f.type})`)
+      });
+      
+      // Use service to add files to existing node
+      const service = serviceManager.getActive();
+      if ('addFilesToNode' in service) {
+        await (service as any).addFilesToNode(node.id, files);
+      }
+      
+      // Refresh dynamic nodes list to show updated dreamTalk
+      const updatedNodes = await service.list();
+      setDynamicNodes(updatedNodes);
+      
+      console.log('Files added to node successfully');
+      
+    } catch (error) {
+      console.error('Failed to add files to node:', error);
+      // TODO: Show user error message
+    }
+  };
+
   // Drag and drop event handlers
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -263,23 +360,37 @@ export default function DreamspaceCanvas() {
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
     
+    const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
+    const dropTarget = detectDropTarget(mousePos.x, mousePos.y);
     const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
     
     console.log('Drop detected:', {
       fileCount: files.length,
       isCommandDrop,
+      dropTarget: dropTarget.type,
+      targetNode: dropTarget.node?.name,
       files: files.map(f => ({ name: f.name, type: f.type, size: f.size }))
     });
     
-    if (isCommandDrop) {
-      // Command+Drop: Open ProtoNode3D with file pre-filled
-      // Use the same position as the Create DreamNode command
-      await handleCommandDrop(files);
+    if (dropTarget.type === 'node' && dropTarget.node) {
+      // Dropping on an existing DreamNode
+      if (isCommandDrop) {
+        // Command+Drop on node: TODO - could open edit mode in future
+        console.log('Command+Drop on node - feature not implemented yet');
+        await handleDropOnNode(files, dropTarget.node);
+      } else {
+        // Normal drop on node: add files to node
+        await handleDropOnNode(files, dropTarget.node);
+      }
     } else {
-      // Normal Drop: Create node instantly at mouse position
-      const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
-      const position = calculateDropPosition(mousePos.x, mousePos.y);
-      await handleNormalDrop(files, position);
+      // Dropping on empty space
+      if (isCommandDrop) {
+        // Command+Drop: Open ProtoNode3D with file pre-filled
+        await handleCommandDrop(files);
+      } else {
+        // Normal Drop: Create node instantly at drop position
+        await handleNormalDrop(files, dropTarget.position);
+      }
     }
     
     setDragMousePosition(null);
@@ -287,21 +398,38 @@ export default function DreamspaceCanvas() {
 
   const handleNormalDrop = async (files: globalThis.File[], position: [number, number, number]) => {
     try {
-      const file = files[0]; // Use first file for single node creation
-      const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
+      const primaryFile = files[0]; // Use first file for node naming and primary dreamTalk
+      const fileNameWithoutExt = primaryFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
       
-      console.log('Creating node instantly:', { title: fileNameWithoutExt, position });
+      console.log('Creating node instantly:', { 
+        title: fileNameWithoutExt, 
+        position,
+        totalFiles: files.length,
+        files: files.map(f => `${f.name} (${f.type})`)
+      });
       
       // Use service to create node
       const service = serviceManager.getActive();
-      const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
       
-      const newNode = await service.create(
-        fileNameWithoutExt,
-        'dream', // Always create Dream-type for normal drops
-        dreamTalkFile,
-        position
-      );
+      // Find first valid media file for dreamTalk
+      const dreamTalkFile = files.find(f => isValidMediaFile(f));
+      const additionalFiles = files.filter(f => f !== dreamTalkFile);
+      
+      // Use enhanced create method if available (MockDreamNodeService)
+      const newNode = 'create' in service && service.create.length > 4
+        ? await (service as any).create(
+            fileNameWithoutExt,
+            'dream', // Always create Dream-type for normal drops
+            dreamTalkFile,
+            position,
+            additionalFiles // Pass all other files
+          )
+        : await service.create(
+            fileNameWithoutExt,
+            'dream',
+            dreamTalkFile,
+            position
+          );
       
       console.log('Node created successfully:', newNode);
       
