@@ -3,6 +3,7 @@ import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
 import { DreamNodeService } from './services/dreamnode-service';
 import { VaultService } from './services/vault-service';
+import { GitTemplateService } from './services/git-template-service';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
@@ -14,6 +15,7 @@ export default class InterBrainPlugin extends Plugin {
   private gitService!: GitService;
   private dreamNodeService!: DreamNodeService;
   private vaultService!: VaultService;
+  private gitTemplateService!: GitTemplateService;
 
   async onload() {
     console.log('InterBrain plugin loaded!');
@@ -38,6 +40,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService();
     this.dreamNodeService = new DreamNodeService();
     this.vaultService = new VaultService(this.app.vault);
+    this.gitTemplateService = new GitTemplateService();
   }
 
   private registerCommands(): void {
@@ -368,6 +371,115 @@ export default class InterBrainPlugin extends Plugin {
         store.setFibonacciConfig({ nodeCount: newCount });
         this.uiService.showSuccess(`Node count decreased to ${newCount}`);
         console.log('Fibonacci sphere node count decreased to:', newCount);
+      }
+    });
+
+    // Git Template System Commands
+    this.addCommand({
+      id: 'create-dreamnode-from-template',
+      name: 'Create DreamNode from Git Template',
+      callback: async () => {
+        console.log('Create DreamNode from template command executed');
+        this.uiService.showPlaceholder('Git template creation coming soon! Use mock creation for now.');
+        
+        // TODO: Implement template-based creation workflow
+        // 1. Prompt user for title and type
+        // 2. Select location in vault for new DreamNode
+        // 3. Generate UUID
+        // 4. Call gitTemplateService.initializeFromTemplate()
+        // 5. Integrate with existing DreamSpace UI
+      }
+    });
+
+    this.addCommand({
+      id: 'validate-dreamnode-template',
+      name: 'Validate DreamNode Template',
+      callback: async () => {
+        console.log('Validate template command executed');
+        const loadingNotice = this.uiService.showLoading('Validating DreamNode template...');
+        
+        try {
+          const validation = this.gitTemplateService.validateTemplate();
+          if (validation.valid) {
+            this.uiService.showSuccess('Template is valid and ready for use');
+            console.log('Template validation successful');
+          } else {
+            this.uiService.showError(`Template validation failed: ${validation.errors.join(', ')}`);
+            console.error('Template validation errors:', validation.errors);
+          }
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Unknown validation error');
+          console.error('Template validation error:', error);
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'check-dreamnode-coherence',
+      name: 'Check DreamNode Template Coherence',
+      callback: async () => {
+        console.log('Check template coherence command executed');
+        const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
+        
+        try {
+          // Get vault path from Obsidian
+          const vaultPath = (this.app.vault.adapter as any).path || '/vault';
+          const results = await this.gitTemplateService.scanVaultCoherence(vaultPath);
+          
+          if (results.total === 0) {
+            this.uiService.showSuccess('No DreamNodes found in vault');
+          } else if (results.incoherent.length === 0) {
+            this.uiService.showSuccess(`All ${results.total} DreamNodes are coherent with template`);
+          } else {
+            this.uiService.showError(`Found ${results.incoherent.length} incoherent DreamNodes out of ${results.total} total`);
+            console.log('Incoherent DreamNodes:', results.incoherent);
+          }
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Coherence check failed');
+          console.error('Coherence check error:', error);
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'update-dreamnode-coherence',
+      name: 'Update DreamNode Template Coherence',
+      callback: async () => {
+        console.log('Update template coherence command executed');
+        const loadingNotice = this.uiService.showLoading('Updating DreamNode coherence...');
+        
+        try {
+          // First scan for incoherent nodes
+          const vaultPath = (this.app.vault.adapter as any).path || '/vault';
+          const scanResults = await this.gitTemplateService.scanVaultCoherence(vaultPath);
+          
+          if (scanResults.incoherent.length === 0) {
+            this.uiService.showSuccess('All DreamNodes are already coherent');
+            return;
+          }
+          
+          // Update each incoherent node
+          let updatedCount = 0;
+          for (const node of scanResults.incoherent) {
+            const updateResult = this.gitTemplateService.updateDreamNodeCoherence(node.path);
+            if (updateResult.success) {
+              updatedCount++;
+              console.log(`Updated coherence for: ${node.path}`);
+            }
+          }
+          
+          this.uiService.showSuccess(`Updated ${updatedCount} DreamNodes to match template coherence`);
+          
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Coherence update failed');
+          console.error('Coherence update error:', error);
+        } finally {
+          loadingNotice.hide();
+        }
       }
     });
   }
