@@ -1,7 +1,7 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, Group } from 'three';
+import { Vector3, Group, Mesh } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -13,6 +13,7 @@ interface DreamNode3DProps {
   onClick?: (node: DreamNode) => void;
   onDoubleClick?: (node: DreamNode) => void;
   enableDynamicScaling?: boolean;
+  onHitSphereRef?: (nodeId: string, meshRef: React.RefObject<Mesh | null>) => void;
 }
 
 /**
@@ -29,14 +30,23 @@ export default function DreamNode3D({
   onHover, 
   onClick, 
   onDoubleClick,
-  enableDynamicScaling = false
+  enableDynamicScaling = false,
+  onHitSphereRef
 }: DreamNode3DProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
   const groupRef = useRef<Group>(null);
+  const hitSphereRef = useRef<Mesh>(null);
   
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
+
+  // Register hit sphere reference with parent component
+  useEffect(() => {
+    if (onHitSphereRef && hitSphereRef) {
+      onHitSphereRef(dreamNode.id, hitSphereRef);
+    }
+  }, [dreamNode.id, onHitSphereRef]);
 
   // Handle mouse events (suppress during sphere rotation to prevent interference)
   const handleMouseEnter = () => {
@@ -133,8 +143,12 @@ export default function DreamNode3D({
   // Debug logging removed for cleaner console
   
   // Wrap in group at final position for world position calculations
+  // Apply hover scaling to the entire group so both visual and hit detection scale together
   return (
-    <group ref={groupRef} position={finalPosition}>
+    <group 
+      ref={groupRef} 
+      position={finalPosition}
+    >
       {/* DreamNode rendering - always visible */}
         <Html
           position={[0, 0, 0]}
@@ -220,6 +234,19 @@ export default function DreamNode3D({
         </div>
       </div>
     </Html>
+    
+    {/* Invisible hit detection sphere - travels with visual node as unified object */}
+    <mesh 
+      ref={hitSphereRef}
+      position={[0, 0, 0]}
+      userData={{ dreamNodeId: dreamNode.id, dreamNode: dreamNode }}
+    >
+      <sphereGeometry args={[12, 8, 8]} />
+      <meshBasicMaterial 
+        transparent={true} 
+        opacity={0}
+      />
+    </mesh>
     </group>
   );
 }

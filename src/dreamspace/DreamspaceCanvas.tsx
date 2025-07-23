@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useRef, useEffect } from 'react';
-import { Group, Vector3, Raycaster, Sphere } from 'three';
+import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D from './DreamNode3D';
@@ -30,6 +30,9 @@ export default function DreamspaceCanvas() {
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
+  
+  // Hit sphere references for scene-based raycasting
+  const hitSphereRefs = useRef<Map<string, React.RefObject<Mesh | null>>>(new Map());
   
   // Debug visualization states from store
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
@@ -60,6 +63,11 @@ export default function DreamspaceCanvas() {
   }, []);
   
   // Debug logging for creation state (removed excessive logging)
+  
+  // Callback to collect hit sphere references from DreamNode3D components
+  const handleHitSphereRef = (nodeId: string, meshRef: React.RefObject<Mesh | null>) => {
+    hitSphereRefs.current.set(nodeId, meshRef);
+  };
 
   /**
    * Validate media file types for DreamTalk
@@ -93,11 +101,6 @@ export default function DreamspaceCanvas() {
     const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
     const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1; // Flip Y for NDC
     
-    console.log('Position calculation:', {
-      mouse: { x: mouseX, y: mouseY },
-      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-      ndc: { x: ndcX, y: ndcY }
-    });
     
     // Create ray direction accounting for camera FOV (75 degrees)
     const fov = 75 * Math.PI / 180; // Convert to radians
@@ -128,10 +131,6 @@ export default function DreamspaceCanvas() {
       const inverseRotation = sphereRotation.clone().invert();
       intersectionPoint.applyQuaternion(inverseRotation);
       
-      console.log('Intersection found:', {
-        worldPosition: intersectionPoint.toArray(),
-        sphereRotation: sphereRotation.toArray()
-      });
       
       return intersectionPoint.toArray() as [number, number, number];
     }
@@ -142,7 +141,7 @@ export default function DreamspaceCanvas() {
   };
 
   /**
-   * Detect what's under the drop position - either a DreamNode or empty space
+   * Detect what's under the drop position using scene-based raycasting
    */
   const detectDropTarget = (mouseX: number, mouseY: number): { type: 'empty' | 'node'; position: [number, number, number]; node?: DreamNode } => {
     // Get the canvas element for accurate bounds
@@ -172,61 +171,46 @@ export default function DreamspaceCanvas() {
     const cameraPosition = new Vector3(0, 0, 0);
     raycaster.set(cameraPosition, rayDirection);
     
-    // Check intersection with DreamNodes
-    // For now, we'll use a simple distance check since we don't have access to Three.js scene here
-    // In a real implementation, we'd use raycaster.intersectObjects()
-    
-    let closestNode: DreamNode | undefined;
-    let closestDistance = Infinity;
-    
-    // Check all nodes for intersection
-    dreamNodes.forEach(node => {
-      // Calculate node position in world space
-      const nodeWorldPos = new Vector3(...node.position);
-      
-      // Apply rotation if sphere is rotated
-      if (dreamWorldRef.current) {
-        nodeWorldPos.applyQuaternion(dreamWorldRef.current.quaternion);
-      }
-      
-      // Simple sphere intersection test (nodes are ~240px spheres)
-      const nodeRadius = 120; // Half of node size in world units
-      const distanceToRay = raycaster.ray.distanceToPoint(nodeWorldPos);
-      
-      if (distanceToRay < nodeRadius && raycaster.ray.origin.distanceTo(nodeWorldPos) < closestDistance) {
-        closestNode = node;
-        closestDistance = raycaster.ray.origin.distanceTo(nodeWorldPos);
+    // Collect all hit sphere meshes for raycasting
+    const hitSpheres: Mesh[] = [];
+    hitSphereRefs.current.forEach((meshRef, _nodeId) => {
+      if (meshRef.current) {
+        hitSpheres.push(meshRef.current);
       }
     });
+    
+    // Use Three.js native raycasting against hit sphere geometries
+    const intersections = raycaster.intersectObjects(hitSpheres);
     
     // Calculate drop position on sphere
     const dropPosition = calculateDropPosition(mouseX, mouseY);
     
-    if (closestNode) {
-      console.log('Drop target: DreamNode', closestNode.name, closestNode.id);
-      return { type: 'node', position: dropPosition, node: closestNode };
+    if (intersections.length > 0) {
+      // Get the closest intersection
+      const closestIntersection = intersections[0];
+      const hitMesh = closestIntersection.object as Mesh;
+      const dreamNodeData = hitMesh.userData.dreamNode as DreamNode;
+      
+      return { type: 'node', position: dropPosition, node: dreamNodeData };
     } else {
-      console.log('Drop target: Empty space at', dropPosition);
       return { type: 'empty', position: dropPosition };
     }
   };
 
-  const handleNodeHover = (node: DreamNode, isHovered: boolean) => {
-    console.log(`Node ${node.name} hover:`, isHovered);
+  const handleNodeHover = (_node: DreamNode, _isHovered: boolean) => {
+    // Hover state handled by individual DreamNode3D components
   };
 
-  const handleNodeClick = (node: DreamNode) => {
-    console.log(`Node clicked:`, node.name, node.type);
+  const handleNodeClick = (_node: DreamNode) => {
+    // TODO: Implement node selection/interaction
   };
 
-  const handleNodeDoubleClick = (node: DreamNode) => {
-    console.log(`Node double-clicked:`, node.name);
+  const handleNodeDoubleClick = (_node: DreamNode) => {
     // TODO: Open DreamSong view
   };
 
   const handleProtoNodeComplete = async (protoNode: ProtoNode) => {
     try {
-      console.log('Creating DreamNode:', protoNode);
       
       // Use raycasting to find intersection with rotated sphere (more robust approach)
       let finalPosition = protoNode.position;
@@ -255,13 +239,6 @@ export default function DreamspaceCanvas() {
           
           finalPosition = intersectionPoint.toArray() as [number, number, number];
           
-          console.log('Raycaster intersection with rotated sphere:', {
-            sphereRotation: sphereRotation.toArray(),
-            rayOrigin: cameraPosition.toArray(),
-            rayDirection: cameraDirection.toArray(),
-            intersectionPoint: intersectionPoint.toArray(),
-            finalPosition: finalPosition
-          });
         } else {
           console.warn('No intersection found with sphere - using default position');
           finalPosition = [0, 0, -5000]; // Fallback to forward position
@@ -270,14 +247,13 @@ export default function DreamspaceCanvas() {
       
       // Use the service manager to create the node
       const service = serviceManager.getActive();
-      const newNode = await service.create(
+      await service.create(
         protoNode.title,
         protoNode.type,
         protoNode.dreamTalkFile,
         finalPosition // Pass rotation-adjusted position to project onto sphere
       );
       
-      console.log('DreamNode created successfully:', newNode);
       
       // Refresh the dynamic nodes list to include the new node
       const updatedNodes = await service.list();
@@ -300,12 +276,6 @@ export default function DreamspaceCanvas() {
 
   const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
     try {
-      console.log('Dropping files on node:', {
-        nodeId: node.id,
-        nodeName: node.name,
-        totalFiles: files.length,
-        files: files.map(f => `${f.name} (${f.type})`)
-      });
       
       // Use service to add files to existing node
       const service = serviceManager.getActive();
@@ -317,7 +287,6 @@ export default function DreamspaceCanvas() {
       const updatedNodes = await service.list();
       setDynamicNodes(updatedNodes);
       
-      console.log('Files added to node successfully');
       
     } catch (error) {
       console.error('Failed to add files to node:', error);
@@ -364,19 +333,11 @@ export default function DreamspaceCanvas() {
     const dropTarget = detectDropTarget(mousePos.x, mousePos.y);
     const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
     
-    console.log('Drop detected:', {
-      fileCount: files.length,
-      isCommandDrop,
-      dropTarget: dropTarget.type,
-      targetNode: dropTarget.node?.name,
-      files: files.map(f => ({ name: f.name, type: f.type, size: f.size }))
-    });
     
     if (dropTarget.type === 'node' && dropTarget.node) {
       // Dropping on an existing DreamNode
       if (isCommandDrop) {
         // Command+Drop on node: TODO - could open edit mode in future
-        console.log('Command+Drop on node - feature not implemented yet');
         await handleDropOnNode(files, dropTarget.node);
       } else {
         // Normal drop on node: add files to node
@@ -401,12 +362,6 @@ export default function DreamspaceCanvas() {
       const primaryFile = files[0]; // Use first file for node naming and primary dreamTalk
       const fileNameWithoutExt = primaryFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
       
-      console.log('Creating node instantly:', { 
-        title: fileNameWithoutExt, 
-        position,
-        totalFiles: files.length,
-        files: files.map(f => `${f.name} (${f.type})`)
-      });
       
       // Use service to create node
       const service = serviceManager.getActive();
@@ -416,22 +371,23 @@ export default function DreamspaceCanvas() {
       const additionalFiles = files.filter(f => f !== dreamTalkFile);
       
       // Use enhanced create method if available (MockDreamNodeService)
-      const newNode = 'create' in service && service.create.length > 4
-        ? await (service as any).create(
-            fileNameWithoutExt,
-            'dream', // Always create Dream-type for normal drops
-            dreamTalkFile,
-            position,
-            additionalFiles // Pass all other files
-          )
-        : await service.create(
-            fileNameWithoutExt,
-            'dream',
-            dreamTalkFile,
-            position
-          );
+      if ('create' in service && service.create.length > 4) {
+        await (service as any).create(
+          fileNameWithoutExt,
+          'dream', // Always create Dream-type for normal drops
+          dreamTalkFile,
+          position,
+          additionalFiles // Pass all other files
+        );
+      } else {
+        await service.create(
+          fileNameWithoutExt,
+          'dream',
+          dreamTalkFile,
+          position
+        );
+      }
       
-      console.log('Node created successfully:', newNode);
       
       // Refresh dynamic nodes list
       const updatedNodes = await service.list();
@@ -451,11 +407,6 @@ export default function DreamspaceCanvas() {
       // Use the EXACT same position as the Create DreamNode command
       const spawnPosition: [number, number, number] = [0, 0, -25];
       
-      console.log('Opening ProtoNode with pre-filled file:', { 
-        title: fileNameWithoutExt, 
-        file: file.name, 
-        position: spawnPosition 
-      });
       
       // Pre-fill the proto node with file data
       const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
@@ -467,7 +418,6 @@ export default function DreamspaceCanvas() {
         dreamTalkFile: dreamTalkFile
       });
       
-      console.log('ProtoNode creation started with data at standard position');
       
     } catch (error) {
       console.error('Failed to start creation from drop:', error);
@@ -534,6 +484,7 @@ export default function DreamspaceCanvas() {
                 onClick={handleNodeClick}
                 onDoubleClick={handleNodeDoubleClick}
                 enableDynamicScaling={spatialLayout === 'constellation'}
+                onHitSphereRef={handleHitSphereRef}
               />
             </React.Fragment>
           ))}
