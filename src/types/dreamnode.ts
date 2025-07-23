@@ -7,42 +7,30 @@
 
 /**
  * Universal Dream Description (UDD) file structure
- * Stored as .udd file in each DreamNode Git repository
+ * Stored as single .udd file in each DreamNode Git repository
+ * Simplified schema optimized for performance and graph traversal
  */
 export interface UDDFile {
-  /** Unique identifier for this DreamNode */
-  id: string;
+  /** Unique identifier - constant, never changes after creation */
+  uuid: string;
+  
+  /** Display name/title of the DreamNode */
+  title: string;
   
   /** Type of DreamNode - determines color coding and relationships */
   type: 'dream' | 'dreamer';
   
-  /** Array of file paths (relative to repo root) for DreamTalk symbols */
-  dreamTalk: string[];
+  /** Single file reference path for DreamTalk symbol (relative to repo root) */
+  dreamTalk: string;
   
-  /** Array of file paths for DreamSong content (Obsidian canvas files) */
-  dreamSong: string[];
+  /** Array of UUIDs for horizontal liminal web relationships */
+  liminalWebRelationships: string[];
   
-  /** IDs of related DreamNodes in the liminal web */
-  liminalWeb: string[];
+  /** Array of UUIDs for vertical holonic relationships - children */
+  submodules: string[];
   
-  /** Optional: Last known position in 3D space */
-  position?: [number, number, number];
-  
-  /** Optional: Display name (defaults to repo name) */
-  name?: string;
-  
-  /** Optional: Description or notes */
-  description?: string;
-  
-  /** Metadata about the repo itself */
-  repo: {
-    /** Path to the Git repository */
-    path: string;
-    /** Last commit hash for change detection */
-    lastCommit?: string;
-    /** Repository URL if remote */
-    remoteUrl?: string;
-  };
+  /** Array of UUIDs for vertical holonic relationships - parents */
+  supermodules: string[];
 }
 
 /**
