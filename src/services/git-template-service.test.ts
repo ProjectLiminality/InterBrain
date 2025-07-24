@@ -71,12 +71,13 @@ describe('GitTemplateService', () => {
   });
 
   describe('Coherence Checking', () => {
-    it('should check DreamNode coherence', () => {
+    it('should check DreamNode coherence', async () => {
       const mockPath = '/test/dreamnode';
-      const result = service.checkDreamNodeCoherence(mockPath);
+      // Without a vault instance, coherence check should fail
+      const result = await service.checkDreamNodeCoherence(mockPath);
 
-      expect(result.coherent).toBe(true);
-      expect(result.issues).toEqual([]);
+      expect(result.coherent).toBe(false);
+      expect(result.issues).toContain('Vault not initialized');
     });
 
     it('should update DreamNode coherence', () => {
@@ -92,10 +93,10 @@ describe('GitTemplateService', () => {
       const mockVaultPath = '/test/vault';
       const result = await service.scanVaultCoherence(mockVaultPath);
 
-      expect(result).toHaveProperty('total');
-      expect(result).toHaveProperty('coherent');
-      expect(result).toHaveProperty('incoherent');
-      expect(Array.isArray(result.incoherent)).toBe(true);
+      // Without vault, should return empty results
+      expect(result.total).toBe(0);
+      expect(result.coherent).toBe(0);
+      expect(result.incoherent).toEqual([]);
     });
   });
 

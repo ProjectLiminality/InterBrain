@@ -4,7 +4,7 @@ This is a DreamNode - a git repository representing a thought-form or person in 
 
 ## Universal Dream Description (UDD)
 
-The `.udd` file contains the essential metadata for this DreamNode:
+The `udd.json` file contains the essential metadata for this DreamNode:
 
 ```json
 {

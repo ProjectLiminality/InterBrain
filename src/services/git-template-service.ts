@@ -1,5 +1,5 @@
 import { UDDFile } from '../types/dreamnode';
-import { Notice } from 'obsidian';
+import { Notice, Vault, TFile, TFolder } from 'obsidian';
 
 /**
  * GitTemplateService - Manages DreamNode template operations
@@ -12,11 +12,22 @@ import { Notice } from 'obsidian';
  */
 export class GitTemplateService {
   private templateDirectory: string;
+  private vault: Vault | null = null;
 
-  constructor() {
+  constructor(vault?: Vault) {
     // The template is packaged with the plugin
     // When using git init --template, provide the full path to this directory
     this.templateDirectory = 'DreamNode-template';
+    if (vault) {
+      this.vault = vault;
+    }
+  }
+
+  /**
+   * Set the vault instance (for late initialization)
+   */
+  setVault(vault: Vault): void {
+    this.vault = vault;
   }
 
   /**
@@ -142,25 +153,64 @@ git commit -m "Initial DreamNode: ${title}"`;
 
   /**
    * Check coherence of a DreamNode repository against the current template
-   * Only validates UDD structure and git hooks (preserves README/LICENSE customizations)
+   * Only validates UDD structure (presence of udd.json with correct schema)
+   * Note: Git repository and hooks cannot be checked via Obsidian API
    */
-  checkDreamNodeCoherence(dreamNodePath: string): { coherent: boolean; issues: string[] } {
+  async checkDreamNodeCoherence(dreamNodePath: string): Promise<{ coherent: boolean; issues: string[] }> {
     const issues: string[] = [];
     
     console.log('GitTemplateService: Checking coherence for:', dreamNodePath);
     
-    // TODO: In real implementation, check:
-    // 1. .udd file exists and has correct schema structure
-    // 2. .git/hooks/pre-commit exists and matches template functionality
-    // 3. .git/hooks/post-commit exists and matches template functionality
-    // 4. UDD schema matches current template version
+    if (!this.vault) {
+      issues.push('Vault not initialized');
+      return { coherent: false, issues };
+    }
     
-    // For now, simulate coherence check
-    console.log('  ✓ UDD file structure check (placeholder)');
-    console.log('  ✓ Git hooks validation (placeholder)');
-    console.log('  ✓ Schema version compatibility (placeholder)');
+    try {
+      // 1. Check if udd.json file exists and has correct schema structure
+      const uddPath = `${dreamNodePath}/udd.json`;
+      const uddFile = this.vault.getAbstractFileByPath(uddPath);
+      
+      if (!uddFile || !(uddFile instanceof TFile)) {
+        issues.push('Missing udd.json file');
+      } else {
+        try {
+          const uddContent = await this.vault.read(uddFile);
+          const uddData = JSON.parse(uddContent);
+          
+          // Validate required UDD fields
+          const requiredFields = ['uuid', 'title', 'type', 'dreamTalk', 'liminalWebRelationships', 'submodules', 'supermodules'];
+          for (const field of requiredFields) {
+            if (!(field in uddData)) {
+              issues.push(`UDD missing required field: ${field}`);
+            }
+          }
+          
+          // Validate type field
+          if (uddData.type && !['dream', 'dreamer'].includes(uddData.type)) {
+            issues.push(`Invalid UDD type: ${uddData.type} (should be 'dream' or 'dreamer')`);
+          }
+          
+          console.log('  ✓ UDD file structure validated');
+        } catch (error) {
+          issues.push('Invalid UDD JSON format');
+        }
+      }
+      
+      // Note: We cannot check .git folder or hooks via Obsidian API
+      // The presence of udd.json is our indicator that this is a DreamNode
+      
+    } catch (error) {
+      issues.push(`Coherence check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
     
-    return { coherent: issues.length === 0, issues };
+    const coherent = issues.length === 0;
+    console.log(`  Result: ${coherent ? 'COHERENT' : 'INCOHERENT'} (${issues.length} issues)`);
+    if (issues.length > 0) {
+      console.log('  Issues:', issues);
+    }
+    
+    return { coherent, issues };
   }
 
   /**
@@ -195,26 +245,78 @@ git commit -m "Initial DreamNode: ${title}"`;
     coherent: number;
     incoherent: { path: string; issues: string[] }[];
   }> {
-    console.log('GitTemplateService: Scanning vault for DreamNodes:', vaultPath);
+    console.log('GitTemplateService: Scanning vault for DreamNodes');
     
-    // TODO: In real implementation:
-    // 1. Walk through vault directory structure
-    // 2. Identify git repositories with .udd files (DreamNodes)
-    // 3. Check coherence for each DreamNode
-    // 4. Return comprehensive report
-    
-    // For now, simulate scan results
-    const mockResults = {
+    const results = {
       total: 0,
       coherent: 0,
       incoherent: [] as { path: string; issues: string[] }[]
     };
     
-    console.log('  ✓ Vault scan complete (placeholder)');
-    console.log('  Found:', mockResults.total, 'DreamNodes');
-    console.log('  Coherent:', mockResults.coherent);
-    console.log('  Incoherent:', mockResults.incoherent.length);
+    if (!this.vault) {
+      console.error('Vault not initialized');
+      return results;
+    }
     
-    return mockResults;
+    try {
+      // Find all folders that have .udd files (potential DreamNodes)
+      const dreamNodes = await this.findDreamNodesInVault();
+      results.total = dreamNodes.length;
+      
+      console.log(`  Found ${dreamNodes.length} potential DreamNode(s)`);
+      
+      // Check coherence for each DreamNode
+      for (const dreamNodePath of dreamNodes) {
+        const coherenceCheck = await this.checkDreamNodeCoherence(dreamNodePath);
+        
+        if (coherenceCheck.coherent) {
+          results.coherent++;
+        } else {
+          results.incoherent.push({
+            path: dreamNodePath,
+            issues: coherenceCheck.issues
+          });
+        }
+      }
+      
+    } catch (error) {
+      console.error('Vault scan error:', error);
+    }
+    
+    console.log('  ✓ Vault scan complete');
+    console.log('  Total:', results.total, 'DreamNodes');
+    console.log('  Coherent:', results.coherent);
+    console.log('  Incoherent:', results.incoherent.length);
+    
+    return results;
+  }
+
+  /**
+   * Find all root-level folders in the vault - all are potential DreamNodes
+   * Only checks one level deep - assumes all DreamNodes live at vault root
+   */
+  private async findDreamNodesInVault(): Promise<string[]> {
+    const dreamNodes: string[] = [];
+    
+    if (!this.vault) {
+      return dreamNodes;
+    }
+    
+    try {
+      // Get all folders at the root of the vault - all are potential DreamNodes
+      const rootFolders = this.vault.getAllLoadedFiles()
+        .filter(file => file instanceof TFolder && file.path.indexOf('/') === -1);
+      
+      // Return all root folders as potential DreamNodes
+      for (const folder of rootFolders) {
+        dreamNodes.push(folder.path);
+        console.log(`    Found potential DreamNode: ${folder.path}`);
+      }
+      
+    } catch (error) {
+      console.error('Error finding DreamNodes:', error);
+    }
+    
+    return dreamNodes;
   }
 }
