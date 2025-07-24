@@ -40,7 +40,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService();
     this.dreamNodeService = new DreamNodeService();
     this.vaultService = new VaultService(this.app.vault);
-    this.gitTemplateService = new GitTemplateService();
+    this.gitTemplateService = new GitTemplateService(this.app.vault);
   }
 
   private registerCommands(): void {
@@ -462,17 +462,18 @@ export default class InterBrainPlugin extends Plugin {
             return;
           }
           
-          // Update each incoherent node
-          let updatedCount = 0;
-          for (const node of scanResults.incoherent) {
-            const updateResult = this.gitTemplateService.updateDreamNodeCoherence(node.path);
-            if (updateResult.success) {
-              updatedCount++;
-              console.log(`Updated coherence for: ${node.path}`);
-            }
-          }
+          // Note: Actual coherence update would require shell commands
+          // For now, just report what would be updated
+          this.uiService.showError(
+            `Found ${scanResults.incoherent.length} incoherent DreamNodes. ` +
+            'Manual update required (git hooks cannot be updated via Obsidian API)'
+          );
           
-          this.uiService.showSuccess(`Updated ${updatedCount} DreamNodes to match template coherence`);
+          // Log details for manual fixing
+          for (const node of scanResults.incoherent) {
+            console.log(`Incoherent DreamNode: ${node.path}`);
+            console.log(`  Issues: ${node.issues.join(', ')}`);
+          }
           
         } catch (error) {
           this.uiService.showError(error instanceof Error ? error.message : 'Coherence update failed');

@@ -7,7 +7,7 @@
 
 /**
  * Universal Dream Description (UDD) file structure
- * Stored as single .udd file in each DreamNode Git repository
+ * Stored as single udd.json file in each DreamNode Git repository
  * Simplified schema optimized for performance and graph traversal
  */
 export interface UDDFile {
