@@ -57,6 +57,25 @@ export const dreamNodeStyles = {
     },
     normal: {
       opacity: 1.0       // Fully opaque for real nodes
+    },
+    // Git state visual indicators
+    git: {
+      clean: {
+        glowIntensity: 10        // Normal glow
+      },
+      uncommitted: {
+        glowIntensity: 25,       // Enhanced glow
+        pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite'
+      },
+      stashed: {
+        glowIntensity: 15,       // Slightly enhanced glow
+        borderStyle: 'dashed'   // Dashed border for stashed state
+      },
+      dirtyAndStashed: {
+        glowIntensity: 30,       // Maximum glow
+        pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite',
+        borderStyle: 'dashed'
+      }
     }
   },
   
@@ -64,7 +83,8 @@ export const dreamNodeStyles = {
   transitions: {
     default: 'all 0.2s ease',
     creation: 'opacity 0.3s ease',
-    hover: 'transform 0.2s ease, box-shadow 0.2s ease'
+    hover: 'transform 0.2s ease, box-shadow 0.2s ease',
+    gitState: 'border-style 0.3s ease, box-shadow 0.3s ease'
   },
   
   // Media file effects
@@ -120,6 +140,43 @@ export function getMediaOverlayStyle() {
     height: '100%',
     background: dreamNodeStyles.media.fadeToBlackGradient,
     pointerEvents: 'none' as const
+  };
+}
+
+/**
+ * Git state type for visual indicators
+ */
+export type GitStateType = 'clean' | 'uncommitted' | 'stashed' | 'dirtyAndStashed';
+
+/**
+ * Helper function to determine git visual state from git status
+ */
+export function getGitVisualState(gitStatus?: { hasUncommittedChanges: boolean; hasStashedChanges: boolean }): GitStateType {
+  if (!gitStatus) return 'clean';
+  
+  const { hasUncommittedChanges, hasStashedChanges } = gitStatus;
+  
+  if (hasUncommittedChanges && hasStashedChanges) {
+    return 'dirtyAndStashed';
+  } else if (hasUncommittedChanges) {
+    return 'uncommitted';
+  } else if (hasStashedChanges) {
+    return 'stashed';
+  } else {
+    return 'clean';
+  }
+}
+
+/**
+ * Helper function to get git state styling properties
+ */
+export function getGitStateStyle(gitState: GitStateType) {
+  const gitStyles = dreamNodeStyles.states.git[gitState];
+  
+  return {
+    borderStyle: ('borderStyle' in gitStyles) ? gitStyles.borderStyle : 'solid',
+    animation: ('pulseAnimation' in gitStyles) ? gitStyles.pulseAnimation : 'none',
+    glowIntensity: gitStyles.glowIntensity
   };
 }
 

@@ -1,4 +1,4 @@
-import { DreamNode } from '../types/dreamnode';
+import { DreamNode, GitStatus } from '../types/dreamnode';
 
 /**
  * MockDreamNodeService - Session-based dynamic storage
@@ -73,7 +73,8 @@ export class MockDreamNodeService {
       dreamSongContent: [], // Empty for new nodes
       liminalWebConnections: [], // Will be populated as more nodes are created
       repoPath: `/mock/repos/${id}`,
-      hasUnsavedChanges: false
+      hasUnsavedChanges: false,
+      gitStatus: this.generateMockGitStatus()
     };
     
     this.nodes.set(id, node);
@@ -271,6 +272,62 @@ export class MockDreamNodeService {
     
     console.log(`MockDreamNodeService: Projected to sphere position:`, projected);
     return projected;
+  }
+  
+  /**
+   * Generate mock git status for testing visual indicators
+   */
+  private generateMockGitStatus(): GitStatus {
+    // Randomly generate different git states for visual testing
+    const rand = Math.random();
+    
+    if (rand < 0.4) {
+      // 40% clean state
+      return {
+        hasUncommittedChanges: false,
+        hasStashedChanges: false,
+        lastChecked: Date.now()
+      };
+    } else if (rand < 0.7) {
+      // 30% uncommitted changes
+      return {
+        hasUncommittedChanges: true,
+        hasStashedChanges: false,
+        lastChecked: Date.now(),
+        details: {
+          staged: Math.floor(Math.random() * 3),
+          unstaged: Math.floor(Math.random() * 5) + 1,
+          untracked: Math.floor(Math.random() * 2),
+          stashCount: 0
+        }
+      };
+    } else if (rand < 0.9) {
+      // 20% stashed changes
+      return {
+        hasUncommittedChanges: false,
+        hasStashedChanges: true,
+        lastChecked: Date.now(),
+        details: {
+          staged: 0,
+          unstaged: 0,
+          untracked: 0,
+          stashCount: Math.floor(Math.random() * 3) + 1
+        }
+      };
+    } else {
+      // 10% both uncommitted and stashed
+      return {
+        hasUncommittedChanges: true,
+        hasStashedChanges: true,
+        lastChecked: Date.now(),
+        details: {
+          staged: Math.floor(Math.random() * 2),
+          unstaged: Math.floor(Math.random() * 3) + 1,
+          untracked: Math.floor(Math.random() * 2),
+          stashCount: Math.floor(Math.random() * 2) + 1
+        }
+      };
+    }
   }
   
   /**
