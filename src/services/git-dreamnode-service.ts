@@ -1,4 +1,4 @@
-import { DreamNode, UDDFile } from '../types/dreamnode';
+import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 
@@ -113,7 +113,8 @@ export class GitDreamNodeService {
       dreamSongContent: [],
       liminalWebConnections: [],
       repoPath: repoName, // Relative to vault
-      hasUnsavedChanges: false
+      hasUnsavedChanges: false,
+      gitStatus: await this.checkGitStatus(repoPath)
     };
     
     // Update store immediately for snappy UI
@@ -696,5 +697,61 @@ export class GitDreamNodeService {
       dreamerNodes: nodes.filter(n => n.type === 'dreamer').length,
       nodesWithMedia: nodes.filter(n => n.dreamTalkMedia.length > 0).length
     };
+  }
+  
+  /**
+   * Check git status for a repository
+   */
+  private async checkGitStatus(repoPath: string): Promise<GitStatus> {
+    try {
+      const fullPath = path.join(this.vaultPath, repoPath);
+      
+      // Check if git repository exists
+      const gitDir = path.join(fullPath, '.git');
+      if (!await this.fileExists(gitDir)) {
+        // No git repo yet, return clean state
+        return {
+          hasUncommittedChanges: false,
+          hasStashedChanges: false,
+          lastChecked: Date.now()
+        };
+      }
+      
+      // Check for uncommitted changes
+      const statusResult = await execAsync('git status --porcelain', { cwd: fullPath });
+      const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
+      
+      // Check for stashed changes
+      const stashResult = await execAsync('git stash list', { cwd: fullPath });
+      const hasStashedChanges = stashResult.stdout.trim().length > 0;
+      
+      // Count different types of changes for details
+      let details;
+      if (hasUncommittedChanges || hasStashedChanges) {
+        const statusLines = statusResult.stdout.trim().split('\n').filter((line: string) => line.length > 0);
+        const staged = statusLines.filter((line: string) => line.charAt(0) !== ' ' && line.charAt(0) !== '?').length;
+        const unstaged = statusLines.filter((line: string) => line.charAt(1) !== ' ').length;
+        const untracked = statusLines.filter((line: string) => line.startsWith('??')).length;
+        const stashCount = hasStashedChanges ? stashResult.stdout.trim().split('\n').length : 0;
+        
+        details = { staged, unstaged, untracked, stashCount };
+      }
+      
+      return {
+        hasUncommittedChanges,
+        hasStashedChanges,
+        lastChecked: Date.now(),
+        details
+      };
+      
+    } catch (error) {
+      console.warn(`Failed to check git status for ${repoPath}:`, error);
+      // Return clean state on error
+      return {
+        hasUncommittedChanges: false,
+        hasStashedChanges: false,
+        lastChecked: Date.now()
+      };
+    }
   }
 }

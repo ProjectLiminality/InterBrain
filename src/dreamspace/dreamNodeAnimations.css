@@ -1,0 +1,22 @@
+/**
+ * CSS animations for DreamNode visual effects
+ */
+
+@keyframes dreamnode-pulse {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 10px currentColor);
+  }
+  50% {
+    filter: brightness(1.2) drop-shadow(0 0 20px currentColor);
+  }
+}
+
+/* Ensure animations work in various browser contexts */
+@keyframes dreamnode-pulse-webkit {
+  0%, 100% {
+    -webkit-filter: brightness(1) drop-shadow(0 0 10px currentColor);
+  }
+  50% {
+    -webkit-filter: brightness(1.2) drop-shadow(0 0 20px currentColor);
+  }
+}

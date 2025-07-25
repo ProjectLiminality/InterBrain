@@ -64,6 +64,9 @@ export interface DreamNode {
   
   /** Whether this node has unsaved changes */
   hasUnsavedChanges: boolean;
+  
+  /** Git status information for visual indicators */
+  gitStatus?: GitStatus;
 }
 
 /**
@@ -147,6 +150,28 @@ export interface SpatialLayout {
   
   /** Additional layout-specific parameters */
   params?: Record<string, unknown>;
+}
+
+/**
+ * Git status information for visual indicators
+ */
+export interface GitStatus {
+  /** Whether there are uncommitted changes (staged or unstaged) */
+  hasUncommittedChanges: boolean;
+  
+  /** Whether there are stashed changes */
+  hasStashedChanges: boolean;
+  
+  /** Last time git status was checked */
+  lastChecked: number;
+  
+  /** Optional detailed status information */
+  details?: {
+    staged: number;
+    unstaged: number;
+    untracked: number;
+    stashCount: number;
+  };
 }
 
 /**

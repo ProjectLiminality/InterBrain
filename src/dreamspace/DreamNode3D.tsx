@@ -5,7 +5,8 @@ import { Vector3, Group, Mesh } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from './dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle } from './dreamNodeStyles';
+import './dreamNodeAnimations.css';
 
 interface DreamNode3DProps {
   dreamNode: DreamNode;
@@ -108,6 +109,10 @@ export default function DreamNode3D({
   // Get consistent colors from shared styles
   const nodeColors = getNodeColors(dreamNode.type);
   
+  // Get git visual state and styling
+  const gitState = getGitVisualState(dreamNode.gitStatus);
+  const gitStyle = getGitStateStyle(gitState);
+  
   // Base size for 3D scaling - will scale with distance due to distanceFactor
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = dreamNodeStyles.dimensions.borderWidth; // Use shared border width
@@ -166,16 +171,17 @@ export default function DreamNode3D({
           width: `${nodeSize}px`,
           height: `${nodeSize}px`,
           borderRadius: dreamNodeStyles.dimensions.borderRadius,
-          border: `${borderWidth}px solid ${nodeColors.border}`,
+          border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
           background: nodeColors.fill,
           overflow: 'hidden',
           position: 'relative',
           cursor: 'pointer',
-          transition: dreamNodeStyles.transitions.default,
+          transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
           transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
+          animation: gitStyle.animation,
           boxShadow: isHovered 
-            ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity)
-            : getNodeGlow(dreamNode.type, 10)
+            ? getNodeGlow(dreamNode.type, Math.max(dreamNodeStyles.states.hover.glowIntensity, gitStyle.glowIntensity))
+            : getNodeGlow(dreamNode.type, gitStyle.glowIntensity)
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
