@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
@@ -8,6 +9,7 @@ export interface ProtoNode {
   title: string;
   type: 'dream' | 'dreamer';
   dreamTalkFile?: globalThis.File;
+  additionalFiles?: globalThis.File[];
   position: [number, number, number];
 }
 
@@ -22,7 +24,24 @@ export interface CreationState {
   validationErrors: ValidationErrors;
 }
 
+// Real node storage - persisted across sessions
+export interface RealNodeData {
+  node: DreamNode;
+  fileHash?: string; // For detecting file changes
+  lastSynced: number; // Timestamp of last vault sync
+}
+
 export interface InterBrainState {
+  // Data mode toggle
+  dataMode: 'mock' | 'real';
+  setDataMode: (mode: 'mock' | 'real') => void;
+  
+  // Real nodes storage (persisted)
+  realNodes: Map<string, RealNodeData>;
+  setRealNodes: (nodes: Map<string, RealNodeData>) => void;
+  updateRealNode: (id: string, data: RealNodeData) => void;
+  deleteRealNode: (id: string) => void;
+  
   // Selected DreamNode state
   selectedNode: DreamNode | null;
   setSelectedNode: (node: DreamNode | null) => void;
@@ -89,8 +108,16 @@ export interface InterBrainState {
   cancelCreation: () => void;
 }
 
-export const useInterBrainStore = create<InterBrainState>((set) => ({
+// Helper to convert Map to serializable format for persistence
+const mapToArray = <K, V>(map: Map<K, V>): [K, V][] => Array.from(map.entries());
+const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
+
+export const useInterBrainStore = create<InterBrainState>()(
+  persist(
+    (set) => ({
   // Initial state
+  dataMode: 'mock' as const, // Start in mock mode
+  realNodes: new Map<string, RealNodeData>(),
   selectedNode: null,
   searchResults: [],
   spatialLayout: 'constellation',
@@ -134,6 +161,18 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
   },
   
   // Actions
+  setDataMode: (mode) => set({ dataMode: mode }),
+  setRealNodes: (nodes) => set({ realNodes: nodes }),
+  updateRealNode: (id, data) => set(state => {
+    const newMap = new Map(state.realNodes);
+    newMap.set(id, data);
+    return { realNodes: newMap };
+  }),
+  deleteRealNode: (id) => set(state => {
+    const newMap = new Map(state.realNodes);
+    newMap.delete(id);
+    return { realNodes: newMap };
+  }),
   setSelectedNode: (node) => set({ selectedNode: node }),
   setSearchResults: (results) => set({ searchResults: results }),
   setSpatialLayout: (layout) => set(state => ({ 
@@ -206,7 +245,8 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
         title: initialData?.title || '',
         type: initialData?.type || 'dream',
         position,
-        dreamTalkFile: initialData?.dreamTalkFile || undefined
+        dreamTalkFile: initialData?.dreamTalkFile || undefined,
+        additionalFiles: initialData?.additionalFiles || undefined
       },
       validationErrors: {}
     }
@@ -243,4 +283,23 @@ export const useInterBrainStore = create<InterBrainState>((set) => ({
       validationErrors: {}
     }
   })),
-}));
+    }),
+    {
+      name: 'interbrain-storage', // Storage key
+      // Only persist real nodes data and data mode
+      partialize: (state) => ({
+        dataMode: state.dataMode,
+        realNodes: mapToArray(state.realNodes),
+      }),
+      // Custom merge function to handle Map deserialization
+      merge: (persisted: unknown, current) => {
+        const persistedData = persisted as { dataMode: 'mock' | 'real'; realNodes: [string, RealNodeData][] };
+        return {
+          ...current,
+          dataMode: persistedData.dataMode || 'mock',
+          realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
+        };
+      },
+    }
+  )
+);

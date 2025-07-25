@@ -153,7 +153,7 @@ git commit -m "Initial DreamNode: ${title}"`;
 
   /**
    * Check coherence of a DreamNode repository against the current template
-   * Only validates UDD structure (presence of udd.json with correct schema)
+   * Only validates UDD structure (presence of .udd with correct schema)
    * Note: Git repository and hooks cannot be checked via Obsidian API
    */
   async checkDreamNodeCoherence(dreamNodePath: string): Promise<{ coherent: boolean; issues: string[] }> {
@@ -167,12 +167,12 @@ git commit -m "Initial DreamNode: ${title}"`;
     }
     
     try {
-      // 1. Check if udd.json file exists and has correct schema structure
-      const uddPath = `${dreamNodePath}/udd.json`;
+      // 1. Check if .udd file exists and has correct schema structure
+      const uddPath = `${dreamNodePath}/.udd`;
       const uddFile = this.vault.getAbstractFileByPath(uddPath);
       
       if (!uddFile || !(uddFile instanceof TFile)) {
-        issues.push('Missing udd.json file');
+        issues.push('Missing .udd file');
       } else {
         try {
           const uddContent = await this.vault.read(uddFile);
@@ -192,13 +192,13 @@ git commit -m "Initial DreamNode: ${title}"`;
           }
           
           console.log('  ✓ UDD file structure validated');
-        } catch (error) {
+        } catch {
           issues.push('Invalid UDD JSON format');
         }
       }
       
       // Note: We cannot check .git folder or hooks via Obsidian API
-      // The presence of udd.json is our indicator that this is a DreamNode
+      // The presence of .udd is our indicator that this is a DreamNode
       
     } catch (error) {
       issues.push(`Coherence check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -240,7 +240,7 @@ git commit -m "Initial DreamNode: ${title}"`;
   /**
    * Scan vault for DreamNode repositories and check their coherence
    */
-  async scanVaultCoherence(vaultPath: string): Promise<{
+  async scanVaultCoherence(): Promise<{
     total: number;
     coherent: number;
     incoherent: { path: string; issues: string[] }[];

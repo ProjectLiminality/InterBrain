@@ -14,9 +14,9 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
     echo "DreamNode Pre-Commit Hook: Initial setup - moving template files to working directory"
     
     # Move template files from .git/ to working directory
-    if [ -f ".git/udd.json" ]; then
-        mv .git/udd.json udd.json
-        echo "  ✓ Moved .git/udd.json to udd.json"
+    if [ -f ".git/udd" ]; then
+        mv .git/udd .udd
+        echo "  ✓ Moved .git/udd to .udd"
     fi
     
     if [ -f ".git/README.md" ]; then
@@ -30,7 +30,7 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
     fi
     
     # Stage the moved files for this commit
-    git add udd.json README.md LICENSE 2>/dev/null
+    git add .udd README.md LICENSE 2>/dev/null
     
     echo "  ✓ DreamNode initialization complete"
 fi
