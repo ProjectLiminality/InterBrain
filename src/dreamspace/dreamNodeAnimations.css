@@ -4,10 +4,12 @@
 
 @keyframes dreamnode-pulse {
   0%, 100% {
-    filter: brightness(1) drop-shadow(0 0 10px currentColor);
+    transform: scale(1);
+    filter: brightness(1);
   }
   50% {
-    filter: brightness(1.2) drop-shadow(0 0 20px currentColor);
+    transform: scale(1.05);
+    filter: brightness(1.3);
   }
 }
 

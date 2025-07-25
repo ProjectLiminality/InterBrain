@@ -685,6 +685,61 @@ export class GitDreamNodeService {
   }
   
   /**
+   * Refresh git status for all nodes (implements IDreamNodeService)
+   */
+  async refreshGitStatus(): Promise<{ updated: number; errors: number }> {
+    return await this.refreshAllGitStatus();
+  }
+  
+  /**
+   * Internal method to refresh git status for all nodes
+   */
+  private async refreshAllGitStatus(): Promise<{ updated: number; errors: number }> {
+    const store = useInterBrainStore.getState();
+    const nodes = Array.from(store.realNodes.entries());
+    
+    let updated = 0;
+    let errors = 0;
+    
+    console.log(`GitDreamNodeService: Refreshing git status for ${nodes.length} nodes...`);
+    
+    for (const [nodeId, nodeData] of nodes) {
+      try {
+        const newGitStatus = await this.checkGitStatus(nodeData.node.repoPath);
+        const oldGitStatus = nodeData.node.gitStatus;
+        
+        // Check if git status actually changed
+        const statusChanged = !oldGitStatus || 
+          oldGitStatus.hasUncommittedChanges !== newGitStatus.hasUncommittedChanges ||
+          oldGitStatus.hasStashedChanges !== newGitStatus.hasStashedChanges;
+        
+        if (statusChanged) {
+          // Update the node with new git status
+          const updatedNode = {
+            ...nodeData.node,
+            gitStatus: newGitStatus
+          };
+          
+          store.updateRealNode(nodeId, {
+            ...nodeData,
+            node: updatedNode,
+            lastSynced: Date.now()
+          });
+          
+          updated++;
+          console.log(`GitDreamNodeService: Updated git status for ${updatedNode.name}: uncommitted=${newGitStatus.hasUncommittedChanges}, stashed=${newGitStatus.hasStashedChanges}`);
+        }
+      } catch (error) {
+        console.error(`GitDreamNodeService: Failed to refresh git status for node ${nodeId}:`, error);
+        errors++;
+      }
+    }
+    
+    console.log(`GitDreamNodeService: Git status refresh complete. Updated: ${updated}, Errors: ${errors}`);
+    return { updated, errors };
+  }
+  
+  /**
    * Get statistics
    */
   getStats() {

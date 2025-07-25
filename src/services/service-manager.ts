@@ -27,6 +27,7 @@ export interface IDreamNodeService {
     dreamerNodes: number;
     nodesWithMedia: number;
   };
+  refreshGitStatus?(): Promise<{ updated: number; errors: number }>;
 }
 
 /**

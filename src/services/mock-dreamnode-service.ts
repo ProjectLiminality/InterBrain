@@ -223,6 +223,24 @@ export class MockDreamNodeService {
   }
 
   /**
+   * Refresh git status (mock implementation - regenerates random states)
+   */
+  async refreshGitStatus(): Promise<{ updated: number; errors: number }> {
+    let updated = 0;
+    
+    // Regenerate random git states for all nodes
+    for (const [nodeId, node] of this.nodes) {
+      const newGitStatus = this.generateMockGitStatus();
+      node.gitStatus = newGitStatus;
+      this.nodes.set(nodeId, node);
+      updated++;
+    }
+    
+    console.log(`MockDreamNodeService: Refreshed git status for ${updated} nodes with new random states`);
+    return { updated, errors: 0 };
+  }
+  
+  /**
    * Get current statistics
    */
   getStats() {
