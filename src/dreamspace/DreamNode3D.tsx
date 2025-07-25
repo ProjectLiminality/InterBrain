@@ -5,7 +5,7 @@ import { Vector3, Group, Mesh } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle } from './dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import './dreamNodeAnimations.css';
 
 interface DreamNode3DProps {
@@ -179,9 +179,9 @@ export default function DreamNode3D({
           transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
           transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
           animation: gitStyle.animation,
-          boxShadow: isHovered 
-            ? getNodeGlow(dreamNode.type, Math.max(dreamNodeStyles.states.hover.glowIntensity, gitStyle.glowIntensity))
-            : getNodeGlow(dreamNode.type, gitStyle.glowIntensity)
+          boxShadow: gitStyle.glowIntensity > 0 
+            ? getGitGlow(gitState, gitStyle.glowIntensity)
+            : (isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none')
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}

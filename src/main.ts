@@ -528,6 +528,43 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Refresh Git Status command
+    this.addCommand({
+      id: 'refresh-git-status',
+      name: 'Refresh Git Status Indicators',
+      callback: async () => {
+        console.log('Refresh git status command executed');
+        const loadingNotice = this.uiService.showLoading('Refreshing git status...');
+        
+        try {
+          const service = serviceManager.getActive();
+          
+          if (service.refreshGitStatus) {
+            const result = await service.refreshGitStatus();
+            
+            if (serviceManager.getMode() === 'mock') {
+              // In mock mode, also trigger UI update
+              if (typeof globalThis.CustomEvent !== 'undefined') {
+                globalThis.dispatchEvent(new globalThis.CustomEvent('mock-nodes-changed', {
+                  detail: { source: 'git-status-refresh' }
+                }));
+              }
+            }
+            
+            this.uiService.showSuccess(`Git status refreshed: ${result.updated} updated, ${result.errors} errors`);
+            console.log('Git status refresh result:', result);
+          } else {
+            this.uiService.showError('Git status refresh not available in current mode');
+          }
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Git status refresh failed');
+          console.error('Git status refresh error:', error);
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
     this.addCommand({
       id: 'update-dreamnode-coherence',
       name: 'Update DreamNode Template Coherence',

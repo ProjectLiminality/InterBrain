@@ -61,20 +61,22 @@ export const dreamNodeStyles = {
     // Git state visual indicators
     git: {
       clean: {
-        glowIntensity: 10        // Normal glow
+        glowIntensity: 0,        // No glow for clean state
+        glowColor: 'transparent'
       },
       uncommitted: {
-        glowIntensity: 25,       // Enhanced glow
+        glowIntensity: 30,       // Strong glow
+        glowColor: '#FF6B6B',    // Red (same as Dreamer color)
         pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite'
       },
       stashed: {
-        glowIntensity: 15,       // Slightly enhanced glow
-        borderStyle: 'dashed'   // Dashed border for stashed state
+        glowIntensity: 25,       // Strong glow  
+        glowColor: '#4FC3F7'     // Blue (same as Dream color)
       },
       dirtyAndStashed: {
-        glowIntensity: 30,       // Maximum glow
-        pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite',
-        borderStyle: 'dashed'
+        glowIntensity: 35,       // Maximum glow
+        glowColor: '#FF6B6B',    // Red for uncommitted (primary state)
+        pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite'
       }
     }
   },
@@ -109,6 +111,18 @@ export function getNodeColors(type: 'dream' | 'dreamer') {
 export function getNodeGlow(type: 'dream' | 'dreamer', intensity: number = 10) {
   const colors = getNodeColors(type);
   return `0 0 ${intensity}px ${colors.border}`;
+}
+
+/**
+ * Helper function to generate git state glow effect
+ */
+export function getGitGlow(gitState: GitStateType, intensity: number = 0) {
+  if (intensity === 0) return 'none';
+  
+  const gitStyles = dreamNodeStyles.states.git[gitState];
+  const color = ('glowColor' in gitStyles) ? gitStyles.glowColor : '#FFFFFF';
+  
+  return `0 0 ${intensity}px ${color}, 0 0 ${intensity * 2}px ${color}`;
 }
 
 /**
@@ -176,7 +190,8 @@ export function getGitStateStyle(gitState: GitStateType) {
   return {
     borderStyle: ('borderStyle' in gitStyles) ? gitStyles.borderStyle : 'solid',
     animation: ('pulseAnimation' in gitStyles) ? gitStyles.pulseAnimation : 'none',
-    glowIntensity: gitStyles.glowIntensity
+    glowIntensity: gitStyles.glowIntensity,
+    glowColor: ('glowColor' in gitStyles) ? gitStyles.glowColor : 'transparent'
   };
 }
 
