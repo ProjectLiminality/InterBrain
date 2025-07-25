@@ -1,7 +1,6 @@
 import { Plugin } from 'obsidian';
 import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
-import { DreamNodeService } from './services/dreamnode-service';
 import { VaultService } from './services/vault-service';
 import { GitTemplateService } from './services/git-template-service';
 import { serviceManager } from './services/service-manager';
@@ -14,7 +13,6 @@ export default class InterBrainPlugin extends Plugin {
   // Service instances
   private uiService!: UIService;
   private gitService!: GitService;
-  private dreamNodeService!: DreamNodeService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
 
@@ -39,7 +37,6 @@ export default class InterBrainPlugin extends Plugin {
   private initializeServices(): void {
     this.uiService = new UIService();
     this.gitService = new GitService();
-    this.dreamNodeService = new DreamNodeService();
     this.vaultService = new VaultService(this.app.vault);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
     
@@ -70,10 +67,12 @@ export default class InterBrainPlugin extends Plugin {
       callback: async () => {
         const loadingNotice = this.uiService.showLoading('Saving DreamNode...');
         try {
-          const currentNode = this.dreamNodeService.getCurrentNode();
+          const store = useInterBrainStore.getState();
+          const currentNode = store.selectedNode;
           if (!currentNode) {
             throw new Error('No DreamNode selected');
           }
+          // TODO: Implement save through service layer when auto-stash workflow is ready
           await this.gitService.commitWithAI(currentNode.repoPath);
           this.uiService.showSuccess('DreamNode saved successfully');
         } catch (error) {
@@ -126,12 +125,14 @@ export default class InterBrainPlugin extends Plugin {
       id: 'weave-dreams',
       name: 'Weave Dreams into higher-order node',
       callback: async () => {
-        const selectedNodes = this.dreamNodeService.getSelectedNodes();
-        if (selectedNodes.length < 2) {
+        // TODO: Implement multi-node selection in store
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        if (!selectedNode) {
           this.uiService.showError('Select at least 2 DreamNodes to weave');
           return;
         }
-        console.log('Would weave nodes:', selectedNodes.map(n => n.name));
+        console.log('Would weave node:', selectedNode.name);
         this.uiService.showPlaceholder('Dream weaving coming soon!');
       }
     });
@@ -151,7 +152,8 @@ export default class InterBrainPlugin extends Plugin {
       id: 'share-dreamnode',
       name: 'Share DreamNode via Coherence Beacon',
       callback: async () => {
-        const currentNode = this.dreamNodeService.getCurrentNode();
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
         if (!currentNode) {
           this.uiService.showError('No DreamNode selected');
           return;
@@ -318,7 +320,8 @@ export default class InterBrainPlugin extends Plugin {
           repoPath: '/test/path',
           hasUnsavedChanges: false
         };
-        this.dreamNodeService.setCurrentNode(mockNode);
+        const store = useInterBrainStore.getState();
+        store.setSelectedNode(mockNode);
         this.uiService.showSuccess(`Selected: ${mockNode.name}`);
         console.log('Mock node selected - Zustand state should be updated');
       }
@@ -329,7 +332,8 @@ export default class InterBrainPlugin extends Plugin {
       id: 'clear-dreamnode-selection',
       name: '[TEST] Clear DreamNode Selection',
       callback: () => {
-        this.dreamNodeService.setCurrentNode(null);
+        const store = useInterBrainStore.getState();
+        store.setSelectedNode(null);
         this.uiService.showSuccess('Selection cleared');
         console.log('Selection cleared - Zustand state should be null');
       }
@@ -340,7 +344,8 @@ export default class InterBrainPlugin extends Plugin {
       id: 'layout-constellation',
       name: 'Switch to Constellation View',
       callback: () => {
-        this.dreamNodeService.setLayout('constellation');
+        const store = useInterBrainStore.getState();
+        store.setSpatialLayout('constellation');
         this.uiService.showSuccess('Switched to constellation view');
         console.log('Layout switched to constellation');
       }
@@ -351,7 +356,8 @@ export default class InterBrainPlugin extends Plugin {
       id: 'layout-search',
       name: 'Switch to Search View',
       callback: () => {
-        this.dreamNodeService.setLayout('search');
+        const store = useInterBrainStore.getState();
+        store.setSpatialLayout('search');
         this.uiService.showSuccess('Switched to search view');
         console.log('Layout switched to search');
       }
@@ -362,12 +368,13 @@ export default class InterBrainPlugin extends Plugin {
       id: 'layout-focused',
       name: 'Switch to Focused View',
       callback: () => {
-        const currentNode = this.dreamNodeService.getCurrentNode();
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
         if (!currentNode) {
           this.uiService.showError('No DreamNode selected - select a node first');
           return;
         }
-        this.dreamNodeService.setLayout('focused');
+        store.setSpatialLayout('focused');
         this.uiService.showSuccess(`Focused on: ${currentNode.name}`);
         console.log('Layout switched to focused on:', currentNode.name);
       }
@@ -378,7 +385,11 @@ export default class InterBrainPlugin extends Plugin {
       id: 'camera-reset',
       name: 'Reset Camera Position',
       callback: () => {
-        this.dreamNodeService.resetCamera();
+        const store = useInterBrainStore.getState();
+        // Reset to origin for proper Dynamic View Scaling geometry
+        store.setCameraPosition([0, 0, 0]);
+        store.setCameraTarget([0, 0, 0]);
+        store.setCameraTransition(false);
         this.uiService.showSuccess('Camera position reset');
         console.log('Camera reset to default position');
       }

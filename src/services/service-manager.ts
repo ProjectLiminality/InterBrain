@@ -39,6 +39,63 @@ export class ServiceManager {
 
   constructor() {
     this.mockService = mockDreamNodeService;
+    
+    // Wrap mock service methods to sync with store
+    this.wrapMockServiceMethods();
+  }
+  
+  /**
+   * Wrap mock service methods to automatically sync with store
+   */
+  private wrapMockServiceMethods(): void {
+    const originalCreate = this.mockService.create.bind(this.mockService);
+    const originalUpdate = this.mockService.update.bind(this.mockService);
+    const originalDelete = this.mockService.delete.bind(this.mockService);
+    const originalAddFiles = this.mockService.addFilesToNode.bind(this.mockService);
+    
+    // Wrap create method
+    this.mockService.create = async (...args) => {
+      const node = await originalCreate(...args);
+      this.syncMockToStore();
+      return node;
+    };
+    
+    // Wrap update method
+    this.mockService.update = async (...args) => {
+      await originalUpdate(...args);
+      this.syncMockToStore();
+    };
+    
+    // Wrap delete method
+    this.mockService.delete = async (...args) => {
+      await originalDelete(...args);
+      this.syncMockToStore();
+    };
+    
+    // Wrap addFilesToNode method
+    this.mockService.addFilesToNode = async (...args) => {
+      await originalAddFiles(...args);
+      this.syncMockToStore();
+    };
+  }
+  
+  /**
+   * Sync mock service nodes to store (for UI updates)
+   */
+  private async syncMockToStore(): Promise<void> {
+    // For now, we'll use a simple event emission pattern
+    // The DreamspaceCanvas will need to listen for these changes
+    console.log('ServiceManager: Mock data changed, notifying listeners');
+    
+    // Emit a custom event that DreamspaceCanvas can listen to
+    // Use globalThis to ensure compatibility in all environments
+    if (typeof globalThis.CustomEvent !== 'undefined') {
+      globalThis.dispatchEvent(new globalThis.CustomEvent('mock-nodes-changed', {
+        detail: { source: 'service-manager' }
+      }));
+    } else {
+      console.log('ServiceManager: CustomEvent not available in this environment');
+    }
   }
   
   /**
@@ -81,19 +138,44 @@ export class ServiceManager {
     const store = useInterBrainStore.getState();
     const previousMode = store.dataMode;
     
+    // Store current UI state before switching
+    const currentUIState = {
+      selectedNode: store.selectedNode,
+      spatialLayout: store.spatialLayout,
+      cameraPosition: store.camera.position,
+      cameraTarget: store.camera.target
+    };
+    
     // Update store
     store.setDataMode(mode);
     
     console.log(`ServiceManager: Switched from ${previousMode} to ${mode} mode`);
+    console.log('ServiceManager: Preserved UI state:', currentUIState);
     
     if (mode === 'real' && this.realService) {
       // Scan vault when switching to real mode
       console.log('ServiceManager: Scanning vault for DreamNodes...');
       const stats = await this.realService.scanVault();
       console.log('ServiceManager: Vault scan complete:', stats);
+      
+      // Try to restore selected node if it exists in real mode
+      if (currentUIState.selectedNode) {
+        const realNodes = await this.realService.list();
+        const matchingNode = realNodes.find(n => n.name === currentUIState.selectedNode?.name);
+        if (matchingNode) {
+          store.setSelectedNode(matchingNode);
+          console.log('ServiceManager: Restored selected node in real mode');
+        }
+      }
     } else if (mode === 'mock') {
       console.log('MockDreamNodeService stats:', this.mockService.getStats());
+      
+      // Sync current mock data to ensure UI is updated
+      this.syncMockToStore();
     }
+    
+    // Restore UI state elements that should persist
+    // Camera and rotation state are preserved automatically by not resetting them
   }
 
   /**
