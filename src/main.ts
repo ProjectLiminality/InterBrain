@@ -4,6 +4,7 @@ import { GitService } from './services/git-service';
 import { DreamNodeService } from './services/dreamnode-service';
 import { VaultService } from './services/vault-service';
 import { GitTemplateService } from './services/git-template-service';
+import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
@@ -41,6 +42,9 @@ export default class InterBrainPlugin extends Plugin {
     this.dreamNodeService = new DreamNodeService();
     this.vaultService = new VaultService(this.app.vault);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
+    
+    // Initialize service manager with plugin instance
+    serviceManager.initialize(this);
   }
 
   private registerCommands(): void {
@@ -190,6 +194,76 @@ export default class InterBrainPlugin extends Plugin {
         const newState = !store.debugFlyingControls;
         store.setDebugFlyingControls(newState);
         this.uiService.showSuccess(`Debug flying controls ${newState ? 'enabled' : 'disabled'}`);
+      }
+    });
+
+    // Toggle between mock and real data mode
+    this.addCommand({
+      id: 'toggle-data-mode',
+      name: 'Toggle Data Mode (Mock ↔ Real)',
+      callback: async () => {
+        const currentMode = serviceManager.getMode();
+        const newMode = currentMode === 'mock' ? 'real' : 'mock';
+        
+        const loadingNotice = this.uiService.showLoading(`Switching to ${newMode} mode...`);
+        try {
+          await serviceManager.setMode(newMode);
+          this.uiService.showSuccess(`Switched to ${newMode} mode`);
+          
+          // Trigger UI refresh
+          const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+          if (dreamspaceLeaf && dreamspaceLeaf.view instanceof DreamspaceView) {
+            // The view will automatically re-render based on store changes
+            console.log(`Data mode switched to ${newMode} - UI should update`);
+          }
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Failed to switch mode');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    // Scan vault for DreamNodes (real mode only)
+    this.addCommand({
+      id: 'scan-vault',
+      name: 'Scan Vault for DreamNodes',
+      callback: async () => {
+        if (serviceManager.getMode() !== 'real') {
+          this.uiService.showError('Vault scan only available in real mode');
+          return;
+        }
+        
+        const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
+        try {
+          const stats = await serviceManager.scanVault();
+          if (stats) {
+            this.uiService.showSuccess(
+              `Scan complete: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed`
+            );
+          }
+        } catch (error) {
+          this.uiService.showError(error instanceof Error ? error.message : 'Vault scan failed');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    // Reset data store
+    this.addCommand({
+      id: 'reset-data-store',
+      name: 'Reset Data Store',
+      callback: () => {
+        const mode = serviceManager.getMode();
+        const confirmMsg = mode === 'mock' 
+          ? 'Reset all mock data?' 
+          : 'Clear real data store? (Vault files will remain unchanged)';
+        
+        if (globalThis.confirm(confirmMsg)) {
+          serviceManager.resetData();
+          this.uiService.showSuccess(`${mode} data store reset`);
+        }
       }
     });
 
@@ -424,9 +498,7 @@ export default class InterBrainPlugin extends Plugin {
         const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
         
         try {
-          // Get vault path from Obsidian
-          const vaultPath = (this.app.vault.adapter as any).path || '/vault';
-          const results = await this.gitTemplateService.scanVaultCoherence(vaultPath);
+          const results = await this.gitTemplateService.scanVaultCoherence();
           
           if (results.total === 0) {
             this.uiService.showSuccess('No DreamNodes found in vault');
@@ -454,8 +526,7 @@ export default class InterBrainPlugin extends Plugin {
         
         try {
           // First scan for incoherent nodes
-          const vaultPath = (this.app.vault.adapter as any).path || '/vault';
-          const scanResults = await this.gitTemplateService.scanVaultCoherence(vaultPath);
+          const scanResults = await this.gitTemplateService.scanVaultCoherence();
           
           if (scanResults.incoherent.length === 0) {
             this.uiService.showSuccess('All DreamNodes are already coherent');
