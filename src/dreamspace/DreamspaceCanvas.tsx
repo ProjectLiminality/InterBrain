@@ -14,8 +14,10 @@ import { serviceManager } from '../services/service-manager';
 import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
 
 export default function DreamspaceCanvas() {
-  // Get mock data configuration from store
+  // Get data mode and mock data configuration from store
+  const dataMode = useInterBrainStore(state => state.dataMode);
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
+  const realNodes = useInterBrainStore(state => state.realNodes);
   
   // State for dynamic nodes from mock service
   const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
@@ -24,9 +26,16 @@ export default function DreamspaceCanvas() {
   const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
   
-  // Combine static mock data with dynamic service nodes
-  const staticNodes = getMockDataForConfig(mockDataConfig);
-  const dreamNodes = [...staticNodes, ...dynamicNodes];
+  // Get nodes based on data mode
+  let dreamNodes: DreamNode[] = [];
+  if (dataMode === 'mock') {
+    // Combine static mock data with dynamic service nodes
+    const staticNodes = getMockDataForConfig(mockDataConfig);
+    dreamNodes = [...staticNodes, ...dynamicNodes];
+  } else {
+    // Use real nodes from store
+    dreamNodes = Array.from(realNodes.values()).map(data => data.node);
+  }
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
@@ -45,22 +54,26 @@ export default function DreamspaceCanvas() {
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
   
-  // Load dynamic nodes from mock service on mount and after creation
+  // Load dynamic nodes from service - only for mock mode
   useEffect(() => {
     const loadDynamicNodes = async () => {
-      try {
-        const service = serviceManager.getActive();
-        // Don't reset on mount - preserve nodes across re-renders
-        const nodes = await service.list();
-        setDynamicNodes(nodes);
-        // Loaded dynamic nodes successfully
-      } catch (error) {
-        console.error('Failed to load dynamic nodes:', error);
+      // Only load dynamic nodes in mock mode
+      if (dataMode === 'mock') {
+        try {
+          const service = serviceManager.getActive();
+          const nodes = await service.list();
+          setDynamicNodes(nodes);
+        } catch (error) {
+          console.error('Failed to load dynamic nodes:', error);
+        }
+      } else {
+        // Clear dynamic nodes in real mode (using store data instead)
+        setDynamicNodes([]);
       }
     };
     
     loadDynamicNodes();
-  }, []);
+  }, [dataMode]); // Re-run when data mode changes
   
   // Debug logging for creation state (removed excessive logging)
   
@@ -251,13 +264,16 @@ export default function DreamspaceCanvas() {
         protoNode.title,
         protoNode.type,
         protoNode.dreamTalkFile,
-        finalPosition // Pass rotation-adjusted position to project onto sphere
+        finalPosition, // Pass rotation-adjusted position to project onto sphere
+        protoNode.additionalFiles // Pass additional files from proto-node
       );
       
-      
-      // Refresh the dynamic nodes list to include the new node
-      const updatedNodes = await service.list();
-      setDynamicNodes(updatedNodes);
+      // Refresh dynamic nodes list only in mock mode
+      // In real mode, the store is already updated by the service
+      if (dataMode === 'mock') {
+        const updatedNodes = await service.list();
+        setDynamicNodes(updatedNodes);
+      }
       
       // Add small delay to ensure new DreamNode renders before hiding proto-node
       globalThis.setTimeout(() => {
@@ -279,9 +295,7 @@ export default function DreamspaceCanvas() {
       
       // Use service to add files to existing node
       const service = serviceManager.getActive();
-      if ('addFilesToNode' in service) {
-        await (service as any).addFilesToNode(node.id, files);
-      }
+      await service.addFilesToNode(node.id, files);
       
       // Refresh dynamic nodes list to show updated dreamTalk
       const updatedNodes = await service.list();
@@ -370,28 +384,21 @@ export default function DreamspaceCanvas() {
       const dreamTalkFile = files.find(f => isValidMediaFile(f));
       const additionalFiles = files.filter(f => f !== dreamTalkFile);
       
-      // Use enhanced create method if available (MockDreamNodeService)
-      if ('create' in service && service.create.length > 4) {
-        await (service as any).create(
-          fileNameWithoutExt,
-          'dream', // Always create Dream-type for normal drops
-          dreamTalkFile,
-          position,
-          additionalFiles // Pass all other files
-        );
-      } else {
-        await service.create(
-          fileNameWithoutExt,
-          'dream',
-          dreamTalkFile,
-          position
-        );
+      // Create node with all files
+      await service.create(
+        fileNameWithoutExt,
+        'dream', // Always create Dream-type for normal drops
+        dreamTalkFile,
+        position,
+        additionalFiles // Pass all other files
+      );
+      
+      // Refresh dynamic nodes list only in mock mode
+      // In real mode, the store is already updated by the service
+      if (dataMode === 'mock') {
+        const updatedNodes = await service.list();
+        setDynamicNodes(updatedNodes);
       }
-      
-      
-      // Refresh dynamic nodes list
-      const updatedNodes = await service.list();
-      setDynamicNodes(updatedNodes);
       
     } catch (error) {
       console.error('Failed to create node from drop:', error);
@@ -401,21 +408,29 @@ export default function DreamspaceCanvas() {
 
   const handleCommandDrop = async (files: globalThis.File[]) => {
     try {
-      const file = files[0]; // Use first file for pre-filling
+      const file = files[0]; // Use first file for title
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
       
       // Use the EXACT same position as the Create DreamNode command
       const spawnPosition: [number, number, number] = [0, 0, -25];
       
+      // Separate media files from other files
+      const mediaFiles = files.filter(f => isValidMediaFile(f));
+      const otherFiles = files.filter(f => !isValidMediaFile(f));
       
-      // Pre-fill the proto node with file data
-      const dreamTalkFile = isValidMediaFile(file) ? file : undefined;
+      // Use first media file as dreamTalk, rest go to additional files
+      const dreamTalkFile = mediaFiles.length > 0 ? mediaFiles[0] : undefined;
+      const additionalFiles = [
+        ...mediaFiles.slice(1), // Remaining media files
+        ...otherFiles // All non-media files (like PDFs)
+      ];
       
-      // Start creation with pre-filled data in a single action
+      // Start creation with pre-filled data including all files
       startCreationWithData(spawnPosition, {
         title: fileNameWithoutExt,
         type: 'dream',
-        dreamTalkFile: dreamTalkFile
+        dreamTalkFile: dreamTalkFile,
+        additionalFiles: additionalFiles.length > 0 ? additionalFiles : undefined
       });
       
       
