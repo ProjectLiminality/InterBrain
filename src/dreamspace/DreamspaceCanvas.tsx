@@ -11,7 +11,11 @@ import ProtoNode3D from '../features/creation/ProtoNode3D';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
+import { UIService } from '../services/ui-service';
 import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
+
+// Create a singleton UI service instance
+const uiService = new UIService();
 
 export default function DreamspaceCanvas() {
   // Get data mode and mock data configuration from store
@@ -21,6 +25,38 @@ export default function DreamspaceCanvas() {
   
   // State for dynamic nodes from mock service
   const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
+  
+  // Effect to load initial mock nodes and listen for changes
+  useEffect(() => {
+    if (dataMode === 'mock') {
+      // Load initial nodes
+      const loadMockNodes = async () => {
+        const service = serviceManager.getActive();
+        const nodes = await service.list();
+        setDynamicNodes(nodes);
+      };
+      loadMockNodes();
+      
+      // Listen for mock node changes
+      const handleMockNodesChanged = async () => {
+        console.log('DreamspaceCanvas: Mock nodes changed, refreshing...');
+        const service = serviceManager.getActive();
+        const nodes = await service.list();
+        setDynamicNodes(nodes);
+      };
+      
+      if (typeof globalThis.addEventListener !== 'undefined') {
+        globalThis.addEventListener('mock-nodes-changed', handleMockNodesChanged);
+        
+        return () => {
+          globalThis.removeEventListener('mock-nodes-changed', handleMockNodesChanged);
+        };
+      }
+    }
+    
+    // Always return a cleanup function (even if it does nothing)
+    return () => {};
+  }, [dataMode]);
   
   // Drag and drop state
   const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
@@ -65,6 +101,7 @@ export default function DreamspaceCanvas() {
           setDynamicNodes(nodes);
         } catch (error) {
           console.error('Failed to load dynamic nodes:', error);
+          uiService.showError(error instanceof Error ? error.message : 'Failed to load dynamic nodes');
         }
       } else {
         // Clear dynamic nodes in real mode (using store data instead)
@@ -268,12 +305,7 @@ export default function DreamspaceCanvas() {
         protoNode.additionalFiles // Pass additional files from proto-node
       );
       
-      // Refresh dynamic nodes list only in mock mode
-      // In real mode, the store is already updated by the service
-      if (dataMode === 'mock') {
-        const updatedNodes = await service.list();
-        setDynamicNodes(updatedNodes);
-      }
+      // No need to manually refresh - event listener will handle it
       
       // Add small delay to ensure new DreamNode renders before hiding proto-node
       globalThis.setTimeout(() => {
@@ -282,7 +314,7 @@ export default function DreamspaceCanvas() {
       
     } catch (error) {
       console.error('Failed to create DreamNode:', error);
-      // TODO: Show error message to user
+      uiService.showError(error instanceof Error ? error.message : 'Failed to create DreamNode');
     }
   };
 
@@ -297,14 +329,12 @@ export default function DreamspaceCanvas() {
       const service = serviceManager.getActive();
       await service.addFilesToNode(node.id, files);
       
-      // Refresh dynamic nodes list to show updated dreamTalk
-      const updatedNodes = await service.list();
-      setDynamicNodes(updatedNodes);
+      // No need to manually refresh - event listener will handle it
       
       
     } catch (error) {
       console.error('Failed to add files to node:', error);
-      // TODO: Show user error message
+      uiService.showError(error instanceof Error ? error.message : 'Failed to add files to node');
     }
   };
 
@@ -393,16 +423,11 @@ export default function DreamspaceCanvas() {
         additionalFiles // Pass all other files
       );
       
-      // Refresh dynamic nodes list only in mock mode
-      // In real mode, the store is already updated by the service
-      if (dataMode === 'mock') {
-        const updatedNodes = await service.list();
-        setDynamicNodes(updatedNodes);
-      }
+      // No need to manually refresh - event listener will handle it
       
     } catch (error) {
       console.error('Failed to create node from drop:', error);
-      // TODO: Show user error message
+      uiService.showError(error instanceof Error ? error.message : 'Failed to create node from drop');
     }
   };
 
@@ -436,7 +461,7 @@ export default function DreamspaceCanvas() {
       
     } catch (error) {
       console.error('Failed to start creation from drop:', error);
-      // TODO: Show user error message
+      uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from drop');
     }
   };
 
