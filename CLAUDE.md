@@ -20,8 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 🚀 **Epic 3 Active**: DreamNode Management System (branch: epic/3-dreamnode-management)
 - 🔮 **Epic 4 Future**: Git Operations Abstraction
 
-### Epic 3 Current Status (July 26, 2025)
-**Major Features Complete**: #283 Proto-node creation, #284 Universal drag-drop hit detection, #309 Git Template System, #312 Service Layer Integration, #314 Visual Git State Indicators
+### Epic 3 Current Status (July 26, 2025) - READY FOR EPIC COMPLETION
+**All Major Features Complete**: #283 Proto-node creation, #284 Universal drag-drop hit detection, #309 Git Template System, #312 Service Layer Integration, #314 Visual Git State Indicators, #310 Auto-stash Creator Mode
 - ✅ Epic branch created: `epic/3-dreamnode-management`
 - ✅ Service layer architecture defined with mock/real swapping capability
 - ✅ **Feature #283 Complete**: In-space proto-node creation with unified animation system
@@ -29,6 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ **Feature #309 Complete**: Git Template System for DreamNode Creation
 - ✅ **Feature #312 Complete**: Service Layer Integration with mock/real switching
 - ✅ **Feature #314 Complete**: Visual Git State Indicators for DreamNodes
+- ✅ **Feature #310 Complete**: Auto-stash Creator Mode workflow with workspace isolation
 - ✅ **Feature #313 Closed**: Development Mode Toggle (subsumed into service layer)
 - ✅ **Feature #315 Closed**: DreamTalk Component refinement (moved to Epic 8)
 - ✅ Shared styling infrastructure established (dreamNodeStyles.ts)
@@ -39,7 +40,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ Git template with udd.json files and pre-commit hooks
 - ✅ Obsidian-compatible coherence checking system
 - ✅ 4 command palette commands for template operations
-- 🔄 **Epic Progress**: Strong foundation with 5 major features complete, 2 features closed as addressed
+- ✅ DreamNode selection infrastructure with click-to-select and visual feedback
+- ✅ Creator Mode pattern with automatic git stash operations
+- ✅ Visual git state hierarchy: red (work-in-progress) > blue (unpushed) > clean
+- ✅ Robust git status detection with unpushed commit checking
+- 🎯 **Epic Status**: ALL FEATURES COMPLETE - Ready for epic completion workflow (CHANGELOG.md + merge to main)
 
 ### Epic 1 Achievements (July 13, 2025)
 - ✅ Obsidian plugin boilerplate with Vite dual workflow
@@ -147,12 +152,14 @@ interface DreamNodeService {
 - **Services**: UI, Git, DreamNode, and Vault service layers
 - **Commands**: 6 core commands via Obsidian command palette
 
-### Epic 3 Implementation (Active Development)
-- **Service Layer**: Interface-based architecture with mock/real implementations
-- **DreamNode Template**: Git template system stored in plugin directory with hooks
-- **Auto-Save Pattern**: Auto-stash on file changes, convert to commit on user "Save"
-- **Mock Development**: Dynamic Zustand store for fast UI iteration without git complexity
-- **Git Operations**: `git init --template` for clean DreamNode repo creation
+### Epic 3 Implementation (COMPLETE - Ready for Main Merge)
+- **Service Layer**: Interface-based architecture with mock/real implementations ✅
+- **DreamNode Template**: Git template system stored in plugin directory with hooks ✅
+- **Creator Mode Pattern**: Workspace isolation via automatic git stash operations ✅
+- **DreamNode Selection**: Click-to-select infrastructure with visual feedback ✅
+- **Visual Git States**: Red (work-in-progress), blue (unpushed), clean state indicators ✅
+- **Mock Development**: Dynamic Zustand store for fast UI iteration without git complexity ✅
+- **Git Operations**: `git init --template` for clean DreamNode repo creation ✅
 
 ### Planned Technologies (Future Epics)
 - **Frontend**: React + React Three Fiber (R3F) for 3D visualization
@@ -401,14 +408,23 @@ DreamNode-template/
 git init --template=${pluginPath}/DreamNode-template
 ```
 
-### Auto-Save Workflow
+### Creator Mode Workflow (Feature #310 Complete)
 ```bash
-# On every file change (auto-stash - replaces previous):
-git add -A && git stash push -m "InterBrain autosave"
+# Enter Creator Mode (restore work-in-progress):
+git stash pop || true  # Handle empty stash gracefully
 
-# On user "Save" action:
-git stash pop && git add -A && git commit -m "User commit message"
+# Exit Creator Mode (preserve work-in-progress):
+git add -A && git stash push -m "InterBrain creator mode"
+
+# Save Action (commit and exit creator mode):
+git add -A && git commit -m "User commit message"
 ```
+
+**Visual Git State Hierarchy**:
+- **Red Glow**: Uncommitted OR stashed changes (work-in-progress takes priority)
+- **Blue Glow**: Committed but unpushed changes (ready to share)
+- **Clean**: No glow for synchronized repositories
+- **Detection**: `git status --porcelain=v1 --branch` with regex parsing for unpushed commits
 
 ### Development Mode Switching
 ```typescript
