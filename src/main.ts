@@ -36,7 +36,7 @@ export default class InterBrainPlugin extends Plugin {
 
   private initializeServices(): void {
     this.uiService = new UIService();
-    this.gitService = new GitService();
+    this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
     
@@ -60,6 +60,62 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Toggle Creator Mode command
+    this.addCommand({
+      id: 'toggle-creator-mode',
+      name: 'Toggle Creator Mode',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        const { creatorMode } = store;
+        const isCurrentlyActive = creatorMode.isActive && creatorMode.nodeId === selectedNode.id;
+        
+        if (isCurrentlyActive) {
+          // Exit creator mode
+          const loadingNotice = this.uiService.showLoading('Exiting creator mode...');
+          try {
+            // Stash any uncommitted changes when exiting creator mode
+            if (serviceManager.getMode() === 'real') {
+              await this.gitService.stashChanges(selectedNode.repoPath);
+            }
+            store.setCreatorMode(false);
+            this.uiService.showSuccess('Exited creator mode - changes stashed');
+          } catch (error) {
+            console.error('Failed to stash changes:', error);
+            // Still exit creator mode even if stash fails
+            store.setCreatorMode(false);
+            this.uiService.showError('Exited creator mode but failed to stash changes');
+          } finally {
+            loadingNotice.hide();
+          }
+        } else {
+          // Enter creator mode
+          const loadingNotice = this.uiService.showLoading('Entering creator mode...');
+          try {
+            // Pop any existing stash when entering creator mode
+            if (serviceManager.getMode() === 'real') {
+              await this.gitService.popStash(selectedNode.repoPath);
+            }
+            store.setCreatorMode(true, selectedNode.id);
+            this.uiService.showSuccess(`Creator mode active for: ${selectedNode.name}`);
+          } catch (error) {
+            console.error('Failed to pop stash:', error);
+            // Still enter creator mode even if pop fails
+            store.setCreatorMode(true, selectedNode.id);
+            this.uiService.showError('Entered creator mode but failed to restore stash');
+          } finally {
+            loadingNotice.hide();
+          }
+        }
+      }
+    });
+
     // Save DreamNode command
     this.addCommand({
       id: 'save-dreamnode',
@@ -74,6 +130,13 @@ export default class InterBrainPlugin extends Plugin {
           }
           // TODO: Implement save through service layer when auto-stash workflow is ready
           await this.gitService.commitWithAI(currentNode.repoPath);
+          
+          // Exit creator mode after successful save
+          const { creatorMode } = store;
+          if (creatorMode.isActive && creatorMode.nodeId === currentNode.id) {
+            store.setCreatorMode(false);
+          }
+          
           this.uiService.showSuccess('DreamNode saved successfully');
         } catch (error) {
           this.uiService.showError(error instanceof Error ? error.message : 'Unknown error occurred');
