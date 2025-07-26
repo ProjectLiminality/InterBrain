@@ -5,6 +5,81 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-07-26 - Epic 3: DreamNode Management System
+
+### Added
+
+**Service Layer Architecture**
+- Interface-based service pattern with runtime switching capability
+- MockDreamNodeService for fast UI iteration without file system operations
+- GitDreamNodeService for real git repository management
+- Command palette commands for switching between mock and real data modes
+- Session storage persistence for mock data development
+
+**Git Template System**
+- Complete DreamNode template stored in plugin directory
+- Automatic git repository initialization with `git init --template`
+- Pre-configured git hooks for coherence beacon updates
+- UDD metadata system with JSON-based node information
+- 4 new command palette commands for template operations
+
+**Visual Git State Indicators**
+- Three-tier visual state hierarchy for DreamNodes
+- Red glow for uncommitted or stashed changes (work-in-progress)
+- Blue glow for committed but unpushed changes (ready to share)
+- Clean state (no glow) for synchronized repositories
+- Robust detection using `git status --porcelain=v1 --branch`
+
+**Creator Mode Workflow**
+- Auto-stash pattern for workspace isolation
+- Seamless entry/exit from work-in-progress states
+- Git stash integration for preserving uncommitted changes
+- Safe commit workflow with automatic stash clearing
+- Protection against losing work during mode transitions
+
+**Proto-node Creation System**
+- In-space node creation with unified animation system
+- Smooth transitions from proto-nodes to full DreamNodes
+- Integration with drag-drop system for DreamTalk assignment
+- Visual feedback during creation process
+
+**Universal Drag-Drop Hit Detection**
+- Native Three.js scene-based raycasting system
+- Scale-aware hit detection across all zoom levels
+- Invisible hit spheres that travel with visual nodes
+- Flawless interaction at any viewing distance
+- Support for both click selection and drag operations
+
+### Technical Achievements
+
+**Code Quality**
+- 101 unit tests passing (up from 84 in Epic 2)
+- Comprehensive test coverage for all new services
+- Mock implementations for all service interfaces
+- Zero lint warnings or type errors
+
+**Architecture Innovations**
+- Service layer abstraction enabling clean separation of concerns
+- Dynamic runtime service swapping for development efficiency
+- Unified animation system for consistent visual transitions
+- Shared styling infrastructure (dreamNodeStyles.ts)
+- Command-driven architecture with service delegation
+
+**Development Infrastructure**
+- Enhanced testing patterns for service layer
+- Mock git operations for reliable testing
+- Improved TypeScript interfaces and type safety
+- Professional git workflow patterns documented
+
+### Changed
+- **State Management**: Extended Zustand store with service layer integration
+- **Testing**: Expanded coverage to include service layer patterns
+- **Commands**: Added 6 new commands for DreamNode operations
+- **Documentation**: Updated with service patterns and git workflows
+
+### Foundation for Epic 4
+This release establishes the complete DreamNode management foundation for Epic 4 (Git Operations Abstraction), with service layer architecture, visual state management, and robust git integration patterns ready for user-friendly Save/Share paradigm implementation.
+
 ## [0.2.0] - 2025-07-18 - Epic 2: 3D Spatial Visualization System
 
 ### Added

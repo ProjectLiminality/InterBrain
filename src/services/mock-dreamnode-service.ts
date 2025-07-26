@@ -304,6 +304,7 @@ export class MockDreamNodeService {
       return {
         hasUncommittedChanges: false,
         hasStashedChanges: false,
+        hasUnpushedChanges: false,
         lastChecked: Date.now()
       };
     } else if (rand < 0.7) {
@@ -311,12 +312,14 @@ export class MockDreamNodeService {
       return {
         hasUncommittedChanges: true,
         hasStashedChanges: false,
+        hasUnpushedChanges: false,
         lastChecked: Date.now(),
         details: {
           staged: Math.floor(Math.random() * 3),
           unstaged: Math.floor(Math.random() * 5) + 1,
           untracked: Math.floor(Math.random() * 2),
-          stashCount: 0
+          stashCount: 0,
+          aheadCount: 0
         }
       };
     } else if (rand < 0.9) {
@@ -324,12 +327,14 @@ export class MockDreamNodeService {
       return {
         hasUncommittedChanges: false,
         hasStashedChanges: true,
+        hasUnpushedChanges: false,
         lastChecked: Date.now(),
         details: {
           staged: 0,
           unstaged: 0,
           untracked: 0,
-          stashCount: Math.floor(Math.random() * 3) + 1
+          stashCount: Math.floor(Math.random() * 3) + 1,
+          aheadCount: 0
         }
       };
     } else {
@@ -337,12 +342,14 @@ export class MockDreamNodeService {
       return {
         hasUncommittedChanges: true,
         hasStashedChanges: true,
+        hasUnpushedChanges: false,
         lastChecked: Date.now(),
         details: {
           staged: Math.floor(Math.random() * 2),
           unstaged: Math.floor(Math.random() * 3) + 1,
           untracked: Math.floor(Math.random() * 2),
-          stashCount: Math.floor(Math.random() * 2) + 1
+          stashCount: Math.floor(Math.random() * 2) + 1,
+          aheadCount: 0
         }
       };
     }
