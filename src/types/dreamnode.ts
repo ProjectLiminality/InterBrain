@@ -162,6 +162,9 @@ export interface GitStatus {
   /** Whether there are stashed changes */
   hasStashedChanges: boolean;
   
+  /** Whether there are unpushed commits (ahead of remote) */
+  hasUnpushedChanges: boolean;
+  
   /** Last time git status was checked */
   lastChecked: number;
   
@@ -171,6 +174,7 @@ export interface GitStatus {
     unstaged: number;
     untracked: number;
     stashCount: number;
+    aheadCount: number;
   };
 }
 

@@ -46,6 +46,13 @@ export interface InterBrainState {
   selectedNode: DreamNode | null;
   setSelectedNode: (node: DreamNode | null) => void;
   
+  // Creator mode state
+  creatorMode: {
+    isActive: boolean;
+    nodeId: string | null; // ID of the node being edited
+  };
+  setCreatorMode: (active: boolean, nodeId?: string | null) => void;
+  
   // Search functionality state
   searchResults: DreamNode[];
   setSearchResults: (results: DreamNode[]) => void;
@@ -119,6 +126,10 @@ export const useInterBrainStore = create<InterBrainState>()(
   dataMode: 'mock' as const, // Start in mock mode
   realNodes: new Map<string, RealNodeData>(),
   selectedNode: null,
+  creatorMode: {
+    isActive: false,
+    nodeId: null
+  },
   searchResults: [],
   spatialLayout: 'constellation',
   fibonacciConfig: DEFAULT_FIBONACCI_CONFIG,
@@ -174,6 +185,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     return { realNodes: newMap };
   }),
   setSelectedNode: (node) => set({ selectedNode: node }),
+  setCreatorMode: (active, nodeId = null) => set({ 
+    creatorMode: { isActive: active, nodeId: nodeId } 
+  }),
   setSearchResults: (results) => set({ searchResults: results }),
   setSpatialLayout: (layout) => set(state => ({ 
     spatialLayout: layout,

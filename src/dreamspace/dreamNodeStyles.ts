@@ -77,6 +77,10 @@ export const dreamNodeStyles = {
         glowIntensity: 35,       // Maximum glow
         glowColor: '#FF6B6B',    // Red for uncommitted (primary state)
         pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite'
+      },
+      unpushed: {
+        glowIntensity: 20,       // Moderate glow
+        glowColor: '#4FC3F7'     // Blue (same as Dream color)
       }
     }
   },
@@ -160,23 +164,27 @@ export function getMediaOverlayStyle() {
 /**
  * Git state type for visual indicators
  */
-export type GitStateType = 'clean' | 'uncommitted' | 'stashed' | 'dirtyAndStashed';
+export type GitStateType = 'clean' | 'uncommitted' | 'stashed' | 'dirtyAndStashed' | 'unpushed';
 
 /**
  * Helper function to determine git visual state from git status
+ * Hierarchy: red (uncommitted/stashed) wins over blue (unpushed)
  */
-export function getGitVisualState(gitStatus?: { hasUncommittedChanges: boolean; hasStashedChanges: boolean }): GitStateType {
+export function getGitVisualState(gitStatus?: { hasUncommittedChanges: boolean; hasStashedChanges: boolean; hasUnpushedChanges: boolean }): GitStateType {
   if (!gitStatus) return 'clean';
   
-  const { hasUncommittedChanges, hasStashedChanges } = gitStatus;
+  const { hasUncommittedChanges, hasStashedChanges, hasUnpushedChanges } = gitStatus;
   
-  if (hasUncommittedChanges && hasStashedChanges) {
-    return 'dirtyAndStashed';
-  } else if (hasUncommittedChanges) {
-    return 'uncommitted';
-  } else if (hasStashedChanges) {
-    return 'stashed';
-  } else {
+  // Red glow wins: uncommitted OR stashed changes (work in progress)
+  if (hasUncommittedChanges || hasStashedChanges) {
+    return 'uncommitted'; // Use 'uncommitted' state for both cases
+  }
+  // Blue glow: unpushed commits (ready to share)
+  else if (hasUnpushedChanges) {
+    return 'unpushed';
+  }
+  // Clean state
+  else {
     return 'clean';
   }
 }

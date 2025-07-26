@@ -5,16 +5,40 @@ description: Comprehensive development continuation - analyze state, plan next f
 
 # Continue Development Workflow
 
+## STEP 1: Check Open Issues & Determine Options
+
+**⚠️ ALWAYS START HERE - FIRST STEP OF EVERY CONTINUATION ⚠️**
+
+### Issue Status Check
+- **My assigned issues**: !`gh issue list --assignee @me --state open`
+- **Current epic progress**: !`gh issue list --label epic --state open`
+- **Active specifications**: !`gh issue list --label specification --state open`
+- **Ready features**: !`gh issue list --label feature --state open`
+
+### Decision Point: Multiple Options Available?
+
+**IF MULTIPLE WORK OPTIONS EXIST:**
+1. **STOP detailed analysis** - Don't proceed with full context gathering yet
+2. **Present concise overview** of available work options:
+   - Epic continuation vs new epic
+   - Specification refinement vs feature implementation  
+   - Different feature options within current epic
+   - Bug fixes vs new development
+3. **Ask user to choose**: "I see multiple development paths available. Here are the options: [BRIEF_OVERVIEW]. Which would you like to focus on?"
+4. **Wait for user choice** before proceeding to detailed analysis
+
+**IF ONLY ONE CLEAR PATH:**
+- Note the single clear direction
+- Proceed directly to detailed context analysis below
+
 ## Context Analysis & State Detection
+
+**Only proceed here AFTER determining work direction above**
 
 ### Project State Gathering
 - **Current branch**: !`git branch --show-current`
 - **Git status**: !`git status --short`
 - **Recent commits**: !`git log --oneline -5`
-- **Assigned GitHub issues**: !`gh issue list --assignee @me --state open`
-- **Current epic progress**: !`gh issue list --label epic --state open`
-- **Active specifications**: !`gh issue list --label specification --state open`
-- **Ready features**: !`gh issue list --label feature --state open`
 
 ### Memory Context
 - **Project memory**: @CLAUDE.md

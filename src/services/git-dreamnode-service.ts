@@ -711,7 +711,8 @@ export class GitDreamNodeService {
         // Check if git status actually changed
         const statusChanged = !oldGitStatus || 
           oldGitStatus.hasUncommittedChanges !== newGitStatus.hasUncommittedChanges ||
-          oldGitStatus.hasStashedChanges !== newGitStatus.hasStashedChanges;
+          oldGitStatus.hasStashedChanges !== newGitStatus.hasStashedChanges ||
+          oldGitStatus.hasUnpushedChanges !== newGitStatus.hasUnpushedChanges;
         
         if (statusChanged) {
           // Update the node with new git status
@@ -727,7 +728,7 @@ export class GitDreamNodeService {
           });
           
           updated++;
-          console.log(`GitDreamNodeService: Updated git status for ${updatedNode.name}: uncommitted=${newGitStatus.hasUncommittedChanges}, stashed=${newGitStatus.hasStashedChanges}`);
+          console.log(`GitDreamNodeService: Updated git status for ${updatedNode.name}: uncommitted=${newGitStatus.hasUncommittedChanges}, stashed=${newGitStatus.hasStashedChanges}, unpushed=${newGitStatus.hasUnpushedChanges}`);
         }
       } catch (error) {
         console.error(`GitDreamNodeService: Failed to refresh git status for node ${nodeId}:`, error);
@@ -768,6 +769,7 @@ export class GitDreamNodeService {
         return {
           hasUncommittedChanges: false,
           hasStashedChanges: false,
+          hasUnpushedChanges: false,
           lastChecked: Date.now()
         };
       }
@@ -780,21 +782,45 @@ export class GitDreamNodeService {
       const stashResult = await execAsync('git stash list', { cwd: fullPath });
       const hasStashedChanges = stashResult.stdout.trim().length > 0;
       
+      // Check for unpushed commits (ahead of remote) using git status
+      let hasUnpushedChanges = false;
+      let aheadCount = 0;
+      try {
+        // Use git status --porcelain=v1 --branch to get ahead/behind info
+        const statusBranchResult = await execAsync('git status --porcelain=v1 --branch', { cwd: fullPath });
+        const branchLine = statusBranchResult.stdout.split('\n')[0];
+        
+        // Look for "ahead N" in the branch line
+        // Format: "## branch...origin/branch [ahead N, behind M]" or "## branch...origin/branch [ahead N]"
+        const aheadMatch = branchLine.match(/\[ahead (\d+)/);
+        if (aheadMatch) {
+          aheadCount = parseInt(aheadMatch[1], 10);
+          hasUnpushedChanges = aheadCount > 0;
+          console.log(`GitDreamNodeService: Found ${aheadCount} unpushed commits in ${repoPath}`);
+        } else {
+          console.log(`GitDreamNodeService: No ahead commits detected in ${repoPath}, branch line: ${branchLine}`);
+        }
+      } catch (error) {
+        // No upstream or git error, assume no unpushed commits
+        console.log(`GitDreamNodeService: Git status error for ${repoPath}:`, error instanceof Error ? error.message : 'Unknown error');
+      }
+      
       // Count different types of changes for details
       let details;
-      if (hasUncommittedChanges || hasStashedChanges) {
+      if (hasUncommittedChanges || hasStashedChanges || hasUnpushedChanges) {
         const statusLines = statusResult.stdout.trim().split('\n').filter((line: string) => line.length > 0);
         const staged = statusLines.filter((line: string) => line.charAt(0) !== ' ' && line.charAt(0) !== '?').length;
         const unstaged = statusLines.filter((line: string) => line.charAt(1) !== ' ').length;
         const untracked = statusLines.filter((line: string) => line.startsWith('??')).length;
         const stashCount = hasStashedChanges ? stashResult.stdout.trim().split('\n').length : 0;
         
-        details = { staged, unstaged, untracked, stashCount };
+        details = { staged, unstaged, untracked, stashCount, aheadCount };
       }
       
       return {
         hasUncommittedChanges,
         hasStashedChanges,
+        hasUnpushedChanges,
         lastChecked: Date.now(),
         details
       };
@@ -805,6 +831,7 @@ export class GitDreamNodeService {
       return {
         hasUncommittedChanges: false,
         hasStashedChanges: false,
+        hasUnpushedChanges: false,
         lastChecked: Date.now()
       };
     }
