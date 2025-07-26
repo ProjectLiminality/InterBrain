@@ -7,6 +7,8 @@ const path = require('path');
 
 const execAsync = promisify(exec);
 
+import { App } from 'obsidian';
+
 // Type for accessing file system path from Obsidian vault adapter
 interface VaultAdapter {
   path?: string;
@@ -16,13 +18,13 @@ interface VaultAdapter {
 export class GitService {
   private vaultPath: string = '';
   
-  constructor(private app?: any) {
+  constructor(private app?: App) {
     if (app) {
       this.initializeVaultPath(app);
     }
   }
   
-  private initializeVaultPath(app: any): void {
+  private initializeVaultPath(app: App): void {
     // Get vault file system path for Node.js fs operations (same as GitDreamNodeService)
     const adapter = app.vault.adapter as VaultAdapter;
     
@@ -166,7 +168,7 @@ export class GitService {
     try {
       // First check if there's a remote tracking branch
       const { stdout: branchInfo } = await execAsync('git branch -vv', { cwd: fullPath });
-      const currentBranchLine = branchInfo.split('\n').find(line => line.startsWith('*'));
+      const currentBranchLine = branchInfo.split('\n').find((line: string) => line.startsWith('*'));
       
       if (!currentBranchLine || !currentBranchLine.includes('[')) {
         // No remote tracking branch
@@ -193,7 +195,7 @@ export class GitService {
     try {
       const { stdout } = await execAsync('git rev-list --count @{upstream}..HEAD', { cwd: fullPath });
       return parseInt(stdout.trim(), 10) || 0;
-    } catch (error) {
+    } catch {
       return 0;
     }
   }

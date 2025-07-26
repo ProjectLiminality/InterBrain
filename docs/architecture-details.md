@@ -21,6 +21,53 @@ This document contains detailed technical implementation information for the Int
 **Target Audience**: Poets, artists, philosophers, grandparents - NOT programmers
 **AI-Powered Abstraction**: LLMs handle complex git operations behind simple UI actions
 
+## Service Layer Architecture (Epic 3)
+
+### Interface-Based Design
+
+**Service Abstraction Pattern**:
+```typescript
+interface DreamNodeService {
+  create(title: string, type: NodeType, dreamTalk?: File): Promise<DreamNode>
+  update(id: string, changes: Partial<DreamNode>): Promise<void>
+  delete(id: string): Promise<void>
+  list(): Promise<DreamNode[]>
+}
+```
+
+**Mock/Real Implementation Switching**:
+- `MockDreamNodeService`: Fast UI iteration with session storage persistence
+- `GitDreamNodeService`: Real git repository operations
+- Runtime switching via command palette for development efficiency
+
+### Git Template System
+
+**DreamNode Template Structure**:
+```
+DreamNode-template/
+├── .udd/
+│   └── metadata.json     # UUID, title, type, dreamTalk
+├── hooks/
+│   ├── pre-commit        # Coherence beacon updates
+│   ├── post-commit       # Relationship tracking
+│   └── post-merge        # Submodule sync
+└── README.md            # DreamNode documentation
+```
+
+**Template Usage**: `git init --template=${pluginPath}/DreamNode-template`
+
+### Creator Mode Pattern
+
+**Auto-stash Workflow**:
+- Enter: `git stash pop || true` (restore work-in-progress)
+- Exit: `git add -A && git stash push -m "InterBrain creator mode"`
+- Save: `git add -A && git commit -m "message"` (clears stash)
+
+**Visual Git States**:
+- **Red Glow**: Uncommitted or stashed changes (work-in-progress)
+- **Blue Glow**: Committed but unpushed changes (ready to share)
+- **Clean**: No glow for synchronized repositories
+
 ### DreamWeaving & Submodules
 
 1. **Canvas Creation**: User creates DreamSong in Obsidian canvas with external DreamTalk symbols
