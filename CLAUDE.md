@@ -443,16 +443,20 @@ git add -A && git commit -m "User commit message"
 - Run this before committing changes or completing features
 
 **Epic Completion Workflow**:
-- **MANDATORY**: Update CHANGELOG.md before merging epic to main
-- Use release branch pattern: `release/vX.Y.Z` from main
-- Include comprehensive epic details, features, and technical achievements
-- Bump version in package.json as part of release
-- **Local Merge Process**: Merge branches locally (no pull requests)
-  - Merge release branch to main locally
-  - Merge epic branch to main locally
-  - Push main to remote after local merges
-- Create git tag after merging
-- Create GitHub releases with release notes based on changelog
+- **MANDATORY**: Update CHANGELOG.md and bump version before merging epic to main
+- **NO RELEASE BRANCHES**: Update CHANGELOG.md and package.json directly on the epic branch
+- Include comprehensive epic details, features, and technical achievements in CHANGELOG
+- Workflow steps:
+  1. On epic branch: Update CHANGELOG.md with new version section
+  2. On epic branch: Bump version in package.json
+  3. On epic branch: Commit these changes with message like "Release vX.Y.Z: Epic N - Title"
+  4. Run `npm run check-all` to ensure everything passes
+  5. Switch to main and merge epic branch locally (no pull requests)
+  6. Push main to remote
+  7. Create git tag vX.Y.Z and push tag
+  8. Create GitHub release with notes from CHANGELOG.md
+  9. Close epic issue with completion summary
+  10. Delete epic branch (local and remote)
 
 ## Key Files
 
