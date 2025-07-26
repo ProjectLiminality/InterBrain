@@ -251,8 +251,11 @@ export default function DreamspaceCanvas() {
     // Hover state handled by individual DreamNode3D components
   };
 
-  const handleNodeClick = (_node: DreamNode) => {
-    // TODO: Implement node selection/interaction
+  const handleNodeClick = (node: DreamNode) => {
+    // Update selected node in store
+    const store = useInterBrainStore.getState();
+    store.setSelectedNode(node);
+    console.log('DreamNode selected:', node.name);
   };
 
   const handleNodeDoubleClick = (_node: DreamNode) => {
@@ -484,6 +487,12 @@ export default function DreamspaceCanvas() {
           width: '100%',
           height: '100%',
           background: '#000000'
+        }}
+        onPointerMissed={() => {
+          // Clicked on empty space - deselect any selected node
+          const store = useInterBrainStore.getState();
+          store.setSelectedNode(null);
+          console.log('Deselected all nodes (missed pointer)');
         }}
       >
         {/* Camera reset handler - listens for store changes and resets camera */}

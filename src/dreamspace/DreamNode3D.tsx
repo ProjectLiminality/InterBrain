@@ -41,6 +41,10 @@ export default function DreamNode3D({
   
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
+  
+  // Check if this node is selected
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+  const isSelected = selectedNode?.id === dreamNode.id;
 
   // Register hit sphere reference with parent component
   useEffect(() => {
@@ -177,11 +181,13 @@ export default function DreamNode3D({
           position: 'relative',
           cursor: 'pointer',
           transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-          transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
+          transform: isSelected ? `scale(1.15)` : (isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'),
           animation: gitStyle.animation,
-          boxShadow: gitStyle.glowIntensity > 0 
-            ? getGitGlow(gitState, gitStyle.glowIntensity)
-            : (isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none')
+          boxShadow: isSelected 
+            ? '0 0 40px #FFD700, 0 0 80px #FFD700'  // Strong gold glow when selected
+            : (gitStyle.glowIntensity > 0 
+              ? getGitGlow(gitState, gitStyle.glowIntensity)
+              : (isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none'))
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
