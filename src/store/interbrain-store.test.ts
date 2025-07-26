@@ -9,6 +9,7 @@ describe('InterBrainStore', () => {
     store.setSelectedNode(null)
     store.setSearchResults([])
     store.setSpatialLayout('constellation')
+    store.setCreatorMode(false)
   })
 
   describe('initial state', () => {
@@ -129,6 +130,44 @@ describe('InterBrainStore', () => {
       // Back to constellation
       useInterBrainStore.getState().setSpatialLayout('constellation')
       expect(useInterBrainStore.getState().spatialLayout).toBe('constellation')
+    })
+  })
+
+  describe('creatorMode', () => {
+    it('should set creator mode active state', () => {
+      const nodeId = 'test-node-123'
+      
+      // Activate creator mode
+      useInterBrainStore.getState().setCreatorMode(true, nodeId)
+      const state = useInterBrainStore.getState()
+      expect(state.creatorMode.isActive).toBe(true)
+      expect(state.creatorMode.nodeId).toBe(nodeId)
+    })
+    
+    it('should deactivate creator mode', () => {
+      const nodeId = 'test-node-123'
+      
+      // First activate
+      useInterBrainStore.getState().setCreatorMode(true, nodeId)
+      
+      // Then deactivate
+      useInterBrainStore.getState().setCreatorMode(false)
+      const state = useInterBrainStore.getState()
+      expect(state.creatorMode.isActive).toBe(false)
+      expect(state.creatorMode.nodeId).toBeNull()
+    })
+    
+    it('should handle switching between nodes in creator mode', () => {
+      const nodeId1 = 'test-node-1'
+      const nodeId2 = 'test-node-2'
+      
+      // Activate for first node
+      useInterBrainStore.getState().setCreatorMode(true, nodeId1)
+      expect(useInterBrainStore.getState().creatorMode.nodeId).toBe(nodeId1)
+      
+      // Switch to second node
+      useInterBrainStore.getState().setCreatorMode(true, nodeId2)
+      expect(useInterBrainStore.getState().creatorMode.nodeId).toBe(nodeId2)
     })
   })
 
