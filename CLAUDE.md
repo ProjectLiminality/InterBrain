@@ -447,7 +447,11 @@ git add -A && git commit -m "User commit message"
 - Use release branch pattern: `release/vX.Y.Z` from main
 - Include comprehensive epic details, features, and technical achievements
 - Bump version in package.json as part of release
-- Merge release branch to main, then create git tag
+- **Local Merge Process**: Merge branches locally (no pull requests)
+  - Merge release branch to main locally
+  - Merge epic branch to main locally
+  - Push main to remote after local merges
+- Create git tag after merging
 - Create GitHub releases with release notes based on changelog
 
 ## Key Files
