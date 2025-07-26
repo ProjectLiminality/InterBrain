@@ -443,20 +443,51 @@ git add -A && git commit -m "User commit message"
 - Run this before committing changes or completing features
 
 **Epic Completion Workflow**:
-- **MANDATORY**: Update CHANGELOG.md and bump version before merging epic to main
-- **NO RELEASE BRANCHES**: Update CHANGELOG.md and package.json directly on the epic branch
-- Include comprehensive epic details, features, and technical achievements in CHANGELOG
-- Workflow steps:
-  1. On epic branch: Update CHANGELOG.md with new version section
-  2. On epic branch: Bump version in package.json
-  3. On epic branch: Commit these changes with message like "Release vX.Y.Z: Epic N - Title"
-  4. Run `npm run check-all` to ensure everything passes
-  5. Switch to main and merge epic branch locally (no pull requests)
-  6. Push main to remote
-  7. Create git tag vX.Y.Z and push tag
-  8. Create GitHub release with notes from CHANGELOG.md
-  9. Close epic issue with completion summary
-  10. Delete epic branch (local and remote)
+- **MANDATORY**: Comprehensive quality assurance and documentation updates before merging to main
+- **NO RELEASE BRANCHES**: All updates happen directly on the epic branch
+- **Philosophy**: Bring work to completion with all quality housekeeping addressed
+
+### Phase 1: Quality Assurance & Testing
+1. Fix any lint errors, warnings, or type errors
+2. Run `npm run check-all` to ensure all tests pass
+3. Review test coverage - ensure all new functions have appropriate tests
+4. Write any missing tests for edge cases or uncovered code paths
+
+### Phase 2: Documentation Updates
+**Follow Documentation Architecture Pattern**:
+- **Root level files** (README.md, CHANGELOG.md): High-level updates and cross-references
+- **docs/ directory**: Detailed technical documentation updates
+
+**Required Updates**:
+1. **README.md**: Update project status, roadmap checkmarks, epic completion notes
+2. **CHANGELOG.md**: Add new version section with comprehensive epic details:
+   - All completed features with issue numbers
+   - Technical achievements and innovations
+   - Architecture changes and patterns introduced
+   - Any breaking changes or migration notes
+3. **Technical Documentation** (docs/):
+   - Update relevant files in docs/technical-patterns.md, docs/architecture-details.md, etc.
+   - Add new patterns discovered during epic implementation
+   - Document any new architectural decisions or patterns
+   - Ensure cross-references between docs are accurate
+4. **Project CLAUDE.md**: Update epic status, current development phase, any new patterns
+
+### Phase 3: Version Release
+1. On epic branch: Bump version in package.json
+2. On epic branch: Commit all changes with message "Release vX.Y.Z: Epic N - Title"
+3. Final `npm run check-all` to ensure everything still passes
+
+### Phase 4: Merge to Main
+1. Switch to main branch locally
+2. Merge epic branch locally (no GitHub PR)
+3. Push main to remote
+
+### Phase 5: Release & Cleanup
+1. Create and push git tag vX.Y.Z
+2. Create GitHub release with comprehensive notes from CHANGELOG.md
+3. Close epic issue with completion summary
+4. Delete epic branch (local and remote)
+5. Update CLAUDE.md to reflect next epic as active
 
 ## Key Files
 
