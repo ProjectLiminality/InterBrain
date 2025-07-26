@@ -20,13 +20,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 🚀 **Epic 3 Active**: DreamNode Management System (branch: epic/3-dreamnode-management)
 - 🔮 **Epic 4 Future**: Git Operations Abstraction
 
-### Epic 3 Current Status (July 24, 2025)
-**Major Features Complete**: #283 Proto-node creation, #284 Universal drag-drop hit detection, #309 Git Template System
+### Epic 3 Current Status (July 26, 2025)
+**Major Features Complete**: #283 Proto-node creation, #284 Universal drag-drop hit detection, #309 Git Template System, #312 Service Layer Integration, #314 Visual Git State Indicators
 - ✅ Epic branch created: `epic/3-dreamnode-management`
 - ✅ Service layer architecture defined with mock/real swapping capability
 - ✅ **Feature #283 Complete**: In-space proto-node creation with unified animation system
 - ✅ **Feature #284 Complete**: Universal scale-aware drag-drop hit detection system
 - ✅ **Feature #309 Complete**: Git Template System for DreamNode Creation
+- ✅ **Feature #312 Complete**: Service Layer Integration with mock/real switching
+- ✅ **Feature #314 Complete**: Visual Git State Indicators for DreamNodes
+- ✅ **Feature #313 Closed**: Development Mode Toggle (subsumed into service layer)
+- ✅ **Feature #315 Closed**: DreamTalk Component refinement (moved to Epic 8)
 - ✅ Shared styling infrastructure established (dreamNodeStyles.ts)
 - ✅ Mock service layer implementation with session storage
 - ✅ Native Three.js scene-based raycasting for flawless hit detection
@@ -35,7 +39,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ Git template with udd.json files and pre-commit hooks
 - ✅ Obsidian-compatible coherence checking system
 - ✅ 4 command palette commands for template operations
-- 🔄 **Epic Progress**: Strong foundation established with 3 major features complete
+- 🔄 **Epic Progress**: Strong foundation with 5 major features complete, 2 features closed as addressed
 
 ### Epic 1 Achievements (July 13, 2025)
 - ✅ Obsidian plugin boilerplate with Vite dual workflow
