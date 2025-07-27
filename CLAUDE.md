@@ -349,6 +349,123 @@ gh issue list --assignee @me --state open
 3. **Close with Session Summary**: `gh issue close ISSUE_NUMBER --comment "session summary"`
 4. **Clean Up**: Delete feature branch after epic integration
 
+## Advanced GitHub CLI & Project Board Management
+
+### Issue Creation Commands
+
+**Create Epic Issue**:
+```bash
+gh issue create --repo ProjectLiminality/InterBrain \
+  --title "Epic N: Title" \
+  --label epic \
+  --body "## Vision\n\nDescription\n\n## Success Criteria\n\n- [ ] All child specifications completed\n- [ ] Features integrated and tested\n- [ ] Epic goals achieved\n\n## Development Status\n\nReady for specification"
+```
+
+**Create Specification Issue**:
+```bash
+gh issue create --repo ProjectLiminality/InterBrain \
+  --title "Title Specification" \
+  --label specification \
+  --body "## Overview\n\nTechnical specification\n\n## Architecture\n\nDetails\n\n## Implementation Plan\n\nPlan\n\n## User Experience\n\nUX details\n\n## Feature Breakdown\n\nWill be populated as features are created\n\n## Definition of Done\n\n- [ ] All child Features completed\n- [ ] Integration tested\n- [ ] Documentation complete"
+```
+
+**Create Feature Issue**:
+```bash
+gh issue create --repo ProjectLiminality/InterBrain \
+  --title "Feature Title" \
+  --label feature \
+  --body "## Description\n\nFeature description\n\n## Acceptance Criteria\n\n- [ ] Feature implementation meets specification requirements\n- [ ] User interactions work as designed\n- [ ] Performance meets expected thresholds\n\n## Dependencies\n\n- Parent specification must be approved\n- Any prerequisite features completed\n\n## Definition of Done\n\n- [ ] Implementation complete\n- [ ] Tests passing\n- [ ] Documentation updated\n- [ ] Code reviewed and merged"
+```
+
+### Project Board Management (GraphQL API)
+
+**CRITICAL**: Parent-child relationships and project board status are managed via GraphQL API, not basic GitHub CLI.
+
+**Project Board IDs**:
+- InterBrain Development: `PVT_kwHOC0_fLc4A9SR1`
+- Status Field ID: `PVTSSF_lAHOC0_fLc4A9SR1zgxCErc`
+- Status Options: `f75ad846` (Planning), `47fc9ee4` (Active), `98236657` (Integration), `e1f23fa9` (Complete)
+
+**Find Issue Project Item ID**:
+```bash
+gh api graphql -f query='
+{
+  repository(owner: "ProjectLiminality", name: "InterBrain") {
+    issue(number: ISSUE_NUMBER) {
+      id
+      projectItems(first: 10) {
+        nodes {
+          id
+          project {
+            id
+            title
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+**Move Issue to Complete Status**:
+```bash
+gh api graphql -f query='
+mutation {
+  updateProjectV2ItemFieldValue(
+    input: {
+      projectId: "PVT_kwHOC0_fLc4A9SR1"
+      itemId: "PROJECT_ITEM_ID_FROM_ABOVE"
+      fieldId: "PVTSSF_lAHOC0_fLc4A9SR1zgxCErc"
+      value: {
+        singleSelectOptionId: "e1f23fa9"
+      }
+    }
+  ) {
+    projectV2Item {
+      id
+    }
+  }
+}'
+```
+
+### Parent-Child Issue Relationships
+
+**IMPORTANT**: GitHub CLI does not directly support parent-child relationships. These are managed through:
+
+1. **Issue Body References**: Include in issue body:
+   ```markdown
+   **Parent Epic**: #255
+   **Parent Specification**: #267
+   **Child Features**: #287, #288, #289
+   ```
+
+2. **GitHub's Web Interface**: Use "Development" section in issue sidebar to link related issues
+
+3. **Project Board Hierarchy**: Use custom fields in project board to track relationships
+
+### Issue Management Workflow
+
+**Standard Epic Creation Workflow**:
+1. Create Epic issue with basic template
+2. Add Epic to project board (auto-assigned to Planning status)
+3. Create Specification issue with parent reference in body
+4. Create Feature issues with parent spec reference
+5. Use GraphQL to move issues through project board states as work progresses
+
+**Epic Completion Workflow**:
+1. Update Epic issue body with completed checkboxes
+2. Move Epic to Complete status via GraphQL
+3. Close Epic issue with completion summary
+4. Clean up any remaining child issues
+
+### Critical Commands Reference
+
+**When creating issues**: ALWAYS use the templates above to maintain consistency
+**When managing project board**: ALWAYS use GraphQL API for status changes
+**When closing epics**: ALWAYS update project board status first, then close issue
+
+**If unsure about any GitHub CLI commands**: Refer to this section FIRST, then use `gh help <command>` for detailed syntax.
+
 ## AI Assistant Integration
 
 This project is designed for AI-first development:
