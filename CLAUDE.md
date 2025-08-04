@@ -18,12 +18,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ **Epic 1 Complete**: Plugin Infrastructure foundation established
 - ✅ **Epic 2 Complete**: 3D Spatial Visualization System with all features implemented
 - ✅ **Epic 3 Complete**: DreamNode Management System with service layer architecture
-- 🚀 **Epic 4 Active**: Git Operations Abstraction (branch: epic/4-git-operations-abstraction)
+- 🚀 **Epic 4 Active**: Liminal Web Layout System (branch: epic/4-liminal-web-layout)
 - 🔮 **Epic 5 Future**: Semantic Search System
 
-### Epic 4 Current Status (July 26, 2025)
-- 🚧 Epic branch to be created: `epic/4-git-operations-abstraction`
-- 📋 Next phase: User-friendly Save/Share paradigm building on Epic 3's service layer
+### Epic 4 Current Status (August 3, 2025)
+- 🚧 Epic branch created: `epic/4-liminal-web-layout`
+- 📋 Next phase: Dynamic spatial layouts based on liminal web relationships
 
 ### Epic 3 Achievements (July 26, 2025)
 **All Features Complete**: #254 - DreamNode Management System | Spec: #266
@@ -295,12 +295,12 @@ main → epic/2-spatial-visualization
 **Core Epics (Sequential Implementation Required)**:
 - **Epic 2**: #253 - 3D Spatial Visualization System | Spec: #265
 - **Epic 3**: #254 - DreamNode Management System | Spec: #266  
-- **Epic 4**: #255 - Git Operations Abstraction | Spec: #267
+- **Epic 4**: #255 - Liminal Web Layout System | Spec: #267
 
 **Epic Scope Clarity** (Updated July 19, 2025):
 - **Epic 2**: Visual representation and navigation of DreamNodes in 3D space (the theater) ✅ Complete
 - **Epic 3**: Basic CRUD operations and DreamNode creation workflows (minimal scope - foundation)
-- **Epic 4**: User-friendly Save/Share paradigm building on Epic 3's service layer (abstractions)
+- **Epic 4**: Dynamic spatial layouts that orchestrate DreamNode positioning based on relationships
 - **Epic 8**: Advanced DreamNode operations (Pop-out, Merge, Process/Substance categorization)
 
 **Feature Reorganization**:
