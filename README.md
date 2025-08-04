@@ -41,8 +41,8 @@ DreamNode Management System with:
 - Proto-node creation with animations
 - 101 unit tests with comprehensive coverage
 
-> 🚧 **Next: Epic 4 - Git Operations Abstraction**  
-Building user-friendly Save/Share paradigm on top of Epic 3's service layer.
+> 🚧 **Next: Epic 4 - Liminal Web Layout System**  
+Dynamic spatial layouts that orchestrate DreamNode positioning based on relationships.
 
 > 🌱 **Beyond the Plugin:**  
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
@@ -52,7 +52,7 @@ The InterBrain is designed as the foundation for **DreamOS** — a decentralized
 2. ✅ Epic 1: Plugin Infrastructure (this repository)  
 3. ✅ Epic 2: 3D Spatial Visualization System
 4. ✅ Epic 3: DreamNode Management System
-5. 🚧 Epic 4: Git Operations Abstraction
+5. 🚧 Epic 4: Liminal Web Layout System
 5. 🪐 DreamOS system (future evolution)  
 
 Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2).
