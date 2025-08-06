@@ -123,19 +123,40 @@ export function generateMockDreamNodes(count: number = 12): DreamNode[] {
 
 /**
  * Generate liminal web connections for a node
- * Dreams connect to Dreamers and vice versa
+ * Dreams connect to Dreamers and vice versa (opposite-type only)
+ * Creates a rich network of relationships for testing focused layouts
  */
 function generateLiminalConnections(index: number, totalCount: number, type: 'dream' | 'dreamer'): string[] {
   const connections: string[] = [];
-  const maxConnections = 3;
+  const maxConnections = Math.min(5, Math.floor(totalCount / 4)); // More connections for larger graphs
   
-  for (let i = 0; i < maxConnections && connections.length < totalCount - 1; i++) {
-    let targetIndex = (index + i + 1) % totalCount;
-    let targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
+  // Generate deterministic but varied connections
+  for (let i = 0; i < maxConnections; i++) {
+    // Use different step sizes to create interesting patterns
+    const stepSizes = [1, 3, 7, 11, 13]; // Prime numbers for good distribution
+    const targetIndex = (index + stepSizes[i % stepSizes.length]) % totalCount;
+    const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
     
-    // Connect to opposite type (Dreams ↔ Dreamers)
+    // Only connect to opposite type (Dreams ↔ Dreamers)
     if (type !== targetType) {
-      connections.push(`mock-${targetType}-${targetIndex}`);
+      const targetId = `mock-${targetType}-${targetIndex}`;
+      if (!connections.includes(targetId)) {  // Avoid duplicates
+        connections.push(targetId);
+      }
+    }
+  }
+  
+  // Ensure every node has at least one connection if possible
+  if (connections.length === 0 && totalCount > 1) {
+    // Find the nearest opposite-type node
+    for (let offset = 1; offset < totalCount; offset++) {
+      const targetIndex = (index + offset) % totalCount;
+      const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
+      
+      if (type !== targetType) {
+        connections.push(`mock-${targetType}-${targetIndex}`);
+        break;
+      }
     }
   }
   

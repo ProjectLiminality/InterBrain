@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Group, Mesh } from 'three';
@@ -7,6 +7,15 @@ import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/D
 import { useInterBrainStore } from '../store/interbrain-store';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import './dreamNodeAnimations.css';
+
+// Universal Movement API interface
+export interface DreamNode3DRef {
+  moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
+  returnToConstellation: (duration?: number) => void;
+  setActiveState: (active: boolean) => void;
+  getCurrentPosition: () => [number, number, number];
+  isMoving: () => boolean;
+}
 
 interface DreamNode3DProps {
   dreamNode: DreamNode;
@@ -18,26 +27,39 @@ interface DreamNode3DProps {
 }
 
 /**
- * 3D DreamNode component with constant size for foundational development
+ * 3D DreamNode component with dual-mode positioning system
  * 
  * Features:
- * - Fixed 240px size for consistent visual development
- * - Static positioning on Fibonacci sphere
- * - Clean interaction patterns (hover, click, double-click)
+ * - Dual-mode: constellation (continuous radial offset) vs active (discrete interpolation)
+ * - Universal movement API for liminal web transitions
+ * - Position sovereignty - component owns its position state
+ * - Counter-rotation support for world-space positioning
  * - Color coding: blue for Dreams, red for Dreamers
  */
-export default function DreamNode3D({ 
+const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({ 
   dreamNode, 
   onHover, 
   onClick, 
   onDoubleClick,
   enableDynamicScaling = false,
   onHitSphereRef
-}: DreamNode3DProps) {
+}, ref) => {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
+  
+  // Dual-mode position state
+  const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
+  const [targetPosition, setTargetPosition] = useState<[number, number, number]>(dreamNode.position);
+  const [currentPosition, setCurrentPosition] = useState<[number, number, number]>(dreamNode.position);
+  const [startPosition, setStartPosition] = useState<[number, number, number]>(dreamNode.position);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionStartTime, setTransitionStartTime] = useState(0);
+  const [transitionDuration, setTransitionDuration] = useState(1000);
+  
+  // TODO: Access to scene for counter-rotation calculations (when needed)
+  // const { scene } = useThree();
   
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
@@ -81,10 +103,68 @@ export default function DreamNode3D({
     e.stopPropagation();
     onDoubleClick?.(dreamNode);
   };
+
+  // Universal Movement API
+  useImperativeHandle(ref, () => ({
+    moveToPosition: (newTargetPosition, duration = 1000, _easing = 'easeOutCubic') => {
+      // Switch to active mode and start transition
+      // CRITICAL FIX: Calculate actual current visual position
+      let actualCurrentPosition: [number, number, number];
+      
+      if (positionMode === 'constellation') {
+        // Calculate constellation position with radial offset
+        const anchorPos = dreamNode.position;
+        const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
+        const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
+        const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
+        
+        actualCurrentPosition = [
+          anchorPos[0] - normalizedDir[0] * radialOffset,
+          anchorPos[1] - normalizedDir[1] * radialOffset,
+          anchorPos[2] - normalizedDir[2] * radialOffset
+        ];
+      } else {
+        actualCurrentPosition = [...currentPosition];
+      }
+      
+      setStartPosition(actualCurrentPosition);
+      setCurrentPosition(actualCurrentPosition); // Initialize currentPosition for active mode
+      setTargetPosition(newTargetPosition);
+      setTransitionDuration(duration);
+      setTransitionStartTime(globalThis.performance.now());
+      setPositionMode('active');
+      setIsTransitioning(true);
+      
+      console.log(`DreamNode3D ${dreamNode.id}: Moving from`, actualCurrentPosition, 'to', newTargetPosition);
+    },
+    returnToConstellation: (duration = 1000) => {
+      // Return to constellation position (with radial offset)
+      const anchorPos = dreamNode.position;
+      setStartPosition([...currentPosition]);
+      setTargetPosition(anchorPos);
+      setTransitionDuration(duration);
+      setTransitionStartTime(globalThis.performance.now());
+      setIsTransitioning(true);
+      // Keep in active mode during transition, will switch back when done
+    },
+    setActiveState: (active: boolean) => {
+      if (active) {
+        setPositionMode('active');
+        setCurrentPosition([...currentPosition]); // Preserve current position
+      } else {
+        setPositionMode('constellation');
+        // Reset to original position state
+        setCurrentPosition(dreamNode.position);
+      }
+    },
+    getCurrentPosition: () => currentPosition,
+    isMoving: () => isTransitioning
+  }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset]);
   
-  // Calculate dynamic scaling on every frame when enabled
-  useFrame(() => {
-    if (enableDynamicScaling && groupRef.current) {
+  // Dual-mode position calculation
+  useFrame((_state, _delta) => {
+    if (positionMode === 'constellation' && enableDynamicScaling && groupRef.current) {
+      // CONSTELLATION MODE: Continuous radial offset calculation (existing behavior)
       // Get world position of the anchor (includes rotation from parent group)
       const worldPosition = new Vector3();
       groupRef.current.getWorldPosition(worldPosition);
@@ -106,6 +186,29 @@ export default function DreamNode3D({
       // Update state if changed
       if (radialOffset !== newRadialOffset) {
         setRadialOffset(newRadialOffset);
+      }
+    } else if (positionMode === 'active' && isTransitioning) {
+      // ACTIVE MODE: Discrete position interpolation
+      const elapsed = globalThis.performance.now() - transitionStartTime;
+      const progress = Math.min(elapsed / transitionDuration, 1);
+      
+      // Apply easing function (easeOutCubic by default)
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      
+      // Linear interpolation from start to target position
+      const newPosition: [number, number, number] = [
+        startPosition[0] + (targetPosition[0] - startPosition[0]) * easedProgress,
+        startPosition[1] + (targetPosition[1] - startPosition[1]) * easedProgress,
+        startPosition[2] + (targetPosition[2] - startPosition[2]) * easedProgress
+      ];
+      
+      setCurrentPosition(newPosition);
+      
+      // Check if transition is complete
+      if (progress >= 1) {
+        setIsTransitioning(false);
+        setCurrentPosition(targetPosition); // Ensure exact target position
+        console.log(`DreamNode3D ${dreamNode.id}: Transition complete at position:`, targetPosition);
       }
     }
   });
@@ -140,12 +243,22 @@ export default function DreamNode3D({
     ];
   }, [anchorPosition]);
   
-  // Calculate final position (anchor + radial offset)
-  const finalPosition = useMemo(() => [
-    anchorPosition[0] - normalizedDirection[0] * radialOffset,
-    anchorPosition[1] - normalizedDirection[1] * radialOffset,
-    anchorPosition[2] - normalizedDirection[2] * radialOffset
-  ] as [number, number, number], [anchorPosition, normalizedDirection, radialOffset]);
+  // Calculate final position based on mode
+  // CRITICAL: Don't memoize this - we need it to update every render when currentPosition changes
+  const finalPosition: [number, number, number] = positionMode === 'constellation'
+    ? [
+        anchorPosition[0] - normalizedDirection[0] * radialOffset,
+        anchorPosition[1] - normalizedDirection[1] * radialOffset,
+        anchorPosition[2] - normalizedDirection[2] * radialOffset
+      ]
+    : currentPosition;
+    
+  // Debug: Log significant position changes
+  useEffect(() => {
+    if (positionMode === 'active') {
+      console.log(`DreamNode3D ${dreamNode.id}: finalPosition update in active mode:`, finalPosition);
+    }
+  }, [finalPosition[0], finalPosition[1], finalPosition[2], dreamNode.id, positionMode]);
   
   // Using sprite mode for automatic billboarding - no manual rotation needed
   
@@ -261,7 +374,11 @@ export default function DreamNode3D({
     </mesh>
     </group>
   );
-}
+});
+
+DreamNode3D.displayName = 'DreamNode3D';
+
+export default DreamNode3D;
 
 /**
  * Renders different types of media in the DreamTalk circle
