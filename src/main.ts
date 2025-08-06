@@ -8,6 +8,9 @@ import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceVie
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
+import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
+import { getMockDataForConfig } from './mock/dreamnode-mock-data';
+import { calculateFocusedLayoutPositions, getFocusedLayoutStats, DEFAULT_FOCUSED_CONFIG } from './dreamspace/layouts/FocusedLayout';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -662,6 +665,167 @@ export default class InterBrainPlugin extends Plugin {
           console.error('Coherence update error:', error);
         } finally {
           loadingNotice.hide();
+        }
+      }
+    });
+
+    // Test command for dual-mode position system
+    this.addCommand({
+      id: 'test-dual-mode-position',
+      name: 'Test: Toggle Node Between Constellation/Active Modes',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        // Get first DreamSpace view to access node refs
+        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
+          this.uiService.showError('DreamSpace view not found');
+          return;
+        }
+        
+        // Access the canvas component (we'll need to implement this)
+        console.log('Test command: Would toggle dual-mode for node:', selectedNode.name);
+        this.uiService.showSuccess(`Test: Ready to toggle ${selectedNode.name} between modes`);
+        
+        // TODO: Access DreamNode3D refs and call moveToPosition API
+        // This will be implemented when SpatialOrchestrator is created
+      }
+    });
+
+    // Test command for relationship queries
+    this.addCommand({
+      id: 'test-relationship-queries',
+      name: 'Test: Query Node Relationships',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        try {
+          // Get all nodes using same method as DreamspaceCanvas
+          const store = useInterBrainStore.getState();
+          const dataMode = store.dataMode;
+          const mockDataConfig = store.mockDataConfig;
+          
+          let allNodes: DreamNode[] = [];
+          if (dataMode === 'mock') {
+            // Get static mock data (same as DreamspaceCanvas)
+            const staticNodes = getMockDataForConfig(mockDataConfig);
+            const service = serviceManager.getActive();
+            const dynamicNodes = await service.list();
+            allNodes = [...staticNodes, ...dynamicNodes];
+          } else {
+            // Real mode - get from store
+            const realNodes = store.realNodes;
+            allNodes = Array.from(realNodes.values()).map(data => data.node);
+          }
+          
+          console.log('DEBUG: Total nodes found:', allNodes.length);
+          console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig);
+          console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ 
+            id: n.id, 
+            type: n.type, 
+            connections: n.liminalWebConnections.length,
+            connectionIds: n.liminalWebConnections.slice(0, 2)
+          })));
+          
+          // Build relationship graph
+          const graph = buildRelationshipGraph(allNodes);
+          
+          // Log stats
+          const stats = getRelationshipStats(graph);
+          console.log('=== Relationship Graph Stats ===');
+          console.log(`Total nodes: ${stats.totalNodes}`);
+          console.log(`Dreams: ${stats.dreamNodes}, Dreamers: ${stats.dreamerNodes}`);
+          console.log(`Average connections: ${stats.averageConnections.toFixed(1)}`);
+          console.log(`Max connections: ${stats.maxConnections}`);
+          console.log(`Nodes with no connections: ${stats.nodesWithNoConnections}`);
+          
+          // Log relationships for selected node
+          logNodeRelationships(graph, selectedNode.id);
+          
+          this.uiService.showSuccess(`Logged relationships for ${selectedNode.name} to console`);
+        } catch (error) {
+          console.error('Relationship query error:', error);
+          this.uiService.showError('Failed to query relationships');
+        }
+      }
+    });
+
+    // Test command for focused layout position calculation
+    this.addCommand({
+      id: 'test-focused-layout-positions',
+      name: 'Test: Calculate Focused Layout Positions',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        try {
+          // Get all nodes using same method as DreamspaceCanvas
+          const dataMode = store.dataMode;
+          const mockDataConfig = store.mockDataConfig;
+          
+          let allNodes: DreamNode[] = [];
+          if (dataMode === 'mock') {
+            const staticNodes = getMockDataForConfig(mockDataConfig);
+            const service = serviceManager.getActive();
+            const dynamicNodes = await service.list();
+            allNodes = [...staticNodes, ...dynamicNodes];
+          } else {
+            const realNodes = store.realNodes;
+            allNodes = Array.from(realNodes.values()).map(data => data.node);
+          }
+          
+          // Build relationship graph
+          const graph = buildRelationshipGraph(allNodes);
+          
+          // Calculate focused layout positions
+          const positions = calculateFocusedLayoutPositions(selectedNode.id, graph, DEFAULT_FOCUSED_CONFIG);
+          const stats = getFocusedLayoutStats(positions);
+          
+          console.log(`\n=== Focused Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
+          console.log('DEBUG: Selected node ID:', selectedNode.id);
+          console.log('DEBUG: Center node ID from calculation:', positions.centerNode.nodeId);
+          console.log('Layout Stats:', stats);
+          console.log('\nCenter Position:', positions.centerNode.position);
+          console.log(`Inner Circle (${positions.innerCircleNodes.length} nodes):`);
+          positions.innerCircleNodes.forEach((node, i) => {
+            const nodeData = graph.nodes.get(node.nodeId);
+            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
+          });
+          
+          if (positions.outerCircleNodes.length > 0) {
+            console.log(`\nOuter Circle (${positions.outerCircleNodes.length} nodes):`);
+            positions.outerCircleNodes.slice(0, 5).forEach((node, i) => {
+              const nodeData = graph.nodes.get(node.nodeId);
+              console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
+            });
+            if (positions.outerCircleNodes.length > 5) {
+              console.log(`  ... and ${positions.outerCircleNodes.length - 5} more`);
+            }
+          }
+          
+          console.log(`\nHidden nodes: ${positions.hiddenNodes.length}`);
+          
+          this.uiService.showSuccess(`Calculated focused layout for ${selectedNode.name} - check console`);
+        } catch (error) {
+          console.error('Position calculation error:', error);
+          this.uiService.showError(error instanceof Error ? error.message : 'Failed to calculate positions');
         }
       }
     });

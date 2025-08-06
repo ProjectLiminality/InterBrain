@@ -76,6 +76,9 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   // Global drag state for hover interference prevention
   const setGlobalDragState = useInterBrainStore(state => state.setIsDragging);
   
+  // Get spatial layout from store to disable rotation in focused mode
+  const spatialLayout = useInterBrainStore(state => state.spatialLayout);
+  
   // Local drag state
   const [isDragging, setIsDragging] = useState(false);
   const lastTrackballPos = useRef<Vector3>(new Vector3());
@@ -93,6 +96,11 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   
   // Mouse event handlers
   const handleMouseDown = (event: globalThis.MouseEvent) => {
+    // Disable rotation when not in constellation mode
+    if (spatialLayout !== 'constellation') {
+      return;
+    }
+    
     // Check if the mouse event is over UI elements (like proto-node HTML)
     const target = event.target as globalThis.HTMLElement;
     if (target && (target.closest('[data-ui-element]') || target.style?.pointerEvents === 'auto')) {
@@ -228,6 +236,12 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   // Physics-based momentum with exponential damping
   useFrame((state, delta) => {
     if (isDragging || !groupRef.current) return;
+    
+    // Disable momentum when not in constellation mode
+    if (spatialLayout !== 'constellation') {
+      angularVelocity.current.speed = 0;
+      return;
+    }
     
     // Check if there's any angular velocity
     if (angularVelocity.current.speed < 0.001) {

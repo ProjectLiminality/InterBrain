@@ -4,9 +4,10 @@ import { useRef, useEffect } from 'react';
 import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
-import DreamNode3D from './DreamNode3D';
+import DreamNode3D, { DreamNode3DRef } from './DreamNode3D';
 import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
+import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import ProtoNode3D from '../features/creation/ProtoNode3D';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
@@ -79,6 +80,12 @@ export default function DreamspaceCanvas() {
   // Hit sphere references for scene-based raycasting
   const hitSphereRefs = useRef<Map<string, React.RefObject<Mesh | null>>>(new Map());
   
+  // SpatialOrchestrator reference for controlling all spatial interactions
+  const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
+  
+  // DreamNode3D references for orchestration (nullable refs)
+  const dreamNodeRefs = useRef<Map<string, React.RefObject<DreamNode3DRef | null>>>(new Map());
+  
   // Debug visualization states from store
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
   const debugIntersectionPoint = useInterBrainStore(state => state.debugIntersectionPoint);
@@ -89,6 +96,30 @@ export default function DreamspaceCanvas() {
   
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
+  
+  // Helper function to get or create DreamNode3D ref
+  const getDreamNodeRef = (nodeId: string): React.RefObject<DreamNode3DRef | null> => {
+    let nodeRef = dreamNodeRefs.current.get(nodeId);
+    if (!nodeRef) {
+      nodeRef = React.createRef<DreamNode3DRef>();
+      dreamNodeRefs.current.set(nodeId, nodeRef);
+      
+      // Register with orchestrator (need to cast to non-null type)
+      if (spatialOrchestratorRef.current && nodeRef) {
+        spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
+      }
+    }
+    return nodeRef;
+  };
+  
+  // Register all existing refs with orchestrator when it's ready
+  useEffect(() => {
+    if (spatialOrchestratorRef.current) {
+      dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
+        spatialOrchestratorRef.current?.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
+      });
+    }
+  }, [dreamNodes.length]); // Re-register when node count changes
   
   // Load dynamic nodes from service - only for mock mode
   useEffect(() => {
@@ -256,6 +287,11 @@ export default function DreamspaceCanvas() {
     const store = useInterBrainStore.getState();
     store.setSelectedNode(node);
     console.log('DreamNode selected:', node.name);
+    
+    // Trigger focused layout via SpatialOrchestrator
+    if (spatialOrchestratorRef.current) {
+      spatialOrchestratorRef.current.focusOnNode(node.id);
+    }
   };
 
   const handleNodeDoubleClick = (_node: DreamNode) => {
@@ -489,10 +525,15 @@ export default function DreamspaceCanvas() {
           background: '#000000'
         }}
         onPointerMissed={() => {
-          // Clicked on empty space - deselect any selected node
+          // Clicked on empty space - deselect any selected node and return to constellation
           const store = useInterBrainStore.getState();
           store.setSelectedNode(null);
           console.log('Deselected all nodes (missed pointer)');
+          
+          // Return to constellation via SpatialOrchestrator
+          if (spatialOrchestratorRef.current) {
+            spatialOrchestratorRef.current.returnToConstellation();
+          }
         }}
       >
         {/* Camera reset handler - listens for store changes and resets camera */}
@@ -528,6 +569,7 @@ export default function DreamspaceCanvas() {
               
               {/* DreamNode component - handles all interactions and dynamic positioning */}
               <DreamNode3D
+                ref={getDreamNodeRef(node.id)}
                 dreamNode={node}
                 onHover={handleNodeHover}
                 onClick={handleNodeClick}
@@ -538,6 +580,19 @@ export default function DreamspaceCanvas() {
             </React.Fragment>
           ))}
         </group>
+        
+        {/* SpatialOrchestrator - manages all spatial interactions and layouts */}
+        <SpatialOrchestrator
+          ref={spatialOrchestratorRef}
+          dreamNodes={dreamNodes}
+          onNodeFocused={(nodeId) => {
+            console.log(`DreamspaceCanvas: Node ${nodeId} focused by orchestrator`);
+          }}
+          onConstellationReturn={() => {
+            console.log('DreamspaceCanvas: Returned to constellation by orchestrator');
+          }}
+          transitionDuration={1000}
+        />
         
         {/* Proto-node for creation - stationary relative to camera */}
         {creationState.isCreating && creationState.protoNode && (
