@@ -4,7 +4,7 @@ import { useRef, useEffect } from 'react';
 import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
-import DreamNode3D from './DreamNode3D';
+import DreamNode3D, { DreamNode3DRef } from './DreamNode3D';
 import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
 import ProtoNode3D from '../features/creation/ProtoNode3D';
@@ -79,6 +79,9 @@ export default function DreamspaceCanvas() {
   // Hit sphere references for scene-based raycasting
   const hitSphereRefs = useRef<Map<string, React.RefObject<Mesh | null>>>(new Map());
   
+  // DreamNode3D references for movement commands  
+  const dreamNodeRefs = useRef<Map<string, React.RefObject<DreamNode3DRef | null>>>(new Map());
+  
   // Debug visualization states from store
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
   const debugIntersectionPoint = useInterBrainStore(state => state.debugIntersectionPoint);
@@ -90,6 +93,43 @@ export default function DreamspaceCanvas() {
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
   
+  // Helper function to get or create DreamNode3D ref
+  const getDreamNodeRef = (nodeId: string): React.RefObject<DreamNode3DRef | null> => {
+    let nodeRef = dreamNodeRefs.current.get(nodeId);
+    if (!nodeRef) {
+      nodeRef = React.createRef<DreamNode3DRef>();
+      dreamNodeRefs.current.set(nodeId, nodeRef);
+    }
+    return nodeRef;
+  };
+  
+  // Expose moveToCenter function globally for commands
+  useEffect(() => {
+    (globalThis as any).__interbrainCanvas = {
+      moveSelectedNodeToCenter: () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          console.log('No node selected for move to center');
+          return false;
+        }
+        
+        const nodeRef = dreamNodeRefs.current.get(selectedNode.id);
+        if (!nodeRef?.current) {
+          console.log(`No ref found for selected node: ${selectedNode.id}`);
+          return false;
+        }
+        
+        // Move to center position (close to camera for large appearance)
+        const centerPosition: [number, number, number] = [0, 0, -50];
+        
+        console.log(`Moving ${selectedNode.name} to center:`, centerPosition);
+        nodeRef.current.moveToPosition(centerPosition, 2000);
+        return true;
+      }
+    };
+  }, []);
   
   // Load dynamic nodes from service - only for mock mode
   useEffect(() => {
@@ -529,6 +569,7 @@ export default function DreamspaceCanvas() {
               
               {/* DreamNode component - handles all interactions and dynamic positioning */}
               <DreamNode3D
+                ref={getDreamNodeRef(node.id)}
                 dreamNode={node}
                 onHover={handleNodeHover}
                 onClick={handleNodeClick}

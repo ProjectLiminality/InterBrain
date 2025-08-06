@@ -669,10 +669,10 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Test command for dual-mode position system
+    // Step 3.5: Simple move-to-center command to test dual-mode positioning
     this.addCommand({
-      id: 'test-dual-mode-position',
-      name: 'Test: Toggle Node Between Constellation/Active Modes',
+      id: 'move-selected-node-to-center',
+      name: 'Move Selected Node to Center',
       callback: () => {
         const store = useInterBrainStore.getState();
         const selectedNode = store.selectedNode;
@@ -682,19 +682,25 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
         
-        // Get first DreamSpace view to access node refs
+        // Check if DreamSpace is open
         const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
         if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
-          this.uiService.showError('DreamSpace view not found');
+          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
           return;
         }
         
-        // Access the canvas component (we'll need to implement this)
-        console.log('Test command: Would toggle dual-mode for node:', selectedNode.name);
-        this.uiService.showSuccess(`Test: Ready to toggle ${selectedNode.name} between modes`);
-        
-        // TODO: Access DreamNode3D refs and call moveToPosition API
-        // This will be implemented when SpatialOrchestrator is created
+        // Call global canvas function (simple approach for now)
+        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        if (canvasAPI && canvasAPI.moveSelectedNodeToCenter) {
+          const success = canvasAPI.moveSelectedNodeToCenter();
+          if (success) {
+            this.uiService.showSuccess(`Moving ${selectedNode.name} to center`);
+          } else {
+            this.uiService.showError('Failed to move node - ref not found');
+          }
+        } else {
+          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
+        }
       }
     });
 
