@@ -704,6 +704,41 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Step 4: Test focused layout via SpatialOrchestrator
+    this.addCommand({
+      id: 'test-focused-layout-orchestrator',
+      name: 'Test: Focus on Selected Node (Orchestrator)',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        // Check if DreamSpace is open
+        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
+          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
+          return;
+        }
+        
+        // Call global canvas function to trigger focused layout
+        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        if (canvasAPI && canvasAPI.focusOnNode) {
+          const success = canvasAPI.focusOnNode(selectedNode.id);
+          if (success) {
+            this.uiService.showSuccess(`Focusing on ${selectedNode.name} with liminal web layout`);
+          } else {
+            this.uiService.showError('Failed to focus - orchestrator not ready');
+          }
+        } else {
+          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
+        }
+      }
+    });
+
     // Test command for relationship queries
     this.addCommand({
       id: 'test-relationship-queries',
