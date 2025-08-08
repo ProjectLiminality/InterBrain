@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, Group, Mesh, Euler } from 'three';
+import { Vector3, Group, Mesh } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -308,31 +308,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           // radialOffset was already set during the animation
         }
       }
-    }
-    
-    // COUNTER-ROTATION: Apply inverse rotation to active nodes to keep them stationary in world space
-    if (positionMode === 'active' && groupRef.current) {
-      // Find the rotatable parent group (dreamWorldRef from DreamspaceCanvas)
-      const rotatableGroup = groupRef.current.parent; // This should be the rotatable dream world group
-      
-      if (rotatableGroup) {
-        // Get the rotation quaternion of the parent group
-        const parentRotation = rotatableGroup.quaternion;
-        
-        // Apply the inverse rotation to counteract the parent's rotation
-        const inverseRotation = parentRotation.clone().invert();
-        groupRef.current.quaternion.copy(inverseRotation);
-        
-        // Debug log (can be removed later)
-        if (dreamNode.id === 'mock-dream-0') { // Only log for one node to avoid spam
-          const angles = new Euler().setFromQuaternion(parentRotation).toArray();
-          const degreesStr = angles.map(a => ((a as number) * 180 / Math.PI).toFixed(1) + '°').join(', ');
-          console.log(`Counter-rotation applied to ${dreamNode.id}: parent rotation angles:`, degreesStr);
-        }
-      }
-    } else if (positionMode === 'constellation' && groupRef.current) {
-      // CONSTELLATION MODE: Reset rotation to identity (let it rotate with parent)
-      groupRef.current.quaternion.set(0, 0, 0, 1);
     }
   });
 

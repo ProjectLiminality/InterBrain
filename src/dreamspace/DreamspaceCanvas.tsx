@@ -22,6 +22,7 @@ export default function DreamspaceCanvas() {
   // Get data mode and mock data configuration from store
   const dataMode = useInterBrainStore(state => state.dataMode);
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
+  const mockRelationshipData = useInterBrainStore(state => state.mockRelationshipData);
   const realNodes = useInterBrainStore(state => state.realNodes);
   
   // State for dynamic nodes from mock service
@@ -67,7 +68,7 @@ export default function DreamspaceCanvas() {
   let dreamNodes: DreamNode[] = [];
   if (dataMode === 'mock') {
     // Combine static mock data with dynamic service nodes
-    const staticNodes = getMockDataForConfig(mockDataConfig);
+    const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
     dreamNodes = [...staticNodes, ...dynamicNodes];
   } else {
     // Use real nodes from store
@@ -607,34 +608,43 @@ export default function DreamspaceCanvas() {
             </mesh>
           )}
           
-          {dreamNodes.map((node) => (
-            <React.Fragment key={node.id}>
-              {/* Star component - purely visual, positioned slightly closer than anchor */}
-              {spatialLayout === 'constellation' && (
-                <Star3D
-                  position={node.position}
-                  size={5000}
+          {dreamNodes.map((node) => {
+            // Check if we're in focused mode to disable dynamic scaling
+            const isFocusedMode = spatialOrchestratorRef.current?.isFocusedMode() || false;
+            const shouldEnableDynamicScaling = spatialLayout === 'constellation' && !isFocusedMode;
+            
+            // Removed excessive dynamic scaling logging for performance
+            
+            return (
+              <React.Fragment key={node.id}>
+                {/* Star component - purely visual, positioned slightly closer than anchor */}
+                {spatialLayout === 'constellation' && (
+                  <Star3D
+                    position={node.position}
+                    size={5000}
+                  />
+                )}
+                
+                {/* DreamNode component - handles all interactions and dynamic positioning */}
+                <DreamNode3D
+                  ref={getDreamNodeRef(node.id)}
+                  dreamNode={node}
+                  onHover={handleNodeHover}
+                  onClick={handleNodeClick}
+                  onDoubleClick={handleNodeDoubleClick}
+                  enableDynamicScaling={shouldEnableDynamicScaling}
+                  onHitSphereRef={handleHitSphereRef}
                 />
-              )}
-              
-              {/* DreamNode component - handles all interactions and dynamic positioning */}
-              <DreamNode3D
-                ref={getDreamNodeRef(node.id)}
-                dreamNode={node}
-                onHover={handleNodeHover}
-                onClick={handleNodeClick}
-                onDoubleClick={handleNodeDoubleClick}
-                enableDynamicScaling={spatialLayout === 'constellation'}
-                onHitSphereRef={handleHitSphereRef}
-              />
-            </React.Fragment>
-          ))}
+              </React.Fragment>
+            );
+          })}
         </group>
         
         {/* SpatialOrchestrator - manages all spatial interactions and layouts */}
         <SpatialOrchestrator
           ref={spatialOrchestratorRef}
           dreamNodes={dreamNodes}
+          dreamWorldRef={dreamWorldRef}
           onNodeFocused={(nodeId) => {
             console.log(`DreamspaceCanvas: Node ${nodeId} focused by orchestrator`);
           }}
@@ -643,7 +653,6 @@ export default function DreamspaceCanvas() {
           }}
           onOrchestratorReady={() => {
             // Register all existing refs when orchestrator is ready
-            console.log(`SpatialOrchestrator ready - registering ${dreamNodeRefs.current.size} existing refs`);
             dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
               if (nodeRef && spatialOrchestratorRef.current) {
                 spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
