@@ -12,6 +12,7 @@
  */
 
 import React, { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
+import { Vector3, Group } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { DreamNode3DRef } from './DreamNode3D';
 import { buildRelationshipGraph } from '../utils/relationship-graph';
@@ -27,6 +28,9 @@ export interface SpatialOrchestratorRef {
   /** Get current focused node ID */
   getFocusedNodeId: () => string | null;
   
+  /** Check if currently in focused mode (any node is focused) */
+  isFocusedMode: () => boolean;
+  
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
   
@@ -37,6 +41,9 @@ export interface SpatialOrchestratorRef {
 interface SpatialOrchestratorProps {
   /** All available dream nodes */
   dreamNodes: DreamNode[];
+  
+  /** Reference to the rotatable dream world group for position correction */
+  dreamWorldRef: React.RefObject<Group | null>;
   
   /** Callback when a node is focused */
   onNodeFocused?: (nodeId: string) => void;
@@ -59,6 +66,7 @@ interface SpatialOrchestratorProps {
  */
 const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestratorProps>(({
   dreamNodes,
+  dreamWorldRef,
   onNodeFocused,
   onConstellationReturn,
   onOrchestratorReady,
@@ -85,8 +93,28 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Build relationship graph from current nodes
         const relationshipGraph = buildRelationshipGraph(dreamNodes);
         
-        // Calculate focused layout positions
+        // Calculate focused layout positions (in local sphere space)
         const positions = calculateFocusedLayoutPositions(nodeId, relationshipGraph, DEFAULT_FOCUSED_CONFIG);
+        
+        // Apply world-space position correction based on current sphere rotation
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion;
+          
+          // Transform center node position to world space
+          const centerPos = new Vector3(...positions.centerNode.position);
+          centerPos.applyQuaternion(sphereRotation);
+          positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
+          
+          // Transform inner circle node positions to world space
+          positions.innerCircleNodes.forEach(node => {
+            const nodePos = new Vector3(...node.position);
+            nodePos.applyQuaternion(sphereRotation);
+            node.position = [nodePos.x, nodePos.y, nodePos.z];
+          });
+          
+          console.log(`SpatialOrchestrator: Applied world-space correction based on sphere rotation:`, 
+            sphereRotation.x.toFixed(3), sphereRotation.y.toFixed(3), sphereRotation.z.toFixed(3), sphereRotation.w.toFixed(3));
+        }
         
         // Start transition
         isTransitioning.current = true;
@@ -103,29 +131,23 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           console.error(`SpatialOrchestrator: Center node ref not found for ${positions.centerNode.nodeId}`);
         }
         
-        // Move inner circle nodes to their positions
+        // Move inner circle nodes to their positions (first-degree relationships "break free")
+        console.log(`SpatialOrchestrator: Moving ${positions.innerCircleNodes.length} inner circle nodes to liminal web positions`);
         positions.innerCircleNodes.forEach(({ nodeId: innerNodeId, position }) => {
           const nodeRef = nodeRefs.current.get(innerNodeId);
+          console.log(`SpatialOrchestrator: Moving inner node ${innerNodeId} to:`, position);
           if (nodeRef?.current) {
             nodeRef.current.setActiveState(true);
             nodeRef.current.moveToPosition(position, transitionDuration);
           }
         });
         
-        // Move outer circle nodes to buffer positions (far from camera, hidden)
-        positions.outerCircleNodes.forEach(({ nodeId: outerNodeId, position }) => {
-          const nodeRef = nodeRefs.current.get(outerNodeId);
+        // Move sphere nodes back to sphere surface (from any scaled positions) - sphere acts as buffer
+        positions.sphereNodes.forEach(sphereNodeId => {
+          const nodeRef = nodeRefs.current.get(sphereNodeId);
           if (nodeRef?.current) {
-            nodeRef.current.setActiveState(true);
-            nodeRef.current.moveToPosition(position, transitionDuration);
-          }
-        });
-        
-        // Keep hidden nodes in constellation mode (they stay on sphere)
-        positions.hiddenNodes.forEach(hiddenNodeId => {
-          const nodeRef = nodeRefs.current.get(hiddenNodeId);
-          if (nodeRef?.current) {
-            nodeRef.current.setActiveState(false); // Constellation mode
+            // During focus transition: move to sphere surface and keep them there
+            nodeRef.current.returnToConstellation(transitionDuration);
           }
         });
         
@@ -150,16 +172,16 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         return;
       }
       
-      console.log('SpatialOrchestrator: Returning to constellation');
+      console.log('SpatialOrchestrator: Returning to constellation with dynamic scaling');
       
       // Start transition
       isTransitioning.current = true;
       focusedNodeId.current = null;
       
-      // Return all nodes to constellation mode
+      // Return all nodes to their dynamically scaled constellation positions
       nodeRefs.current.forEach((nodeRef, _nodeId) => {
         if (nodeRef.current) {
-          nodeRef.current.returnToConstellation(transitionDuration);
+          nodeRef.current.returnToScaledPosition(transitionDuration);
         }
       });
       
@@ -182,21 +204,18 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     getFocusedNodeId: () => focusedNodeId.current,
     
+    isFocusedMode: () => focusedNodeId.current !== null,
+    
     registerNodeRef: (nodeId: string, nodeRef: React.RefObject<DreamNode3DRef>) => {
       nodeRefs.current.set(nodeId, nodeRef);
-      console.log(`SpatialOrchestrator: Registered ref for node ${nodeId}. Total refs: ${nodeRefs.current.size}`);
     },
     
     unregisterNodeRef: (nodeId: string) => {
       nodeRefs.current.delete(nodeId);
-      console.log(`SpatialOrchestrator: Unregistered ref for node ${nodeId}`);
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
   
-  // Log node count changes for debugging
-  useEffect(() => {
-    console.log(`SpatialOrchestrator: Managing ${dreamNodes.length} nodes`);
-  }, [dreamNodes.length]);
+  // Removed excessive node count logging
   
   // Call ready callback on mount
   useEffect(() => {
