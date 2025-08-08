@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, Group, Mesh } from 'three';
+import { Vector3, Group, Mesh, Euler } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -12,6 +12,7 @@ import './dreamNodeAnimations.css';
 export interface DreamNode3DRef {
   moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
   returnToConstellation: (duration?: number) => void;
+  returnToScaledPosition: (duration?: number) => void; // New method for full constellation return
   setActiveState: (active: boolean) => void;
   getCurrentPosition: () => [number, number, number];
   isMoving: () => boolean;
@@ -57,9 +58,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionStartTime, setTransitionStartTime] = useState(0);
   const [transitionDuration, setTransitionDuration] = useState(1000);
-  
-  // TODO: Access to scene for counter-rotation calculations (when needed)
-  // const { scene } = useThree();
+  const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled'>('liminal');
   
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
@@ -134,18 +133,101 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionStartTime(globalThis.performance.now());
       setPositionMode('active');
       setIsTransitioning(true);
+      setTransitionType('liminal'); // This is a liminal web transition
       
-      console.log(`DreamNode3D ${dreamNode.id}: Moving from`, actualCurrentPosition, 'to', newTargetPosition);
+      console.log(`DreamNode3D ${dreamNode.id}: moveToPosition called - from current to`, newTargetPosition);
     },
     returnToConstellation: (duration = 1000) => {
-      // Return to constellation position (with radial offset)
-      const anchorPos = dreamNode.position;
-      setStartPosition([...currentPosition]);
-      setTargetPosition(anchorPos);
+      // Enhanced method: returns to proper constellation position (with scaling if enabled)
+      let actualCurrentPosition: [number, number, number];
+      
+      if (positionMode === 'constellation') {
+        // Calculate current visual position with radial offset
+        const anchorPos = dreamNode.position;
+        const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
+        const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
+        const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
+        
+        actualCurrentPosition = [
+          anchorPos[0] - normalizedDir[0] * radialOffset,
+          anchorPos[1] - normalizedDir[1] * radialOffset,
+          anchorPos[2] - normalizedDir[2] * radialOffset
+        ];
+      } else {
+        actualCurrentPosition = [...currentPosition];
+      }
+      
+      // Target position should be sphere surface - constellation mode will handle scaling
+      const constellationPosition = dreamNode.position;
+      setStartPosition(actualCurrentPosition);
+      setCurrentPosition(actualCurrentPosition);
+      setTargetPosition(constellationPosition);
       setTransitionDuration(duration);
       setTransitionStartTime(globalThis.performance.now());
+      setPositionMode('active'); // Use active mode for the transition
       setIsTransitioning(true);
-      // Keep in active mode during transition, will switch back when done
+      setTransitionType('constellation'); // This is a constellation return transition
+      
+      console.log(`DreamNode3D ${dreamNode.id}: returnToConstellation called - animating to sphere surface`);
+    },
+    returnToScaledPosition: (duration = 1000) => {
+      // Calculate target dynamically scaled position for this node
+      // This is the position the node should have in constellation mode with dynamic scaling
+      
+      // We need to calculate the scaled position by simulating dynamic scaling
+      const anchorPosition = dreamNode.position;
+      
+      // Create a temporary group to calculate world position (similar to useFrame logic)
+      // For now, use a simplified calculation - we assume the parent group is at identity rotation
+      // TODO: This should ideally get the actual parent group transformation
+      const worldAnchorPosition = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
+      
+      // Calculate what the radial offset should be using dynamic scaling
+      const { radialOffset: targetRadialOffset } = calculateDynamicScaling(
+        worldAnchorPosition,
+        DEFAULT_SCALING_CONFIG
+      );
+      
+      // Calculate target scaled position
+      const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
+      const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
+      const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
+      
+      const targetScaledPosition: [number, number, number] = [
+        anchorPosition[0] - normalizedDir[0] * targetRadialOffset,
+        anchorPosition[1] - normalizedDir[1] * targetRadialOffset,
+        anchorPosition[2] - normalizedDir[2] * targetRadialOffset
+      ];
+      
+      // Get actual current position
+      let actualCurrentPosition: [number, number, number];
+      if (positionMode === 'constellation') {
+        // Calculate current visual position with radial offset
+        actualCurrentPosition = [
+          anchorPosition[0] - normalizedDir[0] * radialOffset,
+          anchorPosition[1] - normalizedDir[1] * radialOffset,
+          anchorPosition[2] - normalizedDir[2] * radialOffset
+        ];
+      } else {
+        actualCurrentPosition = [...currentPosition];
+      }
+      
+      // Animate to target scaled position
+      setStartPosition(actualCurrentPosition);
+      setCurrentPosition(actualCurrentPosition);
+      setTargetPosition(targetScaledPosition);
+      setTransitionDuration(duration);
+      setTransitionStartTime(globalThis.performance.now());
+      setPositionMode('active'); // Use active mode for the transition
+      setIsTransitioning(true);
+      setTransitionType('scaled'); // This is a scaled position return transition
+      
+      console.log(`DreamNode3D ${dreamNode.id}: returnToScaledPosition called - animating to scaled position with radialOffset=${targetRadialOffset}`);
+      
+      // Set the target radial offset for when we switch back to constellation mode
+      globalThis.setTimeout(() => {
+        setRadialOffset(targetRadialOffset);
+      }, duration - 100); // Set slightly before transition completes
     },
     setActiveState: (active: boolean) => {
       if (active) {
@@ -161,7 +243,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     isMoving: () => isTransitioning
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset]);
   
-  // Dual-mode position calculation
+  // Dual-mode position calculation with counter-rotation
   useFrame((_state, _delta) => {
     if (positionMode === 'constellation' && enableDynamicScaling && groupRef.current) {
       // CONSTELLATION MODE: Continuous radial offset calculation (existing behavior)
@@ -208,8 +290,49 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       if (progress >= 1) {
         setIsTransitioning(false);
         setCurrentPosition(targetPosition); // Ensure exact target position
-        console.log(`DreamNode3D ${dreamNode.id}: Transition complete at position:`, targetPosition);
+        
+        // Handle transition completion based on type
+        if (transitionType === 'liminal') {
+          // Liminal web transitions: STAY in active mode at target position
+          console.log(`DreamNode3D ${dreamNode.id}: Liminal transition complete - staying in active mode at`, targetPosition);
+          // Don't change positionMode - stay active!
+        } else if (transitionType === 'constellation') {
+          // Constellation return: Switch back to constellation mode
+          console.log(`DreamNode3D ${dreamNode.id}: Constellation transition complete - switching to constellation mode`);
+          setPositionMode('constellation');
+          setRadialOffset(0); // Reset radial offset for clean sphere positioning
+        } else if (transitionType === 'scaled') {
+          // Scaled position return: Switch back to constellation mode
+          console.log(`DreamNode3D ${dreamNode.id}: Scaled transition complete - switching to constellation mode`);
+          setPositionMode('constellation');
+          // radialOffset was already set during the animation
+        }
       }
+    }
+    
+    // COUNTER-ROTATION: Apply inverse rotation to active nodes to keep them stationary in world space
+    if (positionMode === 'active' && groupRef.current) {
+      // Find the rotatable parent group (dreamWorldRef from DreamspaceCanvas)
+      const rotatableGroup = groupRef.current.parent; // This should be the rotatable dream world group
+      
+      if (rotatableGroup) {
+        // Get the rotation quaternion of the parent group
+        const parentRotation = rotatableGroup.quaternion;
+        
+        // Apply the inverse rotation to counteract the parent's rotation
+        const inverseRotation = parentRotation.clone().invert();
+        groupRef.current.quaternion.copy(inverseRotation);
+        
+        // Debug log (can be removed later)
+        if (dreamNode.id === 'mock-dream-0') { // Only log for one node to avoid spam
+          const angles = new Euler().setFromQuaternion(parentRotation).toArray();
+          const degreesStr = angles.map(a => ((a as number) * 180 / Math.PI).toFixed(1) + '°').join(', ');
+          console.log(`Counter-rotation applied to ${dreamNode.id}: parent rotation angles:`, degreesStr);
+        }
+      }
+    } else if (positionMode === 'constellation' && groupRef.current) {
+      // CONSTELLATION MODE: Reset rotation to identity (let it rotate with parent)
+      groupRef.current.quaternion.set(0, 0, 0, 1);
     }
   });
 
@@ -253,12 +376,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       ]
     : currentPosition;
     
-  // Debug: Log significant position changes
-  useEffect(() => {
-    if (positionMode === 'active') {
-      console.log(`DreamNode3D ${dreamNode.id}: finalPosition update in active mode:`, finalPosition);
-    }
-  }, [finalPosition[0], finalPosition[1], finalPosition[2], dreamNode.id, positionMode]);
+  // Removed excessive dynamic scaling logging for performance
   
   // Using sprite mode for automatic billboarding - no manual rotation needed
   
