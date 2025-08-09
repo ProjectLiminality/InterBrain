@@ -58,8 +58,8 @@ export interface InterBrainState {
   setSearchResults: (results: DreamNode[]) => void;
   
   // Spatial layout state
-  spatialLayout: 'constellation' | 'search' | 'focused';
-  setSpatialLayout: (layout: 'constellation' | 'search' | 'focused') => void;
+  spatialLayout: 'constellation' | 'search' | 'liminal-web';
+  setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web') => void;
   
   // Fibonacci sphere layout configuration
   fibonacciConfig: FibonacciSphereConfig;
@@ -81,9 +81,9 @@ export interface InterBrainState {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'search' | 'focused' | null;
+    previousLayout: 'constellation' | 'search' | 'liminal-web' | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'focused' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'liminal-web' | null) => void;
   
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;

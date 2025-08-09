@@ -109,10 +109,10 @@ describe('InterBrainStore', () => {
       expect(useInterBrainStore.getState().spatialLayout).toBe('search')
     })
 
-    it('should set spatial layout to focused', () => {
-      useInterBrainStore.getState().setSpatialLayout('focused')
+    it('should set spatial layout to liminal-web', () => {
+      useInterBrainStore.getState().setSpatialLayout('liminal-web')
       
-      expect(useInterBrainStore.getState().spatialLayout).toBe('focused')
+      expect(useInterBrainStore.getState().spatialLayout).toBe('liminal-web')
     })
 
     it('should transition between different layouts', () => {
@@ -123,9 +123,9 @@ describe('InterBrainStore', () => {
       useInterBrainStore.getState().setSpatialLayout('search')
       expect(useInterBrainStore.getState().spatialLayout).toBe('search')
       
-      // Change to focused
-      useInterBrainStore.getState().setSpatialLayout('focused')
-      expect(useInterBrainStore.getState().spatialLayout).toBe('focused')
+      // Change to liminal-web
+      useInterBrainStore.getState().setSpatialLayout('liminal-web')
+      expect(useInterBrainStore.getState().spatialLayout).toBe('liminal-web')
       
       // Back to constellation
       useInterBrainStore.getState().setSpatialLayout('constellation')

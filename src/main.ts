@@ -468,7 +468,7 @@ export default class InterBrainPlugin extends Plugin {
           this.uiService.showError('No DreamNode selected - select a node first');
           return;
         }
-        store.setSpatialLayout('focused');
+        store.setSpatialLayout('liminal-web');
         this.uiService.showSuccess(`Focused on: ${currentNode.name}`);
         console.log('Layout switched to focused on:', currentNode.name);
       }

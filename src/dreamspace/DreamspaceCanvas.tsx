@@ -618,12 +618,10 @@ export default function DreamspaceCanvas() {
             return (
               <React.Fragment key={node.id}>
                 {/* Star component - purely visual, positioned slightly closer than anchor */}
-                {spatialLayout === 'constellation' && (
-                  <Star3D
-                    position={node.position}
-                    size={5000}
-                  />
-                )}
+                <Star3D
+                  position={node.position}
+                  size={5000}
+                />
                 
                 {/* DreamNode component - handles all interactions and dynamic positioning */}
                 <DreamNode3D
