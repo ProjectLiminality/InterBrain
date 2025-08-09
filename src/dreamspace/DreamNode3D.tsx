@@ -169,10 +169,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('constellation'); // This is a constellation return transition
     },
     returnToScaledPosition: (duration = 1000) => {
-      // Calculate target dynamically scaled position for this node
-      // This is the position the node should have in constellation mode with dynamic scaling
+      // ROBUST METHOD: Returns ANY node to its proper scaled constellation position
+      // Handles both active nodes (from liminal positions) and inactive nodes (from sphere surface)
       
-      // We need to calculate the scaled position by simulating dynamic scaling
+      // Calculate target dynamically scaled position for this node
       const anchorPosition = dreamNode.position;
       
       // Create a temporary group to calculate world position (similar to useFrame logic)
@@ -220,7 +220,14 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setIsTransitioning(true);
       setTransitionType('scaled'); // This is a scaled position return transition
       
-      console.log(`DreamNode3D ${dreamNode.id}: returnToScaledPosition called - animating to scaled position with radialOffset=${targetRadialOffset}`);
+      // Determine node's current state for logging
+      const nodeState = positionMode === 'constellation' ? 'constellation' : 'active';
+      const isAtSphereSurface = Math.abs(radialOffset) < 1;
+      const startType = nodeState === 'active' ? 
+        (isAtSphereSurface ? 'sphere-surface' : 'liminal-position') : 
+        'scaled-position';
+      
+      console.log(`🎯 ${dreamNode.id}: ${startType} → scaled (offset=${targetRadialOffset.toFixed(0)})`);
       
       // Set the target radial offset for when we switch back to constellation mode
       globalThis.setTimeout(() => {
