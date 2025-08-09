@@ -167,8 +167,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active'); // Use active mode for the transition
       setIsTransitioning(true);
       setTransitionType('constellation'); // This is a constellation return transition
-      
-      console.log(`DreamNode3D ${dreamNode.id}: returnToConstellation called - animating to sphere surface`);
     },
     returnToScaledPosition: (duration = 1000) => {
       // Calculate target dynamically scaled position for this node
@@ -298,7 +296,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           // Don't change positionMode - stay active!
         } else if (transitionType === 'constellation') {
           // Constellation return: Switch back to constellation mode
-          console.log(`DreamNode3D ${dreamNode.id}: Constellation transition complete - switching to constellation mode`);
           setPositionMode('constellation');
           setRadialOffset(0); // Reset radial offset for clean sphere positioning
         } else if (transitionType === 'scaled') {
