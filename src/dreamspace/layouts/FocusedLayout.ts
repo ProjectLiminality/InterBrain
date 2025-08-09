@@ -56,25 +56,19 @@ export interface FocusedLayoutPositions {
     position: [number, number, number];
   };
   
-  /** Inner circle node positions (visible related nodes) */
+  /** Inner circle node positions (first-degree relationships that "break free") */
   innerCircleNodes: Array<{
     nodeId: string;
     position: [number, number, number];
   }>;
   
-  /** Outer circle node positions (hidden buffer nodes) */
-  outerCircleNodes: Array<{
-    nodeId: string;
-    position: [number, number, number];
-  }>;
-  
-  /** Nodes that should be hidden/dissolved */
-  hiddenNodes: string[];
+  /** Nodes that remain on the sphere in constellation mode (all non-first-degree) */
+  sphereNodes: string[];
 }
 
 /**
  * Calculate focused layout positions for a given center node
- * Uses relationship graph for efficient queries and opposite-type filtering
+ * Only first-degree relationships "break free" from sphere - all others remain on sphere
  */
 export function calculateFocusedLayoutPositions(
   focusedNodeId: string,
@@ -86,13 +80,11 @@ export function calculateFocusedLayoutPositions(
     throw new Error(`Focused node ${focusedNodeId} not found in relationship graph`);
   }
   
-  // Get opposite-type connections (Dreams ↔ Dreamers only)
-  const relatedNodes = relationshipGraph.getOppositeTypeConnections(focusedNodeId);
-  const secondDegreeNodes = relationshipGraph.getSecondDegreeConnections(focusedNodeId);
+  // Get first-degree connections (Dreams ↔ Dreamers only) - these "break free"
+  const firstDegreeNodes = relationshipGraph.getOppositeTypeConnections(focusedNodeId);
   
   // Limit nodes for performance
-  const limitedInnerNodes = relatedNodes.slice(0, config.maxInnerConnections);
-  const limitedOuterNodes = secondDegreeNodes.slice(0, config.maxOuterConnections);
+  const limitedInnerNodes = firstDegreeNodes.slice(0, config.maxInnerConnections);
   
   // Calculate center position
   const centerPosition: [number, number, number] = [0, 0, -config.centerDistance];
@@ -104,22 +96,14 @@ export function calculateFocusedLayoutPositions(
     -config.innerCircleDistance  // Z coordinate (distance from camera)
   );
   
-  // Calculate outer circle positions (hidden buffer)
-  const outerCirclePositions = calculateCirclePositions(
-    limitedOuterNodes.length,
-    config.outerCircleRadius,
-    -config.outerCircleDistance  // Z coordinate (far from camera)
-  );
-  
-  // Determine hidden nodes (all nodes not in focus, inner, or outer circles)
+  // All nodes that aren't center or first-degree stay on the sphere
   const activeNodeIds = new Set([
     focusedNodeId,
-    ...limitedInnerNodes.map(n => n.id),
-    ...limitedOuterNodes.map(n => n.id)
+    ...limitedInnerNodes.map(n => n.id)
   ]);
   
   const allNodeIds = Array.from(relationshipGraph.nodes.keys());
-  const hiddenNodes = allNodeIds.filter(nodeId => !activeNodeIds.has(nodeId));
+  const sphereNodes = allNodeIds.filter(nodeId => !activeNodeIds.has(nodeId));
   
   return {
     centerNode: {
@@ -130,11 +114,7 @@ export function calculateFocusedLayoutPositions(
       nodeId: node.id,
       position: innerCirclePositions[index]
     })),
-    outerCircleNodes: limitedOuterNodes.map((node, index) => ({
-      nodeId: node.id,
-      position: outerCirclePositions[index]
-    })),
-    hiddenNodes
+    sphereNodes
   };
 }
 
@@ -172,15 +152,13 @@ function calculateCirclePositions(
 export function getFocusedLayoutStats(positions: FocusedLayoutPositions): {
   centerNode: string;
   innerCircleCount: number;
-  outerCircleCount: number;
-  hiddenCount: number;
+  sphereNodesCount: number;
   totalProcessed: number;
 } {
   return {
     centerNode: positions.centerNode.nodeId,
     innerCircleCount: positions.innerCircleNodes.length,
-    outerCircleCount: positions.outerCircleNodes.length,
-    hiddenCount: positions.hiddenNodes.length,
-    totalProcessed: 1 + positions.innerCircleNodes.length + positions.outerCircleNodes.length + positions.hiddenNodes.length
+    sphereNodesCount: positions.sphereNodes.length,
+    totalProcessed: 1 + positions.innerCircleNodes.length + positions.sphereNodes.length
   };
 }

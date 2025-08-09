@@ -96,24 +96,50 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Calculate focused layout positions (in local sphere space)
         const positions = calculateFocusedLayoutPositions(nodeId, relationshipGraph, DEFAULT_FOCUSED_CONFIG);
         
+        console.log('Original positions before transformation:', {
+          center: positions.centerNode.position,
+          innerCircle: positions.innerCircleNodes.map(n => ({ id: n.nodeId, pos: n.position }))
+        });
+        
         // Apply world-space position correction based on current sphere rotation
         if (dreamWorldRef.current) {
-          const sphereRotation = dreamWorldRef.current.quaternion;
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          
+          console.log('Current sphere rotation:', {
+            x: sphereRotation.x.toFixed(3), 
+            y: sphereRotation.y.toFixed(3), 
+            z: sphereRotation.z.toFixed(3), 
+            w: sphereRotation.w.toFixed(3)
+          });
+          
+          // We need to apply the INVERSE rotation to counteract the sphere's rotation
+          // This makes the liminal web appear in camera-relative positions regardless of sphere rotation
+          const inverseRotation = sphereRotation.invert();
+          
+          console.log('Inverse rotation to apply:', {
+            x: inverseRotation.x.toFixed(3), 
+            y: inverseRotation.y.toFixed(3), 
+            z: inverseRotation.z.toFixed(3), 
+            w: inverseRotation.w.toFixed(3)
+          });
           
           // Transform center node position to world space
           const centerPos = new Vector3(...positions.centerNode.position);
-          centerPos.applyQuaternion(sphereRotation);
+          console.log('Center position before transform:', centerPos.toArray());
+          centerPos.applyQuaternion(inverseRotation);
+          console.log('Center position after transform:', centerPos.toArray());
           positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
           
           // Transform inner circle node positions to world space
           positions.innerCircleNodes.forEach(node => {
-            const nodePos = new Vector3(...node.position);
-            nodePos.applyQuaternion(sphereRotation);
-            node.position = [nodePos.x, nodePos.y, nodePos.z];
+            const originalPos = new Vector3(...node.position);
+            console.log(`Node ${node.nodeId} before transform:`, originalPos.toArray());
+            originalPos.applyQuaternion(inverseRotation);
+            console.log(`Node ${node.nodeId} after transform:`, originalPos.toArray());
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
           });
           
-          console.log(`SpatialOrchestrator: Applied world-space correction based on sphere rotation:`, 
-            sphereRotation.x.toFixed(3), sphereRotation.y.toFixed(3), sphereRotation.z.toFixed(3), sphereRotation.w.toFixed(3));
+          console.log(`SpatialOrchestrator: Applied inverse world-space correction`);
         }
         
         // Start transition

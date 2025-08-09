@@ -335,6 +335,34 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Generate mock relationships command
+    this.addCommand({
+      id: 'generate-mock-relationships',
+      name: 'Generate Mock Relationships (Bidirectional)',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        store.generateMockRelationships();
+        
+        const relationships = store.mockRelationshipData;
+        if (relationships) {
+          const nodeCount = relationships.size;
+          const connectionCount = Array.from(relationships.values()).reduce((sum, conns) => sum + conns.length, 0);
+          this.uiService.showSuccess(`Generated relationships for ${nodeCount} nodes with ${connectionCount} total connections`);
+        }
+      }
+    });
+    
+    // Clear mock relationships command
+    this.addCommand({
+      id: 'clear-mock-relationships',
+      name: 'Clear Mock Relationships',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        store.clearMockRelationships();
+        this.uiService.showSuccess('Mock relationships cleared - using default generation');
+      }
+    });
+    
     // Mock data: Cycle through single node, fibonacci-12, fibonacci-50, and fibonacci-100
     this.addCommand({
       id: 'toggle-mock-data',
@@ -760,8 +788,9 @@ export default class InterBrainPlugin extends Plugin {
           
           let allNodes: DreamNode[] = [];
           if (dataMode === 'mock') {
-            // Get static mock data (same as DreamspaceCanvas)
-            const staticNodes = getMockDataForConfig(mockDataConfig);
+            // Get static mock data with persistent relationships
+            const mockRelationshipData = store.mockRelationshipData;
+            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
             const service = serviceManager.getActive();
             const dynamicNodes = await service.list();
             allNodes = [...staticNodes, ...dynamicNodes];
@@ -823,7 +852,8 @@ export default class InterBrainPlugin extends Plugin {
           
           let allNodes: DreamNode[] = [];
           if (dataMode === 'mock') {
-            const staticNodes = getMockDataForConfig(mockDataConfig);
+            const mockRelationshipData = store.mockRelationshipData;
+            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
             const service = serviceManager.getActive();
             const dynamicNodes = await service.list();
             allNodes = [...staticNodes, ...dynamicNodes];
@@ -844,24 +874,13 @@ export default class InterBrainPlugin extends Plugin {
           console.log('DEBUG: Center node ID from calculation:', positions.centerNode.nodeId);
           console.log('Layout Stats:', stats);
           console.log('\nCenter Position:', positions.centerNode.position);
-          console.log(`Inner Circle (${positions.innerCircleNodes.length} nodes):`);
+          console.log(`Inner Circle (${positions.innerCircleNodes.length} first-degree relationships break free):`);
           positions.innerCircleNodes.forEach((node, i) => {
             const nodeData = graph.nodes.get(node.nodeId);
             console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
           });
           
-          if (positions.outerCircleNodes.length > 0) {
-            console.log(`\nOuter Circle (${positions.outerCircleNodes.length} nodes):`);
-            positions.outerCircleNodes.slice(0, 5).forEach((node, i) => {
-              const nodeData = graph.nodes.get(node.nodeId);
-              console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-            });
-            if (positions.outerCircleNodes.length > 5) {
-              console.log(`  ... and ${positions.outerCircleNodes.length - 5} more`);
-            }
-          }
-          
-          console.log(`\nHidden nodes: ${positions.hiddenNodes.length}`);
+          console.log(`\nSphere nodes (remain on sphere): ${positions.sphereNodes.length}`);
           
           this.uiService.showSuccess(`Calculated focused layout for ${selectedNode.name} - check console`);
         } catch (error) {
