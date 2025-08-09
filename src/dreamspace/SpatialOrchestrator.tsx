@@ -17,6 +17,7 @@ import { DreamNode } from '../types/dreamnode';
 import { DreamNode3DRef } from './DreamNode3D';
 import { buildRelationshipGraph } from '../utils/relationship-graph';
 import { calculateFocusedLayoutPositions, DEFAULT_FOCUSED_CONFIG } from './layouts/FocusedLayout';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
@@ -79,6 +80,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   // Current state tracking
   const focusedNodeId = useRef<string | null>(null);
   const isTransitioning = useRef<boolean>(false);
+  
+  // Store integration
+  const setSpatialLayout = useInterBrainStore(state => state.setSpatialLayout);
   
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
@@ -146,6 +150,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
+        // Update store to liminal web layout mode
+        setSpatialLayout('liminal-web');
+        console.log('📍 Store Layout Updated: constellation → liminal-web');
+        
         // Move center node to focus position
         const centerNodeRef = nodeRefs.current.get(positions.centerNode.nodeId);
         console.log(`SpatialOrchestrator: Looking for center node ref ${positions.centerNode.nodeId}, found:`, !!centerNodeRef?.current);
@@ -203,6 +211,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Start transition
       isTransitioning.current = true;
       focusedNodeId.current = null;
+      
+      // Update store to constellation layout mode
+      setSpatialLayout('constellation');
+      console.log('🌟 Store Layout Updated: liminal-web → constellation');
       
       // Return all nodes to their dynamically scaled constellation positions
       nodeRefs.current.forEach((nodeRef, _nodeId) => {
