@@ -68,6 +68,7 @@ function calculateTrackballRotation(from: Vector3, to: Vector3): Quaternion {
  * - Physics-based momentum with exponential damping (325ms time constant)
  * - Velocity estimation with low-pass filtering
  * - No gimbal lock, smooth rotation at all orientations
+ * - Locks rotation when in liminal-web mode
  */
 export default function SphereRotationControls({ groupRef }: SphereRotationControlsProps) {
   const { gl } = useThree();
@@ -101,6 +102,13 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   
   // Mouse event handlers
   const handleMouseDown = (event: globalThis.MouseEvent) => {
+    // Check if rotation is locked (liminal-web mode) - get current state to avoid stale closure
+    const currentLayout = useInterBrainStore.getState().spatialLayout;
+    if (currentLayout === 'liminal-web') {
+      console.log('🔒 Sphere rotation locked - in liminal-web mode');
+      return; // Rotation disabled in liminal-web mode
+    }
+    
     // Check if the mouse event is over UI elements (like proto-node HTML)
     const target = event.target as globalThis.HTMLElement;
     if (target && (target.closest('[data-ui-element]') || target.style?.pointerEvents === 'auto')) {
@@ -273,6 +281,16 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   // Physics-based momentum with exponential damping
   useFrame((state, delta) => {
     if (isDragging.current || !groupRef.current) return;
+    
+    // Stop momentum if rotation is locked (liminal-web mode) - get current state to avoid stale closure
+    const currentLayout = useInterBrainStore.getState().spatialLayout;
+    if (currentLayout === 'liminal-web') {
+      if (angularVelocity.current.speed > 0) {
+        console.log('🛑 Stopping sphere momentum - rotation locked in liminal-web mode');
+        angularVelocity.current.speed = 0;
+      }
+      return;
+    }
     
     // Check if there's any angular velocity
     if (angularVelocity.current.speed < 0.001) {
