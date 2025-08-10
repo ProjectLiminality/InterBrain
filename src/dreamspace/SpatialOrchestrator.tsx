@@ -233,6 +233,18 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Update store to constellation layout mode
       setSpatialLayout('constellation');
       
+      // Get current sphere rotation for accurate scaled position calculation
+      let worldRotation = undefined;
+      if (dreamWorldRef.current) {
+        worldRotation = dreamWorldRef.current.quaternion.clone();
+        console.log(`🌍 Using sphere rotation for scaled positions:`, {
+          x: worldRotation.x.toFixed(3),
+          y: worldRotation.y.toFixed(3),
+          z: worldRotation.z.toFixed(3),
+          w: worldRotation.w.toFixed(3)
+        });
+      }
+      
       // Return ALL nodes to their dynamically scaled constellation positions
       // This handles both active (center+inner) and inactive (sphere) nodes correctly
       const { centerNodeId, innerNodeIds, sphereNodeIds } = liminalWebRoles.current;
@@ -247,8 +259,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Return ALL nodes to scaled positions (handles different starting states)
       nodeRefs.current.forEach((nodeRef, _nodeId) => {
         if (nodeRef.current) {
-          // All nodes use the same method - it handles different starting states internally
-          nodeRef.current.returnToScaledPosition(transitionDuration);
+          // Pass world rotation for accurate dynamic scaling calculation
+          nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation);
         }
       });
       
