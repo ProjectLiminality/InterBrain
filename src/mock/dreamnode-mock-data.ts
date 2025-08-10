@@ -83,9 +83,9 @@ const mockCanvasFiles: CanvasFile[] = [
 
 /**
  * Generate mock DreamNode data using Fibonacci sphere distribution
- * Now uses the core FibonacciSphereLayout algorithm
+ * Now uses persistent relationships from store if available
  */
-export function generateMockDreamNodes(count: number = 12): DreamNode[] {
+export function generateMockDreamNodes(count: number = 12, relationshipData?: Map<string, string[]>): DreamNode[] {
   const spherePositions = calculateFibonacciSpherePositions({
     radius: 5000, // Updated to match night sky sphere radius
     nodeCount: count,
@@ -105,14 +105,19 @@ export function generateMockDreamNodes(count: number = 12): DreamNode[] {
     const mediaIndex = isDream ? i % 3 : 1; // Dreamers use index 1 (brain emoji)
     const media = [mockMediaFiles[mediaIndex]];
     
+    const nodeId = `mock-${type}-${i}`;
+    
+    // Use persistent relationships if available, otherwise generate
+    const connections = relationshipData?.get(nodeId) || generateLiminalConnections(i, count, type);
+    
     dreamNodes.push({
-      id: `mock-${type}-${i}`,
+      id: nodeId,
       type,
       name: isDream ? `Dream ${i + 1}` : `Dreamer ${Math.floor(i / 3) + 1}`,
       position: [x, y, z],
       dreamTalkMedia: media,
       dreamSongContent: mockCanvasFiles,
-      liminalWebConnections: generateLiminalConnections(i, count, type),
+      liminalWebConnections: connections,
       repoPath: `/mock/repos/${type}-${i}`,
       hasUnsavedChanges: false
     });
@@ -123,19 +128,40 @@ export function generateMockDreamNodes(count: number = 12): DreamNode[] {
 
 /**
  * Generate liminal web connections for a node
- * Dreams connect to Dreamers and vice versa
+ * Dreams connect to Dreamers and vice versa (opposite-type only)
+ * Creates a rich network of relationships for testing focused layouts
  */
 function generateLiminalConnections(index: number, totalCount: number, type: 'dream' | 'dreamer'): string[] {
   const connections: string[] = [];
-  const maxConnections = 3;
+  const maxConnections = Math.min(5, Math.floor(totalCount / 4)); // More connections for larger graphs
   
-  for (let i = 0; i < maxConnections && connections.length < totalCount - 1; i++) {
-    let targetIndex = (index + i + 1) % totalCount;
-    let targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
+  // Generate deterministic but varied connections
+  for (let i = 0; i < maxConnections; i++) {
+    // Use different step sizes to create interesting patterns
+    const stepSizes = [1, 3, 7, 11, 13]; // Prime numbers for good distribution
+    const targetIndex = (index + stepSizes[i % stepSizes.length]) % totalCount;
+    const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
     
-    // Connect to opposite type (Dreams ↔ Dreamers)
+    // Only connect to opposite type (Dreams ↔ Dreamers)
     if (type !== targetType) {
-      connections.push(`mock-${targetType}-${targetIndex}`);
+      const targetId = `mock-${targetType}-${targetIndex}`;
+      if (!connections.includes(targetId)) {  // Avoid duplicates
+        connections.push(targetId);
+      }
+    }
+  }
+  
+  // Ensure every node has at least one connection if possible
+  if (connections.length === 0 && totalCount > 1) {
+    // Find the nearest opposite-type node
+    for (let offset = 1; offset < totalCount; offset++) {
+      const targetIndex = (index + offset) % totalCount;
+      const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
+      
+      if (type !== targetType) {
+        connections.push(`mock-${targetType}-${targetIndex}`);
+        break;
+      }
     }
   }
   
@@ -148,18 +174,18 @@ function generateLiminalConnections(index: number, totalCount: number, type: 'dr
 export type MockDataConfig = 'single-node' | 'fibonacci-12' | 'fibonacci-50' | 'fibonacci-100';
 
 /**
- * Get mock data based on configuration
+ * Get mock data based on configuration with optional relationship data
  */
-export function getMockDataForConfig(config: MockDataConfig): DreamNode[] {
+export function getMockDataForConfig(config: MockDataConfig, relationshipData?: Map<string, string[]>): DreamNode[] {
   switch (config) {
     case 'single-node':
       return [getSingleTestNode()];
     case 'fibonacci-12':
-      return generateMockDreamNodes(12);
+      return generateMockDreamNodes(12, relationshipData);
     case 'fibonacci-50':
-      return generateMockDreamNodes(50);
+      return generateMockDreamNodes(50, relationshipData);
     case 'fibonacci-100':
-      return generateMockDreamNodes(100);
+      return generateMockDreamNodes(100, relationshipData);
     default:
       return [getSingleTestNode()];
   }

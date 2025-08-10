@@ -8,6 +8,9 @@ import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceVie
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
+import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
+import { getMockDataForConfig } from './mock/dreamnode-mock-data';
+import { calculateFocusedLayoutPositions, getFocusedLayoutStats, DEFAULT_FOCUSED_CONFIG } from './dreamspace/layouts/FocusedLayout';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -332,6 +335,34 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Generate mock relationships command
+    this.addCommand({
+      id: 'generate-mock-relationships',
+      name: 'Generate Mock Relationships (Bidirectional)',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        store.generateMockRelationships();
+        
+        const relationships = store.mockRelationshipData;
+        if (relationships) {
+          const nodeCount = relationships.size;
+          const connectionCount = Array.from(relationships.values()).reduce((sum, conns) => sum + conns.length, 0);
+          this.uiService.showSuccess(`Generated relationships for ${nodeCount} nodes with ${connectionCount} total connections`);
+        }
+      }
+    });
+    
+    // Clear mock relationships command
+    this.addCommand({
+      id: 'clear-mock-relationships',
+      name: 'Clear Mock Relationships',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        store.clearMockRelationships();
+        this.uiService.showSuccess('Mock relationships cleared - using default generation');
+      }
+    });
+    
     // Mock data: Cycle through single node, fibonacci-12, fibonacci-50, and fibonacci-100
     this.addCommand({
       id: 'toggle-mock-data',
@@ -437,7 +468,7 @@ export default class InterBrainPlugin extends Plugin {
           this.uiService.showError('No DreamNode selected - select a node first');
           return;
         }
-        store.setSpatialLayout('focused');
+        store.setSpatialLayout('liminal-web');
         this.uiService.showSuccess(`Focused on: ${currentNode.name}`);
         console.log('Layout switched to focused on:', currentNode.name);
       }
@@ -662,6 +693,199 @@ export default class InterBrainPlugin extends Plugin {
           console.error('Coherence update error:', error);
         } finally {
           loadingNotice.hide();
+        }
+      }
+    });
+
+    // Step 3.5: Simple move-to-center command to test dual-mode positioning
+    this.addCommand({
+      id: 'move-selected-node-to-center',
+      name: 'Move Selected Node to Center',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        // Check if DreamSpace is open
+        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
+          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
+          return;
+        }
+        
+        // Call global canvas function (simple approach for now)
+        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        if (canvasAPI && canvasAPI.moveSelectedNodeToCenter) {
+          const success = canvasAPI.moveSelectedNodeToCenter();
+          if (success) {
+            this.uiService.showSuccess(`Moving ${selectedNode.name} to center`);
+          } else {
+            this.uiService.showError('Failed to move node - ref not found');
+          }
+        } else {
+          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
+        }
+      }
+    });
+
+    // Step 4: Test focused layout via SpatialOrchestrator
+    this.addCommand({
+      id: 'test-focused-layout-orchestrator',
+      name: 'Test: Focus on Selected Node (Orchestrator)',
+      callback: () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        // Check if DreamSpace is open
+        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
+          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
+          return;
+        }
+        
+        // Call global canvas function to trigger focused layout
+        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        if (canvasAPI && canvasAPI.focusOnNode) {
+          const success = canvasAPI.focusOnNode(selectedNode.id);
+          if (success) {
+            this.uiService.showSuccess(`Focusing on ${selectedNode.name} with liminal web layout`);
+          } else {
+            this.uiService.showError('Failed to focus - orchestrator not ready');
+          }
+        } else {
+          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
+        }
+      }
+    });
+
+    // Test command for relationship queries
+    this.addCommand({
+      id: 'test-relationship-queries',
+      name: 'Test: Query Node Relationships',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        try {
+          // Get all nodes using same method as DreamspaceCanvas
+          const store = useInterBrainStore.getState();
+          const dataMode = store.dataMode;
+          const mockDataConfig = store.mockDataConfig;
+          
+          let allNodes: DreamNode[] = [];
+          if (dataMode === 'mock') {
+            // Get static mock data with persistent relationships
+            const mockRelationshipData = store.mockRelationshipData;
+            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
+            const service = serviceManager.getActive();
+            const dynamicNodes = await service.list();
+            allNodes = [...staticNodes, ...dynamicNodes];
+          } else {
+            // Real mode - get from store
+            const realNodes = store.realNodes;
+            allNodes = Array.from(realNodes.values()).map(data => data.node);
+          }
+          
+          console.log('DEBUG: Total nodes found:', allNodes.length);
+          console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig);
+          console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ 
+            id: n.id, 
+            type: n.type, 
+            connections: n.liminalWebConnections.length,
+            connectionIds: n.liminalWebConnections.slice(0, 2)
+          })));
+          
+          // Build relationship graph
+          const graph = buildRelationshipGraph(allNodes);
+          
+          // Log stats
+          const stats = getRelationshipStats(graph);
+          console.log('=== Relationship Graph Stats ===');
+          console.log(`Total nodes: ${stats.totalNodes}`);
+          console.log(`Dreams: ${stats.dreamNodes}, Dreamers: ${stats.dreamerNodes}`);
+          console.log(`Average connections: ${stats.averageConnections.toFixed(1)}`);
+          console.log(`Max connections: ${stats.maxConnections}`);
+          console.log(`Nodes with no connections: ${stats.nodesWithNoConnections}`);
+          
+          // Log relationships for selected node
+          logNodeRelationships(graph, selectedNode.id);
+          
+          this.uiService.showSuccess(`Logged relationships for ${selectedNode.name} to console`);
+        } catch (error) {
+          console.error('Relationship query error:', error);
+          this.uiService.showError('Failed to query relationships');
+        }
+      }
+    });
+
+    // Test command for focused layout position calculation
+    this.addCommand({
+      id: 'test-focused-layout-positions',
+      name: 'Test: Calculate Focused Layout Positions',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        try {
+          // Get all nodes using same method as DreamspaceCanvas
+          const dataMode = store.dataMode;
+          const mockDataConfig = store.mockDataConfig;
+          
+          let allNodes: DreamNode[] = [];
+          if (dataMode === 'mock') {
+            const mockRelationshipData = store.mockRelationshipData;
+            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
+            const service = serviceManager.getActive();
+            const dynamicNodes = await service.list();
+            allNodes = [...staticNodes, ...dynamicNodes];
+          } else {
+            const realNodes = store.realNodes;
+            allNodes = Array.from(realNodes.values()).map(data => data.node);
+          }
+          
+          // Build relationship graph
+          const graph = buildRelationshipGraph(allNodes);
+          
+          // Calculate focused layout positions
+          const positions = calculateFocusedLayoutPositions(selectedNode.id, graph, DEFAULT_FOCUSED_CONFIG);
+          const stats = getFocusedLayoutStats(positions);
+          
+          console.log(`\n=== Focused Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
+          console.log('DEBUG: Selected node ID:', selectedNode.id);
+          console.log('DEBUG: Center node ID from calculation:', positions.centerNode.nodeId);
+          console.log('Layout Stats:', stats);
+          console.log('\nCenter Position:', positions.centerNode.position);
+          console.log(`Inner Circle (${positions.innerCircleNodes.length} first-degree relationships break free):`);
+          positions.innerCircleNodes.forEach((node, i) => {
+            const nodeData = graph.nodes.get(node.nodeId);
+            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
+          });
+          
+          console.log(`\nSphere nodes (remain on sphere): ${positions.sphereNodes.length}`);
+          
+          this.uiService.showSuccess(`Calculated focused layout for ${selectedNode.name} - check console`);
+        } catch (error) {
+          console.error('Position calculation error:', error);
+          this.uiService.showError(error instanceof Error ? error.message : 'Failed to calculate positions');
         }
       }
     });

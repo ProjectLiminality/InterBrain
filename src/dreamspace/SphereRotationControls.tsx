@@ -68,6 +68,7 @@ function calculateTrackballRotation(from: Vector3, to: Vector3): Quaternion {
  * - Physics-based momentum with exponential damping (325ms time constant)
  * - Velocity estimation with low-pass filtering
  * - No gimbal lock, smooth rotation at all orientations
+ * - Locks rotation when in liminal-web mode
  */
 export default function SphereRotationControls({ groupRef }: SphereRotationControlsProps) {
   const { gl } = useThree();
@@ -76,9 +77,17 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   // Global drag state for hover interference prevention
   const setGlobalDragState = useInterBrainStore(state => state.setIsDragging);
   
-  // Local drag state
-  const [isDragging, setIsDragging] = useState(false);
+  // Local drag state - using refs to avoid stale closures in event handlers
+  const isDragging = useRef(false);
+  const isPotentialDrag = useRef(false);
+  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastTrackballPos = useRef<Vector3>(new Vector3());
+  
+  // Force re-render when drag state changes (for momentum animation)
+  const [, forceUpdate] = useState(0);
+  
+  // Minimum movement threshold to distinguish click from drag (in pixels)
+  const DRAG_THRESHOLD = 5;
   
   // Quaternion rotation state (prevents accumulation errors)
   const currentRotation = useRef<Quaternion>(new Quaternion(0, 0, 0, 1));
@@ -93,6 +102,13 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   
   // Mouse event handlers
   const handleMouseDown = (event: globalThis.MouseEvent) => {
+    // Check if rotation is locked (liminal-web mode) - get current state to avoid stale closure
+    const currentLayout = useInterBrainStore.getState().spatialLayout;
+    if (currentLayout === 'liminal-web') {
+      console.log('🔒 Sphere rotation locked - in liminal-web mode');
+      return; // Rotation disabled in liminal-web mode
+    }
+    
     // Check if the mouse event is over UI elements (like proto-node HTML)
     const target = event.target as globalThis.HTMLElement;
     if (target && (target.closest('[data-ui-element]') || target.style?.pointerEvents === 'auto')) {
@@ -101,15 +117,18 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     }
     
     event.preventDefault();
-    setIsDragging(true);
-    setGlobalDragState(true); // Suppress hover detection globally
+    isPotentialDrag.current = true;
+    // Don't set isDragging or global drag state yet - wait for movement threshold
+    
+    // Store initial mouse position for threshold check
+    dragStartPos.current = { x: event.clientX, y: event.clientY };
     
     // Get canvas bounding rect for accurate coordinate calculation
     const rect = canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
     
-    // Project mouse position to virtual trackball
+    // Project mouse position to virtual trackball (prepare for potential drag)
     lastTrackballPos.current = virtualTrackballProjection(mouseX, mouseY, rect.width, rect.height);
     
     // Stop any existing momentum
@@ -118,8 +137,33 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   };
   
   const handleMouseMove = (event: globalThis.MouseEvent) => {
-    if (!isDragging || !groupRef.current) return;
+    // Check if we should start dragging based on movement threshold
+    if (isPotentialDrag.current && !isDragging.current) {
+      const deltaX = Math.abs(event.clientX - dragStartPos.current.x);
+      const deltaY = Math.abs(event.clientY - dragStartPos.current.y);
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      if (distance > DRAG_THRESHOLD) {
+        // Movement exceeds threshold - start actual drag
+        isDragging.current = true;
+        setGlobalDragState(true); // Now suppress hover detection globally
+        
+        // IMPORTANT: Update the lastTrackballPos to current position when starting drag
+        // Otherwise the first movement will cause a jump
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        lastTrackballPos.current = virtualTrackballProjection(mouseX, mouseY, rect.width, rect.height);
+        
+        // Force re-render for momentum animation
+        forceUpdate(prev => prev + 1);
+      } else {
+        // Still within threshold - don't start dragging yet
+        return;
+      }
+    }
     
+    if (!isDragging.current || !groupRef.current) return;
     
     // Get canvas bounding rect for accurate coordinate calculation
     const rect = canvas.getBoundingClientRect();
@@ -154,11 +198,20 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
   
   const handleMouseUp = (event: globalThis.MouseEvent) => {
     event.preventDefault();
-    setIsDragging(false);
-    setGlobalDragState(false); // Re-enable hover detection
     
-    // Calculate final angular velocity for momentum
-    if (velocityHistory.current.length >= 2) {
+    // Reset all drag states
+    const wasActuallyDragging = isDragging.current;
+    isDragging.current = false;
+    isPotentialDrag.current = false;
+    
+    // Only reset global drag state if we were actually dragging
+    if (wasActuallyDragging) {
+      setGlobalDragState(false); // Re-enable hover detection
+      forceUpdate(prev => prev + 1); // Force re-render to stop momentum animation
+    }
+    
+    // Only calculate momentum if we were actually dragging (not just clicking)
+    if (wasActuallyDragging && velocityHistory.current.length >= 2) {
       // Get recent velocity samples for smoothing
       const recentSamples = velocityHistory.current.slice(-5); // Last 5 samples
       let totalAxis = new Vector3();
@@ -223,11 +276,21 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
       globalThis.document.removeEventListener('mousemove', handleGlobalMouseMove);
       globalThis.document.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [isDragging]); // Re-run when isDragging changes
+  }, []); // No dependencies - refs don't need to trigger re-creation
   
   // Physics-based momentum with exponential damping
   useFrame((state, delta) => {
-    if (isDragging || !groupRef.current) return;
+    if (isDragging.current || !groupRef.current) return;
+    
+    // Stop momentum if rotation is locked (liminal-web mode) - get current state to avoid stale closure
+    const currentLayout = useInterBrainStore.getState().spatialLayout;
+    if (currentLayout === 'liminal-web') {
+      if (angularVelocity.current.speed > 0) {
+        console.log('🛑 Stopping sphere momentum - rotation locked in liminal-web mode');
+        angularVelocity.current.speed = 0;
+      }
+      return;
+    }
     
     // Check if there's any angular velocity
     if (angularVelocity.current.speed < 0.001) {
