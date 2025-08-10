@@ -11,7 +11,7 @@ import './dreamNodeAnimations.css';
 // Universal Movement API interface
 export interface DreamNode3DRef {
   moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
-  returnToConstellation: (duration?: number) => void;
+  returnToConstellation: (duration?: number, easing?: string) => void;
   returnToScaledPosition: (duration?: number, worldRotation?: Quaternion) => void; // New method for full constellation return with rotation support
   setActiveState: (active: boolean) => void;
   getCurrentPosition: () => [number, number, number];
@@ -59,6 +59,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [transitionStartTime, setTransitionStartTime] = useState(0);
   const [transitionDuration, setTransitionDuration] = useState(1000);
   const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled'>('liminal');
+  const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart'>('easeOutCubic');
   
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
@@ -105,7 +106,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
   // Universal Movement API
   useImperativeHandle(ref, () => ({
-    moveToPosition: (newTargetPosition, duration = 1000, _easing = 'easeOutCubic') => {
+    moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
       // Switch to active mode and start transition
       // CRITICAL FIX: Calculate actual current visual position
       let actualCurrentPosition: [number, number, number];
@@ -134,10 +135,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('liminal'); // This is a liminal web transition
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
       
       console.log(`DreamNode3D ${dreamNode.id}: moveToPosition called - from current to`, newTargetPosition);
     },
-    returnToConstellation: (duration = 1000) => {
+    returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
       // Enhanced method: returns to proper constellation position (with scaling if enabled)
       let actualCurrentPosition: [number, number, number];
       
@@ -167,6 +169,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active'); // Use active mode for the transition
       setIsTransitioning(true);
       setTransitionType('constellation'); // This is a constellation return transition
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToScaledPosition: (duration = 1000, worldRotation) => {
       // ROBUST METHOD: Returns ANY node to its proper scaled constellation position
@@ -221,6 +224,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active'); // Use active mode for the transition
       setIsTransitioning(true);
       setTransitionType('scaled'); // This is a scaled position return transition
+      setTransitionEasing('easeOutCubic'); // Default easing for constellation returns
       
       // Determine node's current state for logging
       const nodeState = positionMode === 'constellation' ? 'constellation' : 'active';
@@ -248,7 +252,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     },
     getCurrentPosition: () => currentPosition,
     isMoving: () => isTransitioning
-  }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset]);
+  }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing]);
   
   // Dual-mode position calculation with counter-rotation
   useFrame((_state, _delta) => {
@@ -281,8 +285,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       const elapsed = globalThis.performance.now() - transitionStartTime;
       const progress = Math.min(elapsed / transitionDuration, 1);
       
-      // Apply easing function (easeOutCubic by default)
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      // Apply selected easing function
+      let easedProgress: number;
+      switch (transitionEasing) {
+        case 'easeInQuart':
+          // Strong ease-in for nodes flying OUT to sphere
+          easedProgress = Math.pow(progress, 4);
+          break;
+        case 'easeOutQuart':
+          // Strong ease-out for nodes flying IN from sphere
+          easedProgress = 1 - Math.pow(1 - progress, 4);
+          break;
+        case 'easeOutCubic':
+        default:
+          // Default easing for other transitions
+          easedProgress = 1 - Math.pow(1 - progress, 3);
+          break;
+      }
       
       // Linear interpolation from start to target position
       const newPosition: [number, number, number] = [
