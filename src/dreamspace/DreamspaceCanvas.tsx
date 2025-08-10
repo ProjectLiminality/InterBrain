@@ -4,9 +4,10 @@ import { useRef, useEffect } from 'react';
 import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
-import DreamNode3D from './DreamNode3D';
+import DreamNode3D, { DreamNode3DRef } from './DreamNode3D';
 import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
+import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import ProtoNode3D from '../features/creation/ProtoNode3D';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
@@ -21,6 +22,7 @@ export default function DreamspaceCanvas() {
   // Get data mode and mock data configuration from store
   const dataMode = useInterBrainStore(state => state.dataMode);
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
+  const mockRelationshipData = useInterBrainStore(state => state.mockRelationshipData);
   const realNodes = useInterBrainStore(state => state.realNodes);
   
   // State for dynamic nodes from mock service
@@ -66,7 +68,7 @@ export default function DreamspaceCanvas() {
   let dreamNodes: DreamNode[] = [];
   if (dataMode === 'mock') {
     // Combine static mock data with dynamic service nodes
-    const staticNodes = getMockDataForConfig(mockDataConfig);
+    const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
     dreamNodes = [...staticNodes, ...dynamicNodes];
   } else {
     // Use real nodes from store
@@ -79,6 +81,12 @@ export default function DreamspaceCanvas() {
   // Hit sphere references for scene-based raycasting
   const hitSphereRefs = useRef<Map<string, React.RefObject<Mesh | null>>>(new Map());
   
+  // DreamNode3D references for movement commands  
+  const dreamNodeRefs = useRef<Map<string, React.RefObject<DreamNode3DRef | null>>>(new Map());
+  
+  // SpatialOrchestrator reference for controlling all spatial interactions
+  const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
+  
   // Debug visualization states from store
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
   const debugIntersectionPoint = useInterBrainStore(state => state.debugIntersectionPoint);
@@ -89,6 +97,77 @@ export default function DreamspaceCanvas() {
   
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
+  
+  // Helper function to get or create DreamNode3D ref
+  const getDreamNodeRef = (nodeId: string): React.RefObject<DreamNode3DRef | null> => {
+    let nodeRef = dreamNodeRefs.current.get(nodeId);
+    if (!nodeRef) {
+      nodeRef = React.createRef<DreamNode3DRef>();
+      dreamNodeRefs.current.set(nodeId, nodeRef);
+      
+      // Register with orchestrator (need to cast to non-null type)
+      if (spatialOrchestratorRef.current && nodeRef) {
+        spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
+      }
+    }
+    return nodeRef;
+  };
+  
+  // Register all existing refs with orchestrator when it becomes ready
+  useEffect(() => {
+    if (spatialOrchestratorRef.current) {
+      console.log(`Registering ${dreamNodeRefs.current.size} existing refs with SpatialOrchestrator`);
+      dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
+        if (nodeRef) {
+          spatialOrchestratorRef.current?.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
+        }
+      });
+    }
+  }, [dreamNodes.length, spatialOrchestratorRef.current]); // Re-register when nodes change OR orchestrator becomes ready
+  
+  // Expose moveToCenter function globally for commands
+  useEffect(() => {
+    (globalThis as any).__interbrainCanvas = {
+      moveSelectedNodeToCenter: () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          console.log('No node selected for move to center');
+          return false;
+        }
+        
+        const nodeRef = dreamNodeRefs.current.get(selectedNode.id);
+        if (!nodeRef?.current) {
+          console.log(`No ref found for selected node: ${selectedNode.id}`);
+          return false;
+        }
+        
+        // Move to center position (close to camera for large appearance)
+        const centerPosition: [number, number, number] = [0, 0, -50];
+        
+        console.log(`Moving ${selectedNode.name} to center:`, centerPosition);
+        nodeRef.current.moveToPosition(centerPosition, 2000);
+        return true;
+      },
+      focusOnNode: (nodeId: string) => {
+        // Trigger focused layout via SpatialOrchestrator
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.focusOnNode(nodeId);
+          return true;
+        }
+        return false;
+      },
+      returnToConstellation: () => {
+        // Return to constellation via SpatialOrchestrator
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.returnToConstellation();
+          return true;
+        }
+        return false;
+      }
+    };
+  }, []);
   
   // Load dynamic nodes from service - only for mock mode
   useEffect(() => {
@@ -256,6 +335,14 @@ export default function DreamspaceCanvas() {
     const store = useInterBrainStore.getState();
     store.setSelectedNode(node);
     console.log('DreamNode selected:', node.name);
+    
+    // Trigger focused layout via SpatialOrchestrator
+    if (spatialOrchestratorRef.current) {
+      console.log('Calling SpatialOrchestrator.focusOnNode for:', node.id);
+      spatialOrchestratorRef.current.focusOnNode(node.id);
+    } else {
+      console.error('SpatialOrchestrator ref is null - orchestrator not ready');
+    }
   };
 
   const handleNodeDoubleClick = (_node: DreamNode) => {
@@ -489,10 +576,15 @@ export default function DreamspaceCanvas() {
           background: '#000000'
         }}
         onPointerMissed={() => {
-          // Clicked on empty space - deselect any selected node
+          // Clicked on empty space - deselect any selected node and return to constellation
           const store = useInterBrainStore.getState();
           store.setSelectedNode(null);
           console.log('Deselected all nodes (missed pointer)');
+          
+          // Return to constellation via SpatialOrchestrator
+          if (spatialOrchestratorRef.current) {
+            spatialOrchestratorRef.current.returnToConstellation();
+          }
         }}
       >
         {/* Camera reset handler - listens for store changes and resets camera */}
@@ -516,28 +608,57 @@ export default function DreamspaceCanvas() {
             </mesh>
           )}
           
-          {dreamNodes.map((node) => (
-            <React.Fragment key={node.id}>
-              {/* Star component - purely visual, positioned slightly closer than anchor */}
-              {spatialLayout === 'constellation' && (
+          {dreamNodes.map((node) => {
+            // Check if we're in focused mode to disable dynamic scaling
+            const isFocusedMode = spatialOrchestratorRef.current?.isFocusedMode() || false;
+            const shouldEnableDynamicScaling = spatialLayout === 'constellation' && !isFocusedMode;
+            
+            // Removed excessive dynamic scaling logging for performance
+            
+            return (
+              <React.Fragment key={node.id}>
+                {/* Star component - purely visual, positioned slightly closer than anchor */}
                 <Star3D
                   position={node.position}
                   size={5000}
                 />
-              )}
-              
-              {/* DreamNode component - handles all interactions and dynamic positioning */}
-              <DreamNode3D
-                dreamNode={node}
-                onHover={handleNodeHover}
-                onClick={handleNodeClick}
-                onDoubleClick={handleNodeDoubleClick}
-                enableDynamicScaling={spatialLayout === 'constellation'}
-                onHitSphereRef={handleHitSphereRef}
-              />
-            </React.Fragment>
-          ))}
+                
+                {/* DreamNode component - handles all interactions and dynamic positioning */}
+                <DreamNode3D
+                  ref={getDreamNodeRef(node.id)}
+                  dreamNode={node}
+                  onHover={handleNodeHover}
+                  onClick={handleNodeClick}
+                  onDoubleClick={handleNodeDoubleClick}
+                  enableDynamicScaling={shouldEnableDynamicScaling}
+                  onHitSphereRef={handleHitSphereRef}
+                />
+              </React.Fragment>
+            );
+          })}
         </group>
+        
+        {/* SpatialOrchestrator - manages all spatial interactions and layouts */}
+        <SpatialOrchestrator
+          ref={spatialOrchestratorRef}
+          dreamNodes={dreamNodes}
+          dreamWorldRef={dreamWorldRef}
+          onNodeFocused={(nodeId) => {
+            console.log(`DreamspaceCanvas: Node ${nodeId} focused by orchestrator`);
+          }}
+          onConstellationReturn={() => {
+            console.log('DreamspaceCanvas: Returned to constellation by orchestrator');
+          }}
+          onOrchestratorReady={() => {
+            // Register all existing refs when orchestrator is ready
+            dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
+              if (nodeRef && spatialOrchestratorRef.current) {
+                spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
+              }
+            });
+          }}
+          transitionDuration={1000}
+        />
         
         {/* Proto-node for creation - stationary relative to camera */}
         {creationState.isCreating && creationState.protoNode && (

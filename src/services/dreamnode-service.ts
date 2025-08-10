@@ -38,12 +38,12 @@ export class DreamNodeService {
   }
 
   // Layout management methods
-  setLayout(layout: 'constellation' | 'search' | 'focused'): void {
+  setLayout(layout: 'constellation' | 'search' | 'liminal-web'): void {
     const store = useInterBrainStore.getState();
     store.setSpatialLayout(layout);
   }
 
-  getCurrentLayout(): 'constellation' | 'search' | 'focused' {
+  getCurrentLayout(): 'constellation' | 'search' | 'liminal-web' {
     return useInterBrainStore.getState().spatialLayout;
   }
 

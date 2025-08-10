@@ -58,8 +58,8 @@ export interface InterBrainState {
   setSearchResults: (results: DreamNode[]) => void;
   
   // Spatial layout state
-  spatialLayout: 'constellation' | 'search' | 'focused';
-  setSpatialLayout: (layout: 'constellation' | 'search' | 'focused') => void;
+  spatialLayout: 'constellation' | 'search' | 'liminal-web';
+  setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web') => void;
   
   // Fibonacci sphere layout configuration
   fibonacciConfig: FibonacciSphereConfig;
@@ -81,9 +81,9 @@ export interface InterBrainState {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'search' | 'focused' | null;
+    previousLayout: 'constellation' | 'search' | 'liminal-web' | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'focused' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'liminal-web' | null) => void;
   
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;
@@ -100,6 +100,11 @@ export interface InterBrainState {
   // Mock data configuration
   mockDataConfig: MockDataConfig;
   setMockDataConfig: (config: MockDataConfig) => void;
+  
+  // Persistent mock relationship data
+  mockRelationshipData: Map<string, string[]> | null;
+  generateMockRelationships: () => void;
+  clearMockRelationships: () => void;
   
   // Drag state management (prevents hover interference during sphere rotation)
   isDragging: boolean;
@@ -160,6 +165,9 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // Mock data configuration initial state (single node for testing)
   mockDataConfig: 'fibonacci-100',
+  
+  // Persistent mock relationship data initial state
+  mockRelationshipData: null,
   
   // Drag state initial state (not dragging)
   isDragging: false,
@@ -235,6 +243,102 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Mock data configuration actions
   setMockDataConfig: (config) => set({ mockDataConfig: config }),
   
+  // Mock relationship data actions
+  generateMockRelationships: () => set(state => {
+    const { mockDataConfig } = state;
+    const nodeCount = mockDataConfig === 'single-node' ? 1 : 
+                     mockDataConfig === 'fibonacci-12' ? 12 :
+                     mockDataConfig === 'fibonacci-50' ? 50 : 100;
+    
+    const relationships = new Map<string, string[]>();
+    
+    // First pass: Initialize all nodes in the map
+    for (let i = 0; i < nodeCount; i++) {
+      const nodeType = i % 3 !== 0 ? 'dream' : 'dreamer';
+      const nodeId = `mock-${nodeType}-${i}`;
+      relationships.set(nodeId, []);
+    }
+    
+    // Second pass: Generate bidirectional relationships between Dreams and Dreamers
+    for (let i = 0; i < nodeCount; i++) {
+      const sourceType = i % 3 !== 0 ? 'dream' : 'dreamer';
+      const sourceId = `mock-${sourceType}-${i}`;
+      
+      // Use deterministic pattern for consistent relationships
+      const stepSizes = [1, 3, 7, 11, 13];
+      const maxConnections = Math.min(5, Math.floor(nodeCount / 4));
+      
+      for (let j = 0; j < Math.min(stepSizes.length, maxConnections); j++) {
+        const step = stepSizes[j];
+        const targetIndex = (i + step) % nodeCount;
+        const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
+        
+        // Only connect Dreams to Dreamers and vice versa
+        if (sourceType !== targetType) {
+          const targetId = `mock-${targetType}-${targetIndex}`;
+          
+          // Add forward connection if not already present
+          const sourceConnections = relationships.get(sourceId)!;
+          if (!sourceConnections.includes(targetId)) {
+            sourceConnections.push(targetId);
+          }
+          
+          // Add reverse connection if not already present
+          const targetConnections = relationships.get(targetId)!;
+          if (!targetConnections.includes(sourceId)) {
+            targetConnections.push(sourceId);
+          }
+        }
+      }
+      
+      // Ensure at least one connection if possible
+      const sourceConnections = relationships.get(sourceId)!;
+      if (sourceConnections.length === 0 && nodeCount > 1) {
+        for (let offset = 1; offset < nodeCount; offset++) {
+          const targetIndex = (i + offset) % nodeCount;
+          const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
+          
+          if (sourceType !== targetType) {
+            const targetId = `mock-${targetType}-${targetIndex}`;
+            
+            // Add forward connection
+            sourceConnections.push(targetId);
+            
+            // Add reverse connection
+            const targetConnections = relationships.get(targetId)!;
+            if (!targetConnections.includes(sourceId)) {
+              targetConnections.push(sourceId);
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    // Debug: Verify bidirectionality
+    let unidirectionalCount = 0;
+    relationships.forEach((connections, sourceId) => {
+      connections.forEach(targetId => {
+        const targetConnections = relationships.get(targetId);
+        if (!targetConnections || !targetConnections.includes(sourceId)) {
+          console.error(`UNIDIRECTIONAL: ${sourceId} -> ${targetId} but NOT ${targetId} -> ${sourceId}`);
+          unidirectionalCount++;
+        }
+      });
+    });
+    
+    console.log('Generated mock relationships:', relationships.size, 'nodes with bidirectional connections');
+    if (unidirectionalCount > 0) {
+      console.error(`WARNING: Found ${unidirectionalCount} unidirectional connections!`);
+    } else {
+      console.log('✅ All connections are properly bidirectional');
+    }
+    
+    return { mockRelationshipData: relationships };
+  }),
+  
+  clearMockRelationships: () => set({ mockRelationshipData: null }),
+  
   // Drag state actions
   setIsDragging: (dragging) => set({ isDragging: dragging }),
   
@@ -300,18 +404,24 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data and data mode
+      // Only persist real nodes data, data mode, and mock relationships
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
+        mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
-        const persistedData = persisted as { dataMode: 'mock' | 'real'; realNodes: [string, RealNodeData][] };
+        const persistedData = persisted as { 
+          dataMode: 'mock' | 'real'; 
+          realNodes: [string, RealNodeData][];
+          mockRelationshipData: [string, string[]][] | null;
+        };
         return {
           ...current,
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
+          mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
         };
       },
     }
