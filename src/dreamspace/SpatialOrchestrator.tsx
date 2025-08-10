@@ -179,7 +179,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         if (centerNodeRef?.current) {
           console.log(`SpatialOrchestrator: Moving center node to:`, positions.centerNode.position);
           centerNodeRef.current.setActiveState(true);
-          centerNodeRef.current.moveToPosition(positions.centerNode.position, transitionDuration);
+          // Center node uses ease-out for smooth arrival
+          centerNodeRef.current.moveToPosition(positions.centerNode.position, transitionDuration, 'easeOutQuart');
         } else {
           console.error(`SpatialOrchestrator: Center node ref not found for ${positions.centerNode.nodeId}`);
         }
@@ -189,7 +190,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           const nodeRef = nodeRefs.current.get(innerNodeId);
           if (nodeRef?.current) {
             nodeRef.current.setActiveState(true);
-            nodeRef.current.moveToPosition(position, transitionDuration);
+            // Inner circle nodes use ease-out for smooth arrival into view
+            nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
           }
         });
         
@@ -198,8 +200,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         positions.sphereNodes.forEach(sphereNodeId => {
           const nodeRef = nodeRefs.current.get(sphereNodeId);
           if (nodeRef?.current) {
-            // During focus transition: move inactive nodes to sphere surface to avoid cluttering liminal web view
-            nodeRef.current.returnToConstellation(transitionDuration);
+            // Sphere nodes use ease-in for quick departure from view
+            nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
           }
         });
         
