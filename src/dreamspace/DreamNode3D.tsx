@@ -12,7 +12,7 @@ import './dreamNodeAnimations.css';
 export interface DreamNode3DRef {
   moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
   returnToConstellation: (duration?: number, easing?: string) => void;
-  returnToScaledPosition: (duration?: number, worldRotation?: Quaternion) => void; // New method for full constellation return with rotation support
+  returnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void; // New method for full constellation return with rotation and easing support
   setActiveState: (active: boolean) => void;
   getCurrentPosition: () => [number, number, number];
   isMoving: () => boolean;
@@ -167,7 +167,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('constellation'); // This is a constellation return transition
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
-    returnToScaledPosition: (duration = 1000, worldRotation) => {
+    returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // ROBUST METHOD: Returns ANY node to its proper scaled constellation position
       // Handles both active nodes (from liminal positions) and inactive nodes (from sphere surface)
       
@@ -220,7 +220,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active'); // Use active mode for the transition
       setIsTransitioning(true);
       setTransitionType('scaled'); // This is a scaled position return transition
-      setTransitionEasing('easeOutCubic'); // Default easing for constellation returns
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
       
       // Determine node's current state for logging
       const nodeState = positionMode === 'constellation' ? 'constellation' : 'active';
