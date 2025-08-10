@@ -254,15 +254,25 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Log role-based return for debugging
       if (centerNodeId || innerNodeIds.size > 0 || sphereNodeIds.size > 0) {
         console.log(`🔄 Returning nodes by role:`);
-        console.log(`  - Active nodes (${1 + innerNodeIds.size}): Center + Inner circle → scaled positions`);
-        console.log(`  - Inactive nodes (${sphereNodeIds.size}): Sphere surface → scaled positions`);
+        console.log(`  - Active nodes (${1 + innerNodeIds.size}): Center + Inner circle → scaled positions (easeIn)`);
+        console.log(`  - Inactive nodes (${sphereNodeIds.size}): Sphere surface → scaled positions (easeOut)`);
       }
       
-      // Return ALL nodes to scaled positions (handles different starting states)
-      nodeRefs.current.forEach((nodeRef, _nodeId) => {
+      // Return ALL nodes to scaled positions with role-based easing
+      nodeRefs.current.forEach((nodeRef, nodeId) => {
         if (nodeRef.current) {
-          // Pass world rotation for accurate dynamic scaling calculation
-          nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation);
+          // Determine appropriate easing based on node's role in liminal web
+          let easing = 'easeOutCubic'; // Default fallback
+          if (nodeId === centerNodeId || innerNodeIds.has(nodeId)) {
+            // Active nodes moving OUT from liminal positions - accelerate as they leave
+            easing = 'easeInQuart';
+          } else if (sphereNodeIds.has(nodeId)) {
+            // Inactive nodes moving IN from sphere surface - decelerate as they arrive
+            easing = 'easeOutQuart';
+          }
+          
+          // Pass world rotation for accurate scaling + role-based easing
+          nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation, easing);
         }
       });
       
