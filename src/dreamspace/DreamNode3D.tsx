@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, Group, Mesh } from 'three';
+import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -12,7 +12,7 @@ import './dreamNodeAnimations.css';
 export interface DreamNode3DRef {
   moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
   returnToConstellation: (duration?: number) => void;
-  returnToScaledPosition: (duration?: number) => void; // New method for full constellation return
+  returnToScaledPosition: (duration?: number, worldRotation?: Quaternion) => void; // New method for full constellation return with rotation support
   setActiveState: (active: boolean) => void;
   getCurrentPosition: () => [number, number, number];
   isMoving: () => boolean;
@@ -168,17 +168,19 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setIsTransitioning(true);
       setTransitionType('constellation'); // This is a constellation return transition
     },
-    returnToScaledPosition: (duration = 1000) => {
+    returnToScaledPosition: (duration = 1000, worldRotation) => {
       // ROBUST METHOD: Returns ANY node to its proper scaled constellation position
       // Handles both active nodes (from liminal positions) and inactive nodes (from sphere surface)
       
       // Calculate target dynamically scaled position for this node
       const anchorPosition = dreamNode.position;
       
-      // Create a temporary group to calculate world position (similar to useFrame logic)
-      // For now, use a simplified calculation - we assume the parent group is at identity rotation
-      // TODO: This should ideally get the actual parent group transformation
+      // Transform anchor position to world space using provided rotation (similar to useFrame logic)
       const worldAnchorPosition = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
+      if (worldRotation) {
+        // Apply the sphere's world rotation to get the actual world position
+        worldAnchorPosition.applyQuaternion(worldRotation);
+      }
       
       // Calculate what the radial offset should be using dynamic scaling
       const { radialOffset: targetRadialOffset } = calculateDynamicScaling(
