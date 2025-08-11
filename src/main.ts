@@ -889,6 +889,212 @@ export default class InterBrainPlugin extends Plugin {
         }
       }
     });
+
+    // Undo Layout Change command
+    this.addCommand({
+      id: 'undo-layout-change',
+      name: 'Undo Layout Change',
+      hotkeys: [{ modifiers: ['Mod'], key: 'z' }],
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const { history, currentIndex } = store.navigationHistory;
+        
+        // Check if undo is possible (can undo to index 0, which is the initial constellation state)
+        if (currentIndex < 1) {
+          this.uiService.showError('No more layout changes to undo');
+          return;
+        }
+        
+        // Get the entry to restore
+        const previousEntry = history[currentIndex - 1];
+        if (!previousEntry) {
+          this.uiService.showError('Invalid history entry');
+          return;
+        }
+        
+        try {
+          // Update history index first
+          const success = store.performUndo();
+          if (!success) {
+            this.uiService.showError('Failed to undo - no history available');
+            return;
+          }
+          
+          // Set flag to prevent new history entries during restoration
+          store.setRestoringFromHistory(true);
+          
+          try {
+            // Restore the layout state via SpatialOrchestrator (proper way)
+            if (previousEntry.layout === 'constellation') {
+              // Going to constellation - use SpatialOrchestrator
+              const canvasAPI = (globalThis as any).__interbrainCanvas;
+              if (canvasAPI && canvasAPI.returnToConstellation) {
+                const success = canvasAPI.returnToConstellation();
+                if (success) {
+                  store.setSelectedNode(null); // Update store to match
+                } else {
+                  this.uiService.showError('Failed to return to constellation - SpatialOrchestrator not ready');
+                  return;
+                }
+              } else {
+                this.uiService.showError('Canvas API not available - DreamSpace may not be open');
+                return;
+              }
+            } else if (previousEntry.layout === 'liminal-web' && previousEntry.nodeId) {
+              // Going to liminal-web - need to find and focus on the node
+              const allNodes = await this.getAllAvailableNodes();
+              const targetNode = allNodes.find(node => node.id === previousEntry.nodeId);
+              
+              if (targetNode) {
+                // First update store (required for SpatialOrchestrator to work)
+                store.setSelectedNode(targetNode);
+                
+                // Then trigger visual transition via SpatialOrchestrator
+                const canvasAPI = (globalThis as any).__interbrainCanvas;
+                if (canvasAPI && canvasAPI.focusOnNode) {
+                  const success = canvasAPI.focusOnNode(targetNode.id);
+                  if (!success) {
+                    this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
+                    return;
+                  }
+                } else {
+                  this.uiService.showError('Canvas API not available - DreamSpace may not be open');
+                  return;
+                }
+              } else {
+                // Handle deleted node case - skip to next valid entry
+                console.warn(`Node ${previousEntry.nodeId} no longer exists, skipping undo step`);
+                this.uiService.showError('Target node no longer exists - skipped to previous state');
+              }
+            }
+          } finally {
+            // Always clear the flag
+            store.setRestoringFromHistory(false);
+          }
+          
+        } catch (error) {
+          console.error('Undo failed:', error);
+          this.uiService.showError('Failed to undo layout change');
+        }
+      }
+    });
+
+    // Redo Layout Change command  
+    this.addCommand({
+      id: 'redo-layout-change',
+      name: 'Redo Layout Change',
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'z' }],
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const { history, currentIndex } = store.navigationHistory;
+        
+        // Check if redo is possible
+        if (currentIndex >= history.length - 1) {
+          this.uiService.showError('No more layout changes to redo');
+          return;
+        }
+        
+        // Get the entry to restore
+        const nextEntry = history[currentIndex + 1];
+        if (!nextEntry) {
+          this.uiService.showError('Invalid history entry');
+          return;
+        }
+        
+        try {
+          // Update history index first
+          const success = store.performRedo();
+          if (!success) {
+            this.uiService.showError('Failed to redo - no history available');
+            return;
+          }
+          
+          // Set flag to prevent new history entries during restoration
+          store.setRestoringFromHistory(true);
+          
+          try {
+            // Restore the layout state via SpatialOrchestrator (proper way)
+            if (nextEntry.layout === 'constellation') {
+              // Going to constellation - use SpatialOrchestrator
+              const canvasAPI = (globalThis as any).__interbrainCanvas;
+              if (canvasAPI && canvasAPI.returnToConstellation) {
+                const success = canvasAPI.returnToConstellation();
+                if (success) {
+                  store.setSelectedNode(null); // Update store to match
+                } else {
+                  this.uiService.showError('Failed to return to constellation - SpatialOrchestrator not ready');
+                  return;
+                }
+              } else {
+                this.uiService.showError('Canvas API not available - DreamSpace may not be open');
+                return;
+              }
+            } else if (nextEntry.layout === 'liminal-web' && nextEntry.nodeId) {
+              // Going to liminal-web - need to find and focus on the node
+              const allNodes = await this.getAllAvailableNodes();
+              const targetNode = allNodes.find(node => node.id === nextEntry.nodeId);
+              
+              if (targetNode) {
+                // First update store (required for SpatialOrchestrator to work)
+                store.setSelectedNode(targetNode);
+                
+                // Then trigger visual transition via SpatialOrchestrator
+                const canvasAPI = (globalThis as any).__interbrainCanvas;
+                if (canvasAPI && canvasAPI.focusOnNode) {
+                  const success = canvasAPI.focusOnNode(targetNode.id);
+                  if (!success) {
+                    this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
+                    return;
+                  }
+                } else {
+                  this.uiService.showError('Canvas API not available - DreamSpace may not be open');
+                  return;
+                }
+              } else {
+                // Handle deleted node case
+                console.warn(`Node ${nextEntry.nodeId} no longer exists, skipping redo step`);
+                this.uiService.showError('Target node no longer exists - skipped to next state');
+              }
+            }
+          } finally {
+            // Always clear the flag
+            store.setRestoringFromHistory(false);
+          }
+          
+        } catch (error) {
+          console.error('Redo failed:', error);
+          this.uiService.showError('Failed to redo layout change');
+        }
+      }
+    });
+  }
+
+  // Helper method to get all available nodes (used by undo/redo)
+  private async getAllAvailableNodes(): Promise<DreamNode[]> {
+    try {
+      const store = useInterBrainStore.getState();
+      const dataMode = store.dataMode;
+      const mockDataConfig = store.mockDataConfig;
+      
+      let allNodes: DreamNode[] = [];
+      if (dataMode === 'mock') {
+        // Get static mock data with persistent relationships
+        const mockRelationshipData = store.mockRelationshipData;
+        const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
+        const service = serviceManager.getActive();
+        const dynamicNodes = await service.list();
+        allNodes = [...staticNodes, ...dynamicNodes];
+      } else {
+        // Real mode - get from store
+        const realNodes = store.realNodes;
+        allNodes = Array.from(realNodes.values()).map(data => data.node);
+      }
+      
+      return allNodes;
+    } catch (error) {
+      console.error('Failed to get available nodes:', error);
+      return [];
+    }
   }
 
   onunload() {
