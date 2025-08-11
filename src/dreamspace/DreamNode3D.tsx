@@ -133,7 +133,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('liminal'); // This is a liminal web transition
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
       
-      console.log(`DreamNode3D ${dreamNode.id}: moveToPosition called - from current to`, newTargetPosition);
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
       // Enhanced method: returns to proper constellation position (with scaling if enabled)
@@ -229,8 +228,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         (isAtSphereSurface ? 'sphere-surface' : 'liminal-position') : 
         'scaled-position';
       
-      console.log(`🎯 ${dreamNode.id}: ${startType} → scaled (offset=${targetRadialOffset.toFixed(0)})`);
-      
       // Set the target radial offset for when we switch back to constellation mode
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
@@ -316,7 +313,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         // Handle transition completion based on type
         if (transitionType === 'liminal') {
           // Liminal web transitions: STAY in active mode at target position
-          console.log(`DreamNode3D ${dreamNode.id}: Liminal transition complete - staying in active mode at`, targetPosition);
           // Don't change positionMode - stay active!
         } else if (transitionType === 'constellation') {
           // Constellation return: Switch back to constellation mode
@@ -324,7 +320,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           setRadialOffset(0); // Reset radial offset for clean sphere positioning
         } else if (transitionType === 'scaled') {
           // Scaled position return: Switch back to constellation mode
-          console.log(`DreamNode3D ${dreamNode.id}: Scaled transition complete - switching to constellation mode`);
           setPositionMode('constellation');
           // radialOffset was already set during the animation
         }
