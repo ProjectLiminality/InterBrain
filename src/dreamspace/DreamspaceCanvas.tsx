@@ -161,6 +161,22 @@ export default function DreamspaceCanvas() {
           return true;
         }
         return false;
+      },
+      interruptAndFocusOnNode: (nodeId: string) => {
+        // Trigger focused layout with mid-flight interruption support
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.interruptAndFocusOnNode(nodeId);
+          return true;
+        }
+        return false;
+      },
+      interruptAndReturnToConstellation: () => {
+        // Return to constellation with mid-flight interruption support
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.interruptAndReturnToConstellation();
+          return true;
+        }
+        return false;
       }
     };
   }, []);

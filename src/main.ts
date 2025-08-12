@@ -926,10 +926,10 @@ export default class InterBrainPlugin extends Plugin {
           try {
             // Restore the layout state via SpatialOrchestrator (proper way)
             if (previousEntry.layout === 'constellation') {
-              // Going to constellation - use SpatialOrchestrator
+              // Going to constellation - use SpatialOrchestrator (with interruption support)
               const canvasAPI = (globalThis as any).__interbrainCanvas;
-              if (canvasAPI && canvasAPI.returnToConstellation) {
-                const success = canvasAPI.returnToConstellation();
+              if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
+                const success = canvasAPI.interruptAndReturnToConstellation();
                 if (success) {
                   store.setSelectedNode(null); // Update store to match
                 } else {
@@ -949,10 +949,10 @@ export default class InterBrainPlugin extends Plugin {
                 // First update store (required for SpatialOrchestrator to work)
                 store.setSelectedNode(targetNode);
                 
-                // Then trigger visual transition via SpatialOrchestrator
+                // Then trigger visual transition via SpatialOrchestrator (with interruption support)
                 const canvasAPI = (globalThis as any).__interbrainCanvas;
-                if (canvasAPI && canvasAPI.focusOnNode) {
-                  const success = canvasAPI.focusOnNode(targetNode.id);
+                if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
+                  const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
                   if (!success) {
                     this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
                     return;
@@ -1015,10 +1015,10 @@ export default class InterBrainPlugin extends Plugin {
           try {
             // Restore the layout state via SpatialOrchestrator (proper way)
             if (nextEntry.layout === 'constellation') {
-              // Going to constellation - use SpatialOrchestrator
+              // Going to constellation - use SpatialOrchestrator (with interruption support)
               const canvasAPI = (globalThis as any).__interbrainCanvas;
-              if (canvasAPI && canvasAPI.returnToConstellation) {
-                const success = canvasAPI.returnToConstellation();
+              if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
+                const success = canvasAPI.interruptAndReturnToConstellation();
                 if (success) {
                   store.setSelectedNode(null); // Update store to match
                 } else {
@@ -1038,10 +1038,10 @@ export default class InterBrainPlugin extends Plugin {
                 // First update store (required for SpatialOrchestrator to work)
                 store.setSelectedNode(targetNode);
                 
-                // Then trigger visual transition via SpatialOrchestrator
+                // Then trigger visual transition via SpatialOrchestrator (with interruption support)
                 const canvasAPI = (globalThis as any).__interbrainCanvas;
-                if (canvasAPI && canvasAPI.focusOnNode) {
-                  const success = canvasAPI.focusOnNode(targetNode.id);
+                if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
+                  const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
                   if (!success) {
                     this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
                     return;
