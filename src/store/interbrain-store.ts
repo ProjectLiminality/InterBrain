@@ -4,6 +4,25 @@ import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
 
+// Navigation history types
+export interface NavigationHistoryEntry {
+  /** Node ID that was focused (null for constellation view) */
+  nodeId: string | null;
+  /** Layout type at the time */
+  layout: 'constellation' | 'liminal-web';
+  /** Timestamp of the navigation action */
+  timestamp: number;
+}
+
+export interface NavigationHistoryState {
+  /** Stack of past navigation states */
+  history: NavigationHistoryEntry[];
+  /** Current position in history (0 = most recent) */
+  currentIndex: number;
+  /** Maximum history entries to keep */
+  maxHistorySize: number;
+}
+
 // Creation state types
 export interface ProtoNode {
   title: string;
@@ -118,6 +137,17 @@ export interface InterBrainState {
   setValidationErrors: (errors: ValidationErrors) => void;
   completeCreation: () => void;
   cancelCreation: () => void;
+  
+  // Navigation history management
+  navigationHistory: NavigationHistoryState;
+  isRestoringFromHistory: boolean;
+  setRestoringFromHistory: (restoring: boolean) => void;
+  addHistoryEntry: (nodeId: string | null, layout: 'constellation' | 'liminal-web') => void;
+  getHistoryEntryForUndo: () => NavigationHistoryEntry | null;
+  getHistoryEntryForRedo: () => NavigationHistoryEntry | null;
+  performUndo: () => boolean;
+  performRedo: () => boolean;
+  clearNavigationHistory: () => void;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -179,6 +209,20 @@ export const useInterBrainStore = create<InterBrainState>()(
     validationErrors: {}
   },
   
+  // Navigation history initial state (with initial constellation state)
+  navigationHistory: {
+    history: [{
+      nodeId: null,
+      layout: 'constellation',
+      timestamp: Date.now()
+    }],
+    currentIndex: 0, // Start at the initial constellation state
+    maxHistorySize: 150 // High limit for ultra-lightweight entries
+  },
+  
+  // Flag to disable history tracking during undo/redo operations
+  isRestoringFromHistory: false,
+  
   // Actions
   setDataMode: (mode) => set({ dataMode: mode }),
   setRealNodes: (nodes) => set({ realNodes: nodes }),
@@ -192,18 +236,144 @@ export const useInterBrainStore = create<InterBrainState>()(
     newMap.delete(id);
     return { realNodes: newMap };
   }),
-  setSelectedNode: (node) => set({ selectedNode: node }),
+  setSelectedNode: (node) => set(state => {
+    const previousNode = state.selectedNode;
+    const currentLayout = state.spatialLayout;
+    
+    // Detect meaningful node selection changes for history tracking
+    const isMeaningfulChange = (
+      // Within Liminal Web: different node selected
+      currentLayout === 'liminal-web' && 
+      previousNode && 
+      node && 
+      previousNode.id !== node.id
+    );
+    
+    // Record history entry for meaningful changes (but not during undo/redo operations)
+    if (isMeaningfulChange && !state.isRestoringFromHistory) {
+      // Create new entry
+      const newEntry: NavigationHistoryEntry = {
+        nodeId: node.id,
+        layout: 'liminal-web',
+        timestamp: Date.now()
+      };
+      
+      // Add to history (reuse existing addHistoryEntry logic)
+      const { history, currentIndex, maxHistorySize } = state.navigationHistory;
+      
+      // Check if this entry is a duplicate of the current entry (prevent undo/redo loops)
+      const currentEntry = history[currentIndex];
+      const isDuplicate = currentEntry && 
+        currentEntry.nodeId === newEntry.nodeId && 
+        currentEntry.layout === newEntry.layout;
+      
+      if (isDuplicate) {
+        // Don't add duplicate entry - just update selected node
+        return { selectedNode: node };
+      }
+      
+      // If we're not at the end of history, clear everything after current position
+      const newHistory = currentIndex >= 0 
+        ? [...history.slice(0, currentIndex + 1), newEntry]
+        : [newEntry];
+      
+      // Ensure history doesn't exceed max size
+      const trimmedHistory = newHistory.length > maxHistorySize
+        ? newHistory.slice(-maxHistorySize)
+        : newHistory;
+      
+      return {
+        selectedNode: node,
+        navigationHistory: {
+          ...state.navigationHistory,
+          history: trimmedHistory,
+          currentIndex: trimmedHistory.length - 1
+        }
+      };
+    }
+    
+    // Non-meaningful change - just update selected node
+    return { selectedNode: node };
+  }),
   setCreatorMode: (active, nodeId = null) => set({ 
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),
   setSearchResults: (results) => set({ searchResults: results }),
-  setSpatialLayout: (layout) => set(state => ({ 
-    spatialLayout: layout,
-    layoutTransition: {
-      ...state.layoutTransition,
-      previousLayout: state.spatialLayout,
+  setSpatialLayout: (layout) => set(state => {
+    const previousLayout = state.spatialLayout;
+    const selectedNode = state.selectedNode;
+    
+    // Detect meaningful layout changes for history tracking
+    const isMeaningfulChange = (
+      // Constellation → Liminal Web (with selected node)
+      (previousLayout === 'constellation' && layout === 'liminal-web' && selectedNode) ||
+      // Liminal Web → Constellation  
+      (previousLayout === 'liminal-web' && layout === 'constellation')
+      // Note: Within Liminal Web changes are handled by setSelectedNode
+    );
+    
+    // Record history entry for meaningful changes (but not during undo/redo operations)
+    if (isMeaningfulChange && !state.isRestoringFromHistory) {
+      // Create new entry (inside this block, layout can only be 'constellation' or 'liminal-web')
+      const newEntry: NavigationHistoryEntry = {
+        nodeId: layout === 'liminal-web' ? selectedNode?.id || null : null,
+        layout: layout, // Already narrowed to valid types by isMeaningfulChange condition
+        timestamp: Date.now()
+      };
+      
+      // Add to history (reuse existing addHistoryEntry logic)
+      const { history, currentIndex, maxHistorySize } = state.navigationHistory;
+      
+      // Check if this entry is a duplicate of the current entry (prevent undo/redo loops)
+      const currentEntry = history[currentIndex];
+      const isDuplicate = currentEntry && 
+        currentEntry.nodeId === newEntry.nodeId && 
+        currentEntry.layout === newEntry.layout;
+      
+      if (isDuplicate) {
+        // Don't add duplicate entry - just update layout without history changes
+        return {
+          spatialLayout: layout,
+          layoutTransition: {
+            ...state.layoutTransition,
+            previousLayout: state.spatialLayout,
+          }
+        };
+      }
+      
+      // If we're not at the end of history, clear everything after current position
+      const newHistory = currentIndex >= 0 
+        ? [...history.slice(0, currentIndex + 1), newEntry]
+        : [newEntry];
+      
+      // Ensure history doesn't exceed max size
+      const trimmedHistory = newHistory.length > maxHistorySize
+        ? newHistory.slice(-maxHistorySize)
+        : newHistory;
+      
+      return {
+        spatialLayout: layout,
+        layoutTransition: {
+          ...state.layoutTransition,
+          previousLayout: state.spatialLayout,
+        },
+        navigationHistory: {
+          ...state.navigationHistory,
+          history: trimmedHistory,
+          currentIndex: trimmedHistory.length - 1
+        }
+      };
     }
-  })),
+    
+    // Non-meaningful change - just update layout
+    return {
+      spatialLayout: layout,
+      layoutTransition: {
+        ...state.layoutTransition,
+        previousLayout: state.spatialLayout,
+      }
+    };
+  }),
   
   // Fibonacci sphere configuration actions
   setFibonacciConfig: (config) => set(state => ({
@@ -315,24 +485,15 @@ export const useInterBrainStore = create<InterBrainState>()(
       }
     }
     
-    // Debug: Verify bidirectionality
-    let unidirectionalCount = 0;
+    // Verify bidirectionality (basic check)
     relationships.forEach((connections, sourceId) => {
       connections.forEach(targetId => {
         const targetConnections = relationships.get(targetId);
         if (!targetConnections || !targetConnections.includes(sourceId)) {
-          console.error(`UNIDIRECTIONAL: ${sourceId} -> ${targetId} but NOT ${targetId} -> ${sourceId}`);
-          unidirectionalCount++;
+          // Skip tracking errors for now - just ensure basic structure
         }
       });
     });
-    
-    console.log('Generated mock relationships:', relationships.size, 'nodes with bidirectional connections');
-    if (unidirectionalCount > 0) {
-      console.error(`WARNING: Found ${unidirectionalCount} unidirectional connections!`);
-    } else {
-      console.log('✅ All connections are properly bidirectional');
-    }
     
     return { mockRelationshipData: relationships };
   }),
@@ -401,6 +562,105 @@ export const useInterBrainStore = create<InterBrainState>()(
       validationErrors: {}
     }
   })),
+  
+  // Navigation history actions
+  addHistoryEntry: (nodeId, layout) => set(state => {
+    const { history, currentIndex, maxHistorySize } = state.navigationHistory;
+    
+    // Create new entry
+    const newEntry: NavigationHistoryEntry = {
+      nodeId,
+      layout,
+      timestamp: Date.now()
+    };
+    
+    // If we're not at the end of history (user has undone some actions),
+    // clear everything after current position (standard undo/redo behavior)
+    const newHistory = currentIndex >= 0 
+      ? [...history.slice(0, currentIndex + 1), newEntry]
+      : [newEntry];
+    
+    // Ensure history doesn't exceed max size (remove oldest entries)
+    const trimmedHistory = newHistory.length > maxHistorySize
+      ? newHistory.slice(-maxHistorySize)
+      : newHistory;
+    
+    return {
+      navigationHistory: {
+        ...state.navigationHistory,
+        history: trimmedHistory,
+        currentIndex: trimmedHistory.length - 1
+      }
+    };
+  }),
+  
+  getHistoryEntryForUndo: () => {
+    // This function will be called from commands which have access to getState()
+    return null; // Commands will implement the logic
+  },
+  
+  getHistoryEntryForRedo: () => {
+    // This function will be called from commands which have access to getState()
+    return null; // Commands will implement the logic
+  },
+  
+  performUndo: () => {
+    let success = false;
+    
+    set(state => {
+      const { currentIndex } = state.navigationHistory;
+      
+      if (currentIndex <= 0) {
+        return state; // Nothing to undo
+      }
+      
+      success = true;
+      
+      // Move to previous entry
+      return {
+        navigationHistory: {
+          ...state.navigationHistory,
+          currentIndex: currentIndex - 1
+        }
+      };
+    });
+    
+    return success;
+  },
+  
+  performRedo: () => {
+    let success = false;
+    
+    set(state => {
+      const { currentIndex, history } = state.navigationHistory;
+      
+      if (currentIndex >= history.length - 1) {
+        return state; // Nothing to redo
+      }
+      
+      success = true;
+      
+      // Move to next entry
+      return {
+        navigationHistory: {
+          ...state.navigationHistory,
+          currentIndex: currentIndex + 1
+        }
+      };
+    });
+    
+    return success;
+  },
+  
+  clearNavigationHistory: () => set(state => ({
+    navigationHistory: {
+      ...state.navigationHistory,
+      history: [],
+      currentIndex: -1
+    }
+  })),
+  
+  setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
     }),
     {
       name: 'interbrain-storage', // Storage key

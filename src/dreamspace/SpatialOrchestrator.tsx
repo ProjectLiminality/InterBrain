@@ -26,6 +26,12 @@ export interface SpatialOrchestratorRef {
   /** Return all nodes to constellation layout */
   returnToConstellation: () => void;
   
+  /** Focus on a specific node with mid-flight interruption support */
+  interruptAndFocusOnNode: (nodeId: string) => void;
+  
+  /** Return all nodes to constellation with mid-flight interruption support */
+  interruptAndReturnToConstellation: () => void;
+  
   /** Get current focused node ID */
   getFocusedNodeId: () => string | null;
   
@@ -97,13 +103,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
-      if (isTransitioning.current) {
-        console.log('SpatialOrchestrator: Ignoring focus request during transition');
-        return;
-      }
-      
-      console.log(`SpatialOrchestrator: Focusing on node ${nodeId}`);
-      
       try {
         // Build relationship graph from current nodes
         const relationshipGraph = buildRelationshipGraph(dreamNodes);
@@ -117,52 +116,26 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           innerNodeIds: new Set(positions.innerCircleNodes.map(n => n.nodeId)),
           sphereNodeIds: new Set(positions.sphereNodes)
         };
-        console.log(`📊 Liminal web roles - Center: 1, Inner: ${positions.innerCircleNodes.length}, Sphere: ${positions.sphereNodes.length}`);
-        
-        console.log('Original positions before transformation:', {
-          center: positions.centerNode.position,
-          innerCircle: positions.innerCircleNodes.map(n => ({ id: n.nodeId, pos: n.position }))
-        });
         
         // Apply world-space position correction based on current sphere rotation
         if (dreamWorldRef.current) {
           const sphereRotation = dreamWorldRef.current.quaternion.clone();
           
-          console.log('Current sphere rotation:', {
-            x: sphereRotation.x.toFixed(3), 
-            y: sphereRotation.y.toFixed(3), 
-            z: sphereRotation.z.toFixed(3), 
-            w: sphereRotation.w.toFixed(3)
-          });
-          
           // We need to apply the INVERSE rotation to counteract the sphere's rotation
           // This makes the liminal web appear in camera-relative positions regardless of sphere rotation
           const inverseRotation = sphereRotation.invert();
           
-          console.log('Inverse rotation to apply:', {
-            x: inverseRotation.x.toFixed(3), 
-            y: inverseRotation.y.toFixed(3), 
-            z: inverseRotation.z.toFixed(3), 
-            w: inverseRotation.w.toFixed(3)
-          });
-          
           // Transform center node position to world space
           const centerPos = new Vector3(...positions.centerNode.position);
-          console.log('Center position before transform:', centerPos.toArray());
           centerPos.applyQuaternion(inverseRotation);
-          console.log('Center position after transform:', centerPos.toArray());
           positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
           
           // Transform inner circle node positions to world space
           positions.innerCircleNodes.forEach(node => {
             const originalPos = new Vector3(...node.position);
-            console.log(`Node ${node.nodeId} before transform:`, originalPos.toArray());
             originalPos.applyQuaternion(inverseRotation);
-            console.log(`Node ${node.nodeId} after transform:`, originalPos.toArray());
             node.position = [originalPos.x, originalPos.y, originalPos.z];
           });
-          
-          console.log(`SpatialOrchestrator: Applied inverse world-space correction`);
         }
         
         // Start transition
@@ -171,18 +144,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
         // Update store to liminal web layout mode
         setSpatialLayout('liminal-web');
-        console.log('📍 Store Layout Updated: constellation → liminal-web');
         
         // Move center node to focus position
         const centerNodeRef = nodeRefs.current.get(positions.centerNode.nodeId);
-        console.log(`SpatialOrchestrator: Looking for center node ref ${positions.centerNode.nodeId}, found:`, !!centerNodeRef?.current);
         if (centerNodeRef?.current) {
-          console.log(`SpatialOrchestrator: Moving center node to:`, positions.centerNode.position);
           centerNodeRef.current.setActiveState(true);
           // Center node uses ease-out for smooth arrival
           centerNodeRef.current.moveToPosition(positions.centerNode.position, transitionDuration, 'easeOutQuart');
-        } else {
-          console.error(`SpatialOrchestrator: Center node ref not found for ${positions.centerNode.nodeId}`);
         }
         
         // Move inner circle nodes to their positions (first-degree relationships "break free")
@@ -196,7 +164,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         });
         
         // Move sphere nodes to sphere surface (out of the way for clean liminal web view)
-        console.log(`📍 SpatialOrchestrator: Moving ${positions.sphereNodes.length} sphere nodes to sphere surface (out of view)`);
         positions.sphereNodes.forEach(sphereNodeId => {
           const nodeRef = nodeRefs.current.get(sphereNodeId);
           if (nodeRef?.current) {
@@ -208,7 +175,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Set transition complete after animation duration
         globalThis.setTimeout(() => {
           isTransitioning.current = false;
-          console.log(`SpatialOrchestrator: Focus transition complete for ${nodeId}`);
         }, transitionDuration);
         
         // Notify callback
@@ -221,13 +187,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     },
     
     returnToConstellation: () => {
-      if (isTransitioning.current) {
-        console.log('SpatialOrchestrator: Ignoring constellation request during transition');
-        return;
-      }
-      
-      console.log('🌟 SpatialOrchestrator: Returning to constellation with dynamic scaling');
-      
       // Start transition
       isTransitioning.current = true;
       focusedNodeId.current = null;
@@ -239,24 +198,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       let worldRotation = undefined;
       if (dreamWorldRef.current) {
         worldRotation = dreamWorldRef.current.quaternion.clone();
-        console.log(`🌍 Using sphere rotation for scaled positions:`, {
-          x: worldRotation.x.toFixed(3),
-          y: worldRotation.y.toFixed(3),
-          z: worldRotation.z.toFixed(3),
-          w: worldRotation.w.toFixed(3)
-        });
       }
       
       // Return ALL nodes to their dynamically scaled constellation positions
       // This handles both active (center+inner) and inactive (sphere) nodes correctly
       const { centerNodeId, innerNodeIds, sphereNodeIds } = liminalWebRoles.current;
-      
-      // Log role-based return for debugging
-      if (centerNodeId || innerNodeIds.size > 0 || sphereNodeIds.size > 0) {
-        console.log(`🔄 Returning nodes by role:`);
-        console.log(`  - Active nodes (${1 + innerNodeIds.size}): Center + Inner circle → scaled positions (easeIn)`);
-        console.log(`  - Inactive nodes (${sphereNodeIds.size}): Sphere surface → scaled positions (easeOut)`);
-      }
       
       // Return ALL nodes to scaled positions with role-based easing
       nodeRefs.current.forEach((nodeRef, nodeId) => {
@@ -293,7 +239,171 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         });
         
         isTransitioning.current = false;
-        console.log('✅ Constellation return complete');
+      }, transitionDuration);
+      
+      // Notify callback
+      onConstellationReturn?.();
+    },
+    
+    interruptAndFocusOnNode: (nodeId: string) => {
+      try {
+        // Build relationship graph from current nodes
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        
+        // Calculate focused layout positions (in local sphere space)
+        const positions = calculateFocusedLayoutPositions(nodeId, relationshipGraph, DEFAULT_FOCUSED_CONFIG);
+        
+        // Track node roles for proper constellation return
+        liminalWebRoles.current = {
+          centerNodeId: positions.centerNode.nodeId,
+          innerNodeIds: new Set(positions.innerCircleNodes.map(n => n.nodeId)),
+          sphereNodeIds: new Set(positions.sphereNodes)
+        };
+        
+        // Apply world-space position correction based on current sphere rotation
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          
+          // We need to apply the INVERSE rotation to counteract the sphere's rotation
+          // This makes the liminal web appear in camera-relative positions regardless of sphere rotation
+          const inverseRotation = sphereRotation.invert();
+          
+          // Transform center node position to world space
+          const centerPos = new Vector3(...positions.centerNode.position);
+          centerPos.applyQuaternion(inverseRotation);
+          positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
+          
+          // Transform inner circle node positions to world space
+          positions.innerCircleNodes.forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+        
+        // Start transition (allow interruption of existing transitions)
+        isTransitioning.current = true;
+        focusedNodeId.current = nodeId;
+        
+        // Update store to liminal web layout mode
+        setSpatialLayout('liminal-web');
+        
+        // Move center node to focus position (with interruption support)
+        const centerNodeRef = nodeRefs.current.get(positions.centerNode.nodeId);
+        if (centerNodeRef?.current) {
+          centerNodeRef.current.setActiveState(true);
+          
+          // Use interruption-capable method if the node is currently moving
+          if (centerNodeRef.current.isMoving()) {
+            centerNodeRef.current.interruptAndMoveToPosition(positions.centerNode.position, transitionDuration, 'easeOutQuart');
+          } else {
+            // Center node uses ease-out for smooth arrival
+            centerNodeRef.current.moveToPosition(positions.centerNode.position, transitionDuration, 'easeOutQuart');
+          }
+        }
+        
+        // Move inner circle nodes to their positions (with interruption support)
+        positions.innerCircleNodes.forEach(({ nodeId: innerNodeId, position }) => {
+          const nodeRef = nodeRefs.current.get(innerNodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            
+            // Use interruption-capable method if the node is currently moving
+            if (nodeRef.current.isMoving()) {
+              nodeRef.current.interruptAndMoveToPosition(position, transitionDuration, 'easeOutQuart');
+            } else {
+              // Inner circle nodes use ease-out for smooth arrival into view
+              nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
+            }
+          }
+        });
+        
+        // Move sphere nodes to sphere surface (with interruption support)
+        positions.sphereNodes.forEach(sphereNodeId => {
+          const nodeRef = nodeRefs.current.get(sphereNodeId);
+          if (nodeRef?.current) {
+            // Use interruption-capable method if the node is currently moving
+            if (nodeRef.current.isMoving()) {
+              nodeRef.current.interruptAndReturnToConstellation(transitionDuration, 'easeInQuart');
+            } else {
+              // Sphere nodes use ease-in for quick departure from view
+              nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
+            }
+          }
+        });
+        
+        // Set transition complete after animation duration
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration);
+        
+        // Notify callback
+        onNodeFocused?.(nodeId);
+        
+      } catch (error) {
+        console.error('SpatialOrchestrator: Error during interrupt focus transition:', error);
+        isTransitioning.current = false;
+      }
+    },
+    
+    interruptAndReturnToConstellation: () => {
+      // Start transition (allow interruption of existing transitions)
+      isTransitioning.current = true;
+      focusedNodeId.current = null;
+      
+      // Update store to constellation layout mode
+      setSpatialLayout('constellation');
+      
+      // Get current sphere rotation for accurate scaled position calculation
+      let worldRotation = undefined;
+      if (dreamWorldRef.current) {
+        worldRotation = dreamWorldRef.current.quaternion.clone();
+      }
+      
+      // Return ALL nodes to their dynamically scaled constellation positions
+      // This handles both active (center+inner) and inactive (sphere) nodes correctly
+      const { centerNodeId, innerNodeIds, sphereNodeIds } = liminalWebRoles.current;
+      
+      // Return ALL nodes to scaled positions with role-based easing (with interruption support)
+      nodeRefs.current.forEach((nodeRef, nodeId) => {
+        if (nodeRef.current) {
+          // Determine appropriate easing based on node's role in liminal web
+          let easing = 'easeOutCubic'; // Default fallback
+          if (nodeId === centerNodeId || innerNodeIds.has(nodeId)) {
+            // Active nodes moving OUT from liminal positions - accelerate as they leave
+            easing = 'easeInQuart';
+          } else if (sphereNodeIds.has(nodeId)) {
+            // Inactive nodes moving IN from sphere surface - decelerate as they arrive
+            easing = 'easeOutQuart';
+          }
+          
+          // Use interruption-capable method if the node is currently moving
+          if (nodeRef.current.isMoving()) {
+            nodeRef.current.interruptAndReturnToScaledPosition(transitionDuration, worldRotation, easing);
+          } else {
+            // Pass world rotation for accurate scaling + role-based easing
+            nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation, easing);
+          }
+        }
+      });
+      
+      // Clear role tracking after initiating return
+      liminalWebRoles.current = {
+        centerNodeId: null,
+        innerNodeIds: new Set(),
+        sphereNodeIds: new Set()
+      };
+      
+      // Set transition complete after animation duration
+      globalThis.setTimeout(() => {
+        // Ensure all nodes are back in constellation mode
+        nodeRefs.current.forEach((nodeRef, _nodeId) => {
+          if (nodeRef.current) {
+            nodeRef.current.setActiveState(false);
+          }
+        });
+        
+        isTransitioning.current = false;
       }, transitionDuration);
       
       // Notify callback
@@ -317,7 +427,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   
   // Call ready callback on mount
   useEffect(() => {
-    console.log('SpatialOrchestrator: Component mounted, calling onOrchestratorReady');
     onOrchestratorReady?.();
   }, [onOrchestratorReady]);
   

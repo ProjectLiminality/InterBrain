@@ -116,7 +116,6 @@ export default function DreamspaceCanvas() {
   // Register all existing refs with orchestrator when it becomes ready
   useEffect(() => {
     if (spatialOrchestratorRef.current) {
-      console.log(`Registering ${dreamNodeRefs.current.size} existing refs with SpatialOrchestrator`);
       dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
         if (nodeRef) {
           spatialOrchestratorRef.current?.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
@@ -133,20 +132,17 @@ export default function DreamspaceCanvas() {
         const selectedNode = store.selectedNode;
         
         if (!selectedNode) {
-          console.log('No node selected for move to center');
           return false;
         }
         
         const nodeRef = dreamNodeRefs.current.get(selectedNode.id);
         if (!nodeRef?.current) {
-          console.log(`No ref found for selected node: ${selectedNode.id}`);
           return false;
         }
         
         // Move to center position (close to camera for large appearance)
         const centerPosition: [number, number, number] = [0, 0, -50];
         
-        console.log(`Moving ${selectedNode.name} to center:`, centerPosition);
         nodeRef.current.moveToPosition(centerPosition, 2000);
         return true;
       },
@@ -162,6 +158,22 @@ export default function DreamspaceCanvas() {
         // Return to constellation via SpatialOrchestrator
         if (spatialOrchestratorRef.current) {
           spatialOrchestratorRef.current.returnToConstellation();
+          return true;
+        }
+        return false;
+      },
+      interruptAndFocusOnNode: (nodeId: string) => {
+        // Trigger focused layout with mid-flight interruption support
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.interruptAndFocusOnNode(nodeId);
+          return true;
+        }
+        return false;
+      },
+      interruptAndReturnToConstellation: () => {
+        // Return to constellation with mid-flight interruption support
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.interruptAndReturnToConstellation();
           return true;
         }
         return false;
@@ -334,14 +346,9 @@ export default function DreamspaceCanvas() {
     // Update selected node in store
     const store = useInterBrainStore.getState();
     store.setSelectedNode(node);
-    console.log('DreamNode selected:', node.name);
-    
     // Trigger focused layout via SpatialOrchestrator
     if (spatialOrchestratorRef.current) {
-      console.log('Calling SpatialOrchestrator.focusOnNode for:', node.id);
       spatialOrchestratorRef.current.focusOnNode(node.id);
-    } else {
-      console.error('SpatialOrchestrator ref is null - orchestrator not ready');
     }
   };
 
