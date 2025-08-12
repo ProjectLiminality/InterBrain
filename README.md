@@ -8,8 +8,8 @@ The InterBrain is an innovative knowledge gardening system that aims to revoluti
 
 ## Project Status & Roadmap
 
-> ⚡️ **Current Status: Epic 3 Complete**  
-Epic 3 has been successfully implemented with comprehensive DreamNode management capabilities including service layer architecture, git template system, visual git state indicators, and auto-stash creator mode workflow. 101 unit tests passing with zero warnings.
+> ⚡️ **Current Status: Epic 5 Active Development**  
+Epic 4 foundation (Spatial Orchestration & Undo/Redo) has been merged to main. Epic 5 (Semantic Search System) is now in active development. Epic 4's Edit Mode feature will be completed after Epic 5 in a continuation branch.
 
 > 🔬 **Previous Exploration:**  
 Earlier exploration work including screenshots and recordings can be found at [**InterBrain-Prototype**](https://github.com/ProjectLiminality/InterBrain-Prototype). This repository contains the conceptual foundation and visual demonstrations that inform the current development approach.
@@ -41,8 +41,14 @@ DreamNode Management System with:
 - Proto-node creation with animations
 - 101 unit tests with comprehensive coverage
 
-> 🚧 **Next: Epic 4 - Liminal Web Layout System**  
-Dynamic spatial layouts that orchestrate DreamNode positioning based on relationships.
+> 🔄 **Epic 4 Partial (Foundation Merged):**  
+Liminal Web Layout System with:
+- ✅ Spatial Orchestration System (Feature #316)
+- ✅ Undo/Redo Navigation (Feature #320)
+- 📋 Edit Mode (Feature #321) - Pending, awaiting Epic 5 completion
+
+> 🚀 **Active: Epic 5 - Semantic Search System**  
+Implementing semantic search capabilities using the spatial orchestration foundation from Epic 4.
 
 > 🌱 **Beyond the Plugin:**  
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
@@ -52,8 +58,9 @@ The InterBrain is designed as the foundation for **DreamOS** — a decentralized
 2. ✅ Epic 1: Plugin Infrastructure (this repository)  
 3. ✅ Epic 2: 3D Spatial Visualization System
 4. ✅ Epic 3: DreamNode Management System
-5. 🚧 Epic 4: Liminal Web Layout System
-5. 🪐 DreamOS system (future evolution)  
+5. 🔄 Epic 4: Liminal Web Layout System (foundation merged, edit mode pending)
+6. 🚀 Epic 5: Semantic Search System (active development)
+7. 🪐 DreamOS system (future evolution)  
 
 Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2).
 
