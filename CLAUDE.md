@@ -14,18 +14,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Development Status
 
-**Phase**: Epic 4 Active Development
+**Phase**: Epic 5 Semantic Search Development (Epic 4 Foundation Merged)
 - ✅ **Epic 1 Complete**: Plugin Infrastructure foundation established
 - ✅ **Epic 2 Complete**: 3D Spatial Visualization System with all features implemented
 - ✅ **Epic 3 Complete**: DreamNode Management System with service layer architecture
-- 🚀 **Epic 4 Active**: Liminal Web Layout System (branch: epic/4-liminal-web-layout)
-- 🔮 **Epic 5 Future**: Semantic Search System
+- 🔄 **Epic 4 PARTIAL**: Liminal Web Layout System - Foundation merged, Edit Mode pending
+- 🚀 **Epic 5 Active**: Semantic Search System (branch: epic/5-semantic-search)
 
-### Epic 4 Current Status (August 12, 2025)
-- ✅ Epic branch active: `epic/4-liminal-web-layout`
-- 🎯 **Feature #316 COMPLETED**: Focused Layout Engine & Spatial Orchestration System
-- ✅ **Feature #320 COMPLETED**: Undo/Redo Navigation with Mid-Flight Animation Interruption
-- 📋 Next phase: Additional liminal web features and layout transitions
+### ⚠️ CRITICAL: Epic 4 Partial Merge Status (December 17, 2024)
+**WORKFLOW EXCEPTION - PARTIAL EPIC MERGE**
+- **Reason**: Circular dependency - Edit Mode (#321) needs Semantic Search, Semantic Search needs Spatial Orchestration
+- **Completed & Merged**: Features #316 (Spatial Orchestration) and #320 (Undo/Redo Navigation)
+- **Pending Feature**: #321 (Unified Edit Mode) - Will implement in `epic/4-continued` branch after Epic 5
+- **Continuation Plan**: After Epic 5 completion, branch `epic/4-continued` from main to implement Edit Mode with semantic search integration
+- **Documentation**: See `PARTIAL_EPIC_MERGE.md` for complete workflow exception documentation
+
+### Epic 4 Current Status (December 17, 2024)
+- ✅ **Feature #316 MERGED**: Focused Layout Engine & Spatial Orchestration System (foundation for Epic 5)
+- ✅ **Feature #320 MERGED**: Undo/Redo Navigation with Mid-Flight Animation Interruption
+- 📋 **Feature #321 DEFERRED**: Edit Mode - Awaiting Epic 5 Semantic Search for optimal implementation
+- ⚠️ **IMPORTANT**: Epic 4 housekeeping (full docs update, CHANGELOG) deferred until epic/4-continued completion
 
 ### Epic 4 Achievements (August 12, 2025)
 **Feature #316 Complete**: Focused Layout Engine & Spatial Orchestration System
@@ -234,6 +242,24 @@ main → epic/2-spatial-visualization
 - **MANDATORY**: Update CHANGELOG.md with epic details via release branch
 - Tag release if appropriate
 - Epic represents coherent functionality unit
+
+### Workflow Exception: Partial Epic Merge Pattern
+
+**When to Use**: Only when circular dependencies exist between epics at the architectural level
+**Documentation Required**: PARTIAL_EPIC_MERGE.md file and clear CLAUDE.md updates
+**Process**:
+1. Complete and test foundational features within the epic
+2. Document partial completion status extensively
+3. Merge foundational features to main
+4. Create continuation plan with specific branch name (epic/N-continued)
+5. Defer housekeeping tasks (CHANGELOG, final docs) until continuation completes
+6. Track deferred features in GitHub issues with clear continuation requirements
+
+**Critical Requirements**:
+- Must document WHY the exception is necessary
+- Must specify EXACTLY which features are merged vs deferred
+- Must create clear continuation plan BEFORE merging
+- Must update all project memory and GitHub issues
 
 ### Core Workflow Pattern: Issue Clarity Before Implementation
 
