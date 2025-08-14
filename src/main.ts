@@ -11,6 +11,13 @@ import { DreamNode } from './types/dreamnode';
 import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
 import { getMockDataForConfig } from './mock/dreamnode-mock-data';
 import { calculateFocusedLayoutPositions, getFocusedLayoutStats, DEFAULT_FOCUSED_CONFIG } from './dreamspace/layouts/FocusedLayout';
+import { 
+  createTestEmbeddingCommand,
+  createIndexSampleCommand,
+  createSemanticSearchTestCommand,
+  createClearIndexCommand,
+  createShowIndexStatsCommand
+} from './features/semantic-search/commands/semantic-search-commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -1068,6 +1075,13 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // === SEMANTIC SEARCH COMMANDS (Qwen3) ===
+    this.addCommand(createTestEmbeddingCommand());
+    this.addCommand(createIndexSampleCommand());
+    this.addCommand(createSemanticSearchTestCommand());
+    this.addCommand(createClearIndexCommand());
+    this.addCommand(createShowIndexStatsCommand());
+
     // Indexing command: Intelligent reindex
     this.addCommand({
       id: 'intelligent-reindex',
@@ -1077,7 +1091,7 @@ export default class InterBrainPlugin extends Plugin {
         globalThis.setTimeout(async () => {
           const loadingNotice = this.uiService.showLoading('Analyzing changes for intelligent reindex...');
           try {
-            const { indexingService } = await import('./services/indexing-service');
+            const { indexingService } = await import('./features/semantic-search/indexing/indexing-service');
             const result = await indexingService.intelligentReindex();
             
             const message = `Reindex complete: ${result.added} added, ${result.updated} updated, ${result.errors} errors`;
@@ -1114,7 +1128,7 @@ export default class InterBrainPlugin extends Plugin {
           
           const loadingNotice = this.uiService.showLoading(`Indexing: ${selectedNode.name}...`);
           try {
-            const { indexingService } = await import('./services/indexing-service');
+            const { indexingService } = await import('./features/semantic-search/indexing/indexing-service');
             const vectorData = await indexingService.indexNode(selectedNode);
             
             this.uiService.showSuccess(`Indexed "${selectedNode.name}" (${vectorData.metadata.wordCount} words)`);
@@ -1158,7 +1172,7 @@ export default class InterBrainPlugin extends Plugin {
     let lastReportedProgress = 0;
     
     try {
-      const { indexingService } = await import('./services/indexing-service');
+      const { indexingService } = await import('./features/semantic-search/indexing/indexing-service');
       
       // Set up progress monitoring with UI notifications
       const progressInterval = globalThis.setInterval(() => {

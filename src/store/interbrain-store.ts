@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
-import { VectorData } from '../services/indexing-service';
+import { VectorData } from '../features/semantic-search/indexing/indexing-service';
 
 // Navigation history types
 export interface NavigationHistoryEntry {

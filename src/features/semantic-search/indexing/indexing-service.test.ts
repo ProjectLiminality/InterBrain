@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { IndexingService, VectorData } from '../../src/services/indexing-service';
-import { DreamNode } from '../../src/types/dreamnode';
-import { useInterBrainStore } from '../../src/store/interbrain-store';
+import { IndexingService, VectorData } from './indexing-service';
+import { DreamNode } from '../../../types/dreamnode';
+import { useInterBrainStore } from '../../../store/interbrain-store';
 
 // Mock the store
-vi.mock('../../src/store/interbrain-store', () => ({
+vi.mock('../../../store/interbrain-store', () => ({
   useInterBrainStore: {
     getState: vi.fn()
   }
@@ -12,7 +12,7 @@ vi.mock('../../src/store/interbrain-store', () => ({
 
 // Mock the mock data import
 const mockGetMockDataForConfig = vi.fn();
-vi.mock('../../src/mock/dreamnode-mock-data', () => ({
+vi.mock('../../../mock/dreamnode-mock-data', () => ({
   getMockDataForConfig: mockGetMockDataForConfig
 }));
 
@@ -128,7 +128,7 @@ describe('IndexingService', () => {
       
       const result = await indexingService.indexNode(node);
       
-      expect(result.embedding).toHaveLength(128);
+      expect(result.embedding).toHaveLength(1024); // Qwen3 uses 1024 dimensions
       expect(result.embedding.every(val => typeof val === 'number')).toBe(true);
     });
 
@@ -193,7 +193,7 @@ describe('IndexingService', () => {
       const oldVector: VectorData = {
         nodeId: 'node-2',
         contentHash: 'old-hash',
-        embedding: new Array(128).fill(0.1),
+        embedding: new Array(1024).fill(0.1),
         lastIndexed: Date.now() - 1000,
         metadata: {
           title: 'Test Dreamer 1',
@@ -219,7 +219,7 @@ describe('IndexingService', () => {
       const deletedVector: VectorData = {
         nodeId: 'deleted-node',
         contentHash: 'hash',
-        embedding: new Array(128).fill(0.1),
+        embedding: new Array(1024).fill(0.1),
         lastIndexed: Date.now(),
         metadata: {
           title: 'Deleted Node',
@@ -241,7 +241,7 @@ describe('IndexingService', () => {
       const vector1: VectorData = {
         nodeId: 'node-1',
         contentHash: 'content-hash-1',
-        embedding: new Array(128).fill(0.1),
+        embedding: new Array(1024).fill(0.1),
         lastIndexed: Date.now(),
         metadata: {
           title: 'Test Dream 1',
@@ -253,7 +253,7 @@ describe('IndexingService', () => {
       const vector2: VectorData = {
         nodeId: 'node-2',
         contentHash: 'abc123def456', // Same as current commit hash
-        embedding: new Array(128).fill(0.1),
+        embedding: new Array(1024).fill(0.1),
         lastIndexed: Date.now(),
         metadata: {
           title: 'Test Dreamer 1',

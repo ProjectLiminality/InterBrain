@@ -1,5 +1,6 @@
-import { DreamNode } from '../types/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { DreamNode } from '../../../types/dreamnode';
+import { useInterBrainStore } from '../../../store/interbrain-store';
+import { MockQwen3EmbeddingService } from './mock-embedding-service';
 
 /**
  * Vector data structure for storing indexed content
@@ -7,7 +8,7 @@ import { useInterBrainStore } from '../store/interbrain-store';
 export interface VectorData {
   nodeId: string;
   contentHash: string;  // Git commit hash for change detection
-  embedding: number[];  // Vector embedding (simplified for now)
+  embedding: number[];  // Qwen3 vector embedding (1024 dimensions)
   lastIndexed: number;  // Timestamp
   metadata: {
     title: string;
@@ -55,10 +56,10 @@ export interface IIndexingService {
 }
 
 /**
- * IndexingService - Manages vector embeddings for DreamNodes
+ * IndexingService - Manages Qwen3 vector embeddings for DreamNodes
  * 
  * Provides intelligent indexing with git integration for change detection.
- * Uses simple text analysis initially (will integrate embeddings later).
+ * Uses Qwen3-Embedding-0.6B model for real semantic embeddings (1024 dimensions).
  */
 export class IndexingService implements IIndexingService {
   private progress: IndexingProgress = {
@@ -68,24 +69,27 @@ export class IndexingService implements IIndexingService {
   };
   
   private indexTimes: number[] = [];
+  private embeddingService: MockQwen3EmbeddingService;
   
   constructor() {
-    console.log('IndexingService: Initialized');
+    console.log('IndexingService: Initialized with Mock Qwen3 embeddings (temporary)');
+    this.embeddingService = MockQwen3EmbeddingService.getInstance();
   }
   
   /**
-   * Index a single DreamNode
+   * Index a single DreamNode using Qwen3 embeddings
    */
   async indexNode(node: DreamNode): Promise<VectorData> {
     const startTime = Date.now();
     
     try {
-      // Simple text extraction for now
+      // Extract text content
       const textContent = this.extractTextContent(node);
       const wordCount = textContent.split(/\s+/).filter(w => w.length > 0).length;
       
-      // Create simple embedding (will be replaced with real embeddings)
-      const embedding = this.createSimpleEmbedding(textContent);
+      // Generate real Qwen3 embedding
+      console.log(`IndexingService: Generating Qwen3 embedding for "${node.name}"...`);
+      const embedding = await this.embeddingService.generateEmbedding(textContent);
       
       // Get current git commit hash if available
       const commitHash = await this.getNodeCommitHash(node);
@@ -365,31 +369,6 @@ export class IndexingService implements IIndexingService {
     return parts.join(' ');
   }
   
-  /**
-   * Helper: Create simple embedding (placeholder for real embeddings)
-   */
-  private createSimpleEmbedding(text: string): number[] {
-    // Simple character frequency based embedding (placeholder)
-    const embedding = new Array(128).fill(0);
-    const normalizedText = text.toLowerCase();
-    
-    for (const char of normalizedText) {
-      const code = char.charCodeAt(0);
-      if (code < 128) {
-        embedding[code] += 1;
-      }
-    }
-    
-    // Normalize
-    const sum = embedding.reduce((a, b) => a + b, 0);
-    if (sum > 0) {
-      for (let i = 0; i < embedding.length; i++) {
-        embedding[i] = embedding[i] / sum;
-      }
-    }
-    
-    return embedding;
-  }
   
   /**
    * Helper: Get git commit hash for a node
@@ -434,7 +413,7 @@ export class IndexingService implements IIndexingService {
       return nodes;
     } else {
       // Get from mock data configuration (same source as DreamspaceCanvas)
-      const { getMockDataForConfig } = await import('../mock/dreamnode-mock-data');
+      const { getMockDataForConfig } = await import('../../../mock/dreamnode-mock-data');
       const nodes = getMockDataForConfig(store.mockDataConfig);
       console.log(`IndexingService: Found ${nodes.length} mock nodes:`, nodes.map(n => n.name).join(', '));
       return nodes;
