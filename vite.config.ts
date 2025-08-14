@@ -21,10 +21,8 @@ export default defineConfig({
       output: {
         globals: {
           obsidian: 'obsidian'
-        },
-        manualChunks: {
-          'transformers': ['@xenova/transformers']
         }
+        // Remove manualChunks - Obsidian plugins need everything in main.js
       }
     },
     outDir: 'dist',
