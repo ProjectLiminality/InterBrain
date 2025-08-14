@@ -36,9 +36,8 @@ export class Qwen3EmbeddingService implements EmbeddingService {
 
   // Model configuration
   private static readonly MODEL_CONFIG = {
-    modelId: 'onnx-community/Qwen3-Embedding-0.6B-ONNX',
-    dtype: 'fp32' as const,
-    pooling: 'last_token' as const,
+    modelId: 'Xenova/all-MiniLM-L6-v2',
+    pooling: 'mean' as const,
     normalize: true
   }
 
@@ -69,7 +68,7 @@ export class Qwen3EmbeddingService implements EmbeddingService {
       const isModelAvailable = await modelManagerService.isModelAvailable()
       
       if (!isModelAvailable) {
-        const error = new Error('Qwen3 model not available. Please download it first using "Download Qwen3 Embedding Model" command.')
+        const error = new Error('Embedding model not available. Please download it first using "Download Embedding Model" command.')
         console.error('❌', error.message)
         throw error
       }
@@ -95,17 +94,17 @@ export class Qwen3EmbeddingService implements EmbeddingService {
       )
 
       const initTime = globalThis.performance.now() - startTime
-      console.log(`✅ Qwen3 model initialized in ${initTime.toFixed(2)}ms`)
+      console.log(`✅ Embedding model initialized in ${initTime.toFixed(2)}ms`)
       
       this.initialized = true
     } catch (error) {
-      console.error('❌ Failed to initialize Qwen3 embedding model:', error)
+      console.error('❌ Failed to initialize embedding model:', error)
       
       // Provide helpful error messages
       if (error instanceof Error && error.message.includes('not available')) {
         throw error // Re-throw our custom error message
       } else {
-        throw new Error(`Qwen3 embedding model initialization failed: ${error}. Try downloading the model first.`)
+        throw new Error(`Embedding model initialization failed: ${error}. Try downloading the model first.`)
       }
     }
   }
@@ -117,7 +116,7 @@ export class Qwen3EmbeddingService implements EmbeddingService {
     await this.initialize()
 
     if (!this.pipeline) {
-      throw new Error('Qwen3 embedding pipeline not initialized')
+      throw new Error('Embedding pipeline not initialized')
     }
 
     try {
@@ -134,8 +133,8 @@ export class Qwen3EmbeddingService implements EmbeddingService {
       
       return embedding
     } catch (error) {
-      console.error('❌ Qwen3 embedding generation failed:', error)
-      throw new Error(`Qwen3 embedding generation failed: ${error}`)
+      console.error('❌ Embedding generation failed:', error)
+      throw new Error(`Embedding generation failed: ${error}`)
     }
   }
 
@@ -146,7 +145,7 @@ export class Qwen3EmbeddingService implements EmbeddingService {
     await this.initialize()
 
     if (!this.pipeline) {
-      throw new Error('Qwen3 embedding pipeline not initialized')
+      throw new Error('Embedding pipeline not initialized')
     }
 
     try {
@@ -180,8 +179,8 @@ export class Qwen3EmbeddingService implements EmbeddingService {
 
       return embeddings
     } catch (error) {
-      console.error('❌ Qwen3 batch embedding failed:', error)
-      throw new Error(`Qwen3 batch embedding failed: ${error}`)
+      console.error('❌ Batch embedding failed:', error)
+      throw new Error(`Batch embedding failed: ${error}`)
     }
   }
 

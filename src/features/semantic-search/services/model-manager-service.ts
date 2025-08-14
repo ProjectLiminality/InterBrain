@@ -147,18 +147,18 @@ export class ModelManagerService {
   }
   private downloadAbortController: AbortController | null = null
 
-  // Qwen3 Embedding Model Configuration
-  private static readonly QWEN3_MODEL: ModelInfo = {
-    id: 'qwen3-embedding-0.6b',
-    name: 'Qwen3-Embedding-0.6B',
-    description: 'Multilingual embedding model with 1024 dimensions, optimized for semantic search',
-    size: '639MB',
-    sizeBytes: 639 * 1024 * 1024, // 639MB in bytes
-    dimensions: 1024,
-    contextLength: 32768,
-    languages: ['en', 'zh', 'multilingual', 'code'],
-    downloadUrl: 'https://huggingface.co/onnx-community/Qwen3-Embedding-0.6B-ONNX',
-    checksum: undefined // Will be populated from model metadata
+  // all-MiniLM-L6-v2 Embedding Model Configuration (well-supported alternative)
+  private static readonly EMBEDDING_MODEL: ModelInfo = {
+    id: 'all-minilm-l6-v2',
+    name: 'all-MiniLM-L6-v2',
+    description: 'High-quality sentence embedding model with 384 dimensions, optimized for semantic search',
+    size: '90MB',
+    sizeBytes: 90 * 1024 * 1024, // 90MB in bytes
+    dimensions: 384,
+    contextLength: 512,
+    languages: ['en', 'multilingual'],
+    downloadUrl: 'https://huggingface.co/Xenova/all-MiniLM-L6-v2',
+    checksum: undefined
   }
 
   private constructor() {
@@ -173,10 +173,10 @@ export class ModelManagerService {
   }
 
   /**
-   * Get information about the Qwen3 model
+   * Get information about the embedding model
    */
   getModelInfo(): ModelInfo {
-    return { ...ModelManagerService.QWEN3_MODEL }
+    return { ...ModelManagerService.EMBEDDING_MODEL }
   }
 
   /**
@@ -186,7 +186,7 @@ export class ModelManagerService {
    */
   async isModelAvailable(): Promise<boolean> {
     try {
-      const stored = await this.storage.getModel(ModelManagerService.QWEN3_MODEL.id)
+      const stored = await this.storage.getModel(ModelManagerService.EMBEDDING_MODEL.id)
       return stored !== null
     } catch (error) {
       console.error('ModelManagerService: Error checking model availability:', error)
@@ -199,7 +199,7 @@ export class ModelManagerService {
    */
   async getStoredModel(): Promise<ModelStorage | null> {
     try {
-      return await this.storage.getModel(ModelManagerService.QWEN3_MODEL.id)
+      return await this.storage.getModel(ModelManagerService.EMBEDDING_MODEL.id)
     } catch (error) {
       console.error('ModelManagerService: Error getting stored model:', error)
       return null
@@ -217,7 +217,7 @@ export class ModelManagerService {
    * Download the Qwen3 model with progress reporting
    */
   async downloadModel(force = false): Promise<void> {
-    const modelInfo = ModelManagerService.QWEN3_MODEL
+    const modelInfo = ModelManagerService.EMBEDDING_MODEL
 
     // Check if already available and not forcing redownload
     if (!force && await this.isModelAvailable()) {
@@ -298,7 +298,7 @@ export class ModelManagerService {
    */
   async clearModel(): Promise<void> {
     try {
-      await this.storage.deleteModel(ModelManagerService.QWEN3_MODEL.id)
+      await this.storage.deleteModel(ModelManagerService.EMBEDDING_MODEL.id)
       console.log('ModelManagerService: Model cache cleared')
     } catch (error) {
       console.error('ModelManagerService: Error clearing model cache:', error)
@@ -336,7 +336,7 @@ export class ModelManagerService {
     if (!stored) return false
 
     // Basic validation - check size matches expected
-    const expectedSize = ModelManagerService.QWEN3_MODEL.sizeBytes
+    const expectedSize = ModelManagerService.EMBEDDING_MODEL.sizeBytes
     const actualSize = stored.metadata.size
 
     if (Math.abs(actualSize - expectedSize) > expectedSize * 0.01) { // 1% tolerance
@@ -360,7 +360,7 @@ export class ModelManagerService {
       // The progress callback will help us track the download
       const pipeline_ = await pipeline(
         'feature-extraction',
-        'onnx-community/Qwen3-Embedding-0.6B-ONNX', // Transformers.js model ID
+        'Xenova/all-MiniLM-L6-v2', // Well-supported embedding model
         {
           progress_callback: (progress: unknown) => {
             const progressData = progress as { 

@@ -6,10 +6,10 @@ import { modelManagerService } from '../services/model-manager-service'
  */
 export function createDownloadModelCommand(): Command {
   return {
-    id: 'interbrain-download-qwen3-model',
-    name: 'Download Qwen3 Embedding Model',
+    id: 'interbrain-download-embedding-model',
+    name: 'Download Embedding Model',
     callback: async () => {
-      console.log('🔄 Starting Qwen3 model download...')
+      console.log('🔄 Starting embedding model download...')
       
       try {
         // Check if model is already available

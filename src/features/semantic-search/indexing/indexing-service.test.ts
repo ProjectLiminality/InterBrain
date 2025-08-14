@@ -21,13 +21,13 @@ vi.mock('../services/model-manager-service', () => ({
   modelManagerService: {
     isModelAvailable: vi.fn().mockResolvedValue(true),
     getModelInfo: vi.fn().mockReturnValue({
-      id: 'qwen3-embedding-0.6b',
-      name: 'Qwen3-Embedding-0.6B',
+      id: 'all-minilm-l6-v2',
+      name: 'all-MiniLM-L6-v2',
       description: 'Test model',
-      size: '639MB',
-      dimensions: 1024,
-      contextLength: 32768,
-      languages: ['en', 'zh']
+      size: '90MB',
+      dimensions: 384,
+      contextLength: 512,
+      languages: ['en', 'multilingual']
     })
   }
 }));
@@ -41,8 +41,8 @@ vi.mock('@xenova/transformers', () => ({
       return a & a;
     }, 0);
     
-    const embedding = new Array(1024);
-    for (let i = 0; i < 1024; i++) {
+    const embedding = new Array(384);
+    for (let i = 0; i < 384; i++) {
       embedding[i] = Math.sin((hash + i) * 0.01) * 0.1;
     }
     
@@ -162,7 +162,7 @@ describe('IndexingService', () => {
       
       const result = await indexingService.indexNode(node);
       
-      expect(result.embedding).toHaveLength(1024); // Qwen3 uses 1024 dimensions
+      expect(result.embedding).toHaveLength(384); // all-MiniLM-L6-v2 uses 384 dimensions
       expect(result.embedding.every(val => typeof val === 'number')).toBe(true);
     });
 
@@ -227,7 +227,7 @@ describe('IndexingService', () => {
       const oldVector: VectorData = {
         nodeId: 'node-2',
         contentHash: 'old-hash',
-        embedding: new Array(1024).fill(0.1),
+        embedding: new Array(384).fill(0.1),
         lastIndexed: Date.now() - 1000,
         metadata: {
           title: 'Test Dreamer 1',
@@ -253,7 +253,7 @@ describe('IndexingService', () => {
       const deletedVector: VectorData = {
         nodeId: 'deleted-node',
         contentHash: 'hash',
-        embedding: new Array(1024).fill(0.1),
+        embedding: new Array(384).fill(0.1),
         lastIndexed: Date.now(),
         metadata: {
           title: 'Deleted Node',
@@ -275,7 +275,7 @@ describe('IndexingService', () => {
       const vector1: VectorData = {
         nodeId: 'node-1',
         contentHash: 'content-hash-1',
-        embedding: new Array(1024).fill(0.1),
+        embedding: new Array(384).fill(0.1),
         lastIndexed: Date.now(),
         metadata: {
           title: 'Test Dream 1',
@@ -287,7 +287,7 @@ describe('IndexingService', () => {
       const vector2: VectorData = {
         nodeId: 'node-2',
         contentHash: 'abc123def456', // Same as current commit hash
-        embedding: new Array(1024).fill(0.1),
+        embedding: new Array(384).fill(0.1),
         lastIndexed: Date.now(),
         metadata: {
           title: 'Test Dreamer 1',
