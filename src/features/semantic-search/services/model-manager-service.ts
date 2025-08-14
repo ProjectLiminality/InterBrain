@@ -5,6 +5,8 @@
  * using IndexedDB for storage and providing progress reporting.
  */
 
+import { pipeline } from '@xenova/transformers'
+
 export interface ModelInfo {
   id: string
   name: string
@@ -179,6 +181,8 @@ export class ModelManagerService {
 
   /**
    * Check if model is available in storage
+   * For now, we check our IndexedDB metadata, but the real validation
+   * happens when Transformers.js tries to load the model
    */
   async isModelAvailable(): Promise<boolean> {
     try {
@@ -240,9 +244,9 @@ export class ModelManagerService {
     try {
       console.log(`ModelManagerService: Starting download of ${modelInfo.name}...`)
       
-      // Simulate model download for now - in real implementation this would
-      // use the Transformers.js model loading mechanism which handles caching
-      await this.simulateModelDownload(modelInfo)
+      // Use Transformers.js to actually download and cache the model
+      // This will handle the real model file downloads
+      await this.downloadRealModel(modelInfo)
 
       this.downloadProgress = {
         status: 'complete',
@@ -345,55 +349,79 @@ export class ModelManagerService {
   }
 
   /**
-   * Simulate model download with progress reporting
-   * In real implementation, this would be replaced with actual Transformers.js model loading
+   * Download the real Qwen3 model using Transformers.js
+   * This will download and cache the model files that Transformers.js needs
    */
-  private async simulateModelDownload(modelInfo: ModelInfo): Promise<void> {
-    const chunkSize = 1024 * 1024 // 1MB chunks
-    const totalChunks = Math.ceil(modelInfo.sizeBytes / chunkSize)
+  private async downloadRealModel(modelInfo: ModelInfo): Promise<void> {
+    this.downloadProgress.message = 'Downloading model files...'
     
-    for (let chunk = 0; chunk < totalChunks; chunk++) {
-      // Check for cancellation
-      if (this.downloadAbortController?.signal.aborted) {
-        throw new Error('Download cancelled')
+    try {
+      // Create pipeline which will trigger download of model files
+      // The progress callback will help us track the download
+      const pipeline_ = await pipeline(
+        'feature-extraction',
+        'onnx-community/Qwen3-Embedding-0.6B-ONNX', // Transformers.js model ID
+        {
+          progress_callback: (progress: unknown) => {
+            const progressData = progress as { 
+              status?: string; 
+              name?: string; 
+              progress?: number;
+              loaded?: number;
+              total?: number;
+            }
+            
+            if (progressData.status === 'downloading' && progressData.progress !== undefined) {
+              const currentProgress = Math.round(progressData.progress)
+              
+              this.downloadProgress = {
+                status: 'downloading',
+                progress: currentProgress,
+                loaded: progressData.loaded || Math.round((currentProgress / 100) * modelInfo.sizeBytes),
+                total: modelInfo.sizeBytes,
+                message: `Downloading ${progressData.name}: ${currentProgress}%`
+              }
+              
+              console.log(`ModelManagerService: ${progressData.name}: ${currentProgress}%`)
+            } else if (progressData.status === 'loading') {
+              this.downloadProgress.message = `Loading ${progressData.name}...`
+              console.log(`ModelManagerService: Loading ${progressData.name}`)
+            }
+            
+            // Check for cancellation
+            if (this.downloadAbortController?.signal.aborted) {
+              throw new Error('Download cancelled')
+            }
+          }
+        }
+      )
+
+      // Store metadata in our IndexedDB to track that model is available
+      this.downloadProgress.message = 'Finalizing...'
+      
+      const modelStorage: ModelStorage = {
+        modelId: modelInfo.id,
+        data: new ArrayBuffer(0), // We don't store the actual model data, Transformers.js handles caching
+        metadata: {
+          downloadedAt: Date.now(),
+          version: '1.0.0',
+          size: modelInfo.sizeBytes,
+          checksum: modelInfo.checksum
+        }
       }
 
-      // Simulate download delay
-      await new Promise(resolve => globalThis.setTimeout(resolve, 50))
-
-      const loaded = Math.min((chunk + 1) * chunkSize, modelInfo.sizeBytes)
-      const progress = (loaded / modelInfo.sizeBytes) * 100
-
-      this.downloadProgress = {
-        status: 'downloading',
-        progress: Math.round(progress),
-        loaded,
-        total: modelInfo.sizeBytes,
-        message: `Downloading... ${Math.round(progress)}%`
+      await this.storage.storeModel(modelStorage)
+      
+      // Clean up pipeline reference
+      if (pipeline_) {
+        // Pipeline is now cached by Transformers.js
+        console.log('ModelManagerService: Model cached successfully by Transformers.js')
       }
-
-      // Report progress periodically
-      if (chunk % 10 === 0 || chunk === totalChunks - 1) {
-        console.log(`ModelManagerService: Download progress: ${Math.round(progress)}%`)
-      }
+      
+    } catch (error) {
+      console.error('ModelManagerService: Real model download failed:', error)
+      throw error
     }
-
-    // Simulate storing the model
-    this.downloadProgress.message = 'Storing model...'
-    await new Promise(resolve => globalThis.setTimeout(resolve, 200))
-
-    const modelStorage: ModelStorage = {
-      modelId: modelInfo.id,
-      data: new ArrayBuffer(modelInfo.sizeBytes), // Placeholder data
-      metadata: {
-        downloadedAt: Date.now(),
-        version: '1.0.0',
-        size: modelInfo.sizeBytes,
-        checksum: modelInfo.checksum
-      }
-    }
-
-    await this.storage.storeModel(modelStorage)
   }
 }
 
