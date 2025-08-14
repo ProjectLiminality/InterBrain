@@ -32,23 +32,70 @@ vi.mock('../services/model-manager-service', () => ({
   }
 }));
 
-// Mock the @xenova/transformers pipeline to return mock embeddings
-vi.mock('@xenova/transformers', () => ({
-  pipeline: vi.fn().mockResolvedValue((text: string) => {
-    // Generate deterministic mock embeddings for testing
-    const hash = text.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    
-    const embedding = new Array(384);
-    for (let i = 0; i < 384; i++) {
-      embedding[i] = Math.sin((hash + i) * 0.01) * 0.1;
-    }
-    
-    return { data: new Float32Array(embedding) };
-  })
+// Mock the IframeTransformersService to avoid iframe creation in tests
+vi.mock('../services/iframe-transformers-service', () => ({
+  IframeTransformersService: {
+    getInstance: vi.fn(() => ({
+      initialize: vi.fn().mockResolvedValue(undefined),
+      generateEmbedding: vi.fn().mockImplementation((text: string) => {
+        // Generate deterministic mock embeddings for testing
+        const hash = text.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        
+        const embedding = new Array(384);
+        for (let i = 0; i < 384; i++) {
+          embedding[i] = Math.sin((hash + i) * 0.01) * 0.1;
+        }
+        
+        return Promise.resolve(embedding);
+      }),
+      batchEmbedding: vi.fn().mockImplementation((texts: string[]) => {
+        return Promise.resolve(texts.map(text => {
+          const hash = text.split('').reduce((a, b) => {
+            a = ((a << 5) - a) + b.charCodeAt(0);
+            return a & a;
+          }, 0);
+          
+          const embedding = new Array(384);
+          for (let i = 0; i < 384; i++) {
+            embedding[i] = Math.sin((hash + i) * 0.01) * 0.1;
+          }
+          
+          return embedding;
+        }));
+      }),
+      switchModel: vi.fn().mockResolvedValue(undefined),
+      getModelInfo: vi.fn().mockReturnValue({
+        id: 'sentence-transformers/all-MiniLM-L6-v2',
+        name: 'all-MiniLM-L6-v2',
+        description: 'Test model',
+        size: '90MB',
+        dimensions: 384,
+        contextLength: 512,
+        languages: ['en', 'multilingual']
+      }),
+      getAvailableModels: vi.fn().mockReturnValue([
+        {
+          id: 'sentence-transformers/all-MiniLM-L6-v2',
+          name: 'all-MiniLM-L6-v2',
+          description: 'Test model',
+          dimensions: 384,
+          contextLength: 512,
+          languages: ['en', 'multilingual']
+        }
+      ]),
+      getStatus: vi.fn().mockResolvedValue({
+        initialized: true,
+        currentModel: 'sentence-transformers/all-MiniLM-L6-v2'
+      }),
+      isInitialized: vi.fn().mockReturnValue(true),
+      dispose: vi.fn().mockResolvedValue(undefined)
+    }))
+  }
 }));
+
 
 describe('IndexingService', () => {
   let indexingService: IndexingService;
@@ -59,7 +106,7 @@ describe('IndexingService', () => {
     // Reset all mocks
     vi.clearAllMocks();
     
-    // Create fresh service instance
+    // Create fresh service instance (iframe-based, no path needed)
     indexingService = new IndexingService();
     
     // Create mock nodes

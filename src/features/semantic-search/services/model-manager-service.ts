@@ -1,32 +1,15 @@
 /**
- * Model Manager Service for Qwen3 Embedding Model
+ * LEGACY Model Manager Service 
  * 
- * Handles downloading, caching, and managing the Qwen3-Embedding-0.6B model
- * using IndexedDB for storage and providing progress reporting.
+ * This is the old fallback system used before Node.js-native HuggingFace integration.
+ * Kept for backwards compatibility with existing commands.
+ * 
+ * For new development, use LocalHuggingFaceEmbeddingService instead.
  */
 
-import { pipeline, env } from '@xenova/transformers'
+/* eslint-disable no-undef, @typescript-eslint/no-explicit-any */
 
-// Configure Transformers.js for Obsidian environment
-env.allowRemoteModels = true
-env.allowLocalModels = false
-env.useBrowserCache = true
-
-// Safely configure ONNX runtime for Obsidian plugins
-try {
-  // Initialize backends structure if it doesn't exist
-  env.backends = env.backends || {}
-  env.backends.onnx = env.backends.onnx || {}
-  env.backends.onnx.wasm = env.backends.onnx.wasm || {}
-  
-  // Critical fix for ONNX runtime in plugins - disable multithreading
-  env.backends.onnx.wasm.numThreads = 1
-  env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/'
-  
-  console.log('✅ Transformers.js environment configured for Obsidian')
-} catch (error) {
-  console.warn('⚠️ Could not configure Transformers.js environment:', error)
-}
+// NOTE: Removed @xenova/transformers imports since we now use Node.js-native approach
 
 export interface ModelInfo {
   id: string

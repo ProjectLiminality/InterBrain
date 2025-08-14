@@ -24,6 +24,15 @@ import {
   createModelStatusCommand,
   createCancelDownloadCommand
 } from './features/semantic-search/commands/model-download-commands';
+import {
+  createDownloadHuggingFaceModelCommand,
+  createSwitchHuggingFaceModelCommand,
+  createHuggingFaceModelStatusCommand,
+  createTestHuggingFaceEmbeddingCommand,
+  createClearHuggingFaceCacheCommand,
+  createIndexDreamNodesWithHuggingFaceCommand,
+  initializeHuggingFaceCommands
+} from './features/semantic-search/commands/huggingface-model-commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -37,6 +46,9 @@ export default class InterBrainPlugin extends Plugin {
     
     // Initialize services
     this.initializeServices();
+    
+    // Initialize HuggingFace commands (iframe-based, no plugin path needed)
+    initializeHuggingFaceCommands();
     
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
@@ -1081,13 +1093,21 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // === MODEL MANAGEMENT COMMANDS ===
+    // === MODEL MANAGEMENT COMMANDS (Legacy) ===
     this.addCommand(createDownloadModelCommand());
     this.addCommand(createRedownloadModelCommand());
     this.addCommand(createModelStatusCommand());
     this.addCommand(createCancelDownloadCommand());
 
-    // === SEMANTIC SEARCH COMMANDS (Qwen3) ===
+    // === HUGGINGFACE MODEL COMMANDS (Iframe-based) ===
+    this.addCommand(createDownloadHuggingFaceModelCommand());
+    this.addCommand(createSwitchHuggingFaceModelCommand());
+    this.addCommand(createHuggingFaceModelStatusCommand());
+    this.addCommand(createTestHuggingFaceEmbeddingCommand());
+    this.addCommand(createClearHuggingFaceCacheCommand());
+    this.addCommand(createIndexDreamNodesWithHuggingFaceCommand());
+
+    // === SEMANTIC SEARCH COMMANDS ===
     this.addCommand(createTestEmbeddingCommand());
     this.addCommand(createIndexSampleCommand());
     this.addCommand(createSemanticSearchTestCommand());

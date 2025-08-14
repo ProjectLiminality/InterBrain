@@ -1,6 +1,7 @@
 import { DreamNode } from '../../../types/dreamnode';
 import { useInterBrainStore } from '../../../store/interbrain-store';
-import { Qwen3EmbeddingService } from './embedding-service';
+import { EmbeddingService } from './embedding-service';
+import { IframeTransformersService } from '../services/iframe-transformers-service';
 
 /**
  * Vector data structure for storing indexed content
@@ -69,11 +70,13 @@ export class IndexingService implements IIndexingService {
   };
   
   private indexTimes: number[] = [];
-  private embeddingService: Qwen3EmbeddingService;
+  private embeddingService: EmbeddingService;
   
   constructor() {
-    console.log('IndexingService: Initialized with Qwen3 embeddings');
-    this.embeddingService = Qwen3EmbeddingService.getInstance();
+    console.log('IndexingService: Initializing with iframe-based transformers.js embeddings');
+    
+    // Use IframeTransformersService for proven Smart Connections pattern
+    this.embeddingService = IframeTransformersService.getInstance();
   }
   
   /**
@@ -421,5 +424,5 @@ export class IndexingService implements IIndexingService {
   }
 }
 
-// Export singleton instance
+// Export singleton instance (iframe-based, no plugin path needed)
 export const indexingService = new IndexingService();
