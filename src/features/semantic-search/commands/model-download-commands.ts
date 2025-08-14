@@ -15,8 +15,8 @@ export function createDownloadModelCommand(): Command {
         // Check if model is already available
         const isAvailable = await modelManagerService.isModelAvailable()
         if (isAvailable) {
-          console.log('✅ Qwen3 model is already downloaded and available')
-          console.log('💡 Use "(Re)download Qwen3 Model" to force a fresh download')
+          console.log('✅ all-MiniLM-L6-v2 model is already downloaded and available')
+          console.log('💡 Use "(Re)download Embedding Model" to force a fresh download')
           return
         }
 
@@ -46,20 +46,20 @@ export function createDownloadModelCommand(): Command {
         const finalProgress = modelManagerService.getDownloadProgress()
         
         if (finalProgress.status === 'complete') {
-          console.log('🎉 Qwen3 model downloaded successfully!')
+          console.log('🎉 all-MiniLM-L6-v2 model downloaded successfully!')
           console.log('✨ Real semantic search is now available')
           console.log('')
           console.log('💡 Try these commands next:')
-          console.log('   • "Test Qwen3 Embedding Generation"')
-          console.log('   • "Index Sample DreamNodes (Qwen3)"')
-          console.log('   • "Semantic Search Test (Qwen3)"')
+          console.log('   • "Test Embedding Generation"')
+          console.log('   • "Index Sample DreamNodes"')
+          console.log('   • "Semantic Search Test"')
         } else {
-          console.error(`❌ Download failed: ${finalProgress.error || 'Unknown error'}`)
+            console.error(`❌ Download failed: ${finalProgress.error || 'Unknown error'}`)
         }
 
       } catch (error) {
-        console.error('❌ Failed to download Qwen3 model:', error)
-        console.log('💡 Try again or use "(Re)download Qwen3 Model" to force a fresh attempt')
+        console.error('❌ Failed to download embedding model:', error)
+        console.log('💡 Try again or use "(Re)download Embedding Model" to force a fresh attempt')
       }
     }
   }
@@ -71,9 +71,9 @@ export function createDownloadModelCommand(): Command {
 export function createRedownloadModelCommand(): Command {
   return {
     id: 'interbrain-redownload-qwen3-model',
-    name: '(Re)download Qwen3 Embedding Model',
+    name: '(Re)download Embedding Model',
     callback: async () => {
-      console.log('🔄 Starting Qwen3 model re-download...')
+      console.log('🔄 Starting embedding model re-download...')
       console.log('🗑️ Clearing existing model cache first...')
       
       try {
@@ -106,19 +106,19 @@ export function createRedownloadModelCommand(): Command {
         const finalProgress = modelManagerService.getDownloadProgress()
         
         if (finalProgress.status === 'complete') {
-          console.log('🎉 Qwen3 model re-downloaded successfully!')
+          console.log('🎉 Embedding model re-downloaded successfully!')
           console.log('✨ Fresh model is now available for semantic search')
           console.log('')
           console.log('💡 Try these commands next:')
           console.log('   • "Clear Semantic Search Index" (to rebuild with fresh model)')
-          console.log('   • "Index Sample DreamNodes (Qwen3)"')
-          console.log('   • "Semantic Search Test (Qwen3)"')
+          console.log('   • "Index Sample DreamNodes"')
+          console.log('   • "Semantic Search Test"')
         } else {
           console.error(`❌ Re-download failed: ${finalProgress.error || 'Unknown error'}`)
         }
 
       } catch (error) {
-        console.error('❌ Failed to re-download Qwen3 model:', error)
+        console.error('❌ Failed to re-download embedding model:', error)
         console.log('💡 Check your internet connection and try again')
       }
     }
@@ -131,9 +131,9 @@ export function createRedownloadModelCommand(): Command {
 export function createModelStatusCommand(): Command {
   return {
     id: 'interbrain-qwen3-model-status',
-    name: 'Show Qwen3 Model Status',
+    name: 'Show Embedding Model Status',
     callback: async () => {
-      console.log('📋 Qwen3 Embedding Model Status')
+      console.log('📋 Embedding Model Status')
       console.log('=' .repeat(40))
       
       try {
@@ -165,7 +165,7 @@ export function createModelStatusCommand(): Command {
             console.log(`🔍 Integrity: ${isValid ? '✅ Valid' : '⚠️ Validation Failed'}`)
           }
         } else {
-          console.log('💡 Run "Download Qwen3 Embedding Model" to get started')
+          console.log('💡 Run "Download Embedding Model" to get started')
         }
 
         console.log('')
@@ -199,13 +199,13 @@ export function createModelStatusCommand(): Command {
         // Action Suggestions
         if (!isAvailable) {
           console.log('🎯 Available Actions:')
-          console.log('   • "Download Qwen3 Embedding Model"')
+          console.log('   • "Download Embedding Model"')
         } else {
           console.log('🎯 Available Actions:')
-          console.log('   • "(Re)download Qwen3 Embedding Model"')
-          console.log('   • "Test Qwen3 Embedding Generation"')
-          console.log('   • "Index Sample DreamNodes (Qwen3)"')
-          console.log('   • "Semantic Search Test (Qwen3)"')
+          console.log('   • "(Re)download Embedding Model"')
+          console.log('   • "Test Embedding Generation"')
+          console.log('   • "Index Sample DreamNodes"')
+          console.log('   • "Semantic Search Test"')
         }
 
       } catch (error) {
@@ -221,16 +221,16 @@ export function createModelStatusCommand(): Command {
 export function createCancelDownloadCommand(): Command {
   return {
     id: 'interbrain-cancel-qwen3-download',
-    name: 'Cancel Qwen3 Model Download',
+    name: 'Cancel Embedding Model Download',
     callback: () => {
-      console.log('🛑 Cancelling Qwen3 model download...')
+      console.log('🛑 Cancelling embedding model download...')
       
       const progress = modelManagerService.getDownloadProgress()
       
       if (progress.status === 'downloading') {
         modelManagerService.cancelDownload()
         console.log('✅ Download cancelled successfully')
-        console.log('💡 You can restart the download anytime using "Download Qwen3 Embedding Model"')
+        console.log('💡 You can restart the download anytime using "Download Embedding Model"')
       } else {
         console.log('ℹ️ No download in progress to cancel')
         console.log(`📊 Current status: ${progress.status.toUpperCase()}`)

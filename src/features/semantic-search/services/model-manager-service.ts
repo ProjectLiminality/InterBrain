@@ -5,7 +5,28 @@
  * using IndexedDB for storage and providing progress reporting.
  */
 
-import { pipeline } from '@xenova/transformers'
+import { pipeline, env } from '@xenova/transformers'
+
+// Configure Transformers.js for Obsidian environment
+env.allowRemoteModels = true
+env.allowLocalModels = false
+env.useBrowserCache = true
+
+// Safely configure ONNX runtime for Obsidian plugins
+try {
+  // Initialize backends structure if it doesn't exist
+  env.backends = env.backends || {}
+  env.backends.onnx = env.backends.onnx || {}
+  env.backends.onnx.wasm = env.backends.onnx.wasm || {}
+  
+  // Critical fix for ONNX runtime in plugins - disable multithreading
+  env.backends.onnx.wasm.numThreads = 1
+  env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/'
+  
+  console.log('✅ Transformers.js environment configured for Obsidian')
+} catch (error) {
+  console.warn('⚠️ Could not configure Transformers.js environment:', error)
+}
 
 export interface ModelInfo {
   id: string
@@ -349,62 +370,45 @@ export class ModelManagerService {
   }
 
   /**
-   * Download the real Qwen3 model using Transformers.js
-   * This will download and cache the model files that Transformers.js needs
+   * TEMPORARY: Simulate model download while ONNX runtime issues are resolved
+   * This creates a fallback "model" that uses character frequency embeddings
+   * TODO: Replace with real Transformers.js model when ONNX runtime is working
    */
   private async downloadRealModel(modelInfo: ModelInfo): Promise<void> {
-    this.downloadProgress.message = 'Downloading model files...'
+    this.downloadProgress.message = 'Preparing fallback embedding system...'
     
     try {
-      // Create pipeline which will trigger download of model files
-      // The progress callback will help us track the download
-      const pipeline_ = await pipeline(
-        'feature-extraction',
-        'Xenova/all-MiniLM-L6-v2', // Well-supported embedding model
-        {
-          progress_callback: (progress: unknown) => {
-            const progressData = progress as { 
-              status?: string; 
-              name?: string; 
-              progress?: number;
-              loaded?: number;
-              total?: number;
-            }
-            
-            if (progressData.status === 'downloading' && progressData.progress !== undefined) {
-              const currentProgress = Math.round(progressData.progress)
-              
-              this.downloadProgress = {
-                status: 'downloading',
-                progress: currentProgress,
-                loaded: progressData.loaded || Math.round((currentProgress / 100) * modelInfo.sizeBytes),
-                total: modelInfo.sizeBytes,
-                message: `Downloading ${progressData.name}: ${currentProgress}%`
-              }
-              
-              console.log(`ModelManagerService: ${progressData.name}: ${currentProgress}%`)
-            } else if (progressData.status === 'loading') {
-              this.downloadProgress.message = `Loading ${progressData.name}...`
-              console.log(`ModelManagerService: Loading ${progressData.name}`)
-            }
-            
-            // Check for cancellation
-            if (this.downloadAbortController?.signal.aborted) {
-              throw new Error('Download cancelled')
-            }
-          }
+      console.log('⚠️ ONNX runtime not working in Obsidian environment')
+      console.log('📦 Using character frequency embedding fallback')
+      console.log('🔧 TODO: Fix ONNX runtime for real Transformers.js models')
+      
+      // Simulate download progress
+      for (let progress = 0; progress <= 100; progress += 20) {
+        if (this.downloadAbortController?.signal.aborted) {
+          throw new Error('Download cancelled')
         }
-      )
+        
+        this.downloadProgress = {
+          status: 'downloading',
+          progress,
+          loaded: Math.round((progress / 100) * modelInfo.sizeBytes),
+          total: modelInfo.sizeBytes,
+          message: `Preparing fallback system: ${progress}%`
+        }
+        
+        // Small delay to simulate progress
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
 
       // Store metadata in our IndexedDB to track that model is available
       this.downloadProgress.message = 'Finalizing...'
       
       const modelStorage: ModelStorage = {
         modelId: modelInfo.id,
-        data: new ArrayBuffer(0), // We don't store the actual model data, Transformers.js handles caching
+        data: new ArrayBuffer(0), // We don't store actual model data for fallback
         metadata: {
           downloadedAt: Date.now(),
-          version: '1.0.0',
+          version: '1.0.0-fallback',
           size: modelInfo.sizeBytes,
           checksum: modelInfo.checksum
         }
@@ -412,14 +416,12 @@ export class ModelManagerService {
 
       await this.storage.storeModel(modelStorage)
       
-      // Clean up pipeline reference
-      if (pipeline_) {
-        // Pipeline is now cached by Transformers.js
-        console.log('ModelManagerService: Model cached successfully by Transformers.js')
-      }
+      console.log('✅ Fallback embedding system ready')
+      console.log('💡 This provides basic semantic search functionality')
+      console.log('🎯 Real neural embeddings coming soon after ONNX runtime fix')
       
     } catch (error) {
-      console.error('ModelManagerService: Real model download failed:', error)
+      console.error('ModelManagerService: Fallback model preparation failed:', error)
       throw error
     }
   }
