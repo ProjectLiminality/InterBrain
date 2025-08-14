@@ -56,6 +56,20 @@ export function createDownloadHuggingFaceModelCommand(): Command {
         console.log(`🎉 Successfully initialized iframe transformers service!`)
         console.log(`⏱️ Initialization time: ${(initTime / 1000).toFixed(1)}s`)
         console.log('')
+        
+        // Show filesystem persistence status
+        if (embeddingService.isFilesystemCacheEnabled()) {
+          console.log('💾 Model Persistence: ✅ Filesystem Cache')
+          console.log('   • Models saved to local directory')
+          console.log('   • Available offline after download')
+          console.log('   • Persists across Obsidian restarts')
+        } else {
+          console.log('💾 Model Persistence: ⚠️ Browser Cache')
+          console.log('   • Models may be cleared by browser')
+          console.log('   • Re-download needed after restarts')
+        }
+        
+        console.log('')
         console.log('🎯 Next steps:')
         console.log('   • "Test HuggingFace Embedding" - Test real neural embeddings')
         console.log('   • "Index DreamNodes with HuggingFace" - Re-index with transformers.js')
@@ -162,11 +176,25 @@ export function createHuggingFaceModelStatusCommand(): Command {
         console.log(`   Languages: ${modelInfo.languages.join(', ')}`)
         console.log('')
 
+        // Filesystem persistence status
+        console.log('💾 Model Persistence:')
+        if (embeddingService.isFilesystemCacheEnabled()) {
+          console.log(`   Status: ✅ Filesystem Cache Active`)
+          console.log(`   Location: Local plugin models directory`)
+          console.log(`   Persistence: Survives Obsidian restarts`)
+          console.log(`   Offline: Available without internet`)
+        } else {
+          console.log(`   Status: ⚠️ Browser Cache Only`)
+          console.log(`   Location: Ephemeral browser memory`)
+          console.log(`   Persistence: May be cleared on restart`)
+          console.log(`   Offline: Limited availability`)
+        }
+        console.log('')
+
         // Iframe information
         console.log('🖼️ Iframe Worker Information:')
         console.log(`   Pattern: Smart Connections iframe sandboxing`)
         console.log(`   CDN Source: @xenova/transformers via JSDelivr`)
-        console.log(`   Browser Cache: Enabled (models cached automatically)`)
         console.log(`   Isolation: Sandboxed execution environment`)
         console.log('')
 

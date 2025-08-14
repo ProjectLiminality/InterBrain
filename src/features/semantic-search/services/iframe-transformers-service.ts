@@ -24,13 +24,13 @@ export interface IframeModelConfig {
 }
 
 export interface IframeMessage {
-  type: 'INITIALIZE' | 'EMBED' | 'BATCH_EMBED' | 'MODEL_INFO' | 'SWITCH_MODEL' | 'STATUS'
-  data?: { modelId?: string; text?: string; texts?: string[] }
+  type: 'INITIALIZE' | 'EMBED' | 'BATCH_EMBED' | 'MODEL_INFO' | 'SWITCH_MODEL' | 'STATUS' | 'SET_CACHE_PATH'
+  data?: { modelId?: string; text?: string; texts?: string[]; cachePath?: string }
   requestId?: string
 }
 
 export interface IframeResponse {
-  type: 'INITIALIZED' | 'EMBEDDING_RESULT' | 'BATCH_RESULT' | 'MODEL_INFO_RESULT' | 'ERROR' | 'STATUS_RESULT' | 'PROGRESS'
+  type: 'INITIALIZED' | 'EMBEDDING_RESULT' | 'BATCH_RESULT' | 'MODEL_INFO_RESULT' | 'ERROR' | 'STATUS_RESULT' | 'PROGRESS' | 'CACHE_PATH_SET'
   data?: number[] | number[][] | { initialized: boolean; currentModel: string | null } | unknown
   requestId?: string
   error?: string
@@ -46,6 +46,7 @@ export class IframeTransformersService implements EmbeddingService {
   private initialized = false
   private currentModel = 'Xenova/all-MiniLM-L6-v2'
   private pendingRequests = new Map<string, { resolve: Function; reject: Function }>()
+  private cachePathSet = false
   
   // Popular models available via transformers.js (Xenova-converted for ONNX compatibility)
   private static readonly AVAILABLE_MODELS: Record<string, IframeModelConfig> = {
@@ -85,6 +86,65 @@ export class IframeTransformersService implements EmbeddingService {
   }
 
   /**
+   * Calculate filesystem cache path for model storage
+   */
+  private getModelsCachePath(): string {
+    // Use Node.js require to access path and get vault base path
+    const path = require('path')
+    const fs = require('fs')
+    
+    try {
+      // Get vault base path from Obsidian (available in Electron environment)
+      const vaultBasePath = (globalThis as any).app?.vault?.adapter?.getBasePath?.()
+      
+      if (vaultBasePath) {
+        // Create path: vault/.obsidian/plugins/interbrain/semantic-search/models
+        const modelsPath = path.join(vaultBasePath, '.obsidian', 'plugins', 'interbrain', 'semantic-search', 'models')
+        
+        // Ensure models directory exists
+        if (!fs.existsSync(modelsPath)) {
+          fs.mkdirSync(modelsPath, { recursive: true })
+          console.log(`📁 Created models directory: ${modelsPath}`)
+        }
+        
+        return modelsPath
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not determine vault path, falling back to CDN caching:', error)
+    }
+    
+    // Fallback: return empty string to use default browser cache
+    return ''
+  }
+
+  /**
+   * Set custom cache path in iframe for filesystem persistence
+   */
+  private async setCachePathInIframe(): Promise<void> {
+    const cachePath = this.getModelsCachePath()
+    
+    if (cachePath) {
+      console.log(`📁 Setting filesystem cache path: ${cachePath}`)
+      
+      try {
+        await this.sendMessage<void>({
+          type: 'SET_CACHE_PATH',
+          data: { cachePath }
+        })
+        
+        this.cachePathSet = true
+        console.log('✅ Filesystem cache path set successfully')
+      } catch (error) {
+        console.warn('⚠️ Failed to set cache path, falling back to browser cache:', error)
+        this.cachePathSet = false
+      }
+    } else {
+      console.log('💾 Using browser cache (filesystem path not available)')
+      this.cachePathSet = false
+    }
+  }
+
+  /**
    * Initialize the iframe embedding service
    */
   async initialize(): Promise<void> {
@@ -98,11 +158,15 @@ export class IframeTransformersService implements EmbeddingService {
       // Create sandboxed iframe for ML operations
       await this.createEmbeddingIframe()
       
+      // Set filesystem cache path for model persistence
+      await this.setCachePathInIframe()
+      
       // Initialize with default model
       await this.initializeModel(this.currentModel)
       
       this.initialized = true
-      console.log(`✅ IframeTransformersService initialized with ${this.currentModel}`)
+      const cacheStatus = this.cachePathSet ? 'with filesystem cache' : 'with browser cache'
+      console.log(`✅ IframeTransformersService initialized with ${this.currentModel} ${cacheStatus}`)
       
     } catch (error) {
       console.error('❌ Failed to initialize IframeTransformersService:', error)
@@ -215,6 +279,18 @@ export class IframeTransformersService implements EmbeddingService {
                     });
                     currentModel = data.modelId;
                     window.parent.postMessage({ type: 'INITIALIZED', requestId }, '*');
+                    break;
+                    
+                  case 'SET_CACHE_PATH':
+                    console.log('📁 Iframe: Setting filesystem cache path...', data.cachePath);
+                    if (data.cachePath) {
+                      env.cacheDir = data.cachePath;
+                      env.allowLocalModels = true;
+                      console.log('✅ Iframe: Filesystem cache configured at:', data.cachePath);
+                    } else {
+                      console.log('💾 Iframe: Using browser cache (no filesystem path provided)');
+                    }
+                    window.parent.postMessage({ type: 'CACHE_PATH_SET', requestId }, '*');
                     break;
                 }
               } catch (error) {
@@ -430,6 +506,13 @@ export class IframeTransformersService implements EmbeddingService {
    */
   isInitialized(): boolean {
     return this.initialized && this.iframe !== null
+  }
+
+  /**
+   * Check if filesystem cache path is configured
+   */
+  isFilesystemCacheEnabled(): boolean {
+    return this.cachePathSet
   }
 
   /**
