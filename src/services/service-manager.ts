@@ -3,6 +3,7 @@ import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-ser
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
+import { IndexingService, indexingService } from './indexing-service';
 
 /**
  * Service interface that both mock and real implementations will follow
@@ -36,10 +37,12 @@ export interface IDreamNodeService {
 export class ServiceManager {
   private mockService: MockDreamNodeService;
   private realService: GitDreamNodeService | null = null;
+  private indexingService: IndexingService;
   private plugin: Plugin | null = null;
 
   constructor() {
     this.mockService = mockDreamNodeService;
+    this.indexingService = indexingService;
     
     // Wrap mock service methods to sync with store
     this.wrapMockServiceMethods();
@@ -224,6 +227,13 @@ export class ServiceManager {
         message: 'Real service not initialized'
       };
     }
+  }
+  
+  /**
+   * Get the indexing service
+   */
+  getIndexingService(): IndexingService {
+    return this.indexingService;
   }
   
   /**

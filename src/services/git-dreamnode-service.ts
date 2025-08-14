@@ -1,6 +1,7 @@
 import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
+import { indexingService } from './indexing-service';
 
 // Access Node.js modules directly in Electron context
 /* eslint-disable no-undef */
@@ -128,6 +129,16 @@ export class GitDreamNodeService {
     
     // Create git repository in parallel (non-blocking)
     this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles)
+      .then(async () => {
+        // Index the new node after git repository is created
+        try {
+          await indexingService.indexNode(node);
+          console.log(`GitDreamNodeService: Indexed new node "${title}"`);
+        } catch (error) {
+          console.error('Failed to index new node:', error);
+          // Don't fail the creation if indexing fails
+        }
+      })
       .catch(error => {
         console.error('Failed to create git repository:', error);
         // TODO: Add error handling/retry logic
@@ -714,7 +725,12 @@ export class GitDreamNodeService {
           oldGitStatus.hasStashedChanges !== newGitStatus.hasStashedChanges ||
           oldGitStatus.hasUnpushedChanges !== newGitStatus.hasUnpushedChanges;
         
-        if (statusChanged) {
+        // Check if commit hash changed (new commit detected)
+        const oldCommitHash = oldGitStatus?.details?.commitHash;
+        const newCommitHash = newGitStatus.details?.commitHash;
+        const commitChanged = oldCommitHash && newCommitHash && oldCommitHash !== newCommitHash;
+        
+        if (statusChanged || commitChanged) {
           // Update the node with new git status
           const updatedNode = {
             ...nodeData.node,
@@ -729,6 +745,17 @@ export class GitDreamNodeService {
           
           updated++;
           console.log(`GitDreamNodeService: Updated git status for ${updatedNode.name}: uncommitted=${newGitStatus.hasUncommittedChanges}, stashed=${newGitStatus.hasStashedChanges}, unpushed=${newGitStatus.hasUnpushedChanges}`);
+          
+          // Trigger re-indexing if commit changed (meaningful content change)
+          if (commitChanged && !newGitStatus.hasUncommittedChanges) {
+            // Only re-index if the node is clean (committed changes)
+            try {
+              await indexingService.indexNode(updatedNode);
+              console.log(`GitDreamNodeService: Re-indexed node "${updatedNode.name}" after commit change`);
+            } catch (error) {
+              console.error(`Failed to re-index node ${updatedNode.name}:`, error);
+            }
+          }
         }
       } catch (error) {
         console.error(`GitDreamNodeService: Failed to refresh git status for node ${nodeId}:`, error);
@@ -774,6 +801,16 @@ export class GitDreamNodeService {
         };
       }
       
+      // Get current commit hash
+      let commitHash: string | undefined;
+      try {
+        const hashResult = await execAsync('git rev-parse HEAD', { cwd: fullPath });
+        commitHash = hashResult.stdout.trim();
+      } catch {
+        // No commits yet
+        console.log(`GitDreamNodeService: No commits yet in ${repoPath}`);
+      }
+      
       // Check for uncommitted changes
       const statusResult = await execAsync('git status --porcelain', { cwd: fullPath });
       const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
@@ -807,14 +844,14 @@ export class GitDreamNodeService {
       
       // Count different types of changes for details
       let details;
-      if (hasUncommittedChanges || hasStashedChanges || hasUnpushedChanges) {
+      if (hasUncommittedChanges || hasStashedChanges || hasUnpushedChanges || commitHash) {
         const statusLines = statusResult.stdout.trim().split('\n').filter((line: string) => line.length > 0);
         const staged = statusLines.filter((line: string) => line.charAt(0) !== ' ' && line.charAt(0) !== '?').length;
         const unstaged = statusLines.filter((line: string) => line.charAt(1) !== ' ').length;
         const untracked = statusLines.filter((line: string) => line.startsWith('??')).length;
         const stashCount = hasStashedChanges ? stashResult.stdout.trim().split('\n').length : 0;
         
-        details = { staged, unstaged, untracked, stashCount, aheadCount };
+        details = { staged, unstaged, untracked, stashCount, aheadCount, commitHash };
       }
       
       return {
