@@ -1,6 +1,6 @@
 import { DreamNode } from '../../../types/dreamnode';
 import { useInterBrainStore } from '../../../store/interbrain-store';
-import { MockQwen3EmbeddingService } from './mock-embedding-service';
+import { Qwen3EmbeddingService } from './embedding-service';
 
 /**
  * Vector data structure for storing indexed content
@@ -69,11 +69,11 @@ export class IndexingService implements IIndexingService {
   };
   
   private indexTimes: number[] = [];
-  private embeddingService: MockQwen3EmbeddingService;
+  private embeddingService: Qwen3EmbeddingService;
   
   constructor() {
-    console.log('IndexingService: Initialized with Mock Qwen3 embeddings (temporary)');
-    this.embeddingService = MockQwen3EmbeddingService.getInstance();
+    console.log('IndexingService: Initialized with Qwen3 embeddings');
+    this.embeddingService = Qwen3EmbeddingService.getInstance();
   }
   
   /**

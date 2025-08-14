@@ -1,6 +1,32 @@
 import { Command } from 'obsidian'
 import { indexingService } from '../indexing/indexing-service'
 import { useInterBrainStore } from '../../../store/interbrain-store'
+import { modelManagerService } from '../services/model-manager-service'
+
+/**
+ * Helper: Check if Qwen3 model is available and guide user if not
+ */
+async function checkModelAvailability(): Promise<boolean> {
+  const isAvailable = await modelManagerService.isModelAvailable()
+  
+  if (!isAvailable) {
+    console.log('❌ Qwen3 model not available')
+    console.log('')
+    console.log('💡 To use real semantic search, please download the model first:')
+    console.log('   1. Run "Download Qwen3 Embedding Model" command')
+    console.log('   2. Wait for download to complete (~639MB)')
+    console.log('   3. Try this command again')
+    console.log('')
+    console.log('📊 Model Information:')
+    const modelInfo = modelManagerService.getModelInfo()
+    console.log(`   Name: ${modelInfo.name}`)
+    console.log(`   Size: ${modelInfo.size}`)
+    console.log(`   Dimensions: ${modelInfo.dimensions}`)
+    return false
+  }
+  
+  return true
+}
 
 /**
  * Command to test Qwen3 embedding generation
@@ -11,6 +37,11 @@ export function createTestEmbeddingCommand(): Command {
     name: 'Test Qwen3 Embedding Generation',
     callback: async () => {
       console.log('🧮 Testing Qwen3 embedding generation...')
+      
+      // Check if model is available first
+      if (!(await checkModelAvailability())) {
+        return
+      }
       
       try {
         // Test single embedding
@@ -69,6 +100,11 @@ export function createIndexSampleCommand(): Command {
     name: 'Index Sample DreamNodes (Qwen3)',
     callback: async () => {
       console.log('📝 Indexing sample DreamNodes with Qwen3 embeddings...')
+      
+      // Check if model is available first
+      if (!(await checkModelAvailability())) {
+        return
+      }
       
       try {
         // Get current nodes from store
@@ -138,6 +174,11 @@ export function createSemanticSearchTestCommand(): Command {
     name: 'Semantic Search Test (Qwen3)',
     callback: async () => {
       console.log('🔍 Testing semantic search with Qwen3 embeddings...')
+      
+      // Check if model is available first
+      if (!(await checkModelAvailability())) {
+        return
+      }
       
       try {
         // Check if we have indexed nodes

@@ -16,6 +16,40 @@ vi.mock('../../../mock/dreamnode-mock-data', () => ({
   getMockDataForConfig: mockGetMockDataForConfig
 }));
 
+// Mock the ModelManagerService to always report model as available in tests
+vi.mock('../services/model-manager-service', () => ({
+  modelManagerService: {
+    isModelAvailable: vi.fn().mockResolvedValue(true),
+    getModelInfo: vi.fn().mockReturnValue({
+      id: 'qwen3-embedding-0.6b',
+      name: 'Qwen3-Embedding-0.6B',
+      description: 'Test model',
+      size: '639MB',
+      dimensions: 1024,
+      contextLength: 32768,
+      languages: ['en', 'zh']
+    })
+  }
+}));
+
+// Mock the @xenova/transformers pipeline to return mock embeddings
+vi.mock('@xenova/transformers', () => ({
+  pipeline: vi.fn().mockResolvedValue((text: string) => {
+    // Generate deterministic mock embeddings for testing
+    const hash = text.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    
+    const embedding = new Array(1024);
+    for (let i = 0; i < 1024; i++) {
+      embedding[i] = Math.sin((hash + i) * 0.01) * 0.1;
+    }
+    
+    return { data: new Float32Array(embedding) };
+  })
+}));
+
 describe('IndexingService', () => {
   let indexingService: IndexingService;
   let mockStore: any;

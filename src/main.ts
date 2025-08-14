@@ -18,6 +18,12 @@ import {
   createClearIndexCommand,
   createShowIndexStatsCommand
 } from './features/semantic-search/commands/semantic-search-commands';
+import {
+  createDownloadModelCommand,
+  createRedownloadModelCommand,
+  createModelStatusCommand,
+  createCancelDownloadCommand
+} from './features/semantic-search/commands/model-download-commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -1074,6 +1080,12 @@ export default class InterBrainPlugin extends Plugin {
         }
       }
     });
+
+    // === MODEL MANAGEMENT COMMANDS ===
+    this.addCommand(createDownloadModelCommand());
+    this.addCommand(createRedownloadModelCommand());
+    this.addCommand(createModelStatusCommand());
+    this.addCommand(createCancelDownloadCommand());
 
     // === SEMANTIC SEARCH COMMANDS (Qwen3) ===
     this.addCommand(createTestEmbeddingCommand());

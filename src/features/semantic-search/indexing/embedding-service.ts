@@ -1,4 +1,5 @@
 import { pipeline } from '@xenova/transformers'
+import { modelManagerService } from '../services/model-manager-service'
 
 /**
  * Model information interface
@@ -64,16 +65,30 @@ export class Qwen3EmbeddingService implements EmbeddingService {
     console.log(`🤖 Initializing Qwen3 embedding model...`)
     
     try {
+      // Check if model is available through ModelManagerService
+      const isModelAvailable = await modelManagerService.isModelAvailable()
+      
+      if (!isModelAvailable) {
+        const error = new Error('Qwen3 model not available. Please download it first using "Download Qwen3 Embedding Model" command.')
+        console.error('❌', error.message)
+        throw error
+      }
+
+      console.log('📁 Model found in cache, initializing pipeline...')
+      
       const startTime = globalThis.performance.now()
       
+      // Initialize pipeline with model from our model manager
       this.pipeline = await pipeline(
         'feature-extraction',
         Qwen3EmbeddingService.MODEL_CONFIG.modelId,
         {
+          // Let Transformers.js handle caching, but our ModelManagerService
+          // ensures the model files are available
           progress_callback: (progress: unknown) => {
             const progressData = progress as { status?: string; name?: string; progress?: number }
-            if (progressData.status === 'downloading') {
-              console.log(`📥 Downloading: ${progressData.name} (${Math.round(progressData.progress || 0)}%)`)
+            if (progressData.status === 'loading') {
+              console.log(`⚡ Loading model component: ${progressData.name}`)
             }
           }
         }
@@ -85,7 +100,13 @@ export class Qwen3EmbeddingService implements EmbeddingService {
       this.initialized = true
     } catch (error) {
       console.error('❌ Failed to initialize Qwen3 embedding model:', error)
-      throw new Error(`Qwen3 embedding model initialization failed: ${error}`)
+      
+      // Provide helpful error messages
+      if (error instanceof Error && error.message.includes('not available')) {
+        throw error // Re-throw our custom error message
+      } else {
+        throw new Error(`Qwen3 embedding model initialization failed: ${error}. Try downloading the model first.`)
+      }
     }
   }
 
@@ -168,14 +189,16 @@ export class Qwen3EmbeddingService implements EmbeddingService {
    * Get information about the current model
    */
   getModelInfo(): ModelInfo {
+    // Get consistent model info from ModelManagerService
+    const managerInfo = modelManagerService.getModelInfo()
     return {
-      id: Qwen3EmbeddingService.MODEL_CONFIG.modelId,
-      name: 'Qwen3-Embedding-0.6B',
-      description: 'Multilingual embedding model with 1024 dimensions',
-      size: '639MB',
-      dimensions: 1024,
-      contextLength: 32768,
-      languages: ['en', 'zh', 'multilingual', 'code']
+      id: managerInfo.id,
+      name: managerInfo.name,
+      description: managerInfo.description,
+      size: managerInfo.size,
+      dimensions: managerInfo.dimensions,
+      contextLength: managerInfo.contextLength,
+      languages: managerInfo.languages
     }
   }
 
