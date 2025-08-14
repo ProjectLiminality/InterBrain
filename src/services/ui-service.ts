@@ -8,6 +8,10 @@ export class UIService {
   showError(message: string): void {
     new Notice(`Error: ${message}`, 5000);
   }
+  
+  showWarning(message: string): void {
+    new Notice(`⚠️ ${message}`, 4000);
+  }
 
   showPlaceholder(message: string): void {
     new Notice(`🚧 ${message}`, 3000);

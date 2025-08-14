@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
+import { VectorData } from '../services/indexing-service';
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -60,6 +61,12 @@ export interface InterBrainState {
   setRealNodes: (nodes: Map<string, RealNodeData>) => void;
   updateRealNode: (id: string, data: RealNodeData) => void;
   deleteRealNode: (id: string) => void;
+  
+  // Vector data storage for semantic search (persisted)
+  vectorData: Map<string, VectorData>;
+  updateVectorData: (nodeId: string, data: VectorData) => void;
+  deleteVectorData: (nodeId: string) => void;
+  clearVectorData: () => void;
   
   // Selected DreamNode state
   selectedNode: DreamNode | null;
@@ -160,6 +167,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Initial state
   dataMode: 'mock' as const, // Start in mock mode
   realNodes: new Map<string, RealNodeData>(),
+  vectorData: new Map<string, VectorData>(),
   selectedNode: null,
   creatorMode: {
     isActive: false,
@@ -236,6 +244,20 @@ export const useInterBrainStore = create<InterBrainState>()(
     newMap.delete(id);
     return { realNodes: newMap };
   }),
+  
+  // Vector data actions
+  updateVectorData: (nodeId, data) => set(state => {
+    const newVectorData = new Map(state.vectorData);
+    newVectorData.set(nodeId, data);
+    return { vectorData: newVectorData };
+  }),
+  deleteVectorData: (nodeId) => set(state => {
+    const newVectorData = new Map(state.vectorData);
+    newVectorData.delete(nodeId);
+    return { vectorData: newVectorData };
+  }),
+  clearVectorData: () => set({ vectorData: new Map() }),
+  
   setSelectedNode: (node) => set(state => {
     const previousNode = state.selectedNode;
     const currentLayout = state.spatialLayout;
@@ -664,10 +686,11 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, and mock relationships
+      // Only persist real nodes data, data mode, vector data, and mock relationships
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
+        vectorData: mapToArray(state.vectorData),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
       }),
       // Custom merge function to handle Map deserialization
@@ -675,12 +698,14 @@ export const useInterBrainStore = create<InterBrainState>()(
         const persistedData = persisted as { 
           dataMode: 'mock' | 'real'; 
           realNodes: [string, RealNodeData][];
+          vectorData: [string, VectorData][];
           mockRelationshipData: [string, string[]][] | null;
         };
         return {
           ...current,
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
+          vectorData: persistedData.vectorData ? arrayToMap(persistedData.vectorData) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
         };
       },
