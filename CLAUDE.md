@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ **Epic 3 Complete**: DreamNode Management System with service layer architecture
 - 🔄 **Epic 4 PARTIAL**: Liminal Web Layout System - Foundation merged, Edit Mode pending
 - 🚀 **Epic 5 Active**: Semantic Search System (branch: epic/5-semantic-search)
+  - ✅ **Feature #322 COMPLETE**: Intelligent Indexing System - Background indexing with git integration
 
 ### ⚠️ CRITICAL: Epic 4 Partial Merge Status (December 17, 2024)
 **WORKFLOW EXCEPTION - PARTIAL EPIC MERGE**
@@ -56,6 +57,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Ultra-lightweight history storage**: Only node IDs and layout states (150+ entries)
 - **Seamless animation interruption**: Mid-flight position capture for smooth transitions
 - **Performance optimization**: 101 tests passing with zero technical debt
+
+### Epic 5 Achievements (August 14, 2025)
+**Feature #322 Complete**: Intelligent Indexing System with Git Integration | Issue: #322
+
+**✅ Major Technical Achievements**:
+- ✅ **IndexingService Architecture**: Complete IIndexingService interface with IndexingService implementation
+- ✅ **Vector Data Persistence**: Cross-session storage via Zustand store with Map serialization
+- ✅ **Command Palette Integration**: Three indexing commands with async operation patterns
+- ✅ **Git-Based Change Detection**: Automatic indexing on creation + commit-hash delta detection
+- ✅ **Intelligent Delta Updates**: Only index changed/new nodes, cleanup deleted nodes
+- ✅ **Background Processing**: Non-blocking operations with progress indicators (20% intervals)
+- ✅ **Service Layer Integration**: Mock/Real mode compatibility with unified node access
+- ✅ **Comprehensive Testing**: 22 IndexingService tests (123 total tests passing)
+
+**✅ Key Technical Innovations**:
+- **Character Frequency Embeddings**: Placeholder embedding system for future Qwen3 integration
+- **Cross-Session Persistence**: Vector data survives plugin reloads via persistent store middleware  
+- **Git Integration Hooks**: Automatic re-indexing on `GitDreamNodeService.create()` and commit detection
+- **Command Palette UX**: setTimeout pattern prevents palette freezing during async operations
+- **Delta Algorithm**: Uses git commit hashes for intelligent change detection
+- **Progress Notifications**: Real-time UI feedback for long-running background operations
+- **Error Resilience**: Graceful handling of indexing failures with detailed error reporting
+
+**✅ Files Delivered**:
+- `src/services/indexing-service.ts` (446 lines) - Complete indexing infrastructure
+- `tests/services/indexing-service.test.ts` (483 lines) - Comprehensive test coverage
+- Enhanced 6 existing files with indexing integrations and vector storage
+
+**✅ Architecture Foundation**: Ready for semantic search interface, query processing, and similarity calculations
 
 ### Epic 3 Achievements (July 26, 2025)
 **All Features Complete**: #254 - DreamNode Management System | Spec: #266
@@ -343,15 +373,23 @@ main → epic/2-spatial-visualization
 ## Epic Quick Reference
 
 **Core Epics (Sequential Implementation Required)**:
-- **Epic 2**: #253 - 3D Spatial Visualization System | Spec: #265
-- **Epic 3**: #254 - DreamNode Management System | Spec: #266  
-- **Epic 4**: #255 - Liminal Web Layout System | Spec: #267
+- **Epic 2**: #253 - 3D Spatial Visualization System | Spec: #265 ✅ Complete
+- **Epic 3**: #254 - DreamNode Management System | Spec: #266 ✅ Complete
+- **Epic 4**: #255 - Liminal Web Layout System | Spec: #267 🔄 Partial (Foundation merged)
+- **Epic 5**: #268 - Semantic Search System | Spec: #268 🚀 Active (Indexing complete)
 
-**Epic Scope Clarity** (Updated July 19, 2025):
+**Epic Scope Clarity** (Updated August 14, 2025):
 - **Epic 2**: Visual representation and navigation of DreamNodes in 3D space (the theater) ✅ Complete
-- **Epic 3**: Basic CRUD operations and DreamNode creation workflows (minimal scope - foundation)
-- **Epic 4**: Dynamic spatial layouts that orchestrate DreamNode positioning based on relationships
+- **Epic 3**: Basic CRUD operations and DreamNode creation workflows (foundation) ✅ Complete
+- **Epic 4**: Dynamic spatial layouts that orchestrate DreamNode positioning based on relationships 🔄 Partial
+- **Epic 5**: Semantic search with AI-powered local embeddings and intelligent indexing 🚀 Active
 - **Epic 8**: Advanced DreamNode operations (Pop-out, Merge, Process/Substance categorization)
+
+**Epic 5 Feature Progress**:
+- ✅ **#322: Intelligent Indexing System** - Background indexing with git integration (COMPLETE)
+- 📋 **#290: Semantic Search Implementation** - Local Qwen3-Embedding + Vectra integration (NEXT PRIORITY)
+- 📋 **#323: Search-as-DreamNode Interface** - Unified search/creation UX paradigm (UI Layer)  
+- 📋 **#280: Honeycomb Search Layout** - Semantic distance visualization (Presentation Layer)
 
 **Feature Reorganization**:
 - **Honeycomb search (#280)** → Epic 5 (Semantic Search System)
