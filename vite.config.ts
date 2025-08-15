@@ -2,9 +2,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
+// Plugin to replace onnxruntime-node with onnxruntime-web
+const replaceOnnxPlugin = () => {
+  return {
+    name: 'replace-onnx-runtime',
+    transform(code: string, id: string) {
+      if (id.includes('transformers') || id.includes('onnx')) {
+        // Replace all references to onnxruntime-node with onnxruntime-web
+        code = code.replace(/onnxruntime-node/g, 'onnxruntime-web')
+      }
+      return code
+    }
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), replaceOnnxPlugin()],
   optimizeDeps: {
     include: ['@xenova/transformers', 'vectra'],
     exclude: ['obsidian']
