@@ -1,7 +1,7 @@
 import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
-import { indexingService } from './indexing-service';
+import { indexingService } from '../features/semantic-search/services/indexing-service';
 
 // Access Node.js modules directly in Electron context
 /* eslint-disable no-undef */

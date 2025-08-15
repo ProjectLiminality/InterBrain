@@ -17,7 +17,10 @@ export default defineConfig({
       output: {
         globals: {
           obsidian: 'obsidian'
-        }
+        },
+        // Disable code splitting for Obsidian plugins
+        manualChunks: undefined,
+        inlineDynamicImports: true
       }
     },
     outDir: 'dist',

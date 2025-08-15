@@ -212,7 +212,12 @@ export class OllamaEmbeddingService implements IEmbeddingService {
       // Check if our model is available
       const listData: OllamaListResponse = await listResponse.json();
       const modelExists = listData.models.some(m => 
-        m.name === this.model || m.model === this.model
+        m.name === this.model || 
+        m.model === this.model ||
+        m.name === `${this.model}:latest` ||
+        m.model === `${this.model}:latest` ||
+        m.name.startsWith(`${this.model}:`) ||
+        m.model.startsWith(`${this.model}:`)
       );
 
       if (!modelExists) {

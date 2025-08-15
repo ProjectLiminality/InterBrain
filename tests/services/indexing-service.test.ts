@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { IndexingService, VectorData } from '../../src/services/indexing-service';
+import { IndexingService, VectorData } from '../../src/features/semantic-search/services/indexing-service';
 import { DreamNode } from '../../src/types/dreamnode';
 import { useInterBrainStore } from '../../src/store/interbrain-store';
 

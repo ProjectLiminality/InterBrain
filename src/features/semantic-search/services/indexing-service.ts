@@ -1,5 +1,5 @@
-import { DreamNode } from '../types/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { DreamNode } from '../../../types/dreamnode';
+import { useInterBrainStore } from '../../../store/interbrain-store';
 import { IEmbeddingService, TextProcessor } from './embedding-service';
 import { ollamaEmbeddingService } from './ollama-embedding-service';
 
@@ -503,7 +503,7 @@ export class IndexingService implements IIndexingService {
       return nodes;
     } else {
       // Get from mock data configuration (same source as DreamspaceCanvas)
-      const { getMockDataForConfig } = await import('../mock/dreamnode-mock-data');
+      const { getMockDataForConfig } = await import('../../../mock/dreamnode-mock-data');
       const nodes = getMockDataForConfig(store.mockDataConfig);
       console.log(`IndexingService: Found ${nodes.length} mock nodes:`, nodes.map(n => n.name).join(', '));
       return nodes;

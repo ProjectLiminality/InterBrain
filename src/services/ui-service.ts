@@ -1,6 +1,11 @@
-import { Notice } from 'obsidian';
+import { Notice, App, Modal } from 'obsidian';
 
 export class UIService {
+  private app?: App;
+  
+  constructor(app?: App) {
+    this.app = app;
+  }
   showSuccess(message: string): void {
     new Notice(message);
   }
@@ -23,8 +28,56 @@ export class UIService {
 
   async getUserInput(prompt: string): Promise<string | null> {
     return new Promise((resolve) => {
-      const input = globalThis.prompt(prompt);
-      resolve(input);
+      // Create a simple input modal using Obsidian's modal system
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(prompt);
+      
+      const inputEl = modal.contentEl.createEl('input', {
+        type: 'text',
+        placeholder: 'Enter your search query...'
+      });
+      
+      const buttonContainer = modal.contentEl.createDiv('modal-button-container');
+      
+      const submitBtn = buttonContainer.createEl('button', {
+        text: 'Search',
+        cls: 'mod-cta'
+      });
+      
+      const cancelBtn = buttonContainer.createEl('button', {
+        text: 'Cancel'
+      });
+      
+      // Focus the input
+      inputEl.focus();
+      
+      // Handle submit
+      const handleSubmit = () => {
+        const value = inputEl.value.trim();
+        modal.close();
+        resolve(value || null);
+      };
+      
+      // Handle cancel
+      const handleCancel = () => {
+        modal.close();
+        resolve(null);
+      };
+      
+      // Event listeners
+      submitBtn.onclick = handleSubmit;
+      cancelBtn.onclick = handleCancel;
+      inputEl.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleSubmit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          handleCancel();
+        }
+      };
+      
+      modal.open();
     });
   }
 }
