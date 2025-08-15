@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 🔄 **Epic 4 PARTIAL**: Liminal Web Layout System - Foundation merged, Edit Mode pending
 - 🚀 **Epic 5 Active**: Semantic Search System (branch: epic/5-semantic-search)
   - ✅ **Feature #322 COMPLETE**: Intelligent Indexing System - Background indexing with git integration
+  - ✅ **Ollama Integration COMPLETE**: Semantic search with local Ollama embedding API and modular architecture
 
 ### ⚠️ CRITICAL: Epic 4 Partial Merge Status (December 17, 2024)
 **WORKFLOW EXCEPTION - PARTIAL EPIC MERGE**
