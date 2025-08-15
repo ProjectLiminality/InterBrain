@@ -54,11 +54,13 @@ export class NativeHuggingFaceService implements EmbeddingService {
       env.allowRemoteModels = true // Allow initial downloads
       env.allowLocalModels = true  // Use local cache when available
       
-      // Force proper backend for Electron renderer process
-      // Obsidian plugins run in renderer, not main process
-      // Override auto-detection which incorrectly chooses onnxruntime-node
+      // Critical: Force web backend for Electron renderer
+      // Transformers.js incorrectly detects Electron as Node.js
+      // We must override to use onnxruntime-web, not onnxruntime-node
+      
+      // Configure ONNX backend for web/renderer context
       if (env.backends?.onnx) {
-        // Configure WASM backend for stability and performance
+        // Configure WASM backend settings
         if (env.backends.onnx.wasm) {
           // Critical: Must disable multithreading due to onnxruntime-web bug
           env.backends.onnx.wasm.numThreads = 1
@@ -66,9 +68,11 @@ export class NativeHuggingFaceService implements EmbeddingService {
           // Use SIMD if available for better performance
           env.backends.onnx.wasm.simd = true
           
-          // Set proper WASM paths if needed
-          // Leave undefined to use default CDN paths which work in Electron
-          env.backends.onnx.wasm.wasmPaths = undefined
+          // Use CDN for WASM files (works in Electron renderer)
+          env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/'
+          
+          // Explicitly set to use WASM proxy (web version)
+          env.backends.onnx.wasm.proxy = true
         }
         
         // Try to enable WebGPU for best performance (if available)
@@ -105,16 +109,21 @@ export class NativeHuggingFaceService implements EmbeddingService {
       
       // Check for WebGPU availability
       const hasWebGPU = 'gpu' in navigator && navigator.gpu
+      
+      // Explicitly set execution providers for web environment
+      const executionProviders = hasWebGPU ? ['webgpu', 'wasm'] : ['wasm']
       const device = hasWebGPU ? 'webgpu' : 'wasm'
       
       console.log(`🎯 Using device: ${device} (${hasWebGPU ? 'GPU acceleration available!' : 'Optimized WASM fallback'})`)
+      console.log(`🔧 Execution providers: ${executionProviders.join(', ')}`)
       
-      // Initialize pipeline with optimal device configuration
+      // Initialize pipeline with explicit execution providers
       this.pipeline = await pipeline(
         'feature-extraction',
         NativeHuggingFaceService.MODEL_CONFIG.modelId,
         {
           device: device, // Use WebGPU if available, WASM fallback
+          executionProviders: executionProviders, // Explicitly set providers
           progress_callback: (progress: unknown) => {
             const progressData = progress as { 
               status?: string; 

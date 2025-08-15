@@ -17,7 +17,7 @@ export default defineConfig({
       formats: ['cjs']
     },
     rollupOptions: {
-      external: ['obsidian'],
+      external: ['obsidian', 'onnxruntime-node'], // Exclude node runtime
       output: {
         globals: {
           obsidian: 'obsidian'
@@ -28,7 +28,16 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: false
   },
+  resolve: {
+    alias: {
+      // Force transformers.js to use web version of ONNX runtime
+      'onnxruntime-node': 'onnxruntime-web'
+    }
+  },
   define: {
-    global: 'globalThis'
+    global: 'globalThis',
+    // Override environment detection for transformers.js
+    'process.versions.node': 'undefined',
+    'process.versions.electron': 'undefined'
   }
 })
