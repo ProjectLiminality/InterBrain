@@ -20,4 +20,11 @@ export class UIService {
   showLoading(message: string): Notice {
     return new Notice(message, 0); // 0 = persistent until dismissed
   }
+
+  async getUserInput(prompt: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const input = globalThis.prompt(prompt);
+      resolve(input);
+    });
+  }
 }

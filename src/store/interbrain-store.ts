@@ -4,6 +4,8 @@ import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
 import { VectorData } from '../services/indexing-service';
+import { EmbeddingConfig } from '../services/embedding-service';
+import { DEFAULT_EMBEDDING_CONFIG } from '../services/ollama-embedding-service';
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -51,6 +53,22 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
+// Ollama configuration for embedding service
+export interface OllamaConfig {
+  baseUrl: string;
+  model: string;
+  enabled: boolean;
+  embedding: EmbeddingConfig;
+}
+
+// Default Ollama configuration
+export const DEFAULT_OLLAMA_CONFIG: OllamaConfig = {
+  baseUrl: 'http://localhost:11434',
+  model: 'nomic-embed-text',
+  enabled: true,
+  embedding: DEFAULT_EMBEDDING_CONFIG
+};
+
 export interface InterBrainState {
   // Data mode toggle
   dataMode: 'mock' | 'real';
@@ -67,6 +85,11 @@ export interface InterBrainState {
   updateVectorData: (nodeId: string, data: VectorData) => void;
   deleteVectorData: (nodeId: string) => void;
   clearVectorData: () => void;
+  
+  // Ollama embedding configuration (persisted)
+  ollamaConfig: OllamaConfig;
+  setOllamaConfig: (config: Partial<OllamaConfig>) => void;
+  resetOllamaConfig: () => void;
   
   // Selected DreamNode state
   selectedNode: DreamNode | null;
@@ -168,6 +191,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   dataMode: 'mock' as const, // Start in mock mode
   realNodes: new Map<string, RealNodeData>(),
   vectorData: new Map<string, VectorData>(),
+  ollamaConfig: DEFAULT_OLLAMA_CONFIG,
   selectedNode: null,
   creatorMode: {
     isActive: false,
@@ -257,6 +281,12 @@ export const useInterBrainStore = create<InterBrainState>()(
     return { vectorData: newVectorData };
   }),
   clearVectorData: () => set({ vectorData: new Map() }),
+  
+  // Ollama configuration actions
+  setOllamaConfig: (config) => set(state => ({
+    ollamaConfig: { ...state.ollamaConfig, ...config }
+  })),
+  resetOllamaConfig: () => set({ ollamaConfig: DEFAULT_OLLAMA_CONFIG }),
   
   setSelectedNode: (node) => set(state => {
     const previousNode = state.selectedNode;
@@ -686,12 +716,13 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, and mock relationships
+      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         vectorData: mapToArray(state.vectorData),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
+        ollamaConfig: state.ollamaConfig,
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
@@ -700,6 +731,7 @@ export const useInterBrainStore = create<InterBrainState>()(
           realNodes: [string, RealNodeData][];
           vectorData: [string, VectorData][];
           mockRelationshipData: [string, string[]][] | null;
+          ollamaConfig: OllamaConfig;
         };
         return {
           ...current,
@@ -707,6 +739,7 @@ export const useInterBrainStore = create<InterBrainState>()(
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           vectorData: persistedData.vectorData ? arrayToMap(persistedData.vectorData) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
+          ollamaConfig: persistedData.ollamaConfig || DEFAULT_OLLAMA_CONFIG,
         };
       },
     }

@@ -1140,6 +1140,197 @@ export default class InterBrainPlugin extends Plugin {
         }, 0);
       }
     });
+
+    // Ollama setup and diagnostic commands
+    this.addCommand({
+      id: 'ollama-check-status',
+      name: 'Ollama: Check Status',
+      callback: async () => {
+        const loadingNotice = this.uiService.showLoading('Checking Ollama status...');
+        try {
+          const { ollamaEmbeddingService } = await import('./services/ollama-embedding-service');
+          const { createOllamaHealthService } = await import('./services/ollama-health-service');
+          
+          const healthService = createOllamaHealthService(ollamaEmbeddingService);
+          const statusMessage = await healthService.getStatusMessage();
+          
+          this.uiService.showSuccess(statusMessage);
+        } catch {
+          this.uiService.showError('Failed to check Ollama status');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'ollama-run-diagnostics',
+      name: 'Ollama: Run Diagnostics',
+      callback: async () => {
+        const loadingNotice = this.uiService.showLoading('Running Ollama diagnostics...');
+        try {
+          const { ollamaEmbeddingService } = await import('./services/ollama-embedding-service');
+          const { createOllamaHealthService } = await import('./services/ollama-health-service');
+          
+          const healthService = createOllamaHealthService(ollamaEmbeddingService);
+          const report = await healthService.generateSetupReport();
+          
+          // Create a new file with the report
+          const reportFile = await this.app.vault.create(`Ollama Diagnostics ${new Date().toISOString().split('T')[0]}.md`, report);
+          await this.app.workspace.openLinkText(reportFile.path, '');
+          
+          this.uiService.showSuccess('Diagnostics complete - report opened');
+        } catch (error) {
+          console.error('Diagnostics failed:', error);
+          this.uiService.showError('Failed to run diagnostics');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'ollama-test-embedding',
+      name: 'Ollama: Test Embedding Generation',
+      callback: async () => {
+        const loadingNotice = this.uiService.showLoading('Testing embedding generation...');
+        try {
+          const { ollamaEmbeddingService } = await import('./services/ollama-embedding-service');
+          const { createOllamaHealthService } = await import('./services/ollama-health-service');
+          
+          const healthService = createOllamaHealthService(ollamaEmbeddingService);
+          await healthService.testEmbeddingGeneration();
+          
+          this.uiService.showSuccess('✅ Embedding generation test passed');
+        } catch (error) {
+          console.error('Embedding test failed:', error);
+          this.uiService.showError(`❌ Embedding test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'semantic-search',
+      name: 'Semantic Search',
+      callback: async () => {
+        const query = await this.uiService.getUserInput('Enter search query:');
+        if (!query) return;
+        
+        const loadingNotice = this.uiService.showLoading('Searching...');
+        try {
+          const { semanticSearchService } = await import('./services/semantic-search-service');
+          
+          const results = await semanticSearchService.searchByText(query, {
+            maxResults: 10,
+            includeSnippets: true
+          });
+          
+          if (results.length === 0) {
+            this.uiService.showWarning('No similar nodes found');
+            return;
+          }
+          
+          // Display results
+          const resultText = results.map((result, i) => 
+            `${i + 1}. **${result.node.name}** (${(result.score * 100).toFixed(1)}% similar)\\n   ${result.snippet || 'No snippet available'}`
+          ).join('\\n\\n');
+          
+          // Create a results file
+          const resultsFile = await this.app.vault.create(
+            `Search Results - ${query} - ${new Date().toISOString().split('T')[0]}.md`,
+            `# Search Results for "${query}"\\n\\n${resultText}`
+          );
+          await this.app.workspace.openLinkText(resultsFile.path, '');
+          
+          this.uiService.showSuccess(`Found ${results.length} similar nodes`);
+        } catch (error) {
+          console.error('Semantic search failed:', error);
+          this.uiService.showError('Search failed - check if Ollama is running');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'find-similar-nodes',
+      name: 'Find Similar to Selected Node',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+        
+        if (!selectedNode) {
+          this.uiService.showError('Please select a DreamNode first');
+          return;
+        }
+        
+        const loadingNotice = this.uiService.showLoading(`Finding nodes similar to "${selectedNode.name}"...`);
+        try {
+          const { semanticSearchService } = await import('./services/semantic-search-service');
+          
+          const results = await semanticSearchService.findSimilarNodes(selectedNode, {
+            maxResults: 10,
+            includeSnippets: true
+          });
+          
+          if (results.length === 0) {
+            this.uiService.showWarning('No similar nodes found');
+            return;
+          }
+          
+          // Display results
+          const resultText = results.map((result, i) => 
+            `${i + 1}. **${result.node.name}** (${(result.score * 100).toFixed(1)}% similar)\\n   ${result.snippet || 'No snippet available'}`
+          ).join('\\n\\n');
+          
+          // Create a results file
+          const resultsFile = await this.app.vault.create(
+            `Similar to ${selectedNode.name} - ${new Date().toISOString().split('T')[0]}.md`,
+            `# Nodes Similar to "${selectedNode.name}"\\n\\n${resultText}`
+          );
+          await this.app.workspace.openLinkText(resultsFile.path, '');
+          
+          this.uiService.showSuccess(`Found ${results.length} similar nodes`);
+        } catch (error) {
+          console.error('Similar nodes search failed:', error);
+          this.uiService.showError('Search failed - check if node is indexed and Ollama is running');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
+
+    this.addCommand({
+      id: 'embedding-service-status',
+      name: 'Check Embedding Service Status',
+      callback: async () => {
+        const loadingNotice = this.uiService.showLoading('Checking embedding service status...');
+        try {
+          const { indexingService } = await import('./services/indexing-service');
+          const { semanticSearchService } = await import('./services/semantic-search-service');
+          
+          const embeddingStatus = await indexingService.getEmbeddingStatus();
+          const searchStats = await semanticSearchService.getSearchStats();
+          const isSemanticAvailable = await semanticSearchService.isSemanticSearchAvailable();
+          
+          const statusMessage = [
+            `**Embedding Service**: ${embeddingStatus.message}`,
+            `**Semantic Search**: ${isSemanticAvailable ? '✅ Available' : '🔴 Unavailable'}`,
+            `**Indexed Nodes**: ${searchStats.indexedNodes}/${searchStats.totalNodes} (${(searchStats.indexingCoverage * 100).toFixed(1)}%)`,
+            `**Embedding Dimensions**: ${searchStats.embeddingDimensions || 'Unknown'}`
+          ].join('\\n');
+          
+          this.uiService.showSuccess(statusMessage);
+        } catch (error) {
+          console.error('Status check failed:', error);
+          this.uiService.showError('Failed to check embedding service status');
+        } finally {
+          loadingNotice.hide();
+        }
+      }
+    });
   }
 
   // Helper method to perform full indexing with progress notifications

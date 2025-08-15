@@ -128,7 +128,7 @@ describe('IndexingService', () => {
       
       const result = await indexingService.indexNode(node);
       
-      expect(result.embedding).toHaveLength(128);
+      expect(result.embedding).toHaveLength(768);
       expect(result.embedding.every(val => typeof val === 'number')).toBe(true);
     });
 
