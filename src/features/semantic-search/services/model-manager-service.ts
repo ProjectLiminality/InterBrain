@@ -340,9 +340,9 @@ export class ModelManagerService {
   private async downloadNativeModel(modelInfo: ModelInfo): Promise<void> {
     this.downloadProgress.message = 'Downloading model files to filesystem...'
     
-    // Check for WebGPU availability (moved outside try for catch block access)
-    const hasWebGPU = 'gpu' in navigator && navigator.gpu
-    const device = hasWebGPU ? 'webgpu' : 'wasm'
+    // Force WASM for now - WebGPU requires special initialization in Electron
+    const hasWebGPU = false // Disabled until WebGPU initialization is fixed
+    const device = 'wasm'
     
     try {
       

@@ -72,7 +72,7 @@ export class NativeHuggingFaceService implements EmbeddingService {
           env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/'
           
           // Explicitly set to use WASM proxy (web version)
-          env.backends.onnx.wasm.proxy = true
+          env.backends.onnx.wasm.proxy = false // Changed to false - proxy can cause issues
         }
         
         // Try to enable WebGPU for best performance (if available)
@@ -82,7 +82,7 @@ export class NativeHuggingFaceService implements EmbeddingService {
       }
       
       console.log(`🔧 Transformers.js configured for Electron renderer:`)
-      console.log(`   Backend: Optimized WASM/WebGPU`)
+      console.log(`   Backend: Optimized WASM`)
       console.log(`   Models: ${env.localModelPath}`)
       console.log(`   Cache: ${env.cacheDir}`)
       console.log(`   Threading: Single (stable for onnxruntime-web)`)
@@ -102,19 +102,17 @@ export class NativeHuggingFaceService implements EmbeddingService {
       return
     }
 
-    console.log(`🚀 Initializing HuggingFace embedding model with WebGPU/WASM optimization...`)
+    console.log(`🚀 Initializing HuggingFace embedding model with WASM optimization...`)
     
     try {
       const startTime = globalThis.performance.now()
       
-      // Check for WebGPU availability
-      const hasWebGPU = 'gpu' in navigator && navigator.gpu
+      // Force WASM backend for stability
+      // WebGPU initialization in Electron is complex and requires special setup
+      const executionProviders = ['wasm']
+      const device = 'wasm'
       
-      // Explicitly set execution providers for web environment
-      const executionProviders = hasWebGPU ? ['webgpu', 'wasm'] : ['wasm']
-      const device = hasWebGPU ? 'webgpu' : 'wasm'
-      
-      console.log(`🎯 Using device: ${device} (${hasWebGPU ? 'GPU acceleration available!' : 'Optimized WASM fallback'})`)
+      console.log(`🎯 Using device: ${device} (Optimized WASM backend)`)
       console.log(`🔧 Execution providers: ${executionProviders.join(', ')}`)
       
       // Initialize pipeline with explicit execution providers
@@ -145,7 +143,7 @@ export class NativeHuggingFaceService implements EmbeddingService {
 
       const initTime = globalThis.performance.now() - startTime
       console.log(`✅ HuggingFace embedding model initialized in ${initTime.toFixed(2)}ms`)
-      console.log(`🔥 Using ${hasWebGPU ? 'WebGPU acceleration' : 'optimized WASM'} for high performance`)
+      console.log(`🔥 Using optimized WASM backend for stable performance`)
       
       this.initialized = true
       
