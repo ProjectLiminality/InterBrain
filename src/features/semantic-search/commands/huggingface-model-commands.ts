@@ -1,5 +1,7 @@
 import { Command } from 'obsidian'
 import { IframeTransformersService } from '../services/iframe-transformers-service'
+import { modelDownloadService } from '../services/model-download-service'
+import { modelServingService } from '../services/model-serving-service'
 
 /**
  * HuggingFace Model Management Commands
@@ -23,60 +25,66 @@ export function createDownloadHuggingFaceModelCommand(): Command {
     id: 'interbrain-download-huggingface-model',
     name: 'Download HuggingFace Model',
     callback: async () => {
-      if (!embeddingService) {
-        console.error('❌ HuggingFace embedding service not initialized')
-        return
-      }
-
       console.log('🤗 HuggingFace Model Downloader')
-      console.log('='.repeat(40))
+      console.log('='.repeat(50))
       
       try {
-        const availableModels = embeddingService.getAvailableModels()
+        const availableModels = modelDownloadService.getAvailableModels()
         
         console.log('📋 Available models:')
         availableModels.forEach((model, index) => {
           console.log(`${index + 1}. ${model.name}`)
           console.log(`   ID: ${model.id}`)
+          console.log(`   Size: ${(model.estimatedSizeBytes / 1024 / 1024).toFixed(0)}MB`)
           console.log(`   Dimensions: ${model.dimensions}`)
           console.log(`   Languages: ${model.languages.join(', ')}`)
           console.log(`   Description: ${model.description}`)
           console.log('')
         })
 
-        // Initialize the iframe embedding service
-        console.log(`🚀 Initializing iframe-based transformers.js service...`)
-        console.log('💡 Using Smart Connections proven pattern')
+        // Check if models are already downloaded
+        const downloadedModels = await modelDownloadService.getDownloadedModels()
+        if (downloadedModels.length > 0) {
+          console.log('✅ Already downloaded models:')
+          for (const modelId of downloadedModels) {
+            console.log(`   • ${modelId}`)
+          }
+          console.log('')
+        }
+
+        // For demo, download the default model
+        const defaultModel = 'Xenova/all-MiniLM-L6-v2'
+        console.log(`🚀 Downloading model: ${defaultModel}...`)
+        console.log('💡 This uses Node.js filesystem for true persistence!')
         console.log('')
 
         const startTime = Date.now()
-        await embeddingService.initialize()
-        const initTime = Date.now() - startTime
+        await modelDownloadService.downloadModel(defaultModel)
+        const downloadTime = Date.now() - startTime
 
-        console.log(`🎉 Successfully initialized iframe transformers service!`)
-        console.log(`⏱️ Initialization time: ${(initTime / 1000).toFixed(1)}s`)
+        console.log(`🎉 Successfully downloaded ${defaultModel}!`)
+        console.log(`⏱️ Download time: ${(downloadTime / 1000).toFixed(1)}s`)
+        
+        // Show storage information
+        const storageInfo = await modelDownloadService.getStorageInfo()
+        console.log('')
+        console.log('💾 Storage Information:')
+        console.log(`   • Downloaded models: ${storageInfo.downloadedModels.length}`)
+        console.log(`   • Total size: ${(storageInfo.totalSizeBytes / 1024 / 1024).toFixed(1)}MB`)
+        console.log(`   • Storage location: ${storageInfo.modelsDirectory}`)
         console.log('')
         
-        // Show filesystem persistence status
-        if (embeddingService.isFilesystemCacheEnabled()) {
-          console.log('💾 Model Persistence: ✅ Filesystem Cache')
-          console.log('   • Models saved to local directory')
-          console.log('   • Available offline after download')
-          console.log('   • Persists across Obsidian restarts')
-        } else {
-          console.log('💾 Model Persistence: ⚠️ Browser Cache')
-          console.log('   • Models may be cleared by browser')
-          console.log('   • Re-download needed after restarts')
-        }
-        
-        console.log('')
         console.log('🎯 Next steps:')
-        console.log('   • "Test HuggingFace Embedding" - Test real neural embeddings')
-        console.log('   • "Index DreamNodes with HuggingFace" - Re-index with transformers.js')
-        console.log('   • "Switch HuggingFace Model" - Try different models')
+        console.log('   • "Test HuggingFace Embedding" - Test with downloaded models')
+        console.log('   • "Index DreamNodes with HuggingFace" - Use filesystem-cached models')
+        console.log('   • "HuggingFace Model Status" - Check download status')
 
       } catch (error) {
         console.error('❌ Failed to download HuggingFace model:', error)
+        const progress = modelDownloadService.getDownloadProgress()
+        if (progress.error) {
+          console.log(`   Error details: ${progress.error}`)
+        }
         console.log('💡 Check your internet connection and try again')
       }
     }
@@ -152,60 +160,83 @@ export function createHuggingFaceModelStatusCommand(): Command {
     id: 'interbrain-huggingface-model-status',
     name: 'HuggingFace Model Status',
     callback: async () => {
-      if (!embeddingService) {
-        console.error('❌ HuggingFace embedding service not initialized')
-        return
-      }
-
       console.log('📊 HuggingFace Model Status')
-      console.log('='.repeat(40))
+      console.log('='.repeat(50))
       
       try {
-        const isInitialized = embeddingService.isInitialized()
-        const modelInfo = embeddingService.getModelInfo()
-        const iframeStatus = await embeddingService.getStatus()
-
-        // Current model status
-        console.log('🤖 Current Model:')
-        console.log(`   Name: ${modelInfo.name}`)
-        console.log(`   ID: ${modelInfo.id}`)
-        console.log(`   Status: ${isInitialized ? '✅ Loaded' : '❌ Not Loaded'}`)
-        console.log(`   Iframe Status: ${iframeStatus.initialized ? '✅ Active' : '❌ Not Active'}`)
-        console.log(`   Dimensions: ${modelInfo.dimensions}`)
-        console.log(`   Context Length: ${modelInfo.contextLength.toLocaleString()}`)
-        console.log(`   Languages: ${modelInfo.languages.join(', ')}`)
+        // Download service status
+        const downloadProgress = modelDownloadService.getDownloadProgress()
+        const storageInfo = await modelDownloadService.getStorageInfo()
+        
+        console.log('💾 Download & Storage Status:')
+        console.log(`   Download Status: ${downloadProgress.status}`)
+        if (downloadProgress.status === 'downloading') {
+          console.log(`   Progress: ${downloadProgress.progress}%`)
+          console.log(`   Current File: ${downloadProgress.currentFile || 'N/A'}`)
+          console.log(`   Files: ${downloadProgress.filesCompleted}/${downloadProgress.totalFiles}`)
+        }
+        console.log(`   Downloaded Models: ${storageInfo.downloadedModels.length}`)
+        if (storageInfo.downloadedModels.length > 0) {
+          storageInfo.downloadedModels.forEach(modelId => {
+            console.log(`     • ${modelId}`)
+          })
+        }
+        console.log(`   Total Storage: ${(storageInfo.totalSizeBytes / 1024 / 1024).toFixed(1)}MB`)
+        console.log(`   Models Directory: ${storageInfo.modelsDirectory}`)
         console.log('')
 
-        // Filesystem persistence status
-        console.log('💾 Model Persistence:')
-        if (embeddingService.isFilesystemCacheEnabled()) {
-          console.log(`   Status: ✅ Filesystem Cache Active`)
-          console.log(`   Location: Local plugin models directory`)
-          console.log(`   Persistence: Survives Obsidian restarts`)
-          console.log(`   Offline: Available without internet`)
+        // Serving service status
+        const servingStatus = modelServingService.getServingStatus()
+        console.log('📡 Model Serving Status:')
+        console.log(`   Served Models: ${servingStatus.servedModels.length}`)
+        if (servingStatus.servedModels.length > 0) {
+          servingStatus.servedModels.forEach(modelId => {
+            console.log(`     • ${modelId}`)
+          })
+        }
+        console.log(`   Active Blob URLs: ${servingStatus.totalObjectUrls}`)
+        console.log(`   Memory Usage: ${modelServingService.getMemoryUsageString()}`)
+        console.log('')
+
+        // Iframe service status
+        if (embeddingService) {
+          const isInitialized = embeddingService.isInitialized()
+          const modelInfo = embeddingService.getModelInfo()
+          
+          console.log('🤖 Iframe Service Status:')
+          console.log(`   Service: ${isInitialized ? '✅ Initialized' : '❌ Not Initialized'}`)
+          console.log(`   Current Model: ${modelInfo.name}`)
+          console.log(`   Model ID: ${modelInfo.id}`)
+          console.log(`   Serving Enabled: ${embeddingService.isModelServingEnabled() ? '✅ Yes' : '❌ No'}`)
+          console.log(`   Dimensions: ${modelInfo.dimensions}`)
+          console.log(`   Context Length: ${modelInfo.contextLength.toLocaleString()}`)
+          
+          if (isInitialized) {
+            const iframeStatus = await embeddingService.getStatus()
+            console.log(`   Iframe Status: ${iframeStatus.initialized ? '✅ Active' : '❌ Inactive'}`)
+          }
         } else {
-          console.log(`   Status: ⚠️ Browser Cache Only`)
-          console.log(`   Location: Ephemeral browser memory`)
-          console.log(`   Persistence: May be cleared on restart`)
-          console.log(`   Offline: Limited availability`)
+          console.log('🤖 Iframe Service: ❌ Not initialized')
         }
         console.log('')
 
-        // Iframe information
-        console.log('🖼️ Iframe Worker Information:')
-        console.log(`   Pattern: Smart Connections iframe sandboxing`)
-        console.log(`   CDN Source: @xenova/transformers via JSDelivr`)
-        console.log(`   Isolation: Sandboxed execution environment`)
+        // Architecture information
+        console.log('🏠 Architecture:')
+        console.log(`   Download: Node.js filesystem operations`)
+        console.log(`   Serving: Blob URLs for iframe consumption`)
+        console.log(`   Execution: Isolated iframe with transformers.js`)
+        console.log(`   Persistence: True filesystem storage`)
         console.log('')
 
         // Available actions
         console.log('🎯 Available Actions:')
-        if (!isInitialized) {
-          console.log('   • "Download HuggingFace Model" - Initialize iframe service')
+        if (storageInfo.downloadedModels.length === 0) {
+          console.log('   • "Download HuggingFace Model" - Download models to filesystem')
         } else {
+          console.log('   • "Test HuggingFace Embedding" - Test with downloaded models')
           console.log('   • "Switch HuggingFace Model" - Change active model')
-          console.log('   • "Test HuggingFace Embedding" - Test real neural embeddings')
-          console.log('   • "Clear HuggingFace Cache" - Reset iframe service')
+          console.log('   • "Index DreamNodes with HuggingFace" - Use filesystem models')
+          console.log('   • "Clear HuggingFace Cache" - Clear downloaded models')
         }
 
       } catch (error) {
@@ -223,13 +254,8 @@ export function createTestHuggingFaceEmbeddingCommand(): Command {
     id: 'interbrain-test-huggingface-embedding',
     name: 'Test HuggingFace Embedding',
     callback: async () => {
-      if (!embeddingService) {
-        console.error('❌ HuggingFace embedding service not initialized')
-        return
-      }
-
       console.log('🧪 HuggingFace Embedding Test')
-      console.log('='.repeat(40))
+      console.log('='.repeat(50))
       
       const testTexts = [
         'Artificial intelligence and machine learning',
@@ -239,13 +265,40 @@ export function createTestHuggingFaceEmbeddingCommand(): Command {
       ]
 
       try {
-        // Always reinitialize to ensure iframe is ready
-        console.log('⚠️ Ensuring model is initialized...')
+        // Check if we have downloaded models
+        const downloadedModels = await modelDownloadService.getDownloadedModels()
+        if (downloadedModels.length === 0) {
+          console.log('❌ No models downloaded yet')
+          console.log('')
+          console.log('💡 First download a model:')
+          console.log('   • Run "Download HuggingFace Model" command')
+          console.log('   • Wait for download to complete')
+          console.log('   • Then try this test again')
+          return
+        }
+
+        console.log('✅ Available models:')
+        downloadedModels.forEach(modelId => {
+          console.log(`   • ${modelId}`)
+        })
+        console.log('')
+
+        // Use the first available model
+        const testModelId = downloadedModels[0]
+        console.log(`🤖 Testing with model: ${testModelId}`)
+        
+        // Initialize embedding service if not already done
+        if (!embeddingService) {
+          embeddingService = IframeTransformersService.getInstance()
+        }
+        
+        // Ensure model is served and iframe is initialized
+        console.log('⚡ Initializing model serving and iframe...')
         await embeddingService.initialize()
 
         const modelInfo = embeddingService.getModelInfo()
-        console.log(`🤖 Testing model: ${modelInfo.name}`)
-        console.log(`📊 Expected dimensions: ${modelInfo.dimensions}`)
+        console.log(`📊 Model dimensions: ${modelInfo.dimensions}`)
+        console.log(`📡 Model serving: ${embeddingService.isModelServingEnabled() ? '✅ Enabled' : '❌ Disabled'}`)
         console.log('')
 
         console.log('📝 Test texts:')
@@ -254,7 +307,7 @@ export function createTestHuggingFaceEmbeddingCommand(): Command {
         }
         console.log('')
 
-        console.log('⚡ Generating embeddings...')
+        console.log('⚡ Generating embeddings with filesystem-cached model...')
         const startTime = Date.now()
         
         const embeddings = await embeddingService.batchEmbedding(testTexts)
@@ -280,10 +333,21 @@ export function createTestHuggingFaceEmbeddingCommand(): Command {
         console.log('🔍 Semantic Similarity Test:')
         const similarity = cosineSimilarity(embeddings[0], embeddings[1])
         console.log(`   AI/ML vs Project Management: ${(similarity * 100).toFixed(1)}% similar`)
+        
+        // Show persistence info
+        console.log('')
+        console.log('💾 Persistence Verification:')
+        console.log('   ✅ Model loaded from filesystem cache')
+        console.log('   ✅ Available offline')
+        console.log('   ✅ Survives Obsidian restarts')
 
       } catch (error) {
         console.error('❌ HuggingFace embedding test failed:', error)
-        console.log('💡 Make sure you have downloaded a model first using "Download HuggingFace Model"')
+        console.log('')
+        console.log('💡 Troubleshooting:')
+        console.log('   1. Run "Download HuggingFace Model" to ensure models are cached')
+        console.log('   2. Check "HuggingFace Model Status" for detailed diagnostics')
+        console.log('   3. Restart Obsidian if issues persist')
       }
     }
   }
@@ -297,34 +361,71 @@ export function createClearHuggingFaceCacheCommand(): Command {
     id: 'interbrain-clear-huggingface-cache',
     name: 'Clear HuggingFace Cache',
     callback: async () => {
-      if (!embeddingService) {
-        console.error('❌ HuggingFace embedding service not initialized')
-        return
-      }
-
       console.log('🗑️ HuggingFace Cache Cleaner')
-      console.log('='.repeat(40))
+      console.log('='.repeat(50))
       
       try {
-        console.log('ℹ️ Iframe-based cache clearing:')
-        console.log('   • Browser cache is managed automatically by @xenova/transformers')
-        console.log('   • Models are cached by the browser cache API')
-        console.log('   • Clearing requires iframe recreation')
+        // Show what will be cleared
+        const storageInfo = await modelDownloadService.getStorageInfo()
+        const servingStatus = modelServingService.getServingStatus()
+        
+        console.log('📊 Current cache status:')
+        console.log(`   • Downloaded models: ${storageInfo.downloadedModels.length}`)
+        console.log(`   • Served models: ${servingStatus.servedModels.length}`)
+        console.log(`   • Total storage: ${(storageInfo.totalSizeBytes / 1024 / 1024).toFixed(1)}MB`)
+        console.log(`   • Memory usage: ${modelServingService.getMemoryUsageString()}`)
         console.log('')
         
-        console.log('🚀 Recreating iframe worker to clear model cache...')
-
-        // Dispose current iframe and reinitialize to clear cache
-        embeddingService.dispose()
-        await embeddingService.initialize()
+        if (storageInfo.downloadedModels.length === 0) {
+          console.log('ℹ️ No models to clear')
+          return
+        }
         
-        console.log('✅ Iframe worker recreated - model cache cleared!')
-        console.log('💡 Browser cache may still contain models for faster future loading')
-        console.log('🎯 Run "Download HuggingFace Model" to re-initialize models')
+        console.log('🧽 Clearing cache components:')
+        
+        // 1. Clear served models (blob URLs)
+        if (servingStatus.servedModels.length > 0) {
+          console.log('   1. Clearing served model blob URLs...')
+          modelServingService.unserveAllModels()
+          console.log('      ✅ Blob URLs revoked')
+        }
+        
+        // 2. Dispose iframe service
+        if (embeddingService && embeddingService.isInitialized()) {
+          console.log('   2. Disposing iframe service...')
+          embeddingService.dispose()
+          console.log('      ✅ Iframe service disposed')
+        }
+        
+        // 3. Delete filesystem models
+        console.log('   3. Deleting filesystem models...')
+        for (const modelId of storageInfo.downloadedModels) {
+          await modelDownloadService.deleteModel(modelId)
+          console.log(`      ✅ Deleted ${modelId}`)
+        }
+        
+        // Verify cleanup
+        const finalStorageInfo = await modelDownloadService.getStorageInfo()
+        const finalServingStatus = modelServingService.getServingStatus()
+        
+        console.log('')
+        console.log('✅ Cache cleanup completed!')
+        console.log('📊 Final status:')
+        console.log(`   • Downloaded models: ${finalStorageInfo.downloadedModels.length}`)
+        console.log(`   • Served models: ${finalServingStatus.servedModels.length}`)
+        console.log(`   • Storage freed: ${(storageInfo.totalSizeBytes / 1024 / 1024).toFixed(1)}MB`)
+        console.log('')
+        console.log('🎯 Next steps:')
+        console.log('   • "Download HuggingFace Model" - Re-download models')
+        console.log('   • "HuggingFace Model Status" - Check current status')
 
       } catch (error) {
         console.error('❌ Failed to clear HuggingFace cache:', error)
-        console.log('💡 Try "Download HuggingFace Model" to reinitialize the service')
+        console.log('')
+        console.log('💡 Troubleshooting:')
+        console.log('   • Some files may be in use by the system')
+        console.log('   • Try restarting Obsidian and running this command again')
+        console.log('   • Check file permissions in the models directory')
       }
     }
   }

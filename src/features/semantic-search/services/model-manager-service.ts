@@ -7,8 +7,7 @@
  * For new development, use LocalHuggingFaceEmbeddingService instead.
  */
 
-/* eslint-disable no-undef, @typescript-eslint/no-explicit-any */
-
+/* eslint-disable no-undef */
 // NOTE: Removed @xenova/transformers imports since we now use Node.js-native approach
 
 export interface ModelInfo {

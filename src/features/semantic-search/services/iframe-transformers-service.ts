@@ -13,6 +13,8 @@
  */
 
 import { ModelInfo, EmbeddingService } from '../indexing/embedding-service'
+import { modelServingService, ModelServingService } from './model-serving-service'
+import { modelDownloadService, HuggingFaceModelConfig } from './model-download-service'
 
 export interface IframeModelConfig {
   id: string // HuggingFace model ID
@@ -24,13 +26,13 @@ export interface IframeModelConfig {
 }
 
 export interface IframeMessage {
-  type: 'INITIALIZE' | 'EMBED' | 'BATCH_EMBED' | 'MODEL_INFO' | 'SWITCH_MODEL' | 'STATUS' | 'SET_CACHE_PATH'
-  data?: { modelId?: string; text?: string; texts?: string[]; cachePath?: string }
+  type: 'INITIALIZE' | 'EMBED' | 'BATCH_EMBED' | 'MODEL_INFO' | 'SWITCH_MODEL' | 'STATUS' | 'SET_MODEL_CONFIG'
+  data?: { modelId?: string; text?: string; texts?: string[]; modelConfig?: any }
   requestId?: string
 }
 
 export interface IframeResponse {
-  type: 'INITIALIZED' | 'EMBEDDING_RESULT' | 'BATCH_RESULT' | 'MODEL_INFO_RESULT' | 'ERROR' | 'STATUS_RESULT' | 'PROGRESS' | 'CACHE_PATH_SET'
+  type: 'INITIALIZED' | 'EMBEDDING_RESULT' | 'BATCH_RESULT' | 'MODEL_INFO_RESULT' | 'ERROR' | 'STATUS_RESULT' | 'PROGRESS' | 'MODEL_CONFIG_SET'
   data?: number[] | number[][] | { initialized: boolean; currentModel: string | null } | unknown
   requestId?: string
   error?: string
@@ -46,34 +48,25 @@ export class IframeTransformersService implements EmbeddingService {
   private initialized = false
   private currentModel = 'Xenova/all-MiniLM-L6-v2'
   private pendingRequests = new Map<string, { resolve: Function; reject: Function }>()
-  private cachePathSet = false
+  private modelConfigured = false
   
-  // Popular models available via transformers.js (Xenova-converted for ONNX compatibility)
-  private static readonly AVAILABLE_MODELS: Record<string, IframeModelConfig> = {
-    'Xenova/all-MiniLM-L6-v2': {
-      id: 'Xenova/all-MiniLM-L6-v2',
-      name: 'all-MiniLM-L6-v2',
-      description: 'Lightweight and fast sentence embedding model, 384 dimensions',
-      dimensions: 384,
-      contextLength: 256,
-      languages: ['en', 'multilingual']
-    },
-    'Xenova/all-mpnet-base-v2': {
-      id: 'Xenova/all-mpnet-base-v2',
-      name: 'all-mpnet-base-v2',
-      description: 'High-quality sentence embedding model, 768 dimensions',
-      dimensions: 768,
-      contextLength: 384,
-      languages: ['en']
-    },
-    'Xenova/bge-small-en-v1.5': {
-      id: 'Xenova/bge-small-en-v1.5',
-      name: 'BGE Small EN v1.5',
-      description: 'Efficient English embedding model, 384 dimensions',
-      dimensions: 384,
-      contextLength: 512,
-      languages: ['en']
+  // Get available models from ModelDownloadService
+  private getAvailableModelConfigs(): Record<string, IframeModelConfig> {
+    const configs: Record<string, IframeModelConfig> = {}
+    const availableModels = modelDownloadService.getAvailableModels()
+    
+    for (const model of availableModels) {
+      configs[model.id] = {
+        id: model.id,
+        name: model.name,
+        description: model.description,
+        dimensions: model.dimensions,
+        contextLength: model.contextLength,
+        languages: model.languages
+      }
     }
+    
+    return configs
   }
 
   private constructor() {}
@@ -86,61 +79,60 @@ export class IframeTransformersService implements EmbeddingService {
   }
 
   /**
-   * Calculate filesystem cache path for model storage
+   * Configure model serving for iframe transformers.js
    */
-  private getModelsCachePath(): string {
-    // Use Node.js require to access path and get vault base path
-    const path = require('path')
-    const fs = require('fs')
+  private async configureModelServing(modelId: string): Promise<void> {
+    console.log(`📡 Configuring model serving for ${modelId}...`)
     
     try {
-      // Get vault base path from Obsidian (available in Electron environment)
-      const vaultBasePath = (globalThis as any).app?.vault?.adapter?.getBasePath?.()
-      
-      if (vaultBasePath) {
-        // Create path: vault/.obsidian/plugins/interbrain/semantic-search/models
-        const modelsPath = path.join(vaultBasePath, '.obsidian', 'plugins', 'interbrain', 'semantic-search', 'models')
-        
-        // Ensure models directory exists
-        if (!fs.existsSync(modelsPath)) {
-          fs.mkdirSync(modelsPath, { recursive: true })
-          console.log(`📁 Created models directory: ${modelsPath}`)
-        }
-        
-        return modelsPath
+      // Check if model is downloaded
+      const isDownloaded = await modelDownloadService.isModelDownloaded(modelId)
+      if (!isDownloaded) {
+        throw new Error(`Model ${modelId} is not downloaded. Please download it first.`)
       }
+
+      // Serve the model (creates blob URLs)
+      const servedModel = await modelServingService.serveModel(modelId)
+      
+      // Create iframe model configuration
+      const modelConfig = modelServingService.createIframeModelConfig(modelId)
+      
+      console.log(`📦 Model serving configured:`, {
+        modelId: modelConfig.modelId,
+        totalFiles: modelConfig.totalFiles,
+        servedAt: new Date(modelConfig.servedAt).toISOString()
+      })
+      
+      return modelConfig
+      
     } catch (error) {
-      console.warn('⚠️ Could not determine vault path, falling back to CDN caching:', error)
+      console.error(`❌ Failed to configure model serving for ${modelId}:`, error)
+      throw error
     }
-    
-    // Fallback: return empty string to use default browser cache
-    return ''
   }
 
   /**
-   * Set custom cache path in iframe for filesystem persistence
+   * Configure model in iframe using blob URL serving
    */
-  private async setCachePathInIframe(): Promise<void> {
-    const cachePath = this.getModelsCachePath()
+  private async setModelConfigInIframe(modelId: string): Promise<void> {
+    console.log(`🔧 Setting model configuration in iframe for ${modelId}...`)
     
-    if (cachePath) {
-      console.log(`📁 Setting filesystem cache path: ${cachePath}`)
+    try {
+      const modelConfig = await this.configureModelServing(modelId)
       
-      try {
-        await this.sendMessage<void>({
-          type: 'SET_CACHE_PATH',
-          data: { cachePath }
-        })
-        
-        this.cachePathSet = true
-        console.log('✅ Filesystem cache path set successfully')
-      } catch (error) {
-        console.warn('⚠️ Failed to set cache path, falling back to browser cache:', error)
-        this.cachePathSet = false
-      }
-    } else {
-      console.log('💾 Using browser cache (filesystem path not available)')
-      this.cachePathSet = false
+      console.log('📡 Sending SET_MODEL_CONFIG message to iframe...')
+      await this.sendMessage<void>({
+        type: 'SET_MODEL_CONFIG',
+        data: { modelConfig }
+      })
+      
+      this.modelConfigured = true
+      console.log('✅ Model configuration set successfully in iframe')
+      
+    } catch (error) {
+      console.error('❌ Failed to set model configuration:', error)
+      this.modelConfigured = false
+      throw error
     }
   }
 
@@ -158,15 +150,15 @@ export class IframeTransformersService implements EmbeddingService {
       // Create sandboxed iframe for ML operations
       await this.createEmbeddingIframe()
       
-      // Set filesystem cache path for model persistence
-      await this.setCachePathInIframe()
+      // Configure model serving for the default model
+      await this.setModelConfigInIframe(this.currentModel)
       
-      // Initialize with default model
+      // Initialize with configured model
       await this.initializeModel(this.currentModel)
       
       this.initialized = true
-      const cacheStatus = this.cachePathSet ? 'with filesystem cache' : 'with browser cache'
-      console.log(`✅ IframeTransformersService initialized with ${this.currentModel} ${cacheStatus}`)
+      const servingStatus = this.modelConfigured ? 'with blob URL serving' : 'with remote models'
+      console.log(`✅ IframeTransformersService initialized with ${this.currentModel} ${servingStatus}`)
       
     } catch (error) {
       console.error('❌ Failed to initialize IframeTransformersService:', error)
@@ -198,14 +190,80 @@ export class IframeTransformersService implements EmbeddingService {
             // Load transformers.js from CDN (Smart Connections proven approach)
             import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
             
-            // Configure for browser environment with Electron compatibility
-            env.allowRemoteModels = true;
-            env.allowLocalModels = false;
-            env.useBrowserCache = true;
+            // Configure for local model serving via blob URLs
+            env.allowRemoteModels = false;  // Force local-only loading
+            env.allowLocalModels = true;    // Enable local model loading
+            env.useBrowserCache = false;    // Disable browser cache (use blob URLs)
             
             // Disable WebAssembly threading for Electron compatibility
             env.backends.onnx.wasm.numThreads = 1;
             env.backends.onnx.wasm.simd = false;
+            
+            // Model configuration (set via SET_MODEL_CONFIG message)
+            let modelConfig = null;
+            
+            // Override fetch to intercept model file requests
+            // UNIVERSAL APPROACH: Handle any model file request pattern
+            const originalFetch = window.fetch;
+            window.fetch = async (resource, options) => {
+              const url = resource.toString();
+              
+              // Intercept requests to /models/ or app://obsidian.md/models/
+              if (url.includes('/models/') && modelConfig) {
+                console.log('[FETCH-INTERCEPT] Intercepting request for:', url);
+                
+                // Extract different possible file identifiers
+                const filename = url.split('/').pop();  // Just the filename
+                const fullPath = url.split('/models/')[1];  // Full path after /models/
+                const pathParts = fullPath ? fullPath.split('/') : [];
+                
+                // STRATEGY 1: Try exact filename match
+                if (modelConfig.files && modelConfig.files[filename]) {
+                  const blobUrl = modelConfig.files[filename];
+                  console.log('[FETCH-INTERCEPT] ✅ Serving', filename, 'from blob URL');
+                  return originalFetch(blobUrl, options);
+                }
+                
+                // STRATEGY 2: Try full path match  
+                if (modelConfig.files && modelConfig.files[fullPath]) {
+                  const blobUrl = modelConfig.files[fullPath];
+                  console.log('[FETCH-INTERCEPT] ✅ Serving', fullPath, 'from blob URL');
+                  return originalFetch(blobUrl, options);
+                }
+                
+                // STRATEGY 3: Try fuzzy matching for ONNX files
+                // Handle requests like 'model_quantized.onnx' -> 'model.onnx'
+                if (filename && filename.includes('.onnx')) {
+                  for (const [availableFile, blobUrl] of Object.entries(modelConfig.files)) {
+                    if (availableFile.includes('.onnx')) {
+                      console.log('[FETCH-INTERCEPT] 🔄 ONNX fallback: serving', availableFile, 'for requested', filename);
+                      return originalFetch(blobUrl, options);
+                    }
+                  }
+                }
+                
+                // STRATEGY 4: Try partial filename matching
+                if (filename) {
+                  for (const [availableFile, blobUrl] of Object.entries(modelConfig.files)) {
+                    if (availableFile.toLowerCase().includes(filename.toLowerCase()) || 
+                        filename.toLowerCase().includes(availableFile.toLowerCase())) {
+                      console.log('[FETCH-INTERCEPT] 🎯 Partial match: serving', availableFile, 'for requested', filename);
+                      return originalFetch(blobUrl, options);
+                    }
+                  }
+                }
+                
+                console.warn('[FETCH-INTERCEPT] ❌ File not found with any strategy');
+                console.warn('[FETCH-INTERCEPT] Requested:', filename, '|', fullPath);
+                console.warn('[FETCH-INTERCEPT] Available:', Object.keys(modelConfig.files || {}));
+              }
+              
+              // Default behavior for other requests
+              return originalFetch(resource, options);
+            };
+            
+            // Set local model path to trigger local loading
+            env.localModelPath = '/models/';
             
             let embedder = null;
             let currentModel = null;
@@ -281,16 +339,22 @@ export class IframeTransformersService implements EmbeddingService {
                     window.parent.postMessage({ type: 'INITIALIZED', requestId }, '*');
                     break;
                     
-                  case 'SET_CACHE_PATH':
-                    console.log('📁 Iframe: Setting filesystem cache path...', data.cachePath);
-                    if (data.cachePath) {
-                      env.cacheDir = data.cachePath;
-                      env.allowLocalModels = true;
-                      console.log('✅ Iframe: Filesystem cache configured at:', data.cachePath);
+                  case 'SET_MODEL_CONFIG':
+                    console.log('📦 Iframe: Setting model configuration...', data.modelConfig);
+                    if (data.modelConfig) {
+                      modelConfig = data.modelConfig;
+                      
+                      console.log('✅ Iframe: Model serving configured with fetch interception');
+                      console.log('  Model ID:', modelConfig.modelId);
+                      console.log('  Files:', Object.keys(modelConfig.files).length);
+                      console.log('  Sample file mapping:');
+                      Object.entries(modelConfig.files).slice(0, 2).forEach(([filename, blobUrl]) => {
+                        console.log('    ' + filename + ' -> ' + blobUrl);
+                      });
                     } else {
-                      console.log('💾 Iframe: Using browser cache (no filesystem path provided)');
+                      console.log('⚠️ Iframe: No model configuration provided');
                     }
-                    window.parent.postMessage({ type: 'CACHE_PATH_SET', requestId }, '*');
+                    window.parent.postMessage({ type: 'MODEL_CONFIG_SET', requestId }, '*');
                     break;
                 }
               } catch (error) {
@@ -445,8 +509,9 @@ export class IframeTransformersService implements EmbeddingService {
    * Switch to different model
    */
   async switchModel(modelId: string): Promise<void> {
-    if (!IframeTransformersService.AVAILABLE_MODELS[modelId]) {
-      throw new Error(`Unsupported model: ${modelId}. Available: ${Object.keys(IframeTransformersService.AVAILABLE_MODELS).join(', ')}`)
+    const availableModels = this.getAvailableModelConfigs()
+    if (!availableModels[modelId]) {
+      throw new Error(`Unsupported model: ${modelId}. Available: ${Object.keys(availableModels).join(', ')}`)
     }
 
     if (this.currentModel === modelId && this.initialized) {
@@ -457,6 +522,10 @@ export class IframeTransformersService implements EmbeddingService {
     console.log(`🔄 Switching to model: ${modelId}`)
     
     try {
+      // Configure serving for the new model
+      await this.setModelConfigInIframe(modelId)
+      
+      // Switch model in iframe
       await this.sendMessage<void>({
         type: 'SWITCH_MODEL',
         data: { modelId }
@@ -475,29 +544,46 @@ export class IframeTransformersService implements EmbeddingService {
    * Get current model information
    */
   getModelInfo(): ModelInfo {
-    const config = IframeTransformersService.AVAILABLE_MODELS[this.currentModel]
+    const availableModels = this.getAvailableModelConfigs()
+    const config = availableModels[this.currentModel]
+    
     if (!config) {
       // Fallback to default
-      const defaultConfig = IframeTransformersService.AVAILABLE_MODELS['Xenova/all-MiniLM-L6-v2']
-      return {
-        id: defaultConfig.id,
-        name: defaultConfig.name,
-        description: defaultConfig.description,
-        size: '90MB', // Approximate size
-        dimensions: defaultConfig.dimensions,
-        contextLength: defaultConfig.contextLength,
-        languages: defaultConfig.languages
+      const defaultConfig = availableModels['Xenova/all-MiniLM-L6-v2']
+      if (defaultConfig) {
+        return {
+          id: defaultConfig.id,
+          name: defaultConfig.name,
+          description: defaultConfig.description,
+          size: '90MB', // Approximate size
+          dimensions: defaultConfig.dimensions,
+          contextLength: defaultConfig.contextLength,
+          languages: defaultConfig.languages
+        }
       }
     }
 
+    if (config) {
+      return {
+        id: config.id,
+        name: config.name,
+        description: config.description,
+        size: '90MB', // Default size estimate
+        dimensions: config.dimensions,
+        contextLength: config.contextLength,
+        languages: config.languages
+      }
+    }
+
+    // Ultimate fallback
     return {
-      id: config.id,
-      name: config.name,
-      description: config.description,
-      size: '90MB', // Transformers.js models are cached by browser
-      dimensions: config.dimensions,
-      contextLength: config.contextLength,
-      languages: config.languages
+      id: this.currentModel,
+      name: 'Unknown Model',
+      description: 'Model configuration not available',
+      size: 'Unknown',
+      dimensions: 384,
+      contextLength: 512,
+      languages: ['en']
     }
   }
 
@@ -509,17 +595,31 @@ export class IframeTransformersService implements EmbeddingService {
   }
 
   /**
-   * Check if filesystem cache path is configured
+   * Check if model serving is configured
    */
-  isFilesystemCacheEnabled(): boolean {
-    return this.cachePathSet
+  isModelServingEnabled(): boolean {
+    return this.modelConfigured
+  }
+
+  /**
+   * Check if a specific model is available for serving
+   */
+  async isModelAvailable(modelId: string): Promise<boolean> {
+    return await modelDownloadService.isModelDownloaded(modelId)
   }
 
   /**
    * Get list of available models
    */
   getAvailableModels(): IframeModelConfig[] {
-    return Object.values(IframeTransformersService.AVAILABLE_MODELS)
+    return Object.values(this.getAvailableModelConfigs())
+  }
+
+  /**
+   * Get serving status information
+   */
+  getServingStatus() {
+    return modelServingService.getServingStatus()
   }
 
   /**
@@ -548,7 +648,13 @@ export class IframeTransformersService implements EmbeddingService {
       this.iframe = null
     }
     
+    // Clean up served models to free memory
+    if (this.modelConfigured) {
+      modelServingService.unserveAllModels()
+    }
+    
     this.initialized = false
+    this.modelConfigured = false
     this.pendingRequests.clear()
     console.log('✅ IframeTransformersService disposed')
   }
