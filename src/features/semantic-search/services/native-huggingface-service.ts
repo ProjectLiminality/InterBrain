@@ -3,12 +3,13 @@ import { App } from 'obsidian'
 import { EmbeddingService, ModelInfo } from '../indexing/embedding-service'
 
 /**
- * Native HuggingFace Embedding Service using filesystem persistence
+ * Native HuggingFace Embedding Service with optimized Electron renderer support
  * 
- * Leverages transformers.js native integration in Electron environment for:
- * - 10× faster performance (native ONNX vs WASM)
+ * Leverages transformers.js with optimal ONNX backend configuration for:
+ * - WebGPU acceleration when available (fastest)
+ * - Optimized WASM fallback with proper threading
  * - Persistent filesystem storage
- * - Simplified architecture without IndexedDB complexity
+ * - Electron renderer process compatibility
  */
 export class NativeHuggingFaceService implements EmbeddingService {
   private static instance: NativeHuggingFaceService
@@ -40,7 +41,7 @@ export class NativeHuggingFaceService implements EmbeddingService {
   }
 
   /**
-   * Configure transformers.js for native filesystem persistence
+   * Configure transformers.js for optimal Electron renderer performance
    */
   private configureTransformersJS(): void {
     try {
@@ -53,35 +54,67 @@ export class NativeHuggingFaceService implements EmbeddingService {
       env.allowRemoteModels = true // Allow initial downloads
       env.allowLocalModels = true  // Use local cache when available
       
-      console.log(`🔧 Transformers.js configured:`)
+      // Force proper backend for Electron renderer process
+      // Obsidian plugins run in renderer, not main process
+      // Override auto-detection which incorrectly chooses onnxruntime-node
+      if (env.backends?.onnx) {
+        // Configure WASM backend for stability and performance
+        if (env.backends.onnx.wasm) {
+          // Critical: Must disable multithreading due to onnxruntime-web bug
+          env.backends.onnx.wasm.numThreads = 1
+          
+          // Use SIMD if available for better performance
+          env.backends.onnx.wasm.simd = true
+          
+          // Set proper WASM paths if needed
+          // Leave undefined to use default CDN paths which work in Electron
+          env.backends.onnx.wasm.wasmPaths = undefined
+        }
+        
+        // Try to enable WebGPU for best performance (if available)
+        if (env.backends.onnx.webgpu) {
+          env.backends.onnx.webgpu.preferredLayout = 'NHWC'
+        }
+      }
+      
+      console.log(`🔧 Transformers.js configured for Electron renderer:`)
+      console.log(`   Backend: Optimized WASM/WebGPU`)
       console.log(`   Models: ${env.localModelPath}`)
       console.log(`   Cache: ${env.cacheDir}`)
+      console.log(`   Threading: Single (stable for onnxruntime-web)`)
       
     } catch (error) {
-      console.warn('⚠️ Could not determine vault path, using default paths:', error)
+      console.warn('⚠️ Could not configure transformers.js optimally:', error)
       env.localModelPath = './.models/'
       env.cacheDir = './.cache/'
     }
   }
 
   /**
-   * Initialize the embedding pipeline with native performance
+   * Initialize the embedding pipeline with optimal renderer performance
    */
   async initialize(): Promise<void> {
     if (this.initialized && this.pipeline) {
       return
     }
 
-    console.log(`🚀 Initializing native HuggingFace embedding model...`)
+    console.log(`🚀 Initializing HuggingFace embedding model with WebGPU/WASM optimization...`)
     
     try {
       const startTime = globalThis.performance.now()
       
-      // Initialize pipeline - transformers.js will auto-detect Electron and use native ONNX
+      // Check for WebGPU availability
+      const hasWebGPU = 'gpu' in navigator && navigator.gpu
+      const device = hasWebGPU ? 'webgpu' : 'wasm'
+      
+      console.log(`🎯 Using device: ${device} (${hasWebGPU ? 'GPU acceleration available!' : 'Optimized WASM fallback'})`)
+      
+      // Initialize pipeline with optimal device configuration
       this.pipeline = await pipeline(
         'feature-extraction',
         NativeHuggingFaceService.MODEL_CONFIG.modelId,
         {
+          device: device, // Use WebGPU if available, WASM fallback
           progress_callback: (progress: unknown) => {
             const progressData = progress as { 
               status?: string; 
@@ -102,8 +135,8 @@ export class NativeHuggingFaceService implements EmbeddingService {
       )
 
       const initTime = globalThis.performance.now() - startTime
-      console.log(`✅ Native embedding model initialized in ${initTime.toFixed(2)}ms`)
-      console.log(`🔥 Using native ONNX runtime for 10× performance boost`)
+      console.log(`✅ HuggingFace embedding model initialized in ${initTime.toFixed(2)}ms`)
+      console.log(`🔥 Using ${hasWebGPU ? 'WebGPU acceleration' : 'optimized WASM'} for high performance`)
       
       this.initialized = true
       
@@ -111,18 +144,45 @@ export class NativeHuggingFaceService implements EmbeddingService {
       this.logEnvironmentInfo()
       
     } catch (error) {
-      console.error('❌ Failed to initialize native embedding model:', error)
+      console.error('❌ Failed to initialize embedding model:', error)
       
       // Provide helpful error messages
       if (error instanceof Error) {
         if (error.message.includes('fetch')) {
           throw new Error(`Network error downloading model: ${error.message}. Check internet connection.`)
-        } else if (error.message.includes('ONNX')) {
-          throw new Error(`ONNX runtime error: ${error.message}. Native runtime may not be available.`)
+        } else if (error.message.includes('WebGPU')) {
+          console.warn('⚠️ WebGPU initialization failed, retrying with WASM...')
+          // Retry with WASM fallback
+          return this.initializeWithWASM()
         }
       }
       
-      throw new Error(`Native embedding initialization failed: ${error}`)
+      throw new Error(`Embedding initialization failed: ${error}`)
+    }
+  }
+
+  /**
+   * Fallback initialization with WASM when WebGPU fails
+   */
+  private async initializeWithWASM(): Promise<void> {
+    try {
+      console.log('🔄 Initializing with WASM fallback...')
+      
+      this.pipeline = await pipeline(
+        'feature-extraction',
+        NativeHuggingFaceService.MODEL_CONFIG.modelId,
+        {
+          device: 'wasm', // Force WASM backend
+          progress_callback: null // Simplified for retry
+        }
+      )
+      
+      console.log('✅ WASM fallback initialization successful')
+      this.initialized = true
+      
+    } catch (error) {
+      console.error('❌ WASM fallback also failed:', error)
+      throw new Error(`Unable to initialize embedding model with any backend: ${error}`)
     }
   }
 

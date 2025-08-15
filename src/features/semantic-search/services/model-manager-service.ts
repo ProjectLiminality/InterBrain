@@ -335,17 +335,25 @@ export class ModelManagerService {
   }
 
   /**
-   * Download the embedding model using native Transformers.js with filesystem caching
+   * Download the embedding model using optimized WebGPU/WASM backend
    */
   private async downloadNativeModel(modelInfo: ModelInfo): Promise<void> {
     this.downloadProgress.message = 'Downloading model files to filesystem...'
     
+    // Check for WebGPU availability (moved outside try for catch block access)
+    const hasWebGPU = 'gpu' in navigator && navigator.gpu
+    const device = hasWebGPU ? 'webgpu' : 'wasm'
+    
     try {
-      // Create pipeline which will trigger download and native filesystem caching
+      
+      console.log(`ModelManagerService: Downloading with ${device} backend support`)
+      
+      // Create pipeline which will trigger download with optimal backend
       const pipeline_ = await pipeline(
         'feature-extraction',
         modelInfo.id.replace('all-minilm-l6-v2', 'Xenova/all-MiniLM-L6-v2'), // Ensure correct model path
         {
+          device: device, // Use WebGPU if available, WASM fallback
           progress_callback: (progress: unknown) => {
             const progressData = progress as { 
               status?: string; 
@@ -389,14 +397,51 @@ export class ModelManagerService {
       }
       
       console.log(`ModelManagerService: Model cached successfully to ${cacheInfo.path}`)
+      console.log(`ModelManagerService: Backend support: ${device} (${hasWebGPU ? 'GPU acceleration' : 'optimized WASM'})`)
       
       // Clean up pipeline reference
       if (pipeline_) {
-        console.log('ModelManagerService: Native model ready for use')
+        console.log('ModelManagerService: Model ready for high-performance inference')
       }
       
     } catch (error) {
-      console.error('ModelManagerService: Native model download failed:', error)
+      console.error('ModelManagerService: Model download failed:', error)
+      
+      // If WebGPU failed, retry with WASM
+      if (error instanceof Error && error.message.includes('WebGPU') && device === 'webgpu') {
+        console.log('ModelManagerService: Retrying download with WASM backend...')
+        return this.downloadWithWASMFallback(modelInfo)
+      }
+      
+      throw error
+    }
+  }
+
+  /**
+   * Fallback download method using WASM when WebGPU fails
+   */
+  private async downloadWithWASMFallback(modelInfo: ModelInfo): Promise<void> {
+    try {
+      const pipeline_ = await pipeline(
+        'feature-extraction',
+        modelInfo.id.replace('all-minilm-l6-v2', 'Xenova/all-MiniLM-L6-v2'),
+        {
+          device: 'wasm', // Force WASM backend
+          progress_callback: null // Simplified for retry
+        }
+      )
+      
+      this.downloadProgress.message = 'Model cached to filesystem (WASM backend)'
+      
+      const cacheInfo = await this.getModelCacheInfo()
+      if (!cacheInfo.exists) {
+        throw new Error('Model download completed but cache not found')
+      }
+      
+      console.log('ModelManagerService: WASM fallback download successful')
+      
+    } catch (error) {
+      console.error('ModelManagerService: WASM fallback download also failed:', error)
       throw error
     }
   }
