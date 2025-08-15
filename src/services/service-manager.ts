@@ -3,7 +3,7 @@ import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-ser
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
-import { IndexingService, indexingService } from './indexing-service';
+import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
 
 /**
  * Service interface that both mock and real implementations will follow

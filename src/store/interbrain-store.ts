@@ -3,7 +3,13 @@ import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
-import { VectorData } from '../services/indexing-service';
+import { 
+  OllamaConfigSlice, 
+  createOllamaConfigSlice,
+  extractOllamaPersistenceData,
+  restoreOllamaPersistenceData 
+} from '../features/semantic-search/store/ollama-config-slice';
+import { VectorData } from '../features/semantic-search/services/indexing-service';
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -51,7 +57,9 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
-export interface InterBrainState {
+// Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
+
+export interface InterBrainState extends OllamaConfigSlice {
   // Data mode toggle
   dataMode: 'mock' | 'real';
   setDataMode: (mode: 'mock' | 'real') => void;
@@ -61,12 +69,6 @@ export interface InterBrainState {
   setRealNodes: (nodes: Map<string, RealNodeData>) => void;
   updateRealNode: (id: string, data: RealNodeData) => void;
   deleteRealNode: (id: string) => void;
-  
-  // Vector data storage for semantic search (persisted)
-  vectorData: Map<string, VectorData>;
-  updateVectorData: (nodeId: string, data: VectorData) => void;
-  deleteVectorData: (nodeId: string) => void;
-  clearVectorData: () => void;
   
   // Selected DreamNode state
   selectedNode: DreamNode | null;
@@ -163,11 +165,13 @@ const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
 
 export const useInterBrainStore = create<InterBrainState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   // Initial state
   dataMode: 'mock' as const, // Start in mock mode
   realNodes: new Map<string, RealNodeData>(),
-  vectorData: new Map<string, VectorData>(),
+  
+  // Initialize Ollama config slice
+  ...createOllamaConfigSlice(set, get, {} as any),
   selectedNode: null,
   creatorMode: {
     isActive: false,
@@ -245,18 +249,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     return { realNodes: newMap };
   }),
   
-  // Vector data actions
-  updateVectorData: (nodeId, data) => set(state => {
-    const newVectorData = new Map(state.vectorData);
-    newVectorData.set(nodeId, data);
-    return { vectorData: newVectorData };
-  }),
-  deleteVectorData: (nodeId) => set(state => {
-    const newVectorData = new Map(state.vectorData);
-    newVectorData.delete(nodeId);
-    return { vectorData: newVectorData };
-  }),
-  clearVectorData: () => set({ vectorData: new Map() }),
+  // Note: Vector data and Ollama config actions provided by OllamaConfigSlice
   
   setSelectedNode: (node) => set(state => {
     const previousNode = state.selectedNode;
@@ -686,27 +679,28 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, and mock relationships
+      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
-        vectorData: mapToArray(state.vectorData),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
+        ...extractOllamaPersistenceData(state),
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as { 
           dataMode: 'mock' | 'real'; 
           realNodes: [string, RealNodeData][];
-          vectorData: [string, VectorData][];
           mockRelationshipData: [string, string[]][] | null;
+          vectorData?: [string, VectorData][];
+          ollamaConfig?: any;
         };
         return {
           ...current,
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
-          vectorData: persistedData.vectorData ? arrayToMap(persistedData.vectorData) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
+          ...restoreOllamaPersistenceData(persistedData),
         };
       },
     }

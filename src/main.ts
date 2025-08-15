@@ -11,6 +11,7 @@ import { DreamNode } from './types/dreamnode';
 import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
 import { getMockDataForConfig } from './mock/dreamnode-mock-data';
 import { calculateFocusedLayoutPositions, getFocusedLayoutStats, DEFAULT_FOCUSED_CONFIG } from './dreamspace/layouts/FocusedLayout';
+import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -38,7 +39,7 @@ export default class InterBrainPlugin extends Plugin {
   }
 
   private initializeServices(): void {
-    this.uiService = new UIService();
+    this.uiService = new UIService(this.app);
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
@@ -48,6 +49,9 @@ export default class InterBrainPlugin extends Plugin {
   }
 
   private registerCommands(): void {
+    // Register semantic search commands
+    registerSemanticSearchCommands(this, this.uiService);
+    
     // Open DreamSpace command
     this.addCommand({
       id: 'open-dreamspace',
@@ -1068,134 +1072,7 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Indexing command: Intelligent reindex
-    this.addCommand({
-      id: 'intelligent-reindex',
-      name: 'Intelligent Reindex - Update changed DreamNodes',
-      callback: () => {
-        // Use setTimeout to push async operation to next tick - closes palette immediately
-        globalThis.setTimeout(async () => {
-          const loadingNotice = this.uiService.showLoading('Analyzing changes for intelligent reindex...');
-          try {
-            const { indexingService } = await import('./services/indexing-service');
-            const result = await indexingService.intelligentReindex();
-            
-            const message = `Reindex complete: ${result.added} added, ${result.updated} updated, ${result.errors} errors`;
-            if (result.errors > 0) {
-              this.uiService.showWarning(message);
-            } else {
-              this.uiService.showSuccess(message);
-            }
-            console.log('IndexingService: Intelligent reindex result:', result);
-          } catch (error) {
-            console.error('Intelligent reindex failed:', error);
-            this.uiService.showError('Failed to perform intelligent reindex');
-          } finally {
-            loadingNotice.hide();
-          }
-        }, 0);
-      }
-    });
-
-    // Indexing command: Index selected node
-    this.addCommand({
-      id: 'index-selected-node',
-      name: 'Index Selected DreamNode',
-      callback: () => {
-        // Use setTimeout to push async operation to next tick - closes palette immediately
-        globalThis.setTimeout(async () => {
-          const store = useInterBrainStore.getState();
-          const selectedNode = store.selectedNode;
-          
-          if (!selectedNode) {
-            this.uiService.showError('Please select a DreamNode first');
-            return;
-          }
-          
-          const loadingNotice = this.uiService.showLoading(`Indexing: ${selectedNode.name}...`);
-          try {
-            const { indexingService } = await import('./services/indexing-service');
-            const vectorData = await indexingService.indexNode(selectedNode);
-            
-            this.uiService.showSuccess(`Indexed "${selectedNode.name}" (${vectorData.metadata.wordCount} words)`);
-            console.log('IndexingService: Indexed node:', vectorData);
-          } catch (error) {
-            console.error('Failed to index node:', error);
-            this.uiService.showError(`Failed to index "${selectedNode.name}"`);
-          } finally {
-            loadingNotice.hide();
-          }
-        }, 0);
-      }
-    });
-
-    // Indexing command: Index all nodes
-    this.addCommand({
-      id: 'index-all-nodes',
-      name: 'Index All DreamNodes (Full Reindex)',
-      callback: () => {
-        // Use setTimeout to push async operation to next tick - closes palette immediately
-        globalThis.setTimeout(() => {
-          this.performFullIndexing();
-        }, 0);
-      }
-    });
-  }
-
-  // Helper method to perform full indexing with progress notifications
-  private async performFullIndexing(): Promise<void> {
-    const store = useInterBrainStore.getState();
-    const nodeCount = store.dataMode === 'real' 
-      ? store.realNodes.size 
-      : 0; // Will be determined by service
-    
-    if (nodeCount === 0 && store.dataMode === 'real') {
-      this.uiService.showWarning('No DreamNodes found to index');
-      return;
-    }
-    
-    const loadingNotice = this.uiService.showLoading('Starting full index of all DreamNodes...');
-    let lastReportedProgress = 0;
-    
-    try {
-      const { indexingService } = await import('./services/indexing-service');
-      
-      // Set up progress monitoring with UI notifications
-      const progressInterval = globalThis.setInterval(() => {
-        const progress = indexingService.getProgress();
-        
-        if (progress.status === 'indexing') {
-          // Update loading notice
-          if (progress.message) {
-            loadingNotice.setMessage(progress.message);
-          }
-          
-          // Show progress notifications at 20% intervals
-          const percentComplete = Math.floor((progress.completed / progress.total) * 100);
-          if (percentComplete > 0 && percentComplete % 20 === 0 && percentComplete > lastReportedProgress) {
-            this.uiService.showSuccess(`Indexing progress: ${percentComplete}% (${progress.completed}/${progress.total})`);
-            lastReportedProgress = percentComplete;
-          }
-        }
-      }, 500);
-      
-      const result = await indexingService.indexAllNodes();
-      
-      globalThis.clearInterval(progressInterval);
-      
-      const message = `Full index complete: ${result.indexed} indexed, ${result.errors} errors`;
-      if (result.errors > 0) {
-        this.uiService.showWarning(message);
-      } else {
-        this.uiService.showSuccess(message);
-      }
-      console.log('IndexingService: Full index result:', result);
-    } catch (error) {
-      console.error('Full index failed:', error);
-      this.uiService.showError('Failed to complete full index');
-    } finally {
-      loadingNotice.hide();
-    }
+    // Note: Semantic search commands now registered via registerSemanticSearchCommands()
   }
 
   // Helper method to get all available nodes (used by undo/redo)

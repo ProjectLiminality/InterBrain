@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { IndexingService, VectorData } from '../../src/services/indexing-service';
+import { IndexingService, VectorData } from '../../src/features/semantic-search/services/indexing-service';
 import { DreamNode } from '../../src/types/dreamnode';
 import { useInterBrainStore } from '../../src/store/interbrain-store';
 
@@ -128,7 +128,7 @@ describe('IndexingService', () => {
       
       const result = await indexingService.indexNode(node);
       
-      expect(result.embedding).toHaveLength(128);
+      expect(result.embedding).toHaveLength(768);
       expect(result.embedding.every(val => typeof val === 'number')).toBe(true);
     });
 

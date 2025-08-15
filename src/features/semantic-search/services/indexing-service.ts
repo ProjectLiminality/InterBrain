@@ -1,5 +1,7 @@
-import { DreamNode } from '../types/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { DreamNode } from '../../../types/dreamnode';
+import { useInterBrainStore } from '../../../store/interbrain-store';
+import { IEmbeddingService, TextProcessor } from './embedding-service';
+import { ollamaEmbeddingService } from './ollama-embedding-service';
 
 /**
  * Vector data structure for storing indexed content
@@ -58,7 +60,7 @@ export interface IIndexingService {
  * IndexingService - Manages vector embeddings for DreamNodes
  * 
  * Provides intelligent indexing with git integration for change detection.
- * Uses simple text analysis initially (will integrate embeddings later).
+ * Uses Ollama embedding service for semantic search capabilities.
  */
 export class IndexingService implements IIndexingService {
   private progress: IndexingProgress = {
@@ -68,9 +70,11 @@ export class IndexingService implements IIndexingService {
   };
   
   private indexTimes: number[] = [];
+  private embeddingService: IEmbeddingService;
   
-  constructor() {
-    console.log('IndexingService: Initialized');
+  constructor(embeddingService?: IEmbeddingService) {
+    this.embeddingService = embeddingService || ollamaEmbeddingService;
+    console.log('IndexingService: Initialized with embedding service');
   }
   
   /**
@@ -84,8 +88,8 @@ export class IndexingService implements IIndexingService {
       const textContent = this.extractTextContent(node);
       const wordCount = textContent.split(/\s+/).filter(w => w.length > 0).length;
       
-      // Create simple embedding (will be replaced with real embeddings)
-      const embedding = this.createSimpleEmbedding(textContent);
+      // Generate semantic embedding using Ollama
+      const embedding = await this.generateEmbedding(textContent);
       
       // Get current git commit hash if available
       const commitHash = await this.getNodeCommitHash(node);
@@ -366,18 +370,50 @@ export class IndexingService implements IIndexingService {
   }
   
   /**
-   * Helper: Create simple embedding (placeholder for real embeddings)
+   * Helper: Generate embedding using the configured embedding service
    */
-  private createSimpleEmbedding(text: string): number[] {
-    // Simple character frequency based embedding (placeholder)
-    const embedding = new Array(128).fill(0);
+  private async generateEmbedding(text: string): Promise<number[]> {
+    try {
+      // Check if embedding service is available
+      const isAvailable = await this.embeddingService.isAvailable();
+      if (!isAvailable) {
+        console.warn('IndexingService: Embedding service unavailable, using fallback');
+        return this.createFallbackEmbedding(text);
+      }
+      
+      // Process the text and generate embedding
+      const processedText = TextProcessor.extractContent(text);
+      if (!processedText.trim()) {
+        console.warn('IndexingService: Empty text content, using fallback');
+        return this.createFallbackEmbedding(text);
+      }
+      
+      return await this.embeddingService.processLongText(processedText);
+      
+    } catch (error) {
+      console.error('IndexingService: Embedding generation failed, using fallback:', error);
+      return this.createFallbackEmbedding(text);
+    }
+  }
+  
+  /**
+   * Helper: Create fallback embedding when Ollama is unavailable
+   */
+  private createFallbackEmbedding(text: string): number[] {
+    // Simple character frequency based embedding (fallback)
+    const embedding = new Array(768).fill(0); // Match Ollama dimensions
     const normalizedText = text.toLowerCase();
     
-    for (const char of normalizedText) {
-      const code = char.charCodeAt(0);
-      if (code < 128) {
-        embedding[code] += 1;
-      }
+    // Use hash-based distribution for better fallback
+    let hash = 0;
+    for (let i = 0; i < normalizedText.length; i++) {
+      const char = normalizedText.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+      
+      // Distribute hash values across embedding dimensions
+      const index = Math.abs(hash) % embedding.length;
+      embedding[index] += 1;
     }
     
     // Normalize
@@ -389,6 +425,39 @@ export class IndexingService implements IIndexingService {
     }
     
     return embedding;
+  }
+  
+  /**
+   * Get embedding service health status
+   */
+  async getEmbeddingStatus(): Promise<{ available: boolean; message: string }> {
+    try {
+      const isAvailable = await this.embeddingService.isAvailable();
+      if (isAvailable) {
+        const modelInfo = await this.embeddingService.getModelInfo();
+        return {
+          available: true,
+          message: `✅ ${modelInfo.name} ready (${modelInfo.dimensions}D)`
+        };
+      } else {
+        return {
+          available: false,
+          message: '🔴 Embedding service unavailable - using fallback'
+        };
+      }
+    } catch (error) {
+      return {
+        available: false,
+        message: `🔴 Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+  
+  /**
+   * Get the embedding service instance
+   */
+  getEmbeddingService(): IEmbeddingService {
+    return this.embeddingService;
   }
   
   /**
@@ -434,7 +503,7 @@ export class IndexingService implements IIndexingService {
       return nodes;
     } else {
       // Get from mock data configuration (same source as DreamspaceCanvas)
-      const { getMockDataForConfig } = await import('../mock/dreamnode-mock-data');
+      const { getMockDataForConfig } = await import('../../../mock/dreamnode-mock-data');
       const nodes = getMockDataForConfig(store.mockDataConfig);
       console.log(`IndexingService: Found ${nodes.length} mock nodes:`, nodes.map(n => n.name).join(', '));
       return nodes;
@@ -442,5 +511,5 @@ export class IndexingService implements IIndexingService {
   }
 }
 
-// Export singleton instance
+// Export singleton instance with default Ollama embedding service
 export const indexingService = new IndexingService();

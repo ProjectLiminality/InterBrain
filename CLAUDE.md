@@ -107,6 +107,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Service layer architecture established
 - Documentation updated
 
+### Epic 5 Progress (August 15, 2025)
+**Epic Status**: Active Development - Semantic Search System
+**Current Branch**: epic/5-semantic-search
+
+**✅ Feature Complete**: Ollama Embedding API Integration (feature/ollama-embedding-api)
+
+**✅ Core Implementation Achievements**:
+- ✅ Ollama Local Embedding API Integration - Sovereign AI solution using local models
+- ✅ Modular Feature Architecture - Complete vertical slice at `src/features/semantic-search/`
+- ✅ Zustand Store Slice Pattern - OllamaConfigSlice with clean state management
+- ✅ Service Layer Integration - Factory pattern with app context for semantic operations
+- ✅ Command Organization - 8 semantic search commands across 3 organized command files
+- ✅ Auto-Indexing Pipeline - Nodes automatically indexed on creation and git commit changes
+
+**✅ Technical Achievements**:
+- ✅ **Experimental Branch Archiving Strategy**: Established pattern for preserving alternative approaches
+  - `archive/iframe-approach` - Iframe isolation with Vectra vector database (tagged & documented)
+  - `archive/native-transformers` - Native HuggingFace integration with auto-indexing (tagged & documented)
+  - Comprehensive assessment documents preserve architectural learnings and decision factors
+- ✅ **Vertical Slice Architecture**: Complete self-contained feature ready for npm package extraction
+- ✅ **Local AI Sovereignty**: No cloud dependencies, all processing local via Ollama
+- ✅ **Robust Error Handling**: Graceful degradation when semantic search unavailable
+- ✅ **Performance Optimization**: Background indexing with non-blocking operations
+
+**🎯 Next Epic 5 Features**: Additional semantic search capabilities to be implemented on new feature branches
+
 ### Epic 1 Achievements (July 13, 2025)
 - ✅ Obsidian plugin boilerplate with Vite dual workflow
 - ✅ Zustand state management with 6 core commands
