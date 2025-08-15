@@ -1,6 +1,7 @@
 import { DreamNode } from '../../../types/dreamnode';
 import { useInterBrainStore } from '../../../store/interbrain-store';
-import { Qwen3EmbeddingService } from './embedding-service';
+import { NativeHuggingFaceService, EmbeddingService } from './embedding-service';
+import { App } from 'obsidian';
 
 /**
  * Vector data structure for storing indexed content
@@ -8,7 +9,7 @@ import { Qwen3EmbeddingService } from './embedding-service';
 export interface VectorData {
   nodeId: string;
   contentHash: string;  // Git commit hash for change detection
-  embedding: number[];  // Qwen3 vector embedding (1024 dimensions)
+  embedding: number[];  // HuggingFace vector embedding (384 dimensions)
   lastIndexed: number;  // Timestamp
   metadata: {
     title: string;
@@ -56,10 +57,10 @@ export interface IIndexingService {
 }
 
 /**
- * IndexingService - Manages Qwen3 vector embeddings for DreamNodes
+ * IndexingService - Manages HuggingFace vector embeddings for DreamNodes
  * 
  * Provides intelligent indexing with git integration for change detection.
- * Uses Qwen3-Embedding-0.6B model for real semantic embeddings (1024 dimensions).
+ * Uses all-MiniLM-L6-v2 model for native semantic embeddings (384 dimensions).
  */
 export class IndexingService implements IIndexingService {
   private progress: IndexingProgress = {
@@ -69,15 +70,28 @@ export class IndexingService implements IIndexingService {
   };
   
   private indexTimes: number[] = [];
-  private embeddingService: Qwen3EmbeddingService;
+  private embeddingService: EmbeddingService;
+  private app: App;
+  private static instance: IndexingService;
   
-  constructor() {
-    console.log('IndexingService: Initialized with Qwen3 embeddings');
-    this.embeddingService = Qwen3EmbeddingService.getInstance();
+  private constructor(app: App) {
+    console.log('IndexingService: Initialized with native HuggingFace embeddings');
+    this.app = app;
+    this.embeddingService = NativeHuggingFaceService.getInstance(app);
+  }
+
+  /**
+   * Get singleton instance with Obsidian app context
+   */
+  static getInstance(app?: App): IndexingService {
+    if (!IndexingService.instance && app) {
+      IndexingService.instance = new IndexingService(app);
+    }
+    return IndexingService.instance;
   }
   
   /**
-   * Index a single DreamNode using Qwen3 embeddings
+   * Index a single DreamNode using native HuggingFace embeddings
    */
   async indexNode(node: DreamNode): Promise<VectorData> {
     const startTime = Date.now();
@@ -87,8 +101,8 @@ export class IndexingService implements IIndexingService {
       const textContent = this.extractTextContent(node);
       const wordCount = textContent.split(/\s+/).filter(w => w.length > 0).length;
       
-      // Generate real Qwen3 embedding
-      console.log(`IndexingService: Generating Qwen3 embedding for "${node.name}"...`);
+      // Generate native HuggingFace embedding
+      console.log(`IndexingService: Generating native embedding for "${node.name}"...`);
       const embedding = await this.embeddingService.generateEmbedding(textContent);
       
       // Get current git commit hash if available
@@ -421,5 +435,12 @@ export class IndexingService implements IIndexingService {
   }
 }
 
-// Export singleton instance
-export const indexingService = new IndexingService();
+// Export factory function - requires app instance
+export const createIndexingService = (app: App): IndexingService => {
+  return IndexingService.getInstance(app);
+};
+
+// Export singleton getter (must be initialized first)
+export const getIndexingService = (): IndexingService => {
+  return IndexingService.getInstance();
+};

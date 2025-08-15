@@ -1,7 +1,7 @@
 import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
-import { indexingService } from '../features/semantic-search/indexing/indexing-service';
+import { getIndexingService } from '../features/semantic-search/indexing/indexing-service';
 
 // Access Node.js modules directly in Electron context
 /* eslint-disable no-undef */
@@ -132,7 +132,7 @@ export class GitDreamNodeService {
       .then(async () => {
         // Index the new node after git repository is created
         try {
-          await indexingService.indexNode(node);
+          await getIndexingService().indexNode(node);
           console.log(`GitDreamNodeService: Indexed new node "${title}"`);
         } catch (error) {
           console.error('Failed to index new node:', error);
@@ -750,7 +750,7 @@ export class GitDreamNodeService {
           if (commitChanged && !newGitStatus.hasUncommittedChanges) {
             // Only re-index if the node is clean (committed changes)
             try {
-              await indexingService.indexNode(updatedNode);
+              await getIndexingService().indexNode(updatedNode);
               console.log(`GitDreamNodeService: Re-indexed node "${updatedNode.name}" after commit change`);
             } catch (error) {
               console.error(`Failed to re-index node ${updatedNode.name}:`, error);

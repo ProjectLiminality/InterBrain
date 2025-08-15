@@ -1,8 +1,8 @@
 import { Command } from 'obsidian'
-import { modelManagerService } from '../services/model-manager-service'
+import { getModelManagerService } from '../services/model-manager-service'
 
 /**
- * Command to download the Qwen3 embedding model
+ * Command to download the Embedding embedding model
  */
 export function createDownloadModelCommand(): Command {
   return {
@@ -13,14 +13,14 @@ export function createDownloadModelCommand(): Command {
       
       try {
         // Check if model is already available
-        const isAvailable = await modelManagerService.isModelAvailable()
+        const isAvailable = await getModelManagerService().isModelAvailable()
         if (isAvailable) {
-          console.log('✅ Qwen3 model is already downloaded and available')
-          console.log('💡 Use "(Re)download Qwen3 Model" to force a fresh download')
+          console.log('✅ Embedding model is already downloaded and available')
+          console.log('💡 Use "(Re)download Embedding Model" to force a fresh download')
           return
         }
 
-        const modelInfo = modelManagerService.getModelInfo()
+        const modelInfo = getModelManagerService().getModelInfo()
         console.log(`📥 Downloading ${modelInfo.name}...`)
         console.log(`📊 Model size: ${modelInfo.size} (${modelInfo.dimensions} dimensions)`)
         console.log(`🌐 Languages: ${modelInfo.languages.join(', ')}`)
@@ -28,7 +28,7 @@ export function createDownloadModelCommand(): Command {
 
         // Start progress monitoring
         const progressInterval = globalThis.setInterval(() => {
-          const progress = modelManagerService.getDownloadProgress()
+          const progress = getModelManagerService().getDownloadProgress()
           
           if (progress.status === 'downloading') {
             const loaded = (progress.loaded / (1024 * 1024)).toFixed(1)
@@ -38,46 +38,46 @@ export function createDownloadModelCommand(): Command {
         }, 2000) // Update every 2 seconds
 
         // Start download
-        await modelManagerService.downloadModel(false)
+        await getModelManagerService().downloadModel(false)
 
         // Stop progress monitoring
         globalThis.clearInterval(progressInterval)
 
-        const finalProgress = modelManagerService.getDownloadProgress()
+        const finalProgress = getModelManagerService().getDownloadProgress()
         
         if (finalProgress.status === 'complete') {
-          console.log('🎉 Qwen3 model downloaded successfully!')
+          console.log('🎉 Embedding model downloaded successfully!')
           console.log('✨ Real semantic search is now available')
           console.log('')
           console.log('💡 Try these commands next:')
-          console.log('   • "Test Qwen3 Embedding Generation"')
-          console.log('   • "Index Sample DreamNodes (Qwen3)"')
-          console.log('   • "Semantic Search Test (Qwen3)"')
+          console.log('   • "Test Embedding Embedding Generation"')
+          console.log('   • "Index Sample DreamNodes (Embedding)"')
+          console.log('   • "Semantic Search Test (Embedding)"')
         } else {
           console.error(`❌ Download failed: ${finalProgress.error || 'Unknown error'}`)
         }
 
       } catch (error) {
-        console.error('❌ Failed to download Qwen3 model:', error)
-        console.log('💡 Try again or use "(Re)download Qwen3 Model" to force a fresh attempt')
+        console.error('❌ Failed to download Embedding model:', error)
+        console.log('💡 Try again or use "(Re)download Embedding Model" to force a fresh attempt')
       }
     }
   }
 }
 
 /**
- * Command to re-download (force download) the Qwen3 embedding model
+ * Command to re-download (force download) the Embedding embedding model
  */
 export function createRedownloadModelCommand(): Command {
   return {
     id: 'interbrain-redownload-qwen3-model',
-    name: '(Re)download Qwen3 Embedding Model',
+    name: '(Re)download Embedding Embedding Model',
     callback: async () => {
-      console.log('🔄 Starting Qwen3 model re-download...')
+      console.log('🔄 Starting Embedding model re-download...')
       console.log('🗑️ Clearing existing model cache first...')
       
       try {
-        const modelInfo = modelManagerService.getModelInfo()
+        const modelInfo = getModelManagerService().getModelInfo()
         
         // Show model information
         console.log(`📥 Re-downloading ${modelInfo.name}...`)
@@ -88,7 +88,7 @@ export function createRedownloadModelCommand(): Command {
 
         // Start progress monitoring
         const progressInterval = globalThis.setInterval(() => {
-          const progress = modelManagerService.getDownloadProgress()
+          const progress = getModelManagerService().getDownloadProgress()
           
           if (progress.status === 'downloading') {
             const loaded = (progress.loaded / (1024 * 1024)).toFixed(1)
@@ -98,27 +98,27 @@ export function createRedownloadModelCommand(): Command {
         }, 2000) // Update every 2 seconds
 
         // Force download (will clear cache first)
-        await modelManagerService.downloadModel(true)
+        await getModelManagerService().downloadModel(true)
 
         // Stop progress monitoring
         globalThis.clearInterval(progressInterval)
 
-        const finalProgress = modelManagerService.getDownloadProgress()
+        const finalProgress = getModelManagerService().getDownloadProgress()
         
         if (finalProgress.status === 'complete') {
-          console.log('🎉 Qwen3 model re-downloaded successfully!')
+          console.log('🎉 Embedding model re-downloaded successfully!')
           console.log('✨ Fresh model is now available for semantic search')
           console.log('')
           console.log('💡 Try these commands next:')
           console.log('   • "Clear Semantic Search Index" (to rebuild with fresh model)')
-          console.log('   • "Index Sample DreamNodes (Qwen3)"')
-          console.log('   • "Semantic Search Test (Qwen3)"')
+          console.log('   • "Index Sample DreamNodes (Embedding)"')
+          console.log('   • "Semantic Search Test (Embedding)"')
         } else {
           console.error(`❌ Re-download failed: ${finalProgress.error || 'Unknown error'}`)
         }
 
       } catch (error) {
-        console.error('❌ Failed to re-download Qwen3 model:', error)
+        console.error('❌ Failed to re-download Embedding model:', error)
         console.log('💡 Check your internet connection and try again')
       }
     }
@@ -131,16 +131,16 @@ export function createRedownloadModelCommand(): Command {
 export function createModelStatusCommand(): Command {
   return {
     id: 'interbrain-qwen3-model-status',
-    name: 'Show Qwen3 Model Status',
+    name: 'Show Embedding Model Status',
     callback: async () => {
-      console.log('📋 Qwen3 Embedding Model Status')
+      console.log('📋 Embedding Embedding Model Status')
       console.log('=' .repeat(40))
       
       try {
-        const modelInfo = modelManagerService.getModelInfo()
-        const isAvailable = await modelManagerService.isModelAvailable()
-        const storageInfo = await modelManagerService.getStorageInfo()
-        const downloadProgress = modelManagerService.getDownloadProgress()
+        const modelInfo = getModelManagerService().getModelInfo()
+        const isAvailable = await getModelManagerService().isModelAvailable()
+        const storageInfo = await getModelManagerService().getStorageInfo()
+        const downloadProgress = getModelManagerService().getDownloadProgress()
 
         // Model Information
         console.log(`🤖 Model: ${modelInfo.name}`)
@@ -154,18 +154,18 @@ export function createModelStatusCommand(): Command {
         console.log(`📁 Model Status: ${isAvailable ? '✅ Available' : '❌ Not Downloaded'}`)
         
         if (isAvailable) {
-          const storedModel = await modelManagerService.getStoredModel()
+          const storedModel = await getModelManagerService().getStoredModel()
           if (storedModel) {
             const downloadedAt = new Date(storedModel.metadata.downloadedAt)
             console.log(`📅 Downloaded: ${downloadedAt.toLocaleString()}`)
             console.log(`🔢 Version: ${storedModel.metadata.version}`)
             
             // Validate model integrity
-            const isValid = await modelManagerService.validateModel()
+            const isValid = await getModelManagerService().validateModel()
             console.log(`🔍 Integrity: ${isValid ? '✅ Valid' : '⚠️ Validation Failed'}`)
           }
         } else {
-          console.log('💡 Run "Download Qwen3 Embedding Model" to get started')
+          console.log('💡 Run "Download Embedding Embedding Model" to get started')
         }
 
         console.log('')
@@ -199,13 +199,13 @@ export function createModelStatusCommand(): Command {
         // Action Suggestions
         if (!isAvailable) {
           console.log('🎯 Available Actions:')
-          console.log('   • "Download Qwen3 Embedding Model"')
+          console.log('   • "Download Embedding Embedding Model"')
         } else {
           console.log('🎯 Available Actions:')
-          console.log('   • "(Re)download Qwen3 Embedding Model"')
-          console.log('   • "Test Qwen3 Embedding Generation"')
-          console.log('   • "Index Sample DreamNodes (Qwen3)"')
-          console.log('   • "Semantic Search Test (Qwen3)"')
+          console.log('   • "(Re)download Embedding Embedding Model"')
+          console.log('   • "Test Embedding Embedding Generation"')
+          console.log('   • "Index Sample DreamNodes (Embedding)"')
+          console.log('   • "Semantic Search Test (Embedding)"')
         }
 
       } catch (error) {
@@ -221,16 +221,16 @@ export function createModelStatusCommand(): Command {
 export function createCancelDownloadCommand(): Command {
   return {
     id: 'interbrain-cancel-qwen3-download',
-    name: 'Cancel Qwen3 Model Download',
+    name: 'Cancel Embedding Model Download',
     callback: () => {
-      console.log('🛑 Cancelling Qwen3 model download...')
+      console.log('🛑 Cancelling Embedding model download...')
       
-      const progress = modelManagerService.getDownloadProgress()
+      const progress = getModelManagerService().getDownloadProgress()
       
       if (progress.status === 'downloading') {
-        modelManagerService.cancelDownload()
+        getModelManagerService().cancelDownload()
         console.log('✅ Download cancelled successfully')
-        console.log('💡 You can restart the download anytime using "Download Qwen3 Embedding Model"')
+        console.log('💡 You can restart the download anytime using "Download Embedding Embedding Model"')
       } else {
         console.log('ℹ️ No download in progress to cancel')
         console.log(`📊 Current status: ${progress.status.toUpperCase()}`)

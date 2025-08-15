@@ -3,7 +3,7 @@ import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-ser
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
-import { IndexingService, indexingService } from '../features/semantic-search/indexing/indexing-service';
+import { IndexingService, getIndexingService } from '../features/semantic-search/indexing/indexing-service';
 
 /**
  * Service interface that both mock and real implementations will follow
@@ -42,7 +42,7 @@ export class ServiceManager {
 
   constructor() {
     this.mockService = mockDreamNodeService;
-    this.indexingService = indexingService;
+    this.indexingService = getIndexingService();
     
     // Wrap mock service methods to sync with store
     this.wrapMockServiceMethods();
@@ -233,7 +233,7 @@ export class ServiceManager {
    * Get the indexing service
    */
   getIndexingService(): IndexingService {
-    return this.indexingService;
+    return this.getIndexingService();
   }
   
   /**

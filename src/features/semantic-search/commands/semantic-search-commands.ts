@@ -1,24 +1,24 @@
 import { Command } from 'obsidian'
-import { indexingService } from '../indexing/indexing-service'
+import { getIndexingService } from '../indexing/indexing-service'
 import { useInterBrainStore } from '../../../store/interbrain-store'
-import { modelManagerService } from '../services/model-manager-service'
+import { getModelManagerService } from '../services/model-manager-service'
 
 /**
- * Helper: Check if Qwen3 model is available and guide user if not
+ * Helper: Check if Embedding model is available and guide user if not
  */
 async function checkModelAvailability(): Promise<boolean> {
-  const isAvailable = await modelManagerService.isModelAvailable()
+  const isAvailable = await getModelManagerService().isModelAvailable()
   
   if (!isAvailable) {
-    console.log('❌ Qwen3 model not available')
+    console.log('❌ Embedding model not available')
     console.log('')
     console.log('💡 To use real semantic search, please download the model first:')
-    console.log('   1. Run "Download Qwen3 Embedding Model" command')
-    console.log('   2. Wait for download to complete (~639MB)')
+    console.log('   1. Run "Download Embedding Embedding Model" command')
+    console.log('   2. Wait for download to complete (~90MB)')
     console.log('   3. Try this command again')
     console.log('')
     console.log('📊 Model Information:')
-    const modelInfo = modelManagerService.getModelInfo()
+    const modelInfo = getModelManagerService().getModelInfo()
     console.log(`   Name: ${modelInfo.name}`)
     console.log(`   Size: ${modelInfo.size}`)
     console.log(`   Dimensions: ${modelInfo.dimensions}`)
@@ -29,14 +29,14 @@ async function checkModelAvailability(): Promise<boolean> {
 }
 
 /**
- * Command to test Qwen3 embedding generation
+ * Command to test Embedding embedding generation
  */
 export function createTestEmbeddingCommand(): Command {
   return {
-    id: 'interbrain-test-qwen3-embeddings',
-    name: 'Test Qwen3 Embedding Generation',
+    id: 'interbrain-test-embedding-embeddings',
+    name: 'Test Embedding Embedding Generation',
     callback: async () => {
-      console.log('🧮 Testing Qwen3 embedding generation...')
+      console.log('🧮 Testing Embedding embedding generation...')
       
       // Check if model is available first
       if (!(await checkModelAvailability())) {
@@ -57,7 +57,7 @@ export function createTestEmbeddingCommand(): Command {
           const startTime = globalThis.performance.now()
           
           // Access the embedding service directly for testing
-          const embeddingService = (indexingService as any).embeddingService
+          const embeddingService = (getIndexingService() as any).embeddingService
           const embedding = await embeddingService.generateEmbedding(text)
           
           const duration = globalThis.performance.now() - startTime
@@ -70,7 +70,7 @@ export function createTestEmbeddingCommand(): Command {
         }
 
         // Show model info
-        const embeddingService = (indexingService as any).embeddingService
+        const embeddingService = (getIndexingService() as any).embeddingService
         const modelInfo = embeddingService.getModelInfo()
         console.log(`🤖 Model Information:`)
         console.log(`   Name: ${modelInfo.name}`)
@@ -80,11 +80,11 @@ export function createTestEmbeddingCommand(): Command {
         console.log(`   Languages: ${modelInfo.languages.join(', ')}`)
         
       } catch (error) {
-        console.error('❌ Qwen3 embedding test failed:', error)
+        console.error('❌ Embedding embedding test failed:', error)
         
         if ((error as Error).message?.includes('not initialized') || (error as Error).message?.includes('Failed to initialize')) {
           console.log('💡 Tip: The model will be downloaded automatically on first use')
-          console.log('   This may take several minutes depending on your connection (639MB)')
+          console.log('   This may take several minutes depending on your connection (90MB)')
         }
       }
     }
@@ -92,14 +92,14 @@ export function createTestEmbeddingCommand(): Command {
 }
 
 /**
- * Command to index sample DreamNodes using Qwen3 embeddings
+ * Command to index sample DreamNodes using Embedding embeddings
  */
 export function createIndexSampleCommand(): Command {
   return {
-    id: 'interbrain-index-sample-qwen3',
-    name: 'Index Sample DreamNodes (Qwen3)',
+    id: 'interbrain-index-sample-embedding',
+    name: 'Index Sample DreamNodes (Embedding)',
     callback: async () => {
-      console.log('📝 Indexing sample DreamNodes with Qwen3 embeddings...')
+      console.log('📝 Indexing sample DreamNodes with Embedding embeddings...')
       
       // Check if model is available first
       if (!(await checkModelAvailability())) {
@@ -133,7 +133,7 @@ export function createIndexSampleCommand(): Command {
         for (const node of nodes) {
           try {
             const startTime = globalThis.performance.now()
-            await indexingService.indexNode(node)
+            await getIndexingService().indexNode(node)
             const duration = globalThis.performance.now() - startTime
             
             console.log(`✅ Indexed "${node.name}" in ${duration.toFixed(2)}ms`)
@@ -151,7 +151,7 @@ export function createIndexSampleCommand(): Command {
         }
 
         // Show updated stats
-        const stats = indexingService.getStats()
+        const stats = getIndexingService().getStats()
         console.log(`\n📊 Index Statistics:`)
         console.log(`   Total nodes: ${stats.totalIndexed}`)
         console.log(`   Average index time: ${stats.avgIndexTime?.toFixed(2) || 'N/A'}ms`)
@@ -171,9 +171,9 @@ export function createIndexSampleCommand(): Command {
 export function createSemanticSearchTestCommand(): Command {
   return {
     id: 'interbrain-semantic-search-test',
-    name: 'Semantic Search Test (Qwen3)',
+    name: 'Semantic Search Test (Embedding)',
     callback: async () => {
-      console.log('🔍 Testing semantic search with Qwen3 embeddings...')
+      console.log('🔍 Testing semantic search with Embedding embeddings...')
       
       // Check if model is available first
       if (!(await checkModelAvailability())) {
@@ -182,10 +182,10 @@ export function createSemanticSearchTestCommand(): Command {
       
       try {
         // Check if we have indexed nodes
-        const stats = indexingService.getStats()
+        const stats = getIndexingService().getStats()
         if (stats.totalIndexed === 0) {
           console.log('🤷 No indexed nodes found')
-          console.log('💡 Run "Index Sample DreamNodes (Qwen3)" first')
+          console.log('💡 Run "Index Sample DreamNodes (Embedding)" first')
           return
         }
 
@@ -212,8 +212,8 @@ export function createSemanticSearchTestCommand(): Command {
         const startTime = globalThis.performance.now()
         
         // Perform semantic search by comparing with all indexed vectors
-        const allVectors = indexingService.getAllVectors()
-        const embeddingService = (indexingService as any).embeddingService
+        const allVectors = getIndexingService().getAllVectors()
+        const embeddingService = (getIndexingService() as any).embeddingService
         const queryEmbedding = await embeddingService.generateEmbedding(query)
         
         const embeddingTime = globalThis.performance.now() - startTime
@@ -265,7 +265,7 @@ export function createSemanticSearchTestCommand(): Command {
         console.error('❌ Semantic search test failed:', error)
         
         if ((error as Error).message?.includes('not initialized')) {
-          console.log('💡 Tip: Run "Test Qwen3 Embedding Generation" first to initialize model')
+          console.log('💡 Tip: Run "Test Embedding Embedding Generation" first to initialize model')
         }
       }
     }
@@ -304,12 +304,12 @@ export function createClearIndexCommand(): Command {
     callback: () => {
       console.log('🗑️  Clearing semantic search index...')
       
-      const statsBefore = indexingService.getStats()
+      const statsBefore = getIndexingService().getStats()
       console.log(`📊 Current index has ${statsBefore.totalIndexed} nodes`)
       
-      indexingService.clearIndex()
+      getIndexingService().clearIndex()
       
-      const statsAfter = indexingService.getStats()
+      const statsAfter = getIndexingService().getStats()
       console.log(`✅ Index cleared successfully!`)
       console.log(`📊 Index now has ${statsAfter.totalIndexed} nodes`)
     }
@@ -326,8 +326,8 @@ export function createShowIndexStatsCommand(): Command {
     callback: () => {
       console.log('📊 Semantic Search Index Statistics...')
       
-      const stats = indexingService.getStats()
-      const progress = indexingService.getProgress()
+      const stats = getIndexingService().getStats()
+      const progress = getIndexingService().getProgress()
       
       console.log(`\n📈 Index Statistics:`)
       console.log(`   📚 Total nodes indexed: ${stats.totalIndexed}`)
@@ -343,11 +343,11 @@ export function createShowIndexStatsCommand(): Command {
       
       if (stats.totalIndexed === 0) {
         console.log(`\n💡 Index is empty. Try running:`)
-        console.log(`   1. "Index Sample DreamNodes (Qwen3)"`)
-        console.log(`   2. "Semantic Search Test (Qwen3)"`)
+        console.log(`   1. "Index Sample DreamNodes (Embedding)"`)
+        console.log(`   2. "Semantic Search Test (Embedding)"`)
       } else {
         console.log(`\n✅ Index is ready for semantic search!`)
-        console.log(`   Try "Semantic Search Test (Qwen3)" to test search`)
+        console.log(`   Try "Semantic Search Test (Embedding)" to test search`)
       }
     }
   }

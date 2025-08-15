@@ -1,11 +1,12 @@
 /**
- * Model Manager Service for Qwen3 Embedding Model
+ * Model Manager Service for HuggingFace Embedding Model
  * 
- * Handles downloading, caching, and managing the Qwen3-Embedding-0.6B model
- * using IndexedDB for storage and providing progress reporting.
+ * Handles downloading, caching, and managing the all-MiniLM-L6-v2 model
+ * using native filesystem storage for optimal performance in Obsidian/Electron.
  */
 
-import { pipeline } from '@xenova/transformers'
+import { pipeline, env } from '@xenova/transformers'
+import { App } from 'obsidian'
 
 export interface ModelInfo {
   id: string
@@ -29,129 +30,32 @@ export interface ModelDownloadProgress {
   error?: string
 }
 
-export interface ModelStorage {
-  modelId: string
-  data: ArrayBuffer
-  metadata: {
-    downloadedAt: number
-    checksum?: string
-    version: string
-    size: number
-  }
+export interface ModelCacheInfo {
+  exists: boolean
+  path?: string
+  size?: number
+  lastModified?: number
 }
 
 /**
- * IndexedDB-based model storage for large files
- */
-class ModelStorageDB {
-  private dbName = 'InterBrainModels'
-  private dbVersion = 1
-  private storeName = 'models'
-  private db: IDBDatabase | null = null
-
-  async initialize(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = globalThis.indexedDB.open(this.dbName, this.dbVersion)
-      
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => {
-        this.db = request.result
-        resolve()
-      }
-      
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          const store = db.createObjectStore(this.storeName, { keyPath: 'modelId' })
-          store.createIndex('downloadedAt', 'metadata.downloadedAt')
-        }
-      }
-    })
-  }
-
-  async storeModel(storage: ModelStorage): Promise<void> {
-    if (!this.db) await this.initialize()
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.put(storage)
-      
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve()
-    })
-  }
-
-  async getModel(modelId: string): Promise<ModelStorage | null> {
-    if (!this.db) await this.initialize()
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readonly')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.get(modelId)
-      
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve(request.result || null)
-    })
-  }
-
-  async deleteModel(modelId: string): Promise<void> {
-    if (!this.db) await this.initialize()
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.delete(modelId)
-      
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve()
-    })
-  }
-
-  async getAllModels(): Promise<ModelStorage[]> {
-    if (!this.db) await this.initialize()
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readonly')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.getAll()
-      
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve(request.result)
-    })
-  }
-
-  async getStorageQuota(): Promise<{ used: number; available: number }> {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      const estimate = await navigator.storage.estimate()
-      return {
-        used: estimate.usage || 0,
-        available: estimate.quota || 0
-      }
-    }
-    return { used: 0, available: 0 }
-  }
-}
-
-/**
- * Main Model Manager Service
+ * Native Filesystem Model Manager Service
  */
 export class ModelManagerService {
   private static instance: ModelManagerService
-  private storage: ModelStorageDB
+  private app: App
   private downloadProgress: ModelDownloadProgress = {
     status: 'idle',
     progress: 0,
     loaded: 0,
     total: 0
   }
-  private downloadAbortController: AbortController | null = null
+  private downloadAbortController: any | null = null
 
-  // all-MiniLM-L6-v2 Embedding Model Configuration (well-supported alternative)
+  // all-MiniLM-L6-v2 Embedding Model Configuration (well-supported, native performance)
   private static readonly EMBEDDING_MODEL: ModelInfo = {
     id: 'all-minilm-l6-v2',
     name: 'all-MiniLM-L6-v2',
-    description: 'High-quality sentence embedding model with 384 dimensions, optimized for semantic search',
+    description: 'High-quality sentence embedding model with native ONNX performance',
     size: '90MB',
     sizeBytes: 90 * 1024 * 1024, // 90MB in bytes
     dimensions: 384,
@@ -161,15 +65,41 @@ export class ModelManagerService {
     checksum: undefined
   }
 
-  private constructor() {
-    this.storage = new ModelStorageDB()
+  private constructor(app: App) {
+    this.app = app
+    this.configureTransformersJS()
   }
 
-  static getInstance(): ModelManagerService {
-    if (!ModelManagerService.instance) {
-      ModelManagerService.instance = new ModelManagerService()
+  static getInstance(app?: App): ModelManagerService {
+    if (!ModelManagerService.instance && app) {
+      ModelManagerService.instance = new ModelManagerService(app)
     }
     return ModelManagerService.instance
+  }
+
+  /**
+   * Configure transformers.js for native filesystem persistence
+   */
+  private configureTransformersJS(): void {
+    try {
+      // Get base path from Obsidian vault adapter
+      const basePath = (this.app.vault.adapter as any).basePath || ''
+      
+      // Configure transformers.js for filesystem storage
+      env.localModelPath = `${basePath}/.obsidian/plugins/interbrain/.models/`
+      env.cacheDir = `${basePath}/.obsidian/plugins/interbrain/.cache/`
+      env.allowRemoteModels = true // Allow initial downloads
+      env.allowLocalModels = true  // Use local cache when available
+      
+      console.log(`🔧 ModelManagerService: Configured paths`)   
+      console.log(`   Models: ${env.localModelPath}`)
+      console.log(`   Cache: ${env.cacheDir}`)
+      
+    } catch (error) {
+      console.warn('⚠️ ModelManagerService: Could not determine vault path, using defaults:', error)
+      env.localModelPath = './.models/'
+      env.cacheDir = './.cache/'
+    }
   }
 
   /**
@@ -180,14 +110,13 @@ export class ModelManagerService {
   }
 
   /**
-   * Check if model is available in storage
-   * For now, we check our IndexedDB metadata, but the real validation
-   * happens when Transformers.js tries to load the model
+   * Check if model is available on filesystem
+   * Uses transformers.js cache directory to determine availability
    */
   async isModelAvailable(): Promise<boolean> {
     try {
-      const stored = await this.storage.getModel(ModelManagerService.EMBEDDING_MODEL.id)
-      return stored !== null
+      const cacheInfo = await this.getModelCacheInfo()
+      return cacheInfo.exists
     } catch (error) {
       console.error('ModelManagerService: Error checking model availability:', error)
       return false
@@ -195,14 +124,48 @@ export class ModelManagerService {
   }
 
   /**
-   * Get stored model data
+   * Get model cache information from filesystem
    */
-  async getStoredModel(): Promise<ModelStorage | null> {
+  async getModelCacheInfo(): Promise<ModelCacheInfo> {
     try {
-      return await this.storage.getModel(ModelManagerService.EMBEDDING_MODEL.id)
+      const adapter = this.app.vault.adapter as any
+      const cachePath = env.cacheDir
+      
+      if (!cachePath || !adapter.fs) {
+        return { exists: false }
+      }
+      
+      // Check if cache directory exists
+      const cacheExists = adapter.fs.existsSync && adapter.fs.existsSync(cachePath)
+      
+      if (!cacheExists) {
+        return { exists: false }
+      }
+      
+      // Try to get directory stats
+      let size = 0
+      let lastModified = 0
+      
+      try {
+        if (adapter.fs.statSync) {
+          const stats = adapter.fs.statSync(cachePath)
+          size = stats.size || 0
+          lastModified = stats.mtime?.getTime() || 0
+        }
+      } catch {
+        // Stats may not be available, that's okay
+      }
+      
+      return {
+        exists: true,
+        path: cachePath,
+        size,
+        lastModified
+      }
+      
     } catch (error) {
-      console.error('ModelManagerService: Error getting stored model:', error)
-      return null
+      console.warn('⚠️ ModelManagerService: Could not check cache info:', error)
+      return { exists: false }
     }
   }
 
@@ -214,20 +177,20 @@ export class ModelManagerService {
   }
 
   /**
-   * Download the Qwen3 model with progress reporting
+   * Download the embedding model with progress reporting
    */
   async downloadModel(force = false): Promise<void> {
     const modelInfo = ModelManagerService.EMBEDDING_MODEL
 
     // Check if already available and not forcing redownload
     if (!force && await this.isModelAvailable()) {
-      console.log('ModelManagerService: Model already available, skipping download')
+      console.log('ModelManagerService: Model already cached, skipping download')
       return
     }
 
-    // If forcing redownload, clear existing model
+    // If forcing redownload, clear existing cache
     if (force) {
-      console.log('ModelManagerService: Forcing redownload, clearing existing model...')
+      console.log('ModelManagerService: Forcing redownload, clearing cache...')
       await this.clearModel()
     }
 
@@ -239,14 +202,13 @@ export class ModelManagerService {
       message: 'Initializing download...'
     }
 
-    this.downloadAbortController = new AbortController()
+    this.downloadAbortController = new (globalThis as any).AbortController()
 
     try {
       console.log(`ModelManagerService: Starting download of ${modelInfo.name}...`)
       
-      // Use Transformers.js to actually download and cache the model
-      // This will handle the real model file downloads
-      await this.downloadRealModel(modelInfo)
+      // Use Transformers.js to download and cache the model natively
+      await this.downloadNativeModel(modelInfo)
 
       this.downloadProgress = {
         status: 'complete',
@@ -294,73 +256,95 @@ export class ModelManagerService {
   }
 
   /**
-   * Clear stored model from cache
+   * Clear model from filesystem cache
    */
   async clearModel(): Promise<void> {
     try {
-      await this.storage.deleteModel(ModelManagerService.EMBEDDING_MODEL.id)
-      console.log('ModelManagerService: Model cache cleared')
+      const adapter = this.app.vault.adapter as any
+      const cachePath = env.cacheDir
+      
+      if (cachePath && adapter.fs && adapter.fs.existsSync && adapter.fs.existsSync(cachePath)) {
+        // Clear cache directory if it exists
+        if (adapter.fs.rmSync) {
+          adapter.fs.rmSync(cachePath, { recursive: true, force: true })
+          console.log('ModelManagerService: Filesystem cache cleared')
+        } else {
+          console.warn('ModelManagerService: Cannot clear cache - rmSync not available')
+        }
+      } else {
+        console.log('ModelManagerService: No cache to clear')
+      }
     } catch (error) {
-      console.error('ModelManagerService: Error clearing model cache:', error)
+      console.error('ModelManagerService: Error clearing cache:', error)
       throw error
     }
   }
 
   /**
-   * Get storage usage information
+   * Get filesystem storage information
    */
   async getStorageInfo(): Promise<{
     modelStored: boolean
     modelSize?: number
-    totalUsed: number
-    totalAvailable: number
-    usagePercentage: number
+    cachePath?: string
+    lastModified?: Date
   }> {
-    const quota = await this.storage.getStorageQuota()
-    const storedModel = await this.getStoredModel()
+    const cacheInfo = await this.getModelCacheInfo()
 
     return {
-      modelStored: storedModel !== null,
-      modelSize: storedModel?.metadata.size,
-      totalUsed: quota.used,
-      totalAvailable: quota.available,
-      usagePercentage: quota.available > 0 ? (quota.used / quota.available) * 100 : 0
+      modelStored: cacheInfo.exists,
+      modelSize: cacheInfo.size,
+      cachePath: cacheInfo.path,
+      lastModified: cacheInfo.lastModified ? new Date(cacheInfo.lastModified) : undefined
     }
   }
 
   /**
-   * Validate stored model integrity
+   * Validate model cache integrity
    */
   async validateModel(): Promise<boolean> {
-    const stored = await this.getStoredModel()
-    if (!stored) return false
-
-    // Basic validation - check size matches expected
-    const expectedSize = ModelManagerService.EMBEDDING_MODEL.sizeBytes
-    const actualSize = stored.metadata.size
-
-    if (Math.abs(actualSize - expectedSize) > expectedSize * 0.01) { // 1% tolerance
-      console.warn(`ModelManagerService: Model size mismatch. Expected: ${expectedSize}, Actual: ${actualSize}`)
+    const cacheInfo = await this.getModelCacheInfo()
+    
+    if (!cacheInfo.exists) {
       return false
     }
 
-    // TODO: Add checksum validation when available
+    // Basic validation - check if cache directory exists and seems reasonable
+    if (cacheInfo.size !== undefined && cacheInfo.size < 1024) { // Less than 1KB is suspicious
+      console.warn(`ModelManagerService: Cache size too small: ${cacheInfo.size} bytes`)
+      return false
+    }
+
+    // If we have transformers.js available, try to validate by loading
+    try {
+      // Quick validation - can we create a pipeline?
+      const testPipeline = await pipeline('feature-extraction', ModelManagerService.EMBEDDING_MODEL.id, {
+        progress_callback: null // Disable progress for validation
+      })
+      
+      if (testPipeline) {
+        console.log('ModelManagerService: Model validation successful')
+        return true
+      }
+    } catch (error) {
+      console.warn('ModelManagerService: Model validation failed:', error)
+      return false
+    }
+
     return true
   }
 
   /**
-   * Download the real Qwen3 model using Transformers.js
-   * This will download and cache the model files that Transformers.js needs
+   * Download the embedding model using native Transformers.js with filesystem caching
    */
-  private async downloadRealModel(modelInfo: ModelInfo): Promise<void> {
-    this.downloadProgress.message = 'Downloading model files...'
+  private async downloadNativeModel(modelInfo: ModelInfo): Promise<void> {
+    this.downloadProgress.message = 'Downloading model files to filesystem...'
     
     try {
-      // Create pipeline which will trigger download of model files
-      // The progress callback will help us track the download
+      // Create pipeline which will trigger download and native filesystem caching
       const pipeline_ = await pipeline(
         'feature-extraction',
-        'Xenova/all-MiniLM-L6-v2', // Well-supported embedding model
+        modelInfo.id.replace('all-minilm-l6-v2', 'Xenova/all-MiniLM-L6-v2'), // Ensure correct model path
         {
           progress_callback: (progress: unknown) => {
             const progressData = progress as { 
@@ -396,34 +380,34 @@ export class ModelManagerService {
         }
       )
 
-      // Store metadata in our IndexedDB to track that model is available
-      this.downloadProgress.message = 'Finalizing...'
+      this.downloadProgress.message = 'Model cached to filesystem'
       
-      const modelStorage: ModelStorage = {
-        modelId: modelInfo.id,
-        data: new ArrayBuffer(0), // We don't store the actual model data, Transformers.js handles caching
-        metadata: {
-          downloadedAt: Date.now(),
-          version: '1.0.0',
-          size: modelInfo.sizeBytes,
-          checksum: modelInfo.checksum
-        }
+      // Verify the model was cached
+      const cacheInfo = await this.getModelCacheInfo()
+      if (!cacheInfo.exists) {
+        throw new Error('Model download completed but cache not found')
       }
-
-      await this.storage.storeModel(modelStorage)
+      
+      console.log(`ModelManagerService: Model cached successfully to ${cacheInfo.path}`)
       
       // Clean up pipeline reference
       if (pipeline_) {
-        // Pipeline is now cached by Transformers.js
-        console.log('ModelManagerService: Model cached successfully by Transformers.js')
+        console.log('ModelManagerService: Native model ready for use')
       }
       
     } catch (error) {
-      console.error('ModelManagerService: Real model download failed:', error)
+      console.error('ModelManagerService: Native model download failed:', error)
       throw error
     }
   }
 }
 
-// Export singleton instance
-export const modelManagerService = ModelManagerService.getInstance()
+// Export factory function - requires app instance
+export const createModelManagerService = (app: App): ModelManagerService => {
+  return ModelManagerService.getInstance(app)
+}
+
+// Export singleton getter (must be initialized first)
+export const getModelManagerService = (): ModelManagerService => {
+  return ModelManagerService.getInstance()
+}

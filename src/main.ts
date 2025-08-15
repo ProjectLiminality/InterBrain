@@ -58,6 +58,26 @@ export default class InterBrainPlugin extends Plugin {
     
     // Initialize service manager with plugin instance
     serviceManager.initialize(this);
+    
+    // Initialize semantic search services
+    this.initializeSemanticSearchServices().catch(error => {
+      console.error('Failed to initialize semantic search services:', error);
+    });
+  }
+
+  private async initializeSemanticSearchServices(): Promise<void> {
+    try {
+      // Initialize model manager and indexing services with app context
+      const modelModule = await import('./features/semantic-search/services/model-manager-service');
+      const indexingModule = await import('./features/semantic-search/indexing/indexing-service');
+      
+      modelModule.createModelManagerService(this.app);
+      indexingModule.createIndexingService(this.app);
+      
+      console.log('✅ Semantic search services initialized with native HuggingFace integration');
+    } catch (error) {
+      console.error('❌ Failed to initialize semantic search services:', error);
+    }
   }
 
   private registerCommands(): void {
