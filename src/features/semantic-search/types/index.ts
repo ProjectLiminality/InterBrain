@@ -14,17 +14,14 @@ export type {
 // Re-export indexing types
 export type {
   VectorData,
-  IndexingMetadata,
   IndexingProgress,
-  IndexingResult,
-  IndexingStatus
+  IIndexingService
 } from '../services/indexing-service';
 
 // Re-export search types  
 export type {
   SearchResult,
-  SearchOptions,
-  SearchStats
+  SearchOptions
 } from '../services/semantic-search-service';
 
 // Forward declaration for EmbeddingConfig - will be properly imported from services

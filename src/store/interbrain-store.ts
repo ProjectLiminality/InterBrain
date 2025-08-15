@@ -165,13 +165,13 @@ const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
 
 export const useInterBrainStore = create<InterBrainState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   // Initial state
   dataMode: 'mock' as const, // Start in mock mode
   realNodes: new Map<string, RealNodeData>(),
   
   // Initialize Ollama config slice
-  ...createOllamaConfigSlice(set, () => ({} as any)),
+  ...createOllamaConfigSlice(set, get, {} as any),
   selectedNode: null,
   creatorMode: {
     isActive: false,

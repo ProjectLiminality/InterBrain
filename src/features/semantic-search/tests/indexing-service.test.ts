@@ -1,21 +1,25 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { IndexingService, VectorData } from '../services/indexing-service';
 import { DreamNode } from '../../../types/dreamnode';
+import { useInterBrainStore } from '../../../store/interbrain-store';
+import { ollamaEmbeddingService } from '../services/ollama-embedding-service';
 
 // Mock dependencies
-vi.mock('../../../store/interbrain-store');
-vi.mock('../services/ollama-embedding-service');
-
-const mockStore = {
-  getState: vi.fn(),
-  setState: vi.fn()
-};
-
-const mockEmbeddingService = {
-  generateEmbedding: vi.fn(),
-  isAvailable: vi.fn(),
-  getHealth: vi.fn()
-};
+vi.mock('../../../store/interbrain-store', () => ({
+  useInterBrainStore: {
+    getState: vi.fn(),
+    setState: vi.fn()
+  }
+}));
+vi.mock('../services/ollama-embedding-service', () => ({
+  ollamaEmbeddingService: {
+    generateEmbedding: vi.fn(),
+    processLongText: vi.fn(),
+    isAvailable: vi.fn(),
+    getHealth: vi.fn(),
+    getModelInfo: vi.fn()
+  }
+}));
 
 describe('IndexingService', () => {
   let indexingService: IndexingService;
@@ -27,24 +31,44 @@ describe('IndexingService', () => {
       id: 'test-node-1',
       name: 'Test Node',
       type: 'dream',
+      position: [0, 0, 0],
       repoPath: '/path/to/repo',
-      lastModified: Date.now(),
-      gitStatus: 'clean',
-      liminalWebConnections: []
-    } as DreamNode;
+      dreamTalkMedia: [],
+      dreamSongContent: [],
+      liminalWebConnections: [],
+      hasUnsavedChanges: false,
+      gitStatus: {
+        hasUncommittedChanges: false,
+        hasStashedChanges: false,
+        hasUnpushedChanges: false,
+        lastChecked: Date.now()
+      }
+    };
 
     // Setup mock store
-    mockStore.getState.mockReturnValue({
+    const mockUpdateVectorData = vi.fn();
+    const mockGetState = vi.mocked(useInterBrainStore.getState);
+    mockGetState.mockReturnValue({
       vectorData: new Map(),
-      updateVectorData: vi.fn(),
+      updateVectorData: mockUpdateVectorData,
       dataMode: 'mock'
-    });
+    } as any);
 
     indexingService = new IndexingService();
     
     // Setup mock embedding service
+    const mockEmbeddingService = vi.mocked(ollamaEmbeddingService);
     mockEmbeddingService.generateEmbedding.mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5]);
+    mockEmbeddingService.processLongText.mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5]);
     mockEmbeddingService.isAvailable.mockResolvedValue(true);
+    mockEmbeddingService.getHealth.mockResolvedValue({
+      isHealthy: true,
+      message: 'Ollama service is available'
+    });
+    mockEmbeddingService.getModelInfo.mockResolvedValue({
+      name: 'nomic-embed-text',
+      dimensions: 768
+    });
   });
 
   afterEach(() => {
@@ -74,9 +98,21 @@ describe('IndexingService', () => {
     });
 
     it('should handle embedding service failures', async () => {
-      mockEmbeddingService.generateEmbedding.mockRejectedValue(new Error('Embedding failed'));
+      const mockEmbeddingService = vi.mocked(ollamaEmbeddingService);
+      mockEmbeddingService.processLongText.mockRejectedValue(new Error('Embedding failed'));
 
-      await expect(indexingService.indexNode(mockDreamNode)).rejects.toThrow('Embedding failed');
+      const result = await indexingService.indexNode(mockDreamNode);
+      
+      // Should complete successfully but use fallback embedding (768 dimensions)
+      expect(result).toMatchObject({
+        nodeId: 'test-node-1',
+        metadata: {
+          title: 'Test Node',
+          type: 'dream'
+        }
+      });
+      expect(result.embedding).toHaveLength(768); // Fallback embedding dimensions
+      expect(result.lastIndexed).toBeGreaterThan(0);
     });
   });
 
@@ -100,11 +136,12 @@ describe('IndexingService', () => {
       };
 
       // Mock store with existing data
-      mockStore.getState.mockReturnValue({
+      const mockGetStateWithData = vi.mocked(useInterBrainStore.getState);
+      mockGetStateWithData.mockReturnValue({
         vectorData: new Map([['test-node-1', vectorData]]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      });
+      } as any);
 
       const result = indexingService.getVector('test-node-1');
       expect(result).toEqual(vectorData);
@@ -131,11 +168,11 @@ describe('IndexingService', () => {
         }
       };
 
-      mockStore.getState.mockReturnValue({
+      vi.mocked(useInterBrainStore.getState).mockReturnValue({
         vectorData: new Map([['test-node-1', vectorData]]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      });
+      } as any);
 
       const result = indexingService.needsReindex('test-node-1', 'abc123');
       expect(result).toBe(false);
@@ -155,11 +192,11 @@ describe('IndexingService', () => {
         }
       };
 
-      mockStore.getState.mockReturnValue({
+      vi.mocked(useInterBrainStore.getState).mockReturnValue({
         vectorData: new Map([['test-node-1', vectorData]]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      });
+      } as any);
 
       const result = indexingService.needsReindex('test-node-1', 'new-hash');
       expect(result).toBe(true);
@@ -193,14 +230,14 @@ describe('IndexingService', () => {
         metadata: { title: 'Node 2', type: 'dreamer', wordCount: 75 }
       };
 
-      mockStore.getState.mockReturnValue({
+      vi.mocked(useInterBrainStore.getState).mockReturnValue({
         vectorData: new Map([
           ['node-1', vectorData1],
           ['node-2', vectorData2]
         ]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      });
+      } as any);
 
       const result = indexingService.getAllVectors();
       expect(result).toHaveLength(2);
@@ -211,18 +248,20 @@ describe('IndexingService', () => {
 
   describe('getEmbeddingStatus', () => {
     it('should return available status when service is healthy', async () => {
+      const mockEmbeddingService = vi.mocked(ollamaEmbeddingService);
       mockEmbeddingService.isAvailable.mockResolvedValue(true);
 
       const status = await indexingService.getEmbeddingStatus();
-      expect(status.isAvailable).toBe(true);
-      expect(status.message).toContain('available');
+      expect(status.available).toBe(true);
+      expect(status.message).toContain('ready');
     });
 
     it('should return unavailable status when service is down', async () => {
+      const mockEmbeddingService = vi.mocked(ollamaEmbeddingService);
       mockEmbeddingService.isAvailable.mockResolvedValue(false);
 
       const status = await indexingService.getEmbeddingStatus();
-      expect(status.isAvailable).toBe(false);
+      expect(status.available).toBe(false);
       expect(status.message).toContain('unavailable');
     });
   });

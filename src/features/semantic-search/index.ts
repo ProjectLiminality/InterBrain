@@ -6,7 +6,6 @@
  */
 
 // Core services
-export { IEmbeddingService } from './services/embedding-service';
 export { OllamaEmbeddingService, createOllamaEmbeddingService } from './services/ollama-embedding-service';
 export { OllamaHealthService, createOllamaHealthService } from './services/ollama-health-service';
 export { indexingService } from './services/indexing-service';

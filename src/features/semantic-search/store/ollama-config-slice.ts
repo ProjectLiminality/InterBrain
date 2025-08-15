@@ -28,7 +28,7 @@ export const createOllamaConfigSlice: StateCreator<
   [],
   [],
   OllamaConfigSlice
-> = (set, _get) => ({
+> = (set, _get, _api) => ({
   // Vector data state
   vectorData: new Map<string, VectorData>(),
   

@@ -28,6 +28,10 @@ export class UIService {
 
   async getUserInput(prompt: string): Promise<string | null> {
     return new Promise((resolve) => {
+      if (!this.app) {
+        resolve(null);
+        return;
+      }
       // Create a simple input modal using Obsidian's modal system
       const modal = new Modal(this.app);
       modal.titleEl.setText(prompt);
