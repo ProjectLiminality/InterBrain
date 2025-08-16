@@ -1,13 +1,15 @@
 ---
 allowed-tools: Bash(git:status), Bash(git:branch), Bash(git:log), Bash(git:show), Bash(git:diff), Bash(git:ls-files), Bash(gh:issue:list), Bash(gh:issue:view), Bash(gh:repo:view), Bash(gh:pr:list), Bash(gh:pr:view), Bash(gh:auth:status), Bash(lsof), Bash(find), Bash(npm:run:test), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages
-description: Comprehensive development continuation - analyze state, plan next feature, execute workflow with Playwright testing
+description: Intelligent session continuation with plan-mode preparation workflow - analyze state, conduct knowledge transfer, create branches, then plan implementation
 ---
 
 # Continue Development Workflow
 
+**Core Philosophy**: This command handles meta-preparation work that can happen in plan mode (state analysis, issue analysis, knowledge transfer, branch creation) before transitioning to implementation planning. The workflow proceeds seamlessly through preparation phases while IN plan mode, then exits plan mode only when ready to present a comprehensive implementation strategy.
+
 ## STEP 1: Check Open Issues & Determine Options
 
-**⚠️ ALWAYS START HERE - FIRST STEP OF EVERY CONTINUATION ⚠️**
+**⚠️ PLAN MODE COMPATIBLE - ALWAYS START HERE ⚠️**
 
 ### Issue Status Check
 - **My assigned issues**: !`gh issue list --assignee @me --state open`
@@ -52,7 +54,7 @@ description: Comprehensive development continuation - analyze state, plan next f
 
 ## CRITICAL PHASE 1: Feature Issue Analysis & Knowledge Transfer
 
-**⚠️ MANDATORY FIRST STEPS - NEVER SKIP THIS PHASE ⚠️**
+**⚠️ PLAN MODE COMPATIBLE - MANDATORY FIRST STEPS - NEVER SKIP THIS PHASE ⚠️**
 
 ### 1. Read Current Feature Issue
 - Use `gh issue view ISSUE_NUMBER` to read the current feature issue body
@@ -142,11 +144,11 @@ Based on current epic and specification:
    - Only continue after user approval of refined issue
 
 3. **Feature Branch Strategy** (After Phase 1 Complete):
-   - Create feature branch off epic branch
+   - Create feature branch off epic branch (PLAN MODE COMPATIBLE)
    - Follow naming: `feature/feature-name-from-issue`
-   - Begin implementation with clear, approved plan
+   - Branch creation happens during preparation, before implementation planning
 
-### Phase 4: Implementation Planning
+### Phase 4: Implementation Planning & Plan Mode Exit
 Using TodoWrite, create comprehensive feature implementation plan:
 
 1. **Architecture Tasks**: Following development rules from project memory
@@ -154,6 +156,13 @@ Using TodoWrite, create comprehensive feature implementation plan:
 3. **Testing Tasks**: Unit tests, integration verification
 4. **Documentation Tasks**: Update relevant docs
 5. **Integration Tasks**: Merge preparation and validation
+
+**⚠️ PLAN MODE EXIT POINT ⚠️**
+After completing preparation phases (state analysis, knowledge transfer, issue refinement, branch creation, implementation planning), use ExitPlanMode tool to present comprehensive implementation strategy and get user approval to proceed.
+
+---
+
+## IMPLEMENTATION EXECUTION (Post Plan-Mode)
 
 ### Phase 5: Execute Development
 Begin systematic implementation following AI-first development patterns:

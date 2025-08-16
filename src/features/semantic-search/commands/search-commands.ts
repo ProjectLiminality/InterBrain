@@ -29,20 +29,34 @@ export function registerSearchCommands(plugin: Plugin, uiService: UIService): vo
           return;
         }
         
-        // Display results
-        const resultText = results.map((result, i) => 
-          `${i + 1}. **${result.node.name}** (${(result.score * 100).toFixed(1)}% similar)\\n   ${result.snippet || 'No snippet available'}`
-        ).join('\\n\\n');
+        // Store search results and scores in Zustand store
+        const store = useInterBrainStore.getState();
         
-        // Create a results file with timestamp to avoid conflicts
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
-        const resultsFile = await plugin.app.vault.create(
-          `Search Results - ${query} - ${timestamp[0]} ${timestamp[1].split('.')[0]}.md`,
-          `# Search Results for "${query}"\\n\\n${resultText}`
-        );
-        await plugin.app.workspace.openLinkText(resultsFile.path, '');
+        // Convert search results to DreamNodes for the store
+        const searchResultNodes = results.map(result => result.node);
         
-        uiService.showSuccess(`Found ${results.length} similar nodes`);
+        // Store the similarity scores in a separate map for the layout system
+        const searchScores = new Map<string, number>();
+        results.forEach(result => {
+          searchScores.set(result.node.id, result.score);
+        });
+        
+        // Update store with search results
+        store.setSearchResults(searchResultNodes);
+        
+        // Switch to search spatial layout to trigger honeycomb ring layout
+        store.setSpatialLayout('search');
+        
+        // Log search results for debugging
+        console.log(`\\n=== Semantic Search Results for "${query}" ===`);
+        results.forEach((result, i) => {
+          console.log(`${i + 1}. ${result.node.name} (${(result.score * 100).toFixed(1)}% similar)`);
+          console.log(`   Type: ${result.node.type}, Snippet: ${result.snippet || 'No snippet'}`);
+        });
+        console.log(`\\nSearch results stored in Zustand. Spatial layout switched to 'search' mode.`);
+        console.log(`Total results: ${results.length} nodes arranged in honeycomb rings`);
+        
+        uiService.showSuccess(`Found ${results.length} similar nodes - switched to search layout`);
       } catch (error) {
         console.error('Semantic search failed:', error);
         uiService.showError('Search failed - check if Ollama is running');
@@ -79,20 +93,34 @@ export function registerSearchCommands(plugin: Plugin, uiService: UIService): vo
           return;
         }
         
-        // Display results
-        const resultText = results.map((result, i) => 
-          `${i + 1}. **${result.node.name}** (${(result.score * 100).toFixed(1)}% similar)\\n   ${result.snippet || 'No snippet available'}`
-        ).join('\\n\\n');
+        // Store search results and scores in Zustand store
+        // Note: store is already defined from the selectedNode check above
         
-        // Create a results file with timestamp to avoid conflicts
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
-        const resultsFile = await plugin.app.vault.create(
-          `Similar to ${selectedNode.name} - ${timestamp[0]} ${timestamp[1].split('.')[0]}.md`,
-          `# Nodes Similar to "${selectedNode.name}"\\n\\n${resultText}`
-        );
-        await plugin.app.workspace.openLinkText(resultsFile.path, '');
+        // Convert search results to DreamNodes for the store
+        const searchResultNodes = results.map(result => result.node);
         
-        uiService.showSuccess(`Found ${results.length} similar nodes`);
+        // Store the similarity scores in a separate map for the layout system
+        const searchScores = new Map<string, number>();
+        results.forEach(result => {
+          searchScores.set(result.node.id, result.score);
+        });
+        
+        // Update store with search results
+        store.setSearchResults(searchResultNodes);
+        
+        // Switch to search spatial layout to trigger honeycomb ring layout
+        store.setSpatialLayout('search');
+        
+        // Log search results for debugging
+        console.log(`\\n=== Similar Nodes to "${selectedNode.name}" ===`);
+        results.forEach((result, i) => {
+          console.log(`${i + 1}. ${result.node.name} (${(result.score * 100).toFixed(1)}% similar)`);
+          console.log(`   Type: ${result.node.type}, Snippet: ${result.snippet || 'No snippet'}`);
+        });
+        console.log(`\\nSimilarity results stored in Zustand. Spatial layout switched to 'search' mode.`);
+        console.log(`Total results: ${results.length} nodes arranged in honeycomb rings`);
+        
+        uiService.showSuccess(`Found ${results.length} similar nodes - switched to search layout`);
       } catch (error) {
         console.error('Similar nodes search failed:', error);
         uiService.showError('Search failed - check if node is indexed and Ollama is running');
