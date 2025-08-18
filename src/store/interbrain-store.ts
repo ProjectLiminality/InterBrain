@@ -85,6 +85,15 @@ export interface InterBrainState extends OllamaConfigSlice {
   searchResults: DreamNode[];
   setSearchResults: (results: DreamNode[]) => void;
   
+  // Search interface state
+  searchInterface: {
+    isActive: boolean;
+    currentQuery: string;
+    lastQuery: string; // For change detection
+  };
+  setSearchActive: (active: boolean) => void;
+  setSearchQuery: (query: string) => void;
+  
   // Spatial layout state
   spatialLayout: 'constellation' | 'search' | 'liminal-web';
   setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web') => void;
@@ -178,6 +187,11 @@ export const useInterBrainStore = create<InterBrainState>()(
     nodeId: null
   },
   searchResults: [],
+  searchInterface: {
+    isActive: false,
+    currentQuery: '',
+    lastQuery: ''
+  },
   spatialLayout: 'constellation',
   fibonacciConfig: DEFAULT_FIBONACCI_CONFIG,
   
@@ -314,6 +328,21 @@ export const useInterBrainStore = create<InterBrainState>()(
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),
   setSearchResults: (results) => set({ searchResults: results }),
+  setSearchActive: (active) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      isActive: active,
+      // Reset query when deactivating
+      currentQuery: active ? state.searchInterface.currentQuery : '',
+      lastQuery: active ? state.searchInterface.lastQuery : ''
+    }
+  })),
+  setSearchQuery: (query) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      currentQuery: query
+    }
+  })),
   setSpatialLayout: (layout) => set(state => {
     const previousLayout = state.spatialLayout;
     const selectedNode = state.selectedNode;

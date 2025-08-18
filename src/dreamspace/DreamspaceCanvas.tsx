@@ -9,6 +9,8 @@ import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import ProtoNode3D from '../features/creation/ProtoNode3D';
+import SearchNode3D from '../features/search/SearchNode3D';
+import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -98,6 +100,9 @@ export default function DreamspaceCanvas() {
   // Search results for search mode display
   const searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
+  
+  // Search interface state
+  const searchInterface = useInterBrainStore(state => state.searchInterface);
   
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
@@ -212,13 +217,18 @@ export default function DreamspaceCanvas() {
     if (!spatialOrchestratorRef.current) return;
     
     switch (spatialLayout) {
-      case 'search':
-        // Trigger search results display when switching to search mode
-        if (searchResults && searchResults.length > 0) {
-          console.log(`DreamspaceCanvas: Switching to search mode with ${searchResults.length} results`);
+      case 'search': {
+        // Search mode handles both search interface and search results display
+        const store = useInterBrainStore.getState();
+        if (store.searchInterface.isActive) {
+          console.log('DreamspaceCanvas: Switching to search interface mode');
+          // SearchNode3D will handle the UI - no orchestrator action needed
+        } else if (searchResults && searchResults.length > 0) {
+          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
           spatialOrchestratorRef.current.showSearchResults(searchResults);
         }
         break;
+      }
         
       case 'liminal-web':
         // Trigger liminal web when a node is selected
@@ -452,6 +462,59 @@ export default function DreamspaceCanvas() {
     cancelCreation();
   };
 
+  // Search interface handlers
+  const handleSearchSave = async (query: string, dreamTalkFile?: globalThis.File, additionalFiles?: globalThis.File[]) => {
+    try {
+      console.log('SearchNode save:', { query, dreamTalkFile, additionalFiles });
+      
+      // Use service to create DreamNode from search query
+      const service = serviceManager.getActive();
+      await service.create(
+        query,
+        'dream',
+        dreamTalkFile, // DreamTalk file (single file)
+        [0, 0, -50], // Position (focus position)
+        additionalFiles // Additional files array
+      );
+      
+      // Dismiss search interface
+      const store = useInterBrainStore.getState();
+      store.setSearchActive(false);
+      store.setSpatialLayout('constellation');
+      
+      // Show success message
+      uiService.showSuccess(`Created DreamNode: "${query}"`);
+      
+    } catch (error) {
+      console.error('Failed to create DreamNode from search:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to create DreamNode');
+    }
+  };
+
+  const handleSearchCancel = () => {
+    const store = useInterBrainStore.getState();
+    store.setSearchActive(false);
+    store.setSpatialLayout('constellation');
+  };
+
+  const handleSearchResults = (results: { node: DreamNode; score: number }[]) => {
+    // Convert search results to DreamNodes for spatial display
+    const searchResultNodes = results.map(result => result.node);
+    
+    // Update store with search results
+    const store = useInterBrainStore.getState();
+    store.setSearchResults(searchResultNodes);
+    
+    // If we have results and no search interface active, switch to search results display
+    if (searchResultNodes.length > 0 && !store.searchInterface.isActive) {
+      if (spatialOrchestratorRef.current) {
+        spatialOrchestratorRef.current.showSearchResults(searchResultNodes);
+      }
+    }
+    
+    console.log(`DreamspaceCanvas: Updated with ${searchResultNodes.length} search results`);
+  };
+
   const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
     try {
       
@@ -620,10 +683,17 @@ export default function DreamspaceCanvas() {
           const store = useInterBrainStore.getState();
           
           if (store.spatialLayout === 'search') {
-            // Clear search and return to constellation
-            console.log('Empty space clicked in search mode - clearing search');
-            store.setSearchResults([]);
-            store.setSpatialLayout('constellation');
+            if (store.searchInterface.isActive) {
+              // Dismiss search interface and return to constellation
+              console.log('Empty space clicked in search interface - dismissing search');
+              store.setSearchActive(false);
+              store.setSpatialLayout('constellation');
+            } else {
+              // Clear search results and return to constellation
+              console.log('Empty space clicked in search results mode - clearing search');
+              store.setSearchResults([]);
+              store.setSpatialLayout('constellation');
+            }
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
             console.log('Empty space clicked in liminal web - deselecting node');
@@ -715,6 +785,20 @@ export default function DreamspaceCanvas() {
               position={creationState.protoNode.position}
               onComplete={handleProtoNodeComplete}
               onCancel={handleProtoNodeCancel}
+            />
+          </>
+        )}
+        
+        {/* Search node interface - active when search interface is enabled */}
+        {searchInterface.isActive && spatialLayout === 'search' && (
+          <>
+            <SearchNode3D
+              position={[0, 0, -50]} // Focus position
+              onSave={handleSearchSave}
+              onCancel={handleSearchCancel}
+            />
+            <SearchOrchestrator
+              onSearchResults={handleSearchResults}
             />
           </>
         )}

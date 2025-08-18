@@ -1,0 +1,431 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Html } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
+import { useInterBrainStore } from '../../store/interbrain-store';
+
+interface SearchNode3DProps {
+  position: [number, number, number];
+  onSave: (query: string, dreamTalkFile?: globalThis.File, additionalFiles?: globalThis.File[]) => void;
+  onCancel: () => void;
+}
+
+/**
+ * SearchNode3D - Search interface that visually appears as a Dream-type DreamNode
+ * 
+ * Extends ProtoNode3D architecture for consistent UI/UX. The search query becomes
+ * the title input, and supports drag-and-drop for multi-modal search functionality.
+ * 
+ * Animation: Spawns from sphere surface (5000 units) and flies to focus position (50 units)
+ * using easeOutQuart over 1 second to match spatial orchestration timing.
+ */
+export default function SearchNode3D({ 
+  position,
+  onSave,
+  onCancel
+}: SearchNode3DProps) {
+  const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
+  const fileInputRef = useRef<globalThis.HTMLInputElement>(null);
+  
+  // Get search state from store
+  const { searchInterface, setSearchQuery } = useInterBrainStore();
+  const { currentQuery } = searchInterface;
+  
+  // Local UI state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<string | null>(null);
+  const [dreamTalkFile, setDreamTalkFile] = useState<globalThis.File | null>(null);
+  const [additionalFiles, setAdditionalFiles] = useState<globalThis.File[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Spawn animation state - fly in from sphere surface (5000 units) to focus position (50 units)
+  const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>([
+    position[0], 
+    position[1], 
+    -5000 // Start at sphere surface distance
+  ]);
+  const [animatedOpacity, setAnimatedOpacity] = useState<number>(1.0);
+  const [animatedUIOpacity, setAnimatedUIOpacity] = useState<number>(0.0); // UI starts hidden during spawn
+  const animationStartTime = useRef<number | null>(Date.now()); // Start animation immediately
+  
+  // Spawn animation: 5000 → 50 units using easeOutQuart (1 second duration)
+  useFrame(() => {
+    if (!animationStartTime.current) return;
+    
+    const elapsed = Date.now() - animationStartTime.current;
+    const progress = Math.min(elapsed / 1000, 1); // 1 second duration
+    
+    // easeOutQuart function for consistent spatial orchestration feel
+    const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+    
+    // Animate position: [0,0,-5000] → [0,0,-50]
+    const startZ = -5000;
+    const endZ = position[2]; // Target position (-50)
+    const newZ = startZ + (endZ - startZ) * easeOutQuart;
+    setAnimatedPosition([position[0], position[1], newZ]);
+    
+    // Keep main node fully visible during spawn
+    setAnimatedOpacity(1.0);
+    
+    // Animate UI elements: 0.0 → 1.0 (fade in UI controls after spawn)
+    const startUIOpacity = 0.0;
+    const endUIOpacity = 1.0;
+    const newUIOpacity = startUIOpacity + (endUIOpacity - startUIOpacity) * easeOutQuart;
+    setAnimatedUIOpacity(newUIOpacity);
+    
+    // Complete animation
+    if (progress >= 1) {
+      animationStartTime.current = null;
+      setAnimatedPosition(position);
+      setAnimatedOpacity(1.0);
+      setAnimatedUIOpacity(1.0);
+      
+      // Auto-focus search input after spawn animation
+      globalThis.setTimeout(() => {
+        titleInputRef.current?.focus();
+      }, 50);
+    }
+  });
+  
+  // Auto-focus on mount (fallback if animation completes before useEffect)
+  useEffect(() => {
+    if (!animationStartTime.current) {
+      globalThis.setTimeout(() => {
+        titleInputRef.current?.focus();
+      }, 50);
+    }
+  }, []);
+  
+  // Dream-type node styling for search node (blue)
+  const nodeColors = getNodeColors('dream');
+  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
+  const borderWidth = dreamNodeStyles.dimensions.borderWidth;
+  
+  // Event handlers
+  const handleQueryChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+  };
+  
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+  
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+  
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const file = files[0];
+    
+    if (file) {
+      if (isValidMediaFile(file)) {
+        // Set as DreamTalk media
+        setDreamTalkFile(file);
+        const previewUrl = globalThis.URL.createObjectURL(file);
+        setPreviewMedia(previewUrl);
+      } else {
+        // Add as additional file
+        setAdditionalFiles(prev => [...prev, file]);
+      }
+    }
+  };
+  
+  const handleFileSelect = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (isValidMediaFile(file)) {
+        setDreamTalkFile(file);
+        const previewUrl = globalThis.URL.createObjectURL(file);
+        setPreviewMedia(previewUrl);
+      }
+    }
+  };
+  
+  const handleSave = () => {
+    if (currentQuery.trim()) {
+      setIsAnimating(true);
+      onSave(currentQuery, dreamTalkFile || undefined, additionalFiles);
+    }
+  };
+  
+  const handleCancel = () => {
+    // Clean up preview URL if exists
+    if (previewMedia) {
+      globalThis.URL.revokeObjectURL(previewMedia);
+    }
+    onCancel();
+  };
+  
+  // Keyboard handler for the entire component
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancel();
+    }
+  };
+  
+  const isSaveDisabled = !currentQuery.trim() || isAnimating;
+  
+  return (
+    <group position={animatedPosition}>
+      <Html
+        position={[0, 0, 0]}
+        center
+        transform
+        sprite
+        distanceFactor={10}
+        style={{
+          pointerEvents: 'auto',
+          userSelect: 'none'
+        }}
+      >
+        <div 
+          onKeyDown={handleKeyDown} 
+          data-ui-element="search-node"
+          onMouseDown={(e) => e.stopPropagation()} // Prevent sphere rotation
+          onMouseMove={(e) => e.stopPropagation()} // Prevent sphere rotation
+          onMouseUp={(e) => e.stopPropagation()} // Prevent sphere rotation
+          onClick={(e) => e.stopPropagation()} // Prevent any click propagation
+        >
+          {/* Main Search Node Circle - Blue Dream-type styling */}
+          <div
+            style={{
+              width: `${nodeSize}px`,
+              height: `${nodeSize}px`,
+              borderRadius: dreamNodeStyles.dimensions.borderRadius,
+              border: `${borderWidth}px solid ${nodeColors.border}`,
+              background: nodeColors.fill,
+              overflow: 'hidden',
+              position: 'relative',
+              opacity: animatedOpacity,
+              transition: dreamNodeStyles.transitions.creation,
+              boxShadow: getNodeGlow('dream', 15), // Blue dream glow
+              fontFamily: dreamNodeStyles.typography.fontFamily
+            }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {/* DreamTalk Media Area or Drop Zone */}
+            {previewMedia || dreamTalkFile ? (
+              <div
+                style={{
+                  ...getMediaContainerStyle(),
+                  opacity: animatedOpacity
+                }}
+              >
+                {previewMedia && (
+                  <img 
+                    src={previewMedia}
+                    alt="DreamTalk preview"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+                )}
+                <div style={getMediaOverlayStyle()} />
+              </div>
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  border: isDragOver ? '2px dashed rgba(255,255,255,0.5)' : 'none',
+                  borderRadius: '50%',
+                  zIndex: 9999,
+                  pointerEvents: 'auto',
+                  opacity: animatedUIOpacity // Fade in with other UI
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '75%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    color: dreamNodeStyles.colors.text.secondary,
+                    fontSize: '24px',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                >
+                  <div>Drop image here</div>
+                  <div>or click to browse</div>
+                </div>
+              </div>
+            )}
+            
+            {/* Search Query Input Overlay */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: '50%',
+                pointerEvents: 'none',
+                opacity: (previewMedia || dreamTalkFile) ? animatedUIOpacity : 1.0
+              }}
+            >
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={currentQuery}
+                onChange={handleQueryChange}
+                placeholder="Search query..."
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: dreamNodeStyles.colors.text.primary,
+                  fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none',
+                  width: '80%',
+                  height: `${Math.max(40, nodeSize * 0.08)}px`,
+                  padding: `${Math.max(8, nodeSize * 0.02)}px`,
+                  pointerEvents: 'auto',
+                  boxShadow: 'none',
+                  borderRadius: '0'
+                }}
+              />
+            </div>
+            
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,.pdf,.txt,.md,.doc,.docx"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+          </div>
+          
+          {/* Additional Files Indicator */}
+          {additionalFiles.length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: `${nodeSize + 10}px`,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(100, 100, 255, 0.8)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                whiteSpace: 'nowrap',
+                opacity: animatedUIOpacity
+              }}
+            >
+              {additionalFiles.length} file{additionalFiles.length > 1 ? 's' : ''} added
+            </div>
+          )}
+          
+          {/* Action Buttons */}
+          <div
+            style={{
+              position: 'absolute',
+              top: `${nodeSize + (additionalFiles.length > 0 ? 60 : 40)}px`,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: '12px',
+              opacity: animatedUIOpacity
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              disabled={isAnimating}
+              style={{
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`,
+                border: '1px solid rgba(255,255,255,0.5)',
+                background: 'transparent',
+                color: isAnimating ? 'rgba(255,255,255,0.5)' : 'white',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                borderRadius: `${Math.max(4, nodeSize * 0.01)}px`,
+                cursor: isAnimating ? 'not-allowed' : 'pointer',
+                transition: dreamNodeStyles.transitions.default
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSave();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              disabled={isSaveDisabled}
+              style={{
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`,
+                border: 'none',
+                background: isSaveDisabled 
+                  ? 'rgba(255,255,255,0.3)' 
+                  : nodeColors.border,
+                color: isSaveDisabled ? 'rgba(255,255,255,0.5)' : 'white',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                borderRadius: `${Math.max(4, nodeSize * 0.01)}px`,
+                cursor: isSaveDisabled ? 'not-allowed' : 'pointer',
+                transition: dreamNodeStyles.transitions.default
+              }}
+            >
+              {isAnimating ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+/**
+ * Validate media file types for DreamTalk (reused from ProtoNode3D)
+ */
+function isValidMediaFile(file: globalThis.File): boolean {
+  const validTypes = [
+    'image/png',
+    'image/jpeg', 
+    'image/jpg',
+    'image/gif',
+    'image/webp',
+    'video/mp4',
+    'video/webm'
+  ];
+  
+  return validTypes.includes(file.type);
+}
