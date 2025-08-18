@@ -26,6 +26,13 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize services
     this.initializeServices();
     
+    // Auto-generate mock relationships if not present (ensures deterministic behavior)
+    const store = useInterBrainStore.getState();
+    if (!store.mockRelationshipData) {
+      console.log('Generating initial mock relationships for deterministic behavior...');
+      store.generateMockRelationships();
+    }
+    
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     

@@ -449,9 +449,16 @@ export const useInterBrainStore = create<InterBrainState>()(
       const sourceType = i % 3 !== 0 ? 'dream' : 'dreamer';
       const sourceId = `mock-${sourceType}-${i}`;
       
-      // Use deterministic pattern for consistent relationships
-      const stepSizes = [1, 3, 7, 11, 13];
-      const maxConnections = Math.min(5, Math.floor(nodeCount / 4));
+      // Use deterministic pattern for consistent relationships with more variety
+      const stepSizes = [1, 2, 3, 5, 7, 11, 13, 17, 19];
+      
+      // Create more diversity in connection counts based on node index
+      const baseConnections = 2;
+      const variabilityFactor = ((i * 13) % 17) / 17; // 0 to 1, varies by node
+      const maxConnections = Math.min(
+        Math.floor(nodeCount * 0.8), // Up to 80% of opposite-type nodes
+        baseConnections + Math.floor(variabilityFactor * Math.min(25, nodeCount - baseConnections))
+      );
       
       for (let j = 0; j < Math.min(stepSizes.length, maxConnections); j++) {
         const step = stepSizes[j];

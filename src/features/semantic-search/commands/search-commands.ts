@@ -20,7 +20,8 @@ export function registerSearchCommands(plugin: Plugin, uiService: UIService): vo
         const { semanticSearchService } = await import('../services/semantic-search-service');
         
         const results = await semanticSearchService.searchByText(query, {
-          maxResults: 10,
+          maxResults: 36, // Honeycomb layout capacity
+          similarityThreshold: 0.50, // 50% similarity minimum for more relevant results
           includeSnippets: true
         });
         
@@ -84,7 +85,8 @@ export function registerSearchCommands(plugin: Plugin, uiService: UIService): vo
         const { semanticSearchService } = await import('../services/semantic-search-service');
         
         const results = await semanticSearchService.findSimilarNodes(selectedNode, {
-          maxResults: 10,
+          maxResults: 36, // Honeycomb layout capacity
+          similarityThreshold: 0.50, // 50% similarity minimum for more relevant results
           includeSnippets: true
         });
         
@@ -127,6 +129,26 @@ export function registerSearchCommands(plugin: Plugin, uiService: UIService): vo
       } finally {
         loadingNotice.hide();
       }
+    }
+  });
+
+  // Clear Search Results
+  plugin.addCommand({
+    id: 'clear-search',
+    name: 'Clear Search Results',
+    callback: () => {
+      const store = useInterBrainStore.getState();
+      
+      if (store.spatialLayout !== 'search' || store.searchResults.length === 0) {
+        uiService.showWarning('No active search to clear');
+        return;
+      }
+      
+      console.log('Clearing search results and returning to constellation');
+      store.setSearchResults([]);
+      store.setSpatialLayout('constellation');
+      
+      uiService.showSuccess('Search cleared - returned to constellation');
     }
   });
 }

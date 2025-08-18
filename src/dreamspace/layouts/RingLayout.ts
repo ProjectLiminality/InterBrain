@@ -33,57 +33,37 @@ export interface RingLayoutConfig {
   maxOuterConnections: number;
 }
 
-/**
- * Calculate perspective-corrected distances for visual scaling
- * Each ring should appear progressively smaller in a visually pleasing way
- */
-export function calculatePerspectiveCorrectedDistances(
-  baseDistance: number,
-  scalingFactor: number = 0.7  // Each ring appears 70% the size of the previous one
-): [number, number, number] {
-  const ring1Distance = baseDistance;
-  // For ring2 to appear 70% the size, it needs to be 1/0.7 = 1.43x further away
-  const ring2Distance = Math.round(ring1Distance / scalingFactor);
-  // For ring3 to appear 70% the size of ring2, it needs to be further yet
-  const ring3Distance = Math.round(ring2Distance / scalingFactor);
-  
-  return [ring1Distance, ring2Distance, ring3Distance];
-}
 
-/**
- * Calculate world-space radii that account for perspective distortion
- * Outer rings need larger radii to maintain visual spacing
- */
-export function calculatePerspectiveCorrectedRadii(
-  baseRadius: number,
-  distances: [number, number, number]
-): [number, number, number] {
-  const [ring1Distance, ring2Distance, ring3Distance] = distances;
-  const baseDistance = ring1Distance;
-  
-  // Radius needs to scale proportionally with distance to maintain visual size
-  const ring1Radius = baseRadius;
-  const ring2Radius = Math.round(baseRadius * (ring2Distance / baseDistance));
-  const ring3Radius = Math.round(baseRadius * (ring3Distance / baseDistance));
-  
-  return [ring1Radius, ring2Radius, ring3Radius];
-}
+// Raw ring layout values - direct control for easy iteration
+const CENTER_DISTANCE = 50;
 
-// Calculate perspective-corrected values
-const PERSPECTIVE_CORRECTED_DISTANCES = calculatePerspectiveCorrectedDistances(100, 0.75); // 75% size scaling
-const PERSPECTIVE_CORRECTED_RADII = calculatePerspectiveCorrectedRadii(60, PERSPECTIVE_CORRECTED_DISTANCES);
+// Ring 1 (6 nodes)
+const RING1_DISTANCE = 100;
+const RING1_RADIUS = 40;
 
-// Log the calculated values for reference during development
-console.log('Ring Layout: Perspective-corrected distances:', PERSPECTIVE_CORRECTED_DISTANCES);
-console.log('Ring Layout: Perspective-corrected radii:', PERSPECTIVE_CORRECTED_RADII);
+// Ring 2 (12 nodes) 
+const RING2_DISTANCE = 200;
+const RING2_RADIUS = 125;
+
+// Ring 3 (18 nodes)
+const RING3_DISTANCE = 450;
+const RING3_RADIUS = 335;
+
+// Direct arrays - no calculations, just raw values
+const RAW_DISTANCES: [number, number, number] = [RING1_DISTANCE, RING2_DISTANCE, RING3_DISTANCE];
+const RAW_RADII: [number, number, number] = [RING1_RADIUS, RING2_RADIUS, RING3_RADIUS];
+
+// Log the values for reference during development
+console.log('Ring Layout: Raw distances:', RAW_DISTANCES);
+console.log('Ring Layout: Raw radii:', RAW_RADII);
 
 /**
  * Default configuration for ring layout positioning
  */
 export const DEFAULT_RING_CONFIG: RingLayoutConfig = {
-  centerDistance: 50,                      // Close to camera = large visual size
-  ringDistances: PERSPECTIVE_CORRECTED_DISTANCES,  // Ring 1, 2, 3 distances (perspective corrected)
-  ringRadii: PERSPECTIVE_CORRECTED_RADII,          // Ring 1, 2, 3 radii in world space
+  centerDistance: CENTER_DISTANCE,         // Center node distance
+  ringDistances: RAW_DISTANCES,           // Ring distances - direct values
+  ringRadii: RAW_RADII,                   // Ring radii - direct values  
   maxActiveNodes: 36,                      // 6 + 12 + 18 = 36 total
   outerCircleDistance: 600,                // Far distance = hidden buffer
   outerCircleRadius: 600,                  // Large radius for outer buffer
@@ -124,7 +104,7 @@ export interface RingLayoutPositions {
 
 /**
  * Calculate ring layout positions for a given center node or ordered node list
- * Supports both liminal web mode (with center) and search mode (no center)
+ * Uses precise 42-node coordinate system with boolean masking
  */
 export function calculateRingLayoutPositions(
   focusedNodeId: string | null,
@@ -150,14 +130,76 @@ export function calculateRingLayoutPositions(
   
   // Limit to max active nodes (36 = 6+12+18)
   const limitedNodes = orderedNodes.slice(0, config.maxActiveNodes);
+  const totalNodes = limitedNodes.length;
   
-  // Distribute nodes across rings based on count
-  const { ring1, ring2, ring3 } = distributeNodesAcrossRings(limitedNodes);
+  // Map nodes to their positions
+  const nodePositions: Array<{ nodeId: string; position: [number, number, number] }> = [];
   
-  // Calculate positions for each ring
-  const ring1Positions = calculateHexagonalRingPositions(6, config.ringRadii[0], -config.ringDistances[0]);
-  const ring2Positions = calculateHexagonalRingPositions(12, config.ringRadii[1], -config.ringDistances[1]);
-  const ring3Positions = calculateHexagonalRingPositions(18, config.ringRadii[2], -config.ringDistances[2]);
+  if (totalNodes <= 6) {
+    // For 1-6 nodes: Use direct equidistant angle calculation (like HTML visualizer)
+    const ring1Count = totalNodes;
+    
+    // Original Ring 1 logic with proper rotation
+    let startAngle = -Math.PI / 2; // Default: start at top (point up)
+    if (ring1Count === 6) {
+      startAngle = -Math.PI / 2 + Math.PI / 6; // Rotate by 30° (flat edge at top)
+    }
+    
+    for (let i = 0; i < ring1Count; i++) {
+      const angle = (i / ring1Count) * 2 * Math.PI + startAngle;
+      const x = RAW_RADII[0] * Math.cos(angle);
+      const y = RAW_RADII[0] * Math.sin(angle);
+      // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+      nodePositions.push({
+        nodeId: limitedNodes[i].id,
+        position: [x, -y, -RAW_DISTANCES[0]]
+      });
+    }
+  } else {
+    // For 7+ nodes: Use precise coordinate system with boolean masking
+    const allPositions = generateAll42StaticPositions();
+    const activeMask = getActiveMask(totalNodes);
+    
+    let nodeIndex = 0;
+    for (let i = 0; i < 42 && nodeIndex < totalNodes; i++) {
+      if (activeMask[i]) {
+        nodePositions.push({
+          nodeId: limitedNodes[nodeIndex].id,
+          position: allPositions[i]
+        });
+        nodeIndex++;
+      }
+    }
+  }
+  
+  // Separate nodes into rings based on approach used
+  const ring1Nodes: Array<{ nodeId: string; position: [number, number, number] }> = [];
+  const ring2Nodes: Array<{ nodeId: string; position: [number, number, number] }> = [];
+  const ring3Nodes: Array<{ nodeId: string; position: [number, number, number] }> = [];
+  
+  if (totalNodes <= 6) {
+    // For 1-6 nodes: All nodes go to ring1 (they're all using Ring 1 positions)
+    ring1Nodes.push(...nodePositions);
+  } else {
+    // For 7+ nodes: Use mask-based ring separation
+    const activeMask = getActiveMask(totalNodes);
+    
+    for (let i = 0; i < nodePositions.length; i++) {
+      const maskIndex = activeMask.findIndex((active, idx) => {
+        if (!active) return false;
+        const activeUpToHere = activeMask.slice(0, idx + 1).filter(Boolean).length;
+        return activeUpToHere === i + 1;
+      });
+      
+      if (maskIndex < 6) {
+        ring1Nodes.push(nodePositions[i]);
+      } else if (maskIndex < 18) {
+        ring2Nodes.push(nodePositions[i]);
+      } else {
+        ring3Nodes.push(nodePositions[i]);
+      }
+    }
+  }
   
   // Calculate center position (only for liminal web mode)
   const centerNode = focusedNodeId ? {
@@ -176,116 +218,336 @@ export function calculateRingLayoutPositions(
   
   return {
     centerNode,
-    ring1Nodes: ring1.map((node, index) => ({
-      nodeId: node.id,
-      position: ring1Positions[index] || [0, 0, -config.ringDistances[0]]
-    })),
-    ring2Nodes: ring2.map((node, index) => ({
-      nodeId: node.id,
-      position: ring2Positions[index] || [0, 0, -config.ringDistances[1]]
-    })),
-    ring3Nodes: ring3.map((node, index) => ({
-      nodeId: node.id,
-      position: ring3Positions[index] || [0, 0, -config.ringDistances[2]]
-    })),
+    ring1Nodes,
+    ring2Nodes,
+    ring3Nodes,
     sphereNodes
   };
 }
 
-/**
- * Distribute nodes across the three hexagonal rings based on priority order
- * Ring 1: 6 nodes, Ring 2: 12 nodes, Ring 3: 18 nodes
- */
-function distributeNodesAcrossRings(
-  orderedNodes: Array<{ id: string; name?: string; type?: string }>
-): {
-  ring1: Array<{ id: string; name?: string; type?: string }>;
-  ring2: Array<{ id: string; name?: string; type?: string }>;
-  ring3: Array<{ id: string; name?: string; type?: string }>;
-} {
-  const ring1 = orderedNodes.slice(0, 6);
-  const ring2 = orderedNodes.slice(6, 18);  // 6-17 = 12 nodes
-  const ring3 = orderedNodes.slice(18, 36); // 18-35 = 18 nodes
-  
-  return { ring1, ring2, ring3 };
-}
+// REMOVED: distributeNodesAcrossRings function is no longer needed
+// The 42-node coordinate system with boolean masking handles distribution automatically
 
 /**
- * Calculate hexagonal ring positions with proper node count distribution
- * Supports 6, 12, and 18 node patterns for rings 1, 2, and 3
+ * Generate all 42 static node positions using precise coordinate system
+ * Preserves existing 3D perspective framework with enhanced positioning logic
+ * Note: Y coordinates are negated to convert from HTML canvas coordinates (Y-down) to 3D coordinates (Y-up)
  */
-function calculateHexagonalRingPositions(
-  maxNodes: number,
-  radius: number,
-  zDistance: number
-): [number, number, number][] {
-  if (maxNodes === 0) return [];
+function generateAll42StaticPositions(): [number, number, number][] {
+  const allPositions: [number, number, number][] = [];
   
-  const positions: [number, number, number][] = [];
+  // Ring 1: Nodes 1-6 (same as existing logic with 30° rotation for flat edge at top)
+  const ring1StartAngle = -Math.PI / 2 + Math.PI / 6;
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * 2 * Math.PI + ring1StartAngle;
+    const x = RAW_RADII[0] * Math.cos(angle);
+    const y = RAW_RADII[0] * Math.sin(angle);
+    // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+    allPositions.push([x, -y, -RAW_DISTANCES[0]]); // Use existing Ring 1 distance
+  }
   
-  if (maxNodes <= 6) {
-    // Ring 1: Simple hexagon (6 nodes max)
-    for (let i = 0; i < Math.min(maxNodes, 6); i++) {
-      const angle = (i / 6) * 2 * Math.PI;
-      const x = radius * Math.cos(angle);
-      const y = radius * Math.sin(angle);
-      positions.push([x, y, zDistance]);
-    }
-  } else if (maxNodes <= 12) {
-    // Ring 2: Double hexagon pattern (12 nodes max)
-    // 6 nodes on main vertices, 6 nodes on edge midpoints
-    for (let i = 0; i < Math.min(maxNodes, 12); i++) {
-      let angle: number;
-      let currentRadius: number;
-      
-      if (i < 6) {
-        // Main hexagon vertices
-        angle = (i / 6) * 2 * Math.PI;
-        currentRadius = radius;
-      } else {
-        // Edge midpoints (offset by 30 degrees)
-        angle = ((i - 6) / 6) * 2 * Math.PI + Math.PI / 6;
-        currentRadius = radius * 0.866; // Slightly closer to center
-      }
-      
-      const x = currentRadius * Math.cos(angle);
-      const y = currentRadius * Math.sin(angle);
-      positions.push([x, y, zDistance]);
-    }
-  } else {
-    // Ring 3: Triple hexagon pattern (18 nodes max)
-    // 6 vertices + 6 edge midpoints + 6 inner ring
-    for (let i = 0; i < Math.min(maxNodes, 18); i++) {
-      let angle: number;
-      let currentRadius: number;
-      
-      if (i < 6) {
-        // Outer hexagon vertices
-        angle = (i / 6) * 2 * Math.PI;
-        currentRadius = radius;
-      } else if (i < 12) {
-        // Edge midpoints
-        angle = ((i - 6) / 6) * 2 * Math.PI + Math.PI / 6;
-        currentRadius = radius * 0.866;
-      } else {
-        // Inner ring
-        angle = ((i - 12) / 6) * 2 * Math.PI;
-        currentRadius = radius * 0.5;
-      }
-      
-      const x = currentRadius * Math.cos(angle);
-      const y = currentRadius * Math.sin(angle);
-      positions.push([x, y, zDistance]);
+  // Ring 2: Nodes 7-18 (6 edge positions + 6 corner positions)
+  const ring2EdgeRadius = RAW_RADII[1] * Math.cos(Math.PI / 6); // cos(30°) = √3/2 ≈ 0.866
+  
+  // First 6 nodes (7-12): edge positions (reduced radius)
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * 2 * Math.PI - Math.PI / 2;
+    const x = ring2EdgeRadius * Math.cos(angle);
+    const y = ring2EdgeRadius * Math.sin(angle);
+    // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+    allPositions.push([x, -y, -RAW_DISTANCES[1]]); // Use existing Ring 2 distance
+  }
+  
+  // Next 6 nodes (13-18): corner positions (full radius)
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * 2 * Math.PI - Math.PI / 2 + Math.PI / 6;
+    const x = RAW_RADII[1] * Math.cos(angle);
+    const y = RAW_RADII[1] * Math.sin(angle);
+    // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+    allPositions.push([x, -y, -RAW_DISTANCES[1]]); // Use existing Ring 2 distance
+  }
+  
+  // Ring 3: Nodes 19-42 (6 vertices + 18 edge nodes using path parameterization)
+  const hexagonAngles = [30, 90, 150, 210, 270, 330];
+  const baseRadius = RAW_RADII[2];
+  const vertexPositions: [number, number][] = [];
+  
+  // Calculate vertex positions (19-24)
+  for (let i = 0; i < 6; i++) {
+    const angleDegrees = hexagonAngles[i];
+    const angleRadians = (angleDegrees - 90) * Math.PI / 180;
+    const x = baseRadius * Math.cos(angleRadians);
+    const y = baseRadius * Math.sin(angleRadians);
+    vertexPositions.push([x, y]);
+    // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+    allPositions.push([x, -y, -RAW_DISTANCES[2]]); // Use existing Ring 3 distance
+  }
+  
+  // Path parameterization helper function
+  const lerpPath = (pointA: [number, number], pointB: [number, number], t: number): [number, number] => [
+    pointA[0] + t * (pointB[0] - pointA[0]),
+    pointA[1] + t * (pointB[1] - pointA[1])
+  ];
+  
+  // Add edge nodes using path parameterization (25-36: t = 1/3, 2/3)
+  for (let edgeIndex = 0; edgeIndex < 6; edgeIndex++) {
+    const startVertex = vertexPositions[edgeIndex];
+    const endVertex = vertexPositions[(edgeIndex + 1) % 6];
+    
+    for (let nodeOnEdge = 0; nodeOnEdge < 2; nodeOnEdge++) {
+      const t = (nodeOnEdge + 1) / 3; // t = 1/3, 2/3
+      const [worldX, worldY] = lerpPath(startVertex, endVertex, t);
+      // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+      allPositions.push([worldX, -worldY, -RAW_DISTANCES[2]]);
     }
   }
   
-  return positions;
+  // Add 6 additional edge midpoint nodes (37-42: t = 0.5)
+  for (let edgeIndex = 0; edgeIndex < 6; edgeIndex++) {
+    const startVertex = vertexPositions[edgeIndex];
+    const endVertex = vertexPositions[(edgeIndex + 1) % 6];
+    
+    const [worldX, worldY] = lerpPath(startVertex, endVertex, 0.5); // Exact midpoint
+    // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+    allPositions.push([worldX, -worldY, -RAW_DISTANCES[2]]);
+  }
+  
+  return allPositions;
 }
+
+/**
+ * Generate boolean mask for active nodes based on total node count
+ * Implements precise node activation patterns from honeycomb coordinate system
+ */
+function getActiveMask(totalNodes: number): boolean[] {
+  const mask = new Array(42).fill(false);
+  
+  // Ring 1: Equidistant placement for counts 1-6 (matches HTML visualizer logic)
+  if (totalNodes >= 1) {
+    const ring1Count = Math.min(totalNodes, 6);
+    
+    // For equidistant placement, we need to map logical positions to physical indices
+    // Generate equidistant indices for Ring 1
+    const equidistantIndices: number[] = [];
+    
+    if (ring1Count === 1) {
+      equidistantIndices.push(0); // Top position only
+    } else if (ring1Count === 2) {
+      equidistantIndices.push(0, 3); // Top and bottom
+    } else if (ring1Count === 3) {
+      equidistantIndices.push(0, 2, 4); // Every other position for triangle
+    } else if (ring1Count === 4) {
+      equidistantIndices.push(0, 1, 3, 4); // Skip position 2 and 5 for even distribution
+    } else if (ring1Count === 5) {
+      equidistantIndices.push(0, 1, 2, 3, 4); // All except position 5
+    } else if (ring1Count === 6) {
+      equidistantIndices.push(0, 1, 2, 3, 4, 5); // All positions
+    }
+    
+    // Activate the equidistant indices
+    equidistantIndices.forEach(index => {
+      mask[index] = true;
+    });
+  }
+  
+  // If totalNodes <= 6, we're done
+  if (totalNodes <= 6) return mask;
+  
+  // Helper functions for Ring 2 and Ring 3 activation
+  const activateRing2 = (mask: boolean[]) => {
+    for (let i = 6; i < 18; i++) {
+      mask[i] = true; // Nodes 7-18 (indices 6-17)
+    }
+  };
+  
+  const activateRing3Nodes = (mask: boolean[], nodeNumbers: number[]) => {
+    nodeNumbers.forEach(nodeNum => {
+      mask[nodeNum - 1] = true; // Convert 1-based to 0-based indexing
+    });
+  };
+  
+  // Ring 2 specific patterns (nodes 7-18)
+  if (totalNodes === 7) {
+    mask[6] = true; // Node 7
+  } else if (totalNodes === 8) {
+    mask[6] = true;  // Node 7
+    mask[9] = true;  // Node 10
+  } else if (totalNodes === 9) {
+    mask[6] = true;  // Node 7
+    mask[8] = true;  // Node 9
+    mask[10] = true; // Node 11
+  } else if (totalNodes === 10) {
+    mask[11] = true; // Node 12
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[10] = true; // Node 11
+  } else if (totalNodes === 11) {
+    mask[6] = true;  // Node 7
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+  } else if (totalNodes === 12) {
+    mask[6] = true;  // Node 7
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[9] = true;  // Node 10
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+  } else if (totalNodes === 13) {
+    mask[6] = true;  // Node 7
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[14] = true; // Node 15
+    mask[15] = true; // Node 16
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+  } else if (totalNodes === 14) {
+    mask[17] = true; // Node 18
+    mask[12] = true; // Node 13
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[14] = true; // Node 15
+    mask[15] = true; // Node 16
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+  } else if (totalNodes === 15) {
+    mask[17] = true; // Node 18
+    mask[12] = true; // Node 13
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[14] = true; // Node 15
+    mask[15] = true; // Node 16
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+    mask[6] = true;  // Node 7
+  } else if (totalNodes === 16) {
+    mask[17] = true; // Node 18
+    mask[12] = true; // Node 13
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[14] = true; // Node 15
+    mask[15] = true; // Node 16
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+    mask[6] = true;  // Node 7
+    mask[9] = true;  // Node 10
+  } else if (totalNodes === 17) {
+    mask[17] = true; // Node 18
+    mask[12] = true; // Node 13
+    mask[7] = true;  // Node 8
+    mask[8] = true;  // Node 9
+    mask[14] = true; // Node 15
+    mask[15] = true; // Node 16
+    mask[10] = true; // Node 11
+    mask[11] = true; // Node 12
+    mask[6] = true;  // Node 7
+    mask[16] = true; // Node 17
+    mask[13] = true; // Node 14
+  } else if (totalNodes === 18) {
+    activateRing2(mask);
+  }
+  // Ring 3 specific patterns (Ring 1 + Ring 2 always fully active for 19+)
+  else if (totalNodes === 19) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [42]);
+  } else if (totalNodes === 20) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [42, 39]);
+  } else if (totalNodes === 21) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [42, 38, 40]);
+  } else if (totalNodes === 22) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [37, 38, 40, 41]);
+  } else if (totalNodes === 23) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [37, 38, 40, 41, 42]);
+  } else if (totalNodes === 24) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [37, 38, 39, 40, 41, 42]); // Edge midpoints (t=0.5) - one per hexagon edge
+  } else if (totalNodes === 25) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [37, 38, 40, 41, 42, 29, 30]);
+  } else if (totalNodes === 26) {
+    activateRing2(mask);
+    activateRing3Nodes(mask, [37, 38, 40, 41, 29, 30, 35, 36]);
+  } else if (totalNodes >= 27 && totalNodes <= 36) {
+    // Complex patterns for 27-36 nodes - preserve explicit logic for geometric clarity
+    activateRing2(mask);
+    
+    if (totalNodes === 27) {
+      // Exact pattern from HTML visualizer: 9 Ring 3 nodes
+      // First, explicitly clear all Ring 3 positions to prevent contamination
+      for (let i = 18; i < 42; i++) { 
+        mask[i] = false; 
+      }
+      
+      // Now set ONLY the 9 nodes we want for 27-node pattern
+      mask[36] = true; // Node 37 - edge 0 midpoint (t=0.5)
+      mask[40] = true; // Node 41 - edge 4 midpoint (t=0.5)
+      mask[34] = true; // Node 35 - edge 5, t=2/3
+      mask[35] = true; // Node 36 - edge 5, t=2/3 (completing the pair)
+      mask[38] = true; // Node 39 - edge 2 midpoint (t=0.5) - BOTTOM NODE
+      mask[26] = true; // Node 27 - edge 1, t=1/3
+      mask[27] = true; // Node 28 - edge 1, t=2/3
+      mask[30] = true; // Node 31 - edge 3, t=1/3
+      mask[31] = true; // Node 32 - edge 3, t=2/3
+    } else if (totalNodes === 28) {
+      mask[36] = true; mask[40] = true; mask[34] = true; mask[35] = true;
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[28] = true;
+    } else if (totalNodes === 29) {
+      mask[34] = true; mask[35] = true; mask[26] = true; mask[27] = true;
+      mask[30] = true; mask[31] = true;
+    } else if (totalNodes === 30) {
+      mask[34] = true; mask[35] = true; mask[26] = true; mask[27] = true;
+      mask[30] = true; mask[31] = true; mask[32] = true; mask[33] = true;
+      mask[24] = true;
+    } else if (totalNodes === 31) {
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[32] = true; mask[33] = true; mask[24] = true; mask[25] = true;
+    } else if (totalNodes === 32) {
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[32] = true; mask[33] = true; mask[24] = true; mask[25] = true;
+      mask[23] = true; mask[41] = true; mask[18] = true; // Node 24, 42, 19
+      mask[20] = true; mask[38] = true; mask[21] = true; // Node 21, 39, 22
+    } else if (totalNodes === 33) {
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[32] = true; mask[33] = true; mask[24] = true; mask[25] = true;
+      mask[23] = true; mask[34] = true; mask[35] = true;
+    } else if (totalNodes === 34) {
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[32] = true; mask[33] = true; mask[24] = true; mask[25] = true;
+      mask[23] = true; mask[18] = true; // Node 27-28, 31-34, 25-26, 24, 19
+      mask[20] = true; mask[21] = true; // Node 21, 22
+      mask[34] = true; mask[35] = true; // Node 35, 36
+      mask[29] = true; mask[28] = true; // Node 30, 29
+    } else if (totalNodes === 35) {
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[32] = true; mask[33] = true; mask[24] = true; mask[25] = true;
+      mask[23] = true; mask[18] = true; // Node 27-28, 31-34, 25-26, 24, 19
+      mask[20] = true; mask[21] = true; // Node 21, 22
+      mask[34] = true; mask[35] = true; // Node 35, 36
+      // Note: Nodes 29, 30 (indices 28, 29) are explicitly OFF
+      mask[38] = true; mask[22] = true; mask[19] = true; // Node 39, 23, 20
+    } else if (totalNodes === 36) {
+      mask[26] = true; mask[27] = true; mask[30] = true; mask[31] = true;
+      mask[32] = true; mask[33] = true; mask[24] = true; mask[25] = true;
+      mask[23] = true; mask[18] = true; mask[29] = true; mask[28] = true;
+    }
+  }
+  
+  return mask;
+}
+
+// REMOVED: calculateHexagonalRingPositions function is no longer needed
+// The main functions now directly use generateAll42StaticPositions and getActiveMask
 
 
 /**
  * Calculate ring layout positions for search results (no center node)
- * Takes an ordered list of search result nodes and distributes them across rings
+ * Uses precise 42-node coordinate system with boolean masking
  */
 export function calculateRingLayoutPositionsForSearch(
   orderedNodes: Array<{ id: string; name?: string; type?: string }>,
@@ -294,16 +556,78 @@ export function calculateRingLayoutPositionsForSearch(
 ): RingLayoutPositions {
   // Limit to max active nodes (36 = 6+12+18)
   const limitedNodes = orderedNodes.slice(0, config.maxActiveNodes);
+  const totalNodes = limitedNodes.length;
   
-  // Distribute nodes across rings based on count
-  const { ring1, ring2, ring3 } = distributeNodesAcrossRings(limitedNodes);
+  // Map nodes to their positions
+  const nodePositions: Array<{ nodeId: string; position: [number, number, number] }> = [];
   
-  // Calculate positions for each ring
-  const ring1Positions = calculateHexagonalRingPositions(6, config.ringRadii[0], -config.ringDistances[0]);
-  const ring2Positions = calculateHexagonalRingPositions(12, config.ringRadii[1], -config.ringDistances[1]);
-  const ring3Positions = calculateHexagonalRingPositions(18, config.ringRadii[2], -config.ringDistances[2]);
+  if (totalNodes <= 6) {
+    // For 1-6 nodes: Use direct equidistant angle calculation (like HTML visualizer)
+    const ring1Count = totalNodes;
+    
+    // Original Ring 1 logic with proper rotation
+    let startAngle = -Math.PI / 2; // Default: start at top (point up)
+    if (ring1Count === 6) {
+      startAngle = -Math.PI / 2 + Math.PI / 6; // Rotate by 30° (flat edge at top)
+    }
+    
+    for (let i = 0; i < ring1Count; i++) {
+      const angle = (i / ring1Count) * 2 * Math.PI + startAngle;
+      const x = RAW_RADII[0] * Math.cos(angle);
+      const y = RAW_RADII[0] * Math.sin(angle);
+      // Negate Y to convert from screen coordinates (Y-down) to 3D coordinates (Y-up)
+      nodePositions.push({
+        nodeId: limitedNodes[i].id,
+        position: [x, -y, -RAW_DISTANCES[0]]
+      });
+    }
+  } else {
+    // For 7+ nodes: Use precise coordinate system with boolean masking
+    const allPositions = generateAll42StaticPositions();
+    const activeMask = getActiveMask(totalNodes);
+    
+    let nodeIndex = 0;
+    for (let i = 0; i < 42 && nodeIndex < totalNodes; i++) {
+      if (activeMask[i]) {
+        nodePositions.push({
+          nodeId: limitedNodes[nodeIndex].id,
+          position: allPositions[i]
+        });
+        nodeIndex++;
+      }
+    }
+  }
   
-  // No center node for search mode (leave center empty for future search query node)
+  // Separate nodes into rings based on approach used
+  const ring1Nodes: Array<{ nodeId: string; position: [number, number, number] }> = [];
+  const ring2Nodes: Array<{ nodeId: string; position: [number, number, number] }> = [];
+  const ring3Nodes: Array<{ nodeId: string; position: [number, number, number] }> = [];
+  
+  if (totalNodes <= 6) {
+    // For 1-6 nodes: All nodes go to ring1 (they're all using Ring 1 positions)
+    ring1Nodes.push(...nodePositions);
+  } else {
+    // For 7+ nodes: Use mask-based ring separation
+    const activeMask = getActiveMask(totalNodes);
+    
+    for (let i = 0; i < nodePositions.length; i++) {
+      const maskIndex = activeMask.findIndex((active, idx) => {
+        if (!active) return false;
+        const activeUpToHere = activeMask.slice(0, idx + 1).filter(Boolean).length;
+        return activeUpToHere === i + 1;
+      });
+      
+      if (maskIndex < 6) {
+        ring1Nodes.push(nodePositions[i]);
+      } else if (maskIndex < 18) {
+        ring2Nodes.push(nodePositions[i]);
+      } else {
+        ring3Nodes.push(nodePositions[i]);
+      }
+    }
+  }
+  
+  // No center node for search mode
   const centerNode = null;
   
   // All nodes that aren't search results stay on the sphere
@@ -313,18 +637,9 @@ export function calculateRingLayoutPositionsForSearch(
   
   return {
     centerNode,
-    ring1Nodes: ring1.map((node, index) => ({
-      nodeId: node.id,
-      position: ring1Positions[index] || [0, 0, -config.ringDistances[0]]
-    })),
-    ring2Nodes: ring2.map((node, index) => ({
-      nodeId: node.id,
-      position: ring2Positions[index] || [0, 0, -config.ringDistances[1]]
-    })),
-    ring3Nodes: ring3.map((node, index) => ({
-      nodeId: node.id,
-      position: ring3Positions[index] || [0, 0, -config.ringDistances[2]]
-    })),
+    ring1Nodes,
+    ring2Nodes,
+    ring3Nodes,
     sphereNodes
   };
 }

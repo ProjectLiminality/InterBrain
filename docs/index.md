@@ -13,6 +13,9 @@ Welcome to the comprehensive documentation for **InterBrain** - an innovative kn
 - [**Issue Hierarchy**](development/issue-hierarchy.md) - Project structure and relationships
 - [**Development Kanban**](development/kanban.md) - Refined development structure (51 items)
 
+### 🧮 Algorithms
+- [**Ring Layout Algorithm**](algorithms/ring-layout.md) - Honeycomb positioning system with interactive demo
+
 ## What is InterBrain?
 
 The InterBrain is evolving from a standalone Electron app to a native Obsidian plugin, ultimately forming the foundation for DreamOS - a decentralized, AI-powered operating system for collective sensemaking.

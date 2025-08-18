@@ -95,6 +95,10 @@ export default function DreamspaceCanvas() {
   // Layout state for controlling dynamic view scaling
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   
+  // Search results for search mode display
+  const searchResults = useInterBrainStore(state => state.searchResults);
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+  
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
   
@@ -202,6 +206,35 @@ export default function DreamspaceCanvas() {
     
     loadDynamicNodes();
   }, [dataMode]); // Re-run when data mode changes
+  
+  // React to spatial layout changes and trigger appropriate orchestrator methods
+  useEffect(() => {
+    if (!spatialOrchestratorRef.current) return;
+    
+    switch (spatialLayout) {
+      case 'search':
+        // Trigger search results display when switching to search mode
+        if (searchResults && searchResults.length > 0) {
+          console.log(`DreamspaceCanvas: Switching to search mode with ${searchResults.length} results`);
+          spatialOrchestratorRef.current.showSearchResults(searchResults);
+        }
+        break;
+        
+      case 'liminal-web':
+        // Trigger liminal web when a node is selected
+        if (selectedNode) {
+          console.log(`DreamspaceCanvas: Switching to liminal web mode for node: ${selectedNode.name}`);
+          spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
+        }
+        break;
+        
+      case 'constellation':
+        // Return to constellation
+        console.log('DreamspaceCanvas: Returning to constellation mode');
+        spatialOrchestratorRef.current.returnToConstellation();
+        break;
+    }
+  }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
   
   // Debug logging for creation state (removed excessive logging)
   
@@ -583,14 +616,22 @@ export default function DreamspaceCanvas() {
           background: '#000000'
         }}
         onPointerMissed={() => {
-          // Clicked on empty space - deselect any selected node and return to constellation
+          // Clicked on empty space - handle based on current spatial layout
           const store = useInterBrainStore.getState();
-          store.setSelectedNode(null);
-          console.log('Deselected all nodes (missed pointer)');
           
-          // Return to constellation via SpatialOrchestrator
-          if (spatialOrchestratorRef.current) {
-            spatialOrchestratorRef.current.returnToConstellation();
+          if (store.spatialLayout === 'search') {
+            // Clear search and return to constellation
+            console.log('Empty space clicked in search mode - clearing search');
+            store.setSearchResults([]);
+            store.setSpatialLayout('constellation');
+          } else if (store.spatialLayout === 'liminal-web') {
+            // Deselect and return to constellation
+            console.log('Empty space clicked in liminal web - deselecting node');
+            store.setSelectedNode(null);
+            store.setSpatialLayout('constellation');
+          } else {
+            // Already in constellation mode, just log
+            console.log('Empty space clicked in constellation mode');
           }
         }}
       >

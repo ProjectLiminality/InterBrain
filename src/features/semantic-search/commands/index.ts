@@ -4,6 +4,7 @@ import { UIService } from '../../../services/ui-service';
 import { registerOllamaCommands } from './ollama-commands';
 import { registerIndexingCommands } from './indexing-commands';
 import { registerSearchCommands } from './search-commands';
+import { registerTestSearchCommands } from './test-search-commands';
 
 /**
  * Register all semantic search related commands
@@ -16,6 +17,7 @@ export function registerSemanticSearchCommands(plugin: Plugin, uiService: UIServ
   registerOllamaCommands(plugin, uiService);
   registerIndexingCommands(plugin, uiService);
   registerSearchCommands(plugin, uiService);
+  registerTestSearchCommands(plugin, uiService);
   
   console.log('Semantic search commands registered successfully');
 }
@@ -24,5 +26,6 @@ export function registerSemanticSearchCommands(plugin: Plugin, uiService: UIServ
 export {
   registerOllamaCommands,
   registerIndexingCommands,
-  registerSearchCommands
+  registerSearchCommands,
+  registerTestSearchCommands
 };

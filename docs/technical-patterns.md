@@ -11,6 +11,7 @@ All patterns below have been successfully implemented in the Obsidian plugin wit
 - ✅ **Dynamic View Scaling**: Implemented with Apple Watch-style distance-based positioning in `DynamicViewScaling.ts`
 - ✅ **Virtual Trackball Rotation**: Google Earth-style rotation without gimbal lock (see below)
 - ✅ **Star-DreamNode Architecture**: Decoupled rendering system for performance optimization
+- ✅ **Honeycomb Ring Layout**: Mathematically precise 42-coordinate system for 1-36 nodes (Epic 5)
 
 ### New Pattern: Virtual Trackball Rotation
 
@@ -274,3 +275,52 @@ const emptyState = {
   transition: 'opacity 0.3s ease'
 };
 ```
+
+## Honeycomb Ring Layout Pattern (Epic 5)
+
+Implemented in Feature #280 to provide mathematically precise positioning for liminal web relationships and semantic search results. **[📊 Interactive Algorithm Demo](algorithms/ring-layout.md)**
+
+### Core Architecture
+
+```typescript
+// 42-coordinate system with intelligent selection patterns
+function generateAll42StaticPositions(): [number, number, number][] {
+  const allPositions: [number, number, number][] = [];
+  
+  // Ring 1: 6 nodes with 30° rotation for flat edge at top
+  const ring1StartAngle = -Math.PI / 2 + Math.PI / 6;
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * 2 * Math.PI + ring1StartAngle;
+    const x = RAW_RADII[0] * Math.cos(angle);
+    const y = RAW_RADII[0] * Math.sin(angle);
+    allPositions.push([x, -y, -RAW_DISTANCES[0]]);
+  }
+  // ... Ring 2 & Ring 3 implementation
+  return allPositions;
+}
+```
+
+### Boolean Mask System
+
+```typescript
+// Precise node activation for 7-36 nodes
+function getActiveMask(totalNodes: number): boolean[] {
+  const mask = new Array(42).fill(false);
+  
+  if (totalNodes <= 6) {
+    // Equidistant trigonometric placement
+    return generateEquidistantMask(totalNodes);
+  } else {
+    // Complex geometric patterns using coordinate selection
+    return generateGeometricMask(totalNodes);
+  }
+}
+```
+
+### Key Features
+
+- **Dual Approach**: Trigonometric for 1-6 nodes, coordinate system for 7-36
+- **Perfect Geometry**: Hexagonal patterns with golden ratio proportions  
+- **Visual Hierarchy**: Three distance-based rings (100, 200, 450 units)
+- **O(1) Performance**: Pre-computed static positions, zero recalculation
+- **Unified Algorithm**: Serves both liminal web and semantic search modes
