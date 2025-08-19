@@ -514,10 +514,10 @@ export default function DreamspaceCanvas() {
       
       // Add small delay to ensure new DreamNode renders before hiding search node (same as ProtoNode)
       globalThis.setTimeout(() => {
-        // Dismiss search interface
+        // Dismiss search interface (just like ProtoNode calls completeCreation())
         const store = useInterBrainStore.getState();
         store.setSearchActive(false);
-        store.setSpatialLayout('constellation');
+        // Note: Don't change spatial layout - let it remain as-is like ProtoNode does
         
         // Show success message
         uiService.showSuccess(`Created DreamNode: "${query}"`);
