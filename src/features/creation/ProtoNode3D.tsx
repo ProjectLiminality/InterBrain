@@ -318,6 +318,15 @@ export default function ProtoNode3D({
                   pointerEvents: 'auto',
                   opacity: animatedUIOpacity // Fade out drag-drop text with other UI
                 }}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent event bubbling
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation(); // Prevent rotation controls from capturing
+                  e.preventDefault();
+                }}
               >
                 <div
                   style={{
@@ -328,16 +337,8 @@ export default function ProtoNode3D({
                     color: dreamNodeStyles.colors.text.secondary,
                     fontSize: '24px', // Double the size
                     textAlign: 'center',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent event bubbling
-                    e.preventDefault();
-                    fileInputRef.current?.click();
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation(); // Prevent rotation controls from capturing
-                    e.preventDefault();
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none' // Let parent handle clicks
                   }}
                 >
                   <div>Drop image here</div>
@@ -359,8 +360,13 @@ export default function ProtoNode3D({
                 justifyContent: 'center',
                 background: 'rgba(0, 0, 0, 0.7)',
                 borderRadius: '50%',
-                pointerEvents: 'none', // Allow clicks through to underlying elements
-                opacity: (previewMedia || protoNode.dreamTalkFile) ? animatedUIOpacity : 1.0 // Only fade out if there's media behind
+                pointerEvents: 'auto', // Enable pointer events for clicking
+                opacity: (previewMedia || protoNode.dreamTalkFile) ? animatedUIOpacity : 1.0, // Only fade out if there's media behind
+                cursor: 'text' // Show text cursor
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                titleInputRef.current?.focus();
               }}
             >
               <input
@@ -381,10 +387,13 @@ export default function ProtoNode3D({
                   width: '80%',
                   height: `${Math.max(40, nodeSize * 0.08)}px`, // Explicit height for proper text display
                   padding: `${Math.max(8, nodeSize * 0.02)}px`, // Scale padding with node size for proper text height
+                  lineHeight: '1.4', // Fix baseline clipping
                   pointerEvents: 'auto', // Re-enable pointer events for the input itself
                   boxShadow: 'none', // Remove any potential box shadow
-                  borderRadius: '0' // Remove any border radius that might show an outline
+                  borderRadius: '0', // Remove any border radius that might show an outline
+                  cursor: 'text'
                 }}
+                onClick={(e) => e.stopPropagation()} // Prevent double handling
               />
             </div>
             

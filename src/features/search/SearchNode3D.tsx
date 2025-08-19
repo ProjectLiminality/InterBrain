@@ -337,6 +337,15 @@ export default function SearchNode3D({
                   pointerEvents: 'auto',
                   opacity: animatedUIOpacity // Fade in with other UI
                 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
               >
                 <div
                   style={{
@@ -347,16 +356,8 @@ export default function SearchNode3D({
                     color: dreamNodeStyles.colors.text.secondary,
                     fontSize: '24px',
                     textAlign: 'center',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    fileInputRef.current?.click();
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none' // Let parent handle clicks
                   }}
                 >
                   <div>Drop image here</div>
@@ -378,8 +379,13 @@ export default function SearchNode3D({
                 justifyContent: 'center',
                 background: 'rgba(0, 0, 0, 0.7)',
                 borderRadius: '50%',
-                pointerEvents: 'none',
-                opacity: (previewMedia || dreamTalkFile) ? animatedUIOpacity : 1.0
+                pointerEvents: 'auto', // Enable pointer events for clicking
+                opacity: (previewMedia || dreamTalkFile) ? animatedUIOpacity : 1.0,
+                cursor: 'text' // Show text cursor
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                titleInputRef.current?.focus();
               }}
             >
               <input
@@ -399,10 +405,13 @@ export default function SearchNode3D({
                   width: '80%',
                   height: `${Math.max(40, nodeSize * 0.08)}px`,
                   padding: `${Math.max(8, nodeSize * 0.02)}px`,
+                  lineHeight: '1.4', // Fix baseline clipping
                   pointerEvents: 'auto',
                   boxShadow: 'none',
-                  borderRadius: '0'
+                  borderRadius: '0',
+                  cursor: 'text'
                 }}
+                onClick={(e) => e.stopPropagation()} // Prevent double handling
               />
             </div>
             

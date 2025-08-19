@@ -390,6 +390,13 @@ export default function DreamspaceCanvas() {
   const handleNodeClick = (node: DreamNode) => {
     // Update selected node in store
     const store = useInterBrainStore.getState();
+    
+    // If we're in search mode, properly exit search interface when clicking a result
+    if (store.spatialLayout === 'search' && store.searchInterface.isActive) {
+      console.log('Clicking search result - exiting search mode cleanly');
+      store.setSearchActive(false); // This clears search query and results
+    }
+    
     store.setSelectedNode(node);
     // Trigger focused layout via SpatialOrchestrator
     if (spatialOrchestratorRef.current) {
