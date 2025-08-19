@@ -9,6 +9,8 @@ import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import ProtoNode3D from '../features/creation/ProtoNode3D';
+import SearchNode3D from '../features/search/SearchNode3D';
+import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -98,6 +100,9 @@ export default function DreamspaceCanvas() {
   // Search results for search mode display
   const searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
+  
+  // Search interface state
+  const searchInterface = useInterBrainStore(state => state.searchInterface);
   
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
@@ -212,13 +217,20 @@ export default function DreamspaceCanvas() {
     if (!spatialOrchestratorRef.current) return;
     
     switch (spatialLayout) {
-      case 'search':
-        // Trigger search results display when switching to search mode
+      case 'search': {
+        // Search mode handles both search interface and search results display
+        const store = useInterBrainStore.getState();
         if (searchResults && searchResults.length > 0) {
-          console.log(`DreamspaceCanvas: Switching to search mode with ${searchResults.length} results`);
+          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
           spatialOrchestratorRef.current.showSearchResults(searchResults);
+        } else if (store.searchInterface.isActive) {
+          console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
+          // Use liminal web architecture: move all constellation nodes to sphere surface
+          // SearchNode acts like the focused node at center position [0, 0, -50]
+          spatialOrchestratorRef.current.moveAllToSphereForSearch();
         }
         break;
+      }
         
       case 'liminal-web':
         // Trigger liminal web when a node is selected
@@ -378,6 +390,13 @@ export default function DreamspaceCanvas() {
   const handleNodeClick = (node: DreamNode) => {
     // Update selected node in store
     const store = useInterBrainStore.getState();
+    
+    // If we're in search mode, properly exit search interface when clicking a result
+    if (store.spatialLayout === 'search' && store.searchInterface.isActive) {
+      console.log('Clicking search result - exiting search mode cleanly');
+      store.setSearchActive(false); // This clears search query and results
+    }
+    
     store.setSelectedNode(node);
     // Trigger focused layout via SpatialOrchestrator
     if (spatialOrchestratorRef.current) {
@@ -450,6 +469,100 @@ export default function DreamspaceCanvas() {
 
   const handleProtoNodeCancel = () => {
     cancelCreation();
+  };
+
+  // Search interface handlers
+  const handleSearchSave = async (query: string, dreamTalkFile?: globalThis.File, additionalFiles?: globalThis.File[]) => {
+    try {
+      console.log('SearchNode save:', { query, dreamTalkFile, additionalFiles });
+      
+      // Use raycasting to find intersection with rotated sphere (same as ProtoNode)
+      let finalPosition: [number, number, number] = [0, 0, -50]; // Fallback position
+      if (dreamWorldRef.current) {
+        // Create raycaster from camera position forward
+        const raycaster = new Raycaster();
+        const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
+        const cameraDirection = new Vector3(0, 0, -1); // Forward direction
+        
+        raycaster.set(cameraPosition, cameraDirection);
+        
+        // Create sphere geometry in world space (accounting for rotation)
+        const sphereRadius = 5000;
+        const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
+        
+        // Find intersection points
+        const intersectionPoint = new Vector3();
+        const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
+        
+        if (hasIntersection) {
+          // Since the sphere rotates but the camera ray is fixed, we need to apply
+          // the INVERSE rotation to get the correct position on the rotated sphere
+          const sphereRotation = dreamWorldRef.current.quaternion;
+          const inverseRotation = sphereRotation.clone().invert();
+          intersectionPoint.applyQuaternion(inverseRotation);
+          
+          finalPosition = intersectionPoint.toArray() as [number, number, number];
+          
+        } else {
+          console.warn('No intersection found with sphere - using default position');
+          finalPosition = [0, 0, -5000]; // Fallback to forward position
+        }
+      }
+      
+      // Use service to create DreamNode from search query
+      const service = serviceManager.getActive();
+      await service.create(
+        query,
+        'dream',
+        dreamTalkFile, // DreamTalk file (single file)
+        finalPosition, // Pass rotation-adjusted position to project onto sphere
+        additionalFiles // Additional files array
+      );
+      
+      // No need to manually refresh - event listener will handle it
+      
+      // Note: Constellation return is already triggered by SearchNode3D handleSave()
+      // which happens BEFORE this onSave callback, ensuring parallel animations
+      
+      // Delay dismissing search interface to ensure overlap and prevent flicker
+      // This runs AFTER the save animation (1000ms) and overlap period (100ms)
+      globalThis.setTimeout(() => {
+        // Dismiss search interface after everything is rendered
+        const store = useInterBrainStore.getState();
+        store.setSearchActive(false);
+        
+        // Show success message
+        uiService.showSuccess(`Created DreamNode: "${query}"`);
+      }, 200); // Increased delay to ensure DreamNode is fully rendered
+      
+    } catch (error) {
+      console.error('Failed to create DreamNode from search:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to create DreamNode');
+    }
+  };
+
+  const handleSearchCancel = () => {
+    const store = useInterBrainStore.getState();
+    store.setSearchActive(false);
+    store.setSpatialLayout('constellation');
+  };
+
+  const handleSearchResults = (results: { node: DreamNode; score: number }[]) => {
+    // Convert search results to DreamNodes for spatial display
+    const searchResultNodes = results.map(result => result.node);
+    
+    // Update store with search results
+    const store = useInterBrainStore.getState();
+    store.setSearchResults(searchResultNodes);
+    
+    // If we have results and no search interface active, switch to search results display
+    if (searchResultNodes.length > 0 && !store.searchInterface.isActive) {
+      if (spatialOrchestratorRef.current) {
+        spatialOrchestratorRef.current.showSearchResults(searchResultNodes);
+      }
+    }
+    
+    console.log(`DreamspaceCanvas: Updated with ${searchResultNodes.length} search results`);
   };
 
   const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
@@ -620,10 +733,17 @@ export default function DreamspaceCanvas() {
           const store = useInterBrainStore.getState();
           
           if (store.spatialLayout === 'search') {
-            // Clear search and return to constellation
-            console.log('Empty space clicked in search mode - clearing search');
-            store.setSearchResults([]);
-            store.setSpatialLayout('constellation');
+            if (store.searchInterface.isActive) {
+              // Dismiss search interface and return to constellation
+              console.log('Empty space clicked in search interface - dismissing search');
+              store.setSearchActive(false);
+              store.setSpatialLayout('constellation');
+            } else {
+              // Clear search results and return to constellation
+              console.log('Empty space clicked in search results mode - clearing search');
+              store.setSearchResults([]);
+              store.setSpatialLayout('constellation');
+            }
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
             console.log('Empty space clicked in liminal web - deselecting node');
@@ -715,6 +835,20 @@ export default function DreamspaceCanvas() {
               position={creationState.protoNode.position}
               onComplete={handleProtoNodeComplete}
               onCancel={handleProtoNodeCancel}
+            />
+          </>
+        )}
+        
+        {/* Search node interface - render if in search mode OR during save animation */}
+        {((searchInterface.isActive && spatialLayout === 'search') || searchInterface.isSaving) && (
+          <>
+            <SearchNode3D
+              position={[0, 0, -50]} // Focus position
+              onSave={handleSearchSave}
+              onCancel={handleSearchCancel}
+            />
+            <SearchOrchestrator
+              onSearchResults={handleSearchResults}
             />
           </>
         )}

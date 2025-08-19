@@ -29,10 +29,14 @@ export default function ProtoNode3D({
   const { creationState, updateProtoNode, setValidationErrors } = useInterBrainStore();
   const { protoNode, validationErrors } = creationState;
   
-  // Local UI state
+  // Local UI state for immediate responsiveness
+  const [localTitle, setLocalTitle] = useState(protoNode?.title || '');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Debounced store updates - only update store 300ms after user stops typing
+  const debounceTimeoutRef = useRef<number | null>(null);
   
   // Unified animation state - position and opacity in one system
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
@@ -92,6 +96,22 @@ export default function ProtoNode3D({
     }
   }, [protoNode?.dreamTalkFile, previewMedia]);
   
+  // Cleanup debounce timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        globalThis.clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Sync local title with store title (for external updates)
+  React.useEffect(() => {
+    if (protoNode?.title !== undefined) {
+      setLocalTitle(protoNode.title);
+    }
+  }, [protoNode?.title]);
+  
   if (!protoNode) {
     return null; // Should not render if no proto node exists
   }
@@ -116,11 +136,31 @@ export default function ProtoNode3D({
     return Object.keys(errors).length === 0;
   }, [setValidationErrors]);
   
-  // Event handlers
+  // Debounced store update functions
+  const updateStoreTitle = useCallback((title: string) => {
+    updateProtoNode({ title });
+  }, [updateProtoNode]);
+  
+  const debounceValidation = useCallback((title: string) => {
+    validateTitle(title);
+  }, [setValidationErrors]);
+  
+  // Event handlers - immediate local state update, debounced store updates
   const handleTitleChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
     const title = e.target.value;
-    updateProtoNode({ title });
-    validateTitle(title);
+    
+    // IMMEDIATE: Update local state for responsive UI
+    setLocalTitle(title);
+    
+    // DEBOUNCED: Update store and validation only after user stops typing for 300ms
+    if (debounceTimeoutRef.current) {
+      globalThis.clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = globalThis.setTimeout(() => {
+      updateStoreTitle(title);
+      debounceValidation(title);
+    }, 300) as unknown as number;
   };
   
   const handleTypeChange = (type: 'dream' | 'dreamer') => {
@@ -133,16 +173,19 @@ export default function ProtoNode3D({
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent bubbling to DreamspaceCanvas
     setIsDragOver(true);
   };
   
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent bubbling to DreamspaceCanvas
     setIsDragOver(false);
   };
   
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // CRITICAL: Prevent bubbling to DreamspaceCanvas
     setIsDragOver(false);
     
     const files = Array.from(e.dataTransfer.files);
@@ -168,7 +211,7 @@ export default function ProtoNode3D({
   };
   
   const handleCreate = () => {
-    if (validateTitle(protoNode.title)) {
+    if (validateTitle(localTitle)) {
       setIsAnimating(true);
       
       // Start unified animation (position + opacity)
@@ -201,7 +244,7 @@ export default function ProtoNode3D({
     }
   };
   
-  const isCreateDisabled = !protoNode.title.trim() || !!validationErrors.title || isAnimating;
+  const isCreateDisabled = !localTitle.trim() || !!validationErrors.title || isAnimating;
   
   return (
     <group position={animatedPosition}>
@@ -274,9 +317,18 @@ export default function ProtoNode3D({
                   cursor: 'pointer',
                   border: isDragOver ? '2px dashed rgba(255,255,255,0.5)' : 'none',
                   borderRadius: '50%',
-                  zIndex: 9999,
+                  zIndex: 1, // Lower z-index than text input
                   pointerEvents: 'auto',
                   opacity: animatedUIOpacity // Fade out drag-drop text with other UI
+                }}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent event bubbling
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation(); // Prevent rotation controls from capturing
+                  e.preventDefault();
                 }}
               >
                 <div
@@ -288,16 +340,8 @@ export default function ProtoNode3D({
                     color: dreamNodeStyles.colors.text.secondary,
                     fontSize: '24px', // Double the size
                     textAlign: 'center',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent event bubbling
-                    e.preventDefault();
-                    fileInputRef.current?.click();
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation(); // Prevent rotation controls from capturing
-                    e.preventDefault();
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none' // Let parent handle clicks
                   }}
                 >
                   <div>Drop image here</div>
@@ -306,47 +350,37 @@ export default function ProtoNode3D({
               </div>
             )}
             
-            {/* Title Input Overlay */}
-            <div
+            {/* Text Input - Clean, rectangular, always positioned in center */}
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={localTitle}
+              onChange={handleTitleChange}
+              placeholder="Name"
+              autoFocus
               style={{
                 position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0, 0, 0, 0.7)',
-                borderRadius: '50%',
-                pointerEvents: 'none', // Allow clicks through to underlying elements
-                opacity: (previewMedia || protoNode.dreamTalkFile) ? animatedUIOpacity : 1.0 // Only fade out if there's media behind
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: `${Math.max(120, nodeSize * 0.7)}px`, // Responsive width
+                height: `${Math.max(32, nodeSize * 0.12)}px`, // Adequate height for descenders
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(12, nodeSize * 0.03)}px`,
+                background: 'transparent', // Completely transparent
+                border: 'none', // No border
+                borderRadius: '4px', // Rectangular with subtle rounding
+                color: dreamNodeStyles.colors.text.primary,
+                fontSize: `${Math.max(14, nodeSize * 0.08)}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                textAlign: 'center',
+                outline: 'none',
+                boxShadow: 'none',
+                zIndex: 10, // Above file selection area
+                pointerEvents: 'auto',
+                cursor: 'text'
               }}
-            >
-              <input
-                ref={titleInputRef}
-                type="text"
-                value={protoNode.title}
-                onChange={handleTitleChange}
-                placeholder="Name"
-                autoFocus
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: dreamNodeStyles.colors.text.primary,
-                  fontSize: `${Math.max(12, nodeSize * 0.08)}px`, // Match DreamNode3D text sizing
-                  fontFamily: dreamNodeStyles.typography.fontFamily,
-                  textAlign: 'center',
-                  outline: 'none',
-                  width: '80%',
-                  height: `${Math.max(40, nodeSize * 0.08)}px`, // Explicit height for proper text display
-                  padding: `${Math.max(8, nodeSize * 0.02)}px`, // Scale padding with node size for proper text height
-                  pointerEvents: 'auto', // Re-enable pointer events for the input itself
-                  boxShadow: 'none', // Remove any potential box shadow
-                  borderRadius: '0' // Remove any border radius that might show an outline
-                }}
-              />
-            </div>
+              onClick={(e) => e.stopPropagation()}
+            />
             
             {/* Hidden file input */}
             <input

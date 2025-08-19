@@ -12,6 +12,7 @@ import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } fr
 import { getMockDataForConfig } from './mock/dreamnode-mock-data';
 import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './dreamspace/layouts/RingLayout';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
+import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -58,6 +59,9 @@ export default class InterBrainPlugin extends Plugin {
   private registerCommands(): void {
     // Register semantic search commands
     registerSemanticSearchCommands(this, this.uiService);
+    
+    // Register search interface commands (search-as-dreamnode UI)
+    registerSearchInterfaceCommands(this, this.uiService);
     
     // Open DreamSpace command
     this.addCommand({

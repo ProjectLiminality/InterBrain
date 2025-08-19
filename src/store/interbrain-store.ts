@@ -85,6 +85,17 @@ export interface InterBrainState extends OllamaConfigSlice {
   searchResults: DreamNode[];
   setSearchResults: (results: DreamNode[]) => void;
   
+  // Search interface state
+  searchInterface: {
+    isActive: boolean;
+    isSaving: boolean; // Track if save animation is in progress
+    currentQuery: string;
+    lastQuery: string; // For change detection
+  };
+  setSearchActive: (active: boolean) => void;
+  setSearchQuery: (query: string) => void;
+  setSearchSaving: (saving: boolean) => void;
+  
   // Spatial layout state
   spatialLayout: 'constellation' | 'search' | 'liminal-web';
   setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web') => void;
@@ -178,6 +189,12 @@ export const useInterBrainStore = create<InterBrainState>()(
     nodeId: null
   },
   searchResults: [],
+  searchInterface: {
+    isActive: false,
+    isSaving: false,
+    currentQuery: '',
+    lastQuery: ''
+  },
   spatialLayout: 'constellation',
   fibonacciConfig: DEFAULT_FIBONACCI_CONFIG,
   
@@ -314,6 +331,29 @@ export const useInterBrainStore = create<InterBrainState>()(
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),
   setSearchResults: (results) => set({ searchResults: results }),
+  setSearchActive: (active) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      isActive: active,
+      // Clear query when deactivating for fresh start on reentry
+      currentQuery: active ? state.searchInterface.currentQuery : '',
+      lastQuery: active ? state.searchInterface.lastQuery : ''
+    },
+    // Also clear search results when deactivating
+    searchResults: active ? state.searchResults : []
+  })),
+  setSearchQuery: (query) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      currentQuery: query
+    }
+  })),
+  setSearchSaving: (saving) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      isSaving: saving
+    }
+  })),
   setSpatialLayout: (layout) => set(state => {
     const previousLayout = state.spatialLayout;
     const selectedNode = state.selectedNode;
