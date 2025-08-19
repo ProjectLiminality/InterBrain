@@ -733,7 +733,7 @@ export default class InterBrainPlugin extends Plugin {
         }
         
         // Call global canvas function (simple approach for now)
-        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { moveSelectedNodeToCenter(): boolean } }).__interbrainCanvas;
         if (canvasAPI && canvasAPI.moveSelectedNodeToCenter) {
           const success = canvasAPI.moveSelectedNodeToCenter();
           if (success) {
@@ -768,7 +768,7 @@ export default class InterBrainPlugin extends Plugin {
         }
         
         // Call global canvas function to trigger focused layout
-        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { focusOnNode(nodeId: string): boolean } }).__interbrainCanvas;
         if (canvasAPI && canvasAPI.focusOnNode) {
           const success = canvasAPI.focusOnNode(selectedNode.id);
           if (success) {
@@ -1051,7 +1051,7 @@ export default class InterBrainPlugin extends Plugin {
             // Restore the layout state via SpatialOrchestrator (proper way)
             if (previousEntry.layout === 'constellation') {
               // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as any).__interbrainCanvas;
+              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { interruptAndReturnToConstellation(): boolean } }).__interbrainCanvas;
               if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
                 const success = canvasAPI.interruptAndReturnToConstellation();
                 if (success) {
@@ -1074,7 +1074,7 @@ export default class InterBrainPlugin extends Plugin {
                 store.setSelectedNode(targetNode);
                 
                 // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as any).__interbrainCanvas;
+                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
                 if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
                   const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
                   if (!success) {
@@ -1140,7 +1140,7 @@ export default class InterBrainPlugin extends Plugin {
             // Restore the layout state via SpatialOrchestrator (proper way)
             if (nextEntry.layout === 'constellation') {
               // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as any).__interbrainCanvas;
+              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
               if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
                 const success = canvasAPI.interruptAndReturnToConstellation();
                 if (success) {
@@ -1163,7 +1163,7 @@ export default class InterBrainPlugin extends Plugin {
                 store.setSelectedNode(targetNode);
                 
                 // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as any).__interbrainCanvas;
+                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
                 if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
                   const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
                   if (!success) {

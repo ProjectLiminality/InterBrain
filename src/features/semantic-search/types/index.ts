@@ -57,7 +57,7 @@ export const DEFAULT_OLLAMA_CONFIG: OllamaConfig = {
 export interface CommandResult {
   success: boolean;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 // Ollama setup instructions

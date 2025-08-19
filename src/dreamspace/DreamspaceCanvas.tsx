@@ -135,7 +135,7 @@ export default function DreamspaceCanvas() {
   
   // Expose moveToCenter function globally for commands
   useEffect(() => {
-    (globalThis as any).__interbrainCanvas = {
+    (globalThis as unknown as { __interbrainCanvas: unknown }).__interbrainCanvas = {
       moveSelectedNodeToCenter: () => {
         const store = useInterBrainStore.getState();
         const selectedNode = store.selectedNode;

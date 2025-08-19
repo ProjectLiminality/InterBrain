@@ -52,7 +52,7 @@ describe('IndexingService', () => {
       vectorData: new Map(),
       updateVectorData: mockUpdateVectorData,
       dataMode: 'mock'
-    } as any);
+    } as unknown);
 
     indexingService = new IndexingService();
     
@@ -141,7 +141,7 @@ describe('IndexingService', () => {
         vectorData: new Map([['test-node-1', vectorData]]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      } as any);
+      } as unknown);
 
       const result = indexingService.getVector('test-node-1');
       expect(result).toEqual(vectorData);
@@ -172,7 +172,7 @@ describe('IndexingService', () => {
         vectorData: new Map([['test-node-1', vectorData]]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      } as any);
+      } as unknown);
 
       const result = indexingService.needsReindex('test-node-1', 'abc123');
       expect(result).toBe(false);
@@ -196,7 +196,7 @@ describe('IndexingService', () => {
         vectorData: new Map([['test-node-1', vectorData]]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      } as any);
+      } as unknown);
 
       const result = indexingService.needsReindex('test-node-1', 'new-hash');
       expect(result).toBe(true);
@@ -237,7 +237,7 @@ describe('IndexingService', () => {
         ]),
         updateVectorData: vi.fn(),
         dataMode: 'mock'
-      } as any);
+      } as unknown);
 
       const result = indexingService.getAllVectors();
       expect(result).toHaveLength(2);

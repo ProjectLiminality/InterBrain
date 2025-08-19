@@ -125,7 +125,7 @@ describe('SemanticSearchService', () => {
     mockGetState.mockReturnValue({
       vectorData: mockVectorData,
       dataMode: 'mock'
-    } as any);
+    } as unknown);
 
     searchService = new SemanticSearchService();
 
@@ -151,7 +151,7 @@ describe('SemanticSearchService', () => {
   describe('searchByText', () => {
     it('should return relevant results sorted by similarity', async () => {
       // Mock getAllAvailableNodes to return our mock nodes
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const results = await searchService.searchByText('machine learning', {
@@ -166,7 +166,7 @@ describe('SemanticSearchService', () => {
     });
 
     it('should respect maxResults limit', async () => {
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const results = await searchService.searchByText('machine learning', {
@@ -179,7 +179,7 @@ describe('SemanticSearchService', () => {
     });
 
     it('should filter by minimum similarity threshold', async () => {
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const results = await searchService.searchByText('machine learning', {
@@ -198,7 +198,7 @@ describe('SemanticSearchService', () => {
       mockEmbeddingService.generateEmbedding.mockResolvedValue([0.0, 1.0, 0.0]);
       mockEmbeddingService.processLongText.mockResolvedValue([0.0, 1.0, 0.0]);
 
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const results = await searchService.searchByText('completely different topic', {
@@ -214,7 +214,7 @@ describe('SemanticSearchService', () => {
       const mockEmbeddingService = vi.mocked(ollamaEmbeddingService);
       mockEmbeddingService.processLongText.mockRejectedValue(new Error('Embedding failed'));
 
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       // Should not throw, but return fallback keyword search results
@@ -226,7 +226,7 @@ describe('SemanticSearchService', () => {
 
   describe('findSimilarNodes', () => {
     it('should find nodes similar to the given node', async () => {
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const targetNode = mockDreamNodes[0]; // Machine Learning node
@@ -241,7 +241,7 @@ describe('SemanticSearchService', () => {
     });
 
     it('should exclude the target node from results', async () => {
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const targetNode = mockDreamNodes[0];
@@ -252,7 +252,7 @@ describe('SemanticSearchService', () => {
     });
 
     it('should handle unindexed target node by generating embedding', async () => {
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const unindexedNode: DreamNode = {
@@ -301,7 +301,7 @@ describe('SemanticSearchService', () => {
 
   describe('getSearchStats', () => {
     it('should return accurate search statistics', async () => {
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const stats = await searchService.getSearchStats();
@@ -321,9 +321,9 @@ describe('SemanticSearchService', () => {
       mockGetState.mockReturnValue({
         vectorData: partialVectorData,
         dataMode: 'mock'
-      } as any);
+      } as unknown);
 
-      vi.spyOn(searchService as any, 'getAllAvailableNodes')
+      vi.spyOn(searchService as unknown, 'getAllAvailableNodes')
         .mockResolvedValue(mockDreamNodes);
 
       const stats = await searchService.getSearchStats();

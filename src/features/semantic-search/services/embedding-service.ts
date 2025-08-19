@@ -65,7 +65,7 @@ export class EmbeddingServiceError extends Error {
   constructor(
     message: string,
     public readonly code: 'SERVICE_UNAVAILABLE' | 'MODEL_NOT_FOUND' | 'NETWORK_ERROR' | 'INVALID_RESPONSE' | 'UNKNOWN_ERROR',
-    public readonly details?: any
+    public readonly details?: unknown
   ) {
     super(message);
     this.name = 'EmbeddingServiceError';

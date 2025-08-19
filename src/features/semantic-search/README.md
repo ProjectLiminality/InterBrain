@@ -35,9 +35,7 @@ src/features/semantic-search/
 │   └── ollama-config-slice.ts      # Zustand store slice
 ├── types/                           # TypeScript definitions
 │   └── index.ts                     # All feature types
-├── tests/                           # Unit tests
-└── models/                          # Fallback AI models
-    └── Xenova_all-MiniLM-L6-v2/    # Browser-based fallback
+└── tests/                           # Unit tests
 ```
 
 ## Setup Instructions

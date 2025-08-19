@@ -87,7 +87,7 @@ describe('IndexingService', () => {
       clearVectorData: vi.fn()
     };
     
-    (useInterBrainStore.getState as any).mockReturnValue(mockStore);
+    (useInterBrainStore.getState as unknown).mockReturnValue(mockStore);
   });
 
   afterEach(() => {

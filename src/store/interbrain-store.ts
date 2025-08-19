@@ -7,7 +7,8 @@ import {
   OllamaConfigSlice, 
   createOllamaConfigSlice,
   extractOllamaPersistenceData,
-  restoreOllamaPersistenceData 
+  restoreOllamaPersistenceData,
+  OllamaConfig
 } from '../features/semantic-search/store/ollama-config-slice';
 import { VectorData } from '../features/semantic-search/services/indexing-service';
 
@@ -182,7 +183,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   realNodes: new Map<string, RealNodeData>(),
   
   // Initialize Ollama config slice
-  ...createOllamaConfigSlice(set, get, {} as any),
+  ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
   creatorMode: {
     isActive: false,
@@ -740,7 +741,7 @@ export const useInterBrainStore = create<InterBrainState>()(
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
           vectorData?: [string, VectorData][];
-          ollamaConfig?: any;
+          ollamaConfig?: OllamaConfig;
         };
         return {
           ...current,

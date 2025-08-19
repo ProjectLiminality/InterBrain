@@ -40,7 +40,7 @@ interface OllamaShowResponse {
     quantization_level: string;
   };
   model_info: {
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -154,7 +154,8 @@ export class OllamaEmbeddingService implements IEmbeddingService {
         body: JSON.stringify({ name: this.model })
       });
 
-      const data: OllamaShowResponse = await response.json();
+      const responseJson = await (response as { json: () => Promise<unknown> }).json();
+      const data: OllamaShowResponse = responseJson as OllamaShowResponse;
       
       // Determine dimensions based on model
       let dimensions = 768; // Default for nomic-embed-text
@@ -310,7 +311,8 @@ export class OllamaEmbeddingService implements IEmbeddingService {
         })
       });
 
-      const data: OllamaEmbeddingResponse = await response.json();
+      const responseJson = await (response as { json: () => Promise<unknown> }).json();
+      const data: OllamaEmbeddingResponse = responseJson as OllamaEmbeddingResponse;
       
       if (!data.embedding || !Array.isArray(data.embedding)) {
         throw new EmbeddingServiceError(
@@ -348,7 +350,7 @@ export class OllamaEmbeddingService implements IEmbeddingService {
   /**
    * Fetch with retry logic
    */
-  private async fetchWithRetry(url: string, options: Record<string, any>): Promise<any> {
+  private async fetchWithRetry(url: string, options: Record<string, unknown>): Promise<unknown> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= this.config.maxRetries; attempt++) {

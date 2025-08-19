@@ -2,6 +2,9 @@ import { StateCreator } from 'zustand';
 import { VectorData } from '../services/indexing-service';
 import { OllamaConfig, DEFAULT_OLLAMA_CONFIG } from '../types';
 
+// Re-export OllamaConfig for use in main store
+export { OllamaConfig };
+
 /**
  * Ollama configuration and vector data slice for the main store
  * This slice manages semantic search related state
@@ -86,11 +89,12 @@ export function restoreOllamaPersistenceData(persistedData: {
 /**
  * Type guard to check if state has Ollama config slice
  */
-export function hasOllamaConfigSlice(state: any): state is OllamaConfigSlice {
+export function hasOllamaConfigSlice(state: unknown): state is OllamaConfigSlice {
+  const typedState = state as Record<string, unknown>;
   return (
-    state &&
-    typeof state.vectorData !== 'undefined' &&
-    typeof state.ollamaConfig !== 'undefined' &&
-    typeof state.setOllamaConfig === 'function'
+    typedState &&
+    typeof typedState.vectorData !== 'undefined' &&
+    typeof typedState.ollamaConfig !== 'undefined' &&
+    typeof typedState.setOllamaConfig === 'function'
   );
 }
