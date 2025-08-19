@@ -41,6 +41,9 @@ export interface SpatialOrchestratorRef {
   /** Show search results in honeycomb layout */
   showSearchResults: (searchResults: DreamNode[]) => void;
   
+  /** Move all nodes to sphere surface for search interface mode (like liminal web) */
+  moveAllToSphereForSearch: () => void;
+  
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
   
@@ -509,6 +512,37 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
       } catch (error) {
         console.error('SpatialOrchestrator: Error during search results display:', error);
+        isTransitioning.current = false;
+      }
+    },
+    
+    moveAllToSphereForSearch: () => {
+      try {
+        console.log('SpatialOrchestrator: Moving all nodes to sphere surface for search interface');
+        
+        // Mark as transitioning to prevent interference
+        isTransitioning.current = true;
+        
+        // Move all nodes to sphere surface using sphere node easing (like liminal web mode)
+        nodeRefs.current.forEach((nodeRef) => {
+          if (nodeRef?.current) {
+            // Use same easing as liminal web: sphere nodes use ease-in for departure
+            nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
+          }
+        });
+        
+        // Track this as a search focused state (SearchNode acts as focused node)
+        focusedNodeId.current = 'search-interface';
+        
+        // Set transition complete after animation duration
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration);
+        
+        console.log('SpatialOrchestrator: All nodes moved to sphere surface for search interface');
+        
+      } catch (error) {
+        console.error('SpatialOrchestrator: Error during search interface setup:', error);
         isTransitioning.current = false;
       }
     },

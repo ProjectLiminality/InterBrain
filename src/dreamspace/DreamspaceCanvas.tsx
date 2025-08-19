@@ -221,8 +221,10 @@ export default function DreamspaceCanvas() {
         // Search mode handles both search interface and search results display
         const store = useInterBrainStore.getState();
         if (store.searchInterface.isActive) {
-          console.log('DreamspaceCanvas: Switching to search interface mode');
-          // SearchNode3D will handle the UI - no orchestrator action needed
+          console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
+          // Use liminal web architecture: move all constellation nodes to sphere surface
+          // SearchNode acts like the focused node at center position [0, 0, -50]
+          spatialOrchestratorRef.current.moveAllToSphereForSearch();
         } else if (searchResults && searchResults.length > 0) {
           console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
           spatialOrchestratorRef.current.showSearchResults(searchResults);
@@ -514,10 +516,10 @@ export default function DreamspaceCanvas() {
       
       // Add small delay to ensure new DreamNode renders before hiding search node (same as ProtoNode)
       globalThis.setTimeout(() => {
-        // Dismiss search interface (just like ProtoNode calls completeCreation())
+        // Dismiss search interface and return to constellation (unlike ProtoNode)
         const store = useInterBrainStore.getState();
         store.setSearchActive(false);
-        // Note: Don't change spatial layout - let it remain as-is like ProtoNode does
+        store.setSpatialLayout('constellation'); // Return to constellation like liminal web does
         
         // Show success message
         uiService.showSuccess(`Created DreamNode: "${query}"`);
