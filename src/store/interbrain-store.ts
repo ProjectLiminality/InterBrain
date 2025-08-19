@@ -88,11 +88,13 @@ export interface InterBrainState extends OllamaConfigSlice {
   // Search interface state
   searchInterface: {
     isActive: boolean;
+    isSaving: boolean; // Track if save animation is in progress
     currentQuery: string;
     lastQuery: string; // For change detection
   };
   setSearchActive: (active: boolean) => void;
   setSearchQuery: (query: string) => void;
+  setSearchSaving: (saving: boolean) => void;
   
   // Spatial layout state
   spatialLayout: 'constellation' | 'search' | 'liminal-web';
@@ -189,6 +191,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   searchResults: [],
   searchInterface: {
     isActive: false,
+    isSaving: false,
     currentQuery: '',
     lastQuery: ''
   },
@@ -341,6 +344,12 @@ export const useInterBrainStore = create<InterBrainState>()(
     searchInterface: {
       ...state.searchInterface,
       currentQuery: query
+    }
+  })),
+  setSearchSaving: (saving) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      isSaving: saving
     }
   })),
   setSpatialLayout: (layout) => set(state => {

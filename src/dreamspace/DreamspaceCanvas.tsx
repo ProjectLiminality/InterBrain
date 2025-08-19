@@ -831,8 +831,8 @@ export default function DreamspaceCanvas() {
           </>
         )}
         
-        {/* Search node interface - active when search interface is enabled */}
-        {searchInterface.isActive && spatialLayout === 'search' && (
+        {/* Search node interface - active when search interface is enabled or save animation in progress */}
+        {searchInterface.isActive && (spatialLayout === 'search' || searchInterface.isSaving) && (
           <>
             <SearchNode3D
               position={[0, 0, -50]} // Focus position

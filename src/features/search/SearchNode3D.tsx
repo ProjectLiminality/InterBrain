@@ -187,14 +187,18 @@ export default function SearchNode3D({
       setAnimationType('save');
       animationStartTime.current = Date.now();
       
+      // Mark that save animation is in progress (keeps SearchNode rendered)
+      const store = useInterBrainStore.getState();
+      store.setSearchSaving(true);
+      
       // IMMEDIATELY trigger constellation return to run in parallel with save animation
       // This makes all nodes start moving from sphere surface to constellation NOW
-      const store = useInterBrainStore.getState();
       store.setSpatialLayout('constellation');
       
       // Complete exactly when animation finishes (node will be fully faded out)
       globalThis.setTimeout(() => {
         setIsAnimating(false);
+        store.setSearchSaving(false); // Animation complete
         onSave(currentQuery, dreamTalkFile || undefined, additionalFiles);
       }, 1000); // Exactly when animation completes
     }
