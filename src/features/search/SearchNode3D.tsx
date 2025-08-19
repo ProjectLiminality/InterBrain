@@ -369,55 +369,36 @@ export default function SearchNode3D({
               </div>
             )}
             
-            {/* Search Query Input Overlay - HIGHER Z-INDEX for independent clicks */}
-            <div
+            {/* Text Input - Clean, rectangular, always positioned in center */}
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={localQuery}
+              onChange={handleQueryChange}
+              placeholder="Search query..."
               style={{
                 position: 'absolute',
-                top: '10%', // More space at top for descenders
-                left: '10%',
-                right: '10%', 
-                bottom: '10%', // More space at bottom for descenders
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0, 0, 0, 0.7)',
-                borderRadius: '50%',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: `${Math.max(120, nodeSize * 0.7)}px`, // Responsive width
+                height: `${Math.max(32, nodeSize * 0.12)}px`, // Adequate height for descenders
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(12, nodeSize * 0.03)}px`,
+                background: 'rgba(0, 0, 0, 0.8)', // Subtle background for readability
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: '4px', // Rectangular with subtle rounding
+                color: dreamNodeStyles.colors.text.primary,
+                fontSize: `${Math.max(14, nodeSize * 0.08)}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                textAlign: 'center',
+                outline: 'none',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                zIndex: 10, // Above file selection area
                 pointerEvents: 'auto',
-                opacity: (previewMedia || dreamTalkFile) ? animatedUIOpacity : 1.0,
-                cursor: 'text',
-                zIndex: 10 // HIGHER than file selection area
+                cursor: 'text'
               }}
-              onClick={(e) => {
-                e.stopPropagation();
-                titleInputRef.current?.focus();
-              }}
-            >
-              <input
-                ref={titleInputRef}
-                type="text"
-                value={localQuery}
-                onChange={handleQueryChange}
-                placeholder="Search query..."
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: dreamNodeStyles.colors.text.primary,
-                  fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
-                  fontFamily: dreamNodeStyles.typography.fontFamily,
-                  textAlign: 'center',
-                  outline: 'none',
-                  width: '80%',
-                  height: `${Math.max(50, nodeSize * 0.12)}px`, // INCREASED height for descenders
-                  padding: `${Math.max(12, nodeSize * 0.03)}px`, // INCREASED padding
-                  lineHeight: 'normal', // Use normal line height with increased container
-                  pointerEvents: 'auto',
-                  boxShadow: 'none',
-                  borderRadius: '0',
-                  cursor: 'text'
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+              onClick={(e) => e.stopPropagation()}
+            />
             
             {/* Hidden file input */}
             <input
