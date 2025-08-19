@@ -38,7 +38,7 @@ export default function SearchNode3D({
   const [additionalFiles, setAdditionalFiles] = useState<globalThis.File[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   
-  // Spawn animation state - fly in from sphere surface (5000 units) to focus position (50 units)
+  // Animation state - handles both spawn and save animations
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>([
     position[0], 
     position[1], 
@@ -47,43 +47,74 @@ export default function SearchNode3D({
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(1.0);
   const [animatedUIOpacity, setAnimatedUIOpacity] = useState<number>(0.0); // UI starts hidden during spawn
   const animationStartTime = useRef<number | null>(Date.now()); // Start animation immediately
+  const [animationType, setAnimationType] = useState<'spawn' | 'save'>('spawn');
   
-  // Spawn animation: 5000 → 50 units using easeOutQuart (1 second duration)
+  // Animation handler: supports both spawn and save animations
   useFrame(() => {
     if (!animationStartTime.current) return;
     
     const elapsed = Date.now() - animationStartTime.current;
     const progress = Math.min(elapsed / 1000, 1); // 1 second duration
     
-    // easeOutQuart function for consistent spatial orchestration feel
-    const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-    
-    // Animate position: [0,0,-5000] → [0,0,-50]
-    const startZ = -5000;
-    const endZ = position[2]; // Target position (-50)
-    const newZ = startZ + (endZ - startZ) * easeOutQuart;
-    setAnimatedPosition([position[0], position[1], newZ]);
-    
-    // Keep main node fully visible during spawn
-    setAnimatedOpacity(1.0);
-    
-    // Animate UI elements: 0.0 → 1.0 (fade in UI controls after spawn)
-    const startUIOpacity = 0.0;
-    const endUIOpacity = 1.0;
-    const newUIOpacity = startUIOpacity + (endUIOpacity - startUIOpacity) * easeOutQuart;
-    setAnimatedUIOpacity(newUIOpacity);
-    
-    // Complete animation
-    if (progress >= 1) {
-      animationStartTime.current = null;
-      setAnimatedPosition(position);
-      setAnimatedOpacity(1.0);
-      setAnimatedUIOpacity(1.0);
+    if (animationType === 'spawn') {
+      // Spawn animation: 5000 → 50 units using easeOutQuart
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
       
-      // Auto-focus search input after spawn animation
-      globalThis.setTimeout(() => {
-        titleInputRef.current?.focus();
-      }, 50);
+      // Animate position: [0,0,-5000] → [0,0,-50]
+      const startZ = -5000;
+      const endZ = position[2]; // Target position (-50)
+      const newZ = startZ + (endZ - startZ) * easeOutQuart;
+      setAnimatedPosition([position[0], position[1], newZ]);
+      
+      // Keep main node fully visible during spawn
+      setAnimatedOpacity(1.0);
+      
+      // Animate UI elements: 0.0 → 1.0 (fade in UI controls after spawn)
+      const startUIOpacity = 0.0;
+      const endUIOpacity = 1.0;
+      const newUIOpacity = startUIOpacity + (endUIOpacity - startUIOpacity) * easeOutQuart;
+      setAnimatedUIOpacity(newUIOpacity);
+      
+      // Complete spawn animation
+      if (progress >= 1) {
+        animationStartTime.current = null;
+        setAnimatedPosition(position);
+        setAnimatedOpacity(1.0);
+        setAnimatedUIOpacity(1.0);
+        
+        // Auto-focus search input after spawn animation
+        globalThis.setTimeout(() => {
+          titleInputRef.current?.focus();
+        }, 50);
+      }
+    } else if (animationType === 'save') {
+      // Save animation: current position → [0,0,-75] using easeInOut (like ProtoNode)
+      const easeInOut = progress < 0.5 
+        ? 2 * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      
+      // Animate position: [0,0,-50] → [0,0,-75]
+      const startZ = position[2]; // -50 (current focus position)
+      const endZ = -75; // Move away like ProtoNode
+      const newZ = startZ + (endZ - startZ) * easeInOut;
+      setAnimatedPosition([position[0], position[1], newZ]);
+      
+      // Keep main node opacity at 1.0 (no fade)
+      setAnimatedOpacity(1.0);
+      
+      // Animate UI elements: 1.0 → 0.0 (fade out buttons/controls)
+      const startUIOpacity = 1.0;
+      const endUIOpacity = 0.0;
+      const newUIOpacity = startUIOpacity + (endUIOpacity - startUIOpacity) * easeInOut;
+      setAnimatedUIOpacity(newUIOpacity);
+      
+      // Complete save animation
+      if (progress >= 1) {
+        animationStartTime.current = null;
+        setAnimatedPosition([position[0], position[1], endZ]);
+        setAnimatedOpacity(1.0);
+        setAnimatedUIOpacity(endUIOpacity);
+      }
     }
   });
   
@@ -151,7 +182,16 @@ export default function SearchNode3D({
   const handleSave = () => {
     if (currentQuery.trim()) {
       setIsAnimating(true);
-      onSave(currentQuery, dreamTalkFile || undefined, additionalFiles);
+      
+      // Switch to save animation and start timing
+      setAnimationType('save');
+      animationStartTime.current = Date.now();
+      
+      // Complete exactly when animation finishes (node will be fully faded out)
+      globalThis.setTimeout(() => {
+        setIsAnimating(false);
+        onSave(currentQuery, dreamTalkFile || undefined, additionalFiles);
+      }, 1000); // Exactly when animation completes
     }
   };
   
