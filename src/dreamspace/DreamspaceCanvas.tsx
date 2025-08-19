@@ -517,15 +517,16 @@ export default function DreamspaceCanvas() {
       // Note: Constellation return is already triggered by SearchNode3D handleSave()
       // which happens BEFORE this onSave callback, ensuring parallel animations
       
-      // Add small delay to ensure animations complete before hiding search interface
+      // Delay dismissing search interface to ensure overlap and prevent flicker
+      // This runs AFTER the save animation (1000ms) and overlap period (100ms)
       globalThis.setTimeout(() => {
-        // Dismiss search interface after animations complete
+        // Dismiss search interface after everything is rendered
         const store = useInterBrainStore.getState();
         store.setSearchActive(false);
         
         // Show success message
         uiService.showSuccess(`Created DreamNode: "${query}"`);
-      }, 100); // Small delay for cleanup after animations are done
+      }, 200); // Increased delay to ensure DreamNode is fully rendered
       
     } catch (error) {
       console.error('Failed to create DreamNode from search:', error);
@@ -831,8 +832,8 @@ export default function DreamspaceCanvas() {
           </>
         )}
         
-        {/* Search node interface - active when search interface is enabled or save animation in progress */}
-        {searchInterface.isActive && (spatialLayout === 'search' || searchInterface.isSaving) && (
+        {/* Search node interface - render if in search mode OR during save animation */}
+        {((searchInterface.isActive && spatialLayout === 'search') || searchInterface.isSaving) && (
           <>
             <SearchNode3D
               position={[0, 0, -50]} // Focus position

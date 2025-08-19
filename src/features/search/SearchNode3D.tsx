@@ -200,11 +200,11 @@ export default function SearchNode3D({
         setIsAnimating(false);
         onSave(currentQuery, dreamTalkFile || undefined, additionalFiles);
         
-        // Keep SearchNode rendered for 100ms longer to ensure temporal overlap
+        // Keep SearchNode rendered for 200ms longer to ensure temporal overlap
         // This prevents flicker by ensuring new DreamNode is fully rendered before unmount
         globalThis.setTimeout(() => {
           store.setSearchSaving(false); // Now safe to unmount SearchNode
-        }, 100); // Small overlap to prevent flicker
+        }, 200); // Extended overlap to guarantee DreamNode is rendered
       }, 1000); // Exactly when animation completes
     }
   };
