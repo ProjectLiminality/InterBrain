@@ -27,16 +27,19 @@ export default function SearchNode3D({
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
   const fileInputRef = useRef<globalThis.HTMLInputElement>(null);
   
-  // Get search state from store
+  // Get search state from store  
   const { searchInterface, setSearchQuery } = useInterBrainStore();
-  const { currentQuery } = searchInterface;
   
-  // Local UI state
+  // Local UI state for immediate responsiveness
+  const [localQuery, setLocalQuery] = useState(searchInterface.currentQuery);
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [dreamTalkFile, setDreamTalkFile] = useState<globalThis.File | null>(null);
   const [additionalFiles, setAdditionalFiles] = useState<globalThis.File[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Debounced store update - only update store 300ms after user stops typing
+  const debounceTimeoutRef = React.useRef<number | null>(null);
   
   // Animation state - handles both spawn and save animations
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>([
@@ -127,15 +130,45 @@ export default function SearchNode3D({
     }
   }, []);
   
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        globalThis.clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Sync local query with store query (for external resets)
+  useEffect(() => {
+    setLocalQuery(searchInterface.currentQuery);
+  }, [searchInterface.currentQuery]);
+  
   // Dream-type node styling for search node (blue)
   const nodeColors = getNodeColors('dream');
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = dreamNodeStyles.dimensions.borderWidth;
   
-  // Event handlers
+  // Debounced store update function
+  const updateStoreQuery = React.useCallback((query: string) => {
+    setSearchQuery(query);
+  }, [setSearchQuery]);
+  
+  // Event handlers - immediate local state update, debounced store update
   const handleQueryChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
     const query = e.target.value;
-    setSearchQuery(query);
+    
+    // IMMEDIATE: Update local state for responsive UI
+    setLocalQuery(query);
+    
+    // DEBOUNCED: Update store only after user stops typing for 300ms
+    if (debounceTimeoutRef.current) {
+      globalThis.clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = globalThis.setTimeout(() => {
+      updateStoreQuery(query);
+    }, 300) as unknown as number;
   };
   
   const handleDragOver = (e: React.DragEvent) => {
@@ -180,7 +213,7 @@ export default function SearchNode3D({
   };
   
   const handleSave = () => {
-    if (currentQuery.trim()) {
+    if (localQuery.trim()) {
       setIsAnimating(true);
       
       // Switch to save animation and start timing
@@ -198,7 +231,7 @@ export default function SearchNode3D({
       // Complete exactly when animation finishes (node will be fully faded out)
       globalThis.setTimeout(() => {
         setIsAnimating(false);
-        onSave(currentQuery, dreamTalkFile || undefined, additionalFiles);
+        onSave(localQuery, dreamTalkFile || undefined, additionalFiles);
         
         // Keep SearchNode rendered for 200ms longer to ensure temporal overlap
         // This prevents flicker by ensuring new DreamNode is fully rendered before unmount
@@ -228,7 +261,7 @@ export default function SearchNode3D({
     }
   };
   
-  const isSaveDisabled = !currentQuery.trim() || isAnimating;
+  const isSaveDisabled = !localQuery.trim() || isAnimating;
   
   return (
     <group position={animatedPosition}>
@@ -352,7 +385,7 @@ export default function SearchNode3D({
               <input
                 ref={titleInputRef}
                 type="text"
-                value={currentQuery}
+                value={localQuery}
                 onChange={handleQueryChange}
                 placeholder="Search query..."
                 style={{

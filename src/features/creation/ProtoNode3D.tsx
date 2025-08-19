@@ -29,10 +29,14 @@ export default function ProtoNode3D({
   const { creationState, updateProtoNode, setValidationErrors } = useInterBrainStore();
   const { protoNode, validationErrors } = creationState;
   
-  // Local UI state
+  // Local UI state for immediate responsiveness
+  const [localTitle, setLocalTitle] = useState(protoNode?.title || '');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Debounced store updates - only update store 300ms after user stops typing
+  const debounceTimeoutRef = useRef<number | null>(null);
   
   // Unified animation state - position and opacity in one system
   const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
@@ -92,6 +96,22 @@ export default function ProtoNode3D({
     }
   }, [protoNode?.dreamTalkFile, previewMedia]);
   
+  // Cleanup debounce timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        globalThis.clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Sync local title with store title (for external updates)
+  React.useEffect(() => {
+    if (protoNode?.title !== undefined) {
+      setLocalTitle(protoNode.title);
+    }
+  }, [protoNode?.title]);
+  
   if (!protoNode) {
     return null; // Should not render if no proto node exists
   }
@@ -116,11 +136,31 @@ export default function ProtoNode3D({
     return Object.keys(errors).length === 0;
   }, [setValidationErrors]);
   
-  // Event handlers
+  // Debounced store update functions
+  const updateStoreTitle = useCallback((title: string) => {
+    updateProtoNode({ title });
+  }, [updateProtoNode]);
+  
+  const debounceValidation = useCallback((title: string) => {
+    validateTitle(title);
+  }, [setValidationErrors]);
+  
+  // Event handlers - immediate local state update, debounced store updates
   const handleTitleChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
     const title = e.target.value;
-    updateProtoNode({ title });
-    validateTitle(title);
+    
+    // IMMEDIATE: Update local state for responsive UI
+    setLocalTitle(title);
+    
+    // DEBOUNCED: Update store and validation only after user stops typing for 300ms
+    if (debounceTimeoutRef.current) {
+      globalThis.clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = globalThis.setTimeout(() => {
+      updateStoreTitle(title);
+      debounceValidation(title);
+    }, 300) as unknown as number;
   };
   
   const handleTypeChange = (type: 'dream' | 'dreamer') => {
@@ -168,7 +208,7 @@ export default function ProtoNode3D({
   };
   
   const handleCreate = () => {
-    if (validateTitle(protoNode.title)) {
+    if (validateTitle(localTitle)) {
       setIsAnimating(true);
       
       // Start unified animation (position + opacity)
@@ -201,7 +241,7 @@ export default function ProtoNode3D({
     }
   };
   
-  const isCreateDisabled = !protoNode.title.trim() || !!validationErrors.title || isAnimating;
+  const isCreateDisabled = !localTitle.trim() || !!validationErrors.title || isAnimating;
   
   return (
     <group position={animatedPosition}>
@@ -326,7 +366,7 @@ export default function ProtoNode3D({
               <input
                 ref={titleInputRef}
                 type="text"
-                value={protoNode.title}
+                value={localTitle}
                 onChange={handleTitleChange}
                 placeholder="Name"
                 autoFocus

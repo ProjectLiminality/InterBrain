@@ -335,10 +335,12 @@ export const useInterBrainStore = create<InterBrainState>()(
     searchInterface: {
       ...state.searchInterface,
       isActive: active,
-      // Reset query when deactivating
+      // Clear query when deactivating for fresh start on reentry
       currentQuery: active ? state.searchInterface.currentQuery : '',
       lastQuery: active ? state.searchInterface.lastQuery : ''
-    }
+    },
+    // Also clear search results when deactivating
+    searchResults: active ? state.searchResults : []
   })),
   setSearchQuery: (query) => set(state => ({
     searchInterface: {
