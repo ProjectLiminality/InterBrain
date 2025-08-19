@@ -514,16 +514,18 @@ export default function DreamspaceCanvas() {
       
       // No need to manually refresh - event listener will handle it
       
-      // Add small delay to ensure new DreamNode renders before hiding search node (same as ProtoNode)
+      // Immediately trigger constellation return to run in parallel with SearchNode save animation
+      const store = useInterBrainStore.getState();
+      store.setSpatialLayout('constellation'); // Start constellation return immediately (parallel)
+      
+      // Add small delay to ensure new DreamNode renders before hiding search interface
       globalThis.setTimeout(() => {
-        // Dismiss search interface and return to constellation (unlike ProtoNode)
-        const store = useInterBrainStore.getState();
+        // Dismiss search interface after SearchNode animation completes
         store.setSearchActive(false);
-        store.setSpatialLayout('constellation'); // Return to constellation like liminal web does
         
         // Show success message
         uiService.showSuccess(`Created DreamNode: "${query}"`);
-      }, 100); // 100ms delay for rendering
+      }, 1000); // 1000ms matches SearchNode save animation duration
       
     } catch (error) {
       console.error('Failed to create DreamNode from search:', error);
