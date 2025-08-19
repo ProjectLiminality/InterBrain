@@ -510,13 +510,18 @@ export default function DreamspaceCanvas() {
         additionalFiles // Additional files array
       );
       
-      // Dismiss search interface
-      const store = useInterBrainStore.getState();
-      store.setSearchActive(false);
-      store.setSpatialLayout('constellation');
+      // No need to manually refresh - event listener will handle it
       
-      // Show success message
-      uiService.showSuccess(`Created DreamNode: "${query}"`);
+      // Add small delay to ensure new DreamNode renders before hiding search node (same as ProtoNode)
+      globalThis.setTimeout(() => {
+        // Dismiss search interface
+        const store = useInterBrainStore.getState();
+        store.setSearchActive(false);
+        store.setSpatialLayout('constellation');
+        
+        // Show success message
+        uiService.showSuccess(`Created DreamNode: "${query}"`);
+      }, 100); // 100ms delay for rendering
       
     } catch (error) {
       console.error('Failed to create DreamNode from search:', error);
