@@ -69,6 +69,43 @@ export class Plugin {
   }
 }
 
+export class Notice {
+  message: string;
+  
+  constructor(message: string, _timeout?: number) {
+    this.message = message;
+    console.log('Mock Notice:', message);
+  }
+  
+  hide() {
+    console.log('Mock Notice hidden:', this.message);
+  }
+}
+
+export class Modal {
+  app: MockApp;
+  containerEl: HTMLElement;
+  
+  constructor(_app: MockApp) {
+    this.app = _app;
+    this.containerEl = (globalThis as typeof window).document?.createElement('div') || {} as HTMLElement;
+  }
+  
+  open() {
+    console.log('Mock Modal opened');
+  }
+  
+  close() {
+    console.log('Mock Modal closed');
+  }
+  
+  onOpen() {}
+  onClose() {}
+}
+
+// Export App as a reference to MockApp class
+export { MockApp as App };
+
 export interface WorkspaceLeaf extends MockWorkspaceLeaf {}
 
 // Console logging for debugging

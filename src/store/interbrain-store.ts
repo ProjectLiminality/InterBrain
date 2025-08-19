@@ -3,6 +3,14 @@ import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
+import { 
+  OllamaConfigSlice, 
+  createOllamaConfigSlice,
+  extractOllamaPersistenceData,
+  restoreOllamaPersistenceData,
+  OllamaConfig
+} from '../features/semantic-search/store/ollama-config-slice';
+import { VectorData } from '../features/semantic-search/services/indexing-service';
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -50,7 +58,9 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
-export interface InterBrainState {
+// Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
+
+export interface InterBrainState extends OllamaConfigSlice {
   // Data mode toggle
   dataMode: 'mock' | 'real';
   setDataMode: (mode: 'mock' | 'real') => void;
@@ -75,6 +85,17 @@ export interface InterBrainState {
   // Search functionality state
   searchResults: DreamNode[];
   setSearchResults: (results: DreamNode[]) => void;
+  
+  // Search interface state
+  searchInterface: {
+    isActive: boolean;
+    isSaving: boolean; // Track if save animation is in progress
+    currentQuery: string;
+    lastQuery: string; // For change detection
+  };
+  setSearchActive: (active: boolean) => void;
+  setSearchQuery: (query: string) => void;
+  setSearchSaving: (saving: boolean) => void;
   
   // Spatial layout state
   spatialLayout: 'constellation' | 'search' | 'liminal-web';
@@ -156,16 +177,25 @@ const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
 
 export const useInterBrainStore = create<InterBrainState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   // Initial state
   dataMode: 'mock' as const, // Start in mock mode
   realNodes: new Map<string, RealNodeData>(),
+  
+  // Initialize Ollama config slice
+  ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
   creatorMode: {
     isActive: false,
     nodeId: null
   },
   searchResults: [],
+  searchInterface: {
+    isActive: false,
+    isSaving: false,
+    currentQuery: '',
+    lastQuery: ''
+  },
   spatialLayout: 'constellation',
   fibonacciConfig: DEFAULT_FIBONACCI_CONFIG,
   
@@ -236,6 +266,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     newMap.delete(id);
     return { realNodes: newMap };
   }),
+  
+  // Note: Vector data and Ollama config actions provided by OllamaConfigSlice
+  
   setSelectedNode: (node) => set(state => {
     const previousNode = state.selectedNode;
     const currentLayout = state.spatialLayout;
@@ -299,6 +332,29 @@ export const useInterBrainStore = create<InterBrainState>()(
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),
   setSearchResults: (results) => set({ searchResults: results }),
+  setSearchActive: (active) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      isActive: active,
+      // Clear query when deactivating for fresh start on reentry
+      currentQuery: active ? state.searchInterface.currentQuery : '',
+      lastQuery: active ? state.searchInterface.lastQuery : ''
+    },
+    // Also clear search results when deactivating
+    searchResults: active ? state.searchResults : []
+  })),
+  setSearchQuery: (query) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      currentQuery: query
+    }
+  })),
+  setSearchSaving: (saving) => set(state => ({
+    searchInterface: {
+      ...state.searchInterface,
+      isSaving: saving
+    }
+  })),
   setSpatialLayout: (layout) => set(state => {
     const previousLayout = state.spatialLayout;
     const selectedNode = state.selectedNode;
@@ -434,9 +490,16 @@ export const useInterBrainStore = create<InterBrainState>()(
       const sourceType = i % 3 !== 0 ? 'dream' : 'dreamer';
       const sourceId = `mock-${sourceType}-${i}`;
       
-      // Use deterministic pattern for consistent relationships
-      const stepSizes = [1, 3, 7, 11, 13];
-      const maxConnections = Math.min(5, Math.floor(nodeCount / 4));
+      // Use deterministic pattern for consistent relationships with more variety
+      const stepSizes = [1, 2, 3, 5, 7, 11, 13, 17, 19];
+      
+      // Create more diversity in connection counts based on node index
+      const baseConnections = 2;
+      const variabilityFactor = ((i * 13) % 17) / 17; // 0 to 1, varies by node
+      const maxConnections = Math.min(
+        Math.floor(nodeCount * 0.8), // Up to 80% of opposite-type nodes
+        baseConnections + Math.floor(variabilityFactor * Math.min(25, nodeCount - baseConnections))
+      );
       
       for (let j = 0; j < Math.min(stepSizes.length, maxConnections); j++) {
         const step = stepSizes[j];
@@ -664,11 +727,12 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, and mock relationships
+      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
+        ...extractOllamaPersistenceData(state),
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
@@ -676,12 +740,15 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: 'mock' | 'real'; 
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
+          vectorData?: [string, VectorData][];
+          ollamaConfig?: OllamaConfig;
         };
         return {
           ...current,
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
+          ...restoreOllamaPersistenceData(persistedData),
         };
       },
     }

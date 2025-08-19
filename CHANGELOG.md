@@ -5,6 +5,89 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-08-19 - Epic 5: Semantic Search System
+
+### Added
+
+**Intelligent Indexing System (Feature #322)**
+- Complete IIndexingService interface with IndexingService implementation
+- Vector data persistence across sessions via Zustand store with Map serialization
+- Command palette integration with three indexing commands and async operation patterns
+- Git-based change detection: automatic indexing on creation + commit-hash delta detection
+- Intelligent delta updates: only index changed/new nodes, cleanup deleted nodes
+- Background processing with non-blocking operations and progress indicators (20% intervals)
+- Service layer integration with mock/real mode compatibility and unified node access
+- Comprehensive testing: 22 IndexingService tests (179 total tests passing)
+
+**Semantic Search Implementation (Feature #290)**
+- Ollama Local Embedding API integration: sovereign AI solution using local models
+- Modular feature architecture: complete vertical slice at `src/features/semantic-search/`
+- Zustand store slice pattern: OllamaConfigSlice with clean state management
+- Service layer integration: factory pattern with app context for semantic operations
+- Command organization: 8 semantic search commands across 3 organized command files
+- Auto-indexing pipeline: nodes automatically indexed on creation and git commit changes
+
+**Search-as-DreamNode Interface (Feature #323)**
+- Unified search/creation UX paradigm with seamless query-to-node transformation
+- SearchNode3D component with real-time visual feedback during query typing
+- Save animation system with scale/opacity transitions for natural UX flow
+- Command palette integration: "Activate Search Interface" with proper state management
+- Context-aware search activation: spatial layout switching with clean state transitions
+- Intelligent query change detection: only trigger re-search when query content changes
+
+**Honeycomb Search Layout (Feature #280)**
+- Mathematical precision for 1-36 node positioning with perfect hexagonal grid
+- Adaptive ring distribution: dynamic optimization based on node count
+- Scale progression system: center → ring 1 → ring 2 with optimal spacing ratios
+- Integration with semantic search: honeycomb layout activated in search spatial mode
+- Performance optimization: efficient position calculation with mathematical constants
+
+### Technical Achievements
+
+**Architecture Innovations**
+- Experimental branch archiving strategy: preserving alternative approaches with comprehensive documentation
+- Vertical slice architecture: complete self-contained features ready for npm package extraction
+- Local AI sovereignty: no cloud dependencies, all processing local via Ollama
+- Robust error handling: graceful degradation when semantic search unavailable
+- Cross-session persistence: vector data survives plugin reloads via persistent store middleware
+
+**Code Quality Excellence**
+- Zero lint warnings and zero TypeScript compilation errors across entire codebase
+- 179 unit tests passing with comprehensive coverage for new services
+- Type safety improvements: systematic replacement of 'any' types with proper TypeScript typing
+- Git integration hooks: automatic re-indexing on `GitDreamNodeService.create()` and commit detection
+
+**Key Technical Innovations**
+- Character frequency embeddings: placeholder system for future Qwen3 integration
+- Command palette UX: setTimeout pattern prevents palette freezing during async operations
+- Delta algorithm: uses git commit hashes for intelligent change detection
+- Progress notifications: real-time UI feedback for long-running background operations
+- Error resilience: graceful handling of indexing failures with detailed error reporting
+
+### Files Delivered
+
+**Core Implementation**
+- `src/services/indexing-service.ts` (446 lines): Complete indexing infrastructure
+- `tests/services/indexing-service.test.ts` (483 lines): Comprehensive test coverage
+- `src/features/semantic-search/` (complete vertical slice): 2,500+ lines of semantic search functionality
+- Enhanced 6 existing files with indexing integrations and vector storage
+
+### Architecture Foundation
+
+Epic 5 establishes the foundation for advanced semantic capabilities:
+- Ready for semantic search interface, query processing, and similarity calculations
+- Modular architecture supports future AI model integrations
+- Local-first approach ensures data sovereignty and privacy
+- Scalable indexing system handles growing knowledge graphs efficiently
+
+### Breaking Changes
+
+None. All changes are backward compatible with existing Epic 1-4 functionality.
+
+### Migration Notes
+
+No migration required. Semantic search features are opt-in and enhance existing workflows without disrupting current functionality.
+
 ## [0.3.0] - 2025-07-26 - Epic 3: DreamNode Management System
 
 ### Added

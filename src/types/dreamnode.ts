@@ -170,11 +170,12 @@ export interface GitStatus {
   
   /** Optional detailed status information */
   details?: {
-    staged: number;
-    unstaged: number;
-    untracked: number;
-    stashCount: number;
-    aheadCount: number;
+    staged?: number;
+    unstaged?: number;
+    untracked?: number;
+    stashCount?: number;
+    aheadCount?: number;
+    commitHash?: string;
   };
 }
 

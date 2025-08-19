@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>InterBrain Ring Layout Algorithm - Interactive Visualizer</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #1a1a1a; 
+            color: white; 
+        }
+        canvas { 
+            border: 1px solid #444; 
+            background: #000; 
+            margin: 10px 0; 
+        }
+        .controls { 
+            margin: 20px 0; 
+            padding: 20px; 
+            background: #333; 
+            border-radius: 8px; 
+        }
+        input[type="range"] { 
+            width: 200px; 
+            margin: 0 10px; 
+        }
+        .info { 
+            background: #444; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 10px 0; 
+            font-family: monospace; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Ring Layout Algorithm Visualizer</h1>
+    
+    <div style="background: #2d4a22; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+        <strong>Documentation Reference</strong><br>
+        This interactive tool demonstrates the mathematical precision of InterBrain's honeycomb ring layout algorithm.
+        It shows how 1-36 nodes are positioned using a 42-coordinate system with intelligent selection patterns.
+        <br><em>This is for learning and reference only - not part of the active application.</em>
+    </div>
+    
+    <div class="controls">
+        <label>Node Count: <input type="range" id="nodeCount" min="1" max="36" value="6"> <span id="nodeCountValue">6</span></label>
+        <br><br>
+        <button onclick="setNodeCount(1)">1 Node</button>
+        <button onclick="setNodeCount(6)">6 Nodes</button>
+        <button onclick="setNodeCount(7)">7 Nodes</button>
+        <button onclick="setNodeCount(12)">12 Nodes</button>
+        <button onclick="setNodeCount(18)">18 Nodes</button>
+        <button onclick="setNodeCount(24)">24 Nodes</button>
+        <button onclick="setNodeCount(36)">36 Nodes</button>
+        <br><br>
+        <button onclick="previousNode()">Previous</button>
+        <button onclick="nextNode()">Next</button>
+        <button onclick="visualizeProgression()">Auto Progression (1-36)</button>
+    </div>
+    
+    <div class="info" id="info">
+        Ring 1: 0 nodes | Ring 2: 0 nodes | Ring 3: 0 nodes
+    </div>
+    
+    <div style="display: flex; gap: 20px;">
+        <div>
+            <h3>Dynamic Visualization</h3>
+            <canvas id="canvas" width="800" height="800"></canvas>
+        </div>
+        <div>
+            <h3>Static 42-Node Coordinate System</h3>
+            <canvas id="staticCanvas" width="800" height="800"></canvas>
+            <div style="margin-top: 10px; font-family: monospace; font-size: 12px;">
+                <strong>42 Possible Coordinates:</strong><br>
+                <strong>Ring 1:</strong> Nodes 1-6 (center hexagon)<br>
+                <strong>Ring 2:</strong> Nodes 7-18 (12 nodes: 6 corners + 6 edge midpoints)<br>
+                <strong>Ring 3:</strong> Nodes 19-42 (24 nodes: 6 corners + 18 edge positions)<br>
+                <em>Up to 36 nodes displayed using intelligent coordinate selection</em>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Improved hexagonal ring positioning algorithm for optimal geometric balance
+        function calculateHexagonalRingPositions(maxNodes, radius, zDistance) {
+            if (maxNodes === 0) return [];
+            
+            const positions = [];
+            
+            if (maxNodes <= 6) {
+                // Ring 1: Equidistant spacing on circle (dynamic repositioning)
+                let startAngle = -Math.PI / 2; // Default: start at top (point up)
+                
+                // For exactly 6 nodes, rotate by 30° so flat edge is at top
+                if (maxNodes === 6) {
+                    startAngle = -Math.PI / 2 + Math.PI / 6; // Rotate by 30° (π/6 radians)
+                }
+                
+                for (let i = 0; i < Math.min(maxNodes, 6); i++) {
+                    const angle = (i / maxNodes) * 2 * Math.PI + startAngle;
+                    const x = radius * Math.cos(angle);
+                    const y = radius * Math.sin(angle);
+                    positions.push([x, y, zDistance]);
+                }
+            } else if (maxNodes <= 12) {
+                // Ring 2: Fixed positions - midpoints between inner rays first (more circular)
+                
+                // Define all 12 fixed positions for Ring 2
+                const allRing2Positions = [];
+                
+                // First 6 positions: specific angles for proper rectangle formation
+                // Position 0: -60° (top-right for rectangle)
+                // Position 1: +60° (top-left for rectangle)  
+                // Position 2: -120° (bottom-right for rectangle)
+                // Position 3: +120° (bottom-left for rectangle)
+                // Position 4: 0° (top center)
+                // Position 5: 180° (bottom center)
+                const specificAngles = [
+                    -Math.PI / 3,        // -60° (top-right)
+                    Math.PI / 3,         // +60° (top-left)
+                    -2 * Math.PI / 3,    // -120° (bottom-right) 
+                    2 * Math.PI / 3,     // +120° (bottom-left)
+                    0,                   // 0° (top center)
+                    Math.PI              // 180° (bottom center)
+                ];
+                
+                for (let i = 0; i < 6; i++) {
+                    const angle = specificAngles[i];
+                    const x = radius * Math.cos(angle);
+                    const y = radius * Math.sin(angle);
+                    allRing2Positions.push([x, y, zDistance]);
+                }
+                
+                // Next 6 positions: aligned with inner rays  
+                // Same angles as inner ring: -90°, -30°, 30°, 90°, 150°, 210°
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * 2 * Math.PI - Math.PI / 2; // Same as Ring 1
+                    const x = radius * Math.cos(angle);
+                    const y = radius * Math.sin(angle);
+                    allRing2Positions.push([x, y, zDistance]);
+                }
+                
+                // Optimal placement order for rectangle formation
+                const placementOrder = [
+                    5,     // 1st: Bottom center (180°)
+                    4,     // 2nd: Top center (0°) - vertical line
+                    2,     // 3rd: Bottom-right (-120°) - triangle
+                    0,     // 4th: Top-right (-60°) - rectangle!
+                    3, 1,  // 5th, 6th: Bottom-left (+120°) and Top-left (+60°)
+                    10, 7, // 7th, 8th: Bottom and top corners (aligned with inner)
+                    11, 8, // 9th, 10th: Bottom-right and top-left corners
+                    6, 9   // 11th, 12th: Top-right and bottom-left corners
+                ];
+                
+                // Place nodes according to optimal order (fixed positions)
+                for (let i = 0; i < Math.min(maxNodes - 6, 12); i++) {
+                    const posIndex = placementOrder[i];
+                    positions.push(allRing2Positions[posIndex]);
+                }
+            } else {
+                // Ring 3: Single coherent hexagon - fixed positions at same radius
+                // 18 total positions: 6 corners + 12 edge positions (2 between each corner pair)
+                
+                const allRing3Positions = [];
+                
+                // Generate all 18 evenly distributed positions around the circle
+                for (let i = 0; i < 18; i++) {
+                    const angle = (i / 18) * 2 * Math.PI; // Every 20 degrees
+                    const x = radius * Math.cos(angle);
+                    const y = radius * Math.sin(angle);
+                    allRing3Positions.push({pos: [x, y, zDistance], angle: angle});
+                }
+                
+                // Optimal placement order for maximum symmetry at each step
+                // Start with maximally separated positions, then fill in systematically
+                const placementOrder = [
+                    0, 9,   // Opposite positions (0°, 180°) 
+                    3, 12,  // 60°, 240° (perpendicular)
+                    6, 15,  // 120°, 300° (complete 6-fold symmetry)
+                    1, 10,  // 20°, 200° (fill between)
+                    4, 13,  // 80°, 260° 
+                    7, 16,  // 140°, 320°
+                    2, 11,  // 40°, 220° 
+                    5, 14,  // 100°, 280°
+                    8, 17   // 160°, 340° (final positions)
+                ];
+                
+                // Place nodes according to optimal symmetric order (fixed positions)
+                for (let i = 0; i < Math.min(maxNodes - 18, 18); i++) {
+                    const posIndex = placementOrder[i];
+                    positions.push(allRing3Positions[posIndex].pos);
+                }
+            }
+            
+            return positions;
+        }
+        
+        // Generate all 42 static node positions using the same logic as the static coordinate system
+        function generateAll36StaticPositions() { // Keep function name for compatibility
+            const allPositions = [];
+            const scale = 1; // Use unscaled world coordinates
+            
+            // Ring 1: Nodes 1-6 (same as existing logic)
+            const ring1StartAngle = -Math.PI / 2 + Math.PI / 6; // 30° rotation for flat edge at top
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI + ring1StartAngle;
+                const x = RING_RADII[0] * Math.cos(angle);
+                const y = RING_RADII[0] * Math.sin(angle);
+                allPositions.push([x, y, 0]);
+            }
+            
+            // Ring 2: Nodes 7-18 (6 edge positions + 6 corner positions)
+            const ring2EdgeRadius = RING_RADII[1] * Math.cos(Math.PI / 6);
+            // First 6 nodes (7-12): edge positions (reduced radius)
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI - Math.PI / 2;
+                const x = ring2EdgeRadius * Math.cos(angle);
+                const y = ring2EdgeRadius * Math.sin(angle);
+                allPositions.push([x, y, 0]);
+            }
+            // Next 6 nodes (13-18): corner positions (full radius)
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI - Math.PI / 2 + Math.PI / 6;
+                const x = RING_RADII[1] * Math.cos(angle);
+                const y = RING_RADII[1] * Math.sin(angle);
+                allPositions.push([x, y, 0]);
+            }
+            
+            // Ring 3: Nodes 19-36 (6 vertices + 12 edge nodes using path parameterization)
+            const hexagonAngles = [30, 90, 150, 210, 270, 330];
+            const baseRadius = RING_RADII[2];
+            const vertexPositions = [];
+            
+            // Calculate vertex positions (19-24)
+            for (let i = 0; i < 6; i++) {
+                const angleDegrees = hexagonAngles[i];
+                const angleRadians = (angleDegrees - 90) * Math.PI / 180;
+                const x = baseRadius * Math.cos(angleRadians);
+                const y = baseRadius * Math.sin(angleRadians);
+                vertexPositions.push([x, y]);
+                allPositions.push([x, y, 0]); // Add vertex positions (19-24)
+            }
+            
+            // Path parameterization for edge nodes (25-36)
+            function lerpPath(pointA, pointB, t) {
+                return [
+                    pointA[0] + t * (pointB[0] - pointA[0]),
+                    pointA[1] + t * (pointB[1] - pointA[1])
+                ];
+            }
+            
+            // Add edge nodes using path parameterization (25-36)
+            for (let edgeIndex = 0; edgeIndex < 6; edgeIndex++) {
+                const startVertex = vertexPositions[edgeIndex];
+                const endVertex = vertexPositions[(edgeIndex + 1) % 6];
+                
+                for (let nodeOnEdge = 0; nodeOnEdge < 2; nodeOnEdge++) {
+                    const t = (nodeOnEdge + 1) / 3; // t = 1/3, 2/3
+                    const [worldX, worldY] = lerpPath(startVertex, endVertex, t);
+                    allPositions.push([worldX, worldY, 0]);
+                }
+            }
+            
+            // Add 6 additional edge midpoint nodes (37-42) at t=0.5
+            for (let edgeIndex = 0; edgeIndex < 6; edgeIndex++) {
+                const startVertex = vertexPositions[edgeIndex];
+                const endVertex = vertexPositions[(edgeIndex + 1) % 6];
+                
+                const t = 0.5; // Exact midpoint
+                const [worldX, worldY] = lerpPath(startVertex, endVertex, t);
+                allPositions.push([worldX, worldY, 0]); // Nodes 37-42
+            }
+            
+            return allPositions;
+        }
+        
+        // Helper function to activate Ring 2 nodes (always full for node counts > 18)
+        function activateRing2(mask) {
+            for (let i = 6; i < 18; i++) {
+                mask[i] = true; // Nodes 7-18 (indices 6-17)
+            }
+        }
+        
+        // Helper function to activate specific Ring 3 node sets
+        function activateRing3Nodes(mask, nodeNumbers) {
+            nodeNumbers.forEach(nodeNum => {
+                mask[nodeNum - 1] = true; // Convert 1-based to 0-based indexing
+            });
+        }
+        
+        // Define which nodes are active for each total node count (boolean mask approach)
+        function getActiveMask(totalNodes) {
+            const mask = new Array(42).fill(false);
+            
+            // Always activate Ring 1 (nodes 1-6) for counts > 0
+            for (let i = 0; i < Math.min(totalNodes, 6); i++) {
+                mask[i] = true; // Nodes 1-6 (indices 0-5)
+            }
+            
+            // If totalNodes <= 6, we're done
+            if (totalNodes <= 6) return mask;
+            
+            // Ring 2 specific patterns (nodes 7-18, indices 6-17)
+            if (totalNodes === 7) {
+                mask[6] = true; // Node 7
+            }
+            else if (totalNodes === 8) {
+                mask[6] = true;  // Node 7
+                mask[9] = true;  // Node 10
+            }
+            else if (totalNodes === 9) {
+                mask[6] = true;  // Node 7
+                mask[8] = true;  // Node 9
+                mask[10] = true; // Node 11
+            }
+            else if (totalNodes === 10) {
+                mask[6] = true;  // Node 7 (already in your description but adding for completeness)
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+                // Wait, let me re-read: you want 12, 8, 9, 11 for 10 nodes
+                mask[6] = false; mask[7] = false; mask[8] = false; mask[10] = false; mask[11] = false; // Clear first
+                mask[11] = true; // Node 12
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[10] = true; // Node 11
+            }
+            else if (totalNodes === 11) {
+                mask[6] = true;  // Node 7
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+            }
+            else if (totalNodes === 12) {
+                mask[6] = true;  // Node 7
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[9] = true;  // Node 10
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+            }
+            else if (totalNodes === 13) {
+                mask[6] = true;  // Node 7
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[14] = true; // Node 15
+                mask[15] = true; // Node 16
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+            }
+            else if (totalNodes === 14) {
+                mask[17] = true; // Node 18
+                mask[12] = true; // Node 13
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[14] = true; // Node 15
+                mask[15] = true; // Node 16
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+            }
+            else if (totalNodes === 15) {
+                // All nodes from 14-node setup + Node 7
+                mask[17] = true; // Node 18
+                mask[12] = true; // Node 13
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[14] = true; // Node 15
+                mask[15] = true; // Node 16
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+                mask[6] = true;  // Node 7 (additional)
+            }
+            else if (totalNodes === 16) {
+                // All nodes from 15-node setup + Node 10
+                mask[17] = true; // Node 18
+                mask[12] = true; // Node 13
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[14] = true; // Node 15
+                mask[15] = true; // Node 16
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+                mask[6] = true;  // Node 7
+                mask[9] = true;  // Node 10 (additional)
+            }
+            else if (totalNodes === 17) {
+                // 16-node setup + Node 17, Node 14, - Node 10
+                mask[17] = true; // Node 18
+                mask[12] = true; // Node 13
+                mask[7] = true;  // Node 8
+                mask[8] = true;  // Node 9
+                mask[14] = true; // Node 15
+                mask[15] = true; // Node 16
+                mask[10] = true; // Node 11
+                mask[11] = true; // Node 12
+                mask[6] = true;  // Node 7
+                // mask[9] = false; // Node 10 (turn off) - already false by default
+                mask[16] = true; // Node 17 (additional)
+                mask[13] = true; // Node 14 (additional)
+            }
+            else if (totalNodes === 18) {
+                // All Ring 2 nodes (nodes 7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true; // Nodes 7-18 (indices 6-17)
+                }
+            }
+            
+            // Ring 3 specific patterns (Ring 1 + Ring 2 always fully active for 19+)
+            else if (totalNodes === 19) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [42]);
+            }
+            else if (totalNodes === 20) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [42, 39]);
+            }
+            else if (totalNodes === 21) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [42, 38, 40]);
+            }
+            else if (totalNodes === 22) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [37, 38, 40, 41]);
+            }
+            else if (totalNodes === 23) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [37, 38, 40, 41, 42]); // 22-node setup + 42
+            }
+            else if (totalNodes === 24) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [37, 38, 39, 40, 41, 42]); // 23-node setup + 39
+            }
+            else if (totalNodes === 25) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [37, 38, 40, 41, 42, 29, 30]); // 24-node setup - 39 + 29,30
+            }
+            else if (totalNodes === 26) {
+                activateRing2(mask);
+                activateRing3Nodes(mask, [37, 38, 40, 41, 29, 30, 35, 36]); // 25-node setup - 42 + 35,36
+            }
+            else if (totalNodes === 27) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: Complex modifications from 26-node setup
+                mask[36] = true; // Node 37 (index 36)
+                // mask[37] = false; // Node 38 turned off (already false by default)
+                // mask[39] = false; // Node 40 turned off (already false by default)
+                mask[40] = true; // Node 41 (index 40)
+                // mask[28] = false; // Node 29 turned off (already false by default)
+                // mask[29] = false; // Node 30 turned off (already false by default)
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                mask[38] = true; // Node 39 (index 38) - turn back on
+                mask[26] = true; // Node 27 (index 26) - additional
+                mask[27] = true; // Node 28 (index 27) - additional
+                mask[30] = true; // Node 31 (index 30) - additional
+                mask[31] = true; // Node 32 (index 31) - additional
+            }
+            else if (totalNodes === 28) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 27-node setup - Node 39 + Nodes 29, 30
+                mask[36] = true; // Node 37 (index 36)
+                mask[40] = true; // Node 41 (index 40)
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                // mask[38] = false; // Node 39 turned off (already false by default)
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[28] = true; // Node 29 (index 28) - additional
+                mask[29] = true; // Node 30 (index 29) - additional
+            }
+            else if (totalNodes === 29) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 28-node setup with complex modifications
+                // mask[36] = false; // Node 37 turned off (already false by default)
+                // mask[40] = false; // Node 41 turned off (already false by default)
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                // mask[28] = false; // Node 29 turned off (already false by default)
+                // mask[29] = false; // Node 30 turned off (already false by default)
+                mask[38] = true; // Node 39 (index 38) - additional
+                mask[32] = true; // Node 33 (index 32) - additional
+                mask[33] = true; // Node 34 (index 33) - additional
+                mask[24] = true; // Node 25 (index 24) - additional
+                mask[25] = true; // Node 26 (index 25) - additional
+            }
+            else if (totalNodes === 30) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 29-node setup - Node 39 + Nodes 29, 30
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                // mask[38] = false; // Node 39 turned off (already false by default)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                mask[28] = true; // Node 29 (index 28) - additional
+                mask[29] = true; // Node 30 (index 29) - additional
+            }
+            else if (totalNodes === 31) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 30-node setup - Nodes 35, 36 + Nodes 24, 42, 19
+                // mask[34] = false; // Node 35 turned off (already false by default)
+                // mask[35] = false; // Node 36 turned off (already false by default)
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                mask[28] = true; // Node 29 (index 28)
+                mask[29] = true; // Node 30 (index 29)
+                mask[23] = true; // Node 24 (index 23) - additional
+                mask[41] = true; // Node 42 (index 41) - additional
+                mask[18] = true; // Node 19 (index 18) - additional
+            }
+            // For 32+ nodes, use existing logic
+            else if (totalNodes > 31 && totalNodes < 32) {
+                for (let i = 6; i < Math.min(totalNodes, 42); i++) {
+                    mask[i] = true;
+                }
+            }
+            else if (totalNodes === 32) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 31-node setup - Nodes 29, 30 + Nodes 21, 39, 20
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                // mask[28] = false; // Node 29 turned off (already false by default)
+                // mask[29] = false; // Node 30 turned off (already false by default)
+                mask[23] = true; // Node 24 (index 23)
+                mask[41] = true; // Node 42 (index 41)
+                mask[18] = true; // Node 19 (index 18)
+                mask[20] = true; // Node 21 (index 20) - additional
+                mask[38] = true; // Node 39 (index 38) - additional
+                mask[21] = true; // Node 22 (index 21) - additional
+            }
+            else if (totalNodes === 33) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 32-node setup - Node 42 + Nodes 35, 36
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                mask[23] = true; // Node 24 (index 23)
+                // mask[41] = false; // Node 42 turned off (already false by default)
+                mask[18] = true; // Node 19 (index 18)
+                mask[20] = true; // Node 21 (index 20)
+                mask[38] = true; // Node 39 (index 38)
+                mask[21] = true; // Node 22 (index 21)
+                mask[34] = true; // Node 35 (index 34) - additional
+                mask[35] = true; // Node 36 (index 35) - additional
+            }
+            else if (totalNodes === 34) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 33-node setup - Node 39 + Nodes 30, 29
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                mask[23] = true; // Node 24 (index 23)
+                mask[18] = true; // Node 19 (index 18)
+                mask[20] = true; // Node 21 (index 20)
+                // mask[38] = false; // Node 39 turned off (already false by default)
+                mask[21] = true; // Node 22 (index 21)
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                mask[29] = true; // Node 30 (index 29) - additional
+                mask[28] = true; // Node 29 (index 28) - additional
+            }
+            else if (totalNodes === 35) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 34-node setup - Nodes 30, 29 + Nodes 39, 23, 20
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                mask[23] = true; // Node 24 (index 23)
+                mask[18] = true; // Node 19 (index 18)
+                mask[20] = true; // Node 21 (index 20)
+                mask[21] = true; // Node 22 (index 21)
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                // mask[29] = false; // Node 30 turned off (already false by default)
+                // mask[28] = false; // Node 29 turned off (already false by default)
+                mask[38] = true; // Node 39 (index 38) - additional
+                mask[22] = true; // Node 23 (index 22) - additional
+                mask[19] = true; // Node 20 (index 19) - additional
+            }
+            else if (totalNodes === 36) {
+                // All Ring 2 nodes (7-18) active
+                for (let i = 6; i < 18; i++) {
+                    mask[i] = true;
+                }
+                // Ring 3: 35-node setup - Node 39 + Nodes 30, 29
+                mask[26] = true; // Node 27 (index 26)
+                mask[27] = true; // Node 28 (index 27)
+                mask[30] = true; // Node 31 (index 30)
+                mask[31] = true; // Node 32 (index 31)
+                mask[32] = true; // Node 33 (index 32)
+                mask[33] = true; // Node 34 (index 33)
+                mask[24] = true; // Node 25 (index 24)
+                mask[25] = true; // Node 26 (index 25)
+                mask[23] = true; // Node 24 (index 23)
+                mask[18] = true; // Node 19 (index 18)
+                mask[20] = true; // Node 21 (index 20)
+                mask[21] = true; // Node 22 (index 21)
+                mask[34] = true; // Node 35 (index 34)
+                mask[35] = true; // Node 36 (index 35)
+                // mask[38] = false; // Node 39 turned off (already false by default)
+                mask[22] = true; // Node 23 (index 22)
+                mask[19] = true; // Node 20 (index 19)
+                mask[29] = true; // Node 30 (index 29) - additional
+                mask[28] = true; // Node 29 (index 28) - additional
+            }
+            // For other counts > 36, use sequential logic for now
+            else if (totalNodes > 36) {
+                for (let i = 6; i < Math.min(totalNodes, 42); i++) {
+                    mask[i] = true;
+                }
+            }
+            
+            return mask;
+        }
+        
+        // Raw values from actual algorithm
+        const RING_RADII = [40, 125, 335]; // From RingLayout.ts
+        
+        function visualizeLayout(totalNodes) {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 0.8; // Scale factor to fit in canvas
+            
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw center point
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Add center label
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('CENTER', centerX, centerY - 15);
+            
+            // Hybrid approach: Original Ring 1 logic + masking for Ring 2/3
+            const colors = ['#4ecdc4', '#45b7d1', '#96ceb4'];
+            
+            // Draw ring circles
+            for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
+                const radius = RING_RADII[ringIndex] * scale;
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            let nodeDisplayNumber = 1;
+            let ring1Count = 0, ring2Count = 0, ring3Count = 0;
+            
+            // Ring 1: Use original dynamic equidistant spacing (nodes 1-6)
+            if (totalNodes >= 1) {
+                const ring1Nodes = Math.min(totalNodes, 6);
+                ring1Count = ring1Nodes;
+                
+                // Original Ring 1 logic with proper rotation
+                let startAngle = -Math.PI / 2; // Default: start at top (point up)
+                if (ring1Nodes === 6) {
+                    startAngle = -Math.PI / 2 + Math.PI / 6; // Rotate by 30° (flat edge at top)
+                }
+                
+                ctx.fillStyle = colors[0]; // Ring 1 color
+                for (let i = 0; i < ring1Nodes; i++) {
+                    const angle = (i / ring1Nodes) * 2 * Math.PI + startAngle;
+                    const x = centerX + RING_RADII[0] * scale * Math.cos(angle);
+                    const y = centerY + RING_RADII[0] * scale * Math.sin(angle);
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(nodeDisplayNumber.toString(), x, y + 3);
+                    ctx.fillStyle = colors[0];
+                    
+                    nodeDisplayNumber++;
+                }
+            }
+            
+            // Ring 2 & Ring 3: Use masking approach for nodes 7+
+            if (totalNodes > 6) {
+                const all42Positions = generateAll36StaticPositions(); // Now returns 42 positions
+                const activeMask = getActiveMask(totalNodes);
+                
+                // Draw Ring 2 and Ring 3 nodes using mask (skip Ring 1 indices 0-5)
+                for (let i = 6; i < 42; i++) {
+                    if (!activeMask[i]) continue;
+                    
+                    const pos = all42Positions[i];
+                    const x = centerX + pos[0] * scale;
+                    const y = centerY + pos[1] * scale;
+                    
+                    // Determine color based on position range
+                    let color;
+                    if (i < 18) {
+                        color = colors[1]; // Ring 2
+                        ring2Count++;
+                    } else {
+                        color = colors[2]; // Ring 3
+                        ring3Count++;
+                    }
+                    
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Add node number
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(nodeDisplayNumber.toString(), x, y + 3);
+                    
+                    nodeDisplayNumber++;
+                }
+            }
+            
+            // Add ring labels
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Ring 1: ${ring1Count} nodes`, 20, 30);
+            ctx.fillText(`Ring 2: ${ring2Count} nodes`, 20, 50);
+            ctx.fillText(`Ring 3: ${ring3Count} nodes`, 20, 70);
+            
+            // Update info
+            document.getElementById('info').textContent = 
+                `Ring 1: ${ring1Count} nodes | Ring 2: ${ring2Count} nodes | Ring 3: ${ring3Count} nodes`;
+        }
+        
+        function setNodeCount(count) {
+            document.getElementById('nodeCount').value = count;
+            document.getElementById('nodeCountValue').textContent = count;
+            visualizeLayout(count);
+        }
+        
+        function nextNode() {
+            const current = parseInt(document.getElementById('nodeCount').value);
+            if (current < 36) {
+                setNodeCount(current + 1);
+            }
+        }
+        
+        function previousNode() {
+            const current = parseInt(document.getElementById('nodeCount').value);
+            if (current > 1) {
+                setNodeCount(current - 1);
+            }
+        }
+        
+        function visualizeProgression() {
+            let count = 1;
+            const interval = setInterval(() => {
+                setNodeCount(count);
+                count++;
+                if (count > 36) {
+                    clearInterval(interval);
+                }
+            }, 300); // 300ms between frames for better visibility
+        }
+        
+        // Event listeners
+        document.getElementById('nodeCount').addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            document.getElementById('nodeCountValue').textContent = value;
+            visualizeLayout(value);
+        });
+        
+        // Static 36-node coordinate system
+        function createStaticCoordinateSystem() {
+            const canvas = document.getElementById('staticCanvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 0.8;
+            
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw center point
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('CENTER', centerX, centerY - 15);
+            
+            let nodeNumber = 1;
+            const colors = ['#4ecdc4', '#45b7d1', '#96ceb4']; // Teal, blue, green
+            
+            // Ring 1: 6 nodes (nodes 1-6) - Simple hexagon with flat edge at top
+            const ring1Radius = RING_RADII[0] * scale;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, ring1Radius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            ctx.fillStyle = colors[0];
+            const ring1StartAngle = -Math.PI / 2 + Math.PI / 6; // 30° rotation for flat edge at top
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI + ring1StartAngle;
+                const x = centerX + ring1Radius * Math.cos(angle);
+                const y = centerY + ring1Radius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(nodeNumber.toString(), x, y + 4);
+                ctx.fillStyle = colors[0];
+                
+                nodeNumber++;
+            }
+            
+            // Ring 2: 12 nodes (nodes 7-18) - Hexagon corners + edge midpoints
+            const ring2Radius = RING_RADII[1] * scale;
+            ctx.strokeStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, ring2Radius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            ctx.fillStyle = colors[1];
+            
+            // First 6 nodes: Hexagon corners (aligned with Ring 1 but no rotation) - reduced radius to lie on hexagon edges
+            const ring2EdgeRadius = ring2Radius * Math.cos(Math.PI / 6); // cos(30°) = √3/2 ≈ 0.866
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI - Math.PI / 2; // Start at top
+                const x = centerX + ring2EdgeRadius * Math.cos(angle);
+                const y = centerY + ring2EdgeRadius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(nodeNumber.toString(), x, y + 4);
+                ctx.fillStyle = colors[1];
+                
+                nodeNumber++;
+            }
+            
+            // Next 6 nodes: Edge midpoints (30° offset) - full radius (these are the actual hexagon corners)
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI - Math.PI / 2 + Math.PI / 6; // 30° offset
+                const x = centerX + ring2Radius * Math.cos(angle);
+                const y = centerY + ring2Radius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(nodeNumber.toString(), x, y + 4);
+                ctx.fillStyle = colors[1];
+                
+                nodeNumber++;
+            }
+            
+            // Ring 3: Only nodes 19-25 at hexagon vertices (step-by-step approach)
+            const ring3Radius = RING_RADII[2] * scale;
+            ctx.strokeStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, ring3Radius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            ctx.fillStyle = colors[2];
+            
+            // Nodes 19-24: Hexagon vertices starting at 30° (0° = top)
+            const hexagonAngles = [
+                30,   // Node 19 at 30°
+                90,   // Node 20 at 90° 
+                150,  // Node 21 at 150°
+                210,  // Node 22 at 210°
+                270,  // Node 23 at 270°
+                330,  // Node 24 at 330°
+                30    // Node 25 at 30° (back to start - this creates 7 nodes with one overlap)
+            ];
+            
+            // Place nodes 19-24 at specified angles  
+            for (let i = 0; i < 6; i++) { // 6 nodes (19-24)
+                const angleDegrees = hexagonAngles[i];
+                const angleRadians = (angleDegrees - 90) * Math.PI / 180; // Convert to radians, adjust for 0° = top
+                const x = centerX + ring3Radius * Math.cos(angleRadians);
+                const y = centerY + ring3Radius * Math.sin(angleRadians);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText((19 + i).toString(), x, y + 3);
+                ctx.fillStyle = colors[2];
+            }
+            
+            // Now add edge nodes (25-36) using path parameterization between vertices
+            const vertexPositions = [];
+            
+            // Calculate world coordinates for the 6 vertices (nodes 19-24) - unscaled
+            const baseRadius = RING_RADII[2]; // Use base radius before scaling
+            for (let i = 0; i < 6; i++) {
+                const angleDegrees = hexagonAngles[i];
+                const angleRadians = (angleDegrees - 90) * Math.PI / 180;
+                const x = baseRadius * Math.cos(angleRadians); // True world coordinates
+                const y = baseRadius * Math.sin(angleRadians);
+                vertexPositions.push([x, y]);
+            }
+            
+            // Path parameterization function: lerp between two points
+            function lerpPath(pointA, pointB, t) {
+                return [
+                    pointA[0] + t * (pointB[0] - pointA[0]),
+                    pointA[1] + t * (pointB[1] - pointA[1])
+                ];
+            }
+            
+            let edgeNodeNumber = 25; // Start with node 25
+            
+            // For each edge (6 edges total), place 2 nodes at t=1/3 and t=2/3
+            for (let edgeIndex = 0; edgeIndex < 6; edgeIndex++) {
+                const startVertex = vertexPositions[edgeIndex];
+                const endVertex = vertexPositions[(edgeIndex + 1) % 6]; // Wrap around for last edge
+                
+                // Place 2 nodes on this edge: at t=1/3 and t=2/3
+                for (let nodeOnEdge = 0; nodeOnEdge < 2; nodeOnEdge++) {
+                    const t = (nodeOnEdge + 1) / 3; // t = 1/3 for first node, 2/3 for second
+                    const [worldX, worldY] = lerpPath(startVertex, endVertex, t);
+                    
+                    // Convert to canvas coordinates - use the lerp result directly (no radius adjustment!)
+                    const x = centerX + worldX * scale;
+                    const y = centerY + worldY * scale;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(edgeNodeNumber.toString(), x, y + 3);
+                    ctx.fillStyle = colors[2];
+                    
+                    edgeNodeNumber++;
+                }
+            }
+            
+            // Add 6 additional edge midpoint nodes (37-42) at t=0.5
+            let additionalNodeNumber = 37;
+            for (let edgeIndex = 0; edgeIndex < 6; edgeIndex++) {
+                const startVertex = vertexPositions[edgeIndex];
+                const endVertex = vertexPositions[(edgeIndex + 1) % 6];
+                
+                const t = 0.5; // Exact midpoint
+                const [worldX, worldY] = lerpPath(startVertex, endVertex, t);
+                
+                // Convert to canvas coordinates
+                const x = centerX + worldX * scale;
+                const y = centerY + worldY * scale;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(additionalNodeNumber.toString(), x, y + 3);
+                ctx.fillStyle = colors[2];
+                
+                additionalNodeNumber++;
+            }
+            
+            // Add ring labels
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Ring 1: Nodes 1-6', 20, 30);
+            ctx.fillText('Ring 2: Nodes 7-18', 20, 50);
+            ctx.fillText('Ring 3: Nodes 19-42', 20, 70);
+        }
+        
+        // Initial visualizations
+        visualizeLayout(6);
+        createStaticCoordinateSystem();
+    </script>
+</body>
+</html>

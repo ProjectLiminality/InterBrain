@@ -34,10 +34,18 @@ export function buildRelationshipGraph(dreamNodes: DreamNode[]): RelationshipGra
   const nodes = new Map<string, DreamNode>();
   const edges = new Map<string, string[]>();
   
-  // Build nodes map
+  // Build nodes map first
   dreamNodes.forEach(node => {
     nodes.set(node.id, node);
-    edges.set(node.id, [...node.liminalWebConnections]);
+  });
+  
+  // Build edges, filtering out connections to non-existent nodes
+  // This prevents "phantom nodes" in layout calculations
+  dreamNodes.forEach(node => {
+    const validConnections = node.liminalWebConnections.filter(targetId => 
+      nodes.has(targetId) // Only include connections to nodes that actually exist
+    );
+    edges.set(node.id, validConnections);
   });
   
   // Create graph with query methods

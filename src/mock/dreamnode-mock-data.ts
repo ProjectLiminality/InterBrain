@@ -107,8 +107,9 @@ export function generateMockDreamNodes(count: number = 12, relationshipData?: Ma
     
     const nodeId = `mock-${type}-${i}`;
     
-    // Use persistent relationships if available, otherwise generate
-    const connections = relationshipData?.get(nodeId) || generateLiminalConnections(i, count, type);
+    // Use persistent relationships if available
+    // NEVER generate fallback relationships - this causes non-determinism!
+    const connections = relationshipData?.get(nodeId) || [];
     
     dreamNodes.push({
       id: nodeId,
@@ -126,47 +127,6 @@ export function generateMockDreamNodes(count: number = 12, relationshipData?: Ma
   return dreamNodes;
 }
 
-/**
- * Generate liminal web connections for a node
- * Dreams connect to Dreamers and vice versa (opposite-type only)
- * Creates a rich network of relationships for testing focused layouts
- */
-function generateLiminalConnections(index: number, totalCount: number, type: 'dream' | 'dreamer'): string[] {
-  const connections: string[] = [];
-  const maxConnections = Math.min(5, Math.floor(totalCount / 4)); // More connections for larger graphs
-  
-  // Generate deterministic but varied connections
-  for (let i = 0; i < maxConnections; i++) {
-    // Use different step sizes to create interesting patterns
-    const stepSizes = [1, 3, 7, 11, 13]; // Prime numbers for good distribution
-    const targetIndex = (index + stepSizes[i % stepSizes.length]) % totalCount;
-    const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
-    
-    // Only connect to opposite type (Dreams ↔ Dreamers)
-    if (type !== targetType) {
-      const targetId = `mock-${targetType}-${targetIndex}`;
-      if (!connections.includes(targetId)) {  // Avoid duplicates
-        connections.push(targetId);
-      }
-    }
-  }
-  
-  // Ensure every node has at least one connection if possible
-  if (connections.length === 0 && totalCount > 1) {
-    // Find the nearest opposite-type node
-    for (let offset = 1; offset < totalCount; offset++) {
-      const targetIndex = (index + offset) % totalCount;
-      const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
-      
-      if (type !== targetType) {
-        connections.push(`mock-${targetType}-${targetIndex}`);
-        break;
-      }
-    }
-  }
-  
-  return connections;
-}
 
 /**
  * Mock data configuration types
@@ -177,6 +137,8 @@ export type MockDataConfig = 'single-node' | 'fibonacci-12' | 'fibonacci-50' | '
  * Get mock data based on configuration with optional relationship data
  */
 export function getMockDataForConfig(config: MockDataConfig, relationshipData?: Map<string, string[]>): DreamNode[] {
+  // If no relationship data provided, return nodes with empty connections
+  // This prevents non-deterministic generation
   switch (config) {
     case 'single-node':
       return [getSingleTestNode()];

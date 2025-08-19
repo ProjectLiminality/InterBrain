@@ -10,7 +10,9 @@ import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
 import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
 import { getMockDataForConfig } from './mock/dreamnode-mock-data';
-import { calculateFocusedLayoutPositions, getFocusedLayoutStats, DEFAULT_FOCUSED_CONFIG } from './dreamspace/layouts/FocusedLayout';
+import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './dreamspace/layouts/RingLayout';
+import { registerSemanticSearchCommands } from './features/semantic-search/commands';
+import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -25,6 +27,13 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize services
     this.initializeServices();
     
+    // Auto-generate mock relationships if not present (ensures deterministic behavior)
+    const store = useInterBrainStore.getState();
+    if (!store.mockRelationshipData) {
+      console.log('Generating initial mock relationships for deterministic behavior...');
+      store.generateMockRelationships();
+    }
+    
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     
@@ -38,7 +47,7 @@ export default class InterBrainPlugin extends Plugin {
   }
 
   private initializeServices(): void {
-    this.uiService = new UIService();
+    this.uiService = new UIService(this.app);
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
@@ -48,6 +57,12 @@ export default class InterBrainPlugin extends Plugin {
   }
 
   private registerCommands(): void {
+    // Register semantic search commands
+    registerSemanticSearchCommands(this, this.uiService);
+    
+    // Register search interface commands (search-as-dreamnode UI)
+    registerSearchInterfaceCommands(this, this.uiService);
+    
     // Open DreamSpace command
     this.addCommand({
       id: 'open-dreamspace',
@@ -718,7 +733,7 @@ export default class InterBrainPlugin extends Plugin {
         }
         
         // Call global canvas function (simple approach for now)
-        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { moveSelectedNodeToCenter(): boolean } }).__interbrainCanvas;
         if (canvasAPI && canvasAPI.moveSelectedNodeToCenter) {
           const success = canvasAPI.moveSelectedNodeToCenter();
           if (success) {
@@ -753,7 +768,7 @@ export default class InterBrainPlugin extends Plugin {
         }
         
         // Call global canvas function to trigger focused layout
-        const canvasAPI = (globalThis as any).__interbrainCanvas;
+        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { focusOnNode(nodeId: string): boolean } }).__interbrainCanvas;
         if (canvasAPI && canvasAPI.focusOnNode) {
           const success = canvasAPI.focusOnNode(selectedNode.id);
           if (success) {
@@ -865,17 +880,33 @@ export default class InterBrainPlugin extends Plugin {
           // Build relationship graph
           const graph = buildRelationshipGraph(allNodes);
           
-          // Calculate focused layout positions
-          const positions = calculateFocusedLayoutPositions(selectedNode.id, graph, DEFAULT_FOCUSED_CONFIG);
-          const stats = getFocusedLayoutStats(positions);
+          // Calculate ring layout positions
+          const positions = calculateRingLayoutPositions(selectedNode.id, graph, DEFAULT_RING_CONFIG);
+          const stats = getRingLayoutStats(positions);
           
-          console.log(`\n=== Focused Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
+          console.log(`\n=== Ring Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
           console.log('DEBUG: Selected node ID:', selectedNode.id);
-          console.log('DEBUG: Center node ID from calculation:', positions.centerNode.nodeId);
+          console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None');
           console.log('Layout Stats:', stats);
-          console.log('\nCenter Position:', positions.centerNode.position);
-          console.log(`Inner Circle (${positions.innerCircleNodes.length} first-degree relationships break free):`);
-          positions.innerCircleNodes.forEach((node, i) => {
+          
+          if (positions.centerNode) {
+            console.log('\nCenter Position:', positions.centerNode.position);
+          }
+          
+          console.log(`\nRing 1 (${positions.ring1Nodes.length} nodes):`);
+          positions.ring1Nodes.forEach((node, i) => {
+            const nodeData = graph.nodes.get(node.nodeId);
+            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
+          });
+          
+          console.log(`\nRing 2 (${positions.ring2Nodes.length} nodes):`);
+          positions.ring2Nodes.forEach((node, i) => {
+            const nodeData = graph.nodes.get(node.nodeId);
+            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
+          });
+          
+          console.log(`\nRing 3 (${positions.ring3Nodes.length} nodes):`);
+          positions.ring3Nodes.forEach((node, i) => {
             const nodeData = graph.nodes.get(node.nodeId);
             console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
           });
@@ -886,6 +917,99 @@ export default class InterBrainPlugin extends Plugin {
         } catch (error) {
           console.error('Position calculation error:', error);
           this.uiService.showError(error instanceof Error ? error.message : 'Failed to calculate positions');
+        }
+      }
+    });
+
+    // Test Ring Layout with Dense Relationships
+    this.addCommand({
+      id: 'test-ring-layout-dense',
+      name: 'Test: Ring Layout with Dense Relationships (50 nodes)',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        
+        // Switch to mock mode with dense data
+        store.setDataMode('mock');
+        store.setMockDataConfig('fibonacci-50');
+        
+        // Wait a bit for state to update
+        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
+        
+        // Auto-select first dreamer node for testing
+        const mockNodes = getMockDataForConfig('fibonacci-50');
+        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
+        
+        if (firstDreamer) {
+          store.setSelectedNode(firstDreamer);
+          this.uiService.showSuccess(`Set up dense relationship test (50 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
+          console.log(`\n=== Ring Layout Test: Dense Relationships ===`);
+          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
+          console.log(`Total nodes: 50 with enhanced relationships (10-30 per node)`);
+          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
+        } else {
+          this.uiService.showError('No dreamer nodes found in mock data');
+        }
+      }
+    });
+
+    // Test Ring Layout with Medium Relationships  
+    this.addCommand({
+      id: 'test-ring-layout-medium',
+      name: 'Test: Ring Layout with Medium Relationships (12 nodes)',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        
+        // Switch to mock mode with medium data
+        store.setDataMode('mock');
+        store.setMockDataConfig('fibonacci-12');
+        
+        // Wait a bit for state to update
+        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
+        
+        // Auto-select first dreamer node for testing
+        const mockNodes = getMockDataForConfig('fibonacci-12');
+        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
+        
+        if (firstDreamer) {
+          store.setSelectedNode(firstDreamer);
+          this.uiService.showSuccess(`Set up medium relationship test (12 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
+          console.log(`\n=== Ring Layout Test: Medium Relationships ===`);
+          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
+          console.log(`Total nodes: 12 with enhanced relationships (5-15 per node)`);
+          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
+        } else {
+          this.uiService.showError('No dreamer nodes found in mock data');
+        }
+      }
+    });
+
+    // Test Ring Layout with Sparse Relationships
+    this.addCommand({
+      id: 'test-ring-layout-sparse',
+      name: 'Test: Ring Layout with Sparse Relationships (100 nodes)',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        
+        // Switch to mock mode with sparse data (many nodes, but still 10-30 relationships each)
+        store.setDataMode('mock');
+        store.setMockDataConfig('fibonacci-100');
+        
+        // Wait a bit for state to update
+        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
+        
+        // Auto-select first dreamer node for testing
+        const mockNodes = getMockDataForConfig('fibonacci-100');
+        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
+        
+        if (firstDreamer) {
+          store.setSelectedNode(firstDreamer);
+          this.uiService.showSuccess(`Set up sparse relationship test (100 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
+          console.log(`\n=== Ring Layout Test: Sparse Relationships ===`);
+          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
+          console.log(`Total nodes: 100 with enhanced relationships (10-30 per node)`);
+          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
+        } else {
+          this.uiService.showError('No dreamer nodes found in mock data');
         }
       }
     });
@@ -927,7 +1051,7 @@ export default class InterBrainPlugin extends Plugin {
             // Restore the layout state via SpatialOrchestrator (proper way)
             if (previousEntry.layout === 'constellation') {
               // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as any).__interbrainCanvas;
+              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { interruptAndReturnToConstellation(): boolean } }).__interbrainCanvas;
               if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
                 const success = canvasAPI.interruptAndReturnToConstellation();
                 if (success) {
@@ -950,7 +1074,7 @@ export default class InterBrainPlugin extends Plugin {
                 store.setSelectedNode(targetNode);
                 
                 // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as any).__interbrainCanvas;
+                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
                 if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
                   const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
                   if (!success) {
@@ -1016,7 +1140,7 @@ export default class InterBrainPlugin extends Plugin {
             // Restore the layout state via SpatialOrchestrator (proper way)
             if (nextEntry.layout === 'constellation') {
               // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as any).__interbrainCanvas;
+              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
               if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
                 const success = canvasAPI.interruptAndReturnToConstellation();
                 if (success) {
@@ -1039,7 +1163,7 @@ export default class InterBrainPlugin extends Plugin {
                 store.setSelectedNode(targetNode);
                 
                 // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as any).__interbrainCanvas;
+                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
                 if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
                   const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
                   if (!success) {
@@ -1067,6 +1191,8 @@ export default class InterBrainPlugin extends Plugin {
         }
       }
     });
+
+    // Note: Semantic search commands now registered via registerSemanticSearchCommands()
   }
 
   // Helper method to get all available nodes (used by undo/redo)
