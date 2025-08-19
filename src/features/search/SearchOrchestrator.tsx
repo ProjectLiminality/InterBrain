@@ -41,7 +41,7 @@ export default function SearchOrchestrator({ onSearchResults }: SearchOrchestrat
     // Start periodic check every 1 second
     intervalRef.current = globalThis.setInterval(() => {
       checkForSearchUpdates();
-    }, 1000);
+    }, 1000) as unknown as number;
     
     // Cleanup on unmount or when search becomes inactive
     return () => {

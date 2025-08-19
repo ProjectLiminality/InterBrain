@@ -467,13 +467,46 @@ export default function DreamspaceCanvas() {
     try {
       console.log('SearchNode save:', { query, dreamTalkFile, additionalFiles });
       
+      // Use raycasting to find intersection with rotated sphere (same as ProtoNode)
+      let finalPosition: [number, number, number] = [0, 0, -50]; // Fallback position
+      if (dreamWorldRef.current) {
+        // Create raycaster from camera position forward
+        const raycaster = new Raycaster();
+        const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
+        const cameraDirection = new Vector3(0, 0, -1); // Forward direction
+        
+        raycaster.set(cameraPosition, cameraDirection);
+        
+        // Create sphere geometry in world space (accounting for rotation)
+        const sphereRadius = 5000;
+        const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
+        
+        // Find intersection points
+        const intersectionPoint = new Vector3();
+        const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
+        
+        if (hasIntersection) {
+          // Since the sphere rotates but the camera ray is fixed, we need to apply
+          // the INVERSE rotation to get the correct position on the rotated sphere
+          const sphereRotation = dreamWorldRef.current.quaternion;
+          const inverseRotation = sphereRotation.clone().invert();
+          intersectionPoint.applyQuaternion(inverseRotation);
+          
+          finalPosition = intersectionPoint.toArray() as [number, number, number];
+          
+        } else {
+          console.warn('No intersection found with sphere - using default position');
+          finalPosition = [0, 0, -5000]; // Fallback to forward position
+        }
+      }
+      
       // Use service to create DreamNode from search query
       const service = serviceManager.getActive();
       await service.create(
         query,
         'dream',
         dreamTalkFile, // DreamTalk file (single file)
-        [0, 0, -50], // Position (focus position)
+        finalPosition, // Pass rotation-adjusted position to project onto sphere
         additionalFiles // Additional files array
       );
       
