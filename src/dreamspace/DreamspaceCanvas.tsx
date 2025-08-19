@@ -220,14 +220,14 @@ export default function DreamspaceCanvas() {
       case 'search': {
         // Search mode handles both search interface and search results display
         const store = useInterBrainStore.getState();
-        if (store.searchInterface.isActive) {
+        if (searchResults && searchResults.length > 0) {
+          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
+          spatialOrchestratorRef.current.showSearchResults(searchResults);
+        } else if (store.searchInterface.isActive) {
           console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
           // Use liminal web architecture: move all constellation nodes to sphere surface
           // SearchNode acts like the focused node at center position [0, 0, -50]
           spatialOrchestratorRef.current.moveAllToSphereForSearch();
-        } else if (searchResults && searchResults.length > 0) {
-          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
-          spatialOrchestratorRef.current.showSearchResults(searchResults);
         }
         break;
       }
