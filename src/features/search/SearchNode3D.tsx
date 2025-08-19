@@ -384,15 +384,15 @@ export default function SearchNode3D({
                 width: `${Math.max(120, nodeSize * 0.7)}px`, // Responsive width
                 height: `${Math.max(32, nodeSize * 0.12)}px`, // Adequate height for descenders
                 padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(12, nodeSize * 0.03)}px`,
-                background: 'rgba(0, 0, 0, 0.8)', // Subtle background for readability
-                border: '1px solid rgba(255, 255, 255, 0.3)',
+                background: 'transparent', // Completely transparent
+                border: 'none', // No border
                 borderRadius: '4px', // Rectangular with subtle rounding
                 color: dreamNodeStyles.colors.text.primary,
                 fontSize: `${Math.max(14, nodeSize * 0.08)}px`,
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 textAlign: 'center',
                 outline: 'none',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                boxShadow: 'none',
                 zIndex: 10, // Above file selection area
                 pointerEvents: 'auto',
                 cursor: 'text'
