@@ -29,19 +29,14 @@ export default function SearchOrchestrator({ onSearchResults }: SearchOrchestrat
   
   // Periodic search update effect - 1 second rhythm
   useEffect(() => {
-    console.log(`🔧 SearchOrchestrator: Effect triggered, isActive=${isActive}`);
-    
     if (!isActive) {
       // Clean up interval when search is inactive
       if (intervalRef.current) {
-        console.log('🔧 SearchOrchestrator: Cleaning up interval (search inactive)');
         globalThis.clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
       return;
     }
-    
-    console.log('🔧 SearchOrchestrator: Starting 1-second interval for search monitoring');
     
     // Start periodic check every 1 second
     intervalRef.current = globalThis.setInterval(() => {
@@ -51,7 +46,6 @@ export default function SearchOrchestrator({ onSearchResults }: SearchOrchestrat
     // Cleanup on unmount or when search becomes inactive
     return () => {
       if (intervalRef.current) {
-        console.log('🔧 SearchOrchestrator: Cleaning up interval (component unmount)');
         globalThis.clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -63,22 +57,16 @@ export default function SearchOrchestrator({ onSearchResults }: SearchOrchestrat
     const store = useInterBrainStore.getState();
     const currentQuery = store.searchInterface.currentQuery;
     
-    console.log(`🔍 SearchOrchestrator: Checking updates - current: "${currentQuery}", last: "${lastProcessedQuery.current}"`);
-    
     // Skip if no meaningful change occurred
     if (!hasSignificantChange(lastProcessedQuery.current, currentQuery)) {
-      console.log(`🔍 SearchOrchestrator: No significant change detected`);
       return;
     }
-    
-    console.log(`🔍 SearchOrchestrator: Significant change detected! Processing query: "${currentQuery}"`);
     
     // Update last processed query
     lastProcessedQuery.current = currentQuery;
     
     // Skip search if query is too short or empty
     if (currentQuery.trim().length < 2) {
-      console.log(`🔍 SearchOrchestrator: Query too short (${currentQuery.length} chars), clearing results`);
       onSearchResults([]);
       return;
     }
@@ -120,9 +108,6 @@ function hasSignificantChange(previousQuery: string, currentQuery: string): bool
   const normalizedPrevious = previousQuery.trim().toLowerCase();
   const normalizedCurrent = currentQuery.trim().toLowerCase();
   
-  const hasChange = normalizedPrevious !== normalizedCurrent;
-  console.log(`🔧 SearchOrchestrator: hasSignificantChange() - "${normalizedPrevious}" vs "${normalizedCurrent}" = ${hasChange}`);
-  
   // Return true if there's a meaningful difference
-  return hasChange;
+  return normalizedPrevious !== normalizedCurrent;
 }
