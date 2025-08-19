@@ -173,16 +173,19 @@ export default function SearchNode3D({
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent bubbling to DreamspaceCanvas
     setIsDragOver(true);
   };
   
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent bubbling to DreamspaceCanvas
     setIsDragOver(false);
   };
   
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // CRITICAL: Prevent bubbling to DreamspaceCanvas
     setIsDragOver(false);
     
     const files = Array.from(e.dataTransfer.files);
@@ -333,7 +336,7 @@ export default function SearchNode3D({
                   cursor: 'pointer',
                   border: isDragOver ? '2px dashed rgba(255,255,255,0.5)' : 'none',
                   borderRadius: '50%',
-                  zIndex: 9999,
+                  zIndex: 1, // Lower z-index than text input
                   pointerEvents: 'auto',
                   opacity: animatedUIOpacity // Fade in with other UI
                 }}
@@ -366,22 +369,23 @@ export default function SearchNode3D({
               </div>
             )}
             
-            {/* Search Query Input Overlay */}
+            {/* Search Query Input Overlay - HIGHER Z-INDEX for independent clicks */}
             <div
               style={{
                 position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
+                top: '10%', // More space at top for descenders
+                left: '10%',
+                right: '10%', 
+                bottom: '10%', // More space at bottom for descenders
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: 'rgba(0, 0, 0, 0.7)',
                 borderRadius: '50%',
-                pointerEvents: 'auto', // Enable pointer events for clicking
+                pointerEvents: 'auto',
                 opacity: (previewMedia || dreamTalkFile) ? animatedUIOpacity : 1.0,
-                cursor: 'text' // Show text cursor
+                cursor: 'text',
+                zIndex: 10 // HIGHER than file selection area
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -403,15 +407,15 @@ export default function SearchNode3D({
                   textAlign: 'center',
                   outline: 'none',
                   width: '80%',
-                  height: `${Math.max(40, nodeSize * 0.08)}px`,
-                  padding: `${Math.max(8, nodeSize * 0.02)}px`,
-                  lineHeight: '1.4', // Fix baseline clipping
+                  height: `${Math.max(50, nodeSize * 0.12)}px`, // INCREASED height for descenders
+                  padding: `${Math.max(12, nodeSize * 0.03)}px`, // INCREASED padding
+                  lineHeight: 'normal', // Use normal line height with increased container
                   pointerEvents: 'auto',
                   boxShadow: 'none',
                   borderRadius: '0',
                   cursor: 'text'
                 }}
-                onClick={(e) => e.stopPropagation()} // Prevent double handling
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
             
