@@ -1,15 +1,13 @@
 ---
-allowed-tools: Bash(git:status), Bash(git:branch), Bash(git:log), Bash(git:show), Bash(git:diff), Bash(git:ls-files), Bash(gh:issue:list), Bash(gh:issue:view), Bash(gh:repo:view), Bash(gh:pr:list), Bash(gh:pr:view), Bash(gh:auth:status), Bash(lsof), Bash(find), Bash(npm:run:test), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages
+allowed-tools: Bash(git:status), Bash(git:branch), Bash(git:log), Bash(git:show), Bash(git:diff), Bash(git:ls-files), Bash(gh:issue:list), Bash(gh:issue:view), Bash(gh:repo:view), Bash(gh:pr:list), Bash(gh:pr:view), Bash(gh:auth:status), Bash(lsof), Bash(find), Bash(npm:run:test), Read, Write, MultiEdit, Edit, TodoWrite, LS, Glob, Grep
 description: Intelligent session continuation with plan-mode preparation workflow - analyze state, conduct knowledge transfer, create branches, then plan implementation
 ---
 
 # Continue Development Workflow
 
-**Core Philosophy**: This command handles meta-preparation work that can happen in plan mode (state analysis, issue analysis, knowledge transfer, branch creation) before transitioning to implementation planning. The workflow proceeds seamlessly through preparation phases while IN plan mode, then exits plan mode only when ready to present a comprehensive implementation strategy.
+**Core Philosophy**: This command handles meta-preparation work (state analysis, issue analysis, knowledge transfer, branch creation) before jumping into coding. Focus on thorough preparation and knowledge transfer - user will manually enter plan mode when ready for implementation planning.
 
 ## STEP 1: Check Open Issues & Determine Options
-
-**⚠️ PLAN MODE COMPATIBLE - ALWAYS START HERE ⚠️**
 
 ### Issue Status Check
 - **My assigned issues**: !`gh issue list --assignee @me --state open`
@@ -54,7 +52,7 @@ description: Intelligent session continuation with plan-mode preparation workflo
 
 ## CRITICAL PHASE 1: Feature Issue Analysis & Knowledge Transfer
 
-**⚠️ PLAN MODE COMPATIBLE - MANDATORY FIRST STEPS - NEVER SKIP THIS PHASE ⚠️**
+**⚠️ MANDATORY FIRST STEPS - NEVER SKIP THIS PHASE ⚠️**
 
 ### 1. Read Current Feature Issue
 - Use `gh issue view ISSUE_NUMBER` to read the current feature issue body
@@ -144,21 +142,16 @@ Based on current epic and specification:
    - Only continue after user approval of refined issue
 
 3. **Feature Branch Strategy** (After Phase 1 Complete):
-   - Create feature branch off epic branch (PLAN MODE COMPATIBLE)
+   - Create feature branch off epic branch
    - Follow naming: `feature/feature-name-from-issue`
-   - Branch creation happens during preparation, before implementation planning
+   - Branch creation happens during preparation
 
-### Phase 4: Implementation Planning & Plan Mode Exit
-Using TodoWrite, create comprehensive feature implementation plan:
+### Phase 4: Preparation Complete
+After completing preparation phases (state analysis, knowledge transfer, issue refinement, branch creation):
 
-1. **Architecture Tasks**: Following development rules from project memory
-2. **Implementation Tasks**: Breaking down feature into logical steps
-3. **Testing Tasks**: Unit tests, integration verification
-4. **Documentation Tasks**: Update relevant docs
-5. **Integration Tasks**: Merge preparation and validation
-
-**⚠️ PLAN MODE EXIT POINT ⚠️**
-After completing preparation phases (state analysis, knowledge transfer, issue refinement, branch creation, implementation planning), use ExitPlanMode tool to present comprehensive implementation strategy and get user approval to proceed.
+1. **Summarize Current State**: Brief summary of what's been prepared
+2. **Next Steps Identified**: Clear understanding of implementation direction
+3. **Ready for Planning**: User will manually enter plan mode when ready for detailed implementation planning
 
 ---
 
@@ -178,17 +171,16 @@ Begin systematic implementation following AI-first development patterns:
    - **Feature Slice**: Build UI components in feature folder
    - **Unit Testing**: Write tests as implementation progresses
 
-3. **Playwright MCP Integration Testing**:
-   - Navigate to development environment: `http://localhost:5173`
-   - Test implemented functionality using browser automation
-   - Capture screenshots of working features
-   - Verify console logs for errors or successful operations
-   - Take snapshots for accessibility and interaction testing
+3. **Manual Testing Integration**:
+   - Test functionality directly in Obsidian development vault
+   - Use Plugin Reloader hotkey to refresh plugin after changes
+   - Verify features work as expected through direct interaction
+   - Check Obsidian developer console for errors
 
 4. **Validation & Debugging**:
-   - Use Playwright MCP to verify feature works as expected
-   - Debug any issues found through browser automation
-   - Iterate implementation until Playwright tests pass
+   - Test feature manually in development environment
+   - Debug any issues through console logs and direct testing
+   - Iterate implementation until manual testing confirms functionality
    - Ensure no console errors or broken functionality
 
 5. **Documentation**: Update docs with new functionality only after testing confirms it works
@@ -212,10 +204,10 @@ Begin systematic implementation following AI-first development patterns:
 
 ### Success Criteria
 - [ ] Feature implementation follows project architecture
-- [ ] All acceptance criteria met and tested with Playwright MCP
-- [ ] Browser testing confirms functionality works without errors
+- [ ] All acceptance criteria met and tested manually in Obsidian
+- [ ] Manual testing confirms functionality works without errors
 - [ ] Console logs clean (no errors or warnings)
-- [ ] Screenshots/snapshots captured showing working feature
+- [ ] Feature validated through direct interaction
 - [ ] Documentation updated for new functionality
 - [ ] Feature ready for epic integration
 - [ ] Clear next steps identified
@@ -237,13 +229,13 @@ Begin systematic implementation following AI-first development patterns:
 
 ### Commit & GitHub Operations Protocol
 **CRITICAL**: Only proceed with git commits and GitHub operations AFTER:
-- [ ] Playwright MCP testing confirms feature works
+- [ ] Manual testing in Obsidian confirms feature works
 - [ ] All console errors resolved
-- [ ] Screenshots show successful functionality
+- [ ] Feature validated through direct interaction
 - [ ] No broken agentic loop (dev server remains running)
 
 **Git Workflow**:
-1. Test feature thoroughly with Playwright MCP
+1. Test feature thoroughly in Obsidian development vault
 2. Fix any issues found during testing
 3. Re-test until everything works cleanly
 4. **STOP FOR USER TESTING** - Get explicit confirmation feature works
