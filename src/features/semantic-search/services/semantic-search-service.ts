@@ -73,6 +73,60 @@ export class SemanticSearchService {
   }
   
   /**
+   * Search for nodes of opposite type to the given node (for relationship editing)
+   * Dreams return Dreamers, Dreamers return Dreams
+   */
+  async searchOppositeTypeNodes(query: string, referenceNode: DreamNode, options: SearchOptions = {}): Promise<SearchResult[]> {
+    // Determine opposite type
+    const oppositeType = referenceNode.type === 'dream' ? 'dreamer' : 'dream';
+    
+    const searchOptions: SearchOptions = {
+      ...DEFAULT_SEARCH_OPTIONS,
+      ...options,
+      nodeTypes: [oppositeType], // Only search opposite type
+      excludeNodeId: referenceNode.id, // Don't include the reference node
+      maxResults: options.maxResults || 35 // Default to 35 for honeycomb layout (36 - 1 center)
+    };
+    
+    return await this.searchByText(query, searchOptions);
+  }
+
+  /**
+   * Find nodes of opposite type that are similar to the given node (for relationship suggestions)
+   */
+  async findSimilarOppositeTypeNodes(node: DreamNode, options: SearchOptions = {}): Promise<SearchResult[]> {
+    // Determine opposite type
+    const oppositeType = node.type === 'dream' ? 'dreamer' : 'dream';
+    
+    const searchOptions: SearchOptions = { 
+      ...DEFAULT_SEARCH_OPTIONS, 
+      ...options,
+      nodeTypes: [oppositeType], // Only search opposite type
+      excludeNodeId: node.id, // Don't include the source node in results
+      maxResults: options.maxResults || 35 // Default to 35 for honeycomb layout
+    };
+    
+    const store = useInterBrainStore.getState();
+    const vectorData = store.vectorData.get(node.id);
+    
+    if (!vectorData) {
+      console.warn('SemanticSearchService: No vector data found for node, generating embedding');
+      
+      try {
+        // Generate embedding for this node if not found
+        const nodeText = this.extractNodeText(node);
+        const embedding = await this.generateQueryEmbedding(nodeText);
+        return await this.searchByEmbedding(embedding, searchOptions);
+      } catch {
+        console.error('SemanticSearchService: Failed to generate embedding for node');
+        return [];
+      }
+    }
+    
+    return await this.searchByEmbedding(vectorData.embedding, searchOptions);
+  }
+
+  /**
    * Find nodes similar to a given DreamNode
    */
   async findSimilarNodes(node: DreamNode, options: SearchOptions = {}): Promise<SearchResult[]> {

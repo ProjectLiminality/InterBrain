@@ -51,6 +51,22 @@ export interface CreationState {
   validationErrors: ValidationErrors;
 }
 
+// Edit mode state types
+export interface EditModeState {
+  isActive: boolean;
+  editingNode: DreamNode | null;
+  originalRelationships: string[]; // Store original relationships for cancel operation
+  pendingRelationships: string[]; // Track relationship changes
+  searchResults: DreamNode[]; // Search results for relationship discovery
+  validationErrors: EditModeValidationErrors; // Validation errors for edit mode
+}
+
+export interface EditModeValidationErrors {
+  title?: string;
+  dreamTalk?: string;
+  relationships?: string;
+}
+
 // Real node storage - persisted across sessions
 export interface RealNodeData {
   node: DreamNode;
@@ -158,6 +174,16 @@ export interface InterBrainState extends OllamaConfigSlice {
   setValidationErrors: (errors: ValidationErrors) => void;
   completeCreation: () => void;
   cancelCreation: () => void;
+
+  // Edit mode state management
+  editMode: EditModeState;
+  startEditMode: (node: DreamNode) => void;
+  exitEditMode: () => void;
+  updateEditingNodeMetadata: (updates: Partial<DreamNode>) => void;
+  setEditModeSearchResults: (results: DreamNode[]) => void;
+  togglePendingRelationship: (nodeId: string) => void;
+  savePendingRelationships: () => void;
+  setEditModeValidationErrors: (errors: EditModeValidationErrors) => void;
   
   // Navigation history management
   navigationHistory: NavigationHistoryState;
@@ -236,6 +262,16 @@ export const useInterBrainStore = create<InterBrainState>()(
   creationState: {
     isCreating: false,
     protoNode: null,
+    validationErrors: {}
+  },
+  
+  // Edit mode initial state (not editing)
+  editMode: {
+    isActive: false,
+    editingNode: null,
+    originalRelationships: [],
+    pendingRelationships: [],
+    searchResults: [],
     validationErrors: {}
   },
   
@@ -623,6 +659,84 @@ export const useInterBrainStore = create<InterBrainState>()(
       isCreating: false,
       protoNode: null,
       validationErrors: {}
+    }
+  })),
+
+  // Edit mode actions
+  startEditMode: (node) => set((_state) => ({
+    editMode: {
+      isActive: true,
+      editingNode: { ...node }, // Create a copy to avoid mutations
+      originalRelationships: [...node.liminalWebConnections], // Store original relationships
+      pendingRelationships: [...node.liminalWebConnections], // Start with current relationships
+      searchResults: [],
+      validationErrors: {}
+    }
+  })),
+
+  exitEditMode: () => set((_state) => ({
+    editMode: {
+      isActive: false,
+      editingNode: null,
+      originalRelationships: [],
+      pendingRelationships: [],
+      searchResults: [],
+      validationErrors: {}
+    }
+  })),
+
+  updateEditingNodeMetadata: (updates) => set(state => ({
+    editMode: {
+      ...state.editMode,
+      editingNode: state.editMode.editingNode
+        ? { ...state.editMode.editingNode, ...updates }
+        : null
+    }
+  })),
+
+  setEditModeSearchResults: (results) => set(state => ({
+    editMode: {
+      ...state.editMode,
+      searchResults: results
+    }
+  })),
+
+  togglePendingRelationship: (nodeId) => set(state => {
+    const currentPending = state.editMode.pendingRelationships;
+    const isAlreadyPending = currentPending.includes(nodeId);
+    
+    return {
+      editMode: {
+        ...state.editMode,
+        pendingRelationships: isAlreadyPending
+          ? currentPending.filter(id => id !== nodeId) // Remove if exists
+          : [...currentPending, nodeId] // Add if doesn't exist
+      }
+    };
+  }),
+
+  savePendingRelationships: () => set(state => {
+    if (!state.editMode.editingNode) return state;
+
+    // Update the editing node with pending relationships
+    const updatedNode = {
+      ...state.editMode.editingNode,
+      liminalWebConnections: [...state.editMode.pendingRelationships]
+    };
+
+    return {
+      editMode: {
+        ...state.editMode,
+        editingNode: updatedNode,
+        originalRelationships: [...state.editMode.pendingRelationships] // Update original to match
+      }
+    };
+  }),
+
+  setEditModeValidationErrors: (errors) => set(state => ({
+    editMode: {
+      ...state.editMode,
+      validationErrors: errors
     }
   })),
   

@@ -13,6 +13,7 @@ import { getMockDataForConfig } from './mock/dreamnode-mock-data';
 import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './dreamspace/layouts/RingLayout';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
+import { registerEditModeCommands } from './commands/edit-mode-commands';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -62,6 +63,9 @@ export default class InterBrainPlugin extends Plugin {
     
     // Register search interface commands (search-as-dreamnode UI)
     registerSearchInterfaceCommands(this, this.uiService);
+    
+    // Register edit mode commands (unified editing with relationship management)
+    registerEditModeCommands(this, this.uiService);
     
     // Open DreamSpace command
     this.addCommand({
