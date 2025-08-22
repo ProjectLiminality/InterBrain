@@ -118,6 +118,16 @@ export function getNodeGlow(type: 'dream' | 'dreamer', intensity: number = 10) {
 }
 
 /**
+ * Helper function to generate gold glow for edit mode relationships
+ * Uses strong double-layered effect matching git glows for visibility
+ */
+export function getEditModeGlow(intensity: number = 25) {
+  const goldColor = '#FFD700'; // Bright gold color for relationships
+  // Use double-layered glow effect like git glows for better visibility
+  return `0 0 ${intensity}px ${goldColor}, 0 0 ${intensity * 2}px ${goldColor}`;
+}
+
+/**
  * Helper function to generate git state glow effect
  */
 export function getGitGlow(gitState: GitStateType, intensity: number = 0) {

@@ -2,8 +2,8 @@ import { StateCreator } from 'zustand';
 import { VectorData } from '../services/indexing-service';
 import { OllamaConfig, DEFAULT_OLLAMA_CONFIG } from '../types';
 
-// Re-export OllamaConfig for use in main store
-export { OllamaConfig };
+// Re-export OllamaConfig type for use in main store
+export type { OllamaConfig };
 
 /**
  * Ollama configuration and vector data slice for the main store

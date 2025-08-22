@@ -6,7 +6,7 @@ import { GitTemplateService } from './services/git-template-service';
 import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { useInterBrainStore } from './store/interbrain-store';
-import { DEFAULT_FIBONACCI_CONFIG } from './dreamspace/FibonacciSphereLayout';
+import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
 import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
 import { getMockDataForConfig } from './mock/dreamnode-mock-data';
@@ -449,6 +449,56 @@ export default class InterBrainPlugin extends Plugin {
         store.setSelectedNode(null);
         this.uiService.showSuccess('Selection cleared');
         console.log('Selection cleared - Zustand state should be null');
+      }
+    });
+
+    // Command to redistribute DreamNodes using Fibonacci sphere algorithm
+    this.addCommand({
+      id: 'redistribute-dreamnodes',
+      name: 'Redistribute DreamNodes',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const service = serviceManager.getActive();
+        
+        try {
+          // Get all existing DreamNodes
+          const dreamNodes = await service.list();
+          
+          if (dreamNodes.length === 0) {
+            this.uiService.showInfo('No DreamNodes to redistribute');
+            return;
+          }
+          
+          // Calculate Fibonacci sphere positions for the current node count
+          const positions = calculateFibonacciSpherePositions({
+            radius: store.fibonacciConfig.radius,
+            nodeCount: dreamNodes.length,
+            center: store.fibonacciConfig.center
+          });
+          
+          // Update each node with its new position
+          for (let i = 0; i < dreamNodes.length; i++) {
+            const node = dreamNodes[i];
+            const newPosition = positions[i].position;
+            
+            // Update the node's position using the service
+            await service.update(node.id, {
+              position: newPosition
+            });
+            
+            console.log(`Updated position for "${node.name}": [${newPosition.join(', ')}]`);
+          }
+          
+          // The store will automatically reflect the updates via service.update()
+          // No need to manually refresh
+          
+          this.uiService.showSuccess(`Redistributed ${dreamNodes.length} DreamNodes using Fibonacci sphere algorithm`);
+          console.log(`Redistributed ${dreamNodes.length} nodes with radius ${store.fibonacciConfig.radius}`);
+          
+        } catch (error) {
+          console.error('Failed to redistribute DreamNodes:', error);
+          this.uiService.showError('Failed to redistribute DreamNodes');
+        }
       }
     });
 

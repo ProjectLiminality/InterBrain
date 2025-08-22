@@ -39,7 +39,7 @@ export default function EditNode3D({
   const debounceTimeoutRef = useRef<number | null>(null);
   
   // Animation state (reuse ProtoNode3D patterns)
-  const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
+  // Position no longer animates during save - stays constant
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(1.0);
   const [animatedUIOpacity, setAnimatedUIOpacity] = useState<number>(1.0);
   const animationStartTime = useRef<number | null>(null);
@@ -56,11 +56,8 @@ export default function EditNode3D({
       ? 2 * progress * progress 
       : 1 - Math.pow(-2 * progress + 2, 2) / 2;
     
-    // Animate position: maintain position during save animation
-    const startZ = position[2];
-    const endZ = position[2] - 50; // Move slightly back during save
-    const newZ = startZ + (endZ - startZ) * easeInOut;
-    setAnimatedPosition([position[0], position[1], newZ]);
+    // Don't animate position during save - keep node in place
+    // Position stays constant throughout the animation
     
     // Keep main node opacity at 1.0
     setAnimatedOpacity(1.0);
@@ -74,7 +71,7 @@ export default function EditNode3D({
     // Complete animation
     if (progress >= 1) {
       animationStartTime.current = null;
-      setAnimatedPosition([position[0], position[1], endZ]);
+      // Keep position unchanged
       setAnimatedOpacity(1.0);
       setAnimatedUIOpacity(endUIOpacity);
     }
@@ -250,7 +247,7 @@ export default function EditNode3D({
   const isSaveDisabled = !localTitle.trim() || !!validationErrors.title || isAnimating;
   
   return (
-    <group position={animatedPosition}>
+    <group position={position}>
       <Html
         position={[0, 0, 0]}
         center

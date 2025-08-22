@@ -75,4 +75,25 @@ export class DreamNodeService {
     const store = useInterBrainStore.getState();
     store.setCameraTransition(false);
   }
+
+  // Relationship management methods
+  async updateRelationships(_nodeId: string, _relationshipIds: string[]): Promise<void> {
+    // This will be implemented by concrete service classes
+    throw new Error('updateRelationships must be implemented by concrete service classes');
+  }
+
+  async getRelationships(_nodeId: string): Promise<string[]> {
+    // This will be implemented by concrete service classes
+    throw new Error('getRelationships must be implemented by concrete service classes');
+  }
+
+  async addRelationship(_nodeId: string, _relatedNodeId: string): Promise<void> {
+    // This will be implemented by concrete service classes
+    throw new Error('addRelationship must be implemented by concrete service classes');
+  }
+
+  async removeRelationship(_nodeId: string, _relatedNodeId: string): Promise<void> {
+    // This will be implemented by concrete service classes
+    throw new Error('removeRelationship must be implemented by concrete service classes');
+  }
 }

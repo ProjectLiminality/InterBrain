@@ -2,6 +2,8 @@ import { Plugin } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { semanticSearchService } from '../features/semantic-search/services/semantic-search-service';
+import { serviceManager } from '../services/service-manager';
+import { DreamNode } from '../types/dreamnode';
 
 /**
  * Edit mode commands for unified node editing with relationship management
@@ -39,9 +41,36 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       }
       
       try {
-        // Enter edit mode with the selected node
-        store.startEditMode(store.selectedNode);
-        uiService.showSuccess(`Edit mode activated for "${store.selectedNode.name}"`);
+        // Get the freshest version of the node from the service layer
+        const dreamNodeService = serviceManager.getActive();
+        const freshNode = await dreamNodeService.get(store.selectedNode.id);
+        
+        if (!freshNode) {
+          uiService.showError('Selected node not found in service layer');
+          return;
+        }
+        
+        // Enter edit mode with the fresh node data
+        store.startEditMode(freshNode);
+        
+        // If the node has existing relationships, show them in the search layout
+        if (freshNode.liminalWebConnections && freshNode.liminalWebConnections.length > 0) {
+          // Get all related nodes to display them
+          const relatedNodes = await Promise.all(
+            freshNode.liminalWebConnections.map(id => dreamNodeService.get(id))
+          );
+          
+          // Filter out any null results (in case some relationships are broken)
+          const validRelatedNodes = relatedNodes.filter(node => node !== null) as DreamNode[];
+          
+          // Set these as search results to display them in honeycomb layout
+          store.setSearchResults(validRelatedNodes);
+          store.setSpatialLayout('search');
+          
+          uiService.showSuccess(`Edit mode activated for "${freshNode.name}" (${validRelatedNodes.length} existing relationships)`);
+        } else {
+          uiService.showSuccess(`Edit mode activated for "${freshNode.name}"`);
+        }
       } catch (error) {
         console.error('Failed to enter edit mode:', error);
         uiService.showError('Failed to enter edit mode');
@@ -64,6 +93,12 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       try {
         // Simply exit without saving (user should use save command)
         store.exitEditMode();
+        
+        // Return to liminal-web layout (edit mode requires a selected node)
+        if (store.selectedNode) {
+          store.setSpatialLayout('liminal-web');
+        }
+        
         uiService.showSuccess('Edit mode exited');
       } catch (error) {
         console.error('Failed to exit edit mode:', error);
@@ -114,8 +149,13 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
           }
         );
         
-        // Update store with search results
+        // Update store with search results for edit mode tracking
         store.setEditModeSearchResults(searchResults.map(result => result.node));
+        
+        // CRITICAL: Use the same pattern as search mode to trigger visual layout
+        // Set the main search results and switch to search layout
+        store.setSearchResults(searchResults.map(result => result.node));
+        store.setSpatialLayout('search');
         
         uiService.hideProgress();
         
@@ -147,21 +187,50 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       }
       
       try {
-        // TODO: Implement service layer persistence
-        // For now, just save the pending relationships to the store
+        if (!store.editMode.editingNode) {
+          uiService.showError('No editing node available for save operation');
+          return;
+        }
+
+        // Get the active service for persistence
+        const dreamNodeService = serviceManager.getActive();
+        
+        // 1. Save metadata changes (let service layer handle if no changes)
+        await dreamNodeService.update(store.editMode.editingNode.id, {
+          name: store.editMode.editingNode.name,
+          type: store.editMode.editingNode.type
+        });
+        
+        // 2. Save relationship changes through service layer
+        await dreamNodeService.updateRelationships(
+          store.editMode.editingNode.id,
+          store.editMode.pendingRelationships
+        );
+        
+        // 3. Update store state with confirmed relationships
         store.savePendingRelationships();
         
-        // TODO: Persist changes through service layer (real/mock modes)
-        // This will need to be implemented when we integrate with service layer
+        uiService.showSuccess(`Changes saved successfully (${store.editMode.pendingRelationships.length} relationships)`);
         
-        uiService.showSuccess('Changes saved successfully');
+        // Update the selected node in the main store with the latest data
+        const freshNode = await dreamNodeService.get(store.editMode.editingNode.id);
+        if (freshNode) {
+          store.setSelectedNode(freshNode);
+        }
         
         // Exit edit mode after saving
         store.exitEditMode();
         
+        // Switch to liminal-web layout - this will trigger the focused layout
+        // The SpatialOrchestrator will handle moving related nodes to ring positions
+        // and unrelated nodes back to constellation
+        if (freshNode) {
+          store.setSpatialLayout('liminal-web');
+        }
+        
       } catch (error) {
         console.error('Failed to save edit mode changes:', error);
-        uiService.showError('Failed to save changes');
+        uiService.showError('Failed to save changes: ' + (error instanceof Error ? error.message : 'Unknown error'));
       }
     }
   });
@@ -181,6 +250,12 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       try {
         // Simply exit edit mode without saving (original data is preserved)
         store.exitEditMode();
+        
+        // Return to liminal-web layout (edit mode requires a selected node)
+        if (store.selectedNode) {
+          store.setSpatialLayout('liminal-web');
+        }
+        
         uiService.showSuccess('Changes cancelled');
       } catch (error) {
         console.error('Failed to cancel edit mode changes:', error);
@@ -220,8 +295,13 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
           }
         );
         
-        // Update store with search results
+        // Update store with search results for edit mode tracking
         store.setEditModeSearchResults(searchResults.map(result => result.node));
+        
+        // CRITICAL: Use the same pattern as search mode to trigger visual layout
+        // Set the main search results and switch to search layout
+        store.setSearchResults(searchResults.map(result => result.node));
+        store.setSpatialLayout('search');
         
         uiService.hideProgress();
         

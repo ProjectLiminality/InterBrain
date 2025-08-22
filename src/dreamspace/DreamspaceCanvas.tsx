@@ -11,6 +11,7 @@ import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrat
 import ProtoNode3D from '../features/creation/ProtoNode3D';
 import SearchNode3D from '../features/search/SearchNode3D';
 import SearchOrchestrator from '../features/search/SearchOrchestrator';
+import { EditModeOverlay } from '../features/edit-mode';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -388,8 +389,17 @@ export default function DreamspaceCanvas() {
   };
 
   const handleNodeClick = (node: DreamNode) => {
-    // Update selected node in store
     const store = useInterBrainStore.getState();
+    
+    // Handle edit mode relationship toggling
+    if (store.editMode.isActive && store.editMode.editingNode) {
+      // In edit mode, clicking a node toggles its relationship status
+      store.togglePendingRelationship(node.id);
+      console.log(`Edit mode: Toggled relationship with "${node.name}"`);
+      return; // Don't do normal click handling in edit mode
+    }
+    
+    // Normal click handling (not in edit mode)
     
     // If we're in search mode, properly exit search interface when clicking a result
     if (store.spatialLayout === 'search' && store.searchInterface.isActive) {
@@ -649,24 +659,66 @@ export default function DreamspaceCanvas() {
       const primaryFile = files[0]; // Use first file for node naming and primary dreamTalk
       const fileNameWithoutExt = primaryFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
       
-      
-      // Use service to create node
+      const store = useInterBrainStore.getState();
       const service = serviceManager.getActive();
       
       // Find first valid media file for dreamTalk
       const dreamTalkFile = files.find(f => isValidMediaFile(f));
       const additionalFiles = files.filter(f => f !== dreamTalkFile);
       
-      // Create node with all files
-      await service.create(
+      // Determine node type based on liminal-web context
+      let nodeType: 'dream' | 'dreamer' = 'dream'; // Default to Dream
+      let shouldAutoRelate = false;
+      let focusedNodeId: string | null = null;
+      
+      // In liminal-web mode with a focused node, create opposite type and auto-relate
+      if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
+        const focusedNode = store.selectedNode;
+        focusedNodeId = focusedNode.id;
+        
+        // Create opposite type for automatic relationship
+        nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
+        shouldAutoRelate = true;
+        
+        console.log(`Liminal-web drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
+      }
+      
+      // Create node with determined type
+      const newNode = await service.create(
         fileNameWithoutExt,
-        'dream', // Always create Dream-type for normal drops
+        nodeType,
         dreamTalkFile,
         position,
-        additionalFiles // Pass all other files
+        additionalFiles
       );
       
-      // No need to manually refresh - event listener will handle it
+      // Auto-create relationship if in liminal-web mode
+      if (shouldAutoRelate && focusedNodeId && newNode) {
+        try {
+          // Add bidirectional relationship
+          await service.addRelationship(focusedNodeId, newNode.id);
+          console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
+          uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
+          
+          // Refresh the focused node to include the new relationship
+          const updatedFocusedNode = await service.get(focusedNodeId);
+          if (updatedFocusedNode) {
+            // Update the selected node with fresh relationship data
+            store.setSelectedNode(updatedFocusedNode);
+            
+            // Trigger a liminal-web layout refresh to show the new related node
+            // Small delay to ensure the new node is in the store
+            globalThis.setTimeout(() => {
+              if (spatialOrchestratorRef.current) {
+                spatialOrchestratorRef.current.focusOnNode(focusedNodeId);
+              }
+            }, 100);
+          }
+        } catch (error) {
+          console.error('Failed to create automatic relationship:', error);
+          // Don't fail the whole operation if relationship fails
+        }
+      }
       
     } catch (error) {
       console.error('Failed to create node from drop:', error);
@@ -852,6 +904,9 @@ export default function DreamspaceCanvas() {
             />
           </>
         )}
+        
+        {/* Edit mode overlay - render when edit mode is active */}
+        <EditModeOverlay />
         
         {/* Flying camera controls for debugging - toggleable */}
         {debugFlyingControls && (

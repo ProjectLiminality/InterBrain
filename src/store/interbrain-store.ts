@@ -6,11 +6,9 @@ import { MockDataConfig } from '../mock/dreamnode-mock-data';
 import { 
   OllamaConfigSlice, 
   createOllamaConfigSlice,
-  extractOllamaPersistenceData,
-  restoreOllamaPersistenceData,
   OllamaConfig
 } from '../features/semantic-search/store/ollama-config-slice';
-import { VectorData } from '../features/semantic-search/services/indexing-service';
+import { DEFAULT_OLLAMA_CONFIG } from '../features/semantic-search/types';
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -841,12 +839,13 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
+      // Only persist essential data - NOT vector embeddings which are too large
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
-        ...extractOllamaPersistenceData(state),
+        // Only persist Ollama config, NOT vector data (too large for localStorage)
+        ollamaConfig: state.ollamaConfig,
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
@@ -854,7 +853,6 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: 'mock' | 'real'; 
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
-          vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
         };
         return {
@@ -862,7 +860,9 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
-          ...restoreOllamaPersistenceData(persistedData),
+          // Restore Ollama config but keep vector data empty (will be regenerated as needed)
+          ollamaConfig: persistedData.ollamaConfig || DEFAULT_OLLAMA_CONFIG,
+          vectorData: new Map(), // Always start with empty vector data
         };
       },
     }

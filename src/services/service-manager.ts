@@ -29,6 +29,12 @@ export interface IDreamNodeService {
     nodesWithMedia: number;
   };
   refreshGitStatus?(): Promise<{ updated: number; errors: number }>;
+  
+  // Relationship management
+  updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void>;
+  getRelationships(nodeId: string): Promise<string[]>;
+  addRelationship(nodeId: string, relatedNodeId: string): Promise<void>;
+  removeRelationship(nodeId: string, relatedNodeId: string): Promise<void>;
 }
 
 /**
@@ -56,6 +62,9 @@ export class ServiceManager {
     const originalUpdate = this.mockService.update.bind(this.mockService);
     const originalDelete = this.mockService.delete.bind(this.mockService);
     const originalAddFiles = this.mockService.addFilesToNode.bind(this.mockService);
+    const originalUpdateRelationships = this.mockService.updateRelationships.bind(this.mockService);
+    const originalAddRelationship = this.mockService.addRelationship.bind(this.mockService);
+    const originalRemoveRelationship = this.mockService.removeRelationship.bind(this.mockService);
     
     // Wrap create method
     this.mockService.create = async (...args) => {
@@ -79,6 +88,22 @@ export class ServiceManager {
     // Wrap addFilesToNode method
     this.mockService.addFilesToNode = async (...args) => {
       await originalAddFiles(...args);
+      this.syncMockToStore();
+    };
+    
+    // Wrap relationship methods
+    this.mockService.updateRelationships = async (...args) => {
+      await originalUpdateRelationships(...args);
+      this.syncMockToStore();
+    };
+    
+    this.mockService.addRelationship = async (...args) => {
+      await originalAddRelationship(...args);
+      this.syncMockToStore();
+    };
+    
+    this.mockService.removeRelationship = async (...args) => {
+      await originalRemoveRelationship(...args);
       this.syncMockToStore();
     };
   }

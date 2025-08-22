@@ -356,6 +356,122 @@ export class MockDreamNodeService {
   }
   
   /**
+   * Update relationships for a node (bidirectional)
+   */
+  async updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    // Get current relationships
+    const currentRelationships = new Set(node.liminalWebConnections || []);
+    const newRelationships = new Set(relationshipIds);
+
+    // Find added and removed relationships
+    const added = relationshipIds.filter(id => !currentRelationships.has(id));
+    const removed = Array.from(currentRelationships).filter(id => !newRelationships.has(id));
+
+    // Update the node's relationships
+    node.liminalWebConnections = relationshipIds;
+    this.nodes.set(nodeId, node);
+
+    // Update bidirectional relationships
+    for (const addedId of added) {
+      await this.addBidirectionalRelationship(nodeId, addedId);
+    }
+
+    for (const removedId of removed) {
+      await this.removeBidirectionalRelationship(nodeId, removedId);
+    }
+
+    console.log(`MockDreamNodeService: Updated relationships for ${nodeId}:`, {
+      added: added.length,
+      removed: removed.length,
+      total: relationshipIds.length
+    });
+  }
+
+  /**
+   * Get relationships for a node
+   */
+  async getRelationships(nodeId: string): Promise<string[]> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+    return node.liminalWebConnections || [];
+  }
+
+  /**
+   * Add a single relationship (bidirectional)
+   */
+  async addRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
+    // Add to the first node
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const relationships = new Set(node.liminalWebConnections || []);
+    relationships.add(relatedNodeId);
+    node.liminalWebConnections = Array.from(relationships);
+    this.nodes.set(nodeId, node);
+
+    // Add bidirectional relationship
+    await this.addBidirectionalRelationship(nodeId, relatedNodeId);
+
+    console.log(`MockDreamNodeService: Added relationship ${nodeId} <-> ${relatedNodeId}`);
+  }
+
+  /**
+   * Remove a single relationship (bidirectional)
+   */
+  async removeRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
+    // Remove from the first node
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const relationships = new Set(node.liminalWebConnections || []);
+    relationships.delete(relatedNodeId);
+    node.liminalWebConnections = Array.from(relationships);
+    this.nodes.set(nodeId, node);
+
+    // Remove bidirectional relationship
+    await this.removeBidirectionalRelationship(nodeId, relatedNodeId);
+
+    console.log(`MockDreamNodeService: Removed relationship ${nodeId} <-> ${relatedNodeId}`);
+  }
+
+  /**
+   * Add bidirectional relationship (internal helper)
+   */
+  private async addBidirectionalRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
+    const relatedNode = this.nodes.get(relatedNodeId);
+    if (relatedNode) {
+      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+      relatedRelationships.add(nodeId);
+      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
+      this.nodes.set(relatedNodeId, relatedNode);
+    }
+  }
+
+  /**
+   * Remove bidirectional relationship (internal helper)
+   */
+  private async removeBidirectionalRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
+    const relatedNode = this.nodes.get(relatedNodeId);
+    if (relatedNode) {
+      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+      relatedRelationships.delete(nodeId);
+      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
+      this.nodes.set(relatedNodeId, relatedNode);
+    }
+  }
+
+  /**
    * Calculate position for new nodes
    * Places them on the night sky sphere (5000 units) for proper dynamic scaling
    */

@@ -159,17 +159,57 @@ export class GitDreamNodeService {
       throw new Error(`DreamNode with ID ${id} not found`);
     }
     
+    const originalNode = nodeData.node;
+    let updatedNode = { ...originalNode, ...changes };
+    
+    // Handle folder renaming if name changed
+    if (changes.name && changes.name !== originalNode.name) {
+      const newRepoName = this.generateRepoName(changes.name, originalNode.type, id);
+      const oldRepoPath = path.join(this.vaultPath, originalNode.repoPath);
+      const newRepoPath = path.join(this.vaultPath, newRepoName);
+      
+      // Only rename if the paths are actually different
+      if (oldRepoPath !== newRepoPath) {
+        // Check if target name already exists
+        if (await this.fileExists(newRepoPath)) {
+          throw new Error(`A DreamNode with the name "${changes.name}" already exists. Please choose a different name.`);
+        }
+        
+        try {
+          // Check if source exists
+          if (!await this.fileExists(oldRepoPath)) {
+            console.warn(`GitDreamNodeService: Source folder doesn't exist: ${oldRepoPath}`);
+            // Just update the repoPath without renaming
+            updatedNode = { ...updatedNode, repoPath: newRepoName };
+          } else {
+            // Rename the folder
+            await fsPromises.rename(oldRepoPath, newRepoPath);
+            
+            // Update repoPath in the node
+            updatedNode = { ...updatedNode, repoPath: newRepoName };
+            
+            console.log(`GitDreamNodeService: Renamed folder from "${originalNode.repoPath}" to "${newRepoName}"`);
+          }
+        } catch (error) {
+          console.error(`Failed to rename folder for node ${id}:`, error);
+          throw new Error(`Failed to rename DreamNode folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+    }
+    
     // Update in store
-    const updatedNode = { ...nodeData.node, ...changes };
     store.updateRealNode(id, {
       ...nodeData,
       node: updatedNode,
       lastSynced: Date.now()
     });
     
-    // If metadata changed, update .udd file
+    // If metadata changed, update .udd file and auto-commit
     if (changes.name || changes.type || changes.dreamTalkMedia) {
       await this.updateUDDFile(updatedNode);
+      
+      // Auto-commit changes if enabled (only for actual file changes, not position)
+      await this.autoCommitChanges(updatedNode, changes);
     }
     
     console.log(`GitDreamNodeService: Updated node ${id}`, changes);
@@ -553,6 +593,63 @@ export class GitDreamNodeService {
       .substring(0, 50); // Limit length
   }
   
+  private generateRepoName(title: string, _type: string, _nodeId: string): string {
+    const sanitized = this.sanitizeRepoName(title);
+    // For updates, we can use the same sanitization approach
+    // If we need uniqueness, we could append a short hash of nodeId
+    return sanitized;
+  }
+  
+  
+  /**
+   * Auto-commit changes if they are significant
+   */
+  private async autoCommitChanges(node: DreamNode, changes: Partial<DreamNode>): Promise<void> {
+    try {
+      const repoPath = path.join(this.vaultPath, node.repoPath);
+      
+      // Check if there are any changes to commit
+      const statusResult = await execAsync('git status --porcelain', { cwd: repoPath });
+      if (statusResult.stdout.trim().length === 0) {
+        return; // No changes to commit
+      }
+      
+      // Create commit message based on changes
+      const changeTypes = [];
+      if (changes.name) changeTypes.push(`rename to "${changes.name}"`);
+      if (changes.type) changeTypes.push(`change type to ${changes.type}`);
+      if (changes.dreamTalkMedia) changeTypes.push('update media');
+      
+      const commitMessage = changeTypes.length > 0 
+        ? `Update DreamNode: ${changeTypes.join(', ')}`
+        : 'Update DreamNode metadata';
+      
+      // Stage and commit changes
+      await execAsync('git add -A', { cwd: repoPath });
+      await execAsync(`git commit -m "${commitMessage}"`, { cwd: repoPath });
+      
+      console.log(`GitDreamNodeService: Auto-committed changes for ${node.name}: ${commitMessage}`);
+      
+      // Refresh git status after commit
+      const newGitStatus = await this.checkGitStatus(node.repoPath);
+      
+      // Update store with new git status
+      const store = useInterBrainStore.getState();
+      const nodeData = store.realNodes.get(node.id);
+      if (nodeData) {
+        store.updateRealNode(node.id, {
+          ...nodeData,
+          node: { ...node, gitStatus: newGitStatus },
+          lastSynced: Date.now()
+        });
+      }
+      
+    } catch (error) {
+      console.error(`Failed to auto-commit changes for node ${node.id}:`, error);
+      // Don't throw - auto-commit failure shouldn't break the update
+    }
+  }
+  
   private calculateNewNodePosition(): [number, number, number] {
     const sphereRadius = 5000;
     const theta = Math.random() * Math.PI * 2;
@@ -871,6 +968,186 @@ export class GitDreamNodeService {
         hasUnpushedChanges: false,
         lastChecked: Date.now()
       };
+    }
+  }
+
+  // Relationship management methods
+  
+  /**
+   * Update relationships for a node (bidirectional)
+   */
+  async updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+    
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const node = nodeData.node;
+    
+    // Get current relationships
+    const currentRelationships = new Set(node.liminalWebConnections || []);
+    const newRelationships = new Set(relationshipIds);
+
+    // Find added and removed relationships
+    const added = relationshipIds.filter(id => !currentRelationships.has(id));
+    const removed = Array.from(currentRelationships).filter(id => !newRelationships.has(id));
+
+    // Update the node's relationships
+    node.liminalWebConnections = relationshipIds;
+
+    // Update bidirectional relationships
+    for (const addedId of added) {
+      await this.addBidirectionalRelationshipReal(nodeId, addedId);
+    }
+
+    for (const removedId of removed) {
+      await this.removeBidirectionalRelationshipReal(nodeId, removedId);
+    }
+
+    // Update store
+    store.updateRealNode(nodeId, {
+      ...nodeData,
+      node,
+      lastSynced: Date.now()
+    });
+
+    // Update .udd file
+    await this.updateUDDFile(node);
+
+    console.log(`GitDreamNodeService: Updated relationships for ${nodeId}:`, {
+      added: added.length,
+      removed: removed.length,
+      total: relationshipIds.length
+    });
+  }
+
+  /**
+   * Get relationships for a node
+   */
+  async getRelationships(nodeId: string): Promise<string[]> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+    
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+    
+    return nodeData.node.liminalWebConnections || [];
+  }
+
+  /**
+   * Add a single relationship (bidirectional)
+   */
+  async addRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+    
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const node = nodeData.node;
+    const relationships = new Set(node.liminalWebConnections || []);
+    relationships.add(relatedNodeId);
+    node.liminalWebConnections = Array.from(relationships);
+
+    // Add bidirectional relationship
+    await this.addBidirectionalRelationshipReal(nodeId, relatedNodeId);
+
+    // Update store
+    store.updateRealNode(nodeId, {
+      ...nodeData,
+      node,
+      lastSynced: Date.now()
+    });
+
+    // Update .udd file
+    await this.updateUDDFile(node);
+
+    console.log(`GitDreamNodeService: Added relationship ${nodeId} <-> ${relatedNodeId}`);
+  }
+
+  /**
+   * Remove a single relationship (bidirectional)
+   */
+  async removeRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+    
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const node = nodeData.node;
+    const relationships = new Set(node.liminalWebConnections || []);
+    relationships.delete(relatedNodeId);
+    node.liminalWebConnections = Array.from(relationships);
+
+    // Remove bidirectional relationship
+    await this.removeBidirectionalRelationshipReal(nodeId, relatedNodeId);
+
+    // Update store
+    store.updateRealNode(nodeId, {
+      ...nodeData,
+      node,
+      lastSynced: Date.now()
+    });
+
+    // Update .udd file
+    await this.updateUDDFile(node);
+
+    console.log(`GitDreamNodeService: Removed relationship ${nodeId} <-> ${relatedNodeId}`);
+  }
+
+  /**
+   * Add bidirectional relationship (internal helper)
+   */
+  private async addBidirectionalRelationshipReal(nodeId: string, relatedNodeId: string): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const relatedNodeData = store.realNodes.get(relatedNodeId);
+    
+    if (relatedNodeData) {
+      const relatedNode = relatedNodeData.node;
+      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+      relatedRelationships.add(nodeId);
+      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
+
+      // Update store
+      store.updateRealNode(relatedNodeId, {
+        ...relatedNodeData,
+        node: relatedNode,
+        lastSynced: Date.now()
+      });
+
+      // Update .udd file
+      await this.updateUDDFile(relatedNode);
+    }
+  }
+
+  /**
+   * Remove bidirectional relationship (internal helper)
+   */
+  private async removeBidirectionalRelationshipReal(nodeId: string, relatedNodeId: string): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const relatedNodeData = store.realNodes.get(relatedNodeId);
+    
+    if (relatedNodeData) {
+      const relatedNode = relatedNodeData.node;
+      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+      relatedRelationships.delete(nodeId);
+      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
+
+      // Update store
+      store.updateRealNode(relatedNodeId, {
+        ...relatedNodeData,
+        node: relatedNode,
+        lastSynced: Date.now()
+      });
+
+      // Update .udd file
+      await this.updateUDDFile(relatedNode);
     }
   }
 }

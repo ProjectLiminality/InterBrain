@@ -5,7 +5,7 @@ import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import './dreamNodeAnimations.css';
 
 // Universal Movement API interface
@@ -66,6 +66,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
+  
+  // Subscribe to edit mode state for relationship glow
+  const isEditModeActive = useInterBrainStore(state => state.editMode.isActive);
+  const isPendingRelationship = useInterBrainStore(state => 
+    state.editMode.pendingRelationships.includes(dreamNode.id)
+  );
 
   // Register hit sphere reference with parent component
   useEffect(() => {
@@ -531,9 +537,20 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
           transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
           animation: gitStyle.animation,
-          boxShadow: gitStyle.glowIntensity > 0 
-            ? getGitGlow(gitState, gitStyle.glowIntensity)
-            : (isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none')
+          boxShadow: (() => {
+            // Priority 1: Git status glow (always highest priority)
+            if (gitStyle.glowIntensity > 0) {
+              return getGitGlow(gitState, gitStyle.glowIntensity);
+            }
+            
+            // Priority 2: Edit mode relationship glow
+            if (isEditModeActive && isPendingRelationship) {
+              return getEditModeGlow(25); // Strong gold glow for relationships
+            }
+            
+            // Priority 3: Hover glow (fallback)
+            return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
+          })()
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
