@@ -822,6 +822,12 @@ export default function DreamspaceCanvas() {
           // Clicked on empty space - handle based on current spatial layout
           const store = useInterBrainStore.getState();
           
+          // Suppress empty space clicks during edit mode
+          if (store.editMode.isActive) {
+            console.log('Empty space clicked during edit mode - ignoring');
+            return;
+          }
+          
           if (store.spatialLayout === 'search') {
             if (store.searchInterface.isActive) {
               // Dismiss search interface and return to constellation
