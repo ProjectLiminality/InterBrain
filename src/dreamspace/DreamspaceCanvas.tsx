@@ -433,6 +433,12 @@ export default function DreamspaceCanvas() {
       // In edit mode, clicking a node toggles its relationship status
       store.togglePendingRelationship(node.id);
       console.log(`Edit mode: Toggled relationship with "${node.name}"`);
+      
+      // Trigger immediate reordering for priority-based positioning
+      if (spatialOrchestratorRef.current) {
+        spatialOrchestratorRef.current.reorderEditModeSearchResults();
+      }
+      
       return; // Don't do normal click handling in edit mode
     }
     

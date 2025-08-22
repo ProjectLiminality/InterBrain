@@ -50,6 +50,9 @@ export interface SpatialOrchestratorRef {
   /** Show search results for edit mode - keep center node in place */
   showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => void;
   
+  /** Reorder edit mode search results based on current pending relationships */
+  reorderEditModeSearchResults: () => void;
+  
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
   
@@ -116,6 +119,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   
   // Store integration
   const setSpatialLayout = useInterBrainStore(state => state.setSpatialLayout);
+  
+  // Track current edit mode search results for dynamic reordering
+  const currentEditModeSearchResults = useRef<DreamNode[]>([]);
+  const currentEditModeCenterNodeId = useRef<string | null>(null);
   
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
@@ -557,18 +564,45 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       try {
         console.log(`SpatialOrchestrator: Showing ${searchResults.length} related nodes for edit mode`);
         
+        // Store current search results for dynamic reordering
+        currentEditModeSearchResults.current = searchResults;
+        currentEditModeCenterNodeId.current = centerNodeId;
+        
         // Mark as transitioning
         isTransitioning.current = true;
         
         // Build relationship graph from current nodes
         const relationshipGraph = buildRelationshipGraph(dreamNodes);
         
-        // Create ordered nodes from search results
-        const orderedNodes = searchResults.map(node => ({ 
+        // Get current pending relationships from store for priority ordering
+        const store = useInterBrainStore.getState();
+        const pendingRelationshipIds = store.editMode.pendingRelationships || [];
+        
+        // Filter out already-related nodes from search results to avoid duplicates
+        const filteredSearchResults = searchResults.filter(node => 
+          !pendingRelationshipIds.includes(node.id)
+        );
+        
+        // Create priority-ordered nodes: related nodes first (golden glow), then search results
+        const relatedNodes = pendingRelationshipIds
+          .map(id => dreamNodes.find(node => node.id === id))
+          .filter(node => node !== undefined)
+          .map(node => ({ 
+            id: node.id, 
+            name: node.name, 
+            type: node.type 
+          }));
+        
+        const searchNodesMapped = filteredSearchResults.map(node => ({ 
           id: node.id, 
           name: node.name, 
           type: node.type 
         }));
+        
+        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
+        const orderedNodes = [...relatedNodes, ...searchNodesMapped];
+        
+        console.log(`SpatialOrchestrator: Priority ordering - ${relatedNodes.length} related nodes (golden), ${searchNodesMapped.length} search results`);
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
@@ -634,6 +668,106 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       } catch (error) {
         console.error('SpatialOrchestrator: Error during edit mode search display:', error);
         isTransitioning.current = false;
+      }
+    },
+    
+    reorderEditModeSearchResults: () => {
+      try {
+        // Only reorder if we're currently in edit mode with search results
+        const searchResults = currentEditModeSearchResults.current;
+        const centerNodeId = currentEditModeCenterNodeId.current;
+        
+        if (!searchResults.length || !centerNodeId) {
+          console.log('SpatialOrchestrator: No edit mode search results to reorder');
+          return;
+        }
+        
+        console.log('SpatialOrchestrator: Reordering edit mode search results based on relationship changes');
+        
+        // Build relationship graph from current nodes
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        
+        // Get current pending relationships from store for priority ordering
+        const store = useInterBrainStore.getState();
+        const pendingRelationshipIds = store.editMode.pendingRelationships || [];
+        
+        // Filter out already-related nodes from search results to avoid duplicates
+        const filteredSearchResults = searchResults.filter(node => 
+          !pendingRelationshipIds.includes(node.id)
+        );
+        
+        // Create priority-ordered nodes: related nodes first (golden glow), then search results
+        const relatedNodes = pendingRelationshipIds
+          .map(id => dreamNodes.find(node => node.id === id))
+          .filter(node => node !== undefined)
+          .map(node => ({ 
+            id: node.id, 
+            name: node.name, 
+            type: node.type 
+          }));
+        
+        const searchNodesMapped = filteredSearchResults.map(node => ({ 
+          id: node.id, 
+          name: node.name, 
+          type: node.type 
+        }));
+        
+        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
+        const orderedNodes = [...relatedNodes, ...searchNodesMapped];
+        
+        console.log(`SpatialOrchestrator: Reordering - ${relatedNodes.length} related nodes (golden), ${searchNodesMapped.length} search results`);
+        
+        // Calculate new ring layout positions
+        const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
+        
+        // Apply world-space position correction
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+          
+          // Transform all ring node positions to world space
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+        
+        // Move nodes to their new positions (fast animation for immediate feedback)
+        const fastTransitionDuration = 300; // 300ms for quick reordering
+        
+        // Move search result nodes to their new ring positions
+        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId: searchNodeId, position }) => {
+          if (searchNodeId === centerNodeId) {
+            // Skip the center node - it stays where it is
+            return;
+          }
+          
+          const nodeRef = nodeRefs.current.get(searchNodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            nodeRef.current.moveToPosition(position, fastTransitionDuration, 'easeOutQuart');
+          }
+        });
+        
+        // Move sphere nodes to sphere surface
+        positions.sphereNodes.forEach(sphereNodeId => {
+          // Skip the center node if it's somehow in sphere nodes
+          if (sphereNodeId === centerNodeId) {
+            return;
+          }
+          
+          const nodeRef = nodeRefs.current.get(sphereNodeId);
+          if (nodeRef?.current) {
+            // Move to sphere surface
+            nodeRef.current.returnToConstellation(fastTransitionDuration, 'easeInQuart');
+          }
+        });
+        
+        console.log('SpatialOrchestrator: Edit mode reordering complete');
+        
+      } catch (error) {
+        console.error('SpatialOrchestrator: Error during edit mode reordering:', error);
       }
     },
     
