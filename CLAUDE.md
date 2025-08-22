@@ -739,6 +739,36 @@ git add -A && git commit -m "User commit message"
 - `docs/ux-specifications.md`: Detailed user experience specifications
 - `docs/architecture-details.md`: Technical implementation details
 
+## Media Storage Architecture (Future Implementation)
+
+### Problem: localStorage Quota Exceeded with Large Media Files
+When dropping large media files (videos, podcasts) into DreamNodes, the app stores entire file content in localStorage via dreamTalkMedia field, quickly exceeding the 5-10MB browser limit.
+
+### Solution: Obsidian-Native File Streaming
+**Path of Least Resistance**: Store only file paths in localStorage, use Obsidian's file:// protocol for instant streaming.
+
+**Key Insights**:
+- Obsidian provides direct file:// URL access to vault files
+- Browsers handle local files with near-zero latency (10-50ms to first frame)
+- HTML5 video element supports byte-range requests for instant playback without full load
+- Local SSD performance (3-7 GB/s) makes streaming seamless
+
+**Implementation Strategy**:
+1. **Immediate**: Store only vault paths in `dreamTalkMedia`, not file content
+2. **Lazy Loading**: Use Intersection Observer to preload media as nodes approach viewport
+3. **Progressive Enhancement**: Show thumbnail instantly, stream full media on interaction
+4. **Optional Future**: IndexedDB for generated thumbnails/preview clips
+
+**Performance Approach**:
+```typescript
+// Instant playback pattern
+videoElement.src = vault.adapter.getResourcePath(file); // file:// URL
+videoElement.preload = "metadata"; // Load just headers
+videoElement.play(); // Starts in <50ms
+```
+
+This achieves the desired immediate, responsive preview experience without storage limitations.
+
 ## License
 
 GNU AFFERO GENERAL PUBLIC LICENSE - This project is open source with copyleft requirements.
