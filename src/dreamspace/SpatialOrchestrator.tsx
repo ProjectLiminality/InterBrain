@@ -610,7 +610,16 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Priority ordering: related nodes first (inner rings), then search results (outer rings)
         const orderedNodes = [...relatedNodes, ...unrelatedSearchNodes];
         
-        console.log(`SpatialOrchestrator: Initial setup - ${relatedNodes.length} related nodes (golden), ${unrelatedSearchNodes.length} unrelated search results`);
+        console.log('[EditMode] Initial setup:', {
+          searchResultsCount: searchResults.length,
+          pendingRelationshipIds,
+          filteredSearchResultsCount: filteredSearchResults.length,
+          relatedNodesCount: relatedNodes.length,
+          unrelatedNodesCount: unrelatedSearchNodes.length,
+          combinedOrderedNodesCount: orderedNodes.length,
+          relatedNodeIds: relatedNodes.map(n => n.id),
+          unrelatedNodeIds: unrelatedSearchNodes.map(n => n.id)
+        });
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
@@ -703,7 +712,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const addedRelationshipIds = currentPendingIds.filter(id => !previousRelatedIds.includes(id));
         const removedRelationshipIds = previousRelatedIds.filter(id => !currentPendingIds.includes(id));
         
-        console.log(`SpatialOrchestrator: Detected changes - added: ${addedRelationshipIds.length}, removed: ${removedRelationshipIds.length}`);
+        console.log('[EditMode] Before reorder:', {
+          relatedListSize: relatedNodesList.current.length,
+          unrelatedListSize: unrelatedSearchResultsList.current.length,
+          relatedIds: relatedNodesList.current.map(n => n.id),
+          unrelatedIds: unrelatedSearchResultsList.current.map(n => n.id),
+          pendingRelationships: currentPendingIds,
+          addedRelationshipIds,
+          removedRelationshipIds
+        });
         
         // Process additions: Move from unrelated list to end of related list
         addedRelationshipIds.forEach(addedId => {
@@ -732,7 +749,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Rebuild the combined ordered list with updated stable lists
         const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
         
-        console.log(`SpatialOrchestrator: Final lists - ${relatedNodesList.current.length} related nodes, ${unrelatedSearchResultsList.current.length} unrelated search results`);
+        console.log('[EditMode] After reorder:', {
+          relatedListSize: relatedNodesList.current.length,
+          unrelatedListSize: unrelatedSearchResultsList.current.length,
+          combinedSize: orderedNodes.length,
+          relatedIds: relatedNodesList.current.map(n => n.id),
+          unrelatedIds: unrelatedSearchResultsList.current.map(n => n.id)
+        });
         
         // Calculate new ring layout positions
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);

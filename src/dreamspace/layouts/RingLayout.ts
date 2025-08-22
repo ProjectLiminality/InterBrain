@@ -6,6 +6,7 @@
  */
 
 import { RelationshipGraph } from '../../utils/relationship-graph';
+import { useInterBrainStore } from '../../store/interbrain-store';
 
 /**
  * Configuration for ring layout positioning
@@ -554,8 +555,22 @@ export function calculateRingLayoutPositionsForSearch(
   relationshipGraph: RelationshipGraph,
   config: RingLayoutConfig = DEFAULT_RING_CONFIG
 ): RingLayoutPositions {
+  console.log('[RingLayout] Input:', {
+    orderedNodesReceived: orderedNodes.length,
+    orderedNodeIds: orderedNodes.map(n => n.id),
+    maxActiveNodes: config.maxActiveNodes
+  });
+  
+  // Apply priority wrapper: Pre-sort nodes to ensure related nodes get priority positions
+  const prioritySortedNodes = applyPriorityMapping(orderedNodes, relationshipGraph);
+  
+  console.log('[RingLayout] After priority mapping:', {
+    originalOrder: orderedNodes.map(n => n.id),
+    prioritySortedOrder: prioritySortedNodes.map(n => n.id)
+  });
+  
   // Limit to max active nodes (36 = 6+12+18)
-  const limitedNodes = orderedNodes.slice(0, config.maxActiveNodes);
+  const limitedNodes = prioritySortedNodes.slice(0, config.maxActiveNodes);
   const totalNodes = limitedNodes.length;
   
   // Map nodes to their positions
@@ -635,6 +650,18 @@ export function calculateRingLayoutPositionsForSearch(
   const allNodeIds = Array.from(relationshipGraph.nodes.keys());
   const sphereNodes = allNodeIds.filter(nodeId => !searchNodeIds.has(nodeId));
   
+  console.log('[RingLayout] Output classification:', {
+    limitedNodesCount: limitedNodes.length,
+    ring1Count: ring1Nodes.length,
+    ring2Count: ring2Nodes.length,
+    ring3Count: ring3Nodes.length,
+    sphereNodesCount: sphereNodes.length,
+    ring1Ids: ring1Nodes.map(n => n.nodeId),
+    ring2Ids: ring2Nodes.map(n => n.nodeId),
+    ring3Ids: ring3Nodes.map(n => n.nodeId),
+    sphereNodeIds: sphereNodes
+  });
+  
   return {
     centerNode,
     ring1Nodes,
@@ -666,4 +693,56 @@ export function getRingLayoutStats(positions: RingLayoutPositions): {
     sphereNodesCount: positions.sphereNodes.length,
     totalProcessed: centerCount + activeCount + positions.sphereNodes.length
   };
+}
+
+/**
+ * Priority-Preserving Mapping Layer
+ * 
+ * Wraps the existing mask logic to ensure related nodes (with golden glow) 
+ * always occupy inner ring positions without modifying the core mask algorithms.
+ * 
+ * Strategy: Pre-sort the input list so mask logic naturally assigns
+ * inner positions to related nodes and outer positions to unrelated nodes.
+ */
+function applyPriorityMapping(
+  orderedNodes: Array<{ id: string; name?: string; type?: string }>,
+  _relationshipGraph: RelationshipGraph
+): Array<{ id: string; name?: string; type?: string }> {
+  
+  // Get current pending relationships from edit mode store
+  // Since this is called during edit mode, we can safely access the store
+  const store = useInterBrainStore.getState();
+  const pendingRelationshipIds = store.editMode.pendingRelationships || [];
+  
+  console.log('[PriorityMapping] Input analysis:', {
+    totalNodes: orderedNodes.length,
+    pendingRelationshipIds,
+    nodeIds: orderedNodes.map(n => n.id)
+  });
+  
+  // Separate nodes into related (golden glow) and unrelated groups
+  const relatedNodes: typeof orderedNodes = [];
+  const unrelatedNodes: typeof orderedNodes = [];
+  
+  orderedNodes.forEach(node => {
+    if (pendingRelationshipIds.includes(node.id)) {
+      relatedNodes.push(node);
+    } else {
+      unrelatedNodes.push(node);
+    }
+  });
+  
+  // Priority order: Related nodes first (will get inner ring positions),
+  // then unrelated nodes (will get outer ring positions)
+  const prioritySortedNodes = [...relatedNodes, ...unrelatedNodes];
+  
+  console.log('[PriorityMapping] Output analysis:', {
+    relatedCount: relatedNodes.length,
+    unrelatedCount: unrelatedNodes.length,
+    relatedIds: relatedNodes.map(n => n.id),
+    unrelatedIds: unrelatedNodes.map(n => n.id),
+    finalOrder: prioritySortedNodes.map(n => n.id)
+  });
+  
+  return prioritySortedNodes;
 }
