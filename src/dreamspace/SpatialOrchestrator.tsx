@@ -124,6 +124,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   const currentEditModeSearchResults = useRef<DreamNode[]>([]);
   const currentEditModeCenterNodeId = useRef<string | null>(null);
   
+  // Track the stable lists for swapping logic
+  const relatedNodesList = useRef<Array<{ id: string; name: string; type: string }>>([]);
+  const unrelatedSearchResultsList = useRef<Array<{ id: string; name: string; type: string }>>([]);
+  
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
       try {
@@ -583,7 +587,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           !pendingRelationshipIds.includes(node.id)
         );
         
-        // Create priority-ordered nodes: related nodes first (golden glow), then search results
+        // Create stable lists for swapping logic
         const relatedNodes = pendingRelationshipIds
           .map(id => dreamNodes.find(node => node.id === id))
           .filter(node => node !== undefined)
@@ -593,16 +597,20 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             type: node.type 
           }));
         
-        const searchNodesMapped = filteredSearchResults.map(node => ({ 
+        const unrelatedSearchNodes = filteredSearchResults.map(node => ({ 
           id: node.id, 
           name: node.name, 
           type: node.type 
         }));
         
-        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
-        const orderedNodes = [...relatedNodes, ...searchNodesMapped];
+        // Store stable lists for swapping logic
+        relatedNodesList.current = [...relatedNodes];
+        unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
         
-        console.log(`SpatialOrchestrator: Priority ordering - ${relatedNodes.length} related nodes (golden), ${searchNodesMapped.length} search results`);
+        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
+        const orderedNodes = [...relatedNodes, ...unrelatedSearchNodes];
+        
+        console.log(`SpatialOrchestrator: Initial setup - ${relatedNodes.length} related nodes (golden), ${unrelatedSearchNodes.length} unrelated search results`);
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
@@ -673,49 +681,58 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     reorderEditModeSearchResults: () => {
       try {
-        // Only reorder if we're currently in edit mode with search results
-        const searchResults = currentEditModeSearchResults.current;
+        // Only reorder if we're currently in edit mode with stable lists
         const centerNodeId = currentEditModeCenterNodeId.current;
         
-        if (!searchResults.length || !centerNodeId) {
-          console.log('SpatialOrchestrator: No edit mode search results to reorder');
+        if (!centerNodeId || !relatedNodesList.current.length && !unrelatedSearchResultsList.current.length) {
+          console.log('SpatialOrchestrator: No stable lists to reorder');
           return;
         }
         
-        console.log('SpatialOrchestrator: Reordering edit mode search results based on relationship changes');
+        console.log('SpatialOrchestrator: Performing position swapping based on relationship changes');
         
         // Build relationship graph from current nodes
         const relationshipGraph = buildRelationshipGraph(dreamNodes);
         
-        // Get current pending relationships from store for priority ordering
+        // Get current pending relationships from store
         const store = useInterBrainStore.getState();
-        const pendingRelationshipIds = store.editMode.pendingRelationships || [];
+        const currentPendingIds = store.editMode.pendingRelationships || [];
         
-        // Filter out already-related nodes from search results to avoid duplicates
-        const filteredSearchResults = searchResults.filter(node => 
-          !pendingRelationshipIds.includes(node.id)
-        );
+        // Detect what changed: which nodes were added/removed from relationships
+        const previousRelatedIds = relatedNodesList.current.map(n => n.id);
+        const addedRelationshipIds = currentPendingIds.filter(id => !previousRelatedIds.includes(id));
+        const removedRelationshipIds = previousRelatedIds.filter(id => !currentPendingIds.includes(id));
         
-        // Create priority-ordered nodes: related nodes first (golden glow), then search results
-        const relatedNodes = pendingRelationshipIds
-          .map(id => dreamNodes.find(node => node.id === id))
-          .filter(node => node !== undefined)
-          .map(node => ({ 
-            id: node.id, 
-            name: node.name, 
-            type: node.type 
-          }));
+        console.log(`SpatialOrchestrator: Detected changes - added: ${addedRelationshipIds.length}, removed: ${removedRelationshipIds.length}`);
         
-        const searchNodesMapped = filteredSearchResults.map(node => ({ 
-          id: node.id, 
-          name: node.name, 
-          type: node.type 
-        }));
+        // Process additions: Move from unrelated list to end of related list
+        addedRelationshipIds.forEach(addedId => {
+          const nodeIndex = unrelatedSearchResultsList.current.findIndex(n => n.id === addedId);
+          if (nodeIndex !== -1) {
+            // Remove from unrelated list
+            const [movedNode] = unrelatedSearchResultsList.current.splice(nodeIndex, 1);
+            // Add to end of related list
+            relatedNodesList.current.push(movedNode);
+            console.log(`SpatialOrchestrator: Moved node ${movedNode.id} from unrelated to related`);
+          }
+        });
         
-        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
-        const orderedNodes = [...relatedNodes, ...searchNodesMapped];
+        // Process removals: Move from related list to beginning of unrelated list
+        removedRelationshipIds.forEach(removedId => {
+          const nodeIndex = relatedNodesList.current.findIndex(n => n.id === removedId);
+          if (nodeIndex !== -1) {
+            // Remove from related list
+            const [movedNode] = relatedNodesList.current.splice(nodeIndex, 1);
+            // Add to beginning of unrelated list
+            unrelatedSearchResultsList.current.unshift(movedNode);
+            console.log(`SpatialOrchestrator: Moved node ${movedNode.id} from related to unrelated`);
+          }
+        });
         
-        console.log(`SpatialOrchestrator: Reordering - ${relatedNodes.length} related nodes (golden), ${searchNodesMapped.length} search results`);
+        // Rebuild the combined ordered list with updated stable lists
+        const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
+        
+        console.log(`SpatialOrchestrator: Final lists - ${relatedNodesList.current.length} related nodes, ${unrelatedSearchResultsList.current.length} unrelated search results`);
         
         // Calculate new ring layout positions
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
