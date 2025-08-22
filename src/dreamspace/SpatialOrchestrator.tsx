@@ -586,12 +586,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           });
         }
         
-        // IMPORTANT: Keep the center node (being edited) at center - DON'T MOVE IT
+        // IMPORTANT: Move/keep the center node at the actual center position
         const centerNodeRef = nodeRefs.current.get(centerNodeId);
         if (centerNodeRef?.current) {
-          // Just ensure it's active, but don't move it
           centerNodeRef.current.setActiveState(true);
-          console.log('SpatialOrchestrator: Center node stays at center for edit mode');
+          // Move it to center position (where EditNode will overlay it)
+          const centerPosition: [number, number, number] = [0, 0, -50];
+          centerNodeRef.current.moveToPosition(centerPosition, transitionDuration, 'easeOutQuart');
+          console.log('SpatialOrchestrator: Moving center node to center for edit mode overlay');
         }
         
         // Move search result nodes to ring positions
@@ -678,15 +680,19 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // SPECIAL HANDLING: Center node is already at center (as EditNode)
-        // So we DON'T animate it - just mark it as active
+        // Update store to liminal-web layout mode
+        setSpatialLayout('liminal-web');
+        
+        // IMPORTANT: Move center node TO center position (it might be in honeycomb layout)
+        // The EditNode is fading out, so we need the actual DreamNode at center
         if (positions.centerNode) {
           const centerNodeRef = nodeRefs.current.get(positions.centerNode.nodeId);
           if (centerNodeRef?.current) {
             centerNodeRef.current.setActiveState(true);
-            // Don't move the center node - it's already at the correct position
-            // The EditNode fades out its UI while the DreamNode stays in place
-            console.log('SpatialOrchestrator: Center node stays in place during edit save transition');
+            // Move the center node to the center position
+            // It might currently be in a honeycomb position from edit mode search layout
+            centerNodeRef.current.moveToPosition(positions.centerNode.position, transitionDuration, 'easeOutQuart');
+            console.log('SpatialOrchestrator: Moving center node to center for liminal web transition');
           }
         }
         
