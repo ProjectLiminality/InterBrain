@@ -249,6 +249,43 @@ export default function DreamspaceCanvas() {
     }
   }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
   
+  // Listen for custom edit mode events
+  useEffect(() => {
+    const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+    if (!canvas) return;
+    
+    const handleEditModeSaveTransition = (event: globalThis.Event) => {
+      const customEvent = event as globalThis.CustomEvent;
+      const nodeId = customEvent.detail?.nodeId;
+      
+      if (nodeId && spatialOrchestratorRef.current) {
+        console.log('DreamspaceCanvas: Handling edit mode save transition for node:', nodeId);
+        // Use special transition that doesn't move the center node
+        spatialOrchestratorRef.current.animateToLiminalWebFromEdit(nodeId);
+      }
+    };
+    
+    const handleEditModeSearchLayout = (event: globalThis.Event) => {
+      const customEvent = event as globalThis.CustomEvent;
+      const centerNodeId = customEvent.detail?.centerNodeId;
+      const searchResults = customEvent.detail?.searchResults;
+      
+      if (centerNodeId && searchResults && spatialOrchestratorRef.current) {
+        console.log('DreamspaceCanvas: Setting up edit mode search layout');
+        // Use special method that keeps center node in place
+        spatialOrchestratorRef.current.showEditModeSearchResults(centerNodeId, searchResults);
+      }
+    };
+    
+    canvas.addEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
+    canvas.addEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
+    
+    return () => {
+      canvas.removeEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
+      canvas.removeEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
+    };
+  }, []);
+  
   // Debug logging for creation state (removed excessive logging)
   
   // Callback to collect hit sphere references from DreamNode3D components
@@ -763,6 +800,7 @@ export default function DreamspaceCanvas() {
   return (
     <div 
       className="dreamspace-canvas-container"
+      data-dreamspace-canvas
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

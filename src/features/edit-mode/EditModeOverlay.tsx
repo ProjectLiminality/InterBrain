@@ -66,14 +66,22 @@ export default function EditModeOverlay() {
       if (freshNode) {
         // Update the selectedNode to reflect the saved changes
         useInterBrainStore.getState().setSelectedNode(freshNode);
-      }
-      
-      // Exit edit mode after successful save
-      exitEditMode();
-      
-      // Return to liminal-web layout to show the updated node
-      if (freshNode) {
-        useInterBrainStore.getState().setSpatialLayout('liminal-web');
+        
+        // Immediately trigger the special edit mode save transition
+        // This starts the parallel animations: UI fade + node movements
+        const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+        if (canvas) {
+          const event = new globalThis.CustomEvent('edit-mode-save-transition', {
+            detail: { nodeId: freshNode.id }
+          });
+          canvas.dispatchEvent(event);
+        }
+        
+        // Exit edit mode after animations complete
+        // Don't change spatial layout - it's already handled by the event
+        globalThis.setTimeout(() => {
+          exitEditMode();
+        }, 1000);
       }
     } catch (error) {
       console.error('Failed to save edit mode changes:', error);

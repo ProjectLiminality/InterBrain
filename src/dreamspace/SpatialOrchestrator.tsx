@@ -44,6 +44,12 @@ export interface SpatialOrchestratorRef {
   /** Move all nodes to sphere surface for search interface mode (like liminal web) */
   moveAllToSphereForSearch: () => void;
   
+  /** Special transition for edit mode save - center node doesn't move */
+  animateToLiminalWebFromEdit: (nodeId: string) => void;
+  
+  /** Show search results for edit mode - keep center node in place */
+  showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => void;
+  
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
   
@@ -543,6 +549,176 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
       } catch (error) {
         console.error('SpatialOrchestrator: Error during search interface setup:', error);
+        isTransitioning.current = false;
+      }
+    },
+    
+    showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => {
+      try {
+        console.log(`SpatialOrchestrator: Showing ${searchResults.length} related nodes for edit mode`);
+        
+        // Mark as transitioning
+        isTransitioning.current = true;
+        
+        // Build relationship graph from current nodes
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        
+        // Create ordered nodes from search results
+        const orderedNodes = searchResults.map(node => ({ 
+          id: node.id, 
+          name: node.name, 
+          type: node.type 
+        }));
+        
+        // Calculate ring layout positions for search results (honeycomb pattern)
+        const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
+        
+        // Apply world-space position correction
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+          
+          // Transform all ring node positions to world space
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+        
+        // IMPORTANT: Keep the center node (being edited) at center - DON'T MOVE IT
+        const centerNodeRef = nodeRefs.current.get(centerNodeId);
+        if (centerNodeRef?.current) {
+          // Just ensure it's active, but don't move it
+          centerNodeRef.current.setActiveState(true);
+          console.log('SpatialOrchestrator: Center node stays at center for edit mode');
+        }
+        
+        // Move search result nodes to ring positions
+        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId: searchNodeId, position }) => {
+          if (searchNodeId === centerNodeId) {
+            // Skip the center node - it stays where it is
+            return;
+          }
+          
+          const nodeRef = nodeRefs.current.get(searchNodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
+          }
+        });
+        
+        // Move sphere nodes to sphere surface
+        positions.sphereNodes.forEach(sphereNodeId => {
+          // Skip the center node if it's somehow in sphere nodes
+          if (sphereNodeId === centerNodeId) {
+            return;
+          }
+          
+          const nodeRef = nodeRefs.current.get(sphereNodeId);
+          if (nodeRef?.current) {
+            // Move to sphere surface
+            nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
+          }
+        });
+        
+        // Set transition complete after animation
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration);
+        
+        console.log('SpatialOrchestrator: Edit mode search layout complete');
+        
+      } catch (error) {
+        console.error('SpatialOrchestrator: Error during edit mode search display:', error);
+        isTransitioning.current = false;
+      }
+    },
+    
+    animateToLiminalWebFromEdit: (nodeId: string) => {
+      try {
+        console.log('SpatialOrchestrator: Special edit mode save transition for node:', nodeId);
+        
+        // Build relationship graph from current nodes
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        
+        // Calculate ring layout positions (in local sphere space)
+        const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
+        
+        // Track node roles for proper constellation return
+        liminalWebRoles.current = {
+          centerNodeId: positions.centerNode?.nodeId || null,
+          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
+          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
+          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
+          sphereNodeIds: new Set(positions.sphereNodes)
+        };
+        
+        // Apply world-space position correction based on current sphere rotation
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+          
+          // Transform center node position to world space (if exists)
+          if (positions.centerNode) {
+            const centerPos = new Vector3(...positions.centerNode.position);
+            centerPos.applyQuaternion(inverseRotation);
+            positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
+          }
+          
+          // Transform all ring node positions to world space
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+        
+        // Start transition
+        isTransitioning.current = true;
+        focusedNodeId.current = nodeId;
+        
+        // SPECIAL HANDLING: Center node is already at center (as EditNode)
+        // So we DON'T animate it - just mark it as active
+        if (positions.centerNode) {
+          const centerNodeRef = nodeRefs.current.get(positions.centerNode.nodeId);
+          if (centerNodeRef?.current) {
+            centerNodeRef.current.setActiveState(true);
+            // Don't move the center node - it's already at the correct position
+            // The EditNode fades out its UI while the DreamNode stays in place
+            console.log('SpatialOrchestrator: Center node stays in place during edit save transition');
+          }
+        }
+        
+        // Move all ring nodes to their positions (these DO animate)
+        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId: ringNodeId, position }) => {
+          const nodeRef = nodeRefs.current.get(ringNodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            // Ring nodes use ease-out for smooth arrival into view
+            nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
+          }
+        });
+        
+        // Move sphere nodes to sphere surface (out of the way)
+        positions.sphereNodes.forEach(sphereNodeId => {
+          const nodeRef = nodeRefs.current.get(sphereNodeId);
+          if (nodeRef?.current) {
+            // Sphere nodes use ease-in for quick departure from view
+            nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
+          }
+        });
+        
+        // Set transition complete after animation duration
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration);
+        
+        // Notify callback
+        onNodeFocused?.(nodeId);
+        
+      } catch (error) {
+        console.error('SpatialOrchestrator: Error during edit mode save transition:', error);
         isTransitioning.current = false;
       }
     },

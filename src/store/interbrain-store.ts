@@ -10,7 +10,7 @@ import {
   restoreOllamaPersistenceData,
   OllamaConfig
 } from '../features/semantic-search/store/ollama-config-slice';
-import { DEFAULT_OLLAMA_CONFIG } from '../features/semantic-search/types';
+// OllamaConfig imports are in the semantic search slice
 import { VectorData } from '../features/semantic-search/services/indexing-service';
 
 // Navigation history types

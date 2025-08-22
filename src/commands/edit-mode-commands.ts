@@ -63,9 +63,19 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
           // Filter out any null results (in case some relationships are broken)
           const validRelatedNodes = relatedNodes.filter(node => node !== null) as DreamNode[];
           
-          // Set these as search results to display them in honeycomb layout
-          store.setSearchResults(validRelatedNodes);
-          store.setSpatialLayout('search');
+          // Set these as edit mode search results
+          store.setEditModeSearchResults(validRelatedNodes);
+          // Trigger special edit mode search layout that keeps center node in place
+          const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+          if (canvas) {
+            const event = new globalThis.CustomEvent('edit-mode-search-layout', {
+              detail: { 
+                centerNodeId: freshNode.id,
+                searchResults: validRelatedNodes
+              }
+            });
+            canvas.dispatchEvent(event);
+          }
           
           uiService.showSuccess(`Edit mode activated for "${freshNode.name}" (${validRelatedNodes.length} existing relationships)`);
         } else {

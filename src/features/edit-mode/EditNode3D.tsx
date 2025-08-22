@@ -44,25 +44,22 @@ export default function EditNode3D({
   const [animatedUIOpacity, setAnimatedUIOpacity] = useState<number>(1.0);
   const animationStartTime = useRef<number | null>(null);
   
-  // Animation frame loop (same as ProtoNode3D)
+  // Animation frame loop for UI fade out only
   useFrame(() => {
     if (!animationStartTime.current) return;
     
     const elapsed = Date.now() - animationStartTime.current;
     const progress = Math.min(elapsed / 1000, 1); // 1 second duration
     
-    // Ease-in-out function
+    // Ease-in-out function for smooth transition
     const easeInOut = progress < 0.5 
       ? 2 * progress * progress 
       : 1 - Math.pow(-2 * progress + 2, 2) / 2;
     
-    // Don't animate position during save - keep node in place
-    // Position stays constant throughout the animation
-    
-    // Keep main node opacity at 1.0
+    // Keep main node fully visible - it transitions to the actual DreamNode
     setAnimatedOpacity(1.0);
     
-    // Animate UI elements opacity: 1.0 → 0.0 (fade out buttons/controls)
+    // Fade out UI controls (buttons, type toggle, validation) smoothly
     const startUIOpacity = 1.0;
     const endUIOpacity = 0.0;
     const newUIOpacity = startUIOpacity + (endUIOpacity - startUIOpacity) * easeInOut;
@@ -71,7 +68,6 @@ export default function EditNode3D({
     // Complete animation
     if (progress >= 1) {
       animationStartTime.current = null;
-      // Keep position unchanged
       setAnimatedOpacity(1.0);
       setAnimatedUIOpacity(endUIOpacity);
     }
@@ -214,13 +210,17 @@ export default function EditNode3D({
     if (validateTitle(localTitle)) {
       setIsAnimating(true);
       
-      // Start save animation
+      // Start save animation (fading out UI controls)
       animationStartTime.current = Date.now();
       
-      // Complete save when animation finishes
+      // Call onSave to trigger data persistence and liminal web transition
+      // The parent component will handle the spatial layout change
+      onSave();
+      
+      // The animation continues running to fade out the UI controls
+      // EditModeOverlay will handle exit after successful save
       globalThis.setTimeout(() => {
         setIsAnimating(false);
-        onSave();
       }, 1000);
     }
   };
