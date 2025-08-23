@@ -755,11 +755,11 @@ export default function DreamspaceCanvas() {
             // Update the selected node with fresh relationship data
             store.setSelectedNode(updatedFocusedNode);
             
-            // Trigger a liminal-web layout refresh to show the new related node
+            // Trigger a liminal-web layout refresh with smooth fly-in for the new node
             // Small delay to ensure the new node is in the store
             globalThis.setTimeout(() => {
               if (spatialOrchestratorRef.current) {
-                spatialOrchestratorRef.current.focusOnNode(focusedNodeId);
+                spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
               }
             }, 100);
           }

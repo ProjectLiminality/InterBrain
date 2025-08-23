@@ -23,6 +23,9 @@ export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
   focusOnNode: (nodeId: string) => void;
   
+  /** Focus on a specific node with smooth fly-in animation for newly created node */
+  focusOnNodeWithFlyIn: (nodeId: string, newNodeId: string) => void;
+  
   /** Return all nodes to constellation layout */
   returnToConstellation: () => void;
   
@@ -215,6 +218,103 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
       } catch (error) {
         console.error('SpatialOrchestrator: Error during focus transition:', error);
+        isTransitioning.current = false;
+      }
+    },
+    
+    focusOnNodeWithFlyIn: (nodeId: string, newNodeId: string) => {
+      try {
+        console.log(`SpatialOrchestrator: Focus on ${nodeId} with fly-in animation for new node ${newNodeId}`);
+        
+        // Build relationship graph from current nodes
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        
+        // Calculate ring layout positions (in local sphere space)
+        const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
+        
+        // Track node roles for proper constellation return
+        liminalWebRoles.current = {
+          centerNodeId: positions.centerNode?.nodeId || null,
+          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
+          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
+          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
+          sphereNodeIds: new Set(positions.sphereNodes)
+        };
+        
+        // Apply world-space position correction based on current sphere rotation
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+          
+          // Transform center node position to world space (if exists)
+          if (positions.centerNode) {
+            const centerPos = new Vector3(...positions.centerNode.position);
+            centerPos.applyQuaternion(inverseRotation);
+            positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
+          }
+          
+          // Transform all ring node positions to world space
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+        
+        // Start transition
+        isTransitioning.current = true;
+        focusedNodeId.current = nodeId;
+        
+        // Update store to liminal web layout mode
+        setSpatialLayout('liminal-web');
+        
+        // Move center node to focus position (if exists)
+        if (positions.centerNode) {
+          const centerNodeRef = nodeRefs.current.get(positions.centerNode.nodeId);
+          if (centerNodeRef?.current) {
+            centerNodeRef.current.setActiveState(true);
+            // Center node uses ease-out for smooth arrival
+            centerNodeRef.current.moveToPosition(positions.centerNode.position, transitionDuration, 'easeOutQuart');
+          }
+        }
+        
+        // Move ring nodes with special handling for the newly created node
+        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId: ringNodeId, position }) => {
+          const nodeRef = nodeRefs.current.get(ringNodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            
+            if (ringNodeId === newNodeId) {
+              // NEW NODE: Let it spawn at drop position first, then fly to ring position
+              console.log(`SpatialOrchestrator: New node ${newNodeId} will fly from spawn position to ring position`);
+              // Use a slightly longer duration for the fly-in effect to make it more dramatic
+              nodeRef.current.moveToPosition(position, transitionDuration * 1.2, 'easeOutCubic');
+            } else {
+              // EXISTING NODES: Move normally to their ring positions
+              nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
+            }
+          }
+        });
+        
+        // Move sphere nodes to sphere surface (out of the way for clean liminal web view)
+        positions.sphereNodes.forEach(sphereNodeId => {
+          const nodeRef = nodeRefs.current.get(sphereNodeId);
+          if (nodeRef?.current) {
+            // Sphere nodes use ease-in for quick departure from view
+            nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
+          }
+        });
+        
+        // Set transition complete after animation duration (use longer duration for fly-in)
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration * 1.2);
+        
+        // Notify callback
+        onNodeFocused?.(nodeId);
+        
+      } catch (error) {
+        console.error('SpatialOrchestrator: Error during focus with fly-in transition:', error);
         isTransitioning.current = false;
       }
     },
