@@ -603,12 +603,26 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           type: node.type 
         }));
         
-        // Store stable lists for swapping logic
-        relatedNodesList.current = [...relatedNodes];
-        unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
+        // Update stable lists for swapping logic - handle both initial and subsequent calls
+        if (relatedNodesList.current.length === 0 && unrelatedSearchResultsList.current.length === 0) {
+          // Initial call - set up the lists
+          relatedNodesList.current = [...relatedNodes];
+          unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
+          console.log('[EditMode] Initial list setup - related:', relatedNodes.length, 'unrelated:', unrelatedSearchNodes.length);
+        } else {
+          // Subsequent call (new search results) - merge new unrelated nodes with existing lists
+          // Keep existing related nodes, but update unrelated list with new search results
+          const existingUnrelatedIds = new Set(unrelatedSearchResultsList.current.map(n => n.id));
+          const newUnrelatedNodes = unrelatedSearchNodes.filter(node => !existingUnrelatedIds.has(node.id));
+          
+          // Add new unrelated nodes to the list
+          unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
+          
+          console.log('[EditMode] List update - added', newUnrelatedNodes.length, 'new unrelated nodes, total unrelated:', unrelatedSearchResultsList.current.length);
+        }
         
         // Priority ordering: related nodes first (inner rings), then search results (outer rings)
-        const orderedNodes = [...relatedNodes, ...unrelatedSearchNodes];
+        const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
         
         console.log('[EditMode] Initial setup:', {
           searchResultsCount: searchResults.length,

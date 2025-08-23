@@ -222,8 +222,14 @@ export default function DreamspaceCanvas() {
         // Search mode handles both search interface and search results display
         const store = useInterBrainStore.getState();
         if (searchResults && searchResults.length > 0) {
-          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
-          spatialOrchestratorRef.current.showSearchResults(searchResults);
+          // Check if we're in edit mode - need special handling to maintain stable lists
+          if (store.editMode.isActive && store.editMode.editingNode) {
+            console.log(`DreamspaceCanvas: Switching to edit mode search results with ${searchResults.length} results`);
+            spatialOrchestratorRef.current.showEditModeSearchResults(store.editMode.editingNode.id, searchResults);
+          } else {
+            console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
+            spatialOrchestratorRef.current.showSearchResults(searchResults);
+          }
         } else if (store.searchInterface.isActive) {
           console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
           // Use liminal web architecture: move all constellation nodes to sphere surface
