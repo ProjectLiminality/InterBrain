@@ -40,21 +40,32 @@ export default function EditModeOverlay() {
       // Get the active service for persistence
       const dreamNodeService = serviceManager.getActive();
       
-      // 1. Save metadata changes (let service layer handle if no changes)
+      // 1. Handle new DreamTalk media file if provided
+      if (editMode.newDreamTalkFile) {
+        console.log(`EditModeOverlay: Saving new DreamTalk media: ${editMode.newDreamTalkFile.name}`);
+        await dreamNodeService.addFilesToNode(editMode.editingNode.id, [editMode.newDreamTalkFile]);
+      }
+      
+      // 2. Save metadata changes (let service layer handle if no changes)
       await dreamNodeService.update(editMode.editingNode.id, {
         name: editMode.editingNode.name,
         type: editMode.editingNode.type
         // Add other metadata fields as needed
       });
       
-      // 2. Save relationship changes through service layer
+      // 3. Save relationship changes through service layer
       await dreamNodeService.updateRelationships(
         editMode.editingNode.id,
         editMode.pendingRelationships
       );
       
-      // 3. Update store state with confirmed relationships
+      // 4. Update store state with confirmed relationships
       savePendingRelationships();
+      
+      // 5. Clear the new DreamTalk file from edit mode state (successful save)
+      if (editMode.newDreamTalkFile) {
+        useInterBrainStore.getState().setEditModeNewDreamTalkFile(undefined);
+      }
       
       console.log(`Edit mode changes saved for node ${editMode.editingNode.id}:`, {
         relationships: editMode.pendingRelationships.length,
