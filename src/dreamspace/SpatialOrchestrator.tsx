@@ -751,20 +751,17 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           });
         }
         
-        // IMPORTANT: Move/keep the center node at the actual center position
+        // IMPORTANT: Keep the center node at its current position (already correctly positioned with sphere rotation)
         const centerNodeRef = nodeRefs.current.get(centerNodeId);
         if (centerNodeRef?.current) {
-          console.log(`[SpatialOrchestrator] Center node ${centerNodeId} found - checking current position`);
+          console.log(`[SpatialOrchestrator] Center node ${centerNodeId} found - keeping at current position (already correctly centered)`);
           
-          // Log current position if available
+          // Log current position for verification
           const currentPosition = centerNodeRef.current.getCurrentPosition?.();
-          console.log(`[SpatialOrchestrator] Center node current position:`, currentPosition);
+          console.log(`[SpatialOrchestrator] Center node staying at position:`, currentPosition);
           
           centerNodeRef.current.setActiveState(true);
-          // Move it to center position (where EditNode will overlay it)
-          const centerPosition: [number, number, number] = [0, 0, -50];
-          centerNodeRef.current.moveToPosition(centerPosition, transitionDuration, 'easeOutQuart');
-          console.log(`[SpatialOrchestrator] Moving center node ${centerNodeId} from ${currentPosition ? `[${currentPosition.join(', ')}]` : 'unknown'} to center position [0, 0, -50]`);
+          // DO NOT move center node - it's already correctly positioned with sphere rotation counteracted
         } else {
           console.error(`[SpatialOrchestrator] Center node ${centerNodeId} not found in nodeRefs! Available nodes:`, Array.from(nodeRefs.current.keys()));
         }
