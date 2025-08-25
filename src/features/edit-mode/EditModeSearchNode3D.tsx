@@ -56,26 +56,28 @@ export default function EditModeSearchNode3D({
   }, []);
   
   // Global escape key handling is now managed by DreamspaceCanvas for stability
-  // Component-level escape handling for input field only
+  // Component-level escape handling for search mode - takes priority
   useEffect(() => {
     const handleComponentEscape = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
         // Only handle if this component is mounted and search mode is active
         const store = useInterBrainStore.getState();
         if (store.editMode.isActive && store.editMode.isSearchingRelationships) {
-          console.log(`⚡ [EditModeSearchNode3D] Component escape handler triggered`);
+          console.log(`⚡ [EditModeSearchNode3D] Component escape handler triggered - blocking global handler`);
           e.preventDefault();
+          e.stopImmediatePropagation(); // Prevent global handler from executing
           handleCancel();
         }
       }
     };
     
     console.log(`🎯 [EditModeSearchNode3D] Adding component escape listener for search mode`);
-    globalThis.document.addEventListener('keydown', handleComponentEscape);
+    // Add with capture phase to run before global handler
+    globalThis.document.addEventListener('keydown', handleComponentEscape, true);
     
     return () => {
       console.log(`🧹 [EditModeSearchNode3D] Removing component escape listener`);
-      globalThis.document.removeEventListener('keydown', handleComponentEscape);
+      globalThis.document.removeEventListener('keydown', handleComponentEscape, true);
     };
   }, []); // Empty deps - setup once, cleanup on unmount
   
@@ -276,7 +278,7 @@ export default function EditModeSearchNode3D({
                   width: '75%', // 75% of the background circle size
                   height: '75%',
                   borderRadius: '50%',
-                  background: `conic-gradient(from 0deg, ${nodeColors.border} 0%, ${nodeColors.border} 25%, transparent 100%)`,
+                  background: `conic-gradient(from 0deg, transparent 0%, transparent 75%, ${nodeColors.border} 100%)`,
                   mask: 'radial-gradient(circle, transparent 60%, black 65%)', // Creates ring effect
                   WebkitMask: 'radial-gradient(circle, transparent 60%, black 65%)', // Safari support
                   animation: 'spin 1s linear infinite',
