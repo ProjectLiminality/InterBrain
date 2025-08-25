@@ -51,10 +51,12 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
         }
         
         // Enter edit mode with the fresh node data
+        console.log(`[EditMode] Entering edit mode for node: ${freshNode.id} at current position - before startEditMode`);
         store.startEditMode(freshNode);
         
         // If the node has existing relationships, show them in the search layout
         if (freshNode.liminalWebConnections && freshNode.liminalWebConnections.length > 0) {
+          console.log(`[EditMode] Node has ${freshNode.liminalWebConnections.length} existing relationships - will trigger edit-mode-search-layout`);
           // Get all related nodes to display them
           const relatedNodes = await Promise.all(
             freshNode.liminalWebConnections.map(id => dreamNodeService.get(id))
@@ -66,6 +68,7 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
           // Set these as edit mode search results
           store.setEditModeSearchResults(validRelatedNodes);
           // Trigger special edit mode search layout that keeps center node in place
+          console.log(`[EditMode] Dispatching edit-mode-search-layout event for center node ${freshNode.id} with ${validRelatedNodes.length} related nodes`);
           const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
           if (canvas) {
             const event = new globalThis.CustomEvent('edit-mode-search-layout', {
@@ -75,6 +78,9 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
               }
             });
             canvas.dispatchEvent(event);
+            console.log(`[EditMode] edit-mode-search-layout event dispatched successfully`);
+          } else {
+            console.error(`[EditMode] Canvas element not found - cannot dispatch edit-mode-search-layout event`);
           }
           
           uiService.showSuccess(`Edit mode activated for "${freshNode.name}" (${validRelatedNodes.length} existing relationships)`);

@@ -276,10 +276,22 @@ export default function DreamspaceCanvas() {
       const centerNodeId = customEvent.detail?.centerNodeId;
       const searchResults = customEvent.detail?.searchResults;
       
+      console.log(`[Canvas] Received edit-mode-search-layout event:`, {
+        centerNodeId,
+        searchResultsCount: searchResults?.length,
+        orchestratorAvailable: !!spatialOrchestratorRef.current
+      });
+      
       if (centerNodeId && searchResults && spatialOrchestratorRef.current) {
-        console.log('DreamspaceCanvas: Setting up edit mode search layout');
+        console.log(`[Canvas] Setting up edit mode search layout for center node ${centerNodeId} with ${searchResults.length} related nodes`);
         // Use special method that keeps center node in place
         spatialOrchestratorRef.current.showEditModeSearchResults(centerNodeId, searchResults);
+      } else {
+        console.error(`[Canvas] Missing required data for edit-mode-search-layout:`, {
+          hasCenterNodeId: !!centerNodeId,
+          hasSearchResults: !!searchResults,
+          hasOrchestrator: !!spatialOrchestratorRef.current
+        });
       }
     };
     
