@@ -79,10 +79,20 @@ export default function DreamspaceCanvas() {
       // Priority 2: Edit mode (second priority)  
       if (store.editMode.isActive && !store.editMode.isSearchingRelationships) {
         console.log(`✏️ [DreamspaceCanvas] Global escape: Exiting edit mode to liminal-web`);
+        console.log(`✏️ [DreamspaceCanvas] Pre-exit state: selectedNode=${store.selectedNode?.name}, spatialLayout=${store.spatialLayout}`);
         e.preventDefault();
+        e.stopImmediatePropagation(); // Prevent any other handlers from running
+        
+        const selectedNode = store.selectedNode; // Capture before exitEditMode
         store.exitEditMode();
-        if (store.selectedNode) {
+        
+        // Always set to liminal-web if there was a selected node
+        if (selectedNode) {
+          console.log(`✏️ [DreamspaceCanvas] Setting layout to liminal-web for node: ${selectedNode.name}`);
           store.setSpatialLayout('liminal-web');
+        } else {
+          console.log(`✏️ [DreamspaceCanvas] No selected node, going to constellation`);
+          store.setSpatialLayout('constellation');
         }
         return;
       }

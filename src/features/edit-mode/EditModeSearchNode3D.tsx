@@ -63,10 +63,19 @@ export default function EditModeSearchNode3D({
         // Only handle if this component is mounted and search mode is active
         const store = useInterBrainStore.getState();
         if (store.editMode.isActive && store.editMode.isSearchingRelationships) {
-          console.log(`⚡ [EditModeSearchNode3D] Component escape handler triggered - blocking global handler`);
+          console.log(`⚡ [EditModeSearchNode3D] Component escape handler triggered`);
+          console.log(`⚡ [EditModeSearchNode3D] Pre-cancel state: isActive=${store.editMode.isActive}, isSearching=${store.editMode.isSearchingRelationships}`);
           e.preventDefault();
           e.stopImmediatePropagation(); // Prevent global handler from executing
+          
+          // Call cancel which should toggle off search mode
           handleCancel();
+          
+          // Log state after cancel to verify it worked
+          const postStore = useInterBrainStore.getState();
+          console.log(`⚡ [EditModeSearchNode3D] Post-cancel state: isActive=${postStore.editMode.isActive}, isSearching=${postStore.editMode.isSearchingRelationships}`);
+        } else {
+          console.log(`⚡ [EditModeSearchNode3D] Component escape ignored - not in search mode or edit mode inactive`);
         }
       }
     };
@@ -76,7 +85,7 @@ export default function EditModeSearchNode3D({
     globalThis.document.addEventListener('keydown', handleComponentEscape, true);
     
     return () => {
-      console.log(`🧹 [EditModeSearchNode3D] Removing component escape listener`);
+      console.log(`🧹 [EditModeSearchNode3D] Removing component escape listener - should restore global escape handling`);
       globalThis.document.removeEventListener('keydown', handleComponentEscape, true);
     };
   }, []); // Empty deps - setup once, cleanup on unmount
