@@ -64,11 +64,22 @@ export default function DreamspaceCanvas() {
   }, [dataMode]);
 
   // Global escape key handler for all layout modes
+  // Use a ref to track if we've recently handled an escape to prevent double-processing
+  const escapeHandledRef = useRef<number>(0);
+  
   useEffect(() => {
     const handleGlobalEscape = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return;
 
+      // Debounce: Ignore if we just handled an escape within 100ms
+      const now = Date.now();
+      if (now - escapeHandledRef.current < 100) {
+        console.log(`🚫 [DreamspaceCanvas] Global escape: Debounced (within 100ms of last escape)`);
+        return;
+      }
+
       const store = useInterBrainStore.getState();
+      console.log(`🔍 [DreamspaceCanvas] Global escape: Current state - editMode.isActive=${store.editMode.isActive}, isSearching=${store.editMode.isSearchingRelationships}, layout=${store.spatialLayout}`);
       
       // Priority 1: Edit mode search (highest priority) - DON'T HANDLE, let component do it
       if (store.editMode.isActive && store.editMode.isSearchingRelationships) {
@@ -76,12 +87,14 @@ export default function DreamspaceCanvas() {
         return; // Let EditModeSearchNode3D handle it completely
       }
       
-      // Priority 2: Edit mode (second priority)  
+      // Priority 2: Edit mode (second priority) - MUST CHECK BEFORE LAYOUT CHECKS
       if (store.editMode.isActive && !store.editMode.isSearchingRelationships) {
         console.log(`✏️ [DreamspaceCanvas] Global escape: Exiting edit mode to liminal-web`);
         console.log(`✏️ [DreamspaceCanvas] Pre-exit state: selectedNode=${store.selectedNode?.name}, spatialLayout=${store.spatialLayout}`);
         e.preventDefault();
         e.stopImmediatePropagation(); // Prevent any other handlers from running
+        
+        escapeHandledRef.current = now; // Mark as handled
         
         const selectedNode = store.selectedNode; // Capture before exitEditMode
         store.exitEditMode();
@@ -97,25 +110,27 @@ export default function DreamspaceCanvas() {
         return;
       }
       
-      // Priority 3: Global search mode
-      if (store.spatialLayout === 'search') {
+      // Priority 3: Global search mode (ONLY if not in edit mode)
+      if (!store.editMode.isActive && store.spatialLayout === 'search') {
         console.log(`🔍 [DreamspaceCanvas] Global escape: Exiting search mode to constellation`);
         e.preventDefault();
+        escapeHandledRef.current = now; // Mark as handled
         store.setSearchResults([]);
         store.setSpatialLayout('constellation');
         return;
       }
       
-      // Priority 4: Liminal web mode  
-      if (store.spatialLayout === 'liminal-web') {
+      // Priority 4: Liminal web mode (ONLY if not in edit mode)
+      if (!store.editMode.isActive && store.spatialLayout === 'liminal-web') {
         console.log(`🕸️ [DreamspaceCanvas] Global escape: Exiting liminal-web to constellation`);
         e.preventDefault();
+        escapeHandledRef.current = now; // Mark as handled
         store.setSelectedNode(null);
         store.setSpatialLayout('constellation');
         return;
       }
       
-      console.log(`🌌 [DreamspaceCanvas] Global escape: Already in constellation mode or unhandled state`);
+      console.log(`🌌 [DreamspaceCanvas] Global escape: No action taken - already in constellation or unhandled state`);
     };
 
     console.log(`🎯 [DreamspaceCanvas] Setting up global escape handler`);
