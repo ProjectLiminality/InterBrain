@@ -401,8 +401,10 @@ export const useInterBrainStore = create<InterBrainState>()(
     const previousLayout = state.spatialLayout;
     const selectedNode = state.selectedNode;
     
-    // Log the state change for debugging
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${layout}`);
+    // Only log actual changes, not redundant calls
+    if (previousLayout !== layout) {
+      console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${layout}`);
+    }
     
     // Detect meaningful layout changes for history tracking
     const isMeaningfulChange = (
@@ -672,32 +674,43 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
 
   // Edit mode actions
-  startEditMode: (node) => set((_state) => ({
-    editMode: {
-      isActive: true,
-      editingNode: { ...node }, // Create a copy to avoid mutations
-      originalRelationships: [...node.liminalWebConnections], // Store original relationships
-      pendingRelationships: [...node.liminalWebConnections], // Start with current relationships
-      searchResults: [],
-      validationErrors: {},
-      isSearchingRelationships: false
-    },
-    // Also set the spatial layout to 'edit' mode
-    spatialLayout: 'edit' as const
-  })),
+  startEditMode: (node) => set((state) => {
+    const previousLayout = state.spatialLayout;
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → edit (entering edit mode)`);
+    
+    return {
+      editMode: {
+        isActive: true,
+        editingNode: { ...node }, // Create a copy to avoid mutations
+        originalRelationships: [...node.liminalWebConnections], // Store original relationships
+        pendingRelationships: [...node.liminalWebConnections], // Start with current relationships
+        searchResults: [],
+        validationErrors: {},
+        isSearchingRelationships: false
+      },
+      // Also set the spatial layout to 'edit' mode
+      spatialLayout: 'edit' as const
+    };
+  }),
 
-  exitEditMode: () => set((_state) => ({
-    editMode: {
-      isActive: false,
-      editingNode: null,
-      originalRelationships: [],
-      pendingRelationships: [],
-      searchResults: [],
-      validationErrors: {},
-      newDreamTalkFile: undefined,
-      isSearchingRelationships: false
-    }
-  })),
+  exitEditMode: () => set((state) => {
+    // Note: We don't change the layout here - the calling code should handle that
+    // This allows for proper transitions (edit → liminal-web, edit-search → edit, etc.)
+    console.log(`📍 [Store] Exiting edit mode (layout remains: ${state.spatialLayout})`);
+    
+    return {
+      editMode: {
+        isActive: false,
+        editingNode: null,
+        originalRelationships: [],
+        pendingRelationships: [],
+        searchResults: [],
+        validationErrors: {},
+        newDreamTalkFile: undefined,
+        isSearchingRelationships: false
+      }
+    };
+  }),
 
   updateEditingNodeMetadata: (updates) => set(state => ({
     editMode: {
@@ -722,14 +735,20 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   })),
 
-  setEditModeSearchActive: (active) => set(state => ({
-    editMode: {
-      ...state.editMode,
-      isSearchingRelationships: active
-    },
-    // Update spatial layout based on search mode state
-    spatialLayout: active ? 'edit-search' as const : 'edit' as const
-  })),
+  setEditModeSearchActive: (active) => set(state => {
+    const previousLayout = state.spatialLayout;
+    const newLayout = active ? 'edit-search' as const : 'edit' as const;
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${newLayout} (edit mode search ${active ? 'activated' : 'deactivated'})`);
+    
+    return {
+      editMode: {
+        ...state.editMode,
+        isSearchingRelationships: active
+      },
+      // Update spatial layout based on search mode state
+      spatialLayout: newLayout
+    };
+  }),
 
   togglePendingRelationship: (nodeId) => set(state => {
     const currentPending = state.editMode.pendingRelationships;

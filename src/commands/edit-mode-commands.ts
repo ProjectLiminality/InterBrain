@@ -50,13 +50,17 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
           return;
         }
         
+        // Clear any existing main search results to avoid interference
+        store.setSearchResults([]);
+        
         // Enter edit mode with the fresh node data
-        console.log(`[EditMode] Entering edit mode for node: ${freshNode.id} at current position - before startEditMode`);
+        console.log(`🎯 [EditMode-Entry] Starting edit mode for node "${freshNode.name}" (${freshNode.id})`);
         store.startEditMode(freshNode);
         
         // If the node has existing relationships, show them in the search layout
         if (freshNode.liminalWebConnections && freshNode.liminalWebConnections.length > 0) {
-          console.log(`[EditMode] Node has ${freshNode.liminalWebConnections.length} existing relationships - will trigger edit-mode-search-layout`);
+          console.log(`🔗 [EditMode-Relationships] Found ${freshNode.liminalWebConnections.length} existing relationships:`, freshNode.liminalWebConnections);
+          
           // Get all related nodes to display them
           const relatedNodes = await Promise.all(
             freshNode.liminalWebConnections.map(id => dreamNodeService.get(id))
@@ -64,13 +68,15 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
           
           // Filter out any null results (in case some relationships are broken)
           const validRelatedNodes = relatedNodes.filter(node => node !== null) as DreamNode[];
+          console.log(`✅ [EditMode-Relationships] Resolved ${validRelatedNodes.length} valid related nodes:`, validRelatedNodes.map(n => `${n.name}(${n.id})`));
           
           // Set these as edit mode search results
           store.setEditModeSearchResults(validRelatedNodes);
+          
           // Trigger special edit mode search layout that keeps center node in place
-          console.log(`[EditMode] Dispatching edit-mode-search-layout event for center node ${freshNode.id} with ${validRelatedNodes.length} related nodes`);
           const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
           if (canvas) {
+            console.log(`🚀 [EditMode-Layout] Dispatching edit-mode-search-layout event for center node ${freshNode.id}`);
             const event = new globalThis.CustomEvent('edit-mode-search-layout', {
               detail: { 
                 centerNodeId: freshNode.id,
@@ -78,13 +84,13 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
               }
             });
             canvas.dispatchEvent(event);
-            console.log(`[EditMode] edit-mode-search-layout event dispatched successfully`);
           } else {
-            console.error(`[EditMode] Canvas element not found - cannot dispatch edit-mode-search-layout event`);
+            console.error(`❌ [EditMode-Layout] Canvas element not found - layout event failed`);
           }
           
           uiService.showSuccess(`Edit mode activated for "${freshNode.name}" (${validRelatedNodes.length} existing relationships)`);
         } else {
+          console.log(`📭 [EditMode-Entry] No existing relationships for node "${freshNode.name}"`);
           uiService.showSuccess(`Edit mode activated for "${freshNode.name}"`);
         }
       } catch (error) {
@@ -107,11 +113,27 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       }
       
       try {
+        console.log(`🚪 [EditMode-Exit] Exiting edit mode without saving`);
+        
+        // Capture the selected node before exiting edit mode
+        const nodeToFocus = store.selectedNode;
+        
         // Simply exit without saving (user should use save command)
         store.exitEditMode();
         
+        // CRITICAL: Clear stale edit mode data from orchestrator before returning to liminal-web
+        const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+        if (canvas) {
+          const event = new globalThis.CustomEvent('clear-edit-mode-data', {
+            detail: { source: 'exit-edit-mode' }
+          });
+          canvas.dispatchEvent(event);
+          console.log(`🧹 [EditMode-Exit] Dispatched clear-edit-mode-data event`);
+        }
+        
         // Return to liminal-web layout (edit mode requires a selected node)
-        if (store.selectedNode) {
+        if (nodeToFocus) {
+          console.log(`🔄 [EditMode-Exit] Switching to liminal-web layout for focused node`);
           store.setSpatialLayout('liminal-web');
         }
         
@@ -168,10 +190,10 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
         // Update store with search results for edit mode tracking
         store.setEditModeSearchResults(searchResults.map(result => result.node));
         
-        // CRITICAL: Use the same pattern as search mode to trigger visual layout
-        // Set the main search results and switch to search layout
+        // CRITICAL: Set search results and switch to edit-search layout
+        // This maintains edit mode while showing search results
         store.setSearchResults(searchResults.map(result => result.node));
-        store.setSpatialLayout('search');
+        store.setEditModeSearchActive(true); // This will set layout to 'edit-search'
         
         uiService.hideProgress();
         
@@ -264,11 +286,29 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       }
       
       try {
+        console.log(`🚪 [EditMode-Cancel] Cancelling edit mode for node "${store.editMode.editingNode?.name}" (${store.editMode.editingNode?.id})`);
+        
+        // Capture the selected node before exiting edit mode
+        const nodeToFocus = store.selectedNode;
+        console.log(`🎯 [EditMode-Cancel] Will focus node after cancel: "${nodeToFocus?.name}" (${nodeToFocus?.id})`);
+        
         // Simply exit edit mode without saving (original data is preserved)
         store.exitEditMode();
         
+        // CRITICAL: Clear stale edit mode data from orchestrator before returning to liminal-web
+        // This ensures the focusOnNode method gets fresh relationship data
+        const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+        if (canvas) {
+          const event = new globalThis.CustomEvent('clear-edit-mode-data', {
+            detail: { source: 'cancel-edit-mode' }
+          });
+          canvas.dispatchEvent(event);
+          console.log(`🧹 [EditMode-Cancel] Dispatched clear-edit-mode-data event`);
+        }
+        
         // Return to liminal-web layout (edit mode requires a selected node)
-        if (store.selectedNode) {
+        if (nodeToFocus) {
+          console.log(`🔄 [EditMode-Cancel] Switching to liminal-web layout for focused node`);
           store.setSpatialLayout('liminal-web');
         }
         
@@ -314,10 +354,10 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
         // Update store with search results for edit mode tracking
         store.setEditModeSearchResults(searchResults.map(result => result.node));
         
-        // CRITICAL: Use the same pattern as search mode to trigger visual layout
-        // Set the main search results and switch to search layout
+        // CRITICAL: Set search results and switch to edit-search layout
+        // This maintains edit mode while showing search results
         store.setSearchResults(searchResults.map(result => result.node));
-        store.setSpatialLayout('search');
+        store.setEditModeSearchActive(true); // This will set layout to 'edit-search'
         
         uiService.hideProgress();
         

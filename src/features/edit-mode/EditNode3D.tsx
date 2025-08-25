@@ -8,6 +8,7 @@ interface EditNode3DProps {
   position: [number, number, number];
   onSave: () => void;
   onCancel: () => void;
+  onToggleSearchOff?: () => Promise<void>;
 }
 
 /**
@@ -20,13 +21,14 @@ interface EditNode3DProps {
 export default function EditNode3D({ 
   position,
   onSave,
-  onCancel
+  onCancel,
+  onToggleSearchOff
 }: EditNode3DProps) {
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
   const fileInputRef = useRef<globalThis.HTMLInputElement>(null);
   
   // Get edit mode state from store
-  const { editMode, updateEditingNodeMetadata, setEditModeNewDreamTalkFile, setEditModeValidationErrors } = useInterBrainStore();
+  const { editMode, updateEditingNodeMetadata, setEditModeNewDreamTalkFile, setEditModeValidationErrors, setEditModeSearchActive } = useInterBrainStore();
   const { editingNode, validationErrors, newDreamTalkFile } = editMode;
   
   // Local UI state for immediate responsiveness
@@ -246,6 +248,22 @@ export default function EditNode3D({
     onCancel();
   };
   
+  // Toggle relationship search interface
+  const handleToggleRelationshipSearch = () => {
+    if (editMode.isSearchingRelationships) {
+      // Turning OFF search mode - filter to pending relationships
+      if (onToggleSearchOff) {
+        onToggleSearchOff();
+      } else {
+        // Fallback - just turn off search without filtering
+        setEditModeSearchActive(false);
+      }
+    } else {
+      // Turning ON search mode - just activate the interface
+      setEditModeSearchActive(true);
+    }
+  };
+
   // Keyboard handler (same as ProtoNode3D)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -552,6 +570,32 @@ export default function EditNode3D({
               }}
             >
               {isAnimating ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleRelationshipSearch();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              disabled={isAnimating}
+              style={{
+                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`,
+                border: `1px solid ${editMode.isSearchingRelationships ? nodeColors.border : 'rgba(255,255,255,0.5)'}`,
+                background: editMode.isSearchingRelationships ? 'rgba(255,255,255,0.1)' : 'transparent',
+                color: isAnimating ? 'rgba(255,255,255,0.5)' : 'white',
+                fontSize: `${Math.max(14, nodeSize * 0.035)}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                borderRadius: `${Math.max(4, nodeSize * 0.01)}px`,
+                cursor: isAnimating ? 'not-allowed' : 'pointer',
+                transition: dreamNodeStyles.transitions.default,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px'
+              }}
+              title="Toggle relationship search"
+            >
+              🔗
             </button>
           </div>
         </div>
