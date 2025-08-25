@@ -60,6 +60,7 @@ export interface EditModeState {
   pendingRelationships: string[]; // Track relationship changes
   searchResults: DreamNode[]; // Search results for relationship discovery
   validationErrors: EditModeValidationErrors; // Validation errors for edit mode
+  newDreamTalkFile?: globalThis.File; // New media file for DreamTalk editing
 }
 
 export interface EditModeValidationErrors {
@@ -181,6 +182,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   startEditMode: (node: DreamNode) => void;
   exitEditMode: () => void;
   updateEditingNodeMetadata: (updates: Partial<DreamNode>) => void;
+  setEditModeNewDreamTalkFile: (file: globalThis.File | undefined) => void;
   setEditModeSearchResults: (results: DreamNode[]) => void;
   togglePendingRelationship: (nodeId: string) => void;
   savePendingRelationships: () => void;
@@ -682,7 +684,8 @@ export const useInterBrainStore = create<InterBrainState>()(
       originalRelationships: [],
       pendingRelationships: [],
       searchResults: [],
-      validationErrors: {}
+      validationErrors: {},
+      newDreamTalkFile: undefined
     }
   })),
 
@@ -692,6 +695,13 @@ export const useInterBrainStore = create<InterBrainState>()(
       editingNode: state.editMode.editingNode
         ? { ...state.editMode.editingNode, ...updates }
         : null
+    }
+  })),
+
+  setEditModeNewDreamTalkFile: (file) => set(state => ({
+    editMode: {
+      ...state.editMode,
+      newDreamTalkFile: file
     }
   })),
 

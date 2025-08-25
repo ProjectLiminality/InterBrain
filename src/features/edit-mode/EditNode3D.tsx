@@ -26,8 +26,8 @@ export default function EditNode3D({
   const fileInputRef = useRef<globalThis.HTMLInputElement>(null);
   
   // Get edit mode state from store
-  const { editMode, updateEditingNodeMetadata, setEditModeValidationErrors } = useInterBrainStore();
-  const { editingNode, validationErrors } = editMode;
+  const { editMode, updateEditingNodeMetadata, setEditModeNewDreamTalkFile, setEditModeValidationErrors } = useInterBrainStore();
+  const { editingNode, validationErrors, newDreamTalkFile } = editMode;
   
   // Local UI state for immediate responsiveness
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
@@ -80,14 +80,22 @@ export default function EditNode3D({
     }
   }, [editingNode?.type]);
   
-  // Handle pre-filled dreamTalkFile from existing node
+  // Handle pre-filled dreamTalkMedia from existing node or new file
   useEffect(() => {
-    if (editingNode?.dreamTalkMedia.length && !previewMedia) {
-      // For existing nodes, we'd need to create preview URLs from media paths
-      // This is a placeholder - real implementation would load media from paths
-      console.log('TODO: Load media preview from existing DreamNode:', editingNode.dreamTalkMedia[0]);
+    if (newDreamTalkFile && !previewMedia) {
+      // Prioritize new file over existing media
+      const previewUrl = globalThis.URL.createObjectURL(newDreamTalkFile);
+      setPreviewMedia(previewUrl);
+      console.log(`[EditNode3D] Showing new DreamTalk file: ${newDreamTalkFile.name}`);
+    } else if (editingNode?.dreamTalkMedia.length && !previewMedia) {
+      // Fall back to existing media
+      const existingMedia = editingNode.dreamTalkMedia[0];
+      if (existingMedia.data) {
+        console.log(`[EditNode3D] Loading existing DreamTalk media: ${existingMedia.path}`);
+        setPreviewMedia(existingMedia.data);
+      }
     }
-  }, [editingNode?.dreamTalkMedia, previewMedia]);
+  }, [editingNode?.dreamTalkMedia, newDreamTalkFile, previewMedia]);
   
   // Cleanup debounce timeout on unmount
   useEffect(() => {
@@ -190,19 +198,24 @@ export default function EditNode3D({
     const file = files[0];
     
     if (file && isValidMediaFile(file)) {
-      // TODO: Handle file upload for editing (different from creation)
-      console.log('TODO: Handle DreamTalk media update in edit mode:', file.name);
+      console.log(`[EditNode3D] New DreamTalk media dropped: ${file.name}`);
       const previewUrl = globalThis.URL.createObjectURL(file);
       setPreviewMedia(previewUrl);
+      
+      // Store the new file in edit mode state for save processing
+      setEditModeNewDreamTalkFile(file);
     }
   };
   
   const handleFileSelect = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && isValidMediaFile(file)) {
-      console.log('TODO: Handle DreamTalk media update in edit mode:', file.name);
+      console.log(`[EditNode3D] New DreamTalk media selected: ${file.name}`);
       const previewUrl = globalThis.URL.createObjectURL(file);
       setPreviewMedia(previewUrl);
+      
+      // Store the new file in edit mode state for save processing
+      setEditModeNewDreamTalkFile(file);
     }
   };
   
@@ -294,7 +307,8 @@ export default function EditNode3D({
                   opacity: animatedOpacity
                 }}
               >
-                {previewMedia && (
+                {previewMedia ? (
+                  // Show new media preview (from drag/drop or file select)
                   <img 
                     src={previewMedia}
                     alt="DreamTalk preview"
@@ -304,8 +318,18 @@ export default function EditNode3D({
                       objectFit: 'cover'
                     }}
                   />
-                )}
-                {/* TODO: Show existing media from editingNode.dreamTalkMedia */}
+                ) : editingNode.dreamTalkMedia.length > 0 ? (
+                  // Show existing media from DreamNode
+                  <img 
+                    src={editingNode.dreamTalkMedia[0].data}
+                    alt="Current DreamTalk media"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+                ) : null}
                 <div style={getMediaOverlayStyle()} />
               </div>
             ) : (
