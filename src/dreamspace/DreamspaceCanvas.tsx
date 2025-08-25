@@ -70,15 +70,15 @@ export default function DreamspaceCanvas() {
 
       const store = useInterBrainStore.getState();
       
-      // Priority 1: Edit mode search (highest priority)
+      // Priority 1: Edit mode search (highest priority) - DON'T HANDLE, let component do it
       if (store.editMode.isActive && store.editMode.isSearchingRelationships) {
-        console.log(`🌐 [DreamspaceCanvas] Global escape: Delegating to edit search mode handler`);
-        return; // Let EditModeSearchNode3D handle it
+        console.log(`🌐 [DreamspaceCanvas] Global escape: In edit search mode - letting component handle`);
+        return; // Let EditModeSearchNode3D handle it completely
       }
       
       // Priority 2: Edit mode (second priority)  
       if (store.editMode.isActive && !store.editMode.isSearchingRelationships) {
-        console.log(`✏️ [DreamspaceCanvas] Global escape: Exiting edit mode`);
+        console.log(`✏️ [DreamspaceCanvas] Global escape: Exiting edit mode to liminal-web`);
         e.preventDefault();
         store.exitEditMode();
         if (store.selectedNode) {

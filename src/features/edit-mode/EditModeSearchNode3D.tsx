@@ -251,12 +251,12 @@ export default function EditModeSearchNode3D({
                 right: `${nodeSize * 0.075}px`, // Distance from right edge to center of right semicircle
                 top: '50%',
                 transform: 'translate(50%, -50%)', // Center the circle on the right semicircle center
-                width: `${nodeSize * 0.12}px`, // Ring size to fit within pill height
+                width: `${nodeSize * 0.12}px`, // Full background circle size
                 height: `${nodeSize * 0.12}px`,
                 pointerEvents: 'none'
               }}
             >
-              {/* Background circle - opaque black to hide text behind */}
+              {/* Background circle - opaque black to hide text behind (full size) */}
               <div
                 style={{
                   position: 'absolute',
@@ -267,12 +267,14 @@ export default function EditModeSearchNode3D({
                 }}
               />
               
-              {/* Spinning gradient ring - border only, not filled */}
+              {/* Spinning gradient ring - 75% size of background circle */}
               <div
                 style={{
                   position: 'absolute',
-                  width: '100%',
-                  height: '100%',
+                  top: '12.5%', // Center the 75% sized ring: (100% - 75%) / 2 = 12.5%
+                  left: '12.5%',
+                  width: '75%', // 75% of the background circle size
+                  height: '75%',
                   borderRadius: '50%',
                   background: `conic-gradient(from 0deg, ${nodeColors.border} 0%, ${nodeColors.border} 25%, transparent 100%)`,
                   mask: 'radial-gradient(circle, transparent 60%, black 65%)', // Creates ring effect
