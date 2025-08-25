@@ -60,17 +60,20 @@ export default function EditModeSearchNode3D({
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        console.log(`⚡ [EditModeSearchNode3D] Global escape handler triggered`);
         handleCancel();
       }
     };
     
+    console.log(`🎯 [EditModeSearchNode3D] Adding global escape listener`);
     // Add global listener
     globalThis.document.addEventListener('keydown', handleGlobalKeyDown);
     
     return () => {
+      console.log(`🧹 [EditModeSearchNode3D] Removing global escape listener`);
       globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, []);
+  }, []); // Empty deps - setup once, cleanup on unmount
   
   // Cleanup debounce timeout on unmount
   useEffect(() => {
@@ -236,20 +239,70 @@ export default function EditModeSearchNode3D({
             }}
           />
           
-          {/* Search Status */}
-          {(isSearching || searchError) && (
+          {/* Elegant Spinning Loading Indicator */}
+          {isSearching && (
+            <div
+              style={{
+                position: 'absolute',
+                right: `${nodeSize * 0.075}px`, // Position at center of right semicircle
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: `${nodeSize * 0.12}px`, // Fit within pill height
+                height: `${nodeSize * 0.12}px`,
+                pointerEvents: 'none'
+              }}
+            >
+              {/* Background circle - opaque black to hide text behind */}
+              <div
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 1.0)',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }}
+              />
+              
+              {/* Spinning gradient circle */}
+              <div
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  background: `conic-gradient(from 0deg, ${nodeColors.border}, transparent)`,
+                  animation: 'spin 1s linear infinite',
+                  opacity: 0.8
+                }}
+              />
+              
+              {/* CSS keyframe animation */}
+              <style>
+                {`
+                  @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                `}
+              </style>
+            </div>
+          )}
+          
+          {/* Error Status - only show errors, not searching text */}
+          {searchError && (
             <div
               style={{
                 position: 'relative',
                 marginTop: '8px',
                 fontSize: '12px',
-                color: searchError ? '#ff6b6b' : 'rgba(255,255,255,0.7)',
+                color: '#ff6b6b',
                 textAlign: 'center',
                 whiteSpace: 'nowrap',
-                pointerEvents: 'none' // Allow clicks to pass through
+                pointerEvents: 'none'
               }}
             >
-              {isSearching ? 'Searching...' : searchError}
+              {searchError}
             </div>
           )}
           

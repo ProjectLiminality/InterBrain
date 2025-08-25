@@ -44,21 +44,27 @@ export default function EditModeOverlay() {
   useEffect(() => {
     // Only set up listener if edit mode is active
     if (!editMode.isActive || !editMode.editingNode) {
+      console.log(`🚫 [EditModeOverlay] Skipping global escape setup - edit mode inactive`);
       return;
     }
     
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape' && !editMode.isSearchingRelationships) {
         // Only handle escape in main edit mode, not during relationship search
+        console.log(`⚡ [EditModeOverlay] Global escape handler triggered for edit mode`);
         e.preventDefault();
         handleCancel();
+      } else if (e.key === 'Escape' && editMode.isSearchingRelationships) {
+        console.log(`🔍 [EditModeOverlay] Escape key pressed but search mode is active - delegating to search handler`);
       }
     };
     
+    console.log(`🎯 [EditModeOverlay] Adding global escape listener for edit mode (searchMode: ${editMode.isSearchingRelationships})`);
     // Add global listener when edit mode is active
     globalThis.document.addEventListener('keydown', handleGlobalKeyDown);
     
     return () => {
+      console.log(`🧹 [EditModeOverlay] Removing global escape listener for edit mode`);
       globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
     };
   }, [editMode.isActive, editMode.editingNode, editMode.isSearchingRelationships, handleCancel]); // Include handleCancel in dependencies
@@ -206,6 +212,23 @@ export default function EditModeOverlay() {
       // No pending relationships, clear search results
       store.setEditModeSearchResults([]);
     }
+    
+    // CRITICAL: Restore focus to ensure escape key handling works
+    // After exiting search mode, focus might be lost, breaking global escape handler
+    globalThis.setTimeout(() => {
+      // Focus the document body or a reliable element to restore keyboard event handling
+      const activeElement = globalThis.document.activeElement as globalThis.HTMLElement;
+      console.log(`🎯 [EditModeOverlay] Focus after search toggle off:`, activeElement?.tagName);
+      
+      // If focus is on an input or other form element, blur it to restore global focus
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        activeElement.blur();
+      }
+      
+      // Ensure document body has focus for global keyboard events
+      globalThis.document.body.focus();
+      console.log(`🔄 [EditModeOverlay] Restored focus to document body for global escape handling`);
+    }, 50); // Small delay to ensure search interface has fully unmounted
   };
   
   
