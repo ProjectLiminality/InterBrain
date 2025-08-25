@@ -55,23 +55,27 @@ export default function EditModeSearchNode3D({
     };
   }, []);
   
-  // Global escape key handler for persistent focus management
+  // Global escape key handling is now managed by DreamspaceCanvas for stability
+  // Component-level escape handling for input field only
   useEffect(() => {
-    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+    const handleComponentEscape = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.preventDefault();
-        console.log(`⚡ [EditModeSearchNode3D] Global escape handler triggered`);
-        handleCancel();
+        // Only handle if this component is mounted and search mode is active
+        const store = useInterBrainStore.getState();
+        if (store.editMode.isActive && store.editMode.isSearchingRelationships) {
+          console.log(`⚡ [EditModeSearchNode3D] Component escape handler triggered`);
+          e.preventDefault();
+          handleCancel();
+        }
       }
     };
     
-    console.log(`🎯 [EditModeSearchNode3D] Adding global escape listener`);
-    // Add global listener
-    globalThis.document.addEventListener('keydown', handleGlobalKeyDown);
+    console.log(`🎯 [EditModeSearchNode3D] Adding component escape listener for search mode`);
+    globalThis.document.addEventListener('keydown', handleComponentEscape);
     
     return () => {
-      console.log(`🧹 [EditModeSearchNode3D] Removing global escape listener`);
-      globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
+      console.log(`🧹 [EditModeSearchNode3D] Removing component escape listener`);
+      globalThis.document.removeEventListener('keydown', handleComponentEscape);
     };
   }, []); // Empty deps - setup once, cleanup on unmount
   
@@ -239,15 +243,15 @@ export default function EditModeSearchNode3D({
             }}
           />
           
-          {/* Elegant Spinning Loading Indicator */}
+          {/* Elegant Spinning Ring Loading Indicator */}
           {isSearching && (
             <div
               style={{
                 position: 'absolute',
-                right: `${nodeSize * 0.075}px`, // Position at center of right semicircle
+                right: `${nodeSize * 0.075}px`, // Distance from right edge to center of right semicircle
                 top: '50%',
-                transform: 'translateY(-50%)',
-                width: `${nodeSize * 0.12}px`, // Fit within pill height
+                transform: 'translate(50%, -50%)', // Center the circle on the right semicircle center
+                width: `${nodeSize * 0.12}px`, // Ring size to fit within pill height
                 height: `${nodeSize * 0.12}px`,
                 pointerEvents: 'none'
               }}
@@ -259,21 +263,22 @@ export default function EditModeSearchNode3D({
                   width: '100%',
                   height: '100%',
                   borderRadius: '50%',
-                  background: 'rgba(0, 0, 0, 1.0)',
-                  border: '1px solid rgba(255,255,255,0.1)'
+                  background: 'rgba(0, 0, 0, 1.0)'
                 }}
               />
               
-              {/* Spinning gradient circle */}
+              {/* Spinning gradient ring - border only, not filled */}
               <div
                 style={{
                   position: 'absolute',
                   width: '100%',
                   height: '100%',
                   borderRadius: '50%',
-                  background: `conic-gradient(from 0deg, ${nodeColors.border}, transparent)`,
+                  background: `conic-gradient(from 0deg, ${nodeColors.border} 0%, ${nodeColors.border} 25%, transparent 100%)`,
+                  mask: 'radial-gradient(circle, transparent 60%, black 65%)', // Creates ring effect
+                  WebkitMask: 'radial-gradient(circle, transparent 60%, black 65%)', // Safari support
                   animation: 'spin 1s linear infinite',
-                  opacity: 0.8
+                  opacity: 0.9
                 }}
               />
               

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useInterBrainStore } from '../../store/interbrain-store';
 import { serviceManager } from '../../services/service-manager';
 import { UIService } from '../../services/ui-service';
@@ -39,35 +39,7 @@ export default function EditModeOverlay() {
     }
   };
   
-  // Global escape key handler for edit mode - works even when focus is lost
-  // Must be before conditional return to maintain hook call order
-  useEffect(() => {
-    // Only set up listener if edit mode is active
-    if (!editMode.isActive || !editMode.editingNode) {
-      console.log(`🚫 [EditModeOverlay] Skipping global escape setup - edit mode inactive`);
-      return;
-    }
-    
-    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape' && !editMode.isSearchingRelationships) {
-        // Only handle escape in main edit mode, not during relationship search
-        console.log(`⚡ [EditModeOverlay] Global escape handler triggered for edit mode`);
-        e.preventDefault();
-        handleCancel();
-      } else if (e.key === 'Escape' && editMode.isSearchingRelationships) {
-        console.log(`🔍 [EditModeOverlay] Escape key pressed but search mode is active - delegating to search handler`);
-      }
-    };
-    
-    console.log(`🎯 [EditModeOverlay] Adding global escape listener for edit mode (searchMode: ${editMode.isSearchingRelationships})`);
-    // Add global listener when edit mode is active
-    globalThis.document.addEventListener('keydown', handleGlobalKeyDown);
-    
-    return () => {
-      console.log(`🧹 [EditModeOverlay] Removing global escape listener for edit mode`);
-      globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
-    };
-  }, [editMode.isActive, editMode.editingNode, editMode.isSearchingRelationships, handleCancel]); // Include handleCancel in dependencies
+  // Global escape key handling is now managed by DreamspaceCanvas for stability
   
   // Don't render if edit mode is not active
   if (!editMode.isActive || !editMode.editingNode) {

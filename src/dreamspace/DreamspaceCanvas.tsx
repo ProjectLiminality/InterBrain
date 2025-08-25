@@ -62,6 +62,60 @@ export default function DreamspaceCanvas() {
     // Always return a cleanup function (even if it does nothing)
     return () => {};
   }, [dataMode]);
+
+  // Global escape key handler for all layout modes
+  useEffect(() => {
+    const handleGlobalEscape = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+
+      const store = useInterBrainStore.getState();
+      
+      // Priority 1: Edit mode search (highest priority)
+      if (store.editMode.isActive && store.editMode.isSearchingRelationships) {
+        console.log(`🌐 [DreamspaceCanvas] Global escape: Delegating to edit search mode handler`);
+        return; // Let EditModeSearchNode3D handle it
+      }
+      
+      // Priority 2: Edit mode (second priority)  
+      if (store.editMode.isActive && !store.editMode.isSearchingRelationships) {
+        console.log(`✏️ [DreamspaceCanvas] Global escape: Exiting edit mode`);
+        e.preventDefault();
+        store.exitEditMode();
+        if (store.selectedNode) {
+          store.setSpatialLayout('liminal-web');
+        }
+        return;
+      }
+      
+      // Priority 3: Global search mode
+      if (store.spatialLayout === 'search') {
+        console.log(`🔍 [DreamspaceCanvas] Global escape: Exiting search mode to constellation`);
+        e.preventDefault();
+        store.setSearchResults([]);
+        store.setSpatialLayout('constellation');
+        return;
+      }
+      
+      // Priority 4: Liminal web mode  
+      if (store.spatialLayout === 'liminal-web') {
+        console.log(`🕸️ [DreamspaceCanvas] Global escape: Exiting liminal-web to constellation`);
+        e.preventDefault();
+        store.setSelectedNode(null);
+        store.setSpatialLayout('constellation');
+        return;
+      }
+      
+      console.log(`🌌 [DreamspaceCanvas] Global escape: Already in constellation mode or unhandled state`);
+    };
+
+    console.log(`🎯 [DreamspaceCanvas] Setting up global escape handler`);
+    globalThis.document.addEventListener('keydown', handleGlobalEscape);
+    
+    return () => {
+      console.log(`🧹 [DreamspaceCanvas] Removing global escape handler`);
+      globalThis.document.removeEventListener('keydown', handleGlobalEscape);
+    };
+  }, []); // Empty deps - only setup once
   
   // Drag and drop state
   const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
@@ -242,8 +296,10 @@ export default function DreamspaceCanvas() {
       case 'liminal-web':
         // Trigger liminal web when a node is selected
         if (selectedNode) {
-          console.log(`DreamspaceCanvas: Switching to liminal web mode for node: ${selectedNode.name}`);
+          console.log(`🌐 [Canvas-Layout] Switching to liminal-web for node "${selectedNode.name}" (${selectedNode.id}) with ${selectedNode.liminalWebConnections?.length || 0} relationships`);
           spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
+        } else {
+          console.warn(`⚠️ [Canvas-Layout] liminal-web layout triggered but no selectedNode available`);
         }
         break;
         
@@ -276,31 +332,38 @@ export default function DreamspaceCanvas() {
       const centerNodeId = customEvent.detail?.centerNodeId;
       const searchResults = customEvent.detail?.searchResults;
       
-      console.log(`[Canvas] Received edit-mode-search-layout event:`, {
-        centerNodeId,
-        searchResultsCount: searchResults?.length,
-        orchestratorAvailable: !!spatialOrchestratorRef.current
-      });
+      console.log(`🎪 [Canvas-Event] Received edit-mode-search-layout event for center ${centerNodeId} with ${searchResults?.length || 0} related nodes`);
       
       if (centerNodeId && searchResults && spatialOrchestratorRef.current) {
-        console.log(`[Canvas] Setting up edit mode search layout for center node ${centerNodeId} with ${searchResults.length} related nodes`);
-        // Use special method that keeps center node in place
+        console.log(`🎯 [Canvas-Event] Calling orchestrator.showEditModeSearchResults()`);
         spatialOrchestratorRef.current.showEditModeSearchResults(centerNodeId, searchResults);
       } else {
-        console.error(`[Canvas] Missing required data for edit-mode-search-layout:`, {
-          hasCenterNodeId: !!centerNodeId,
-          hasSearchResults: !!searchResults,
-          hasOrchestrator: !!spatialOrchestratorRef.current
-        });
+        console.error(`❌ [Canvas-Event] Missing required data - centerNode: ${!!centerNodeId}, searchResults: ${!!searchResults}, orchestrator: ${!!spatialOrchestratorRef.current}`);
+      }
+    };
+    
+    // Handle clear edit mode data event (called when cancelling edit mode)
+    const handleClearEditModeData = (event: globalThis.Event) => {
+      const customEvent = event as globalThis.CustomEvent;
+      const source = customEvent.detail?.source;
+      
+      console.log(`🧹 [Canvas-Event] Received clear-edit-mode-data event from ${source}`);
+      
+      if (spatialOrchestratorRef.current) {
+        spatialOrchestratorRef.current.clearEditModeData();
+      } else {
+        console.error(`❌ [Canvas-Event] Orchestrator not available for cleanup`);
       }
     };
     
     canvas.addEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
     canvas.addEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
+    canvas.addEventListener('clear-edit-mode-data', handleClearEditModeData);
     
     return () => {
       canvas.removeEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
       canvas.removeEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
+      canvas.removeEventListener('clear-edit-mode-data', handleClearEditModeData);
     };
   }, []);
   
