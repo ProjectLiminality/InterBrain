@@ -24,16 +24,29 @@ export default function EditModeOverlay() {
     exitEditMode
   } = useInterBrainStore();
   
-  // Don't render if edit mode is not active
-  if (!editMode.isActive || !editMode.editingNode) {
-    return null;
-  }
-  
   // Center position for the editing node (similar to ProtoNode spawn position)
   const centerPosition: [number, number, number] = [0, 0, -50];
   
+  // Handler functions defined before useEffect to maintain hook order
+  const handleCancel = () => {
+    // Exit edit mode - original data is preserved in store
+    exitEditMode();
+    
+    // Return to liminal-web layout (edit mode requires a selected node)
+    const store = useInterBrainStore.getState();
+    if (store.selectedNode) {
+      store.setSpatialLayout('liminal-web');
+    }
+  };
+  
   // Global escape key handler for edit mode - works even when focus is lost
+  // Must be before conditional return to maintain hook call order
   useEffect(() => {
+    // Only set up listener if edit mode is active
+    if (!editMode.isActive || !editMode.editingNode) {
+      return;
+    }
+    
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape' && !editMode.isSearchingRelationships) {
         // Only handle escape in main edit mode, not during relationship search
@@ -48,7 +61,12 @@ export default function EditModeOverlay() {
     return () => {
       globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [editMode.isSearchingRelationships]); // Re-register when search mode toggles
+  }, [editMode.isActive, editMode.editingNode, editMode.isSearchingRelationships, handleCancel]); // Include handleCancel in dependencies
+  
+  // Don't render if edit mode is not active
+  if (!editMode.isActive || !editMode.editingNode) {
+    return null;
+  }
   
   const handleSave = async () => {
     try {
@@ -132,17 +150,6 @@ export default function EditModeOverlay() {
       });
       
       // Don't exit edit mode if save fails - user can try again or cancel
-    }
-  };
-  
-  const handleCancel = () => {
-    // Exit edit mode - original data is preserved in store
-    exitEditMode();
-    
-    // Return to liminal-web layout (edit mode requires a selected node)
-    const store = useInterBrainStore.getState();
-    if (store.selectedNode) {
-      store.setSpatialLayout('liminal-web');
     }
   };
 
