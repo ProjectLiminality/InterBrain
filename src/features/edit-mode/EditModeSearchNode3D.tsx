@@ -44,7 +44,7 @@ export default function EditModeSearchNode3D({
       setAnimatedOpacity(1);
     }, 50);
     
-    // Focus the input after animation
+    // Focus the input after animation and keep it focused
     const focusTimer = globalThis.setTimeout(() => {
       titleInputRef.current?.focus();
     }, 100);
@@ -52,6 +52,23 @@ export default function EditModeSearchNode3D({
     return () => {
       globalThis.clearTimeout(timer);
       globalThis.clearTimeout(focusTimer);
+    };
+  }, []);
+  
+  // Global escape key handler for persistent focus management
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    
+    // Add global listener
+    globalThis.document.addEventListener('keydown', handleGlobalKeyDown);
+    
+    return () => {
+      globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
     };
   }, []);
   
@@ -174,15 +191,14 @@ export default function EditModeSearchNode3D({
       >
         <div
           style={{
-            width: `${nodeSize + 20}px`, // Reduced padding around node
-            height: `${nodeSize + 60}px`, // Much smaller vertical space to avoid blocking nodes
+            // Remove fixed dimensions to eliminate rectangular blocking
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            position: 'relative'
+            position: 'relative',
+            pointerEvents: 'none' // Allow clicks to pass through container
           }}
-          onMouseDown={(e) => e.stopPropagation()}
         >
           {/* Search Input */}
           <input
@@ -191,24 +207,32 @@ export default function EditModeSearchNode3D({
             value={localQuery}
             onChange={handleQueryChange}
             onKeyDown={handleKeyDown}
+            onFocus={() => {
+              // Maintain focus highlight permanently while in search mode
+              if (titleInputRef.current) {
+                titleInputRef.current.style.borderColor = nodeColors.border;
+              }
+            }}
+            onBlur={(e) => {
+              // Immediately refocus to maintain persistent highlight
+              e.target.focus();
+            }}
             placeholder="Search relationships..."
             style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: `${Math.max(120, nodeSize * 0.9)}px`, // 2/3 of original 200px = 133px, scale with node
-              height: `${Math.max(24, nodeSize * 0.15)}px`, // Proportionally smaller height
-              padding: `${Math.max(6, nodeSize * 0.03)}px ${Math.max(10, nodeSize * 0.04)}px`,
+              position: 'relative',
+              width: `${nodeSize * 0.9}px`, // 2/3 of original 200px = 120px (133 * 0.9)
+              height: `${nodeSize * 0.15}px`, // Proportionally smaller height
+              padding: `${nodeSize * 0.03}px ${nodeSize * 0.04}px`,
               background: 'rgba(0, 0, 0, 1.0)', // Fully opaque black background
               border: `2px solid ${nodeColors.border}`,
-              borderRadius: `${Math.max(12, nodeSize * 0.075)}px`, // Pill shape - semicircles on ends
+              borderRadius: `${nodeSize * 0.075}px`, // Pill shape - semicircles on ends
               color: 'white',
-              fontSize: `${Math.max(14, nodeSize * 0.08)}px`,
+              fontSize: `${nodeSize * 0.06}px`, // 75% of original size (0.08 * 0.75 = 0.06)
               fontFamily: dreamNodeStyles.typography.fontFamily,
               textAlign: 'center',
-              outline: 'none',
-              transition: 'border-color 0.2s ease',
+              outline: 'none', // Remove gray browser outline completely
+              boxShadow: 'none', // Remove any default focus shadow
+              pointerEvents: 'auto' // Enable clicks only on the input itself
             }}
           />
           
@@ -216,52 +240,20 @@ export default function EditModeSearchNode3D({
           {(isSearching || searchError) && (
             <div
               style={{
-                position: 'absolute',
-                top: '65%',
-                left: '50%',
-                transform: 'translateX(-50%)',
+                position: 'relative',
+                marginTop: '8px',
                 fontSize: '12px',
                 color: searchError ? '#ff6b6b' : 'rgba(255,255,255,0.7)',
                 textAlign: 'center',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none' // Allow clicks to pass through
               }}
             >
               {isSearching ? 'Searching...' : searchError}
             </div>
           )}
           
-          {/* Action Button */}
-          <div
-            style={{
-              position: 'absolute',
-              top: `${nodeSize + 40}px`, // Adjusted for smaller container
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              gap: '12px'
-            }}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCancel();
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              style={{
-                padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`,
-                border: '1px solid rgba(255,255,255,0.5)',
-                background: 'transparent',
-                color: 'white',
-                fontSize: `${Math.max(14, nodeSize * 0.035)}px`,
-                fontFamily: dreamNodeStyles.typography.fontFamily,
-                borderRadius: `${Math.max(4, nodeSize * 0.01)}px`,
-                cursor: 'pointer',
-                transition: dreamNodeStyles.transitions.default
-              }}
-            >
-              Close
-            </button>
-          </div>
+          {/* Close button removed - escape key only */}
         </div>
       </Html>
     </group>

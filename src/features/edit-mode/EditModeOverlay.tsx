@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useInterBrainStore } from '../../store/interbrain-store';
 import { serviceManager } from '../../services/service-manager';
 import { UIService } from '../../services/ui-service';
+import { DreamNode } from '../../types/dreamnode';
 import EditNode3D from './EditNode3D';
+import EditModeSearchNode3D from './EditModeSearchNode3D';
 
 // Create UIService instance for showing user messages
 const uiService = new UIService();
@@ -29,6 +31,24 @@ export default function EditModeOverlay() {
   
   // Center position for the editing node (similar to ProtoNode spawn position)
   const centerPosition: [number, number, number] = [0, 0, -50];
+  
+  // Global escape key handler for edit mode - works even when focus is lost
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && !editMode.isSearchingRelationships) {
+        // Only handle escape in main edit mode, not during relationship search
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    
+    // Add global listener when edit mode is active
+    globalThis.document.addEventListener('keydown', handleGlobalKeyDown);
+    
+    return () => {
+      globalThis.document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [editMode.isSearchingRelationships]); // Re-register when search mode toggles
   
   const handleSave = async () => {
     try {
@@ -125,6 +145,61 @@ export default function EditModeOverlay() {
       store.setSpatialLayout('liminal-web');
     }
   };
+
+  const handleSearchToggleOff = async () => {
+    const store = useInterBrainStore.getState();
+    
+    console.log(`🔍 [EditModeOverlay] Toggling off search mode - filtering to pending relationships`);
+    
+    // Close the search interface
+    store.setEditModeSearchActive(false);
+    
+    // Get current pending relationships to show only related nodes
+    const pendingRelationshipIds = store.editMode.pendingRelationships;
+    
+    if (pendingRelationshipIds.length > 0 && store.editMode.editingNode) {
+      // Get the related nodes from the service layer
+      const dreamNodeService = serviceManager.getActive();
+      const relatedNodes = await Promise.all(
+        pendingRelationshipIds.map(id => dreamNodeService.get(id))
+      );
+      
+      // Filter out any null results (in case some relationships are broken)
+      const validRelatedNodes = relatedNodes.filter(node => node !== null) as DreamNode[];
+      
+      console.log(`✅ [EditModeOverlay] Showing ${validRelatedNodes.length} pending related nodes after search toggle off`);
+      
+      // Update the edit mode search results to show only pending relationships
+      store.setEditModeSearchResults(validRelatedNodes);
+      
+      // CRITICAL: Clear stale orchestrator data before showing filtered results
+      const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+      if (canvas) {
+        // First clear the stale edit mode data
+        const clearEvent = new globalThis.CustomEvent('clear-edit-mode-data', {
+          detail: { source: 'search-toggle-off' }
+        });
+        canvas.dispatchEvent(clearEvent);
+        
+        // Then trigger the filtered layout after a brief delay to ensure cleanup completes
+        globalThis.setTimeout(() => {
+          if (store.editMode.editingNode) {
+            const layoutEvent = new globalThis.CustomEvent('edit-mode-search-layout', {
+              detail: { 
+                centerNodeId: store.editMode.editingNode.id,
+                searchResults: validRelatedNodes
+              }
+            });
+            canvas.dispatchEvent(layoutEvent);
+          }
+        }, 10);
+      }
+    } else {
+      console.log(`📭 [EditModeOverlay] No pending relationships - clearing search results`);
+      // No pending relationships, clear search results
+      store.setEditModeSearchResults([]);
+    }
+  };
   
   
   
@@ -135,7 +210,16 @@ export default function EditModeOverlay() {
         position={centerPosition}
         onSave={handleSave}
         onCancel={handleCancel}
+        onToggleSearchOff={handleSearchToggleOff}
       />
+      
+      {/* Relationship search interface - renders on top of EditNode3D when active */}
+      {editMode.isSearchingRelationships && (
+        <EditModeSearchNode3D
+          position={centerPosition}
+          onCancel={handleSearchToggleOff}
+        />
+      )}
       
       {/* Relationship management now handled by existing SpatialOrchestrator + DreamNode3D components */}
       {/* Gold glow and click handling will be added to existing DreamNode3D components */}
