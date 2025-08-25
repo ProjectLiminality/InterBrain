@@ -56,6 +56,9 @@ export interface SpatialOrchestratorRef {
   /** Reorder edit mode search results based on current pending relationships */
   reorderEditModeSearchResults: () => void;
   
+  /** Clear stale edit mode data when exiting edit mode */
+  clearEditModeData: () => void;
+  
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
   
@@ -176,8 +179,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Update store to liminal web layout mode
-        setSpatialLayout('liminal-web');
+        // Only update to liminal-web if not already in edit mode
+        // Edit mode manages its own layout state
+        const currentLayout = useInterBrainStore.getState().spatialLayout;
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+          setSpatialLayout('liminal-web');
+        }
         
         // Move center node to focus position (if exists)
         if (positions.centerNode) {
@@ -265,8 +272,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Update store to liminal web layout mode
-        setSpatialLayout('liminal-web');
+        // Only update to liminal-web if not already in edit mode
+        // Edit mode manages its own layout state
+        const currentLayout = useInterBrainStore.getState().spatialLayout;
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+          setSpatialLayout('liminal-web');
+        }
         
         // Move center node to focus position (if exists)
         if (positions.centerNode) {
@@ -424,8 +435,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Update store to liminal web layout mode
-        setSpatialLayout('liminal-web');
+        // Only update to liminal-web if not already in edit mode
+        const currentLayout = useInterBrainStore.getState().spatialLayout;
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+          setSpatialLayout('liminal-web');
+        }
         
         // Move center node to focus position (with interruption support)
         if (positions.centerNode) {
@@ -666,11 +680,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => {
       try {
-        console.log(`SpatialOrchestrator: Showing ${searchResults.length} related nodes for edit mode`);
+        console.log(`🎪 [Orchestrator-EditMode] Received request to show ${searchResults.length} related nodes for center node ${centerNodeId}`);
         
         // Store current search results for dynamic reordering
+        const previousCenterNodeId = currentEditModeCenterNodeId.current;
         currentEditModeSearchResults.current = searchResults;
         currentEditModeCenterNodeId.current = centerNodeId;
+        
+        console.log(`🔄 [Orchestrator-EditMode] Center node change: ${previousCenterNodeId} → ${centerNodeId}`);
         
         // Mark as transitioning
         isTransitioning.current = true;
@@ -681,6 +698,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Get current pending relationships from store for priority ordering
         const store = useInterBrainStore.getState();
         const pendingRelationshipIds = store.editMode.pendingRelationships || [];
+        
+        console.log(`📋 [Orchestrator-EditMode] Pending relationships from store:`, pendingRelationshipIds);
         
         // Filter out already-related nodes from search results to avoid duplicates
         const filteredSearchResults = searchResults.filter(node => 
@@ -703,12 +722,22 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           type: node.type 
         }));
         
-        // Update stable lists for swapping logic - handle both initial and subsequent calls
+        // Check if this is a new edit mode session (different center node)
+        const isNewEditModeSession = previousCenterNodeId !== centerNodeId;
+        
+        // Update stable lists for swapping logic - handle both initial, new session, and subsequent calls
         if (relatedNodesList.current.length === 0 && unrelatedSearchResultsList.current.length === 0) {
           // Initial call - set up the lists
           relatedNodesList.current = [...relatedNodes];
           unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
-          console.log('[EditMode] Initial list setup - related:', relatedNodes.length, 'unrelated:', unrelatedSearchNodes.length);
+          console.log(`📝 [Orchestrator-EditMode] Initial list setup - related: ${relatedNodes.length}, unrelated: ${unrelatedSearchNodes.length}`);
+        } else if (isNewEditModeSession) {
+          // New edit mode session for different node - reset lists to avoid stale data
+          console.log(`🔄 [Orchestrator-EditMode] NEW SESSION DETECTED - clearing stale lists`);
+          console.log(`   Previous lists - related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length}`);
+          relatedNodesList.current = [...relatedNodes];
+          unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
+          console.log(`   New lists - related: ${relatedNodes.length}, unrelated: ${unrelatedSearchNodes.length}`);
         } else {
           // Subsequent call (new search results) - merge new unrelated nodes with existing lists
           // Keep existing related nodes, but update unrelated list with new search results
@@ -718,25 +747,18 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           // Add new unrelated nodes to the list
           unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
           
-          console.log('[EditMode] List update - added', newUnrelatedNodes.length, 'new unrelated nodes, total unrelated:', unrelatedSearchResultsList.current.length);
+          console.log(`➕ [Orchestrator-EditMode] Added ${newUnrelatedNodes.length} new unrelated nodes, total unrelated: ${unrelatedSearchResultsList.current.length}`);
         }
         
         // Priority ordering: related nodes first (inner rings), then search results (outer rings)
         const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
         
-        console.log('[EditMode] Initial setup:', {
-          searchResultsCount: searchResults.length,
-          pendingRelationshipIds,
-          filteredSearchResultsCount: filteredSearchResults.length,
-          relatedNodesCount: relatedNodes.length,
-          unrelatedNodesCount: unrelatedSearchNodes.length,
-          combinedOrderedNodesCount: orderedNodes.length,
-          relatedNodeIds: relatedNodes.map(n => n.id),
-          unrelatedNodeIds: unrelatedSearchNodes.map(n => n.id)
-        });
+        console.log(`🎯 [Orchestrator-EditMode] Final layout data - ordered nodes: ${orderedNodes.length} (related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length})`);
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
+        const totalPositions = positions.ring1Nodes.length + positions.ring2Nodes.length + positions.ring3Nodes.length + positions.sphereNodes.length + (positions.centerNode ? 1 : 0);
+        console.log(`📐 [Orchestrator-EditMode] Calculated ${totalPositions} positions for layout`);
         
         // Apply world-space position correction
         if (dreamWorldRef.current) {
@@ -767,7 +789,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
         
         // Move search result nodes to ring positions
-        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId: searchNodeId, position }) => {
+        const ringNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+        console.log(`🎪 [Orchestrator-EditMode] Moving ${ringNodes.length} nodes to ring positions (excluding center ${centerNodeId})`);
+        
+        ringNodes.forEach(({ nodeId: searchNodeId, position }) => {
           if (searchNodeId === centerNodeId) {
             // Skip the center node - it stays where it is
             return;
@@ -777,10 +802,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           if (nodeRef?.current) {
             nodeRef.current.setActiveState(true);
             nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
+          } else {
+            console.warn(`⚠️ [Orchestrator-EditMode] Node ref not found for ring node ${searchNodeId}`);
           }
         });
         
         // Move sphere nodes to sphere surface
+        console.log(`🌐 [Orchestrator-EditMode] Moving ${positions.sphereNodes.length} nodes back to sphere surface`);
         positions.sphereNodes.forEach(sphereNodeId => {
           // Skip the center node if it's somehow in sphere nodes
           if (sphereNodeId === centerNodeId) {
@@ -831,15 +859,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const addedRelationshipIds = currentPendingIds.filter(id => !previousRelatedIds.includes(id));
         const removedRelationshipIds = previousRelatedIds.filter(id => !currentPendingIds.includes(id));
         
-        console.log('[EditMode] Before reorder:', {
-          relatedListSize: relatedNodesList.current.length,
-          unrelatedListSize: unrelatedSearchResultsList.current.length,
-          relatedIds: relatedNodesList.current.map(n => n.id),
-          unrelatedIds: unrelatedSearchResultsList.current.map(n => n.id),
-          pendingRelationships: currentPendingIds,
-          addedRelationshipIds,
-          removedRelationshipIds
-        });
+        console.log(`🔄 [Orchestrator-Reorder] Relationship changes - added: ${addedRelationshipIds.length}, removed: ${removedRelationshipIds.length}`);
         
         // Process additions: Move from unrelated list to end of related list
         addedRelationshipIds.forEach(addedId => {
@@ -849,7 +869,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             const [movedNode] = unrelatedSearchResultsList.current.splice(nodeIndex, 1);
             // Add to end of related list
             relatedNodesList.current.push(movedNode);
-            console.log(`SpatialOrchestrator: Moved node ${movedNode.id} from unrelated to related`);
           }
         });
         
@@ -868,13 +887,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Rebuild the combined ordered list with updated stable lists
         const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
         
-        console.log('[EditMode] After reorder:', {
-          relatedListSize: relatedNodesList.current.length,
-          unrelatedListSize: unrelatedSearchResultsList.current.length,
-          combinedSize: orderedNodes.length,
-          relatedIds: relatedNodesList.current.map(n => n.id),
-          unrelatedIds: unrelatedSearchResultsList.current.map(n => n.id)
-        });
+        console.log(`✅ [Orchestrator-Reorder] Lists updated - related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length}`);
         
         // Calculate new ring layout positions
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
@@ -1028,6 +1041,20 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     unregisterNodeRef: (nodeId: string) => {
       nodeRefs.current.delete(nodeId);
+    },
+    
+    clearEditModeData: () => {
+      console.log(`🧹 [Orchestrator-Cleanup] Clearing stale edit mode data`);
+      
+      // Clear stable edit mode lists
+      relatedNodesList.current = [];
+      unrelatedSearchResultsList.current = [];
+      
+      // Clear edit mode tracking
+      currentEditModeSearchResults.current = [];
+      currentEditModeCenterNodeId.current = null;
+      
+      console.log(`✅ [Orchestrator-Cleanup] Edit mode data cleared`);
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
   

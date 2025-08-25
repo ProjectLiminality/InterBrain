@@ -401,6 +401,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     const previousLayout = state.spatialLayout;
     const selectedNode = state.selectedNode;
     
+    // Log the state change for debugging
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${layout}`);
+    
     // Detect meaningful layout changes for history tracking
     const isMeaningfulChange = (
       // Constellation → Liminal Web (with selected node)

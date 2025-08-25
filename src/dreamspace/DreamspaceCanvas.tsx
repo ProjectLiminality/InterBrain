@@ -295,6 +295,24 @@ export default function DreamspaceCanvas() {
         break;
       }
         
+      case 'edit':
+        // Edit mode - similar to liminal-web but in edit state
+        if (selectedNode) {
+          console.log(`✏️ [Canvas-Layout] Edit mode for node "${selectedNode.name}" (${selectedNode.id})`);
+          // Use the same focus logic as liminal-web for now
+          spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
+        } else {
+          console.warn(`⚠️ [Canvas-Layout] Edit mode triggered but no selectedNode available`);
+        }
+        break;
+        
+      case 'edit-search':
+        // Edit search mode - handle relationship search
+        console.log(`🔍 [Canvas-Layout] Edit search mode active`);
+        // The search interface component will handle the UI
+        // Layout is already handled by edit mode
+        break;
+        
       case 'liminal-web':
         // Trigger liminal web when a node is selected
         if (selectedNode) {
