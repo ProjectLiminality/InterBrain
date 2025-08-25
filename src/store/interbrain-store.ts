@@ -61,6 +61,7 @@ export interface EditModeState {
   searchResults: DreamNode[]; // Search results for relationship discovery
   validationErrors: EditModeValidationErrors; // Validation errors for edit mode
   newDreamTalkFile?: globalThis.File; // New media file for DreamTalk editing
+  isSearchingRelationships: boolean; // Toggle state for relationship search interface
 }
 
 export interface EditModeValidationErrors {
@@ -115,9 +116,9 @@ export interface InterBrainState extends OllamaConfigSlice {
   setSearchQuery: (query: string) => void;
   setSearchSaving: (saving: boolean) => void;
   
-  // Spatial layout state
-  spatialLayout: 'constellation' | 'search' | 'liminal-web';
-  setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web') => void;
+  // Spatial layout state - expanded to include edit modes as first-class states
+  spatialLayout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search';
+  setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search') => void;
   
   // Fibonacci sphere layout configuration
   fibonacciConfig: FibonacciSphereConfig;
@@ -139,9 +140,9 @@ export interface InterBrainState extends OllamaConfigSlice {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'search' | 'liminal-web' | null;
+    previousLayout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'liminal-web' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null) => void;
   
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;
@@ -184,6 +185,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   updateEditingNodeMetadata: (updates: Partial<DreamNode>) => void;
   setEditModeNewDreamTalkFile: (file: globalThis.File | undefined) => void;
   setEditModeSearchResults: (results: DreamNode[]) => void;
+  setEditModeSearchActive: (active: boolean) => void;
   togglePendingRelationship: (nodeId: string) => void;
   savePendingRelationships: () => void;
   setEditModeValidationErrors: (errors: EditModeValidationErrors) => void;
@@ -275,7 +277,8 @@ export const useInterBrainStore = create<InterBrainState>()(
     originalRelationships: [],
     pendingRelationships: [],
     searchResults: [],
-    validationErrors: {}
+    validationErrors: {},
+    isSearchingRelationships: false
   },
   
   // Navigation history initial state (with initial constellation state)
@@ -673,8 +676,11 @@ export const useInterBrainStore = create<InterBrainState>()(
       originalRelationships: [...node.liminalWebConnections], // Store original relationships
       pendingRelationships: [...node.liminalWebConnections], // Start with current relationships
       searchResults: [],
-      validationErrors: {}
-    }
+      validationErrors: {},
+      isSearchingRelationships: false
+    },
+    // Also set the spatial layout to 'edit' mode
+    spatialLayout: 'edit' as const
   })),
 
   exitEditMode: () => set((_state) => ({
@@ -685,7 +691,8 @@ export const useInterBrainStore = create<InterBrainState>()(
       pendingRelationships: [],
       searchResults: [],
       validationErrors: {},
-      newDreamTalkFile: undefined
+      newDreamTalkFile: undefined,
+      isSearchingRelationships: false
     }
   })),
 
@@ -710,6 +717,15 @@ export const useInterBrainStore = create<InterBrainState>()(
       ...state.editMode,
       searchResults: results
     }
+  })),
+
+  setEditModeSearchActive: (active) => set(state => ({
+    editMode: {
+      ...state.editMode,
+      isSearchingRelationships: active
+    },
+    // Update spatial layout based on search mode state
+    spatialLayout: active ? 'edit-search' as const : 'edit' as const
   })),
 
   togglePendingRelationship: (nodeId) => set(state => {

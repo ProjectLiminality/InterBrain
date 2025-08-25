@@ -55,36 +55,7 @@ export default function EditModeSearchNode3D({
     };
   }, []);
   
-  // Component-level escape handling for search mode only
-  // This handler ONLY handles escape when in search mode, nothing else
-  useEffect(() => {
-    const handleSearchEscape = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      
-      // CRITICAL: Only handle if search mode is truly active
-      const store = useInterBrainStore.getState();
-      if (!store.editMode.isActive || !store.editMode.isSearchingRelationships) {
-        // Not our responsibility - let global handler take it
-        return;
-      }
-      
-      console.log(`⚡ [EditModeSearchNode3D] Handling escape from search mode`);
-      e.preventDefault();
-      e.stopPropagation(); // Stop bubbling but not immediate propagation
-      
-      // Simply exit search mode - don't exit edit mode
-      handleCancel();
-    };
-    
-    console.log(`🎯 [EditModeSearchNode3D] Mounting search escape listener`);
-    // Use normal bubbling phase, not capture - let it work naturally with global handler
-    globalThis.document.addEventListener('keydown', handleSearchEscape);
-    
-    return () => {
-      console.log(`🧹 [EditModeSearchNode3D] Unmounting search escape listener`);
-      globalThis.document.removeEventListener('keydown', handleSearchEscape);
-    };
-  }, []); // Empty deps - setup once, cleanup on unmount
+  // Escape handling is now centralized in DreamspaceCanvas using spatialLayout state
   
   // Cleanup debounce timeout on unmount
   useEffect(() => {
