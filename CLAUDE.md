@@ -168,6 +168,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - May require unified layout state coordination between store and orchestrator
 - Alternative: Accept current behavior as "close enough" for MVP
 
+### Liminal-Web Mode Toggle Issues
+**Status**: Deferred - Command queuing complexity  
+**Issue**: Quality-of-life toggles from liminal-web mode are unreliable:
+- **Search mode toggle**: Sometimes stops at constellation, doesn't complete transition to search
+- **Animation conflicts**: Dream node scaling and other effects interrupted by rushed transitions
+
+**Attempted Solutions** (August 26, 2025):
+- Sequential command queuing with 300ms delay
+- Proper animation timing with 1100ms delay (1000ms + 100ms buffer)
+- Fresh store references to prevent stale state
+
+**Root Cause**: Complex interaction between constellation settlement timing, animation states, and command queuing. The transitions work sometimes but are not consistently reliable.
+
+**Next Steps**: 
+- Consider simpler approach: disable toggles from liminal-web, require manual constellation return
+- Or: Deeper investigation into animation state coordination
+- Current workaround: Users can manually go constellation → search/creation
+
+### Proto Node Fly-In Animation Issues  
+**Status**: Deferred - Animation system complexity (August 26, 2025)
+**Issue**: Proto node creation animation system needs refinement:
+- **Desired behavior**: Fly-in animation when entering creation mode (like SearchNode3D)
+- **Cancel/Escape**: Fly-out animation when canceling creation
+- **Save**: Preserve existing save animation (move to final position, fade UI)
+
+**Attempted Solutions**:
+- Multiple animation state system with spawn/save/cancel types
+- Component mount animation triggers
+- Animation timing coordination with useFrame hooks
+
+**Root Cause**: Complex interaction between component lifecycle, animation state management, and useFrame timing. Animation states conflict and create unwanted side effects.
+
+**Next Steps**: 
+- Consider simpler animation approach focusing only on essential transitions  
+- May require rethinking animation architecture for creation components
+- Alternative: Accept current immediate appearance/disappearance as sufficient for MVP
+- **Current Status**: Reverted to stable state (commit 3402622) with working core functionality
+
 ### Epic 1 Achievements (July 13, 2025)
 - ✅ Obsidian plugin boilerplate with Vite dual workflow
 - ✅ Zustand state management with 6 core commands
