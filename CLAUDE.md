@@ -144,6 +144,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **🎯 Remaining Epic 5 Features**: UI/UX layer features for search visualization and interaction
 
+## Known Issues & Technical Debt
+
+### Edit Mode Layout Issues
+**Status**: Deferred - Requires architectural analysis
+**Issue**: When exiting edit-search mode, all search results remain in ring layout instead of intelligently differentiating between:
+- **Glowing nodes** (pending relationships) - Should stay in ring
+- **Non-glowing nodes** (unrelated search results) - Should fly away to sphere
+
+**Context**: 
+- Escape navigation system works correctly (edit-search → edit → liminal-web)
+- Store correctly filters `searchResults` to only pending relationships when exiting edit-search
+- SpatialOrchestrator maintains separate `relatedNodesList` and `unrelatedSearchResultsList`
+- Canvas attempts to call `reorderEditModeSearchResults()` fail due to state coordination issues
+
+**Attempted Solutions** (August 26, 2025):
+- Direct filtering in canvas layout handler
+- Detection logic for edit-search transitions  
+- Multiple `showEditModeSearchResults` vs `reorderEditModeSearchResults` approaches
+
+**Next Steps**: 
+- Consider orchestrator state management refactor
+- May require unified layout state coordination between store and orchestrator
+- Alternative: Accept current behavior as "close enough" for MVP
+
 ### Epic 1 Achievements (July 13, 2025)
 - ✅ Obsidian plugin boilerplate with Vite dual workflow
 - ✅ Zustand state management with 6 core commands
