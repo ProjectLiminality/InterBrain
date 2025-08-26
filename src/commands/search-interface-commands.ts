@@ -29,8 +29,10 @@ export function registerSearchInterfaceCommands(plugin: Plugin, uiService: UISer
           store.setSpatialLayout('constellation');
           // Small delay to ensure smooth transition
           globalThis.setTimeout(() => {
-            store.setSearchActive(true);
-            store.setSpatialLayout('search');
+            const freshStore = useInterBrainStore.getState();
+            freshStore.setSearchActive(true);
+            freshStore.setSpatialLayout('search');
+            console.log(`🔍 [Search-Toggle] Completed transition to search mode`);
           }, 100);
           uiService.showSuccess('Search mode activated from liminal web');
         } else {

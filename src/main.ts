@@ -199,7 +199,9 @@ export default class InterBrainPlugin extends Plugin {
           store.setSpatialLayout('constellation');
           // Small delay to ensure smooth transition
           globalThis.setTimeout(() => {
-            store.startCreationWithData(spawnPosition);
+            const freshStore = useInterBrainStore.getState();
+            freshStore.startCreationWithData(spawnPosition);
+            console.log(`🛠️ [Create-Toggle] Completed transition to creation mode`);
           }, 100);
         } else {
           // Normal creation from constellation or other states
