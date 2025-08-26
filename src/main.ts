@@ -203,7 +203,7 @@ export default class InterBrainPlugin extends Plugin {
             console.log(`🛠️ [Create-Toggle] Phase 2: triggering creation mode`);
             const freshStore = useInterBrainStore.getState();
             freshStore.startCreationWithData(spawnPosition);
-          }, 300); // Longer delay to let constellation fully settle
+          }, 1100); // Animation duration (1000ms) + buffer (100ms)
         } else {
           // Normal creation from constellation or other states
           store.startCreationWithData(spawnPosition);

@@ -35,7 +35,7 @@ export function registerSearchInterfaceCommands(plugin: Plugin, uiService: UISer
             // Use the same logic as normal search activation
             freshStore.setSearchActive(true);
             freshStore.setSpatialLayout('search');
-          }, 300); // Longer delay to let constellation fully settle
+          }, 1100); // Animation duration (1000ms) + buffer (100ms)
           uiService.showSuccess('Search mode activated from liminal web');
         } else {
           // Normal activation from constellation or other states
