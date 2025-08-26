@@ -21,10 +21,24 @@ export function registerSearchInterfaceCommands(plugin: Plugin, uiService: UISer
         store.setSpatialLayout('constellation');
         uiService.showSuccess('Search dismissed');
       } else {
-        // Activate search mode
-        store.setSearchActive(true);
-        store.setSpatialLayout('search');
-        uiService.showSuccess('Search mode activated');
+        // Check current layout to determine transition path
+        if (store.spatialLayout === 'liminal-web') {
+          // From liminal-web: go to constellation first, then activate search
+          console.log(`🔍 [Search-Toggle] Transitioning liminal-web → constellation → search`);
+          store.setSelectedNode(null);
+          store.setSpatialLayout('constellation');
+          // Small delay to ensure smooth transition
+          globalThis.setTimeout(() => {
+            store.setSearchActive(true);
+            store.setSpatialLayout('search');
+          }, 100);
+          uiService.showSuccess('Search mode activated from liminal web');
+        } else {
+          // Normal activation from constellation or other states
+          store.setSearchActive(true);
+          store.setSpatialLayout('search');
+          uiService.showSuccess('Search mode activated');
+        }
       }
     }
   });

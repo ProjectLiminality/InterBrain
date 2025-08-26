@@ -188,11 +188,23 @@ export default class InterBrainPlugin extends Plugin {
         // Trigger creation mode in the store
         const store = useInterBrainStore.getState();
         
-        // Calculate spawn position (same distance as focused nodes) - negative Z to be in front of camera  
+        // Calculate spawn position (used in both paths)
         const spawnPosition: [number, number, number] = [0, 0, -25];
         
-        // Start creation mode (using the same method for consistency)
-        store.startCreationWithData(spawnPosition);
+        // Check current layout to determine transition path
+        if (store.spatialLayout === 'liminal-web') {
+          // From liminal-web: go to constellation first, then activate creation
+          console.log(`🛠️ [Create-Toggle] Transitioning liminal-web → constellation → creation`);
+          store.setSelectedNode(null);
+          store.setSpatialLayout('constellation');
+          // Small delay to ensure smooth transition
+          globalThis.setTimeout(() => {
+            store.startCreationWithData(spawnPosition);
+          }, 100);
+        } else {
+          // Normal creation from constellation or other states
+          store.startCreationWithData(spawnPosition);
+        }
         
         // Debug logging to verify state
         const newState = useInterBrainStore.getState();

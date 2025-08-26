@@ -614,34 +614,44 @@ export const useInterBrainStore = create<InterBrainState>()(
   setIsDragging: (dragging) => set({ isDragging: dragging }),
   
   // Creation state actions
-  startCreation: (position) => set((_state) => ({
-    spatialLayout: 'creation',
-    creationState: {
-      isCreating: true,
-      protoNode: {
-        title: '',
-        type: 'dream', // Default to dream type
-        position,
-        dreamTalkFile: undefined
-      },
-      validationErrors: {}
-    }
-  })),
+  startCreation: (position) => set((state) => {
+    const previousLayout = state.spatialLayout;
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → creation (starting node creation)`);
+    
+    return {
+      spatialLayout: 'creation',
+      creationState: {
+        isCreating: true,
+        protoNode: {
+          title: '',
+          type: 'dream', // Default to dream type
+          position,
+          dreamTalkFile: undefined
+        },
+        validationErrors: {}
+      }
+    };
+  }),
   
-  startCreationWithData: (position, initialData) => set((_state) => ({
-    spatialLayout: 'creation',
-    creationState: {
-      isCreating: true,
-      protoNode: {
-        title: initialData?.title || '',
-        type: initialData?.type || 'dream',
-        position,
-        dreamTalkFile: initialData?.dreamTalkFile || undefined,
-        additionalFiles: initialData?.additionalFiles || undefined
-      },
-      validationErrors: {}
-    }
-  })),
+  startCreationWithData: (position, initialData) => set((state) => {
+    const previousLayout = state.spatialLayout;
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → creation (starting node creation with data)`);
+    
+    return {
+      spatialLayout: 'creation',
+      creationState: {
+        isCreating: true,
+        protoNode: {
+          title: initialData?.title || '',
+          type: initialData?.type || 'dream',
+          position,
+          dreamTalkFile: initialData?.dreamTalkFile || undefined,
+          additionalFiles: initialData?.additionalFiles || undefined
+        },
+        validationErrors: {}
+      }
+    };
+  }),
   
   updateProtoNode: (updates) => set(state => ({
     creationState: {
@@ -659,23 +669,33 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   })),
   
-  completeCreation: () => set((_state) => ({
-    spatialLayout: 'constellation',
-    creationState: {
-      isCreating: false,
-      protoNode: null,
-      validationErrors: {}
-    }
-  })),
+  completeCreation: () => set((state) => {
+    const previousLayout = state.spatialLayout;
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → constellation (completing node creation)`);
+    
+    return {
+      spatialLayout: 'constellation',
+      creationState: {
+        isCreating: false,
+        protoNode: null,
+        validationErrors: {}
+      }
+    };
+  }),
   
-  cancelCreation: () => set((_state) => ({
-    spatialLayout: 'constellation',
-    creationState: {
-      isCreating: false,
-      protoNode: null,
-      validationErrors: {}
-    }
-  })),
+  cancelCreation: () => set((state) => {
+    const previousLayout = state.spatialLayout;
+    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → constellation (canceling node creation)`);
+    
+    return {
+      spatialLayout: 'constellation',
+      creationState: {
+        isCreating: false,
+        protoNode: null,
+        validationErrors: {}
+      }
+    };
+  }),
 
   // Edit mode actions
   startEditMode: (node) => set((state) => {
