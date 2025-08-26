@@ -185,22 +185,7 @@ export default function EditModeOverlay() {
       store.setEditModeSearchResults([]);
     }
     
-    // CRITICAL: Restore focus to ensure escape key handling works
-    // After exiting search mode, focus might be lost, breaking global escape handler
-    globalThis.setTimeout(() => {
-      // Focus the document body or a reliable element to restore keyboard event handling
-      const activeElement = globalThis.document.activeElement as globalThis.HTMLElement;
-      console.log(`🎯 [EditModeOverlay] Focus after search toggle off:`, activeElement?.tagName);
-      
-      // If focus is on an input or other form element, blur it to restore global focus
-      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
-        activeElement.blur();
-      }
-      
-      // Ensure document body has focus for global keyboard events
-      globalThis.document.body.focus();
-      console.log(`🔄 [EditModeOverlay] Restored focus to document body for global escape handling`);
-    }, 50); // Small delay to ensure search interface has fully unmounted
+    // Note: Focus management removed - global DreamspaceCanvas escape handler doesn't require it
   };
   
   

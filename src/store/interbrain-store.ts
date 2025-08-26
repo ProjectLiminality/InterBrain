@@ -687,7 +687,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         isActive: true,
         editingNode: { ...node }, // Create a copy to avoid mutations
         originalRelationships: [...node.liminalWebConnections], // Store original relationships
-        pendingRelationships: [], // Start clean - relationships are only added when actively searching
+        pendingRelationships: [...node.liminalWebConnections], // Show existing relationships with glow
         searchResults: [],
         validationErrors: {},
         isSearchingRelationships: false
@@ -747,10 +747,14 @@ export const useInterBrainStore = create<InterBrainState>()(
     return {
       editMode: {
         ...state.editMode,
-        isSearchingRelationships: active
+        isSearchingRelationships: active,
+        // Clear search results when exiting edit-search mode to prevent persistence
+        searchResults: active ? state.editMode.searchResults : []
       },
       // Update spatial layout based on search mode state
-      spatialLayout: newLayout
+      spatialLayout: newLayout,
+      // Also clear main search results when exiting edit-search to clean up spatial layout
+      searchResults: active ? state.searchResults : []
     };
   }),
 
