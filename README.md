@@ -6,10 +6,16 @@
 
 The InterBrain is an innovative knowledge gardening system that aims to revolutionize the way we collectively relate to our ideas and stories. It transcends the traditional "Second Brain" paradigm, popularized by PKM tools like Obsidian, shifting to a dynamic, relational approach to organizing knowledge as opposed to static, top-down categorization.
 
+## 🚀 Ready to Install & Try
+
+The InterBrain is work-in-progress software with basic functionality now installable as an Obsidian plugin. You can download and install the plugin to start building your liminal web using the existing features, while other capabilities are still in development and the full vision has yet to be comprehensively implemented.
+
+**[→ Download Plugin](https://github.com/ProjectLiminality/InterBrain/releases/latest)** | **[→ Installation Guide](#installation--setup)**
+
 ## Project Status & Roadmap
 
-> ⚡️ **Current Status: Epic 5 Complete - Ready for Main Merge**  
-Epic 5 (Semantic Search System) has been completed with comprehensive semantic search capabilities. Epic 4's remaining Edit Mode feature will be completed next in a continuation branch.
+> ⚡️ **Current Status: Core Functionality Complete & Installable**  
+Both Epic 4 (Liminal Web Layout System) and Epic 5 (Semantic Search System) are complete with all features implemented. The InterBrain is now ready for installation and use in Obsidian.
 
 > 🔬 **Previous Exploration:**  
 Earlier exploration work including screenshots and recordings can be found at [**InterBrain-Prototype**](https://github.com/ProjectLiminality/InterBrain-Prototype). This repository contains the conceptual foundation and visual demonstrations that inform the current development approach.
@@ -20,7 +26,7 @@ Foundation infrastructure with:
 - Command palette architecture (6 core commands)  
 - Service layer abstraction (UI, Git, DreamNode, Vault)
 - Zustand reactive state management
-- Vitest testing framework (47 tests passing)
+- Vitest testing framework with comprehensive coverage
 
 > ✅ **Epic 2 Complete:**  
 3D Spatial Visualization System with:
@@ -29,7 +35,7 @@ Foundation infrastructure with:
 - Google Earth-style sphere rotation controls
 - Fibonacci sphere layout algorithm
 - Dynamic view scaling (Apple Watch style)
-- 84 unit tests with 100% coverage for new features
+- Comprehensive unit test coverage
 
 > ✅ **Epic 3 Complete:**  
 DreamNode Management System with:
@@ -39,7 +45,7 @@ DreamNode Management System with:
 - Auto-stash creator mode workflow
 - Universal drag-drop hit detection
 - Proto-node creation with animations
-- 101 unit tests with comprehensive coverage
+- Robust testing infrastructure
 
 > ✅ **Epic 4 Complete:**  
 Liminal Web Layout System with:
@@ -53,7 +59,7 @@ Comprehensive semantic search capabilities with local AI sovereignty:
 - ✅ Ollama Embedding API Integration (Feature #290) - Local embedding generation
 - ✅ Search-as-DreamNode Interface (Feature #323) - Unified search/creation UX paradigm
 - ✅ Honeycomb Search Layout (Feature #280) - Mathematical precision for 1-36 node positioning
-- ✅ All Epic 5 features complete with 179 tests passing and zero warnings
+- ✅ All Epic 5 features complete with comprehensive test coverage and zero warnings
 
 > 🌱 **Beyond the Plugin:**  
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
@@ -63,11 +69,51 @@ The InterBrain is designed as the foundation for **DreamOS** — a decentralized
 2. ✅ Epic 1: Plugin Infrastructure (this repository)  
 3. ✅ Epic 2: 3D Spatial Visualization System
 4. ✅ Epic 3: DreamNode Management System
-5. 🔄 Epic 4: Liminal Web Layout System (foundation merged, edit mode pending)
+5. ✅ Epic 4: Liminal Web Layout System (complete)
 6. ✅ Epic 5: Semantic Search System (complete)
 7. 🪐 DreamOS system (future evolution)  
 
 Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2).
+
+## Installation & Setup
+
+### Prerequisites
+
+1. **Obsidian**: Download and install [Obsidian](https://obsidian.md/) if you haven't already
+2. **Git**: Install [Git](https://git-scm.com/downloads) - required for DreamNode creation functionality
+3. **Platform**: Developed and tested on macOS. Windows and Linux compatibility likely but not actively tested
+
+### Plugin Installation
+
+1. **Download**: Get the latest InterBrain plugin from [GitHub Releases](https://github.com/ProjectLiminality/InterBrain/releases)
+2. **Extract**: Unzip the downloaded file to create an `interbrain` folder
+3. **Install**: Drag the `interbrain` folder to your Obsidian vault's plugins directory:
+   - **Location**: `<your-vault>/.obsidian/plugins/` (where `<your-vault>` is your specific Obsidian vault folder)
+   - **Tip**: In Obsidian Settings → Community plugins, click the folder icon to open your plugins directory directly
+4. **Enable**: Restart Obsidian, go to Settings → Community plugins, and enable "InterBrain"
+
+### Optional: Semantic Search Setup
+
+For semantic search functionality, install Ollama:
+
+1. **Install Ollama**: Download from [ollama.ai](https://ollama.ai) (available for macOS, Windows, Linux)
+2. **Install Model**: Run `ollama pull nomic-embed-text` in terminal
+3. **Verify**: InterBrain will automatically detect Ollama when available
+
+### Getting Started
+
+Once installed, try this simple exercise to build your first liminal web:
+
+1. Open Obsidian and activate the InterBrain workspace via command palette
+2. Create a DreamNode for any project or idea you're working on
+3. Click that node to enter liminal web mode (focused layout)
+4. Drag and drop pictures of collaborators (name files with their names)
+5. Click on any person to focus on them, then add shared projects/ideas
+6. Watch your personal knowledge network emerge through relationships
+
+### Important Notes
+
+**Security & Development Status**: InterBrain is work-in-progress software under active development. All code is built transparently in public on GitHub where you can review the complete source code and development history. Users should exercise their own judgment when installing development software. As we approach a stable release, security, stability, and comprehensive testing will receive focused attention in line with production software standards.
 
 ## Core Concepts
 
