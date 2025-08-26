@@ -6,7 +6,7 @@ import { semanticSearchService } from '../semantic-search/services/semantic-sear
 
 interface EditModeSearchNode3DProps {
   position: [number, number, number];
-  onCancel: () => void;
+  // Note: onCancel prop removed as escape handling is now managed by global DreamspaceCanvas handler
 }
 
 /**
@@ -18,13 +18,12 @@ interface EditModeSearchNode3DProps {
  * Search queries trigger real-time relationship discovery for the editing node.
  */
 export default function EditModeSearchNode3D({ 
-  position,
-  onCancel
+  position
 }: EditModeSearchNode3DProps) {
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
   
   // Get edit mode state from store  
-  const { editMode, setEditModeSearchResults, setSpatialLayout, setSearchResults } = useInterBrainStore();
+  const { editMode, setEditModeSearchResults, setSearchResults } = useInterBrainStore();
   
   // Local UI state for immediate responsiveness
   const [localQuery, setLocalQuery] = useState('');
@@ -122,10 +121,10 @@ export default function EditModeSearchNode3D({
       // Update store with search results for edit mode tracking
       setEditModeSearchResults(resultNodes);
       
-      // CRITICAL: Use the same pattern as regular search mode to trigger visual layout
-      // Set the main search results and switch to search layout
+      // CRITICAL: Set main search results for spatial visualization but stay in edit-search layout
+      // Edit-search mode should maintain its own layout state
       setSearchResults(resultNodes);
-      setSpatialLayout('search');
+      // Note: Do NOT change layout - stay in 'edit-search' mode
       
     } catch (error) {
       console.error('EditModeSearchNode3D: Search failed:', error);
@@ -137,10 +136,7 @@ export default function EditModeSearchNode3D({
   
   // Handle keyboard shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      handleCancel();
-    } else if (e.key === 'Enter' && localQuery.trim()) {
+    if (e.key === 'Enter' && localQuery.trim()) {
       e.preventDefault();
       // Trigger immediate search
       if (debounceTimeoutRef.current) {
@@ -148,15 +144,10 @@ export default function EditModeSearchNode3D({
       }
       performSearch(localQuery.trim());
     }
+    // Note: Escape handling is now managed by global DreamspaceCanvas handler
   };
   
-  const handleCancel = () => {
-    // Clear any pending search
-    if (debounceTimeoutRef.current) {
-      globalThis.clearTimeout(debounceTimeoutRef.current);
-    }
-    onCancel();
-  };
+  // Note: handleCancel was removed as escape handling is now managed by global DreamspaceCanvas handler
   
   // Node styling - 2/3 the size of EditNode3D for more compact search interface
   const nodeSize = 133; // 2/3 of 200px

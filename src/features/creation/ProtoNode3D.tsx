@@ -238,10 +238,8 @@ export default function ProtoNode3D({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleCreate();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      handleCancel();
     }
+    // Note: Escape handling is now managed by global DreamspaceCanvas handler
   };
   
   const isCreateDisabled = !localTitle.trim() || !!validationErrors.title || isAnimating;

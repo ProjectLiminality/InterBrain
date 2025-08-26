@@ -117,8 +117,8 @@ export interface InterBrainState extends OllamaConfigSlice {
   setSearchSaving: (saving: boolean) => void;
   
   // Spatial layout state - expanded to include edit modes as first-class states
-  spatialLayout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search';
-  setSpatialLayout: (layout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search') => void;
+  spatialLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search';
+  setSpatialLayout: (layout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search') => void;
   
   // Fibonacci sphere layout configuration
   fibonacciConfig: FibonacciSphereConfig;
@@ -140,9 +140,9 @@ export interface InterBrainState extends OllamaConfigSlice {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null;
+    previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null) => void;
   
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;
@@ -615,6 +615,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // Creation state actions
   startCreation: (position) => set((_state) => ({
+    spatialLayout: 'creation',
     creationState: {
       isCreating: true,
       protoNode: {
@@ -628,6 +629,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
   
   startCreationWithData: (position, initialData) => set((_state) => ({
+    spatialLayout: 'creation',
     creationState: {
       isCreating: true,
       protoNode: {
@@ -658,6 +660,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
   
   completeCreation: () => set((_state) => ({
+    spatialLayout: 'constellation',
     creationState: {
       isCreating: false,
       protoNode: null,
@@ -666,6 +669,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
   
   cancelCreation: () => set((_state) => ({
+    spatialLayout: 'constellation',
     creationState: {
       isCreating: false,
       protoNode: null,
@@ -683,7 +687,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         isActive: true,
         editingNode: { ...node }, // Create a copy to avoid mutations
         originalRelationships: [...node.liminalWebConnections], // Store original relationships
-        pendingRelationships: [...node.liminalWebConnections], // Start with current relationships
+        pendingRelationships: [], // Start clean - relationships are only added when actively searching
         searchResults: [],
         validationErrors: {},
         isSearchingRelationships: false

@@ -63,58 +63,79 @@ export default function DreamspaceCanvas() {
     return () => {};
   }, [dataMode]);
 
-  // Single, simple, centralized escape key handler based on unified spatialLayout state
+  // Single, centralized escape key handler with debouncing for unified spatialLayout state
   useEffect(() => {
+    let debounceTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+    
     const handleEscape = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       
       e.preventDefault();
-      const store = useInterBrainStore.getState();
-      const layout = store.spatialLayout;
       
-      console.log(`🎯 [DreamspaceCanvas] Escape pressed in layout: ${layout}`);
-      
-      // Simple, clear logic for each layout state
-      switch (layout) {
-        case 'edit-search':
-          // Exit search mode, stay in edit mode
-          console.log(`🔍 Exit edit-search → edit`);
-          store.setEditModeSearchActive(false); // This will set layout to 'edit'
-          break;
-          
-        case 'edit':
-          // Exit edit mode, go to liminal-web
-          console.log(`✏️ Exit edit → liminal-web`);
-          store.exitEditMode();
-          store.setSpatialLayout('liminal-web');
-          break;
-          
-        case 'search':
-          // Exit global search, go to constellation
-          console.log(`🔍 Exit search → constellation`);
-          store.setSearchResults([]);
-          store.setSpatialLayout('constellation');
-          break;
-          
-        case 'liminal-web':
-          // Exit liminal-web, go to constellation
-          console.log(`🕸️ Exit liminal-web → constellation`);
-          store.setSelectedNode(null);
-          store.setSpatialLayout('constellation');
-          break;
-          
-        case 'constellation':
-          // Already at top level
-          console.log(`🌌 Already in constellation`);
-          break;
+      // Debounce rapid escape key presses (300ms)
+      if (debounceTimeout) {
+        globalThis.clearTimeout(debounceTimeout);
       }
+      
+      debounceTimeout = globalThis.setTimeout(() => {
+        const store = useInterBrainStore.getState();
+        const layout = store.spatialLayout;
+        
+        console.log(`🎯 [DreamspaceCanvas] Escape navigation: ${layout} → parent`);
+        
+        // Complete hierarchical navigation for all states
+        switch (layout) {
+          case 'creation':
+            // Exit creation mode, return to constellation
+            console.log(`🛠️ Exit creation → constellation`);
+            store.cancelCreation(); // This sets layout to 'constellation'
+            break;
+            
+          case 'edit-search':
+            // Exit search mode, stay in edit mode
+            console.log(`🔍 Exit edit-search → edit`);
+            store.setEditModeSearchActive(false); // This will set layout to 'edit'
+            break;
+            
+          case 'edit':
+            // Exit edit mode, go to liminal-web
+            console.log(`✏️ Exit edit → liminal-web`);
+            store.exitEditMode();
+            store.setSpatialLayout('liminal-web');
+            break;
+            
+          case 'search':
+            // Exit global search, go to constellation
+            console.log(`🔍 Exit search → constellation`);
+            store.setSearchResults([]);
+            store.setSpatialLayout('constellation');
+            break;
+            
+          case 'liminal-web':
+            // Exit liminal-web, go to constellation
+            console.log(`🕸️ Exit liminal-web → constellation`);
+            store.setSelectedNode(null);
+            store.setSpatialLayout('constellation');
+            break;
+            
+          case 'constellation':
+            // Already at top level
+            console.log(`🌌 Already in constellation (root)`);
+            break;
+        }
+        
+        debounceTimeout = null;
+      }, 300); // 300ms debounce to prevent rapid state changes
     };
     
-    console.log(`🎯 [DreamspaceCanvas] Setting up unified escape handler`);
+    console.log(`🎯 [DreamspaceCanvas] Setting up unified escape handler with debouncing`);
     globalThis.document.addEventListener('keydown', handleEscape);
     
     return () => {
       console.log(`🧹 [DreamspaceCanvas] Removing unified escape handler`);
+      if (debounceTimeout) {
+        globalThis.clearTimeout(debounceTimeout);
+      }
       globalThis.document.removeEventListener('keydown', handleEscape);
     };
   }, []); // Single handler, no dependencies

@@ -43,7 +43,7 @@ export class DreamNodeService {
     store.setSpatialLayout(layout);
   }
 
-  getCurrentLayout(): 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' {
+  getCurrentLayout(): 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' {
     return useInterBrainStore.getState().spatialLayout;
   }
 

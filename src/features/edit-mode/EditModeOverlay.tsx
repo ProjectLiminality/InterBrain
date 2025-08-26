@@ -219,7 +219,6 @@ export default function EditModeOverlay() {
       {editMode.isSearchingRelationships && (
         <EditModeSearchNode3D
           position={centerPosition}
-          onCancel={handleSearchToggleOff}
         />
       )}
       

@@ -269,10 +269,8 @@ export default function EditNode3D({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSave();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      handleCancel();
     }
+    // Note: Escape handling is now managed by global DreamspaceCanvas handler
   };
   
   const isSaveDisabled = !localTitle.trim() || !!validationErrors.title || isAnimating;
