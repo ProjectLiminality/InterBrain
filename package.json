@@ -1,6 +1,6 @@
 {
   "name": "interbrain",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A revolutionary knowledge management system for Obsidian that transcends traditional Second Brain paradigms",
   "main": "main.js",
   "scripts": {

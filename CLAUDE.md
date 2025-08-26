@@ -14,30 +14,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Development Status
 
-**Phase**: Epic 5 Complete - Ready for Main Merge (Epic 4 Foundation Merged)
+**Phase**: Epic 4 Complete - Ready for Next Epic Planning
 - ✅ **Epic 1 Complete**: Plugin Infrastructure foundation established
 - ✅ **Epic 2 Complete**: 3D Spatial Visualization System with all features implemented
 - ✅ **Epic 3 Complete**: DreamNode Management System with service layer architecture
-- 🔄 **Epic 4 PARTIAL**: Liminal Web Layout System - Foundation merged, Edit Mode pending
-- ✅ **Epic 5 COMPLETE**: Semantic Search System (branch: epic/5-semantic-search)
+- ✅ **Epic 4 COMPLETE**: Liminal Web Layout System - All features implemented including unified edit mode
+- ✅ **Epic 5 COMPLETE**: Semantic Search System
   - ✅ **Feature #322 COMPLETE**: Intelligent Indexing System - Background indexing with git integration
   - ✅ **Feature #290 COMPLETE**: Ollama Embedding API Integration - Local semantic search
   - ✅ **Feature #323 COMPLETE**: Search-as-DreamNode Interface - Unified search/creation UX
   - ✅ **Feature #280 COMPLETE**: Honeycomb Search Layout - Mathematical precision positioning
 
-### ⚠️ CRITICAL: Epic 4 Partial Merge Status (December 17, 2024)
-**WORKFLOW EXCEPTION - PARTIAL EPIC MERGE**
-- **Reason**: Circular dependency - Edit Mode (#321) needs Semantic Search, Semantic Search needs Spatial Orchestration
-- **Completed & Merged**: Features #316 (Spatial Orchestration) and #320 (Undo/Redo Navigation)
-- **Pending Feature**: #321 (Unified Edit Mode) - Will implement in `epic/4-continued` branch after Epic 5
-- **Continuation Plan**: After Epic 5 completion, branch `epic/4-continued` from main to implement Edit Mode with semantic search integration
-- **Documentation**: See `PARTIAL_EPIC_MERGE.md` for complete workflow exception documentation
-
-### Epic 4 Current Status (December 17, 2024)
-- ✅ **Feature #316 MERGED**: Focused Layout Engine & Spatial Orchestration System (foundation for Epic 5)
-- ✅ **Feature #320 MERGED**: Undo/Redo Navigation with Mid-Flight Animation Interruption
-- 📋 **Feature #321 DEFERRED**: Edit Mode - Awaiting Epic 5 Semantic Search for optimal implementation
-- ⚠️ **IMPORTANT**: Epic 4 housekeeping (full docs update, CHANGELOG) deferred until epic/4-continued completion
+### Epic 4 Complete Status (August 26, 2025)
+**All Features Complete**: Epic 4 - Liminal Web Layout System | Spec: #267
+- ✅ **Feature #316 COMPLETE**: Focused Layout Engine & Spatial Orchestration System  
+- ✅ **Feature #320 COMPLETE**: Undo/Redo Navigation with Mid-Flight Animation Interruption
+- ✅ **Feature #321 COMPLETE**: Unified Edit Mode with semantic search integration
 
 ### Epic 4 Achievements (August 12, 2025)
 **Feature #316 Complete**: Focused Layout Engine & Spatial Orchestration System
@@ -334,11 +326,13 @@ interface DreamNodeService {
 
 **Core Strategy**: 3-tier GitHub Issues + Dynamic AI Task Management + Epic-Level Testing/Documentation
 
-### GitHub Issue Structure (3-Tier)
+### GitHub Issue Structure (3-Tier Hierarchy)
 - **Epic**: High-level functionality units (stable structure)
-- **Specification**: Detailed implementation plans (explicated when development wave hits)
-- **Feature**: User-facing functionality (concrete enough to test)
+- **Specification**: Detailed implementation plans (one per epic - child of epic)
+- **Feature**: User-facing functionality (children of specification - concrete enough to test)
 - **Tasks**: AI handles dynamically via TodoWrite (no GitHub task issues needed)
+
+**Issue Completion Order**: Features → Specification → Epic (bottom-up completion)
 
 ### Git Branch Strategy
 ```
@@ -372,23 +366,18 @@ main → epic/2-spatial-visualization
 - Tag release if appropriate
 - Epic represents coherent functionality unit
 
-### Workflow Exception: Partial Epic Merge Pattern
+### Epic Completion Requirements
 
-**When to Use**: Only when circular dependencies exist between epics at the architectural level
-**Documentation Required**: PARTIAL_EPIC_MERGE.md file and clear CLAUDE.md updates
-**Process**:
-1. Complete and test foundational features within the epic
-2. Document partial completion status extensively
-3. Merge foundational features to main
-4. Create continuation plan with specific branch name (epic/N-continued)
-5. Defer housekeeping tasks (CHANGELOG, final docs) until continuation completes
-6. Track deferred features in GitHub issues with clear continuation requirements
+**Quality Standards**:
+- All tests passing with comprehensive coverage
+- Zero lint warnings or errors at any level
+- Zero TypeScript compilation errors
+- Clean git state with no uncommitted changes
 
-**Critical Requirements**:
-- Must document WHY the exception is necessary
-- Must specify EXACTLY which features are merged vs deferred
-- Must create clear continuation plan BEFORE merging
-- Must update all project memory and GitHub issues
+**Documentation Standards**:
+- CHANGELOG entry based on git commit analysis (not just project memory)
+- Technical documentation updates for architectural changes
+- Project memory updates reflecting completion status
 
 ### Core Workflow Pattern: Issue Clarity Before Implementation
 
@@ -639,11 +628,13 @@ mutation {
 4. Create Feature issues with parent spec reference
 5. Use GraphQL to move issues through project board states as work progresses
 
-**Epic Completion Workflow**:
-1. Update Epic issue body with completed checkboxes
-2. Move Epic to Complete status via GraphQL
-3. Close Epic issue with completion summary
-4. Clean up any remaining child issues
+**Epic Completion Protocol** (3-Tier Issue Hierarchy):
+1. **Complete ALL Implementation Work First**: Code, tests, documentation, merge to main, cleanup
+2. **ONLY AFTER Work is Complete**: Update and close issues (Specification first, then Epic)
+3. **CHANGELOG Analysis**: Review relevant git commit history (not just project memory) for precise documentation
+4. **Pristine Code Requirement**: `npm run check-all` must show zero warnings/errors at any level
+
+**CRITICAL: Never update issue bodies or close issues until all work is merged and complete**
 
 ### Critical Commands Reference
 

@@ -5,6 +5,86 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-08-26 - Epic 4: Liminal Web Layout System (Complete)
+
+### Added
+
+**Unified Edit Mode (Feature #321)**
+- Complete ProtoNode integration with focused view for relationship and metadata editing
+- Seamless transition between search, edit, and liminal-web spatial modes
+- Real-time visual feedback during editing with semantic search integration
+- Save animation system with scale/opacity transitions for natural UX flow
+- Context-aware edit activation with proper spatial layout state management
+
+**Edit Mode Refinements**
+- Comprehensive escape key navigation system with proper state isolation
+- Visual state management for edit mode overlays and UI components
+- DreamTalk media file support with display and editing capabilities in EditNode3D
+- Ring ordering system with priority-based positioning and smooth animations
+- Center node positioning stability during edit mode transitions
+
+**Transition System Improvements**
+- Liminal-web transition animations with proper command queuing
+- Quality-of-life navigation toggles between spatial modes
+- Animation duration respect system for seamless user experience
+- Mid-flight animation interruption handling for responsive interactions
+- Proper state management for complex spatial mode transitions
+
+**Layout State Unification**
+- Unified spatialLayout state management across all modes including edit
+- Enhanced escape navigation flow with debouncing and state coordination
+- Single-layer escape navigation system with optimized user experience
+- Elegant spinning loading indicators for async operations
+- Visual feedback systems for edit mode state changes
+
+**Bug Fixes and Polish**
+- Fixed UI blocking issues by removing unnecessary 3D geometry from EditModeSearchNode3D
+- React Hooks order violation resolution in EditModeOverlay component
+- Gradient direction fixes and escape event propagation priority handling
+- Ring ordering logic improvements with proper position swapping
+- Center node fly-out prevention during edit mode entry
+
+### Technical Achievements
+
+**Architecture Completion**
+- Epic 4 foundation features (#316, #320) integrated with edit mode (#321)
+- Complete spatial relationship orchestration system operational
+- Unified edit interface supporting both metadata and relationship modifications
+- Service layer architecture maintained throughout edit mode implementation
+
+**Code Quality Excellence**
+- 179 unit tests passing with comprehensive coverage maintained
+- Zero lint warnings and zero TypeScript compilation errors
+- Clean git state with systematic commit organization
+- Performance optimization for complex spatial transitions
+
+**Key Technical Innovations**
+- Spatial layout state coordination between store and orchestrator systems
+- Edit mode lifecycle management with proper component mounting/unmounting
+- DreamTalk media file persistence and display integration
+- Animation state management for complex multi-component interactions
+
+### Known Issues
+
+**Proto Node Animation System** (Documented for Future Resolution)
+- Proto node fly-in animations deferred due to animation system complexity
+- Current implementation provides stable core functionality without visual transitions
+- Animation states conflict with component lifecycle and useFrame timing
+- Requires architectural rethinking of animation coordination for creation components
+
+**Edit Mode Layout Edge Cases** (Documented for Future Resolution)
+- Search results differentiation between related vs unrelated nodes in ring layout
+- Complex state coordination between spatial orchestrator and store systems
+- Alternative approach consideration: simpler behavior acceptance for MVP
+
+### Breaking Changes
+
+None. All changes are backward compatible with existing Epic 1-5 functionality.
+
+### Migration Notes
+
+No migration required. Epic 4 completion enhances existing spatial navigation workflows without disrupting current functionality.
+
 ## [0.4.0] - 2025-08-19 - Epic 5: Semantic Search System
 
 ### Added
