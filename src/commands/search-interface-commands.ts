@@ -23,17 +23,19 @@ export function registerSearchInterfaceCommands(plugin: Plugin, uiService: UISer
       } else {
         // Check current layout to determine transition path
         if (store.spatialLayout === 'liminal-web') {
-          // From liminal-web: go to constellation first, then activate search
-          console.log(`🔍 [Search-Toggle] Transitioning liminal-web → constellation → search`);
+          // From liminal-web: First return to constellation, then trigger search command
+          console.log(`🔍 [Search-Toggle] Phase 1: liminal-web → constellation`);
           store.setSelectedNode(null);
           store.setSpatialLayout('constellation');
-          // Small delay to ensure smooth transition
+          
+          // Wait for constellation transition to complete, then trigger search command
           globalThis.setTimeout(() => {
+            console.log(`🔍 [Search-Toggle] Phase 2: triggering search activation`);
             const freshStore = useInterBrainStore.getState();
+            // Use the same logic as normal search activation
             freshStore.setSearchActive(true);
             freshStore.setSpatialLayout('search');
-            console.log(`🔍 [Search-Toggle] Completed transition to search mode`);
-          }, 100);
+          }, 300); // Longer delay to let constellation fully settle
           uiService.showSuccess('Search mode activated from liminal web');
         } else {
           // Normal activation from constellation or other states

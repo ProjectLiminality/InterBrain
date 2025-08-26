@@ -193,16 +193,17 @@ export default class InterBrainPlugin extends Plugin {
         
         // Check current layout to determine transition path
         if (store.spatialLayout === 'liminal-web') {
-          // From liminal-web: go to constellation first, then activate creation
-          console.log(`🛠️ [Create-Toggle] Transitioning liminal-web → constellation → creation`);
+          // From liminal-web: First return to constellation, then trigger creation command  
+          console.log(`🛠️ [Create-Toggle] Phase 1: liminal-web → constellation`);
           store.setSelectedNode(null);
           store.setSpatialLayout('constellation');
-          // Small delay to ensure smooth transition
+          
+          // Wait for constellation transition to complete, then trigger creation
           globalThis.setTimeout(() => {
+            console.log(`🛠️ [Create-Toggle] Phase 2: triggering creation mode`);
             const freshStore = useInterBrainStore.getState();
             freshStore.startCreationWithData(spawnPosition);
-            console.log(`🛠️ [Create-Toggle] Completed transition to creation mode`);
-          }, 100);
+          }, 300); // Longer delay to let constellation fully settle
         } else {
           // Normal creation from constellation or other states
           store.startCreationWithData(spawnPosition);
