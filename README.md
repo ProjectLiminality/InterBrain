@@ -92,24 +92,33 @@ Current development progress is tracked through [**GitHub Issues**](https://gith
    - **Tip**: In Obsidian Settings → Community plugins, click the folder icon to open your plugins directory directly
 4. **Enable**: Restart Obsidian, go to Settings → Community plugins, and enable "InterBrain"
 
-### Optional: Semantic Search Setup
+### Required for Semantic Search: Ollama Setup
 
-For semantic search functionality, install Ollama:
+**Note**: Semantic search features require Ollama. Basic DreamNode creation and liminal web navigation work without it.
 
 1. **Install Ollama**: Download from [ollama.ai](https://ollama.ai) (available for macOS, Windows, Linux)
 2. **Install Model**: Run `ollama pull nomic-embed-text` in terminal
-3. **Verify**: InterBrain will automatically detect Ollama when available
+3. **Check Status**: Use command palette "Ollama: Check Status" to verify setup
+4. **Index**: Run "Full Index" command to enable semantic search on your DreamNodes
 
 ### Getting Started
 
 Once installed, try this simple exercise to build your first liminal web:
 
 1. Open Obsidian and activate the InterBrain workspace via command palette
-2. Create a DreamNode for any project or idea you're working on
-3. Click that node to enter liminal web mode (focused layout)
-4. Drag and drop pictures of collaborators (name files with their names)
-5. Click on any person to focus on them, then add shared projects/ideas
-6. Watch your personal knowledge network emerge through relationships
+2. **Run "Full Index"** command (required for semantic search functionality)
+3. Create a DreamNode for any project or idea you're working on
+4. Click that node to enter liminal web mode (focused layout)
+5. **Run "Enter Edit Mode"** command to edit nodes and relationships in 3D space
+6. Drag and drop pictures of collaborators (name files with their names)
+7. Click on any person to focus on them, then add shared projects/ideas
+8. Watch your personal knowledge network emerge through relationships
+
+**Essential Commands:**
+- **"Ollama: Check Status"**: Verify if Ollama is properly set up for semantic search
+- **"Full Index"**: Index your DreamNodes for semantic search (required after Ollama setup)
+- **"Enter Edit Mode"**: Edit node content and relationships while in liminal web view
+- **"Activate Search Interface"**: Use semantic search to find and create nodes (requires Ollama + indexing)
 
 ### Important Notes
 
