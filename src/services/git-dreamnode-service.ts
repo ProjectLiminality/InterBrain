@@ -372,7 +372,9 @@ export class GitDreamNodeService {
       console.log(`GitDreamNodeService: Git add result:`, addResult);
       
       // Make the initial commit (this triggers the pre-commit hook)
-      const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${title}"`, { cwd: repoPath });
+      // Escape the title to handle quotes and special characters
+      const escapedTitle = title.replace(/"/g, '\\"');
+      const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
       console.log(`GitDreamNodeService: Git commit result:`, commitResult);
       
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
@@ -626,7 +628,9 @@ export class GitDreamNodeService {
       
       // Stage and commit changes
       await execAsync('git add -A', { cwd: repoPath });
-      await execAsync(`git commit -m "${commitMessage}"`, { cwd: repoPath });
+      // Escape the commit message to handle quotes and special characters
+      const escapedMessage = commitMessage.replace(/"/g, '\\"');
+      await execAsync(`git commit -m "${escapedMessage}"`, { cwd: repoPath });
       
       console.log(`GitDreamNodeService: Auto-committed changes for ${node.name}: ${commitMessage}`);
       
