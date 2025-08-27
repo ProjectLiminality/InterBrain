@@ -295,8 +295,9 @@ export default function DreamspaceCanvas() {
     if (!spatialOrchestratorRef.current) return;
     
     switch (spatialLayout) {
-      case 'search': {
-        // Search mode handles both search interface and search results display
+      case 'search':
+      case 'edit-search': {
+        // Both search and edit-search use the same visual architecture
         const store = useInterBrainStore.getState();
         if (searchResults && searchResults.length > 0) {
           // Check if we're in edit mode - need special handling to maintain stable lists
@@ -325,13 +326,6 @@ export default function DreamspaceCanvas() {
         } else {
           console.warn(`⚠️ [Canvas-Layout] Edit mode triggered but no selectedNode available`);
         }
-        break;
-        
-      case 'edit-search':
-        // Edit search mode - handle relationship search
-        console.log(`🔍 [Canvas-Layout] Edit search mode active`);
-        // The search interface component will handle the UI
-        // Layout is already handled by edit mode
         break;
         
       case 'liminal-web':
