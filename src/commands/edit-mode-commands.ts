@@ -14,6 +14,7 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
   plugin.addCommand({
     id: 'enter-edit-mode',
     name: 'Enter Edit Mode',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'e' }],
     callback: async () => {
       const store = useInterBrainStore.getState();
       

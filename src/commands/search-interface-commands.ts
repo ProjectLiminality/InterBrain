@@ -11,6 +11,7 @@ export function registerSearchInterfaceCommands(plugin: Plugin, uiService: UISer
   plugin.addCommand({
     id: 'toggle-search-mode',
     name: 'Toggle Search Mode',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'f' }],
     callback: async () => {
       const store = useInterBrainStore.getState();
       

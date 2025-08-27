@@ -168,11 +168,11 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Create DreamNode command (no hotkey for now - use command palette)
+    // Create DreamNode command
     this.addCommand({
       id: 'create-dreamnode',
       name: 'Create new DreamNode',
-      // hotkeys: [{ modifiers: ['Alt'], key: 'n' }], // Commented out - Obsidian hotkey issues
+      hotkeys: [{ modifiers: ['Ctrl'], key: 'n' }],
       callback: async () => {
         console.log('Create DreamNode command executed (via command palette)');
         
@@ -244,6 +244,83 @@ export default class InterBrainPlugin extends Plugin {
       callback: () => {
         console.log('Toggle selection command executed');
         this.uiService.showPlaceholder('Selection UI coming soon!');
+      }
+    });
+
+    // Open DreamNode in Finder command
+    this.addCommand({
+      id: 'open-dreamnode-in-finder',
+      name: 'Open DreamNode in Finder',
+      hotkeys: [{ modifiers: ['Ctrl'], key: 'o' }],
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode) {
+          this.uiService.showError('No DreamNode selected');
+          return;
+        }
+
+        // Only available in real mode (mock nodes don't have file paths)
+        if (serviceManager.getMode() !== 'real') {
+          this.uiService.showError('Open in Finder only available in real mode');
+          return;
+        }
+
+        try {
+          // Use git service to open the repository folder in Finder
+          await this.gitService.openInFinder(currentNode.repoPath);
+          this.uiService.showSuccess(`Opened ${currentNode.name} in Finder`);
+        } catch (error) {
+          console.error('Failed to open in Finder:', error);
+          this.uiService.showError('Failed to open DreamNode in Finder');
+        }
+      }
+    });
+
+    // Delete DreamNode command
+    this.addCommand({
+      id: 'delete-dreamnode',
+      name: 'Delete DreamNode',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode) {
+          this.uiService.showError('No DreamNode selected');
+          return;
+        }
+
+        // Safety confirmation popup
+        const confirmMessage = `Are you sure you want to delete "${currentNode.name}"?\n\nThis action cannot be undone. All files and git history for this DreamNode will be permanently removed.`;
+        const confirmed = globalThis.confirm(confirmMessage);
+        
+        if (!confirmed) {
+          this.uiService.showInfo('Delete operation cancelled');
+          return;
+        }
+
+        const loadingNotice = this.uiService.showLoading(`Deleting ${currentNode.name}...`);
+        try {
+          // Get the active service for deletion
+          const dreamNodeService = serviceManager.getActive();
+          
+          // Delete the DreamNode through the service layer
+          await dreamNodeService.delete(currentNode.id);
+          
+          // Clear the selection since the node no longer exists
+          store.setSelectedNode(null);
+          
+          // Return to constellation view
+          store.setSpatialLayout('constellation');
+          
+          this.uiService.showSuccess(`Successfully deleted "${currentNode.name}"`);
+          console.log(`DreamNode deleted: ${currentNode.name} (${currentNode.id})`);
+          
+        } catch (error) {
+          console.error('Failed to delete DreamNode:', error);
+          this.uiService.showError(`Failed to delete "${currentNode.name}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          loadingNotice.hide();
+        }
       }
     });
 

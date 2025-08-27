@@ -199,4 +199,22 @@ export class GitService {
       return 0;
     }
   }
+
+  /**
+   * Open repository folder in Finder (macOS) or Explorer (Windows)
+   */
+  async openInFinder(repoPath: string): Promise<void> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Opening ${fullPath} in Finder`);
+      
+      // Use macOS 'open' command to reveal the folder in Finder
+      await execAsync(`open "${fullPath}"`, { cwd: fullPath });
+      
+      console.log(`GitService: Successfully opened ${fullPath} in Finder`);
+    } catch (error) {
+      console.error('GitService: Failed to open in Finder:', error);
+      throw new Error(`Failed to open in Finder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
