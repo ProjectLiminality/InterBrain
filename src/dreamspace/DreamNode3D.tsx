@@ -563,6 +563,40 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
             {/* Fade-to-black overlay */}
             <div style={getMediaOverlayStyle()} />
+            
+            {/* Hover overlay with name */}
+            {isHovered && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: isHovered ? 1 : 0,
+                  transition: 'opacity 0.2s ease-in-out',
+                  pointerEvents: 'none',
+                  zIndex: 10
+                }}
+              >
+                <div
+                  style={{
+                    color: dreamNodeStyles.colors.text.primary,
+                    fontFamily: dreamNodeStyles.typography.fontFamily,
+                    fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
+                    textAlign: 'center',
+                    padding: '8px'
+                  }}
+                >
+                  {dreamNode.name}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
