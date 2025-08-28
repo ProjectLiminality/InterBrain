@@ -10,7 +10,7 @@ The InterBrain is an innovative knowledge gardening system that aims to revoluti
 
 The InterBrain is work-in-progress software with basic functionality now installable as an Obsidian plugin. You can download and install the plugin to start building your liminal web using the existing features, while other capabilities are still in development and the full vision has yet to be comprehensively implemented.
 
-**[→ Download Plugin](https://github.com/ProjectLiminality/InterBrain/releases/tag/v0.5.0-plugin)** | **[→ Installation Guide](#installation--setup)**
+**[→ Download Plugin](https://github.com/ProjectLiminality/InterBrain/releases/tag/v0.5.0)** | **[→ Installation Guide](#installation--setup)**
 
 ## Project Status & Roadmap
 
