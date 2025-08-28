@@ -210,7 +210,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   persist(
     (set, get) => ({
   // Initial state
-  dataMode: 'mock' as const, // Start in mock mode
+  dataMode: 'real' as const, // Start in real mode by default
   realNodes: new Map<string, RealNodeData>(),
   
   // Initialize Ollama config slice

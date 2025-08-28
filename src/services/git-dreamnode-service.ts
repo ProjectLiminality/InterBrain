@@ -52,14 +52,18 @@ export class GitDreamNodeService {
     this.vaultPath = vaultPath;
     
     // Template is packaged with the plugin
-    // Get the plugin directory path
+    // Get the plugin directory path from Obsidian's plugin manifest
     if (this.vaultPath) {
       const pluginDir = path.join(this.vaultPath, '.obsidian', 'plugins', plugin.manifest.id);
       this.templatePath = path.join(pluginDir, 'DreamNode-template');
     } else {
-      // Fallback - use relative path
-      this.templatePath = './DreamNode-template';
-      console.warn('GitDreamNodeService: Could not determine vault path, using relative template path');
+      // Fallback - try to get plugin directory from plugin object
+      // @ts-ignore - accessing private plugin properties
+      const pluginDir = plugin.app?.vault?.adapter?.basePath ? 
+        path.join(plugin.app.vault.adapter.basePath, '.obsidian', 'plugins', plugin.manifest.id) :
+        './DreamNode-template';
+      this.templatePath = path.join(pluginDir, 'DreamNode-template');
+      console.warn('GitDreamNodeService: Could not determine vault path, using fallback template path:', this.templatePath);
     }
     
     console.log('GitDreamNodeService: Vault path:', this.vaultPath);
