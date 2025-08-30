@@ -100,13 +100,77 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ #310 Auto-stash Creator Mode - Workspace isolation with git stash operations
 - ✅ #313 Development Mode Toggle - Subsumed into service layer architecture
 - ✅ #315 DreamTalk Component - Moved to Epic 8 for future refinement
+- ✅ #286 DreamWeaving Canvas Integration - Canvas parsing and git submodule management
 
 **✅ Integration Complete**:
-- 101 unit tests passing (100% coverage for new services)
+- 204 unit tests passing (100% coverage for new services)
 - Zero lint warnings or errors
 - Full TypeScript type safety
 - Service layer architecture established
 - Documentation updated
+
+### DreamWeaving Canvas Integration Achievement (August 30, 2025)
+**Feature #286 Complete**: DreamWeaving Canvas Integration | Parent Spec: #271
+
+**✅ Core Implementation**:
+- **Canvas Parser Service**: Complete JSON parsing with external dependency detection
+- **Submodule Manager Service**: Git submodule operations with automated path rewriting  
+- **DreamNode Boundary Detection**: Recursive .udd file detection for scope identification
+- **Path Rewriting Engine**: Automatic canvas file path updates after submodule import
+- **Git Safety Integration**: Leverages existing autostash system for clean operations
+
+**✅ Command Integration**:
+- **Create DreamSong Canvas** (Ctrl+D): Creates empty canvas in selected DreamNode with auto-commit
+- **Parse Canvas Dependencies**: Debug command for dependency analysis
+- **Import External DreamNodes**: Debug command for selective submodule import
+- **Update Canvas Paths**: Debug command for path rewriting only
+- **Import and Update Canvas Paths**: Combined command for reliability
+- **Sync Canvas Submodules**: End-to-end workflow with pre-sync commit
+
+**✅ Technical Achievements**:
+- **Real-time Dependency Detection**: Identifies external DreamNode references in canvas files
+- **Automated Submodule Operations**: Direct git submodule add with proper naming conventions
+- **Intelligent Path Construction**: Preserves DreamNode hierarchy with prefix mapping
+- **Atomic Git Operations**: Pre-sync commits preserve work, post-sync commits handled by SubmoduleManager
+- **Robust Error Handling**: Graceful degradation and clear error messaging
+- **Comprehensive Test Coverage**: 25+ additional tests covering canvas parsing and submodule operations
+
+**✅ Usage Examples**:
+
+1. **Create DreamSong Canvas** (Ctrl+D):
+   ```
+   Prerequisites: Select a DreamNode in 3D space
+   Action: Press Ctrl+D or use command palette
+   Result: Creates `DreamSong.canvas` file in selected DreamNode with auto-commit
+   Opens: Canvas file in Obsidian for immediate editing
+   ```
+
+2. **Basic Canvas Workflow**:
+   ```
+   1. Create DreamSong.canvas in your DreamNode (Ctrl+D)
+   2. Add media files from other DreamNodes to the canvas
+   3. External dependencies automatically detected by file paths
+   4. Run "Sync Canvas Submodules" to import dependencies
+   5. Canvas paths updated to reference local submodule copies
+   6. DreamNode becomes fully sovereign (self-contained)
+   ```
+
+3. **Debug Workflow** (Granular Commands):
+   ```
+   1. "Parse Canvas Dependencies" - See what external files are referenced
+   2. "Import External DreamNodes as Submodules" - Import dependencies only
+   3. "Update Canvas File Paths" - Rewrite paths only
+   4. "Import and Update Canvas Paths" - Combined import + rewrite
+   ```
+
+4. **Path Transformation Example**:
+   ```
+   Before: "../../OtherDreamNode/media/video.mp4"
+   After:  "PlayPad/OtherDreamNode/media/video.mp4"
+   
+   Where: PlayPad is the parent DreamNode boundary
+          OtherDreamNode becomes a git submodule
+   ```
 
 ### Epic 5 Progress (August 15, 2025)
 **Epic Status**: Active Development - Semantic Search System

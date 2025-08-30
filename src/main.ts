@@ -14,6 +14,9 @@ import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG }
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
 import { registerEditModeCommands } from './commands/edit-mode-commands';
+import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
+import { CanvasParserService } from './services/canvas-parser-service';
+import { SubmoduleManagerService } from './services/submodule-manager-service';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -21,6 +24,8 @@ export default class InterBrainPlugin extends Plugin {
   private gitService!: GitService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
+  private canvasParserService!: CanvasParserService;
+  private submoduleManagerService!: SubmoduleManagerService;
 
   async onload() {
     console.log('InterBrain plugin loaded!');
@@ -50,8 +55,16 @@ export default class InterBrainPlugin extends Plugin {
   private initializeServices(): void {
     this.uiService = new UIService(this.app);
     this.gitService = new GitService(this.app);
-    this.vaultService = new VaultService(this.app.vault);
+    this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
+    
+    // Initialize dreamweaving services
+    this.canvasParserService = new CanvasParserService(this.vaultService);
+    this.submoduleManagerService = new SubmoduleManagerService(
+      this.app,
+      this.vaultService,
+      this.canvasParserService
+    );
     
     // Initialize service manager with plugin instance
     serviceManager.initialize(this);
@@ -66,6 +79,15 @@ export default class InterBrainPlugin extends Plugin {
     
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
+    
+    // Register dreamweaving commands (canvas submodule management)
+    registerDreamweavingCommands(
+      this,
+      this.uiService,
+      this.vaultService,
+      this.canvasParserService,
+      this.submoduleManagerService
+    );
     
     // Open DreamSpace command
     this.addCommand({
@@ -289,11 +311,15 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        // Safety confirmation popup
-        const confirmMessage = `Are you sure you want to delete "${currentNode.name}"?\n\nThis action cannot be undone. All files and git history for this DreamNode will be permanently removed.`;
-        const confirmed = globalThis.confirm(confirmMessage);
+        // Safety confirmation using Obsidian Modal
+        const confirmed = await this.uiService.promptForText(
+          `⚠️ DELETE "${currentNode.name}" ⚠️`,
+          `Type "${currentNode.name}" to confirm permanent deletion`
+        );
         
-        if (!confirmed) {
+        const isConfirmed = confirmed === currentNode.name;
+        
+        if (!isConfirmed) {
           this.uiService.showInfo('Delete operation cancelled');
           return;
         }

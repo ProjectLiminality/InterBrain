@@ -41,6 +41,14 @@ export default [
     }
   },
   {
+    files: ['src/commands/dreamweaving-commands.ts', 'src/services/submodule-manager-service.ts'],
+    languageOptions: {
+      globals: {
+        require: 'readonly'
+      }
+    }
+  },
+  {
     ignores: ['main.js', 'node_modules/', '*.d.ts']
   }
 ];
