@@ -59,8 +59,8 @@ export class GitDreamNodeService {
     } else {
       // Fallback - try to get plugin directory from plugin object
       // @ts-ignore - accessing private plugin properties
-      const pluginDir = plugin.app?.vault?.adapter?.basePath ? 
-        path.join(plugin.app.vault.adapter.basePath, '.obsidian', 'plugins', plugin.manifest.id) :
+      const pluginDir = (plugin.app?.vault?.adapter as any)?.basePath ? 
+        path.join((plugin.app.vault.adapter as any).basePath, '.obsidian', 'plugins', plugin.manifest.id) :
         './DreamNode-template';
       this.templatePath = path.join(pluginDir, 'DreamNode-template');
       console.warn('GitDreamNodeService: Could not determine vault path, using fallback template path:', this.templatePath);
@@ -220,7 +220,7 @@ export class GitDreamNodeService {
   }
   
   /**
-   * Delete a DreamNode
+   * Delete a DreamNode and its git repository
    */
   async delete(id: string): Promise<void> {
     const store = useInterBrainStore.getState();
@@ -230,11 +230,27 @@ export class GitDreamNodeService {
       throw new Error(`DreamNode with ID ${id} not found`);
     }
     
-    // Remove from store
+    const nodeName = nodeData.node.name;
+    const repoPath = nodeData.node.repoPath;
+    const fullRepoPath = path.join(this.vaultPath, repoPath);
+    
+    try {
+      // Delete the actual git repository from disk
+      console.log(`GitDreamNodeService: Deleting git repository at ${fullRepoPath}`);
+      
+      // Use recursive removal to delete the entire directory
+      await fsPromises.rm(fullRepoPath, { recursive: true, force: true });
+      
+      console.log(`GitDreamNodeService: Successfully deleted git repository for ${nodeName}`);
+    } catch (error) {
+      console.error(`GitDreamNodeService: Failed to delete git repository for ${nodeName}:`, error);
+      throw new Error(`Failed to delete git repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
+    // Remove from store only after successful deletion
     store.deleteRealNode(id);
     
-    // TODO: Optionally delete git repository from disk
-    console.log(`GitDreamNodeService: Deleted node ${id}`);
+    console.log(`GitDreamNodeService: Deleted node ${nodeName} (${id})`);
   }
   
   /**
