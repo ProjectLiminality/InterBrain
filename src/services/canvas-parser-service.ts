@@ -24,6 +24,7 @@ export interface CanvasEdge {
   toNode: string;
   fromSide?: 'top' | 'right' | 'bottom' | 'left';
   toSide?: 'top' | 'right' | 'bottom' | 'left';
+  toEnd?: 'none' | 'arrow'; // For undirected edges (toEnd: 'none')
   color?: string;
   label?: string;
 }

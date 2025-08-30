@@ -16,10 +16,29 @@ import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { UIService } from '../services/ui-service';
+import { VaultService } from '../services/vault-service';
+import { CanvasParserService } from '../services/canvas-parser-service';
 import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
 
-// Create a singleton UI service instance
+// Create singleton service instances
 const uiService = new UIService();
+
+// Note: These services need the Obsidian plugin instance, which we'll get from serviceManager
+// For now, we'll pass undefined and the DreamNode3D will handle graceful degradation
+let vaultService: VaultService | undefined;
+let canvasParserService: CanvasParserService | undefined;
+
+// Try to get services from serviceManager in browser environment
+try {
+  const activeService = serviceManager.getActive();
+  if (typeof (activeService as any).getVaultService === 'function') {
+    vaultService = (activeService as any).getVaultService();
+    canvasParserService = (activeService as any).getCanvasParserService();
+  }
+} catch {
+  // Graceful degradation in browser environment
+  console.log('Services not available in browser environment, flip functionality will be disabled');
+}
 
 export default function DreamspaceCanvas() {
   // Get data mode and mock data configuration from store
@@ -1018,6 +1037,8 @@ export default function DreamspaceCanvas() {
                   onDoubleClick={handleNodeDoubleClick}
                   enableDynamicScaling={shouldEnableDynamicScaling}
                   onHitSphereRef={handleHitSphereRef}
+                  vaultService={vaultService}
+                  canvasParserService={canvasParserService}
                 />
               </React.Fragment>
             );

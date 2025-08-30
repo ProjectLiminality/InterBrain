@@ -125,6 +125,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   
   // Store integration
   const setSpatialLayout = useInterBrainStore(state => state.setSpatialLayout);
+  const resetAllFlips = useInterBrainStore(state => state.resetAllFlips);
   
   // Track current edit mode search results for dynamic reordering
   const currentEditModeSearchResults = useRef<DreamNode[]>([]);
@@ -334,6 +335,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Start transition
       isTransitioning.current = true;
       focusedNodeId.current = null;
+      
+      // Reset all flip states when returning to constellation
+      resetAllFlips();
       
       // Update store to constellation layout mode
       setSpatialLayout('constellation');

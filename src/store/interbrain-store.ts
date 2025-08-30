@@ -12,6 +12,7 @@ import {
 } from '../features/semantic-search/store/ollama-config-slice';
 // OllamaConfig imports are in the semantic search slice
 import { VectorData } from '../features/semantic-search/services/indexing-service';
+import { FlipState } from '../types/dreamsong';
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -200,6 +201,17 @@ export interface InterBrainState extends OllamaConfigSlice {
   performUndo: () => boolean;
   performRedo: () => boolean;
   clearNavigationHistory: () => void;
+  
+  // DreamNode flip animation state
+  flipState: {
+    flippedNodeId: string | null;
+    flipStates: Map<string, FlipState>;
+  };
+  setFlippedNode: (nodeId: string | null) => void;
+  startFlipAnimation: (nodeId: string, direction: 'front-to-back' | 'back-to-front') => void;
+  completeFlipAnimation: (nodeId: string) => void;
+  resetAllFlips: () => void;
+  getNodeFlipState: (nodeId: string) => FlipState | null;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -294,6 +306,12 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // Flag to disable history tracking during undo/redo operations
   isRestoringFromHistory: false,
+  
+  // DreamNode flip animation initial state
+  flipState: {
+    flippedNodeId: null,
+    flipStates: new Map<string, FlipState>()
+  },
   
   // Actions
   setDataMode: (mode) => set({ dataMode: mode }),
@@ -915,6 +933,87 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
   
   setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
+  
+  // DreamNode flip animation actions
+  setFlippedNode: (nodeId) => set((state) => {
+    // Reset previous flipped node if different
+    if (state.flipState.flippedNodeId && state.flipState.flippedNodeId !== nodeId) {
+      const updatedFlipStates = new Map(state.flipState.flipStates);
+      updatedFlipStates.delete(state.flipState.flippedNodeId);
+      
+      return {
+        flipState: {
+          flippedNodeId: nodeId,
+          flipStates: updatedFlipStates
+        }
+      };
+    }
+    
+    return {
+      flipState: {
+        ...state.flipState,
+        flippedNodeId: nodeId
+      }
+    };
+  }),
+  
+  startFlipAnimation: (nodeId, direction) => set((state) => {
+    const updatedFlipStates = new Map(state.flipState.flipStates);
+    
+    const currentFlipState = updatedFlipStates.get(nodeId) || {
+      isFlipped: false,
+      isFlipping: false,
+      flipDirection: 'front-to-back' as const,
+      animationStartTime: 0
+    };
+    
+    updatedFlipStates.set(nodeId, {
+      ...currentFlipState,
+      isFlipping: true,
+      flipDirection: direction,
+      animationStartTime: globalThis.performance.now()
+    });
+    
+    return {
+      flipState: {
+        flippedNodeId: nodeId,
+        flipStates: updatedFlipStates
+      }
+    };
+  }),
+  
+  completeFlipAnimation: (nodeId) => set((state) => {
+    const updatedFlipStates = new Map(state.flipState.flipStates);
+    const currentFlipState = updatedFlipStates.get(nodeId);
+    
+    if (currentFlipState) {
+      updatedFlipStates.set(nodeId, {
+        ...currentFlipState,
+        isFlipped: currentFlipState.flipDirection === 'front-to-back' ? true : false,
+        isFlipping: false,
+        animationStartTime: 0
+      });
+    }
+    
+    return {
+      flipState: {
+        ...state.flipState,
+        flipStates: updatedFlipStates
+      }
+    };
+  }),
+  
+  resetAllFlips: () => set(() => ({
+    flipState: {
+      flippedNodeId: null,
+      flipStates: new Map<string, FlipState>()
+    }
+  })),
+  
+  getNodeFlipState: (nodeId) => {
+    const state = get();
+    return state.flipState.flipStates.get(nodeId) || null;
+  },
     }),
     {
       name: 'interbrain-storage', // Storage key

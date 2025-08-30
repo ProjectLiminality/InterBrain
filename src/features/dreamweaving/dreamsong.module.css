@@ -1,0 +1,332 @@
+/* DreamSong Component Styles
+ * Implements flip-flop layout with alternating media-text positioning
+ * Includes circular masking for DreamNode back-side embedding
+ */
+
+/* Main container */
+.dreamsong-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  border-radius: 50%; /* Circular masking for DreamNode back */
+  background: rgba(0, 0, 0, 0.9);
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Header section */
+.dreamsong-header {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.dreamsong-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.dreamsong-block-count {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Scrollable content area */
+.dreamsong-content {
+  height: calc(100% - 60px); /* Account for header */
+  overflow-y: auto;
+  padding: 16px;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar styling */
+.dreamsong-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dreamsong-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.dreamsong-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.dreamsong-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Empty state styling */
+.dreamsong-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-state-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.empty-state-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+/* Base block styling */
+.dreamsong-block {
+  margin-bottom: 24px;
+  position: relative;
+  animation: fade-in 0.4s ease-out;
+}
+
+.dreamsong-block:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Block number indicator (for debugging) */
+.dreamsong-block-number {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* Text-only blocks */
+.dreamsong-block--text .dreamsong-text-only {
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Media-only blocks */
+.dreamsong-block--media .dreamsong-media-only {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Media-text paired blocks - FLIP-FLOP LAYOUT */
+.dreamsong-block--media-text .dreamsong-media-text {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-height: 80px;
+}
+
+/* Left-aligned: Media left, text right */
+.dreamsong-block--left-aligned .dreamsong-media-text {
+  flex-direction: row;
+}
+
+/* Right-aligned: Text left, media right */
+.dreamsong-block--right-aligned .dreamsong-media-text {
+  flex-direction: row-reverse;
+}
+
+.dreamsong-media-container {
+  flex: 0 0 45%;
+  max-width: 45%;
+}
+
+.dreamsong-text-container {
+  flex: 1;
+  min-width: 0; /* Allow text to shrink */
+}
+
+/* Media elements */
+.dreamsong-media {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.dreamsong-media:hover {
+  transform: scale(1.02);
+}
+
+.dreamsong-media[data-type="video"] {
+  max-height: 200px;
+}
+
+.dreamsong-media[data-type="audio"] {
+  width: 100%;
+}
+
+/* Audio container styling */
+.dreamsong-audio-container {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.dreamsong-audio-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+/* Text elements */
+.dreamsong-text {
+  line-height: 1.6;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dreamsong-text p {
+  margin: 0 0 12px 0;
+}
+
+.dreamsong-text p:last-child {
+  margin-bottom: 0;
+}
+
+.dreamsong-text h1,
+.dreamsong-text h2,
+.dreamsong-text h3,
+.dreamsong-text h4,
+.dreamsong-text h5,
+.dreamsong-text h6 {
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.dreamsong-text strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.dreamsong-text em {
+  color: rgba(255, 255, 255, 0.8);
+  font-style: italic;
+}
+
+.dreamsong-text code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.dreamsong-text blockquote {
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+  padding-left: 12px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+
+.dreamsong-text ul,
+.dreamsong-text ol {
+  margin: 0 0 12px 0;
+  padding-left: 20px;
+}
+
+.dreamsong-text li {
+  margin-bottom: 4px;
+}
+
+/* Error states */
+.dreamsong-media-error {
+  padding: 16px;
+  background: rgba(255, 0, 0, 0.1);
+  border: 1px solid rgba(255, 0, 0, 0.3);
+  border-radius: 8px;
+  color: rgba(255, 100, 100, 1);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Responsive adjustments for small containers */
+@media (max-width: 400px) {
+  .dreamsong-block--media-text .dreamsong-media-text {
+    flex-direction: column !important;
+  }
+  
+  .dreamsong-media-container {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+  
+  .dreamsong-header {
+    padding: 8px 12px;
+  }
+  
+  .dreamsong-content {
+    padding: 12px;
+  }
+  
+  .dreamsong-title {
+    font-size: 12px;
+  }
+  
+  .dreamsong-block-count {
+    font-size: 10px;
+  }
+}
+
+/* Animation for flip transition entrance */
+.dreamsong-container.flip-enter {
+  animation: flip-in 0.6s ease-out;
+}
+
+@keyframes flip-in {
+  from {
+    transform: rotateY(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}

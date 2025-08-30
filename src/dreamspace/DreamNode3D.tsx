@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
@@ -6,6 +6,11 @@ import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
+import { DreamSong } from '../features/dreamweaving/DreamSong';
+import { DreamSongParserService } from '../services/dreamsong-parser-service';
+import { CanvasParserService } from '../services/canvas-parser-service';
+import { VaultService } from '../services/vault-service';
+import { DreamSongData } from '../types/dreamsong';
 import './dreamNodeAnimations.css';
 
 // Universal Movement API interface
@@ -28,6 +33,9 @@ interface DreamNode3DProps {
   onDoubleClick?: (node: DreamNode) => void;
   enableDynamicScaling?: boolean;
   onHitSphereRef?: (nodeId: string, meshRef: React.RefObject<Mesh | null>) => void;
+  // Services for DreamSong parsing
+  vaultService?: VaultService;
+  canvasParserService?: CanvasParserService;
 }
 
 /**
@@ -46,12 +54,20 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   onClick, 
   onDoubleClick,
   enableDynamicScaling = false,
-  onHitSphereRef
+  onHitSphereRef,
+  vaultService,
+  canvasParserService
 }, ref) => {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
+  
+  // Flip animation state
+  const [flipRotation, setFlipRotation] = useState(0);
+  const [dreamSongData, setDreamSongData] = useState<DreamSongData | null>(null);
+  const [hasDreamSong, setHasDreamSong] = useState(false);
+  const [isLoadingDreamSong, setIsLoadingDreamSong] = useState(false);
   
   // Dual-mode position state
   const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
@@ -67,11 +83,32 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Check global drag state to prevent hover interference during sphere rotation
   const isDragging = useInterBrainStore(state => state.isDragging);
   
+  // Flip state management
+  const flipState = useInterBrainStore(state => state.flipState);
+  const setFlippedNode = useInterBrainStore(state => state.setFlippedNode);
+  const startFlipAnimation = useInterBrainStore(state => state.startFlipAnimation);
+  const completeFlipAnimation = useInterBrainStore(state => state.completeFlipAnimation);
+  const spatialLayout = useInterBrainStore(state => state.spatialLayout);
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+  
   // Subscribe to edit mode state for relationship glow
   const isEditModeActive = useInterBrainStore(state => state.editMode.isActive);
   const isPendingRelationship = useInterBrainStore(state => 
     state.editMode.pendingRelationships.includes(dreamNode.id)
   );
+  
+  // Get current flip state for this node
+  const nodeFlipState = flipState.flipStates.get(dreamNode.id);
+  const isFlipped = nodeFlipState?.isFlipped || false;
+  const isFlipping = nodeFlipState?.isFlipping || false;
+  
+  // Determine if flip button should be visible (only in liminal web mode for selected node)
+  const shouldShowFlipButton = useMemo(() => {
+    return spatialLayout === 'liminal-web' && 
+           selectedNode?.id === dreamNode.id && 
+           hasDreamSong && 
+           !isDragging;
+  }, [spatialLayout, selectedNode, dreamNode.id, hasDreamSong, isDragging]);
 
   // Register hit sphere reference with parent component
   useEffect(() => {
@@ -79,6 +116,64 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       onHitSphereRef(dreamNode.id, hitSphereRef);
     }
   }, [dreamNode.id, onHitSphereRef]);
+  
+  // Check for DreamSong canvas file on component mount and when selected
+  useEffect(() => {
+    const checkDreamSong = async () => {
+      if (!vaultService || !canvasParserService) return;
+      
+      const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+      try {
+        const exists = await vaultService.fileExists(canvasPath);
+        setHasDreamSong(exists);
+      } catch (error) {
+        console.error(`Failed to check DreamSong for ${dreamNode.id}:`, error);
+        setHasDreamSong(false);
+      }
+    };
+    
+    checkDreamSong();
+  }, [dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService]);
+  
+  // Load DreamSong data when flipped to back side
+  useEffect(() => {
+    const loadDreamSongData = async () => {
+      if (!isFlipped || !hasDreamSong || !vaultService || !canvasParserService || dreamSongData) {
+        return;
+      }
+      
+      setIsLoadingDreamSong(true);
+      
+      try {
+        const dreamSongParser = new DreamSongParserService(vaultService, canvasParserService);
+        const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+        const result = await dreamSongParser.parseDreamSong(canvasPath, dreamNode.repoPath);
+        
+        if (result.success && result.data) {
+          setDreamSongData(result.data);
+        } else {
+          console.error(`Failed to parse DreamSong: ${result.error?.message}`);
+        }
+      } catch (error) {
+        console.error(`Error loading DreamSong for ${dreamNode.id}:`, error);
+      } finally {
+        setIsLoadingDreamSong(false);
+      }
+    };
+    
+    loadDreamSongData();
+  }, [isFlipped, hasDreamSong, dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService, dreamSongData]);
+  
+  // Reset flip state when node is no longer selected in liminal web mode
+  useEffect(() => {
+    if (spatialLayout !== 'liminal-web' || selectedNode?.id !== dreamNode.id) {
+      if (flipState.flippedNodeId === dreamNode.id) {
+        setFlippedNode(null);
+        setFlipRotation(0);
+        setDreamSongData(null);
+      }
+    }
+  }, [spatialLayout, selectedNode, dreamNode.id, flipState.flippedNodeId, setFlippedNode]);
 
   // Handle mouse events (suppress during sphere rotation to prevent interference)
   const handleMouseEnter = () => {
@@ -102,6 +197,15 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     e.stopPropagation();
     onClick?.(dreamNode);
   };
+  
+  // Handle flip button click
+  const handleFlipClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDragging || isFlipping) return;
+    
+    const direction = isFlipped ? 'back-to-front' : 'front-to-back';
+    startFlipAnimation(dreamNode.id, direction);
+  }, [isDragging, isFlipping, isFlipped, startFlipAnimation, dreamNode.id]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isDragging) return; // Suppress double-click during drag operations
@@ -501,6 +605,32 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     
   // Removed excessive dynamic scaling logging for performance
   
+  // Handle flip animation updates
+  useFrame(() => {
+    if (!isFlipping) return;
+    
+    const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? Math.PI : 0;
+    const animationDuration = 600; // ms
+    const elapsed = globalThis.performance.now() - (nodeFlipState?.animationStartTime || 0);
+    const progress = Math.min(elapsed / animationDuration, 1);
+    
+    // Ease-in-out timing function
+    const easedProgress = progress < 0.5 
+      ? 2 * progress * progress 
+      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+    
+    const newRotation = nodeFlipState?.flipDirection === 'front-to-back' 
+      ? easedProgress * Math.PI
+      : Math.PI - (easedProgress * Math.PI);
+    
+    setFlipRotation(newRotation);
+    
+    if (progress >= 1) {
+      completeFlipAnimation(dreamNode.id);
+      setFlipRotation(targetRotation);
+    }
+  });
+  
   // Using sprite mode for automatic billboarding - no manual rotation needed
   
   // Debug logging removed for cleaner console
@@ -512,7 +642,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       ref={groupRef} 
       position={finalPosition}
     >
-      {/* DreamNode rendering - always visible */}
+      {/* DreamNode rendering with flip animation */}
+      <group rotation={[0, flipRotation, 0]}>
+        {/* Front side (DreamTalk) */}
         <Html
           position={[0, 0, 0]}
           center
@@ -521,7 +653,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           distanceFactor={10}  // Scale based on distance from camera
           style={{
             pointerEvents: isDragging ? 'none' : 'auto', // Disable all mouse events during drag
-            userSelect: 'none'
+            userSelect: 'none',
+            opacity: flipRotation > Math.PI / 2 ? 0 : 1, // Hide when rotated past 90 degrees
+            backfaceVisibility: 'hidden'
           }}
         >
       <div
@@ -641,8 +775,169 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         >
           {dreamNode.name}
         </div>
+        
+        {/* Flip button (bottom-center, only when hovering and has DreamSong) */}
+        {shouldShowFlipButton && isHovered && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '8px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.9)',
+              border: '2px solid rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: '#333',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              transition: 'all 0.2s ease',
+              zIndex: 20
+            }}
+            onClick={handleFlipClick}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+              e.currentTarget.style.transform = 'translateX(-50%) scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
+              e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
+            }}
+          >
+            📖
+          </div>
+        )}
       </div>
     </Html>
+    
+    {/* Back side (DreamSong) - rotated 180 degrees to face correctly */}
+    <Html
+      position={[0, 0, 0]}
+      center
+      transform
+      sprite
+      distanceFactor={10}
+      style={{
+        pointerEvents: isDragging ? 'none' : 'auto',
+        userSelect: 'none',
+        opacity: flipRotation <= Math.PI / 2 ? 0 : 1, // Show when rotated past 90 degrees
+        backfaceVisibility: 'hidden'
+      }}
+    >
+      <div
+        style={{
+          width: `${nodeSize}px`,
+          height: `${nodeSize}px`,
+          borderRadius: dreamNodeStyles.dimensions.borderRadius,
+          border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+          background: nodeColors.fill,
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'pointer',
+          transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
+          transform: `scaleX(-1) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`, // Mirror horizontally
+          animation: gitStyle.animation,
+          boxShadow: (() => {
+            // Priority 1: Git status glow (always highest priority)
+            if (gitStyle.glowIntensity > 0) {
+              return getGitGlow(gitState, gitStyle.glowIntensity);
+            }
+            
+            // Priority 2: Edit mode relationship glow
+            if (isEditModeActive && isPendingRelationship) {
+              return getEditModeGlow(25); // Strong gold glow for relationships
+            }
+            
+            // Priority 3: Hover glow (fallback)
+            return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
+          })()
+        }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+      >
+        {/* DreamSong content */}
+        {dreamSongData ? (
+          <DreamSong 
+            dreamSongData={dreamSongData}
+            className="flip-enter"
+            maxHeight={`${nodeSize}px`}
+          />
+        ) : isLoadingDreamSong ? (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: dreamNodeStyles.colors.text.primary,
+              fontSize: '12px'
+            }}
+          >
+            Loading DreamSong...
+          </div>
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: dreamNodeStyles.colors.text.primary,
+              fontSize: '12px'
+            }}
+          >
+            No DreamSong available
+          </div>
+        )}
+        
+        {/* Flip button for back side */}
+        {shouldShowFlipButton && isHovered && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '8px',
+              left: '50%',
+              transform: 'translateX(-50%) scaleX(-1)', // Counter the parent mirror
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.9)',
+              border: '2px solid rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: '#333',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              transition: 'all 0.2s ease',
+              zIndex: 20
+            }}
+            onClick={handleFlipClick}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+              e.currentTarget.style.transform = 'translateX(-50%) scaleX(-1) scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
+              e.currentTarget.style.transform = 'translateX(-50%) scaleX(-1) scale(1)';
+            }}
+          >
+            🔄
+          </div>
+        )}
+      </div>
+    </Html>
+  </group>
     
     {/* Invisible hit detection sphere - travels with visual node as unified object */}
     <mesh 
