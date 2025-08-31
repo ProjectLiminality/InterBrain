@@ -408,15 +408,10 @@ export class DreamSongParserService {
    * Resolve media file path to data URL, following DreamTalk media pattern
    */
   private async resolveMediaPath(filename: string, dreamNodePath: string): Promise<string | null> {
-    // Handle both relative and absolute paths within the DreamNode
-    let filePath = filename;
+    // Canvas paths are already relative to the DreamNode, so just use them directly
+    const filePath = filename;
     
-    // If it's a relative path, make it relative to the DreamNode
-    if (!filename.startsWith('/')) {
-      filePath = `${dreamNodePath}/${filename}`;
-    }
-    
-    console.log(`🔍 [DreamSong Parser] Resolving media path: ${filename} → ${filePath}`);
+    console.log(`🔍 [DreamSong Parser] Resolving media path: ${filename} (from DreamNode: ${dreamNodePath})`);
 
     try {
       // Check if file exists in vault
