@@ -45,6 +45,8 @@ export class ServiceManager {
   private realService: GitDreamNodeService | null = null;
   private indexingService: IndexingService;
   private plugin: Plugin | null = null;
+  private vaultService: any | null = null;
+  private canvasParserService: any | null = null;
 
   constructor() {
     this.mockService = mockDreamNodeService;
@@ -134,6 +136,10 @@ export class ServiceManager {
     this.plugin = plugin;
     this.realService = new GitDreamNodeService(plugin);
     
+    // Store service references (accessing private properties from main.ts)
+    this.vaultService = (plugin as any).vaultService;
+    this.canvasParserService = (plugin as any).canvasParserService;
+    
     // Sync with store's data mode
     const store = useInterBrainStore.getState();
     if (store.dataMode === 'real' && this.realService) {
@@ -164,22 +170,14 @@ export class ServiceManager {
    * Get VaultService instance (only available when plugin is initialized)
    */
   getVaultService() {
-    if (!this.plugin) {
-      return null;
-    }
-    // Access vault service from the plugin instance
-    return (this.plugin as any).vaultService || null;
+    return this.vaultService;
   }
 
   /**
    * Get CanvasParserService instance (only available when plugin is initialized)
    */
   getCanvasParserService() {
-    if (!this.plugin) {
-      return null;
-    }
-    // Access canvas parser service from the plugin instance
-    return (this.plugin as any).canvasParserService || null;
+    return this.canvasParserService;
   }
 
   /**
