@@ -30,11 +30,13 @@ let canvasParserService: CanvasParserService | undefined;
 
 // Try to get services from serviceManager in browser environment
 try {
-  const activeService = serviceManager.getActive();
-  if (typeof (activeService as any).getVaultService === 'function') {
-    vaultService = (activeService as any).getVaultService();
-    canvasParserService = (activeService as any).getCanvasParserService();
-  }
+  // Get services directly from serviceManager, not from the active service
+  vaultService = serviceManager.getVaultService() || undefined;
+  canvasParserService = serviceManager.getCanvasParserService() || undefined;
+  console.log('🎯 [DreamspaceCanvas] Services loaded:', {
+    vaultService: !!vaultService,
+    canvasParserService: !!canvasParserService
+  });
 } catch {
   // Graceful degradation in browser environment
   console.log('Services not available in browser environment, flip functionality will be disabled');
