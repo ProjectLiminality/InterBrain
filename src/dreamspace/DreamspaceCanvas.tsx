@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { useRef, useEffect } from 'react';
 import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
@@ -23,26 +22,27 @@ import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
 // Create singleton service instances
 const uiService = new UIService();
 
-// Note: These services need the Obsidian plugin instance, which we'll get from serviceManager
-// For now, we'll pass undefined and the DreamNode3D will handle graceful degradation
-let vaultService: VaultService | undefined;
-let canvasParserService: CanvasParserService | undefined;
-
-// Try to get services from serviceManager in browser environment
-try {
-  // Get services directly from serviceManager, not from the active service
-  vaultService = serviceManager.getVaultService() || undefined;
-  canvasParserService = serviceManager.getCanvasParserService() || undefined;
-  console.log('🎯 [DreamspaceCanvas] Services loaded:', {
-    vaultService: !!vaultService,
-    canvasParserService: !!canvasParserService
-  });
-} catch {
-  // Graceful degradation in browser environment
-  console.log('Services not available in browser environment, flip functionality will be disabled');
-}
-
 export default function DreamspaceCanvas() {
+  // Get services inside component so they're available after plugin initialization
+  const [vaultService, setVaultService] = useState<VaultService | undefined>(undefined);
+  const [canvasParserService, setCanvasParserService] = useState<CanvasParserService | undefined>(undefined);
+  
+  // Load services on component mount (after plugin has initialized)
+  useEffect(() => {
+    try {
+      const vault = serviceManager.getVaultService() || undefined;
+      const canvas = serviceManager.getCanvasParserService() || undefined;
+      setVaultService(vault);
+      setCanvasParserService(canvas);
+      console.log('🎯 [DreamspaceCanvas] Services loaded on mount:', {
+        vaultService: !!vault,
+        canvasParserService: !!canvas
+      });
+    } catch {
+      console.log('Services not available, flip functionality will be disabled');
+    }
+  }, []); // Run once on mount
+  
   // Get data mode and mock data configuration from store
   const dataMode = useInterBrainStore(state => state.dataMode);
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
