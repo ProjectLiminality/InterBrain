@@ -161,6 +161,28 @@ export class ServiceManager {
   }
 
   /**
+   * Get VaultService instance (only available when plugin is initialized)
+   */
+  getVaultService() {
+    if (!this.plugin) {
+      return null;
+    }
+    // Access vault service from the plugin instance
+    return (this.plugin as any).vaultService || null;
+  }
+
+  /**
+   * Get CanvasParserService instance (only available when plugin is initialized)
+   */
+  getCanvasParserService() {
+    if (!this.plugin) {
+      return null;
+    }
+    // Access canvas parser service from the plugin instance
+    return (this.plugin as any).canvasParserService || null;
+  }
+
+  /**
    * Switch between mock and real modes
    */
   async setMode(mode: 'mock' | 'real'): Promise<void> {

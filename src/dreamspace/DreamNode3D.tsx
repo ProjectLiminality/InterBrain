@@ -106,7 +106,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const shouldShowFlipButton = useMemo(() => {
     const result = spatialLayout === 'liminal-web' && 
                    selectedNode?.id === dreamNode.id && 
-                   hasDreamSong && 
+                   isHovered &&
                    !isDragging;
     
     // Debug logging for flip button visibility (only when conditions are close)
@@ -114,13 +114,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       console.log(`🔄 [DreamNode3D] Flip button logic for "${dreamNode.name}":`);  
       console.log(`  - spatialLayout === 'liminal-web': ${spatialLayout === 'liminal-web'}`);
       console.log(`  - selectedNode?.id === dreamNode.id: ${selectedNode?.id === dreamNode.id}`);
-      console.log(`  - hasDreamSong: ${hasDreamSong}`);
+      console.log(`  - isHovered: ${isHovered}`);
       console.log(`  - isDragging: ${isDragging}`);
       console.log(`  - shouldShowFlipButton: ${result}`);
     }
     
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, hasDreamSong, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
   // Register hit sphere reference with parent component
   useEffect(() => {
