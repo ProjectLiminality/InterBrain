@@ -66,12 +66,12 @@ export default class InterBrainPlugin extends Plugin {
       this.canvasParserService
     );
     
-    // Initialize service manager with plugin instance and services
-    serviceManager.initialize(this);
-    
-    // Make services accessible to ServiceManager
+    // Make services accessible to ServiceManager BEFORE initialization
     (this as any).vaultService = this.vaultService;
     (this as any).canvasParserService = this.canvasParserService;
+    
+    // Initialize service manager with plugin instance and services
+    serviceManager.initialize(this);
   }
 
   private registerCommands(): void {
