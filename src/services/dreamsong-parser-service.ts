@@ -1,5 +1,6 @@
 import { VaultService } from './vault-service';
 import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './canvas-parser-service';
+import { TFile } from 'obsidian';
 import { 
   DreamSongData, 
   DreamSongBlock, 
@@ -137,7 +138,8 @@ export class DreamSongParserService {
     const blocks = await this.createContentBlocks(
       canvasData.nodes,
       sortResult.sortedNodeIds,
-      mediaTextPairs
+      mediaTextPairs,
+      dreamNodePath
     );
 
     return {
@@ -285,7 +287,8 @@ export class DreamSongParserService {
   private async createContentBlocks(
     nodes: CanvasNode[],
     sortedNodeIds: string[],
-    mediaTextPairs: MediaTextPair[]
+    mediaTextPairs: MediaTextPair[],
+    dreamNodePath: string
   ): Promise<DreamSongBlock[]> {
     const blocks: DreamSongBlock[] = [];
     const nodesMap = new Map(nodes.map(n => [n.id, n]));
@@ -317,7 +320,7 @@ export class DreamSongParserService {
         const textNode = nodesMap.get(mediaTextPair.textNodeId);
 
         if (mediaNode && textNode) {
-          const mediaInfo = this.createMediaInfo(mediaNode);
+          const mediaInfo = await this.createMediaInfo(mediaNode, dreamNodePath);
           const textContent = this.processTextContent(textNode.text || '');
 
           if (mediaInfo) {
@@ -337,7 +340,7 @@ export class DreamSongParserService {
       } else {
         // Create standalone block
         if (node.type === 'file') {
-          const mediaInfo = this.createMediaInfo(node);
+          const mediaInfo = await this.createMediaInfo(node, dreamNodePath);
           if (mediaInfo) {
             blocks.push({
               id: nodeId,
@@ -368,9 +371,9 @@ export class DreamSongParserService {
   }
 
   /**
-   * Create media info from file node
+   * Create media info from file node with proper path resolution
    */
-  private createMediaInfo(fileNode: CanvasNode): MediaInfo | null {
+  private async createMediaInfo(fileNode: CanvasNode, dreamNodePath: string): Promise<MediaInfo | null> {
     if (!fileNode.file) return null;
 
     const filename = fileNode.file;
@@ -387,11 +390,99 @@ export class DreamSongParserService {
       return null; // Unsupported media type
     }
 
+    // Resolve file path to data URL (following DreamTalk pattern)
+    const resolvedSrc = await this.resolveMediaPath(filename, dreamNodePath);
+    if (!resolvedSrc) {
+      console.warn(`🚫 [DreamSong Parser] Could not resolve media path: ${filename}`);
+      return null;
+    }
+
     return {
       type: mediaType,
-      src: `${this.config.mediaPathPrefix}${filename.split('/').pop()}`,
+      src: resolvedSrc,
       alt: this.createAltText(filename)
     };
+  }
+
+  /**
+   * Resolve media file path to data URL, following DreamTalk media pattern
+   */
+  private async resolveMediaPath(filename: string, dreamNodePath: string): Promise<string | null> {
+    // Handle both relative and absolute paths within the DreamNode
+    let filePath = filename;
+    
+    // If it's a relative path, make it relative to the DreamNode
+    if (!filename.startsWith('/')) {
+      filePath = `${dreamNodePath}/${filename}`;
+    }
+    
+    console.log(`🔍 [DreamSong Parser] Resolving media path: ${filename} → ${filePath}`);
+
+    try {
+      // Check if file exists in vault
+      const exists = await this.vaultService.fileExists(filePath);
+      if (!exists) {
+        console.warn(`🚫 [DreamSong Parser] Media file not found: ${filePath}`);
+        return null;
+      }
+
+      // Convert to data URL using same approach as DreamTalk media
+      const dataUrl = await this.filePathToDataUrl(filePath);
+      console.log(`✅ [DreamSong Parser] Created data URL for: ${filename} (${dataUrl.length} chars)`);
+      return dataUrl;
+      
+    } catch (error) {
+      console.error(`❌ [DreamSong Parser] Error resolving media path ${filename}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Convert file path to data URL using Obsidian vault adapter
+   */
+  private async filePathToDataUrl(filePath: string): Promise<string> {
+    // Get the TFile object from the vault
+    const file = this.vaultService.obsidianVault.getAbstractFileByPath(filePath);
+    
+    if (!(file instanceof TFile)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    
+    // Read file as ArrayBuffer for binary files
+    const arrayBuffer = await this.vaultService.obsidianVault.readBinary(file);
+    
+    // Convert ArrayBuffer to base64
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    
+    // Get MIME type from file extension  
+    const mimeType = this.getMimeType(filePath);
+    
+    // Create base64 data URL
+    return `data:${mimeType};base64,${base64}`;
+  }
+
+  /**
+   * Get MIME type from file extension (same as GitDreamNodeService)
+   */
+  private getMimeType(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const mimeTypes: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.ogg': 'video/ogg',
+      '.mov': 'video/quicktime',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.m4a': 'audio/mp4'
+    };
+    return mimeTypes[`.${ext}`] || 'application/octet-stream';
   }
 
   /**
