@@ -140,6 +140,14 @@ export class ServiceManager {
     this.vaultService = (plugin as any).vaultService;
     this.canvasParserService = (plugin as any).canvasParserService;
     
+    // Debug logging
+    console.log('🔧 [ServiceManager] Initialization debug:');
+    console.log('🔧 [ServiceManager] Plugin instance:', !!plugin);
+    console.log('🔧 [ServiceManager] VaultService from plugin:', !!(plugin as any).vaultService);
+    console.log('🔧 [ServiceManager] CanvasParserService from plugin:', !!(plugin as any).canvasParserService);
+    console.log('🔧 [ServiceManager] Stored vaultService:', !!this.vaultService);
+    console.log('🔧 [ServiceManager] Stored canvasParserService:', !!this.canvasParserService);
+    
     // Sync with store's data mode
     const store = useInterBrainStore.getState();
     if (store.dataMode === 'real' && this.realService) {
@@ -170,6 +178,7 @@ export class ServiceManager {
    * Get VaultService instance (only available when plugin is initialized)
    */
   getVaultService() {
+    console.log('🔧 [ServiceManager] getVaultService() called, returning:', !!this.vaultService);
     return this.vaultService;
   }
 
@@ -177,6 +186,7 @@ export class ServiceManager {
    * Get CanvasParserService instance (only available when plugin is initialized)
    */
   getCanvasParserService() {
+    console.log('🔧 [ServiceManager] getCanvasParserService() called, returning:', !!this.canvasParserService);
     return this.canvasParserService;
   }
 
