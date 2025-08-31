@@ -67,6 +67,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [flipRotation, setFlipRotation] = useState(0);
   const [dreamSongData, setDreamSongData] = useState<DreamSongData | null>(null);
   const [hasDreamSong, setHasDreamSong] = useState(false);
+  const [dreamSongHasContent, setDreamSongHasContent] = useState(false);
   const [isLoadingDreamSong, setIsLoadingDreamSong] = useState(false);
   
   // Dual-mode position state
@@ -107,6 +108,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     const result = spatialLayout === 'liminal-web' && 
                    selectedNode?.id === dreamNode.id && 
                    isHovered &&
+                   dreamSongHasContent &&
                    !isDragging;
     
     // Debug logging for flip button visibility (only when conditions are close)
@@ -115,12 +117,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       console.log(`  - spatialLayout === 'liminal-web': ${spatialLayout === 'liminal-web'}`);
       console.log(`  - selectedNode?.id === dreamNode.id: ${selectedNode?.id === dreamNode.id}`);
       console.log(`  - isHovered: ${isHovered}`);
+      console.log(`  - dreamSongHasContent: ${dreamSongHasContent}`);
       console.log(`  - isDragging: ${isDragging}`);
       console.log(`  - shouldShowFlipButton: ${result}`);
     }
     
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamSongHasContent, isDragging]);
 
   // Register hit sphere reference with parent component
   useEffect(() => {
@@ -159,9 +162,15 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             console.log(`  - Blocks: ${parseResult.data.blocks.length}`);
             console.log(`  - Has content: ${parseResult.data.hasContent}`);
             console.log(`  - Total blocks: ${parseResult.data.totalBlocks}`);
+            
+            // Set content availability based on actual parsed content
+            setDreamSongHasContent(parseResult.data.hasContent);
           } else {
             console.log(`❌ [DreamNode3D] DreamSong parse failed:`, parseResult.error?.message);
+            setDreamSongHasContent(false);
           }
+        } else {
+          setDreamSongHasContent(false);
         }
       } catch (error) {
         console.error(`❌ [DreamNode3D] Error checking DreamSong for ${dreamNode.id}:`, error);
@@ -662,7 +671,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     
     setFlipRotation(newRotation);
     
+    // Debug logging for flip animation
+    console.log(`🔄 [Flip Animation] Node: ${dreamNode.name}, Progress: ${progress.toFixed(2)}, Rotation: ${(newRotation * 180 / Math.PI).toFixed(1)}°`);
+    
     if (progress >= 1) {
+      console.log(`✅ [Flip Animation] Completed for ${dreamNode.name} at ${(targetRotation * 180 / Math.PI).toFixed(1)}°`);
       completeFlipAnimation(dreamNode.id);
       setFlipRotation(targetRotation);
     }
