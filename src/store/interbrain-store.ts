@@ -936,8 +936,11 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // DreamNode flip animation actions
   setFlippedNode: (nodeId) => set((state) => {
+    console.log(`🔄 [Store] Setting flipped node: ${nodeId}`);
+    
     // Reset previous flipped node if different
     if (state.flipState.flippedNodeId && state.flipState.flippedNodeId !== nodeId) {
+      console.log(`🗑️ [Store] Clearing previous flipped node: ${state.flipState.flippedNodeId}`);
       const updatedFlipStates = new Map(state.flipState.flipStates);
       updatedFlipStates.delete(state.flipState.flippedNodeId);
       
@@ -958,6 +961,8 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
   
   startFlipAnimation: (nodeId, direction) => set((state) => {
+    console.log(`🔄 [Store] Starting flip animation for node: ${nodeId}, direction: ${direction}`);
+    
     const updatedFlipStates = new Map(state.flipState.flipStates);
     
     const currentFlipState = updatedFlipStates.get(nodeId) || {
@@ -967,11 +972,18 @@ export const useInterBrainStore = create<InterBrainState>()(
       animationStartTime: 0
     };
     
-    updatedFlipStates.set(nodeId, {
+    const newFlipState = {
       ...currentFlipState,
       isFlipping: true,
       flipDirection: direction,
       animationStartTime: globalThis.performance.now()
+    };
+    
+    updatedFlipStates.set(nodeId, newFlipState);
+    
+    console.log(`🔄 [Store] Updated flip state:`, {
+      flippedNodeId: nodeId,
+      newState: newFlipState
     });
     
     return {
@@ -983,16 +995,29 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
   
   completeFlipAnimation: (nodeId) => set((state) => {
+    console.log(`✅ [Store] Completing flip animation for node: ${nodeId}`);
+    
     const updatedFlipStates = new Map(state.flipState.flipStates);
     const currentFlipState = updatedFlipStates.get(nodeId);
     
     if (currentFlipState) {
-      updatedFlipStates.set(nodeId, {
+      const finalFlippedState = currentFlipState.flipDirection === 'front-to-back';
+      const completedFlipState = {
         ...currentFlipState,
-        isFlipped: currentFlipState.flipDirection === 'front-to-back' ? true : false,
+        isFlipped: finalFlippedState,
         isFlipping: false,
         animationStartTime: 0
+      };
+      
+      updatedFlipStates.set(nodeId, completedFlipState);
+      
+      console.log(`✅ [Store] Flip animation completed:`, {
+        nodeId,
+        finalFlippedState,
+        direction: currentFlipState.flipDirection
       });
+    } else {
+      console.log(`⚠️ [Store] No flip state found for node: ${nodeId}`);
     }
     
     return {

@@ -104,10 +104,22 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Determine if flip button should be visible (only in liminal web mode for selected node)
   const shouldShowFlipButton = useMemo(() => {
-    return spatialLayout === 'liminal-web' && 
-           selectedNode?.id === dreamNode.id && 
-           hasDreamSong && 
-           !isDragging;
+    const result = spatialLayout === 'liminal-web' && 
+                   selectedNode?.id === dreamNode.id && 
+                   hasDreamSong && 
+                   !isDragging;
+    
+    // Debug logging for flip button visibility (only when conditions are close)
+    if (spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode.id) {
+      console.log(`🔄 [DreamNode3D] Flip button logic for "${dreamNode.name}":`);  
+      console.log(`  - spatialLayout === 'liminal-web': ${spatialLayout === 'liminal-web'}`);
+      console.log(`  - selectedNode?.id === dreamNode.id: ${selectedNode?.id === dreamNode.id}`);
+      console.log(`  - hasDreamSong: ${hasDreamSong}`);
+      console.log(`  - isDragging: ${isDragging}`);
+      console.log(`  - shouldShowFlipButton: ${result}`);
+    }
+    
+    return result;
   }, [spatialLayout, selectedNode, dreamNode.id, hasDreamSong, isDragging]);
 
   // Register hit sphere reference with parent component
@@ -120,14 +132,39 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Check for DreamSong canvas file on component mount and when selected
   useEffect(() => {
     const checkDreamSong = async () => {
-      if (!vaultService || !canvasParserService) return;
+      console.log(`🎭 [DreamNode3D] Checking DreamSong for node: "${dreamNode.name}" (${dreamNode.id})`);
+      console.log(`🎭 [DreamNode3D] Services available - vault: ${!!vaultService}, canvas: ${!!canvasParserService}`);
+      
+      if (!vaultService || !canvasParserService) {
+        console.log(`⚠️ [DreamNode3D] Cannot check DreamSong: missing services`);
+        return;
+      }
       
       const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+      console.log(`🎭 [DreamNode3D] Checking canvas at: "${canvasPath}"`);
+      
       try {
         const exists = await vaultService.fileExists(canvasPath);
+        console.log(`${exists ? '✅' : '❌'} [DreamNode3D] DreamSong canvas ${exists ? 'EXISTS' : 'NOT FOUND'} for "${dreamNode.name}"`);
         setHasDreamSong(exists);
+        
+        // If DreamSong exists, try to parse it to check if it has content
+        if (exists) {
+          console.log(`🎭 [DreamNode3D] DreamSong exists, creating parser to check content...`);
+          const dreamSongParser = new DreamSongParserService(vaultService, canvasParserService);
+          const parseResult = await dreamSongParser.parseDreamSong(canvasPath, dreamNode.repoPath);
+          
+          if (parseResult.success && parseResult.data) {
+            console.log(`✅ [DreamNode3D] DreamSong parsed successfully:`);
+            console.log(`  - Blocks: ${parseResult.data.blocks.length}`);
+            console.log(`  - Has content: ${parseResult.data.hasContent}`);
+            console.log(`  - Total blocks: ${parseResult.data.totalBlocks}`);
+          } else {
+            console.log(`❌ [DreamNode3D] DreamSong parse failed:`, parseResult.error?.message);
+          }
+        }
       } catch (error) {
-        console.error(`Failed to check DreamSong for ${dreamNode.id}:`, error);
+        console.error(`❌ [DreamNode3D] Error checking DreamSong for ${dreamNode.id}:`, error);
         setHasDreamSong(false);
       }
     };

@@ -74,21 +74,33 @@ export class DreamSongParserService {
    */
   async hasDreamSong(dreamNodePath: string): Promise<boolean> {
     const canvasPath = `${dreamNodePath}/DreamSong.canvas`;
-    return await this.vaultService.fileExists(canvasPath);
+    console.log(`🔍 [DreamSong Parser] Checking for DreamSong at: "${canvasPath}"`);
+    const exists = await this.vaultService.fileExists(canvasPath);
+    console.log(`${exists ? '✅' : '❌'} [DreamSong Parser] DreamSong ${exists ? 'EXISTS' : 'NOT FOUND'} at: "${canvasPath}"`);
+    return exists;
   }
 
   /**
    * Get cached DreamSong data or parse if not cached
    */
   async getDreamSong(canvasPath: string, dreamNodePath: string): Promise<DreamSongData | null> {
+    console.log(`📖 [DreamSong Parser] Getting DreamSong for: "${canvasPath}"`);
+    
     // Check cache first
     if (this.parseCache.has(canvasPath)) {
+      console.log(`⚡ [DreamSong Parser] Using cached DreamSong data`);
       return this.parseCache.get(canvasPath)!;
     }
 
     // Parse if not cached
+    console.log(`🔄 [DreamSong Parser] Parsing DreamSong (not cached)`);
     const result = await this.parseDreamSong(canvasPath, dreamNodePath);
-    return result.success ? result.data! : null;
+    const success = result.success && result.data;
+    console.log(`${success ? '✅' : '❌'} [DreamSong Parser] Parse result: ${success ? 'SUCCESS' : 'FAILED'}`);
+    if (success) {
+      console.log(`📊 [DreamSong Parser] DreamSong has ${result.data!.blocks.length} blocks, hasContent: ${result.data!.hasContent}`);
+    }
+    return success ? result.data! : null;
   }
 
   /**

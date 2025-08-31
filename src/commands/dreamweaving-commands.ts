@@ -634,4 +634,156 @@ export function registerDreamweavingCommands(
       }
     }
   });
+
+  // ========================================
+  // DreamNode Flip Animation Commands
+  // ========================================
+
+  // Flip Selected DreamNode - Toggle flip state
+  plugin.addCommand({
+    id: 'flip-selected-dreamnode',
+    name: 'Flip Selected DreamNode',
+    hotkeys: [{ modifiers: ['Mod'], key: 'f' }],
+    checkCallback: (checking: boolean) => {
+      const store = useInterBrainStore.getState();
+      const { selectedNode, spatialLayout, flipState } = store;
+      
+      // Only available in liminal web mode with a selected node
+      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
+      const canFlip = spatialLayout === 'liminal-web' && 
+                     selectedNode !== null && 
+                     !currentFlipState?.isFlipping;
+      
+      if (checking) {
+        return canFlip;
+      }
+      
+      if (canFlip && selectedNode) {
+        console.log(`🎬 [Command] Flip Selected DreamNode: ${selectedNode.name}`);
+        
+        // Determine flip direction based on current state
+        const isCurrentlyFlipped = currentFlipState?.isFlipped || false;
+        const direction = isCurrentlyFlipped ? 'back-to-front' : 'front-to-back';
+        
+        store.startFlipAnimation(selectedNode.id, direction);
+      }
+      
+      return true;
+    }
+  });
+
+  // Flip DreamNode to Front (DreamTalk)
+  plugin.addCommand({
+    id: 'flip-dreamnode-to-front',
+    name: 'Flip DreamNode to Front (DreamTalk)',
+    checkCallback: (checking: boolean) => {
+      const store = useInterBrainStore.getState();
+      const { selectedNode, spatialLayout, flipState } = store;
+      
+      // Only available if there's a selected node that's currently flipped
+      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
+      const canFlipToFront = spatialLayout === 'liminal-web' && 
+                            selectedNode !== null && 
+                            currentFlipState?.isFlipped === true &&
+                            !currentFlipState?.isFlipping;
+      
+      if (checking) {
+        return canFlipToFront;
+      }
+      
+      if (canFlipToFront && selectedNode) {
+        console.log(`🎬 [Command] Flip DreamNode to Front: ${selectedNode.name}`);
+        store.startFlipAnimation(selectedNode.id, 'back-to-front');
+      }
+      
+      return true;
+    }
+  });
+
+  // Flip DreamNode to Back (DreamSong)
+  plugin.addCommand({
+    id: 'flip-dreamnode-to-back',
+    name: 'Flip DreamNode to Back (DreamSong)',
+    checkCallback: (checking: boolean) => {
+      const store = useInterBrainStore.getState();
+      const { selectedNode, spatialLayout, flipState } = store;
+      
+      // Only available if there's a selected node that's not currently flipped
+      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
+      const canFlipToBack = spatialLayout === 'liminal-web' && 
+                           selectedNode !== null && 
+                           (currentFlipState?.isFlipped !== true) &&
+                           !currentFlipState?.isFlipping;
+      
+      if (checking) {
+        return canFlipToBack;
+      }
+      
+      if (canFlipToBack && selectedNode) {
+        console.log(`🎬 [Command] Flip DreamNode to Back: ${selectedNode.name}`);
+        store.startFlipAnimation(selectedNode.id, 'front-to-back');
+      }
+      
+      return true;
+    }
+  });
+
+  // ========================================
+  // Debug Commands for DreamSong Functionality
+  // ========================================
+
+  // Debug: Check DreamSong Detection
+  plugin.addCommand({
+    id: 'debug-dreamsong-detection',
+    name: 'Debug: Check DreamSong Detection',
+    callback: () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+      
+      if (!selectedNode) {
+        console.log('❌ [Debug] No node selected for DreamSong detection check');
+        uiService.showError('No node selected for DreamSong detection check');
+        return;
+      }
+      
+      console.log(`🔍 [Debug] DreamSong Detection Check for: ${selectedNode.name}`);
+      console.log(`  - Node ID: ${selectedNode.id}`);
+      console.log(`  - Repo Path: ${selectedNode.repoPath}`);
+      console.log(`  - Expected Canvas Path: ${selectedNode.repoPath}/DreamSong.canvas`);
+      
+      uiService.showInfo(`Debug check for ${selectedNode.name} - see console for details`);
+      
+      // The actual detection will be logged by the DreamNode3D component
+      // when it runs its DreamSong check effect
+    }
+  });
+
+  // Debug: Current Flip State
+  plugin.addCommand({
+    id: 'debug-flip-state',
+    name: 'Debug: Current Flip State',
+    callback: () => {
+      const store = useInterBrainStore.getState();
+      const { flipState, selectedNode } = store;
+      
+      console.log(`🔄 [Debug] Global Flip State:`, {
+        flippedNodeId: flipState.flippedNodeId,
+        totalFlipStates: flipState.flipStates.size
+      });
+      
+      if (selectedNode) {
+        const nodeFlipState = flipState.flipStates.get(selectedNode.id);
+        console.log(`🔄 [Debug] Selected Node (${selectedNode.name}) Flip State:`, nodeFlipState || 'No flip state');
+      } else {
+        console.log(`❌ [Debug] No node selected`);
+      }
+      
+      // Log all flip states
+      flipState.flipStates.forEach((state, nodeId) => {
+        console.log(`🔄 [Debug] Node ${nodeId} flip state:`, state);
+      });
+      
+      uiService.showInfo(`Flip state logged to console (${flipState.flipStates.size} nodes have flip state)`);
+    }
+  });
 }
