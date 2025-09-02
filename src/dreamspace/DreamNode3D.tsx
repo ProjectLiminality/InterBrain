@@ -63,8 +63,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
   
-  // Flip animation state - default to 0 for front side
-  const [flipRotation, setFlipRotation] = useState(0);
+  // Flip animation state - default to Math.PI for front side (corrected orientation)
+  const [flipRotation, setFlipRotation] = useState(Math.PI);
   const [dreamSongData, setDreamSongData] = useState<DreamSongData | null>(null);
   const [hasDreamSong, setHasDreamSong] = useState(false);
   const [dreamSongHasContent, setDreamSongHasContent] = useState(false);
@@ -103,10 +103,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const isFlipped = nodeFlipState?.isFlipped || false;
   const isFlipping = nodeFlipState?.isFlipping || false;
   
-  // Ensure initial state shows front side (flipRotation = 0 = front)
+  // Ensure initial state shows front side (flipRotation = Math.PI = front)
   useEffect(() => {
     if (!nodeFlipState) {
-      setFlipRotation(0); // Front side by default
+      setFlipRotation(Math.PI); // Front side by default
     }
   }, [nodeFlipState]);
   
@@ -140,14 +140,18 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     }
   }, [dreamNode.id, onHitSphereRef]);
   
-  // Check for DreamSong canvas file on component mount and when selected
+  // Check for DreamSong canvas file on component mount, when selected, or when services become available
   useEffect(() => {
     const checkDreamSong = async () => {
       console.log(`🎭 [DreamNode3D] Checking DreamSong for node: "${dreamNode.name}" (${dreamNode.id})`);
       console.log(`🎭 [DreamNode3D] Services available - vault: ${!!vaultService}, canvas: ${!!canvasParserService}`);
+      console.log(`🎭 [DreamNode3D] Node selected: ${selectedNode?.id === dreamNode.id}, spatialLayout: ${spatialLayout}`);
       
       if (!vaultService || !canvasParserService) {
-        console.log(`⚠️ [DreamNode3D] Cannot check DreamSong: missing services`);
+        console.log(`⚠️ [DreamNode3D] Cannot check DreamSong: missing services - will retry when services become available`);
+        // Reset states when services unavailable
+        setHasDreamSong(false);
+        setDreamSongHasContent(false);
         return;
       }
       
@@ -183,11 +187,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } catch (error) {
         console.error(`❌ [DreamNode3D] Error checking DreamSong for ${dreamNode.id}:`, error);
         setHasDreamSong(false);
+        setDreamSongHasContent(false);
       }
     };
     
     checkDreamSong();
-  }, [dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService]);
+  }, [dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService, selectedNode?.id, spatialLayout]);
   
   // Load DreamSong data when flipped to back side
   useEffect(() => {
@@ -663,7 +668,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   useFrame(() => {
     if (!isFlipping) return;
     
-    const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? Math.PI : 0;
+    const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? 0 : Math.PI;
     const animationDuration = 600; // ms
     const elapsed = globalThis.performance.now() - (nodeFlipState?.animationStartTime || 0);
     const progress = Math.min(elapsed / animationDuration, 1);
@@ -674,8 +679,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       : 1 - Math.pow(-2 * progress + 2, 2) / 2;
     
     const newRotation = nodeFlipState?.flipDirection === 'front-to-back' 
-      ? easedProgress * Math.PI
-      : Math.PI - (easedProgress * Math.PI);
+      ? Math.PI - (easedProgress * Math.PI)  // From Math.PI (front) to 0 (back)
+      : easedProgress * Math.PI;             // From 0 (back) to Math.PI (front)
     
     setFlipRotation(newRotation);
     
