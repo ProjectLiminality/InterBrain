@@ -746,7 +746,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
               background: nodeColors.fill,
               overflow: 'hidden',
-              cursor: 'pointer',
+              cursor: 'pointer !important',
               transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
               transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale}) translateZ(1px)` : 'scale(1) translateZ(1px)',
               animation: gitStyle.animation,
@@ -864,22 +864,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               bottom: '8px',
               left: '50%',
               transform: 'translateX(-50%)',
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
+              width: '84px',
+              height: '84px',
+              borderRadius: '12px',
               background: 'rgba(0, 0, 0, 0.1)',
               border: 'none',
               backdropFilter: 'blur(4px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
+              cursor: 'pointer !important',
               fontSize: '12px',
               color: '#fff',
               boxShadow: '0 2px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
               filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.3))',
               transition: 'all 0.2s ease',
-              zIndex: 20
+              zIndex: 20,
+              pointerEvents: 'auto'
             }}
             onClick={(e) => {
               e.stopPropagation(); // Prevent event from bubbling to node
@@ -898,6 +899,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 // Clear existing content and add Obsidian icon
                 el.innerHTML = '';
                 setIcon(el, 'lucide-flip-horizontal');
+                // Scale icon for larger button
+                const iconElement = el.querySelector('.lucide-flip-horizontal');
+                if (iconElement) {
+                  (iconElement as HTMLElement).style.width = '36px';
+                  (iconElement as HTMLElement).style.height = '36px';
+                }
               }
             }}
           >
@@ -915,7 +922,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
               background: nodeColors.fill,
               overflow: 'hidden',
-              cursor: 'pointer',
+              cursor: 'pointer !important',
               transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
               transform: `rotateY(180deg) translateZ(-2px) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`,
               animation: gitStyle.animation,
@@ -983,22 +990,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   bottom: '8px',
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '6px',
+                  width: '84px',
+                  height: '84px',
+                  borderRadius: '12px',
                   background: 'rgba(0, 0, 0, 0.1)',
                   border: 'none',
                   backdropFilter: 'blur(4px)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: 'pointer !important',
                   fontSize: '12px',
                   color: '#fff',
                   boxShadow: '0 2px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                   filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.3))',
                   transition: 'all 0.2s ease',
-                  zIndex: 20
+                  zIndex: 20,
+              pointerEvents: 'auto'
                 }}
                 onClick={(e) => {
                   e.stopPropagation(); // Prevent event from bubbling to node
@@ -1017,6 +1025,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                     // Clear existing content and add Obsidian icon
                     el.innerHTML = '';
                     setIcon(el, 'lucide-flip-horizontal');
+                    // Scale icon for larger button
+                    const iconElement = el.querySelector('.lucide-flip-horizontal');
+                    if (iconElement) {
+                      (iconElement as HTMLElement).style.width = '36px';
+                      (iconElement as HTMLElement).style.height = '36px';
+                    }
                   }
                 }}
               >
