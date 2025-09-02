@@ -1,4 +1,4 @@
-import { Vault, TFile, TFolder, App } from 'obsidian';
+import { Vault, App } from 'obsidian';
 
 // Access Node.js modules directly in Electron context (following GitService pattern)
 /* eslint-disable no-undef */
@@ -44,61 +44,72 @@ export class VaultService {
     return this.vault;
   }
 
-  async createFolder(path: string): Promise<void> {
-    await this.vault.createFolder(path);
+  async createFolder(folderPath: string): Promise<void> {
+    const fullPath = this.getFullPath(folderPath);
+    try {
+      fs.mkdirSync(fullPath, { recursive: true });
+    } catch (error) {
+      throw new Error(`Failed to create folder: ${folderPath} (${error})`);
+    }
   }
 
   async fileExists(filePath: string): Promise<boolean> {
     console.log(`🔍 [VaultService] Checking if file exists: "${filePath}"`);
     
-    // For hidden files (starting with .), use Node.js fs API
-    if (filePath.includes('/.') || filePath.startsWith('.')) {
-      const fullPath = this.getFullPath(filePath);
-      console.log(`🔍 [VaultService] Hidden file detected, using fs.existsSync: "${fullPath}"`);
-      
-      try {
-        const exists = fs.existsSync(fullPath);
-        console.log(`${exists ? '✅' : '❌'} [VaultService] Hidden file ${exists ? 'EXISTS' : 'NOT FOUND'}: "${fullPath}"`);
-        return exists;
-      } catch (error) {
-        console.log(`❌ [VaultService] Error checking hidden file: ${error}`);
-        return false;
-      }
-    }
+    const fullPath = this.getFullPath(filePath);
+    console.log(`🔍 [VaultService] Using Node.js fs.existsSync: "${fullPath}"`);
     
-    // For regular files, use Obsidian's vault API
-    const file = this.vault.getAbstractFileByPath(filePath);
-    const exists = file instanceof TFile;
-    console.log(`${exists ? '✅' : '❌'} [VaultService] Regular file ${exists ? 'EXISTS' : 'NOT FOUND'}: "${filePath}" (type: ${file ? file.constructor.name : 'null'})`);
-    return exists;
+    try {
+      const exists = fs.existsSync(fullPath);
+      console.log(`${exists ? '✅' : '❌'} [VaultService] File ${exists ? 'EXISTS' : 'NOT FOUND'}: "${fullPath}"`);
+      return exists;
+    } catch (error) {
+      console.log(`❌ [VaultService] Error checking file: ${error}`);
+      return false;
+    }
   }
 
   async folderExists(path: string): Promise<boolean> {
-    const folder = this.vault.getAbstractFileByPath(path);
-    return folder instanceof TFolder;
+    const fullPath = this.getFullPath(path);
+    try {
+      const stats = fs.lstatSync(fullPath);
+      return stats.isDirectory();
+    } catch {
+      return false;
+    }
   }
 
   async readFile(path: string): Promise<string> {
-    const file = this.vault.getAbstractFileByPath(path);
-    if (!(file instanceof TFile)) {
-      throw new Error(`File not found: ${path}`);
+    const fullPath = this.getFullPath(path);
+    try {
+      return fs.readFileSync(fullPath, 'utf8');
+    } catch (error) {
+      throw new Error(`File not found: ${path} (${error})`);
     }
-    return await this.vault.read(file);
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    const file = this.vault.getAbstractFileByPath(path);
-    if (file instanceof TFile) {
-      await this.vault.modify(file, content);
-    } else {
-      await this.vault.create(path, content);
+    const fullPath = this.getFullPath(path);
+    try {
+      // Ensure directory exists
+      const dir = require('path').dirname(fullPath);
+      fs.mkdirSync(dir, { recursive: true });
+      
+      // Write file
+      fs.writeFileSync(fullPath, content, 'utf8');
+    } catch (error) {
+      throw new Error(`Failed to write file: ${path} (${error})`);
     }
   }
 
   async deleteFile(path: string): Promise<void> {
-    const file = this.vault.getAbstractFileByPath(path);
-    if (file instanceof TFile) {
-      await this.vault.delete(file);
+    const fullPath = this.getFullPath(path);
+    try {
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    } catch (error) {
+      throw new Error(`Failed to delete file: ${path} (${error})`);
     }
   }
 }

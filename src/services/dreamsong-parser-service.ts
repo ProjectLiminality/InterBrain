@@ -1,6 +1,11 @@
 import { VaultService } from './vault-service';
 import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './canvas-parser-service';
-import { TFile } from 'obsidian';
+
+// Access Node.js modules directly in Electron context (following VaultService pattern)
+/* eslint-disable no-undef */
+const fs = require('fs');
+const path = require('path');
+/* eslint-enable no-undef */
 import { 
   DreamSongData, 
   DreamSongBlock, 
@@ -433,28 +438,45 @@ export class DreamSongParserService {
   }
 
   /**
-   * Convert file path to data URL using Obsidian vault adapter
+   * Convert file path to data URL using Node.js fs (following VaultService pattern)
    */
   private async filePathToDataUrl(filePath: string): Promise<string> {
-    // Get the TFile object from the vault
-    const file = this.vaultService.obsidianVault.getAbstractFileByPath(filePath);
+    // Get full path using VaultService helper
+    const fullPath = this.getFullPath(filePath);
     
-    if (!(file instanceof TFile)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
+    // Read file as binary using Node.js fs
+    const buffer = fs.readFileSync(fullPath);
     
-    // Read file as ArrayBuffer for binary files
-    const arrayBuffer = await this.vaultService.obsidianVault.readBinary(file);
-    
-    // Convert ArrayBuffer to base64 (Node.js compatible)
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const base64 = globalThis.Buffer.from(uint8Array).toString('base64');
+    // Convert to base64
+    const base64 = buffer.toString('base64');
     
     // Get MIME type from file extension  
     const mimeType = this.getMimeType(filePath);
     
     // Create base64 data URL
     return `data:${mimeType};base64,${base64}`;
+  }
+
+  /**
+   * Get full file system path (helper method following VaultService pattern)
+   */
+  private getFullPath(filePath: string): string {
+    // Use VaultService to get vault path and construct full path
+    const vaultPath = this.getVaultPath();
+    if (!vaultPath) {
+      console.warn('DreamSongParserService: Vault path not initialized, using relative path');
+      return filePath;
+    }
+    return path.join(vaultPath, filePath);
+  }
+
+  /**
+   * Get vault path from VaultService (helper method)
+   */
+  private getVaultPath(): string {
+    // Access VaultService's private vaultPath via reflection
+    // This is safe since we're in the same service layer architecture
+    return (this.vaultService as any).vaultPath || '';
   }
 
   /**

@@ -342,6 +342,7 @@ interbrain-plugin/
 7. **UI Calls Commands**: UI components use `executeCommandById()`, never call services directly
 8. **Document for AI**: Every feature folder needs a `README.md` with high-level summary
 9. **Testing Before Commits**: Use Playwright MCP to validate features work in browser before any git operations
+10. **Node.js fs Preferred**: Use Node.js fs API directly for file operations, with VaultService as thin wrapper for path resolution
 
 ### Epic 3 Service Layer Pattern
 ```typescript
@@ -367,6 +368,7 @@ interface DreamNodeService {
 - **Testing**: Vitest with comprehensive mocking
 - **Services**: UI, Git, DreamNode, and Vault service layers
 - **Commands**: 6 core commands via Obsidian command palette
+- **File System**: Node.js fs API (preferred) with VaultService as thin wrapper
 
 ### Epic 3 Implementation (COMPLETE - Ready for Main Merge)
 - **Service Layer**: Interface-based architecture with mock/real implementations ✅
