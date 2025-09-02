@@ -940,36 +940,31 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           </div>
         </div>
       </Html>
+    
+    {/* Invisible hit detection sphere - travels with visual node as unified object */}
+    <mesh 
+      ref={hitSphereRef}
+      position={[0, 0, 0]}
+      userData={{ dreamNodeId: dreamNode.id, dreamNode: dreamNode }}
+    >
+      <sphereGeometry args={[12, 8, 8]} />
+      <meshBasicMaterial 
+        transparent={true} 
+        opacity={0}
+      />
+    </mesh>
   </group>
-      <div
-        style={{
-          width: `${nodeSize}px`,
-          height: `${nodeSize}px`,
-          borderRadius: dreamNodeStyles.dimensions.borderRadius,
-          border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
-          background: nodeColors.fill,
-          overflow: 'hidden',
-          position: 'relative',
-          cursor: 'pointer',
-          transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-          transform: `scaleX(-1) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`, // Mirror horizontally
-          animation: gitStyle.animation,
-          boxShadow: (() => {
-            // Priority 1: Git status glow (always highest priority)
-            if (gitStyle.glowIntensity > 0) {
-              return getGitGlow(gitState, gitStyle.glowIntensity);
-            }
-            
-            // Priority 2: Edit mode relationship glow
-            if (isEditModeActive && isPendingRelationship) {
-              return getEditModeGlow(25); // Strong gold glow for relationships
-            }
-            
-            // Priority 3: Hover glow (fallback)
-            return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-          })()
-        }}
-        onMouseEnter={handleMouseEnter}
+  );
+});
+
+DreamNode3D.displayName = 'DreamNode3D';
+
+export default DreamNode3D;
+
+/**
+ * Renders different types of media in the DreamTalk circle
+ */
+function MediaRenderer({ media }: { media: MediaFile }) {
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
