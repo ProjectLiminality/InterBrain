@@ -918,7 +918,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: nodeColors.text
+                  color: dreamNodeStyles.colors.text.primary
                 }}
               >
                 Loading DreamSong...
@@ -931,7 +931,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: nodeColors.text
+                  color: dreamNodeStyles.colors.text.primary
                 }}
               >
                 No DreamSong available
@@ -954,111 +954,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       />
     </mesh>
   </group>
-  );
-});
-
-DreamNode3D.displayName = 'DreamNode3D';
-
-export default DreamNode3D;
-
-/**
- * Renders different types of media in the DreamTalk circle
- */
-function MediaRenderer({ media }: { media: MediaFile }) {
-        onMouseLeave={handleMouseLeave}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-      >
-        {/* DreamSong content */}
-        {dreamSongData ? (
-          <DreamSong 
-            dreamSongData={dreamSongData}
-            className="flip-enter"
-            maxHeight={`${nodeSize}px`}
-          />
-        ) : isLoadingDreamSong ? (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              fontSize: '12px'
-            }}
-          >
-            Loading DreamSong...
-          </div>
-        ) : (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              fontSize: '12px'
-            }}
-          >
-            No DreamSong available
-          </div>
-        )}
-        
-        {/* Flip button for back side */}
-        {shouldShowFlipButton && isHovered && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '8px',
-              left: '50%',
-              transform: 'translateX(-50%) scaleX(-1)', // Counter the parent mirror
-              width: '24px',
-              height: '24px',
-              borderRadius: '50%',
-              background: 'rgba(255, 255, 255, 0.9)',
-              border: '2px solid rgba(0, 0, 0, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: '#333',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-              transition: 'all 0.2s ease',
-              zIndex: 20
-            }}
-            onClick={handleFlipClick}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
-              e.currentTarget.style.transform = 'translateX(-50%) scaleX(-1) scale(1.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
-              e.currentTarget.style.transform = 'translateX(-50%) scaleX(-1) scale(1)';
-            }}
-          >
-            🔄
-          </div>
-        )}
-      </div>
-    </Html>
-  </group>
-    
-    {/* Invisible hit detection sphere - travels with visual node as unified object */}
-    <mesh 
-      ref={hitSphereRef}
-      position={[0, 0, 0]}
-      userData={{ dreamNodeId: dreamNode.id, dreamNode: dreamNode }}
-    >
-      <sphereGeometry args={[12, 8, 8]} />
-      <meshBasicMaterial 
-        transparent={true} 
-        opacity={0}
-      />
-    </mesh>
-    </group>
   );
 });
 

@@ -446,9 +446,9 @@ export class DreamSongParserService {
     // Read file as ArrayBuffer for binary files
     const arrayBuffer = await this.vaultService.obsidianVault.readBinary(file);
     
-    // Convert ArrayBuffer to base64
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
+    // Convert ArrayBuffer to base64 (Node.js compatible)
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const base64 = globalThis.Buffer.from(uint8Array).toString('base64');
     
     // Get MIME type from file extension  
     const mimeType = this.getMimeType(filePath);
