@@ -692,55 +692,63 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       ref={groupRef} 
       position={finalPosition}
     >
-      {/* DreamNode rendering with flip animation */}
-      <group rotation={[0, flipRotation, 0]}>
-        {/* Front side (DreamTalk) */}
-        <Html
-          position={[0, 0, 0]}
-          center
-          transform  // Enable 3D transformations
-          sprite     // Always face camera (billboarding)
-          distanceFactor={10}  // Scale based on distance from camera
+      {/* Billboard wrapper - always faces camera */}
+      <Html
+        center
+        transform
+        sprite  // Only the outer container should be billboard
+        distanceFactor={10}
+        style={{
+          pointerEvents: isDragging ? 'none' : 'auto',
+          userSelect: 'none'
+        }}
+      >
+        {/* Rotatable container for flip animation - NO sprite prop */}
+        <div
           style={{
-            pointerEvents: isDragging ? 'none' : 'auto', // Disable all mouse events during drag
-            userSelect: 'none',
-            opacity: flipRotation > Math.PI / 2 ? 0 : 1, // Hide when rotated past 90 degrees
-            backfaceVisibility: 'hidden'
+            transform: `rotateY(${flipRotation}rad)`,
+            transformStyle: 'preserve-3d',
+            transition: 'transform 0.6s ease-in-out',
+            width: `${nodeSize}px`,
+            height: `${nodeSize}px`,
+            position: 'relative'
           }}
         >
-      <div
-        style={{
-          width: `${nodeSize}px`,
-          height: `${nodeSize}px`,
-          borderRadius: dreamNodeStyles.dimensions.borderRadius,
-          border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
-          background: nodeColors.fill,
-          overflow: 'hidden',
-          position: 'relative',
-          cursor: 'pointer',
-          transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-          transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
-          animation: gitStyle.animation,
-          boxShadow: (() => {
-            // Priority 1: Git status glow (always highest priority)
-            if (gitStyle.glowIntensity > 0) {
-              return getGitGlow(gitState, gitStyle.glowIntensity);
-            }
-            
-            // Priority 2: Edit mode relationship glow
-            if (isEditModeActive && isPendingRelationship) {
-              return getEditModeGlow(25); // Strong gold glow for relationships
-            }
-            
-            // Priority 3: Hover glow (fallback)
-            return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-          })()
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-      >
+          {/* Front side (DreamTalk) */}
+          <div
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              borderRadius: dreamNodeStyles.dimensions.borderRadius,
+              border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+              background: nodeColors.fill,
+              overflow: 'hidden',
+              cursor: 'pointer',
+              transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
+              transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale}) translateZ(1px)` : 'scale(1) translateZ(1px)',
+              animation: gitStyle.animation,
+              backfaceVisibility: 'hidden',
+              boxShadow: (() => {
+                // Priority 1: Git status glow (always highest priority)
+                if (gitStyle.glowIntensity > 0) {
+                  return getGitGlow(gitState, gitStyle.glowIntensity);
+                }
+                
+                // Priority 2: Edit mode relationship glow
+                if (isEditModeActive && isPendingRelationship) {
+                  return getEditModeGlow(25); // Strong gold glow for relationships
+                }
+                
+                // Priority 3: Hover glow (fallback)
+                return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
+              })()
+            }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+          >
         {/* DreamTalk Media Container */}
         {dreamNode.dreamTalkMedia[0] && (
           <div style={getMediaContainerStyle()}>
@@ -862,23 +870,77 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             📖
           </div>
         )}
-      </div>
-    </Html>
-    
-    {/* Back side (DreamSong) - rotated 180 degrees to face correctly */}
-    <Html
-      position={[0, 0, 0]}
-      center
-      transform
-      sprite
-      distanceFactor={10}
-      style={{
-        pointerEvents: isDragging ? 'none' : 'auto',
-        userSelect: 'none',
-        opacity: flipRotation <= Math.PI / 2 ? 0 : 1, // Show when rotated past 90 degrees
-        backfaceVisibility: 'hidden'
-      }}
-    >
+          </div>
+
+          {/* Back side (DreamSong) - rotated 180 degrees with Z offset */}
+          <div
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              borderRadius: dreamNodeStyles.dimensions.borderRadius,
+              border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+              background: nodeColors.fill,
+              overflow: 'hidden',
+              cursor: 'pointer',
+              transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
+              transform: `rotateY(180deg) translateZ(-2px) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`,
+              animation: gitStyle.animation,
+              backfaceVisibility: 'hidden',
+              boxShadow: (() => {
+                // Priority 1: Git status glow (always highest priority)
+                if (gitStyle.glowIntensity > 0) {
+                  return getGitGlow(gitState, gitStyle.glowIntensity);
+                }
+                
+                // Priority 2: Edit mode relationship glow
+                if (isEditModeActive && isPendingRelationship) {
+                  return getEditModeGlow(25); // Strong gold glow for relationships
+                }
+                
+                // Priority 3: Hover glow (fallback)
+                return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
+              })()
+            }}
+          >
+            {/* DreamSong content */}
+            {dreamSongData ? (
+              <DreamSong 
+                dreamSongData={dreamSongData}
+                className="flip-enter"
+                maxHeight={`${nodeSize}px`}
+              />
+            ) : isLoadingDreamSong ? (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: nodeColors.text
+                }}
+              >
+                Loading DreamSong...
+              </div>
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: nodeColors.text
+                }}
+              >
+                No DreamSong available
+              </div>
+            )}
+          </div>
+        </div>
+      </Html>
+  </group>
       <div
         style={{
           width: `${nodeSize}px`,
