@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
@@ -664,8 +664,17 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     
   // Removed excessive dynamic scaling logging for performance
   
-  // Handle flip animation updates
+  // Access camera for billboard rotation
+  const { camera } = useThree();
+  
+  // Handle billboard rotation and flip animation updates
   useFrame(() => {
+    // Make the group face the camera (billboard behavior)
+    if (groupRef.current && camera) {
+      groupRef.current.lookAt(camera.position);
+    }
+    
+    // Handle flip animation  
     if (!isFlipping) return;
     
     const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? 0 : Math.PI;
@@ -705,18 +714,17 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       ref={groupRef} 
       position={finalPosition}
     >
-      {/* Billboard wrapper - always faces camera */}
+      {/* Html wrapper for 3D flip animation - no sprite to allow 3D transforms */}
       <Html
         center
         transform
-        sprite  // Only the outer container should be billboard
         distanceFactor={10}
         style={{
           pointerEvents: isDragging ? 'none' : 'auto',
           userSelect: 'none'
         }}
       >
-        {/* Rotatable container for flip animation - NO sprite prop */}
+        {/* Rotatable container for flip animation with 3D transforms */}
         <div
           style={{
             transform: `rotateY(${flipRotation}rad)`,
@@ -726,6 +734,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             height: `${nodeSize}px`,
             position: 'relative'
           }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
         >
           {/* Front side (DreamTalk) */}
           <div
@@ -954,7 +966,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         </div>
       </Html>
     
-    {/* Invisible hit detection sphere - travels with visual node as unified object */}
+    {/* DEBUGGING: Visible hit detection sphere - travels with visual node as unified object */}
     <mesh 
       ref={hitSphereRef}
       position={[0, 0, 0]}
@@ -962,8 +974,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     >
       <sphereGeometry args={[12, 8, 8]} />
       <meshBasicMaterial 
+        color="red"
         transparent={true} 
-        opacity={0}
+        opacity={0.3}
+        wireframe={true}
       />
     </mesh>
   </group>
