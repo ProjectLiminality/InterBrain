@@ -585,11 +585,18 @@ gh issue view ISSUE_NUMBER
 gh issue list --assignee @me --state open
 ```
 
-**Feature Completion Workflow**:
-1. **Complete Implementation**: All acceptance criteria met
-2. **Update Issue Body**: Edit issue to check off `[x]` all completed criteria
+**Feature Branch Completion Workflow** (NOT Epic Completion):
+1. **Complete Implementation**: All acceptance criteria met (no version bumping or CHANGELOG updates)
+2. **Update Issue Body**: Edit issue to check off `[x]` all completed criteria  
 3. **Close with Session Summary**: `gh issue close ISSUE_NUMBER --comment "session summary"`
-4. **Clean Up**: Delete feature branch after epic integration
+4. **Merge to Epic Branch**: Merge feature branch to epic branch
+5. **Clean Up**: Delete feature branch after epic integration
+
+**CRITICAL**: Feature branch completion does NOT include:
+- Version bumping (happens in Epic completion only)
+- CHANGELOG updates (happens in Epic completion only)  
+- Documentation updates (happens in Epic completion only)
+- Release creation (happens in Epic completion only)
 
 ## Advanced GitHub CLI & Project Board Management
 
