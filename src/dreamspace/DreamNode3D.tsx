@@ -63,7 +63,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
   
-  // Flip animation state
+  // Flip animation state - default to 0 for front side
   const [flipRotation, setFlipRotation] = useState(0);
   const [dreamSongData, setDreamSongData] = useState<DreamSongData | null>(null);
   const [hasDreamSong, setHasDreamSong] = useState(false);
@@ -103,12 +103,19 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const isFlipped = nodeFlipState?.isFlipped || false;
   const isFlipping = nodeFlipState?.isFlipping || false;
   
+  // Ensure initial state shows front side (flipRotation = 0 = front)
+  useEffect(() => {
+    if (!nodeFlipState) {
+      setFlipRotation(0); // Front side by default
+    }
+  }, [nodeFlipState]);
+  
   // Determine if flip button should be visible (only in liminal web mode for selected node)
   const shouldShowFlipButton = useMemo(() => {
     const result = spatialLayout === 'liminal-web' && 
                    selectedNode?.id === dreamNode.id && 
                    isHovered &&
-                   dreamSongHasContent &&
+                   hasDreamSong &&  // Show button if DreamSong file exists (even if empty)
                    !isDragging;
     
     // Debug logging for flip button visibility (only when conditions are close)
@@ -117,13 +124,14 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       console.log(`  - spatialLayout === 'liminal-web': ${spatialLayout === 'liminal-web'}`);
       console.log(`  - selectedNode?.id === dreamNode.id: ${selectedNode?.id === dreamNode.id}`);
       console.log(`  - isHovered: ${isHovered}`);
+      console.log(`  - hasDreamSong: ${hasDreamSong}`);
       console.log(`  - dreamSongHasContent: ${dreamSongHasContent}`);
       console.log(`  - isDragging: ${isDragging}`);
       console.log(`  - shouldShowFlipButton: ${result}`);
     }
     
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamSongHasContent, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, hasDreamSong, isDragging]);
 
   // Register hit sphere reference with parent component
   useEffect(() => {
@@ -726,7 +734,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               overflow: 'hidden',
               cursor: 'pointer',
               transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-              transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale}) translateZ(1px)` : 'scale(1) translateZ(1px)',
+              transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale}) translateZ(1px) scaleX(-1)` : 'scale(1) translateZ(1px) scaleX(-1)',
               animation: gitStyle.animation,
               backfaceVisibility: 'hidden',
               boxShadow: (() => {
@@ -835,7 +843,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         </div>
         
         {/* Flip button (bottom-center, only when hovering and has DreamSong) */}
-        {shouldShowFlipButton && isHovered && (
+        {shouldShowFlipButton && (
           <div
             style={{
               position: 'absolute',
@@ -884,7 +892,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               overflow: 'hidden',
               cursor: 'pointer',
               transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-              transform: `rotateY(180deg) translateZ(-2px) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`,
+              transform: `rotateY(180deg) translateZ(-2px) scaleX(-1) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`,
               animation: gitStyle.animation,
               backfaceVisibility: 'hidden',
               boxShadow: (() => {
