@@ -88,17 +88,17 @@ export class VaultService {
     }
   }
 
-  async writeFile(path: string, content: string): Promise<void> {
-    const fullPath = this.getFullPath(path);
+  async writeFile(filePath: string, content: string): Promise<void> {
+    const fullPath = this.getFullPath(filePath);
     try {
       // Ensure directory exists
-      const dir = require('path').dirname(fullPath);
+      const dir = path.dirname(fullPath);
       fs.mkdirSync(dir, { recursive: true });
       
       // Write file
       fs.writeFileSync(fullPath, content, 'utf8');
     } catch (error) {
-      throw new Error(`Failed to write file: ${path} (${error})`);
+      throw new Error(`Failed to write file: ${filePath} (${error})`);
     }
   }
 

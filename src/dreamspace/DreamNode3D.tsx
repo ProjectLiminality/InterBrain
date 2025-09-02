@@ -897,7 +897,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               overflow: 'hidden',
               cursor: 'pointer',
               transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-              transform: `rotateY(180deg) translateZ(-2px) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`
+              transform: `rotateY(180deg) translateZ(-2px) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`,
               animation: gitStyle.animation,
               backfaceVisibility: 'hidden',
               boxShadow: (() => {
