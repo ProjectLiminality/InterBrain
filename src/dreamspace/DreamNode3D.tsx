@@ -727,7 +727,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         {/* Rotatable container for flip animation with 3D transforms */}
         <div
           style={{
-            transform: `rotateY(${flipRotation}rad)`,
+            transform: `rotateY(${flipRotation}rad) scaleX(-1)`,
             transformStyle: 'preserve-3d',
             transition: 'transform 0.6s ease-in-out',
             width: `${nodeSize}px`,
@@ -882,7 +882,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               transition: 'all 0.2s ease',
               zIndex: 20
             }}
-            onClick={handleFlipClick}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent event from bubbling to node
+              handleFlipClick(e);
+            }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
               e.currentTarget.style.transform = 'translateX(-50%) scale(1.1)';
@@ -966,7 +969,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         </div>
       </Html>
     
-    {/* DEBUGGING: Visible hit detection sphere - travels with visual node as unified object */}
+    {/* Invisible hit detection sphere - travels with visual node as unified object */}
     <mesh 
       ref={hitSphereRef}
       position={[0, 0, 0]}
@@ -974,10 +977,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     >
       <sphereGeometry args={[12, 8, 8]} />
       <meshBasicMaterial 
-        color="red"
         transparent={true} 
-        opacity={0.3}
-        wireframe={true}
+        opacity={0}
       />
     </mesh>
   </group>
