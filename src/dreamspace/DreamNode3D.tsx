@@ -668,14 +668,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Access camera for billboard rotation
   const { camera } = useThree();
   
-  // Handle billboard rotation and flip animation updates
+  // Handle flip animation updates
   useFrame(() => {
-    // Make the group face the camera (billboard behavior)
-    if (groupRef.current && camera) {
-      groupRef.current.lookAt(camera.position);
-    }
-    
-    // Handle flip animation  
     if (!isFlipping) return;
     
     const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? 0 : Math.PI;
@@ -715,7 +709,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       ref={groupRef} 
       position={finalPosition}
     >
-      {/* Html wrapper for 3D flip animation - no sprite to allow 3D transforms */}
+      {/* Html wrapper for 3D flip animation - manual billboard via CSS */}
       <Html
         center
         transform
