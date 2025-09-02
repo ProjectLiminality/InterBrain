@@ -5,6 +5,8 @@ import { VaultService } from './services/vault-service';
 import { GitTemplateService } from './services/git-template-service';
 import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
+import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
+import { LeafManagerService } from './services/leaf-manager-service';
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
@@ -26,6 +28,7 @@ export default class InterBrainPlugin extends Plugin {
   private gitTemplateService!: GitTemplateService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
+  private leafManagerService!: LeafManagerService;
 
   async onload() {
     console.log('InterBrain plugin loaded!');
@@ -42,6 +45,7 @@ export default class InterBrainPlugin extends Plugin {
     
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
+    this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
     
     // Register commands
     this.registerCommands();
@@ -65,10 +69,12 @@ export default class InterBrainPlugin extends Plugin {
       this.vaultService,
       this.canvasParserService
     );
+    this.leafManagerService = new LeafManagerService(this.app);
     
     // Make services accessible to ServiceManager BEFORE initialization
     (this as any).vaultService = this.vaultService;
     (this as any).canvasParserService = this.canvasParserService;
+    (this as any).leafManagerService = this.leafManagerService;
     
     // Initialize service manager with plugin instance and services
     serviceManager.initialize(this);
@@ -1401,5 +1407,10 @@ export default class InterBrainPlugin extends Plugin {
 
   onunload() {
     console.log('InterBrain plugin unloaded');
+    
+    // Clean up leaf manager service
+    if (this.leafManagerService) {
+      this.leafManagerService.destroy();
+    }
   }
 }

@@ -47,6 +47,7 @@ export class ServiceManager {
   private plugin: Plugin | null = null;
   private vaultService: any | null = null;
   private canvasParserService: any | null = null;
+  private leafManagerService: any | null = null;
 
   constructor() {
     this.mockService = mockDreamNodeService;
@@ -139,6 +140,7 @@ export class ServiceManager {
     // Store service references (accessing private properties from main.ts)
     this.vaultService = (plugin as any).vaultService;
     this.canvasParserService = (plugin as any).canvasParserService;
+    this.leafManagerService = (plugin as any).leafManagerService;
     
     // Debug logging
     console.log('🔧 [ServiceManager] Initialization debug:');
@@ -188,6 +190,31 @@ export class ServiceManager {
   getCanvasParserService() {
     console.log('🔧 [ServiceManager] getCanvasParserService() called, returning:', !!this.canvasParserService);
     return this.canvasParserService;
+  }
+
+  /**
+   * Get LeafManagerService instance (only available when plugin is initialized)
+   */
+  getLeafManagerService() {
+    console.log('🔧 [ServiceManager] getLeafManagerService() called, returning:', !!this.leafManagerService);
+    return this.leafManagerService;
+  }
+
+  /**
+   * Generic service getter (for backwards compatibility and simpler access)
+   */
+  getService(serviceName: string) {
+    switch (serviceName) {
+      case 'leafManagerService':
+        return this.getLeafManagerService();
+      case 'vaultService':
+        return this.getVaultService();
+      case 'canvasParserService':
+        return this.getCanvasParserService();
+      default:
+        console.warn(`🔧 [ServiceManager] Unknown service requested: ${serviceName}`);
+        return null;
+    }
   }
 
   /**

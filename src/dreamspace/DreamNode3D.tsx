@@ -225,6 +225,42 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     startFlipAnimation(dreamNode.id, direction);
   }, [isDragging, isFlipping, isFlipped, startFlipAnimation, dreamNode.id]);
 
+  const handleDreamTalkFullScreen = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDragging) return;
+    
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      const leafManager = serviceManager.getService('leafManagerService');
+      
+      if (leafManager && dreamNode.dreamTalkMedia[0]) {
+        await leafManager.openDreamTalkFullScreen(dreamNode, dreamNode.dreamTalkMedia[0]);
+      } else {
+        console.log('No DreamTalk media available for:', dreamNode.name);
+      }
+    } catch (error) {
+      console.error('Failed to open DreamTalk full-screen:', error);
+    }
+  }, [isDragging, dreamNode]);
+
+  const handleDreamSongFullScreen = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDragging) return;
+    
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      const leafManager = serviceManager.getService('leafManagerService');
+      
+      if (leafManager && dreamSongData) {
+        await leafManager.openDreamSongFullScreen(dreamNode, dreamSongData);
+      } else {
+        console.log('No DreamSong data available for:', dreamNode.name);
+      }
+    } catch (error) {
+      console.error('Failed to open DreamSong full-screen:', error);
+    }
+  }, [isDragging, dreamNode, dreamSongData]);
+
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isDragging) return;
     e.stopPropagation();
@@ -611,6 +647,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               onClick={handleClick}
               onDoubleClick={handleDoubleClick}
               onFlipClick={handleFlipClick}
+              onFullScreenClick={handleDreamTalkFullScreen}
             />
 
             {/* Back side - DreamSong */}
@@ -629,6 +666,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               onClick={handleClick}
               onDoubleClick={handleDoubleClick}
               onFlipClick={handleFlipClick}
+              onFullScreenClick={handleDreamSongFullScreen}
             />
           </div>
         </Html>

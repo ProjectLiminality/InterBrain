@@ -20,6 +20,7 @@ interface DreamSongSideProps {
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
   onFlipClick: (e: React.MouseEvent) => void;
+  onFullScreenClick?: (e: React.MouseEvent) => void;
 }
 
 export const DreamSongSide: React.FC<DreamSongSideProps> = ({
@@ -36,7 +37,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   onMouseLeave,
   onClick,
   onDoubleClick,
-  onFlipClick
+  onFlipClick,
+  onFullScreenClick
 }) => {
   const nodeColors = getNodeColors(dreamNode.type);
   const gitState = getGitVisualState(dreamNode.gitStatus);
@@ -77,38 +79,92 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      {/* DreamSong content */}
-      {dreamSongData ? (
-        <DreamSong 
-          dreamSongData={dreamSongData}
-          className="flip-enter"
-          maxHeight={`${nodeSize}px`}
-        />
-      ) : isLoadingDreamSong ? (
+      {/* DreamSong content wrapper with circular masking */}
+      <div
+        style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          overflow: 'hidden',
+          zIndex: 1
+        }}
+      >
+        {dreamSongData ? (
+          <DreamSong 
+            dreamSongData={dreamSongData}
+            className="flip-enter"
+          />
+        ) : isLoadingDreamSong ? (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: dreamNodeStyles.colors.text.primary
+            }}
+          >
+            Loading DreamSong...
+          </div>
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: dreamNodeStyles.colors.text.primary
+            }}
+          >
+            No DreamSong available
+          </div>
+        )}
+      </div>
+
+      {/* Full-screen button (top-center, on back side) */}
+      {isHovered && onFullScreenClick && (
         <div
           style={{
-            width: '100%',
-            height: '100%',
+            position: 'absolute',
+            top: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '84px',
+            height: '84px',
+            borderRadius: '50%',
+            background: '#000000',
+            border: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: dreamNodeStyles.colors.text.primary
+            cursor: 'pointer !important',
+            fontSize: '12px',
+            color: '#fff',
+            transition: 'all 0.2s ease',
+            zIndex: 20,
+            pointerEvents: 'auto'
+          }}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent event from bubbling to node
+            onFullScreenClick(e);
+          }}
+          ref={(el) => {
+            if (el) {
+              // Clear existing content and add Obsidian icon
+              el.innerHTML = '';
+              setIcon(el, 'lucide-maximize');
+              // Scale icon for larger button
+              const iconElement = el.querySelector('.lucide-maximize');
+              if (iconElement) {
+                (iconElement as any).style.width = '36px';
+                (iconElement as any).style.height = '36px';
+              }
+            }
           }}
         >
-          Loading DreamSong...
-        </div>
-      ) : (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: dreamNodeStyles.colors.text.primary
-          }}
-        >
-          No DreamSong available
         </div>
       )}
 

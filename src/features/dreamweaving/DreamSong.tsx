@@ -5,20 +5,18 @@ import './dreamsong.module.css';
 interface DreamSongProps {
   dreamSongData: DreamSongData;
   className?: string;
-  maxHeight?: string;
 }
 
 /**
  * DreamSong Component
  * 
- * Displays a linear story flow generated from canvas dependency graphs.
- * Features flip-flop layout with alternating media-text positioning and 
- * circular masking for embedding in DreamNode back-side interface.
+ * Pure content component that displays a linear story flow generated from canvas dependency graphs.
+ * Features flip-flop layout with alternating media-text positioning.
+ * Container-agnostic - can be rendered in any context (embedded, full-screen, etc.).
  */
 export const DreamSong: React.FC<DreamSongProps> = ({ 
   dreamSongData, 
-  className = '',
-  maxHeight = '300px'
+  className = ''
 }) => {
   
   // Memoize blocks to prevent unnecessary re-renders
@@ -26,7 +24,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
   if (!dreamSongData.hasContent) {
     return (
-      <div className={`dreamsong-container ${className}`} style={{ maxHeight }}>
+      <div className={`dreamsong-container ${className}`}>
         <div className="dreamsong-empty-state">
           <div className="empty-state-icon">📖</div>
           <div className="empty-state-text">
@@ -41,7 +39,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   }
 
   return (
-    <div className={`dreamsong-container ${className}`} style={{ maxHeight }}>
+    <div className={`dreamsong-container ${className}`}>
       <div className="dreamsong-header">
         <div className="dreamsong-title">DreamSong</div>
         <div className="dreamsong-block-count">

@@ -16,6 +16,7 @@ interface DreamTalkSideProps {
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
   onFlipClick: (e: React.MouseEvent) => void;
+  onFullScreenClick?: (e: React.MouseEvent) => void;
 }
 
 export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
@@ -30,7 +31,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   onMouseLeave,
   onClick,
   onDoubleClick,
-  onFlipClick
+  onFlipClick,
+  onFullScreenClick
 }) => {
   const nodeColors = getNodeColors(dreamNode.type);
   const gitState = getGitVisualState(dreamNode.gitStatus);
@@ -154,6 +156,50 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
       >
         {dreamNode.name}
       </div>
+
+      {/* Full-screen button (top-center, on front side) */}
+      {isHovered && onFullScreenClick && dreamNode.dreamTalkMedia[0] && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '84px',
+            height: '84px',
+            borderRadius: '50%',
+            background: '#000000',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer !important',
+            fontSize: '12px',
+            color: '#fff',
+            transition: 'all 0.2s ease',
+            zIndex: 20,
+            pointerEvents: 'auto'
+          }}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent event from bubbling to node
+            onFullScreenClick(e);
+          }}
+          ref={(el) => {
+            if (el) {
+              // Clear existing content and add Obsidian icon
+              el.innerHTML = '';
+              setIcon(el, 'lucide-maximize');
+              // Scale icon for larger button
+              const iconElement = el.querySelector('.lucide-maximize');
+              if (iconElement) {
+                (iconElement as any).style.width = '36px';
+                (iconElement as any).style.height = '36px';
+              }
+            }
+          }}
+        >
+        </div>
+      )}
       
       {/* Professional flip button - Obsidian style */}
       {shouldShowFlipButton && (
