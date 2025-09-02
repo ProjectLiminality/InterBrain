@@ -708,7 +708,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       {/* Billboard wrapper - always faces camera */}
       <Html
         center
-        transform
         sprite  // Only the outer container should be billboard
         distanceFactor={10}
         style={{
@@ -726,6 +725,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             height: `${nodeSize}px`,
             position: 'relative'
           }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
         >
           {/* Front side (DreamTalk) */}
           <div
