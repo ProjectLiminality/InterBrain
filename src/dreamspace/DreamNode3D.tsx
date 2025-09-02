@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwa
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
+import { setIcon } from 'obsidian';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -863,18 +864,20 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               bottom: '8px',
               left: '50%',
               transform: 'translateX(-50%)',
-              width: '24px',
-              height: '24px',
-              borderRadius: '50%',
-              background: 'rgba(255, 255, 255, 0.9)',
-              border: '2px solid rgba(0, 0, 0, 0.3)',
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              background: 'rgba(0, 0, 0, 0.1)',
+              border: 'none',
+              backdropFilter: 'blur(4px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
               fontSize: '12px',
-              color: '#333',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              color: '#fff',
+              boxShadow: '0 2px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+              filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.3))',
               transition: 'all 0.2s ease',
               zIndex: 20
             }}
@@ -883,15 +886,21 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               handleFlipClick(e);
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
               e.currentTarget.style.transform = 'translateX(-50%) scale(1.1)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
+              e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)';
               e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
             }}
+            ref={(el) => {
+              if (el) {
+                // Clear existing content and add Obsidian icon
+                el.innerHTML = '';
+                setIcon(el, 'lucide-flip-horizontal');
+              }
+            }}
           >
-            📖
           </div>
         )}
           </div>
@@ -974,18 +983,20 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   bottom: '8px',
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  border: '2px solid rgba(0, 0, 0, 0.3)',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '6px',
+                  background: 'rgba(0, 0, 0, 0.1)',
+                  border: 'none',
+                  backdropFilter: 'blur(4px)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
                   fontSize: '12px',
-                  color: '#333',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                  color: '#fff',
+                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.3))',
                   transition: 'all 0.2s ease',
                   zIndex: 20
                 }}
@@ -994,15 +1005,21 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   handleFlipClick(e);
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
                   e.currentTarget.style.transform = 'translateX(-50%) scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)';
                   e.currentTarget.style.transform = 'translateX(-50%) scale(1)';
                 }}
+                ref={(el) => {
+                  if (el) {
+                    // Clear existing content and add Obsidian icon
+                    el.innerHTML = '';
+                    setIcon(el, 'lucide-flip-horizontal');
+                  }
+                }}
               >
-                📖
               </div>
             )}
           </div>
