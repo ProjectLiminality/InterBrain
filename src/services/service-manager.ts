@@ -218,6 +218,23 @@ export class ServiceManager {
   }
 
   /**
+   * Execute a command by ID using the plugin's app instance
+   */
+  executeCommand(commandId: string): void {
+    if (!this.plugin) {
+      console.warn(`🔧 [ServiceManager] Cannot execute command '${commandId}': Plugin not initialized`);
+      return;
+    }
+    
+    try {
+      this.plugin.app.commands.executeCommandById(commandId);
+      console.log(`🔧 [ServiceManager] Executed command: ${commandId}`);
+    } catch (error) {
+      console.error(`🔧 [ServiceManager] Failed to execute command '${commandId}':`, error);
+    }
+  }
+
+  /**
    * Switch between mock and real modes
    */
   async setMode(mode: 'mock' | 'real'): Promise<void> {

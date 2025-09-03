@@ -231,17 +231,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     
     try {
       const { serviceManager } = await import('../services/service-manager');
-      const leafManager = serviceManager.getService('leafManagerService');
-      
-      if (leafManager && dreamNode.dreamTalkMedia[0]) {
-        await leafManager.openDreamTalkFullScreen(dreamNode, dreamNode.dreamTalkMedia[0]);
-      } else {
-        console.log('No DreamTalk media available for:', dreamNode.name);
-      }
+      serviceManager.executeCommand('open-dreamtalk-fullscreen');
     } catch (error) {
-      console.error('Failed to open DreamTalk full-screen:', error);
+      console.error('Failed to execute DreamTalk full-screen command:', error);
     }
-  }, [isDragging, dreamNode]);
+  }, [isDragging]);
 
   const handleDreamSongFullScreen = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -249,17 +243,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     
     try {
       const { serviceManager } = await import('../services/service-manager');
-      const leafManager = serviceManager.getService('leafManagerService');
-      
-      if (leafManager && dreamSongData) {
-        await leafManager.openDreamSongFullScreen(dreamNode, dreamSongData);
-      } else {
-        console.log('No DreamSong data available for:', dreamNode.name);
-      }
+      serviceManager.executeCommand('open-dreamsong-fullscreen');
     } catch (error) {
-      console.error('Failed to open DreamSong full-screen:', error);
+      console.error('Failed to execute DreamSong full-screen command:', error);
     }
-  }, [isDragging, dreamNode, dreamSongData]);
+  }, [isDragging]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isDragging) return;

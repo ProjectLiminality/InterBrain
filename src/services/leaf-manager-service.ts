@@ -1,4 +1,4 @@
-import { App, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, WorkspaceLeaf, Notice } from 'obsidian';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { DreamSongData } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../dreamspace/DreamSongFullScreenView';
@@ -26,7 +26,7 @@ export class LeafManagerService {
       // custom media viewing or leverage Obsidian's file opening capabilities
       console.log(`Opening DreamTalk media for ${dreamNode.name}:`, {
         type: mediaFile.type,
-        name: mediaFile.name,
+        path: mediaFile.path,
         size: mediaFile.size
       });
 
@@ -40,12 +40,10 @@ export class LeafManagerService {
       // 3. Or creating a custom media viewer leaf
       
       // For now, just show a notification
-      // @ts-ignore - Obsidian's Notice is available globally
-      new Notice(`DreamTalk full-screen: ${mediaFile.name} (${mediaFile.type})`);
+      new Notice(`DreamTalk full-screen: ${mediaFile.path} (${mediaFile.type})`);
       
     } catch (error) {
       console.error('Failed to open DreamTalk full-screen:', error);
-      // @ts-ignore - Obsidian's Notice is available globally
       new Notice('Failed to open DreamTalk in full-screen', 3000);
     }
   }
@@ -100,7 +98,6 @@ export class LeafManagerService {
       
     } catch (error) {
       console.error('Failed to open DreamSong full-screen:', error);
-      // @ts-ignore - Obsidian's Notice is available globally
       new Notice('Failed to open DreamSong in full-screen', 3000);
     }
   }

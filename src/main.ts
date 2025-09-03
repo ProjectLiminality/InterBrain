@@ -17,6 +17,7 @@ import { registerSemanticSearchCommands } from './features/semantic-search/comma
 import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
 import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
+import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 
@@ -98,6 +99,9 @@ export default class InterBrainPlugin extends Plugin {
       this.canvasParserService,
       this.submoduleManagerService
     );
+    
+    // Register full-screen commands
+    registerFullScreenCommands(this, this.uiService);
     
     // Open DreamSpace command
     this.addCommand({

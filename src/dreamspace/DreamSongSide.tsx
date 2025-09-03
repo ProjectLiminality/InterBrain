@@ -29,7 +29,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   isEditModeActive,
   isPendingRelationship,
   shouldShowFlipButton,
-  nodeSize,
+  nodeSize: _nodeSize,
   borderWidth,
   dreamSongData,
   isLoadingDreamSong,
