@@ -227,8 +227,9 @@ export class ServiceManager {
     }
     
     try {
-      this.plugin.app.commands.executeCommandById(commandId);
-      console.log(`🔧 [ServiceManager] Executed command: ${commandId}`);
+      const fullCommandId = `interbrain:${commandId}`;
+      this.plugin.app.commands.executeCommandById(fullCommandId);
+      console.log(`🔧 [ServiceManager] Executed command: ${fullCommandId}`);
     } catch (error) {
       console.error(`🔧 [ServiceManager] Failed to execute command '${commandId}':`, error);
     }

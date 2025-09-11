@@ -343,6 +343,7 @@ interbrain-plugin/
 8. **Document for AI**: Every feature folder needs a `README.md` with high-level summary
 9. **Testing Before Commits**: Use Playwright MCP to validate features work in browser before any git operations
 10. **Node.js fs Preferred**: Use Node.js fs API directly for file operations, with VaultService as thin wrapper for path resolution
+11. **❌ ANTI-PATTERN: Never use CSS transforms for 3D positioning** - Always use native React Three Fiber 3D positioning (groups, position props, rotation props) instead of CSS 2D hacks like `translateZ()` or `rotateY()`. CSS transforms are fundamentally 2D and break true 3D depth in R3F space.
 
 ### Epic 3 Service Layer Pattern
 ```typescript

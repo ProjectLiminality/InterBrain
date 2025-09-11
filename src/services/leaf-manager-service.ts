@@ -6,41 +6,109 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../drea
 /**
  * Leaf Manager Service
  * 
- * Manages Obsidian leaves for full-screen DreamNode experiences.
+ * Manages Obsidian leaves for split-screen DreamNode experiences.
+ * Creates 50/50 split: DreamSpace on left, single right pane with stacked tabs.
+ * All DreamSong/DreamTalk leaves appear as tabs in the right pane.
  * Implements one-leaf-per-node strategy with proper cleanup.
  */
 export class LeafManagerService {
   private app: App;
   private dreamSongLeaves: Map<string, WorkspaceLeaf> = new Map();
+  private dreamTalkLeaves: Map<string, WorkspaceLeaf> = new Map();
+  private rightPaneLeaf: WorkspaceLeaf | null = null;
 
   constructor(app: App) {
     this.app = app;
   }
 
   /**
-   * Open DreamTalk media file in full-screen using Obsidian's built-in viewer
+   * Get or create a leaf in the right pane for DreamSong/DreamTalk leaves
+   */
+  private getRightLeaf(): WorkspaceLeaf {
+    // If we don't have a right pane yet, create the initial split
+    if (!this.rightPaneLeaf || !this.rightPaneLeaf.parent) {
+      this.rightPaneLeaf = this.app.workspace.getLeaf('split', 'vertical');
+      return this.rightPaneLeaf;
+    }
+    
+    // We have a right pane, so create a new tab within that specific pane group
+    // First make sure the right pane is active, then create a tab
+    this.app.workspace.setActiveLeaf(this.rightPaneLeaf);
+    return this.app.workspace.getLeaf('tab');
+  }
+
+  /**
+   * Check if any DreamNode leaves are still open
+   */
+  private hasOpenLeaves(): boolean {
+    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0;
+  }
+
+  /**
+   * Collapse the right pane if no leaves remain
+   */
+  private async collapseRightPaneIfEmpty(): Promise<void> {
+    if (!this.hasOpenLeaves() && this.rightPaneLeaf) {
+      await this.rightPaneLeaf.detach();
+      this.rightPaneLeaf = null;
+      console.log('Collapsed right pane - no leaves remaining');
+    }
+  }
+
+  /**
+   * Open DreamTalk media file in right pane
+   * Creates 50/50 split on first call, then stacks as tabs. Implements one-leaf-per-node strategy.
    */
   async openDreamTalkFullScreen(dreamNode: DreamNode, mediaFile: MediaFile): Promise<void> {
     try {
-      // For now, we'll use console logging - in the future we can implement
-      // custom media viewing or leverage Obsidian's file opening capabilities
       console.log(`Opening DreamTalk media for ${dreamNode.name}:`, {
         type: mediaFile.type,
         path: mediaFile.path,
         size: mediaFile.size
       });
 
-      // Close any existing DreamSong leaf for this node first
-      await this.closeDreamSongFullScreen(dreamNode.id);
-
-      // TODO: Implement media file opening
-      // This would involve:
-      // 1. Creating a temporary file in the vault if needed
-      // 2. Using app.workspace.getLeaf().openFile() to open it
-      // 3. Or creating a custom media viewer leaf
+      // Check if we already have a leaf for this DreamNode
+      const existingLeaf = this.dreamTalkLeaves.get(dreamNode.id);
       
-      // For now, just show a notification
-      new Notice(`DreamTalk full-screen: ${mediaFile.path} (${mediaFile.type})`);
+      if (existingLeaf) {
+        // Leaf exists, just reveal it
+        this.app.workspace.revealLeaf(existingLeaf);
+        console.log(`Revealed existing DreamTalk leaf for ${dreamNode.name}`);
+        return;
+      }
+
+      // Construct the full path within the vault
+      const fullPath = `${dreamNode.repoPath}/${mediaFile.path}`;
+      console.log(`Looking for file at vault path: ${fullPath}`);
+
+      // Get the file from the vault
+      const file = this.app.vault.getAbstractFileByPath(fullPath);
+      
+      if (!file) {
+        console.error(`File not found in vault: ${fullPath}`);
+        new Notice(`File not found: ${mediaFile.path}`, 3000);
+        return;
+      }
+
+      // Check if it's actually a file (not a folder)
+      if (file.path !== fullPath) {
+        console.error(`Path mismatch - expected: ${fullPath}, got: ${file.path}`);
+        new Notice(`Invalid file path: ${mediaFile.path}`, 3000);
+        return;
+      }
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+      await leaf.openFile(file as any); // TFile type
+      
+      // Track this leaf
+      this.dreamTalkLeaves.set(dreamNode.id, leaf);
+      
+      // Set up cleanup when leaf is closed
+      this.setupDreamTalkLeafCleanup(dreamNode.id, leaf);
+      
+      console.log(`Successfully opened ${file.path} in new leaf`);
+      new Notice(`Opened ${mediaFile.path}`);
       
     } catch (error) {
       console.error('Failed to open DreamTalk full-screen:', error);
@@ -49,8 +117,8 @@ export class LeafManagerService {
   }
 
   /**
-   * Open DreamSong in full-screen leaf
-   * Implements one-leaf-per-node strategy
+   * Open DreamSong in right pane
+   * Creates 50/50 split on first call, then stacks as tabs. Implements one-leaf-per-node strategy.
    */
   async openDreamSongFullScreen(dreamNode: DreamNode, dreamSongData: DreamSongData): Promise<void> {
     try {
@@ -70,8 +138,8 @@ export class LeafManagerService {
         }
       }
 
-      // Create new leaf
-      const leaf = this.app.workspace.getLeaf(true); // Force new leaf
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
       
       // Set the view type and data
       await leaf.setViewState({
@@ -108,8 +176,10 @@ export class LeafManagerService {
   async closeDreamSongFullScreen(dreamNodeId: string): Promise<void> {
     const leaf = this.dreamSongLeaves.get(dreamNodeId);
     if (leaf) {
-      await leaf.detach();
+      // Remove from map first to prevent cleanup loop
       this.dreamSongLeaves.delete(dreamNodeId);
+      await leaf.detach();
+      await this.collapseRightPaneIfEmpty();
       console.log(`Closed DreamSong full-screen for node: ${dreamNodeId}`);
     }
   }
@@ -142,23 +212,83 @@ export class LeafManagerService {
   }
 
   /**
-   * Set up automatic cleanup when a leaf is closed by the user
+   * Set up automatic cleanup when a DreamSong leaf is closed by the user
    */
   private setupLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
     // Listen for leaf detach
     const originalDetach = leaf.detach.bind(leaf);
     leaf.detach = async () => {
-      this.dreamSongLeaves.delete(dreamNodeId);
-      console.log(`Auto-cleaned up DreamSong leaf for node: ${dreamNodeId}`);
+      // Only clean up if we still have this leaf tracked
+      if (this.dreamSongLeaves.has(dreamNodeId)) {
+        this.dreamSongLeaves.delete(dreamNodeId);
+        console.log(`Auto-cleaned up DreamSong leaf for node: ${dreamNodeId}`);
+        await this.collapseRightPaneIfEmpty();
+      }
       return originalDetach();
     };
   }
 
   /**
+   * Set up automatic cleanup when a DreamTalk leaf is closed by the user
+   */
+  private setupDreamTalkLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
+    // Listen for leaf detach
+    const originalDetach = leaf.detach.bind(leaf);
+    leaf.detach = async () => {
+      // Only clean up if we still have this leaf tracked
+      if (this.dreamTalkLeaves.has(dreamNodeId)) {
+        this.dreamTalkLeaves.delete(dreamNodeId);
+        console.log(`Auto-cleaned up DreamTalk leaf for node: ${dreamNodeId}`);
+        await this.collapseRightPaneIfEmpty();
+      }
+      return originalDetach();
+    };
+  }
+
+  /**
+   * Close DreamTalk full-screen leaf for a specific DreamNode
+   */
+  async closeDreamTalkFullScreen(dreamNodeId: string): Promise<void> {
+    const leaf = this.dreamTalkLeaves.get(dreamNodeId);
+    if (leaf) {
+      // Remove from map first to prevent cleanup loop
+      this.dreamTalkLeaves.delete(dreamNodeId);
+      await leaf.detach();
+      await this.collapseRightPaneIfEmpty();
+      console.log(`Closed DreamTalk full-screen for node: ${dreamNodeId}`);
+    }
+  }
+
+  /**
+   * Close all open DreamTalk full-screen leaves
+   */
+  async closeAllDreamTalkFullScreen(): Promise<void> {
+    const promises = Array.from(this.dreamTalkLeaves.keys()).map(nodeId => 
+      this.closeDreamTalkFullScreen(nodeId)
+    );
+    await Promise.all(promises);
+  }
+
+  /**
+   * Check if a DreamNode has an open DreamTalk leaf
+   */
+  isDreamTalkOpen(dreamNodeId: string): boolean {
+    return this.dreamTalkLeaves.has(dreamNodeId);
+  }
+
+  /**
    * Clean up service resources
    */
-  destroy(): void {
-    this.closeAllDreamSongFullScreen();
+  async destroy(): Promise<void> {
+    await this.closeAllDreamSongFullScreen();
+    await this.closeAllDreamTalkFullScreen();
     this.dreamSongLeaves.clear();
+    this.dreamTalkLeaves.clear();
+    
+    // Clean up right pane
+    if (this.rightPaneLeaf) {
+      await this.rightPaneLeaf.detach();
+      this.rightPaneLeaf = null;
+    }
   }
 }

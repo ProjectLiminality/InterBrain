@@ -9,6 +9,7 @@ interface DreamTalkSideProps {
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
   shouldShowFlipButton: boolean;
+  shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
   onMouseEnter: () => void;
@@ -25,6 +26,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   isEditModeActive,
   isPendingRelationship,
   shouldShowFlipButton,
+  shouldShowFullscreenButton,
   nodeSize,
   borderWidth,
   onMouseEnter,
@@ -50,9 +52,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         overflow: 'hidden',
         cursor: 'pointer !important',
         transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale}) translateZ(1px)` : 'scale(1) translateZ(1px)',
+        transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
         animation: gitStyle.animation,
-        backfaceVisibility: 'hidden',
         boxShadow: (() => {
           // Priority 1: Git status glow (always highest priority)
           if (gitStyle.glowIntensity > 0) {
@@ -157,8 +158,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         {dreamNode.name}
       </div>
 
-      {/* Full-screen button (top-center, on front side) */}
-      {isHovered && onFullScreenClick && dreamNode.dreamTalkMedia[0] && (
+      {/* Full-screen button (top-center, on front side) - Stable Click Wrapper */}
+      {shouldShowFullscreenButton && onFullScreenClick && (
         <div
           style={{
             position: 'absolute',
@@ -167,37 +168,46 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
             transform: 'translateX(-50%)',
             width: '84px',
             height: '84px',
-            borderRadius: '50%',
-            background: '#000000',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer !important',
-            fontSize: '12px',
-            color: '#fff',
-            transition: 'all 0.2s ease',
-            zIndex: 20,
+            cursor: 'pointer',
+            zIndex: 100, // Much higher z-index to override any overlays
             pointerEvents: 'auto'
           }}
           onClick={(e) => {
             e.stopPropagation(); // Prevent event from bubbling to node
             onFullScreenClick(e);
           }}
-          ref={(el) => {
-            if (el) {
-              // Clear existing content and add Obsidian icon
-              el.innerHTML = '';
-              setIcon(el, 'lucide-maximize');
-              // Scale icon for larger button
-              const iconElement = el.querySelector('.lucide-maximize');
-              if (iconElement) {
-                (iconElement as any).style.width = '36px';
-                (iconElement as any).style.height = '36px';
-              }
-            }
-          }}
         >
+          {/* Visual button - DOM manipulation happens here, not on click handler */}
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '50%',
+              background: '#000000',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              color: '#fff',
+              transition: 'all 0.2s ease',
+              zIndex: 99,
+              pointerEvents: 'none' // Clicks pass through to wrapper
+            }}
+            ref={(el) => {
+              if (el) {
+                // Clear existing content and add Obsidian icon
+                el.innerHTML = '';
+                setIcon(el, 'lucide-maximize');
+                // Scale icon for larger button
+                const iconElement = el.querySelector('.lucide-maximize');
+                if (iconElement) {
+                  (iconElement as any).style.width = '36px';
+                  (iconElement as any).style.height = '36px';
+                }
+              }
+            }}
+          />
         </div>
       )}
       
@@ -221,7 +231,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
             fontSize: '12px',
             color: '#fff',
             transition: 'all 0.2s ease',
-            zIndex: 20,
+            zIndex: 100,
             pointerEvents: 'auto'
           }}
           onClick={(e) => {
@@ -302,6 +312,25 @@ function MediaRenderer({ media }: { media: MediaFile }) {
             maxWidth: '80px',
             filter: 'invert(1)'
           }}
+        />
+      </div>
+    );
+  }
+
+  if (media.type.startsWith('application/pdf')) {
+    return (
+      <div style={{...mediaStyle, overflow: 'hidden'}}>
+        <iframe 
+          src={media.data}
+          style={{
+            width: '200%',
+            height: '200%', 
+            transform: 'scale(0.5) translate(-50%, -50%)',
+            transformOrigin: 'top left',
+            border: 'none',
+            pointerEvents: 'none'
+          }}
+          title="PDF preview"
         />
       </div>
     );

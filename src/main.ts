@@ -1277,6 +1277,9 @@ export default class InterBrainPlugin extends Plugin {
                 this.uiService.showError('Target node no longer exists - skipped to previous state');
               }
             }
+            
+            // Restore visual state (flip state and scroll position) after layout restoration
+            store.restoreVisualState(previousEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);
@@ -1366,6 +1369,9 @@ export default class InterBrainPlugin extends Plugin {
                 this.uiService.showError('Target node no longer exists - skipped to next state');
               }
             }
+            
+            // Restore visual state (flip state and scroll position) after layout restoration
+            store.restoreVisualState(nextEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);

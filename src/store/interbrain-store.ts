@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
+import { DreamSongData } from '../types/dreamsong';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
 import { 
@@ -14,6 +15,54 @@ import {
 import { VectorData } from '../features/semantic-search/services/indexing-service';
 import { FlipState } from '../types/dreamsong';
 
+// Helper function to get current scroll position of DreamSong content
+function getDreamSongScrollPosition(nodeId: string): number | null {
+  try {
+    // Look for DreamSong leaf in right pane containing this nodeId
+    const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
+    if (dreamSongLeaf) {
+      const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
+      if (scrollContainer instanceof HTMLElement) {
+        return scrollContainer.scrollTop;
+      }
+    }
+    
+    // Also check for embedded DreamSong content in DreamSpace
+    const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
+    if (dreamSpaceContent instanceof HTMLElement) {
+      return dreamSpaceContent.scrollTop;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn(`Failed to get scroll position for node ${nodeId}:`, error);
+    return null;
+  }
+}
+
+// Helper function to restore scroll position of DreamSong content
+function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number): void {
+  try {
+    // Look for DreamSong leaf in right pane containing this nodeId
+    const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
+    if (dreamSongLeaf) {
+      const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
+      if (scrollContainer instanceof HTMLElement) {
+        scrollContainer.scrollTop = scrollPosition;
+        return;
+      }
+    }
+    
+    // Also check for embedded DreamSong content in DreamSpace
+    const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
+    if (dreamSpaceContent instanceof HTMLElement) {
+      dreamSpaceContent.scrollTop = scrollPosition;
+    }
+  } catch (error) {
+    console.warn(`Failed to restore scroll position for node ${nodeId}:`, error);
+  }
+}
+
 // Navigation history types
 export interface NavigationHistoryEntry {
   /** Node ID that was focused (null for constellation view) */
@@ -22,6 +71,10 @@ export interface NavigationHistoryEntry {
   layout: 'constellation' | 'liminal-web';
   /** Timestamp of the navigation action */
   timestamp: number;
+  /** Flip state of the focused node (null if not flipped or no focused node) */
+  flipState: FlipState | null;
+  /** Scroll position in DreamSong content (null if not applicable) */
+  scrollPosition: number | null;
 }
 
 export interface NavigationHistoryState {
@@ -94,6 +147,10 @@ export interface InterBrainState extends OllamaConfigSlice {
   // Selected DreamNode state
   selectedNode: DreamNode | null;
   setSelectedNode: (node: DreamNode | null) => void;
+  
+  // Selected DreamNode's DreamSong data (for reuse in full-screen)
+  selectedNodeDreamSongData: DreamSongData | null;
+  setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
   
   // Creator mode state
   creatorMode: {
@@ -201,6 +258,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   performUndo: () => boolean;
   performRedo: () => boolean;
   clearNavigationHistory: () => void;
+  restoreVisualState: (entry: NavigationHistoryEntry) => void;
   
   // DreamNode flip animation state
   flipState: {
@@ -228,6 +286,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Initialize Ollama config slice
   ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
+  selectedNodeDreamSongData: null,
   creatorMode: {
     isActive: false,
     nodeId: null
@@ -348,7 +407,9 @@ export const useInterBrainStore = create<InterBrainState>()(
       const newEntry: NavigationHistoryEntry = {
         nodeId: node.id,
         layout: 'liminal-web',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        flipState: state.flipState.flipStates.get(node.id) || null,
+        scrollPosition: getDreamSongScrollPosition(node.id) // We'll implement this helper
       };
       
       // Add to history (reuse existing addHistoryEntry logic)
@@ -388,6 +449,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     // Non-meaningful change - just update selected node
     return { selectedNode: node };
   }),
+  
+  setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
+  
   setCreatorMode: (active, nodeId = null) => set({ 
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),
@@ -439,7 +503,11 @@ export const useInterBrainStore = create<InterBrainState>()(
       const newEntry: NavigationHistoryEntry = {
         nodeId: layout === 'liminal-web' ? selectedNode?.id || null : null,
         layout: layout, // Already narrowed to valid types by isMeaningfulChange condition
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        flipState: (layout === 'liminal-web' && selectedNode) ? 
+          state.flipState.flipStates.get(selectedNode.id) || null : null,
+        scrollPosition: (layout === 'liminal-web' && selectedNode) ? 
+          getDreamSongScrollPosition(selectedNode.id) : null
       };
       
       // Add to history (reuse existing addHistoryEntry logic)
@@ -843,7 +911,11 @@ export const useInterBrainStore = create<InterBrainState>()(
     const newEntry: NavigationHistoryEntry = {
       nodeId,
       layout,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      flipState: (nodeId && layout === 'liminal-web') ? 
+        state.flipState.flipStates.get(nodeId) || null : null,
+      scrollPosition: (nodeId && layout === 'liminal-web') ? 
+        getDreamSongScrollPosition(nodeId) : null
     };
     
     // If we're not at the end of history (user has undone some actions),
@@ -933,6 +1005,38 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
   
   setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
+  
+  restoreVisualState: (entry) => set((state) => {
+    console.log(`🔄 [Store] Restoring visual state for node: ${entry.nodeId}`, { 
+      flipState: entry.flipState, 
+      scrollPosition: entry.scrollPosition 
+    });
+    
+    const newState = { ...state };
+    
+    // Restore FlipState if present
+    if (entry.nodeId && entry.flipState) {
+      // Update the flip state for this node
+      const updatedFlipStates = new Map(state.flipState.flipStates);
+      updatedFlipStates.set(entry.nodeId, entry.flipState);
+      
+      newState.flipState = {
+        ...state.flipState,
+        flipStates: updatedFlipStates,
+        flippedNodeId: entry.flipState.isFlipped ? entry.nodeId : state.flipState.flippedNodeId
+      };
+    }
+    
+    // Restore scroll position (async, but we don't wait for it)
+    if (entry.nodeId && entry.scrollPosition !== null) {
+      // Use setTimeout to ensure DOM has updated after state change
+      setTimeout(() => {
+        restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
+      }, 100);
+    }
+    
+    return newState;
+  }),
   
   // DreamNode flip animation actions
   setFlippedNode: (nodeId) => set((state) => {

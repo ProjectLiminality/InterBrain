@@ -40,8 +40,6 @@ export class DreamSongParserService {
    */
   async parseDreamSong(canvasPath: string, dreamNodePath: string): Promise<DreamSongParseResult> {
     try {
-      console.log(`📖 [DreamSong Parser] Parsing canvas: ${canvasPath}`);
-      
       // Check if canvas file exists
       const canvasExists = await this.vaultService.fileExists(canvasPath);
       if (!canvasExists) {
@@ -62,7 +60,6 @@ export class DreamSongParserService {
       // Cache the result
       this.parseCache.set(canvasPath, dreamSongData);
       
-      console.log(`✅ [DreamSong Parser] Successfully parsed ${dreamSongData.blocks.length} blocks`);
       return {
         success: true,
         data: dreamSongData
@@ -384,13 +381,15 @@ export class DreamSongParserService {
     const filename = fileNode.file;
     const extension = filename.split('.').pop()?.toLowerCase() || '';
 
-    let mediaType: 'video' | 'image' | 'audio';
+    let mediaType: 'video' | 'image' | 'audio' | 'pdf';
     if (['mp4', 'webm', 'ogg', 'mov'].includes(extension)) {
       mediaType = 'video';
     } else if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(extension)) {
       mediaType = 'image';
     } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(extension)) {
       mediaType = 'audio';
+    } else if (extension === 'pdf') {
+      mediaType = 'pdf';
     } else {
       return null; // Unsupported media type
     }
@@ -402,10 +401,14 @@ export class DreamSongParserService {
       return null;
     }
 
+    // Extract source DreamNode ID from file path
+    const sourceDreamNodeId = this.extractSourceDreamNodeId(filename, dreamNodePath);
+
     return {
       type: mediaType,
       src: resolvedSrc,
-      alt: this.createAltText(filename)
+      alt: this.createAltText(filename),
+      sourceDreamNodeId
     };
   }
 
@@ -415,8 +418,6 @@ export class DreamSongParserService {
   private async resolveMediaPath(filename: string, dreamNodePath: string): Promise<string | null> {
     // Canvas paths are already relative to the DreamNode, so just use them directly
     const filePath = filename;
-    
-    console.log(`🔍 [DreamSong Parser] Resolving media path: ${filename} (from DreamNode: ${dreamNodePath})`);
 
     try {
       // Check if file exists in vault
@@ -427,9 +428,7 @@ export class DreamSongParserService {
       }
 
       // Convert to data URL using same approach as DreamTalk media
-      const dataUrl = await this.filePathToDataUrl(filePath);
-      console.log(`✅ [DreamSong Parser] Created data URL for: ${filename} (${dataUrl.length} chars)`);
-      return dataUrl;
+      return await this.filePathToDataUrl(filePath);
       
     } catch (error) {
       console.error(`❌ [DreamSong Parser] Error resolving media path ${filename}:`, error);
@@ -500,6 +499,22 @@ export class DreamSongParserService {
       '.m4a': 'audio/mp4'
     };
     return mimeTypes[`.${ext}`] || 'application/octet-stream';
+  }
+
+  /**
+   * Extract source DreamNode ID from media file path
+   * Handles paths like "PlayPad/OtherDreamNode/media/file.mp4" for submodule references
+   */
+  private extractSourceDreamNodeId(filename: string, currentDreamNodePath: string): string | undefined {
+    // If path contains submodule reference (e.g., "PlayPad/OtherDreamNode/...")
+    const submoduleMatch = filename.match(/^([^/]+)\/([^/]+)\//);
+    if (submoduleMatch) {
+      const submoduleName = submoduleMatch[2]; // "OtherDreamNode"
+      return submoduleName; // Use submodule name as DreamNode ID
+    }
+    
+    // If it's a local file (no submodule path), return undefined (not clickable)
+    return undefined;
   }
 
   /**

@@ -643,7 +643,7 @@ export function registerDreamweavingCommands(
   plugin.addCommand({
     id: 'flip-selected-dreamnode',
     name: 'Flip Selected DreamNode',
-    hotkeys: [{ modifiers: ['Mod'], key: 'f' }],
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'j' }],
     checkCallback: (checking: boolean) => {
       const store = useInterBrainStore.getState();
       const { selectedNode, spatialLayout, flipState } = store;

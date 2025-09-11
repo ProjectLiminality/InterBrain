@@ -801,7 +801,11 @@ export class GitDreamNodeService {
       'image/gif',
       'image/webp',
       'video/mp4',
-      'video/webm'
+      'video/webm',
+      'audio/mp3',
+      'audio/wav',
+      'audio/ogg',
+      'application/pdf'
     ];
     
     return validTypes.includes(file.type);

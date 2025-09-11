@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { DreamNode } from '../types/dreamnode';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import { DreamSong } from '../features/dreamweaving/DreamSong';
 import { DreamSongData } from '../types/dreamsong';
+import { useInterBrainStore } from '../store/interbrain-store';
 import { setIcon } from 'obsidian';
 
 interface DreamSongSideProps {
@@ -11,6 +12,7 @@ interface DreamSongSideProps {
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
   shouldShowFlipButton: boolean;
+  shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
   dreamSongData: DreamSongData | null;
@@ -29,6 +31,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   isEditModeActive,
   isPendingRelationship,
   shouldShowFlipButton,
+  shouldShowFullscreenButton,
   nodeSize: _nodeSize,
   borderWidth,
   dreamSongData,
@@ -44,6 +47,25 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   const gitState = getGitVisualState(dreamNode.gitStatus);
   const gitStyle = getGitStateStyle(gitState);
 
+  // Connect to store for media click navigation
+  const realNodes = useInterBrainStore(state => state.realNodes);
+  const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
+  
+  // Convert realNodes Map to dreamNodes array (same pattern as DreamspaceCanvas)
+  const dreamNodes = Array.from(realNodes.values()).map(data => data.node);
+
+  // Handler for media click navigation
+  const handleMediaClick = useCallback((sourceDreamNodeId: string) => {
+    // Find the DreamNode by ID or name
+    const targetNode = dreamNodes?.find(node => 
+      node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
+    );
+    
+    if (targetNode) {
+      setSelectedNode(targetNode);
+    }
+  }, [dreamNodes, setSelectedNode]);
+
   return (
     <div
       style={{
@@ -56,9 +78,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         overflow: 'hidden',
         cursor: 'pointer !important',
         transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        transform: `rotateY(180deg) translateZ(-2px) ${isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)'}`,
+        transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
         animation: gitStyle.animation,
-        backfaceVisibility: 'hidden',
         boxShadow: (() => {
           // Priority 1: Git status glow (always highest priority)
           if (gitStyle.glowIntensity > 0) {
@@ -79,7 +100,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      {/* DreamSong content wrapper with circular masking */}
+      {/* Circular mask container */}
       <div
         style={{
           position: 'absolute',
@@ -90,12 +111,48 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           zIndex: 1
         }}
       >
-        {dreamSongData ? (
-          <DreamSong 
-            dreamSongData={dreamSongData}
-            className="flip-enter"
-          />
-        ) : isLoadingDreamSong ? (
+        {/* Scrollable content container */}
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            overflow: 'auto',
+            pointerEvents: 'auto' // Enable scrolling interaction
+          }}
+        >
+          {dreamSongData ? (
+            <div style={{ 
+              height: 'auto', 
+              minHeight: '100%',
+              position: 'relative',
+              paddingBottom: '20px' // Extra space to ensure scrollable area
+            }}>
+              <DreamSong 
+                dreamSongData={dreamSongData}
+                className="flip-enter dreamsong-embedded"
+                sourceDreamNodeId={dreamNode.id}
+                onMediaClick={handleMediaClick}
+              />
+              {/* Custom styles for embedded context */}
+              <style dangerouslySetInnerHTML={{
+                __html: `
+                  .dreamsong-embedded .dreamsong-container {
+                    height: auto !important;
+                    min-height: 100%;
+                    background: transparent;
+                    overflow: visible;
+                  }
+                  .dreamsong-embedded .dreamsong-content {
+                    padding: 8px;
+                  }
+                  .dreamsong-embedded .dreamsong-header {
+                    padding: 8px 12px;
+                    font-size: 12px;
+                  }
+                `
+              }} />
+            </div>
+          ) : isLoadingDreamSong ? (
           <div
             style={{
               width: '100%',
@@ -103,7 +160,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary
+              color: dreamNodeStyles.colors.text.primary,
+              pointerEvents: 'auto' // Allow content interaction
             }}
           >
             Loading DreamSong...
@@ -116,16 +174,23 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary
+              color: dreamNodeStyles.colors.text.primary,
+              pointerEvents: 'auto' // Allow content interaction
             }}
           >
             No DreamSong available
           </div>
         )}
+        </div>
+        
+        {/* Fade-to-black overlay - positioned outside scrolling container but inside circular mask */}
+        {dreamSongData && (
+          <div style={getMediaOverlayStyle()} />
+        )}
       </div>
 
-      {/* Full-screen button (top-center, on back side) */}
-      {isHovered && onFullScreenClick && (
+      {/* Full-screen button (top-center, on back side) - Stable Click Wrapper */}
+      {shouldShowFullscreenButton && onFullScreenClick && (
         <div
           style={{
             position: 'absolute',
@@ -134,37 +199,46 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             transform: 'translateX(-50%)',
             width: '84px',
             height: '84px',
-            borderRadius: '50%',
-            background: '#000000',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer !important',
-            fontSize: '12px',
-            color: '#fff',
-            transition: 'all 0.2s ease',
-            zIndex: 20,
+            cursor: 'pointer',
+            zIndex: 100, // Much higher z-index to override any overlays
             pointerEvents: 'auto'
           }}
           onClick={(e) => {
             e.stopPropagation(); // Prevent event from bubbling to node
             onFullScreenClick(e);
           }}
-          ref={(el) => {
-            if (el) {
-              // Clear existing content and add Obsidian icon
-              el.innerHTML = '';
-              setIcon(el, 'lucide-maximize');
-              // Scale icon for larger button
-              const iconElement = el.querySelector('.lucide-maximize');
-              if (iconElement) {
-                (iconElement as any).style.width = '36px';
-                (iconElement as any).style.height = '36px';
-              }
-            }
-          }}
         >
+          {/* Visual button - DOM manipulation happens here, not on click handler */}
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '50%',
+              background: '#000000',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              color: '#fff',
+              transition: 'all 0.2s ease',
+              zIndex: 99,
+              pointerEvents: 'none' // Clicks pass through to wrapper
+            }}
+            ref={(el) => {
+              if (el) {
+                // Clear existing content and add Obsidian icon
+                el.innerHTML = '';
+                setIcon(el, 'lucide-maximize');
+                // Scale icon for larger button
+                const iconElement = el.querySelector('.lucide-maximize');
+                if (iconElement) {
+                  (iconElement as any).style.width = '36px';
+                  (iconElement as any).style.height = '36px';
+                }
+              }
+            }}
+          />
         </div>
       )}
 
@@ -188,7 +262,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             fontSize: '12px',
             color: '#fff',
             transition: 'all 0.2s ease',
-            zIndex: 20,
+            zIndex: 100,
             pointerEvents: 'auto'
           }}
           onClick={(e) => {

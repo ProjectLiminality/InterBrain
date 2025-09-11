@@ -54,17 +54,11 @@ export class VaultService {
   }
 
   async fileExists(filePath: string): Promise<boolean> {
-    console.log(`🔍 [VaultService] Checking if file exists: "${filePath}"`);
-    
     const fullPath = this.getFullPath(filePath);
-    console.log(`🔍 [VaultService] Using Node.js fs.existsSync: "${fullPath}"`);
-    
     try {
-      const exists = fs.existsSync(fullPath);
-      console.log(`${exists ? '✅' : '❌'} [VaultService] File ${exists ? 'EXISTS' : 'NOT FOUND'}: "${fullPath}"`);
-      return exists;
+      return fs.existsSync(fullPath);
     } catch (error) {
-      console.log(`❌ [VaultService] Error checking file: ${error}`);
+      console.error(`Error checking file existence: ${error}`);
       return false;
     }
   }

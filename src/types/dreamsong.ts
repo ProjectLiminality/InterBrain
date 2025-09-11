@@ -8,9 +8,10 @@
 
 // Media information for DreamSong blocks
 export interface MediaInfo {
-  type: 'video' | 'image' | 'audio';
+  type: 'video' | 'image' | 'audio' | 'pdf';
   src: string;
   alt: string;
+  sourceDreamNodeId?: string; // ID of the DreamNode this media originates from (for clickable navigation)
 }
 
 // Content block types for DreamSong layout

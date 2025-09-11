@@ -15,6 +15,7 @@ export function registerFullScreenCommands(
   plugin.addCommand({
     id: 'open-dreamtalk-fullscreen',
     name: 'Open DreamTalk Full-Screen',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'l' }],
     callback: async () => {
       try {
         const store = useInterBrainStore.getState();
@@ -54,6 +55,7 @@ export function registerFullScreenCommands(
   plugin.addCommand({
     id: 'open-dreamsong-fullscreen',
     name: 'Open DreamSong Full-Screen',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'k' }],
     callback: async () => {
       try {
         const store = useInterBrainStore.getState();
@@ -64,18 +66,27 @@ export function registerFullScreenCommands(
           return;
         }
         
-        // Check if DreamNode has DreamSong data - we need to parse it
         console.log(`Opening DreamSong full-screen for: ${selectedNode.name}`);
         
-        // Get services
+        // Get leaf manager service
         const leafManager = serviceManager.getService('leafManagerService');
-        const canvasParser = serviceManager.getService('canvasParserService');
-        
         if (!leafManager) {
           uiService.showError('Leaf manager service not available');
           return;
         }
         
+        // First, try to use already-parsed data from Zustand store
+        const storedDreamSongData = store.selectedNodeDreamSongData;
+        if (storedDreamSongData && selectedNode.id === store.selectedNode?.id) {
+          console.log('Using cached DreamSong data from store');
+          await leafManager.openDreamSongFullScreen(selectedNode, storedDreamSongData);
+          uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
+          return;
+        }
+        
+        // Fallback: Parse canvas if no cached data available
+        console.log('No cached data found, parsing canvas...');
+        const canvasParser = serviceManager.getService('canvasParserService');
         if (!canvasParser) {
           uiService.showError('Canvas parser service not available');
           return;
@@ -95,17 +106,21 @@ export function registerFullScreenCommands(
         try {
           const analysis = await canvasParser.analyzeCanvasDependencies(canvasPath);
           
-          // For now, create a simple DreamSong data structure
-          // TODO: Implement proper canvas-to-dreamsong parsing
           const dreamSongData = {
-            hasContent: analysis.totalFiles > 0,
-            totalBlocks: analysis.totalFiles,
-            blocks: analysis.allFiles.map((file: any, index: number) => ({
+            canvasPath,
+            dreamNodePath: selectedNode.repoPath,
+            hasContent: analysis?.totalFiles > 0,
+            totalBlocks: analysis?.totalFiles || 0,
+            blocks: (analysis?.allFiles || []).map((file: any, index: number) => ({
               id: `block-${index}`,
               type: 'text' as const,
               text: `Content from ${file.path}`,
-            }))
+            })),
+            lastParsed: Date.now()
           };
+          
+          // Store parsed data for future use
+          store.setSelectedNodeDreamSongData(dreamSongData);
           
           await leafManager.openDreamSongFullScreen(selectedNode, dreamSongData);
           uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
@@ -115,10 +130,16 @@ export function registerFullScreenCommands(
           
           // Fallback: open with empty state
           const emptyDreamSong = {
+            canvasPath,
+            dreamNodePath: selectedNode.repoPath,
             hasContent: false,
             totalBlocks: 0,
-            blocks: []
+            blocks: [],
+            lastParsed: Date.now()
           };
+          
+          // Store empty data for future use
+          store.setSelectedNodeDreamSongData(emptyDreamSong);
           
           await leafManager.openDreamSongFullScreen(selectedNode, emptyDreamSong);
           uiService.showInfo(`Opened empty DreamSong for ${selectedNode.name}`);

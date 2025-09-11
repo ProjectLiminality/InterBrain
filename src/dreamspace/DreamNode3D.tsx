@@ -57,10 +57,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const hitSphereRef = useRef<Mesh>(null);
   
   // Flip animation state
-  const [flipRotation, setFlipRotation] = useState(Math.PI);
+  const [flipRotation, setFlipRotation] = useState(0);
   const [dreamSongData, setDreamSongData] = useState<DreamSongData | null>(null);
   const [hasDreamSong, setHasDreamSong] = useState(false);
-  const [, setDreamSongHasContent] = useState(false);
+  const [dreamSongHasContent, setDreamSongHasContent] = useState(false);
   const [isLoadingDreamSong, setIsLoadingDreamSong] = useState(false);
   
   // Dual-mode position state
@@ -80,7 +80,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Flip state management
   const flipState = useInterBrainStore(state => state.flipState);
   const setFlippedNode = useInterBrainStore(state => state.setFlippedNode);
-  const startFlipAnimation = useInterBrainStore(state => state.startFlipAnimation);
   const completeFlipAnimation = useInterBrainStore(state => state.completeFlipAnimation);
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
@@ -99,7 +98,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Ensure initial state shows front side
   useEffect(() => {
     if (!nodeFlipState) {
-      setFlipRotation(Math.PI);
+      setFlipRotation(0);
     }
   }, [nodeFlipState]);
   
@@ -109,6 +108,30 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                    selectedNode?.id === dreamNode.id && 
                    isHovered &&
                    hasDreamSong &&
+                   dreamSongHasContent && // Only show if canvas has actual content
+                   !isDragging;
+    
+    return result;
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, hasDreamSong, dreamSongHasContent, isDragging]);
+
+  // Determine if DreamTalk fullscreen button should be visible (stable version)
+  const shouldShowDreamTalkFullscreen = useMemo(() => {
+    const result = spatialLayout === 'liminal-web' && 
+                   selectedNode?.id === dreamNode.id && 
+                   isHovered &&
+                   dreamNode.dreamTalkMedia && 
+                   dreamNode.dreamTalkMedia[0] &&
+                   !isDragging;
+    
+    return result;
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging]);
+
+  // Determine if DreamSong fullscreen button should be visible (stable version)
+  const shouldShowDreamSongFullscreen = useMemo(() => {
+    const result = spatialLayout === 'liminal-web' && 
+                   selectedNode?.id === dreamNode.id && 
+                   isHovered &&
+                   hasDreamSong && // DreamSong canvas exists
                    !isDragging;
     
     return result;
@@ -174,11 +197,46 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         
         if (result.success && result.data) {
           setDreamSongData(result.data);
+          // Store in Zustand for reuse in full-screen (only for selected node)
+          const store = useInterBrainStore.getState();
+          if (store.selectedNode?.id === dreamNode.id) {
+            store.setSelectedNodeDreamSongData(result.data);
+          }
         } else {
-          console.error(`Failed to parse DreamSong: ${result.error?.message}`);
+          console.warn(`Failed to parse DreamSong: ${result.error?.message}`);
+          // Set empty DreamSong data for graceful handling
+          const emptyData = {
+            canvasPath: `${dreamNode.repoPath}/DreamSong.canvas`,
+            dreamNodePath: dreamNode.repoPath,
+            hasContent: false,
+            totalBlocks: 0,
+            blocks: [],
+            lastParsed: Date.now()
+          };
+          setDreamSongData(emptyData);
+          // Store empty data in Zustand for reuse in full-screen (only for selected node)
+          const store = useInterBrainStore.getState();
+          if (store.selectedNode?.id === dreamNode.id) {
+            store.setSelectedNodeDreamSongData(emptyData);
+          }
         }
       } catch (error) {
         console.error(`Error loading DreamSong for ${dreamNode.id}:`, error);
+        // Set empty DreamSong data for graceful handling
+        const emptyData = {
+          canvasPath: `${dreamNode.repoPath}/DreamSong.canvas`,
+          dreamNodePath: dreamNode.repoPath,
+          hasContent: false,
+          totalBlocks: 0,
+          blocks: [],
+          lastParsed: Date.now()
+        };
+        setDreamSongData(emptyData);
+        // Store empty data in Zustand for reuse in full-screen (only for selected node)
+        const store = useInterBrainStore.getState();
+        if (store.selectedNode?.id === dreamNode.id) {
+          store.setSelectedNodeDreamSongData(emptyData);
+        }
       } finally {
         setIsLoadingDreamSong(false);
       }
@@ -192,7 +250,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (spatialLayout !== 'liminal-web' || selectedNode?.id !== dreamNode.id) {
       if (flipState.flippedNodeId === dreamNode.id) {
         setFlippedNode(null);
-        setFlipRotation(Math.PI);
+        setFlipRotation(0);
         setDreamSongData(null);
       }
     }
@@ -217,37 +275,50 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     onClick?.(dreamNode);
   };
   
-  const handleFlipClick = useCallback((e: React.MouseEvent) => {
+  const handleFlipClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDragging || isFlipping) return;
     
-    const direction = isFlipped ? 'back-to-front' : 'front-to-back';
-    startFlipAnimation(dreamNode.id, direction);
-  }, [isDragging, isFlipping, isFlipped, startFlipAnimation, dreamNode.id]);
+    console.log('🎯 Flip button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
+    
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      console.log('🎯 About to execute flip-selected-dreamnode command');
+      serviceManager.executeCommand('flip-selected-dreamnode');
+    } catch (error) {
+      console.error('Failed to execute flip command:', error);
+    }
+  }, [isDragging, isFlipping, dreamNode.id, dreamNode.name]);
 
   const handleDreamTalkFullScreen = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDragging) return;
     
+    console.log('🎯 DreamTalk fullscreen button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
+    
     try {
       const { serviceManager } = await import('../services/service-manager');
+      console.log('🎯 About to execute open-dreamtalk-fullscreen command');
       serviceManager.executeCommand('open-dreamtalk-fullscreen');
     } catch (error) {
       console.error('Failed to execute DreamTalk full-screen command:', error);
     }
-  }, [isDragging]);
+  }, [isDragging, dreamNode.id, dreamNode.name]);
 
   const handleDreamSongFullScreen = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDragging) return;
     
+    console.log('🎵 DreamSong fullscreen button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
+    
     try {
       const { serviceManager } = await import('../services/service-manager');
+      console.log('🎵 About to execute open-dreamsong-fullscreen command');
       serviceManager.executeCommand('open-dreamsong-fullscreen');
     } catch (error) {
       console.error('Failed to execute DreamSong full-screen command:', error);
     }
-  }, [isDragging]);
+  }, [isDragging, dreamNode.id, dreamNode.name]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isDragging) return;
@@ -546,7 +617,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     
     // Flip animation updates
     if (isFlipping) {
-      const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? 0 : Math.PI;
+      const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? Math.PI : 0;
       const animationDuration = 600;
       const elapsed = globalThis.performance.now() - (nodeFlipState?.animationStartTime || 0);
       const progress = Math.min(elapsed / animationDuration, 1);
@@ -556,8 +627,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         : 1 - Math.pow(-2 * progress + 2, 2) / 2;
       
       const newRotation = nodeFlipState?.flipDirection === 'front-to-back' 
-        ? Math.PI - (easedProgress * Math.PI)
-        : easedProgress * Math.PI;
+        ? easedProgress * Math.PI
+        : Math.PI - (easedProgress * Math.PI);
       
       setFlipRotation(newRotation);
       
@@ -600,64 +671,91 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     >
       {/* Billboard component - always faces camera */}
       <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
-        {/* Html wrapper for UI components */}
-        <Html
-          center
-          transform
-          distanceFactor={10}
-          style={{
-            pointerEvents: isDragging ? 'none' : 'auto',
-            userSelect: 'none'
-          }}
-        >
-          {/* Rotatable group for flip animation - child of billboard */}
-          <div
+        {/* R3F rotating group for true 3D flip animation */}
+        <group rotation={[0, flipRotation, 0]}>
+          {/* First Html component - original DreamTalk */}
+          <Html
+            position={[0, 0, 0.01]}
+            center
+            transform
+            distanceFactor={10}
             style={{
-              transform: `rotateY(${flipRotation}rad) scaleX(-1)`,
-              transformStyle: 'preserve-3d',
-              transition: 'transform 0.6s ease-in-out',
-              width: `${nodeSize}px`,
-              height: `${nodeSize}px`,
-              position: 'relative'
+              pointerEvents: isDragging ? 'none' : 'auto',
+              userSelect: isHovered ? 'auto' : 'none'
             }}
           >
-            {/* Front side - DreamTalk */}
-            <DreamTalkSide
-              dreamNode={dreamNode}
-              isHovered={isHovered}
-              isEditModeActive={isEditModeActive}
-              isPendingRelationship={isPendingRelationship}
-              shouldShowFlipButton={shouldShowFlipButton}
-              nodeSize={nodeSize}
-              borderWidth={borderWidth}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
-              onClick={handleClick}
-              onDoubleClick={handleDoubleClick}
-              onFlipClick={handleFlipClick}
-              onFullScreenClick={handleDreamTalkFullScreen}
-            />
+            {/* Container div */}
+            <div
+              style={{
+                transformStyle: 'preserve-3d',
+                width: `${nodeSize}px`,
+                height: `${nodeSize}px`,
+                position: 'relative'
+              }}
+            >
+              {/* Front side - DreamTalk */}
+              <DreamTalkSide
+                dreamNode={dreamNode}
+                isHovered={isHovered}
+                isEditModeActive={isEditModeActive}
+                isPendingRelationship={isPendingRelationship}
+                shouldShowFlipButton={shouldShowFlipButton}
+                shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
+                nodeSize={nodeSize}
+                borderWidth={borderWidth}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
+                onFlipClick={handleFlipClick}
+                onFullScreenClick={handleDreamTalkFullScreen}
+              />
+            </div>
+          </Html>
 
-            {/* Back side - DreamSong */}
-            <DreamSongSide
-              dreamNode={dreamNode}
-              isHovered={isHovered}
-              isEditModeActive={isEditModeActive}
-              isPendingRelationship={isPendingRelationship}
-              shouldShowFlipButton={shouldShowFlipButton}
-              nodeSize={nodeSize}
-              borderWidth={borderWidth}
-              dreamSongData={dreamSongData}
-              isLoadingDreamSong={isLoadingDreamSong}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
-              onClick={handleClick}
-              onDoubleClick={handleDoubleClick}
-              onFlipClick={handleFlipClick}
-              onFullScreenClick={handleDreamSongFullScreen}
-            />
-          </div>
-        </Html>
+          {/* Second Html component - DreamSong with 3D offset and rotation */}
+          <Html
+            position={[0, 0, -0.01]}
+            rotation={[0, Math.PI, 0]}
+            center
+            transform
+            distanceFactor={10}
+            style={{
+              pointerEvents: isDragging ? 'none' : 'auto',
+              userSelect: isHovered ? 'auto' : 'none'
+            }}
+          >
+            {/* Container div */}
+            <div
+              style={{
+                transformStyle: 'preserve-3d',
+                width: `${nodeSize}px`,
+                height: `${nodeSize}px`,
+                position: 'relative'
+              }}
+            >
+              {/* DreamSong side */}
+              <DreamSongSide
+                dreamNode={dreamNode}
+                isHovered={isHovered}
+                isEditModeActive={isEditModeActive}
+                isPendingRelationship={isPendingRelationship}
+                shouldShowFlipButton={shouldShowFlipButton}
+                shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
+                nodeSize={nodeSize}
+                borderWidth={borderWidth}
+                dreamSongData={dreamSongData}
+                isLoadingDreamSong={isLoadingDreamSong}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
+                onFlipClick={handleFlipClick}
+                onFullScreenClick={handleDreamSongFullScreen}
+              />
+            </div>
+          </Html>
+        </group>
       </Billboard>
     
       {/* Invisible hit detection sphere */}
