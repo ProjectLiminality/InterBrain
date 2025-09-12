@@ -181,10 +181,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     checkDreamSong();
   }, [dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService, selectedNode?.id, spatialLayout]);
   
-  // Load DreamSong data when flipped to back side
+  // Load DreamSong data when node is selected (preload for seamless flip UX)
   useEffect(() => {
-    const loadDreamSongData = async () => {
-      if (!isFlipped || !hasDreamSong || !vaultService || !canvasParserService || dreamSongData) {
+    const loadDreamSongDataWithCache = async () => {
+      const isSelected = selectedNode?.id === dreamNode.id;
+      if (!isSelected || !hasDreamSong || !vaultService || !canvasParserService) {
         return;
       }
       
@@ -193,18 +194,52 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       try {
         const dreamSongParser = new DreamSongParserService(vaultService, canvasParserService);
         const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+        const store = useInterBrainStore.getState();
+        
+        // Generate structure hash for cache invalidation
+        const structureHash = await dreamSongParser.generateStructureHash(canvasPath);
+        
+        if (!structureHash) {
+          console.warn(`Could not generate structure hash for ${canvasPath}`);
+          setIsLoadingDreamSong(false);
+          return;
+        }
+        
+        // Check cache first (L2 cache in Zustand)
+        const cachedEntry = store.getCachedDreamSong(dreamNode.id, structureHash);
+        
+        if (cachedEntry) {
+          console.log(`🚀 DreamSong cache HIT for ${dreamNode.name} (${structureHash})`);
+          setDreamSongData(cachedEntry.data);
+          
+          // Also store in selectedNodeDreamSongData for full-screen consistency
+          if (store.selectedNode?.id === dreamNode.id) {
+            store.setSelectedNodeDreamSongData(cachedEntry.data);
+          }
+          
+          setIsLoadingDreamSong(false);
+          return;
+        }
+        
+        // Cache miss - need to parse
+        console.log(`📝 DreamSong cache MISS for ${dreamNode.name} (${structureHash}) - parsing...`);
         const result = await dreamSongParser.parseDreamSong(canvasPath, dreamNode.repoPath);
         
         if (result.success && result.data) {
           setDreamSongData(result.data);
-          // Store in Zustand for reuse in full-screen (only for selected node)
-          const store = useInterBrainStore.getState();
+          
+          // Store in cache for future use
+          store.setCachedDreamSong(dreamNode.id, structureHash, result.data);
+          
+          // Store in selectedNodeDreamSongData for full-screen (only for selected node)
           if (store.selectedNode?.id === dreamNode.id) {
             store.setSelectedNodeDreamSongData(result.data);
           }
+          
+          console.log(`✅ DreamSong parsed and cached for ${dreamNode.name}`);
         } else {
           console.warn(`Failed to parse DreamSong: ${result.error?.message}`);
-          // Set empty DreamSong data for graceful handling
+          // Create empty DreamSong data for graceful handling
           const emptyData = {
             canvasPath: `${dreamNode.repoPath}/DreamSong.canvas`,
             dreamNodePath: dreamNode.repoPath,
@@ -214,15 +249,18 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             lastParsed: Date.now()
           };
           setDreamSongData(emptyData);
-          // Store empty data in Zustand for reuse in full-screen (only for selected node)
-          const store = useInterBrainStore.getState();
+          
+          // Cache empty data to prevent repeated parsing of broken canvas
+          store.setCachedDreamSong(dreamNode.id, structureHash, emptyData);
+          
+          // Store empty data for full-screen (only for selected node)
           if (store.selectedNode?.id === dreamNode.id) {
             store.setSelectedNodeDreamSongData(emptyData);
           }
         }
       } catch (error) {
         console.error(`Error loading DreamSong for ${dreamNode.id}:`, error);
-        // Set empty DreamSong data for graceful handling
+        // Set empty DreamSong data for graceful error handling
         const emptyData = {
           canvasPath: `${dreamNode.repoPath}/DreamSong.canvas`,
           dreamNodePath: dreamNode.repoPath,
@@ -232,7 +270,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           lastParsed: Date.now()
         };
         setDreamSongData(emptyData);
-        // Store empty data in Zustand for reuse in full-screen (only for selected node)
+        
+        // Store empty data for selected node
         const store = useInterBrainStore.getState();
         if (store.selectedNode?.id === dreamNode.id) {
           store.setSelectedNodeDreamSongData(emptyData);
@@ -242,8 +281,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       }
     };
     
-    loadDreamSongData();
-  }, [isFlipped, hasDreamSong, dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService, dreamSongData]);
+    loadDreamSongDataWithCache();
+  }, [selectedNode?.id, hasDreamSong, dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService]);
   
   // Reset flip state when node is no longer selected
   useEffect(() => {
@@ -251,7 +290,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       if (flipState.flippedNodeId === dreamNode.id) {
         setFlippedNode(null);
         setFlipRotation(0);
-        setDreamSongData(null);
+        // Note: Keep dreamSongData in memory for performance - cache handles invalidation
       }
     }
   }, [spatialLayout, selectedNode, dreamNode.id, flipState.flippedNodeId, setFlippedNode]);
@@ -746,6 +785,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 borderWidth={borderWidth}
                 dreamSongData={dreamSongData}
                 isLoadingDreamSong={isLoadingDreamSong}
+                isVisible={isFlipped} // Performance optimization: only render media when visible
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}

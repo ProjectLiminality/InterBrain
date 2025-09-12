@@ -17,6 +17,7 @@ interface DreamSongSideProps {
   borderWidth: number;
   dreamSongData: DreamSongData | null;
   isLoadingDreamSong: boolean;
+  isVisible?: boolean; // Performance optimization: only render media when visible
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: (e: React.MouseEvent) => void;
@@ -36,6 +37,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   borderWidth,
   dreamSongData,
   isLoadingDreamSong,
+  isVisible = true, // Default to true for backwards compatibility
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -127,12 +129,27 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
               position: 'relative',
               paddingBottom: '20px' // Extra space to ensure scrollable area
             }}>
-              <DreamSong 
-                dreamSongData={dreamSongData}
-                className="flip-enter dreamsong-embedded"
-                sourceDreamNodeId={dreamNode.id}
-                onMediaClick={handleMediaClick}
-              />
+              {isVisible ? (
+                <DreamSong 
+                  dreamSongData={dreamSongData}
+                  className="flip-enter dreamsong-embedded"
+                  sourceDreamNodeId={dreamNode.id}
+                  onMediaClick={handleMediaClick}
+                />
+              ) : (
+                // Lightweight placeholder when not visible (facing away from camera)
+                <div className="dreamsong-placeholder" style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#888',
+                  fontSize: '12px'
+                }}>
+                  DreamSong loaded
+                </div>
+              )}
               {/* Custom styles for embedded context */}
               <style dangerouslySetInnerHTML={{
                 __html: `

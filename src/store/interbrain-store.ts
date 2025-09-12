@@ -18,19 +18,26 @@ import { FlipState } from '../types/dreamsong';
 // Helper function to get current scroll position of DreamSong content
 function getDreamSongScrollPosition(nodeId: string): number | null {
   try {
+    // Ensure we're in browser environment
+    if (typeof document === 'undefined') return null;
+    
     // Look for DreamSong leaf in right pane containing this nodeId
+    // eslint-disable-next-line no-undef
     const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
     if (dreamSongLeaf) {
       const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
-      if (scrollContainer instanceof HTMLElement) {
-        return scrollContainer.scrollTop;
+      if (scrollContainer && 'scrollTop' in scrollContainer) {
+        // eslint-disable-next-line no-undef
+        return (scrollContainer as HTMLElement).scrollTop;
       }
     }
     
     // Also check for embedded DreamSong content in DreamSpace
+    // eslint-disable-next-line no-undef
     const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
-    if (dreamSpaceContent instanceof HTMLElement) {
-      return dreamSpaceContent.scrollTop;
+    if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
+      // eslint-disable-next-line no-undef
+      return (dreamSpaceContent as HTMLElement).scrollTop;
     }
     
     return null;
@@ -43,20 +50,27 @@ function getDreamSongScrollPosition(nodeId: string): number | null {
 // Helper function to restore scroll position of DreamSong content
 function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number): void {
   try {
+    // Ensure we're in browser environment
+    if (typeof document === 'undefined') return;
+    
     // Look for DreamSong leaf in right pane containing this nodeId
+    // eslint-disable-next-line no-undef
     const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
     if (dreamSongLeaf) {
       const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
-      if (scrollContainer instanceof HTMLElement) {
-        scrollContainer.scrollTop = scrollPosition;
+      if (scrollContainer && 'scrollTop' in scrollContainer) {
+        // eslint-disable-next-line no-undef
+        (scrollContainer as HTMLElement).scrollTop = scrollPosition;
         return;
       }
     }
     
     // Also check for embedded DreamSong content in DreamSpace
+    // eslint-disable-next-line no-undef
     const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
-    if (dreamSpaceContent instanceof HTMLElement) {
-      dreamSpaceContent.scrollTop = scrollPosition;
+    if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
+      // eslint-disable-next-line no-undef
+      (dreamSpaceContent as HTMLElement).scrollTop = scrollPosition;
     }
   } catch (error) {
     console.warn(`Failed to restore scroll position for node ${nodeId}:`, error);
@@ -131,6 +145,21 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
+// DreamSong caching system - persisted across sessions
+export interface DreamSongCacheEntry {
+  data: DreamSongData;
+  structureHash: string; // Hash of topological sort + content for smart invalidation
+  lastAccessed: number; // For LRU eviction
+  sizeBytes: number; // Estimated memory footprint
+}
+
+export interface DreamSongCacheState {
+  cache: Map<string, DreamSongCacheEntry>; // Key: `${nodeId}_${structureHash}`
+  totalSizeBytes: number; // Current cache size
+  maxSizeBytes: number; // 50MB limit
+  lastAccessTime: number | null; // Timestamp of last cache access
+}
+
 // Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
 
 export interface InterBrainState extends OllamaConfigSlice {
@@ -151,6 +180,13 @@ export interface InterBrainState extends OllamaConfigSlice {
   // Selected DreamNode's DreamSong data (for reuse in full-screen)
   selectedNodeDreamSongData: DreamSongData | null;
   setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
+  
+  // DreamSong cache (persisted across sessions)
+  dreamSongCache: DreamSongCacheState;
+  getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
+  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
+  clearDreamSongCache: () => void;
+  evictLRUEntries: () => void;
   
   // Creator mode state
   creatorMode: {
@@ -287,6 +323,15 @@ export const useInterBrainStore = create<InterBrainState>()(
   ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
   selectedNodeDreamSongData: null,
+  
+  // DreamSong cache initial state
+  dreamSongCache: {
+    cache: new Map<string, DreamSongCacheEntry>(),
+    totalSizeBytes: 0,
+    maxSizeBytes: 50 * 1024 * 1024, // 50MB limit
+    lastAccessTime: null
+  },
+  
   creatorMode: {
     isActive: false,
     nodeId: null
@@ -357,7 +402,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     history: [{
       nodeId: null,
       layout: 'constellation',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      flipState: null,
+      scrollPosition: null
     }],
     currentIndex: 0, // Start at the initial constellation state
     maxHistorySize: 150 // High limit for ultra-lightweight entries
@@ -451,6 +498,117 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
   
   setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
+  
+  // DreamSong cache methods
+  getCachedDreamSong: (nodeId, structureHash) => {
+    const state = get();
+    const cacheKey = `${nodeId}_${structureHash}`;
+    const entry = state.dreamSongCache.cache.get(cacheKey);
+    
+    if (entry) {
+      // Update last accessed time for LRU
+      const now = Date.now();
+      const updatedEntry = { ...entry, lastAccessed: now };
+      set(state => {
+        const newCache = new Map(state.dreamSongCache.cache);
+        newCache.set(cacheKey, updatedEntry);
+        return {
+          dreamSongCache: {
+            ...state.dreamSongCache,
+            cache: newCache,
+            lastAccessTime: now
+          }
+        };
+      });
+      return updatedEntry;
+    }
+    
+    return null;
+  },
+  
+  setCachedDreamSong: (nodeId, structureHash, data) => set(state => {
+    const cacheKey = `${nodeId}_${structureHash}`;
+    
+    // Estimate size (rough calculation: JSON string length * 2 bytes for UTF-16)
+    const sizeBytes = JSON.stringify(data).length * 2;
+    
+    const entry: DreamSongCacheEntry = {
+      data,
+      structureHash,
+      lastAccessed: Date.now(),
+      sizeBytes
+    };
+    
+    const newCache = new Map(state.dreamSongCache.cache);
+    
+    // Remove existing entry if it exists (to update size calculation)
+    const existingEntry = newCache.get(cacheKey);
+    const sizeDelta = existingEntry ? sizeBytes - existingEntry.sizeBytes : sizeBytes;
+    
+    newCache.set(cacheKey, entry);
+    
+    const newState = {
+      dreamSongCache: {
+        ...state.dreamSongCache,
+        cache: newCache,
+        totalSizeBytes: state.dreamSongCache.totalSizeBytes + sizeDelta
+      }
+    };
+    
+    // Check if we need to evict entries after adding
+    if (newState.dreamSongCache.totalSizeBytes > newState.dreamSongCache.maxSizeBytes) {
+      // Trigger LRU eviction
+      if (typeof setTimeout !== 'undefined') {
+        // eslint-disable-next-line no-undef
+        setTimeout(() => get().evictLRUEntries(), 0);
+      } else {
+        // Fallback for non-browser environments
+        get().evictLRUEntries();
+      }
+    }
+    
+    return newState;
+  }),
+  
+  evictLRUEntries: () => set(state => {
+    if (state.dreamSongCache.totalSizeBytes <= state.dreamSongCache.maxSizeBytes) {
+      return state; // No eviction needed
+    }
+    
+    // Sort entries by last accessed time (oldest first)
+    const entries = Array.from(state.dreamSongCache.cache.entries());
+    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+    
+    const newCache = new Map(state.dreamSongCache.cache);
+    let newTotalSize = state.dreamSongCache.totalSizeBytes;
+    
+    // Remove oldest entries until we're under the limit
+    for (const [key, entry] of entries) {
+      if (newTotalSize <= state.dreamSongCache.maxSizeBytes * 0.8) { // Leave 20% buffer
+        break;
+      }
+      newCache.delete(key);
+      newTotalSize -= entry.sizeBytes;
+    }
+    
+    console.log(`DreamSong cache: Evicted ${entries.length - newCache.size} entries. Size: ${newTotalSize} bytes`);
+    
+    return {
+      dreamSongCache: {
+        ...state.dreamSongCache,
+        cache: newCache,
+        totalSizeBytes: newTotalSize
+      }
+    };
+  }),
+  
+  clearDreamSongCache: () => set(state => ({
+    dreamSongCache: {
+      ...state.dreamSongCache,
+      cache: new Map<string, DreamSongCacheEntry>(),
+      totalSizeBytes: 0
+    }
+  })),
   
   setCreatorMode: (active, nodeId = null) => set({ 
     creatorMode: { isActive: active, nodeId: nodeId } 
@@ -1030,9 +1188,15 @@ export const useInterBrainStore = create<InterBrainState>()(
     // Restore scroll position (async, but we don't wait for it)
     if (entry.nodeId && entry.scrollPosition !== null) {
       // Use setTimeout to ensure DOM has updated after state change
-      setTimeout(() => {
+      if (typeof setTimeout !== 'undefined') {
+        // eslint-disable-next-line no-undef
+        setTimeout(() => {
+          restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
+        }, 100);
+      } else {
+        // Fallback for non-browser environments
         restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
-      }, 100);
+      }
     }
     
     return newState;
@@ -1146,11 +1310,15 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
+      // Only persist real nodes data, data mode, vector data, mock relationships, DreamSong cache, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
+        dreamSongCache: {
+          ...state.dreamSongCache,
+          cache: mapToArray(state.dreamSongCache.cache)
+        },
         ...extractOllamaPersistenceData(state),
       }),
       // Custom merge function to handle Map deserialization
@@ -1159,6 +1327,12 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: 'mock' | 'real'; 
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
+          dreamSongCache?: {
+            cache: [string, DreamSongCacheEntry][];
+            totalSizeBytes: number;
+            maxSizeBytes: number;
+            lastAccessTime: number | null;
+          };
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
         };
@@ -1167,6 +1341,15 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
+          dreamSongCache: persistedData.dreamSongCache ? {
+            ...persistedData.dreamSongCache,
+            cache: arrayToMap(persistedData.dreamSongCache.cache)
+          } : {
+            cache: new Map<string, DreamSongCacheEntry>(),
+            totalSizeBytes: 0,
+            maxSizeBytes: 50 * 1024 * 1024, // 50MB limit
+            lastAccessTime: null
+          },
           ...restoreOllamaPersistenceData(persistedData),
         };
       },

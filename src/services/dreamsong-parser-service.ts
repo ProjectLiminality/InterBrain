@@ -36,7 +36,136 @@ export class DreamSongParserService {
   ) {}
 
   /**
+   * Generate structure hash for smart cache invalidation
+   * Ignores cosmetic changes (XY coordinates) but captures structural changes
+   */
+  async generateStructureHash(canvasPath: string): Promise<string | null> {
+    try {
+      // Check if canvas file exists
+      const canvasExists = await this.vaultService.fileExists(canvasPath);
+      if (!canvasExists) {
+        return null;
+      }
+
+      // Parse canvas data
+      const canvasData = await this.canvasParser.parseCanvas(canvasPath);
+      
+      if (!canvasData.nodes || canvasData.nodes.length === 0) {
+        return 'empty-canvas'; // Special hash for empty canvas
+      }
+
+      // Create structure fingerprint - only the parts that affect DreamSong output
+      const structureData = {
+        // Node content (excluding position)
+        nodes: canvasData.nodes.map(node => ({
+          id: node.id,
+          text: node.text || '',
+          file: node.file || '',
+          type: node.type,
+          width: node.width, // Size matters for layout
+          height: node.height
+          // Deliberately exclude x, y coordinates
+        })).sort((a, b) => a.id.localeCompare(b.id)), // Sort for consistency
+        
+        // Edge relationships (structure)
+        edges: canvasData.edges.map(edge => ({
+          id: edge.id,
+          fromNode: edge.fromNode,
+          toNode: edge.toNode,
+          toEnd: edge.toEnd
+        })).sort((a, b) => a.id.localeCompare(b.id)) // Sort for consistency
+      };
+
+      // Generate hash from structure data
+      const structureString = JSON.stringify(structureData);
+      
+      // Simple hash function (could use crypto.createHash for more robust hashing)
+      let hash = 0;
+      for (let i = 0; i < structureString.length; i++) {
+        const char = structureString.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      
+      return hash.toString(36); // Base36 for shorter string
+      
+    } catch (error) {
+      console.error('Failed to generate structure hash:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse a DreamSong canvas file with intelligent L1/L2 caching
+   * L1: In-memory parseCache (fast, per-service instance)
+   * L2: Zustand persistent cache (persistent across sessions)
+   */
+  async parseDreamSongWithCache(
+    canvasPath: string, 
+    dreamNodePath: string, 
+    nodeId: string,
+    zustandStore?: any
+  ): Promise<DreamSongParseResult> {
+    try {
+      // Generate structure hash for cache invalidation
+      const structureHash = await this.generateStructureHash(canvasPath);
+      
+      if (!structureHash) {
+        return this.createErrorResult('parsing_error', 'Could not generate structure hash', canvasPath);
+      }
+      
+      const cacheKey = `${nodeId}_${structureHash}`;
+      
+      // L1 Cache check (in-memory, fastest)
+      if (this.parseCache.has(cacheKey)) {
+        console.log(`⚡ DreamSong L1 cache HIT: ${cacheKey}`);
+        return {
+          success: true,
+          data: this.parseCache.get(cacheKey)!
+        };
+      }
+      
+      // L2 Cache check (Zustand persistent store)
+      if (zustandStore) {
+        const cachedEntry = zustandStore.getCachedDreamSong(nodeId, structureHash);
+        if (cachedEntry) {
+          console.log(`🚀 DreamSong L2 cache HIT: ${cacheKey}`);
+          // Populate L1 cache for next time
+          this.parseCache.set(cacheKey, cachedEntry.data);
+          return {
+            success: true,
+            data: cachedEntry.data
+          };
+        }
+      }
+      
+      // Cache miss - parse from scratch
+      console.log(`📝 DreamSong cache MISS: ${cacheKey} - parsing...`);
+      const result = await this.parseDreamSong(canvasPath, dreamNodePath);
+      
+      if (result.success && result.data) {
+        // Store in L1 cache
+        this.parseCache.set(cacheKey, result.data);
+        
+        // Store in L2 cache (Zustand)
+        if (zustandStore) {
+          zustandStore.setCachedDreamSong(nodeId, structureHash, result.data);
+        }
+        
+        console.log(`✅ DreamSong parsed and cached: ${cacheKey}`);
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.error('Error in parseDreamSongWithCache:', error);
+      return this.createErrorResult('parsing_error', `Parse error: ${error}`, canvasPath);
+    }
+  }
+  
+  /**
    * Parse a DreamSong canvas file and return structured story flow
+   * (Original method - kept for direct usage without caching)
    */
   async parseDreamSong(canvasPath: string, dreamNodePath: string): Promise<DreamSongParseResult> {
     try {
@@ -56,9 +185,6 @@ export class DreamSongParserService {
 
       // Process canvas into story blocks
       const dreamSongData = await this.processCanvasIntoStory(canvasData, canvasPath, dreamNodePath);
-      
-      // Cache the result
-      this.parseCache.set(canvasPath, dreamSongData);
       
       return {
         success: true,
@@ -415,7 +541,7 @@ export class DreamSongParserService {
   /**
    * Resolve media file path to data URL, following DreamTalk media pattern
    */
-  private async resolveMediaPath(filename: string, dreamNodePath: string): Promise<string | null> {
+  private async resolveMediaPath(filename: string, _dreamNodePath: string): Promise<string | null> {
     // Canvas paths are already relative to the DreamNode, so just use them directly
     const filePath = filename;
 
@@ -505,7 +631,7 @@ export class DreamSongParserService {
    * Extract source DreamNode ID from media file path
    * Handles paths like "PlayPad/OtherDreamNode/media/file.mp4" for submodule references
    */
-  private extractSourceDreamNodeId(filename: string, currentDreamNodePath: string): string | undefined {
+  private extractSourceDreamNodeId(filename: string, _currentDreamNodePath: string): string | undefined {
     // If path contains submodule reference (e.g., "PlayPad/OtherDreamNode/...")
     const submoduleMatch = filename.match(/^([^/]+)\/([^/]+)\//);
     if (submoduleMatch) {
