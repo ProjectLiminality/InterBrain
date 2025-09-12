@@ -92,7 +92,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Get current flip state for this node
   const nodeFlipState = flipState.flipStates.get(dreamNode.id);
-  const isFlipped = nodeFlipState?.isFlipped || false;
   const isFlipping = nodeFlipState?.isFlipping || false;
   
   // Ensure initial state shows front side
@@ -785,7 +784,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 borderWidth={borderWidth}
                 dreamSongData={dreamSongData}
                 isLoadingDreamSong={isLoadingDreamSong}
-                isVisible={isFlipped} // Performance optimization: only render media when visible
+                // Note: DreamSong always rendered, CSS backface-visibility handles optimization
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
