@@ -74,6 +74,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled'>('liminal');
   const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart'>('easeOutCubic');
   
+  // Add flip rotation to transition system for unified animations
+  const [targetFlipRotation, setTargetFlipRotation] = useState(0);
+  const [startFlipRotation, setStartFlipRotation] = useState(0);
+  const [shouldAnimateFlip, setShouldAnimateFlip] = useState(false);
+  
+  // No longer need to track flip state - we access live store state directly
+  
   // Check global drag state
   const isDragging = useInterBrainStore(state => state.isDragging);
   
@@ -100,6 +107,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setFlipRotation(0);
     }
   }, [nodeFlipState]);
+  
+  // No longer need tracking - using live store state in imperative handles
   
   // Determine if flip button should be visible
   const shouldShowFlipButton = useMemo(() => {
@@ -288,7 +297,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (spatialLayout !== 'liminal-web' || selectedNode?.id !== dreamNode.id) {
       if (flipState.flippedNodeId === dreamNode.id) {
         setFlippedNode(null);
-        setFlipRotation(0);
+        // Note: Flip rotation now animates smoothly via Universal Movement API
+        // setFlipRotation(0); // Removed - handled by flip-back animation
         // Note: Keep dreamSongData in memory for performance - cache handles invalidation
       }
     }
@@ -364,9 +374,48 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     onDoubleClick?.(dreamNode);
   };
 
+  // Helper to start flip-back animation alongside movement
+  const startFlipBackAnimation = () => {
+    // Get LIVE store state (not stale component state)
+    const liveStoreState = useInterBrainStore.getState();
+    const currentFlipRotation = flipRotation;
+    const storeFlippedNodeId = liveStoreState.flipState.flippedNodeId;
+    const wasFlipped = storeFlippedNodeId === dreamNode.id;
+    
+    // Always log for now to debug the filtering issue
+    console.log(`🔄 [${dreamNode.name}] startFlipBackAnimation called:`, {
+      currentFlipRotation,
+      wasFlipped,
+      storeFlippedNodeId,
+      componentFlippedNodeId: flipState.flippedNodeId,
+      nodeId: dreamNode.id
+    });
+    
+    // Check if this node was recently flipped (check live store state)
+    if (currentFlipRotation !== 0 || wasFlipped) {
+      // Use current rotation if available, otherwise assume it was Math.PI (fully flipped)
+      const startRotation = currentFlipRotation !== 0 ? currentFlipRotation : Math.PI;
+      console.log(`🔄 [${dreamNode.name}] Starting unified flip-back animation from ${startRotation} to 0`);
+      setStartFlipRotation(startRotation);
+      setTargetFlipRotation(0);
+      setShouldAnimateFlip(true);
+    }
+  };
+
   // Universal Movement API implementation (keeping all the complex logic)
   useImperativeHandle(ref, () => ({
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
+      const wasFlipped = flipState.flippedNodeId === dreamNode.id || flipRotation !== 0;
+      // Always log for now to debug the filtering issue
+      console.log(`🚀 [${dreamNode.name}] moveToPosition called (wasFlipped: ${wasFlipped}):`, {
+        newTargetPosition,
+        duration,
+        easing,
+        currentFlipRotation: flipRotation,
+        flippedNodeId: flipState.flippedNodeId,
+        nodeId: dreamNode.id
+      });
+      
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
@@ -383,6 +432,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
+      
+      // Start flip-back animation alongside position movement
+      startFlipBackAnimation();
       
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -395,6 +447,16 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
+      const wasFlipped = flipState.flippedNodeId === dreamNode.id || flipRotation !== 0;
+      // Always log for now to debug the filtering issue
+      console.log(`🏠 [${dreamNode.name}] returnToConstellation called (wasFlipped: ${wasFlipped}):`, {
+        duration,
+        easing,
+        currentFlipRotation: flipRotation,
+        flippedNodeId: flipState.flippedNodeId,
+        nodeId: dreamNode.id
+      });
+      
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
@@ -411,6 +473,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
+      
+      // Start flip-back animation alongside position movement
+      startFlipBackAnimation();
       
       const constellationPosition = dreamNode.position;
       setStartPosition(actualCurrentPosition);
@@ -456,6 +521,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
+      
+      // Start flip-back animation alongside position movement
+      startFlipBackAnimation();
       
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -673,6 +741,40 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       if (progress >= 1) {
         completeFlipAnimation(dreamNode.id);
         setFlipRotation(targetRotation);
+      }
+    }
+    
+    // Unified flip-back animation (parallel with position movement)
+    if (shouldAnimateFlip && !isFlipping) {
+      const elapsed = globalThis.performance.now() - transitionStartTime;
+      const progress = Math.min(elapsed / transitionDuration, 1);
+      
+      let easedProgress: number;
+      switch (transitionEasing) {
+        case 'easeInQuart':
+          easedProgress = Math.pow(progress, 4);
+          break;
+        case 'easeOutQuart':
+          easedProgress = 1 - Math.pow(1 - progress, 4);
+          break;
+        case 'easeOutCubic':
+        default:
+          easedProgress = 1 - Math.pow(1 - progress, 3);
+          break;
+      }
+      
+      const newFlipRotation = startFlipRotation + (targetFlipRotation - startFlipRotation) * easedProgress;
+      setFlipRotation(newFlipRotation);
+      
+      // Log every 20% of the animation progress to avoid spam
+      if (Math.floor(progress * 5) !== Math.floor((progress - 0.01) * 5)) {
+        console.log(`🔄 [${dreamNode.name}] Unified flip animation progress: ${Math.round(progress * 100)}%, rotation: ${newFlipRotation.toFixed(3)}`);
+      }
+      
+      if (progress >= 1) {
+        setFlipRotation(targetFlipRotation);
+        setShouldAnimateFlip(false);
+        console.log(`🔄 [${dreamNode.name}] Unified flip-back animation complete: ${targetFlipRotation}`);
       }
     }
   });
