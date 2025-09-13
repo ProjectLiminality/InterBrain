@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { DreamSongData, DreamSongBlock, MediaInfo } from '../../types/dreamsong';
+import separatorImage from '../../assets/images/Separator.png';
 import './dreamsong.module.css';
 
 interface DreamSongProps {
@@ -67,7 +68,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
           {dreamNodeName || 'DreamSong'}
         </div>
         <img
-          src="media/elements/Separator.png"
+          src={separatorImage}
           alt="Separator"
           className="dreamsong-separator"
         />
@@ -229,10 +230,6 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
         </div>
       )}
 
-      {/* Block number indicator for debugging */}
-      <div className="dreamsong-block-number">
-        {blockIndex + 1}
-      </div>
     </div>
   );
 };

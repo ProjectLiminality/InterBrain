@@ -13,7 +13,7 @@
   position: relative;
   background: #000000;
   color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: 'TeX Gyre Termes', Georgia, serif;
   display: flex;
   flex-direction: column;
   padding: 20px;
@@ -30,10 +30,11 @@
 }
 
 .dreamsong-title {
-  font-size: 3rem;
+  font-size: 4rem;
   font-weight: 600;
   color: #ffffff;
   margin-bottom: 2rem;
+  text-align: center;
 }
 
 .dreamsong-separator {
@@ -128,23 +129,6 @@
   }
 }
 
-/* Block number indicator (for debugging) */
-.dreamsong-block-number {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  pointer-events: none;
-}
 
 /* Text-only blocks - centered */
 .dreamsong-block--text {
@@ -178,10 +162,11 @@
 .dreamsong-block--media-text .dreamsong-media-text {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   width: 100%;
   max-width: 95%;
   margin: 0 auto;
+  gap: 20px;
 }
 
 /* Left-aligned: Media left, text right */
@@ -197,7 +182,7 @@
 .dreamsong-media-container {
   flex: 2;
   max-width: 60%;
-  margin: 0 20px;
+  margin: 0;
 }
 
 .dreamsong-text-container {
@@ -205,7 +190,9 @@
   max-width: 30%;
   padding: 10px;
   text-align: left;
-  margin: 0 20px;
+  margin: 0;
+  display: flex;
+  align-items: center;
 }
 
 /* Media elements */
@@ -246,7 +233,7 @@
 /* Text elements */
 .dreamsong-text {
   line-height: 1.5;
-  font-size: 30px;
+  font-size: 30px !important;
   color: white;
 }
 
