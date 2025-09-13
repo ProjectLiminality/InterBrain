@@ -1157,25 +1157,21 @@ export const useInterBrainStore = create<InterBrainState>()(
   setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
   
   restoreVisualState: (entry) => set((state) => {
-      flipState: entry.flipState, 
-      scrollPosition: entry.scrollPosition 
-    });
-    
     const newState = { ...state };
-    
+
     // Restore FlipState if present
     if (entry.nodeId && entry.flipState) {
       // Update the flip state for this node
       const updatedFlipStates = new Map(state.flipState.flipStates);
       updatedFlipStates.set(entry.nodeId, entry.flipState);
-      
+
       newState.flipState = {
         ...state.flipState,
         flipStates: updatedFlipStates,
         flippedNodeId: entry.flipState.isFlipped ? entry.nodeId : state.flipState.flippedNodeId
       };
     }
-    
+
     // Restore scroll position (async, but we don't wait for it)
     if (entry.nodeId && entry.scrollPosition !== null) {
       // Use setTimeout to ensure DOM has updated after state change
@@ -1189,7 +1185,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
       }
     }
-    
+
     return newState;
   }),
   
@@ -1236,15 +1232,13 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
     
     updatedFlipStates.set(nodeId, newFlipState);
-    
-      flippedNodeId: nodeId,
-      newState: newFlipState
-    });
-    
+
     return {
+      ...state,
       flipState: {
-        flippedNodeId: nodeId,
-        flipStates: updatedFlipStates
+        ...state.flipState,
+        flipStates: updatedFlipStates,
+        flippedNodeId: nodeId
       }
     };
   }),
@@ -1264,12 +1258,6 @@ export const useInterBrainStore = create<InterBrainState>()(
       };
       
       updatedFlipStates.set(nodeId, completedFlipState);
-      
-        nodeId,
-        finalFlippedState,
-        direction: currentFlipState.flipDirection
-      });
-    } else {
     }
     
     return {

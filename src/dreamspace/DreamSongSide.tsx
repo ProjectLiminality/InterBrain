@@ -129,33 +129,14 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
               position: 'relative',
               paddingBottom: '20px' // Extra space to ensure scrollable area
             }}>
-              <DreamSong 
+              <DreamSong
                 dreamSongData={dreamSongData}
-                className="flip-enter dreamsong-embedded"
+                className="flip-enter"
                 sourceDreamNodeId={dreamNode.id}
+                dreamNodeName={dreamNode.name}
                 onMediaClick={handleMediaClick}
+                embedded={true}
               />
-              {/* Custom styles for embedded context with performance optimization */}
-              <style dangerouslySetInnerHTML={{
-                __html: `
-                  .dreamsong-embedded {
-                    backface-visibility: hidden; /* Browser-native optimization for hidden faces */
-                  }
-                  .dreamsong-embedded .dreamsong-container {
-                    height: auto !important;
-                    min-height: 100%;
-                    background: transparent;
-                    overflow: visible;
-                  }
-                  .dreamsong-embedded .dreamsong-content {
-                    padding: 8px;
-                  }
-                  .dreamsong-embedded .dreamsong-header {
-                    padding: 8px 12px;
-                    font-size: 12px;
-                  }
-                `
-              }} />
             </div>
           ) : isLoadingDreamSong ? (
           <div

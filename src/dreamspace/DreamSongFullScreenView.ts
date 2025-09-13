@@ -51,28 +51,15 @@ export class DreamSongFullScreenView extends ItemView {
     container.empty();
     container.addClass('dreamsong-fullscreen-container');
 
-    // Add full-screen specific styles
-    container.createEl('style', {
-      text: `
-        .dreamsong-fullscreen-container {
-          width: 100%;
-          height: 100%;
-          overflow: auto;
-          background: #000000;
-          display: flex;
-          justify-content: center;
-          align-items: flex-start;
-        }
-
-        .dreamsong-fullscreen-wrapper {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          justify-content: center;
-          align-items: flex-start;
-        }
-      `
-    });
+    // Set up container styling
+    const htmlContainer = container as any;
+    htmlContainer.style.width = '100%';
+    htmlContainer.style.height = '100%';
+    htmlContainer.style.overflow = 'auto';
+    htmlContainer.style.background = '#000000';
+    htmlContainer.style.display = 'flex';
+    htmlContainer.style.justifyContent = 'center';
+    htmlContainer.style.alignItems = 'flex-start';
 
     // Use setTimeout to ensure container is properly set up before rendering
     globalThis.setTimeout(() => {
@@ -103,11 +90,12 @@ export class DreamSongFullScreenView extends ItemView {
       this.root.render(
         createElement(StrictMode, null,
           createElement('div', {
-            className: 'dreamsong-fullscreen-wrapper',
             style: {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              width: '100%',
+              height: '100%',
               color: '#ffffff',
               fontSize: '18px'
             }
@@ -118,22 +106,16 @@ export class DreamSongFullScreenView extends ItemView {
     }
 
     console.log('Rendering DreamSong component with data:', this.dreamSongData);
-    // Render the exact same DreamSong component - no wrapper needed!
+    // Render the DreamSong component directly - CSS modules handle all styling
     this.root.render(
       createElement(StrictMode, null,
-        createElement('div', {
-          className: 'dreamsong-fullscreen-wrapper',
-          'data-type': 'dreamsong-fullscreen',
-          'data-node-id': this.dreamNode?.id
-        }, 
-          createElement(DreamSong, {
-            dreamSongData: this.dreamSongData,
-            className: 'dreamsong-fullscreen',
-            sourceDreamNodeId: this.dreamNode?.id,
-            dreamNodeName: this.dreamNode?.name,
-            onMediaClick: this.handleMediaClick.bind(this)
-          })
-        )
+        createElement(DreamSong, {
+          dreamSongData: this.dreamSongData,
+          sourceDreamNodeId: this.dreamNode?.id,
+          dreamNodeName: this.dreamNode?.name,
+          onMediaClick: this.handleMediaClick.bind(this),
+          embedded: false
+        })
       )
     );
   }

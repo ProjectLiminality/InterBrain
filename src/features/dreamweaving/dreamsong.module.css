@@ -4,7 +4,7 @@
  */
 
 /* Main container - pure content, no shape constraints */
-.dreamsong-container {
+.dreamSongContainer {
   width: 100%;
   max-width: 2600px;
   margin: 0 auto;
@@ -20,8 +20,26 @@
   box-sizing: border-box;
 }
 
+/* Embedded context modifier */
+.dreamSongContainer.embedded {
+  height: auto !important;
+  min-height: 100%;
+  background: transparent;
+  overflow: visible;
+  backface-visibility: hidden; /* Browser-native optimization for hidden faces */
+}
+
+.dreamSongContainer.embedded .dreamSongContent {
+  padding: 8px;
+}
+
+.dreamSongContainer.embedded .dreamSongHeader {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
 /* Header section */
-.dreamsong-header {
+.dreamSongHeader {
   text-align: center;
   margin-bottom: 2rem;
   display: flex;
@@ -29,7 +47,7 @@
   align-items: center;
 }
 
-.dreamsong-title {
+.dreamSongTitle {
   font-size: 4rem;
   font-weight: 600;
   color: #ffffff;
@@ -37,7 +55,7 @@
   text-align: center;
 }
 
-.dreamsong-separator {
+.dreamSongSeparator {
   width: 90%;
   height: auto;
   display: block;
@@ -46,33 +64,33 @@
 }
 
 /* Scrollable content area */
-.dreamsong-content {
+.dreamSongContent {
   flex: 1;
   overflow-y: auto;
   scroll-behavior: smooth;
 }
 
 /* Custom scrollbar styling */
-.dreamsong-content::-webkit-scrollbar {
+.dreamSongContent::-webkit-scrollbar {
   width: 4px;
 }
 
-.dreamsong-content::-webkit-scrollbar-track {
+.dreamSongContent::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
 
-.dreamsong-content::-webkit-scrollbar-thumb {
+.dreamSongContent::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
 }
 
-.dreamsong-content::-webkit-scrollbar-thumb:hover {
+.dreamSongContent::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
 }
 
 /* Empty state styling */
-.dreamsong-empty-state {
+.dreamSongEmptyState {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -82,27 +100,27 @@
   padding: 32px 16px;
 }
 
-.empty-state-icon {
+.emptyStateIcon {
   font-size: 48px;
   margin-bottom: 16px;
   opacity: 0.6;
 }
 
-.empty-state-text {
+.emptyStateText {
   font-size: 16px;
   font-weight: 500;
   color: #ffffff;
   margin-bottom: 8px;
 }
 
-.empty-state-subtitle {
+.emptyStateSubtitle {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.6);
   line-height: 1.4;
 }
 
 /* Base block styling */
-.dreamsong-block {
+.dreamSongBlock {
   margin-bottom: 75px;
   position: relative;
   animation: fade-in 0.4s ease-out;
@@ -114,7 +132,7 @@
   margin-right: auto;
 }
 
-.dreamsong-block:last-child {
+.dreamSongBlock:last-child {
   margin-bottom: 0;
 }
 
@@ -131,22 +149,22 @@
 
 
 /* Text-only blocks - centered */
-.dreamsong-block--text {
+.dreamSongBlockText {
   flex-direction: column;
 }
 
-.dreamsong-block--text .dreamsong-text-only {
+.dreamSongBlockText .dreamSongTextOnly {
   max-width: 90%;
   margin: 0 auto;
   text-align: left;
 }
 
 /* Media-only blocks - centered */
-.dreamsong-block--media {
+.dreamSongBlockMedia {
   flex-direction: column;
 }
 
-.dreamsong-block--media .dreamsong-media-only {
+.dreamSongBlockMedia .dreamSongMediaOnly {
   max-width: 1000px;
   margin: 0 auto;
   border-radius: 12px;
@@ -155,11 +173,11 @@
 }
 
 /* Media-text paired blocks - FLIP-FLOP LAYOUT */
-.dreamsong-block--media-text {
+.dreamSongBlockMediaText {
   flex-direction: row;
 }
 
-.dreamsong-block--media-text .dreamsong-media-text {
+.dreamSongBlockMediaText .dreamSongMediaText {
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -170,22 +188,22 @@
 }
 
 /* Left-aligned: Media left, text right */
-.dreamsong-block--left-aligned .dreamsong-media-text {
+.dreamSongBlockLeftAligned .dreamSongMediaText {
   flex-direction: row;
 }
 
 /* Right-aligned: Text left, media right */
-.dreamsong-block--right-aligned .dreamsong-media-text {
+.dreamSongBlockRightAligned .dreamSongMediaText {
   flex-direction: row-reverse;
 }
 
-.dreamsong-media-container {
+.dreamSongMediaContainer {
   flex: 2;
   max-width: 60%;
   margin: 0;
 }
 
-.dreamsong-text-container {
+.dreamSongTextContainer {
   flex: 1;
   max-width: 30%;
   padding: 10px;
@@ -196,7 +214,7 @@
 }
 
 /* Media elements */
-.dreamsong-media {
+.dreamSongMedia {
   width: 100%;
   height: auto;
   border-radius: 8px;
@@ -204,26 +222,26 @@
   transition: transform 0.2s ease;
 }
 
-.dreamsong-media:hover {
+.dreamSongMedia:hover {
   transform: scale(1.02);
 }
 
-.dreamsong-media[data-type="video"] {
+.dreamSongMedia[data-type="video"] {
   max-height: 200px;
 }
 
-.dreamsong-media[data-type="audio"] {
+.dreamSongMedia[data-type="audio"] {
   width: 100%;
 }
 
 /* Audio container styling */
-.dreamsong-audio-container {
+.dreamSongAudioContainer {
   background: rgba(255, 255, 255, 0.05);
   padding: 12px;
   border-radius: 8px;
 }
 
-.dreamsong-audio-label {
+.dreamSongAudioLabel {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.8);
   margin-bottom: 8px;
@@ -231,42 +249,42 @@
 }
 
 /* Text elements */
-.dreamsong-text {
+.dreamSongText {
   line-height: 1.5;
   font-size: 30px !important;
   color: white;
 }
 
-.dreamsong-text p {
+.dreamSongText p {
   margin: 0 0 12px 0;
 }
 
-.dreamsong-text p:last-child {
+.dreamSongText p:last-child {
   margin-bottom: 0;
 }
 
-.dreamsong-text h1,
-.dreamsong-text h2,
-.dreamsong-text h3,
-.dreamsong-text h4,
-.dreamsong-text h5,
-.dreamsong-text h6 {
+.dreamSongText h1,
+.dreamSongText h2,
+.dreamSongText h3,
+.dreamSongText h4,
+.dreamSongText h5,
+.dreamSongText h6 {
   color: #ffffff;
   margin: 0 0 8px 0;
   font-weight: 600;
 }
 
-.dreamsong-text strong {
+.dreamSongText strong {
   color: #ffffff;
   font-weight: 600;
 }
 
-.dreamsong-text em {
+.dreamSongText em {
   color: rgba(255, 255, 255, 0.8);
   font-style: italic;
 }
 
-.dreamsong-text code {
+.dreamSongText code {
   background: rgba(255, 255, 255, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
@@ -274,7 +292,7 @@
   font-size: 12px;
 }
 
-.dreamsong-text blockquote {
+.dreamSongText blockquote {
   border-left: 3px solid rgba(255, 255, 255, 0.3);
   padding-left: 12px;
   margin: 0;
@@ -282,18 +300,18 @@
   font-style: italic;
 }
 
-.dreamsong-text ul,
-.dreamsong-text ol {
+.dreamSongText ul,
+.dreamSongText ol {
   margin: 0 0 12px 0;
   padding-left: 20px;
 }
 
-.dreamsong-text li {
+.dreamSongText li {
   margin-bottom: 4px;
 }
 
 /* Error states */
-.dreamsong-media-error {
+.dreamSongMediaError {
   padding: 16px;
   background: rgba(255, 0, 0, 0.1);
   border: 1px solid rgba(255, 0, 0, 0.3);
@@ -305,30 +323,30 @@
 
 /* Responsive adjustments for mobile devices */
 @media (max-width: 1200px) {
-  .dreamsong-block--media-text .dreamsong-media-text {
+  .dreamSongBlockMediaText .dreamSongMediaText {
     flex-direction: column !important;
     margin-bottom: 0px;
   }
 
-  .dreamsong-media-container {
+  .dreamSongMediaContainer {
     flex: 1;
     max-width: 90%;
     margin: 0px 0;
     order: 1;
   }
 
-  .dreamsong-text-container {
+  .dreamSongTextContainer {
     flex: 1;
     max-width: 90%;
     margin: 0px 0;
     order: 2;
   }
 
-  .dreamsong-title {
+  .dreamSongTitle {
     font-size: 2rem;
   }
 
-  .dreamsong-text {
+  .dreamSongText {
     font-size: 20px;
   }
 
@@ -338,11 +356,11 @@
 }
 
 /* Animation for flip transition entrance */
-.dreamsong-container.flip-enter {
-  animation: flip-in 0.6s ease-out;
+.dreamSongContainer.flipEnter {
+  animation: flipIn 0.6s ease-out;
 }
 
-@keyframes flip-in {
+@keyframes flipIn {
   from {
     transform: rotateY(-90deg);
     opacity: 0;

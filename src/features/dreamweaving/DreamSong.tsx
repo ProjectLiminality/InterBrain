@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { DreamSongData, DreamSongBlock, MediaInfo } from '../../types/dreamsong';
 import separatorImage from '../../assets/images/Separator.png';
-import './dreamsong.module.css';
+import styles from './dreamsong.module.css';
 
 interface DreamSongProps {
   dreamSongData: DreamSongData;
@@ -9,6 +9,7 @@ interface DreamSongProps {
   sourceDreamNodeId?: string; // ID of the DreamNode this DreamSong belongs to (for scroll restoration)
   dreamNodeName?: string; // Name of the DreamNode for display in header
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
+  embedded?: boolean; // Whether this is being rendered in embedded context (e.g., 3D sphere back)
 }
 
 /**
@@ -23,20 +24,23 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   className = '',
   sourceDreamNodeId,
   dreamNodeName,
-  onMediaClick
+  onMediaClick,
+  embedded = false
 }) => {
   // Memoize blocks to prevent unnecessary re-renders
   const blocks = useMemo(() => dreamSongData.blocks, [dreamSongData.blocks]);
 
+  const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
+
   if (!dreamSongData.hasContent) {
     return (
-      <div className={`dreamsong-container ${className}`} style={{ pointerEvents: 'auto' }}>
-        <div className="dreamsong-empty-state">
-          <div className="empty-state-icon">📖</div>
-          <div className="empty-state-text">
+      <div className={containerClass} style={{ pointerEvents: 'auto' }}>
+        <div className={styles.dreamSongEmptyState}>
+          <div className={styles.emptyStateIcon}>📖</div>
+          <div className={styles.emptyStateText}>
             No DreamSong content yet
           </div>
-          <div className="empty-state-subtitle">
+          <div className={styles.emptyStateSubtitle}>
             Add content to your canvas to create a story flow
           </div>
         </div>
@@ -59,22 +63,22 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
   return (
     <div
-      className={`dreamsong-container ${className}`}
+      className={containerClass}
       style={{ pointerEvents: 'auto' }}
       data-node-id={sourceDreamNodeId}
     >
-      <div className="dreamsong-header">
-        <div className="dreamsong-title">
+      <div className={styles.dreamSongHeader}>
+        <div className={styles.dreamSongTitle}>
           {dreamNodeName || 'DreamSong'}
         </div>
         <img
           src={separatorImage}
           alt="Separator"
-          className="dreamsong-separator"
+          className={styles.dreamSongSeparator}
         />
       </div>
 
-      <div className="dreamsong-content" style={{ pointerEvents: 'auto' }}>
+      <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
         {blocksWithFlipFlop.map((block, index) => (
           <DreamSongBlockComponent
             key={block.id}
@@ -97,23 +101,31 @@ interface DreamSongBlockProps {
 /**
  * Individual DreamSong content block
  */
-const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIndex, onMediaClick }) => {
+const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIndex: _blockIndex, onMediaClick }) => {
   const getBlockClassName = (): string => {
-    const baseClass = 'dreamsong-block';
-    const typeClass = `dreamsong-block--${block.type}`;
-    
+    const baseClass = styles.dreamSongBlock;
+
     // For media-text blocks, use explicit alignment from block data
     if (block.type === 'media-text') {
-      const alignClass = block.isLeftAligned ? 'dreamsong-block--left-aligned' : 'dreamsong-block--right-aligned';
+      const typeClass = styles.dreamSongBlockMediaText;
+      const alignClass = block.isLeftAligned ? styles.dreamSongBlockLeftAligned : styles.dreamSongBlockRightAligned;
       return `${baseClass} ${typeClass} ${alignClass}`;
     }
-    
-    return `${baseClass} ${typeClass}`;
+
+    if (block.type === 'text') {
+      return `${baseClass} ${styles.dreamSongBlockText}`;
+    }
+
+    if (block.type === 'media') {
+      return `${baseClass} ${styles.dreamSongBlockMedia}`;
+    }
+
+    return baseClass;
   };
 
   const renderMediaElement = (media: MediaInfo): React.ReactNode => {
     const commonProps = {
-      className: 'dreamsong-media',
+      className: styles.dreamSongMedia,
       alt: media.alt,
       loading: 'lazy' as const
     };
@@ -146,7 +158,7 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
         return (
           <div style={containerStyle} onClick={clickHandler}>
             <video
-              className="dreamsong-media"
+              className={styles.dreamSongMedia}
               src={media.src}
               controls
               preload="metadata"
@@ -159,10 +171,10 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
       
       case 'audio':
         return (
-          <div className="dreamsong-audio-container" style={containerStyle} onClick={clickHandler}>
-            <div className="dreamsong-audio-label">{media.alt}</div>
+          <div className={styles.dreamSongAudioContainer} style={containerStyle} onClick={clickHandler}>
+            <div className={styles.dreamSongAudioLabel}>{media.alt}</div>
             <audio
-              className="dreamsong-media"
+              className={styles.dreamSongMedia}
               src={media.src}
               controls
               preload="metadata"
@@ -177,7 +189,7 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
           <div style={containerStyle} onClick={clickHandler}>
             <iframe
               src={media.src}
-              className="dreamsong-media"
+              className={styles.dreamSongMedia}
               style={{width: '100%', height: '400px', border: 'none'}}
               title={media.alt}
             />
@@ -186,7 +198,7 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
       
       default:
         return (
-          <div className="dreamsong-media-error">
+          <div className={styles.dreamSongMediaError}>
             Unsupported media type: {media.type}
           </div>
         );
@@ -196,7 +208,7 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
   const renderTextElement = (text: string): React.ReactNode => {
     return (
       <div 
-        className="dreamsong-text"
+        className={styles.dreamSongText}
         dangerouslySetInnerHTML={{ __html: text }}
       />
     );
@@ -206,25 +218,25 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
     <div className={getBlockClassName()}>
       {/* Standalone text block */}
       {block.type === 'text' && block.text && (
-        <div className="dreamsong-text-only">
+        <div className={styles.dreamSongTextOnly}>
           {renderTextElement(block.text)}
         </div>
       )}
 
       {/* Standalone media block */}
       {block.type === 'media' && block.media && (
-        <div className="dreamsong-media-only">
+        <div className={styles.dreamSongMediaOnly}>
           {renderMediaElement(block.media)}
         </div>
       )}
 
       {/* Media-text paired block with flip-flop layout */}
       {block.type === 'media-text' && block.media && block.text && (
-        <div className="dreamsong-media-text">
-          <div className="dreamsong-media-container">
+        <div className={styles.dreamSongMediaText}>
+          <div className={styles.dreamSongMediaContainer}>
             {renderMediaElement(block.media)}
           </div>
-          <div className="dreamsong-text-container">
+          <div className={styles.dreamSongTextContainer}>
             {renderTextElement(block.text)}
           </div>
         </div>
