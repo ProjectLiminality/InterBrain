@@ -643,7 +643,6 @@ export const useInterBrainStore = create<InterBrainState>()(
     
     // Only log actual changes, not redundant calls
     if (previousLayout !== layout) {
-      console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${layout}`);
     }
     
     // Detect meaningful layout changes for history tracking
@@ -860,7 +859,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Creation state actions
   startCreation: (position) => set((state) => {
     const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → creation (starting node creation)`);
     
     return {
       spatialLayout: 'creation',
@@ -879,7 +877,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   startCreationWithData: (position, initialData) => set((state) => {
     const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → creation (starting node creation with data)`);
     
     return {
       spatialLayout: 'creation',
@@ -915,7 +912,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   completeCreation: () => set((state) => {
     const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → constellation (completing node creation)`);
     
     return {
       spatialLayout: 'constellation',
@@ -929,7 +925,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   cancelCreation: () => set((state) => {
     const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → constellation (canceling node creation)`);
     
     return {
       spatialLayout: 'constellation',
@@ -944,7 +939,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Edit mode actions
   startEditMode: (node) => set((state) => {
     const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → edit (entering edit mode)`);
     
     return {
       editMode: {
@@ -964,7 +958,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   exitEditMode: () => set((state) => {
     // Note: We don't change the layout here - the calling code should handle that
     // This allows for proper transitions (edit → liminal-web, edit-search → edit, etc.)
-    console.log(`📍 [Store] Exiting edit mode (layout remains: ${state.spatialLayout})`);
     
     return {
       editMode: {
@@ -1006,7 +999,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   setEditModeSearchActive: (active) => set(state => {
     const previousLayout = state.spatialLayout;
     const newLayout = active ? 'edit-search' as const : 'edit' as const;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${newLayout} (edit mode search ${active ? 'activated' : 'deactivated'})`);
     
     return {
       editMode: {
@@ -1165,7 +1157,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
   
   restoreVisualState: (entry) => set((state) => {
-    console.log(`🔄 [Store] Restoring visual state for node: ${entry.nodeId}`, { 
       flipState: entry.flipState, 
       scrollPosition: entry.scrollPosition 
     });
@@ -1204,11 +1195,9 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // DreamNode flip animation actions
   setFlippedNode: (nodeId) => set((state) => {
-    console.log(`🔄 [Store] Setting flipped node: ${nodeId}`);
     
     // Reset previous flipped node if different
     if (state.flipState.flippedNodeId && state.flipState.flippedNodeId !== nodeId) {
-      console.log(`🗑️ [Store] Clearing previous flipped node: ${state.flipState.flippedNodeId}`);
       const updatedFlipStates = new Map(state.flipState.flipStates);
       updatedFlipStates.delete(state.flipState.flippedNodeId);
       
@@ -1229,7 +1218,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
   
   startFlipAnimation: (nodeId, direction) => set((state) => {
-    console.log(`🔄 [Store] Starting flip animation for node: ${nodeId}, direction: ${direction}`);
     
     const updatedFlipStates = new Map(state.flipState.flipStates);
     
@@ -1249,7 +1237,6 @@ export const useInterBrainStore = create<InterBrainState>()(
     
     updatedFlipStates.set(nodeId, newFlipState);
     
-    console.log(`🔄 [Store] Updated flip state:`, {
       flippedNodeId: nodeId,
       newState: newFlipState
     });
@@ -1263,7 +1250,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
   
   completeFlipAnimation: (nodeId) => set((state) => {
-    console.log(`✅ [Store] Completing flip animation for node: ${nodeId}`);
     
     const updatedFlipStates = new Map(state.flipState.flipStates);
     const currentFlipState = updatedFlipStates.get(nodeId);
@@ -1279,13 +1265,11 @@ export const useInterBrainStore = create<InterBrainState>()(
       
       updatedFlipStates.set(nodeId, completedFlipState);
       
-      console.log(`✅ [Store] Flip animation completed:`, {
         nodeId,
         finalFlippedState,
         direction: currentFlipState.flipDirection
       });
     } else {
-      console.log(`⚠️ [Store] No flip state found for node: ${nodeId}`);
     }
     
     return {
