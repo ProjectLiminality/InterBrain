@@ -38,60 +38,69 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
   // Helper function to render DreamTalk media
   const renderDreamTalkMedia = (): React.ReactNode => {
+    console.log('🎵 [DreamSong] renderDreamTalkMedia called:', { dreamTalkMedia, embedded });
+
     if (!dreamTalkMedia || dreamTalkMedia.length === 0) {
+      console.log('🎵 [DreamSong] No DreamTalk media found');
       return null;
     }
 
     // Use the first media file as the primary DreamTalk
     const primaryMedia = dreamTalkMedia[0];
+    console.log('🎵 [DreamSong] Primary media:', primaryMedia);
 
     const commonProps = {
       style: { maxWidth: '100%', height: 'auto', borderRadius: '8px' }
     };
 
-    switch (primaryMedia.type) {
-      case 'image':
-        return (
-          <img
-            src={primaryMedia.data}
-            alt="DreamTalk"
-            {...commonProps}
-          />
-        );
+    // Handle MIME types
+    const mimeType = primaryMedia.type.toLowerCase();
+    console.log('🎵 [DreamSong] Processing MIME type:', mimeType);
 
-      case 'video':
-        return (
-          <video
+    if (mimeType.startsWith('image/')) {
+      console.log('🎵 [DreamSong] Rendering image DreamTalk');
+      return (
+        <img
+          src={primaryMedia.data}
+          alt="DreamTalk"
+          {...commonProps}
+        />
+      );
+    }
+
+    if (mimeType.startsWith('video/')) {
+      return (
+        <video
+          src={primaryMedia.data}
+          controls
+          preload="metadata"
+          playsInline
+          style={{ ...commonProps.style, maxHeight: '300px' }}
+        >
+          Your browser does not support video playback.
+        </video>
+      );
+    }
+
+    if (mimeType.startsWith('audio/')) {
+      return (
+        <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '8px' }}>
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
+            DreamTalk Audio
+          </div>
+          <audio
             src={primaryMedia.data}
             controls
             preload="metadata"
-            playsInline
-            style={{ ...commonProps.style, maxHeight: '300px' }}
+            style={{ width: '100%' }}
           >
-            Your browser does not support video playback.
-          </video>
-        );
-
-      case 'audio':
-        return (
-          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '8px' }}>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
-              DreamTalk Audio
-            </div>
-            <audio
-              src={primaryMedia.data}
-              controls
-              preload="metadata"
-              style={{ width: '100%' }}
-            >
-              Your browser does not support audio playback.
-            </audio>
-          </div>
-        );
-
-      default:
-        return null;
+            Your browser does not support audio playback.
+          </audio>
+        </div>
+      );
     }
+
+    return null;
   };
 
   if (!hasContent) {
