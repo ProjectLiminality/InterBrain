@@ -5,6 +5,7 @@ import { DreamSong } from '../features/dreamweaving/DreamSong';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { serviceManager } from '../services/service-manager';
 
 export const DREAMSONG_FULLSCREEN_VIEW_TYPE = 'dreamsong-fullscreen-view';
 
@@ -12,6 +13,7 @@ export class DreamSongFullScreenView extends ItemView {
   private root: Root | null = null;
   private dreamNode: DreamNode | null = null;
   private blocks: DreamSongBlock[] = [];
+  private fileChangeListener: ((file: any) => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, dreamNode?: DreamNode, blocks?: DreamSongBlock[]) {
     super(leaf);
@@ -43,6 +45,98 @@ export class DreamSongFullScreenView extends ItemView {
     globalThis.setTimeout(() => {
       this.render();
     }, 10);
+
+    // Set up file watching for real-time updates
+    this.setupFileWatcher();
+  }
+
+  /**
+   * Set up file watching for real-time DreamSong updates
+   */
+  private setupFileWatcher() {
+    // Clean up existing listener first
+    this.cleanupFileWatcher();
+
+    if (!this.dreamNode) {
+      return;
+    }
+
+    const app = serviceManager.getApp();
+    if (!app) {
+      return;
+    }
+
+    const canvasPath = `${this.dreamNode.repoPath}/DreamSong.canvas`;
+    const vault = app.vault;
+
+    // Create the file change handler
+    this.fileChangeListener = (file: any) => {
+      if (file.path === canvasPath) {
+        console.log(`🎵 [FullScreen] Canvas file changed: ${canvasPath}, triggering re-parse`);
+
+        // Parse and update with a small delay to ensure file write is complete
+        setTimeout(() => {
+          this.reparseAndUpdate();
+        }, 100);
+      }
+    };
+
+    // Listen for file modifications and creation
+    vault.on('modify', this.fileChangeListener);
+    vault.on('create', this.fileChangeListener);
+
+    console.log(`🎵 [FullScreen] Watching for changes to: ${canvasPath}`);
+  }
+
+  /**
+   * Re-parse the canvas and update the view
+   */
+  private async reparseAndUpdate() {
+    if (!this.dreamNode) {
+      return;
+    }
+
+    try {
+      const canvasPath = `${this.dreamNode.repoPath}/DreamSong.canvas`;
+
+      // Use the same parsing logic as the fullscreen command
+      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
+      const { CanvasParserService } = await import('../services/canvas-parser-service');
+
+      const canvasParserService = new CanvasParserService(serviceManager.getVaultService());
+      const vaultService = serviceManager.getVaultService();
+
+      // Parse canvas using new architecture
+      const canvasData = await canvasParserService.parseCanvas(canvasPath);
+      let blocks = parseCanvasToBlocks(canvasData);
+
+      // Resolve media paths to data URLs
+      blocks = await resolveMediaPaths(blocks, this.dreamNode.repoPath, vaultService);
+
+      console.log(`🎵 [FullScreen] Reparsed ${blocks.length} blocks for real-time update`);
+
+      // Update the view with new blocks
+      this.blocks = blocks;
+      this.render();
+
+    } catch (error) {
+      console.error('🎵 [FullScreen] Failed to reparse canvas:', error);
+    }
+  }
+
+  /**
+   * Clean up file watching
+   */
+  private cleanupFileWatcher() {
+    if (this.fileChangeListener) {
+      const app = serviceManager.getApp();
+      if (app && app.vault) {
+        app.vault.off('modify', this.fileChangeListener);
+        app.vault.off('create', this.fileChangeListener);
+        console.log('🎵 [FullScreen] Cleaned up file watcher');
+      }
+      this.fileChangeListener = null;
+    }
   }
 
   async onOpen(): Promise<void> {
@@ -141,6 +235,9 @@ export class DreamSongFullScreenView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    // Clean up file watcher
+    this.cleanupFileWatcher();
+
     if (this.root) {
       this.root.unmount();
       this.root = null;
