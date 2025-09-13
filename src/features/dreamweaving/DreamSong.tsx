@@ -64,6 +64,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
           src={primaryMedia.data}
           alt="DreamTalk"
           {...commonProps}
+          style={{ ...commonProps.style, cursor: onMediaClick ? 'pointer' : 'default' }}
+          onClick={onMediaClick && sourceDreamNodeId ? () => onMediaClick(sourceDreamNodeId) : undefined}
         />
       );
     }
@@ -75,7 +77,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
           controls
           preload="metadata"
           playsInline
-          style={{ ...commonProps.style, maxHeight: '300px' }}
+          style={{ ...commonProps.style, maxHeight: '300px', cursor: onMediaClick ? 'pointer' : 'default' }}
+          onClick={onMediaClick && sourceDreamNodeId ? () => onMediaClick(sourceDreamNodeId) : undefined}
         >
           Your browser does not support video playback.
         </video>
@@ -84,7 +87,15 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
     if (mimeType.startsWith('audio/')) {
       return (
-        <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '8px' }}>
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            padding: '12px',
+            borderRadius: '8px',
+            cursor: onMediaClick ? 'pointer' : 'default'
+          }}
+          onClick={onMediaClick && sourceDreamNodeId ? () => onMediaClick(sourceDreamNodeId) : undefined}
+        >
           <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
             DreamTalk Audio
           </div>

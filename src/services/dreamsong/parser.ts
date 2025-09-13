@@ -35,7 +35,7 @@ export interface TopologicalSortResult {
  * Main parser function - transforms canvas data into ordered DreamSong blocks
  * This is the entry point that orchestrates the entire parsing pipeline
  */
-export function parseCanvasToBlocks(canvasData: CanvasData): DreamSongBlock[] {
+export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: string): DreamSongBlock[] {
   // Validate input
   if (!canvasData.nodes || canvasData.nodes.length === 0) {
     return [];
@@ -71,7 +71,8 @@ export function parseCanvasToBlocks(canvasData: CanvasData): DreamSongBlock[] {
   const blocks = createContentBlocks(
     canvasData.nodes,
     sortResult.sortedNodeIds,
-    mediaTextPairs
+    mediaTextPairs,
+    sourceDreamNodeId
   );
 
   return blocks;
@@ -207,7 +208,8 @@ export function topologicalSort(nodes: CanvasNode[], directedEdges: ProcessedCan
 export function createContentBlocks(
   nodes: CanvasNode[],
   sortedNodeIds: string[],
-  mediaTextPairs: MediaTextPair[]
+  mediaTextPairs: MediaTextPair[],
+  sourceDreamNodeId?: string
 ): DreamSongBlock[] {
   const blocks: DreamSongBlock[] = [];
   const nodesMap = new Map(nodes.map(n => [n.id, n]));
@@ -239,7 +241,7 @@ export function createContentBlocks(
       const textNode = nodesMap.get(mediaTextPair.textNodeId);
 
       if (mediaNode && textNode) {
-        const mediaInfo = createMediaInfoFromNode(mediaNode);
+        const mediaInfo = createMediaInfoFromNode(mediaNode, sourceDreamNodeId);
         const textContent = processTextContent(textNode.text || '');
 
         if (mediaInfo) {
@@ -259,7 +261,7 @@ export function createContentBlocks(
     } else {
       // Create standalone block
       if (node.type === 'file') {
-        const mediaInfo = createMediaInfoFromNode(node);
+        const mediaInfo = createMediaInfoFromNode(node, sourceDreamNodeId);
         if (mediaInfo) {
           blocks.push({
             id: nodeId,
@@ -289,7 +291,7 @@ export function createContentBlocks(
  * Create media info from file node (without path resolution)
  * Path resolution will be handled in a separate layer
  */
-export function createMediaInfoFromNode(fileNode: CanvasNode): MediaInfo | null {
+export function createMediaInfoFromNode(fileNode: CanvasNode, sourceDreamNodeId?: string): MediaInfo | null {
   if (!fileNode.file) return null;
 
   const filename = fileNode.file;
@@ -308,14 +310,15 @@ export function createMediaInfoFromNode(fileNode: CanvasNode): MediaInfo | null 
     return null; // Unsupported media type
   }
 
-  // Extract source DreamNode ID from file path
-  const sourceDreamNodeId = extractSourceDreamNodeId(filename);
+  // Extract source DreamNode ID from file path, with fallback to current DreamNode
+  const extractedSourceId = extractSourceDreamNodeId(filename);
+  const finalSourceDreamNodeId = extractedSourceId || sourceDreamNodeId; // Use current DreamNode for local files
 
   return {
     type: mediaType,
     src: filename, // Will be resolved later by media-resolver
     alt: createAltText(filename),
-    sourceDreamNodeId
+    sourceDreamNodeId: finalSourceDreamNodeId
   };
 }
 

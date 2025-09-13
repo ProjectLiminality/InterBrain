@@ -95,7 +95,7 @@ export function registerFullScreenCommands(
 
           // Parse canvas using new architecture
           const canvasData = await canvasParserService.parseCanvas(canvasPath);
-          let blocks = parseCanvasToBlocks(canvasData);
+          let blocks = parseCanvasToBlocks(canvasData, selectedNode.id);
 
           // Resolve media paths to data URLs
           blocks = await resolveMediaPaths(blocks, selectedNode.repoPath, vaultService);

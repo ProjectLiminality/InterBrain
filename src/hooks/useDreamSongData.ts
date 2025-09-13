@@ -34,7 +34,8 @@ interface DreamSongDataResult {
 export function useDreamSongData(
   canvasPath: string,
   dreamNodePath: string,
-  options: UseDreamSongDataOptions
+  options: UseDreamSongDataOptions,
+  sourceDreamNodeId?: string
 ): DreamSongDataResult {
   const { canvasParser, vaultService } = options;
 
@@ -78,7 +79,7 @@ export function useDreamSongData(
         console.log(`🔄 DreamSong hash changed: ${hash} → ${newHash}`);
 
         // Hash changed - do full parse and resolve
-        const result = await parseAndResolveCanvas(canvasData, dreamNodePath, vaultService);
+        const result = await parseAndResolveCanvas(canvasData, dreamNodePath, vaultService, sourceDreamNodeId);
 
         setBlocks(result.blocks);
         setHash(result.hash);

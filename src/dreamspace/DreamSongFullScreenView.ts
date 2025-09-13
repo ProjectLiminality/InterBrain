@@ -108,7 +108,7 @@ export class DreamSongFullScreenView extends ItemView {
 
       // Parse canvas using new architecture
       const canvasData = await canvasParserService.parseCanvas(canvasPath);
-      let blocks = parseCanvasToBlocks(canvasData);
+      let blocks = parseCanvasToBlocks(canvasData, this.dreamNode.id);
 
       // Resolve media paths to data URLs
       blocks = await resolveMediaPaths(blocks, this.dreamNode.repoPath, vaultService);

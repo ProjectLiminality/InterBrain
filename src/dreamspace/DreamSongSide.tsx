@@ -59,7 +59,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   const { blocks, hasContent, isLoading: isLoadingDreamSong, error } = useDreamSongData(
     canvasPath,
     dreamNode.repoPath,
-    { canvasParser, vaultService }
+    { canvasParser, vaultService },
+    dreamNode.id
   );
   const nodeColors = getNodeColors(dreamNode.type);
   const gitState = getGitVisualState(dreamNode.gitStatus);

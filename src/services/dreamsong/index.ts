@@ -54,10 +54,11 @@ import { resolveMediaPaths } from './media-resolver';
 export async function parseAndResolveCanvas(
   canvasData: any,
   dreamNodePath: string,
-  vaultService: any
+  vaultService: any,
+  sourceDreamNodeId?: string
 ) {
   // Layer 1: Parse canvas to blocks
-  const blocks = parseCanvasToBlocks(canvasData);
+  const blocks = parseCanvasToBlocks(canvasData, sourceDreamNodeId);
 
   // Layer 2: Generate hash for change detection
   const hash = generateStructureHash(blocks);
@@ -75,8 +76,8 @@ export async function parseAndResolveCanvas(
 /**
  * Quick parsing without media resolution (for hash-only operations)
  */
-export function parseCanvasForHash(canvasData: any) {
-  const blocks = parseCanvasToBlocks(canvasData);
+export function parseCanvasForHash(canvasData: any, sourceDreamNodeId?: string) {
+  const blocks = parseCanvasToBlocks(canvasData, sourceDreamNodeId);
   const hash = generateStructureHash(blocks);
 
   return {
