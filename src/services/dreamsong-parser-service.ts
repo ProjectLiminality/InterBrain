@@ -222,7 +222,6 @@ export class DreamSongParserService {
     }
 
     // Parse if not cached
-    console.log(`🔄 [DreamSong Parser] Parsing DreamSong (not cached)`);
     const result = await this.parseDreamSong(canvasPath, dreamNodePath);
     const success = result.success && result.data;
     console.log(`${success ? '✅' : '❌'} [DreamSong Parser] Parse result: ${success ? 'SUCCESS' : 'FAILED'}`);
@@ -247,7 +246,6 @@ export class DreamSongParserService {
     canvasPath: string, 
     dreamNodePath: string
   ): Promise<DreamSongData> {
-    console.log(`🔄 [DreamSong Parser] Processing ${canvasData.nodes.length} nodes, ${canvasData.edges.length} edges`);
 
     // Process edges into directed and undirected categories
     const processedEdges = this.processCanvasEdges(canvasData.edges);

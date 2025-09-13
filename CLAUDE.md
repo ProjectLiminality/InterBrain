@@ -25,6 +25,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - ✅ **Feature #323 COMPLETE**: Search-as-DreamNode Interface - Unified search/creation UX
   - ✅ **Feature #280 COMPLETE**: Honeycomb Search Layout - Mathematical precision positioning
 
+### Full-Screen DreamSong Experience (September 13, 2025)
+**Feature Branch Complete**: feature/fullscreen-dreamsong-experience
+- ✅ **DreamTalk Display**: Shows DreamTalk media above DreamSong header in fullscreen view
+- ✅ **Three-Layer Architecture**: Clean parser/hasher/media-resolver separation for maintainability
+- ✅ **Real-Time Updates**: Automatic canvas file change detection with seamless re-parsing
+- ✅ **Fixed Topological Sort**: Media-text pairs treated as single units in flow ordering
+- ✅ **Universal Media Navigation**: All media files clickable to reveal their source DreamNode
+- ✅ **CSS Modules Integration**: Proper styling with Vite build system
+- ✅ **MIME Type Support**: Correct handling of image/, video/, and audio/ media types
+
 ### Epic 4 Complete Status (August 26, 2025)
 **All Features Complete**: Epic 4 - Liminal Web Layout System | Spec: #267
 - ✅ **Feature #316 COMPLETE**: Focused Layout Engine & Spatial Orchestration System  

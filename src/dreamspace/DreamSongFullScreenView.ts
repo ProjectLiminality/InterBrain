@@ -72,10 +72,8 @@ export class DreamSongFullScreenView extends ItemView {
     // Create the file change handler
     this.fileChangeListener = (file: any) => {
       if (file.path === canvasPath) {
-        console.log(`🎵 [FullScreen] Canvas file changed: ${canvasPath}, triggering re-parse`);
-
         // Parse and update with a small delay to ensure file write is complete
-        setTimeout(() => {
+        globalThis.setTimeout(() => {
           this.reparseAndUpdate();
         }, 100);
       }
@@ -84,8 +82,6 @@ export class DreamSongFullScreenView extends ItemView {
     // Listen for file modifications and creation
     vault.on('modify', this.fileChangeListener);
     vault.on('create', this.fileChangeListener);
-
-    console.log(`🎵 [FullScreen] Watching for changes to: ${canvasPath}`);
   }
 
   /**
@@ -113,8 +109,6 @@ export class DreamSongFullScreenView extends ItemView {
       // Resolve media paths to data URLs
       blocks = await resolveMediaPaths(blocks, this.dreamNode.repoPath, vaultService);
 
-      console.log(`🎵 [FullScreen] Reparsed ${blocks.length} blocks for real-time update`);
-
       // Update the view with new blocks
       this.blocks = blocks;
       this.render();
@@ -133,7 +127,6 @@ export class DreamSongFullScreenView extends ItemView {
       if (app && app.vault) {
         app.vault.off('modify', this.fileChangeListener);
         app.vault.off('create', this.fileChangeListener);
-        console.log('🎵 [FullScreen] Cleaned up file watcher');
       }
       this.fileChangeListener = null;
     }

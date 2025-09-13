@@ -38,16 +38,12 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
   // Helper function to render DreamTalk media
   const renderDreamTalkMedia = (): React.ReactNode => {
-    console.log('🎵 [DreamSong] renderDreamTalkMedia called:', { dreamTalkMedia, embedded });
-
     if (!dreamTalkMedia || dreamTalkMedia.length === 0) {
-      console.log('🎵 [DreamSong] No DreamTalk media found');
       return null;
     }
 
     // Use the first media file as the primary DreamTalk
     const primaryMedia = dreamTalkMedia[0];
-    console.log('🎵 [DreamSong] Primary media:', primaryMedia);
 
     const commonProps = {
       style: { maxWidth: '100%', height: 'auto', borderRadius: '8px' }
@@ -55,10 +51,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
     // Handle MIME types
     const mimeType = primaryMedia.type.toLowerCase();
-    console.log('🎵 [DreamSong] Processing MIME type:', mimeType);
 
     if (mimeType.startsWith('image/')) {
-      console.log('🎵 [DreamSong] Rendering image DreamTalk');
       return (
         <img
           src={primaryMedia.data}

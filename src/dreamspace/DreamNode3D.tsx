@@ -213,11 +213,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     e.stopPropagation();
     if (isDragging) return;
     
-    console.log('🎵 DreamSong fullscreen button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
-    
     try {
       const { serviceManager } = await import('../services/service-manager');
-      console.log('🎵 About to execute open-dreamsong-fullscreen command');
       serviceManager.executeCommand('open-dreamsong-fullscreen');
     } catch (error) {
       console.error('Failed to execute DreamSong full-screen command:', error);

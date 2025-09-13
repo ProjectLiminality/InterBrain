@@ -76,7 +76,6 @@ export function useDreamSongData(
           return;
         }
 
-        console.log(`🔄 DreamSong hash changed: ${hash} → ${newHash}`);
 
         // Hash changed - do full parse and resolve
         const result = await parseAndResolveCanvas(canvasData, dreamNodePath, vaultService, sourceDreamNodeId);
@@ -114,10 +113,9 @@ export function useDreamSongData(
     const handleFileChange = (file: any) => {
       // Check if the changed file is our canvas
       if (file.path === canvasPath) {
-        console.log(`🎵 [DreamSong] Canvas file changed: ${canvasPath}, triggering re-parse`);
 
         // Use a small delay to ensure file write is complete
-        setTimeout(() => {
+        globalThis.setTimeout(() => {
           parseCanvas();
         }, 100);
       }
@@ -129,11 +127,9 @@ export function useDreamSongData(
     // Also listen for file creation (in case canvas was created after component mount)
     vault.on('create', handleFileChange);
 
-    console.log(`🎵 [DreamSong] Watching for changes to: ${canvasPath}`);
 
     // Cleanup listener on unmount or path change
     return () => {
-      console.log(`🎵 [DreamSong] Stopped watching: ${canvasPath}`);
       vault.off('modify', handleFileChange);
       vault.off('create', handleFileChange);
     };

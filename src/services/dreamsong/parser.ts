@@ -51,12 +51,6 @@ export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: 
   const textNodesInPairs = new Set(mediaTextPairs.map(pair => pair.textNodeId));
   const nodesForTopologicalSort = canvasData.nodes.filter(node => !textNodesInPairs.has(node.id));
 
-  console.log('🎵 [Parser] Nodes for topological sort:', {
-    originalCount: canvasData.nodes.length,
-    filteredCount: nodesForTopologicalSort.length,
-    excludedTextNodes: Array.from(textNodesInPairs),
-    mediaTextPairs: mediaTextPairs.length
-  });
 
   // Perform topological sort on directed edges only, using filtered nodes
   const sortResult = topologicalSort(nodesForTopologicalSort, processedEdges.directed);
