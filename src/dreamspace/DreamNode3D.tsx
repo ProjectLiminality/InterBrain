@@ -79,7 +79,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [startFlipRotation, setStartFlipRotation] = useState(0);
   const [shouldAnimateFlip, setShouldAnimateFlip] = useState(false);
   const [flipAnimationStartTime, setFlipAnimationStartTime] = useState(0);
-  const [flipAnimationDuration, setFlipAnimationDuration] = useState(500); // Faster than position movement
+  const [flipAnimationDuration, setFlipAnimationDuration] = useState(1000); // Same duration as position movement
   
   // No longer need to track flip state - we access live store state directly
   
@@ -392,7 +392,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTargetFlipRotation(0);
       setShouldAnimateFlip(true);
       setFlipAnimationStartTime(globalThis.performance.now());
-      setFlipAnimationDuration(500); // 500ms - twice as fast as 1000ms position movement
+      setFlipAnimationDuration(1000); // 1000ms - same duration as position movement
     }
   };
 
