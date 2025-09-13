@@ -6,6 +6,7 @@ interface DreamSongProps {
   dreamSongData: DreamSongData;
   className?: string;
   sourceDreamNodeId?: string; // ID of the DreamNode this DreamSong belongs to (for scroll restoration)
+  dreamNodeName?: string; // Name of the DreamNode for display in header
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
 }
 
@@ -16,10 +17,11 @@ interface DreamSongProps {
  * Features flip-flop layout with alternating media-text positioning.
  * Container-agnostic - can be rendered in any context (embedded, full-screen, etc.).
  */
-export const DreamSong: React.FC<DreamSongProps> = ({ 
-  dreamSongData, 
+export const DreamSong: React.FC<DreamSongProps> = ({
+  dreamSongData,
   className = '',
   sourceDreamNodeId,
+  dreamNodeName,
   onMediaClick
 }) => {
   // Memoize blocks to prevent unnecessary re-renders
@@ -41,21 +43,38 @@ export const DreamSong: React.FC<DreamSongProps> = ({
     );
   }
 
+  // Calculate flip-flop index for media-text pairs only
+  const blocksWithFlipFlop = useMemo(() => {
+    let mediaTextPairIndex = 0;
+    return blocks.map((block) => {
+      if (block.type === 'media-text') {
+        const isLeftAligned = mediaTextPairIndex % 2 === 0;
+        mediaTextPairIndex++;
+        return { ...block, isLeftAligned };
+      }
+      return block;
+    });
+  }, [blocks]);
+
   return (
-    <div 
-      className={`dreamsong-container ${className}`} 
+    <div
+      className={`dreamsong-container ${className}`}
       style={{ pointerEvents: 'auto' }}
       data-node-id={sourceDreamNodeId}
     >
       <div className="dreamsong-header">
-        <div className="dreamsong-title">DreamSong</div>
-        <div className="dreamsong-block-count">
-          {dreamSongData.totalBlocks} {dreamSongData.totalBlocks === 1 ? 'block' : 'blocks'}
+        <div className="dreamsong-title">
+          {dreamNodeName || 'DreamSong'}
         </div>
+        <img
+          src="media/elements/Separator.png"
+          alt="Separator"
+          className="dreamsong-separator"
+        />
       </div>
-      
+
       <div className="dreamsong-content" style={{ pointerEvents: 'auto' }}>
-        {blocks.map((block, index) => (
+        {blocksWithFlipFlop.map((block, index) => (
           <DreamSongBlockComponent
             key={block.id}
             block={block}

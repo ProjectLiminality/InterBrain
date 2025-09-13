@@ -58,17 +58,18 @@ export class DreamSongFullScreenView extends ItemView {
           width: 100%;
           height: 100%;
           overflow: auto;
-          background: rgba(0, 0, 0, 0.95);
+          background: #000000;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
         }
-        
+
         .dreamsong-fullscreen-wrapper {
           width: 100%;
           height: 100%;
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 20px;
-          box-sizing: border-box;
-          overflow-y: auto;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
         }
       `
     });
@@ -129,6 +130,7 @@ export class DreamSongFullScreenView extends ItemView {
             dreamSongData: this.dreamSongData,
             className: 'dreamsong-fullscreen',
             sourceDreamNodeId: this.dreamNode?.id,
+            dreamNodeName: this.dreamNode?.name,
             onMediaClick: this.handleMediaClick.bind(this)
           })
         )
