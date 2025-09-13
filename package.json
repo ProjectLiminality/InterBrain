@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --config vite.dev.config.ts",
     "build": "vite build",
-    "plugin-build": "vite build && cp dist/main.js .",
+    "plugin-build": "vite build && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "check-all": "npm run lint && npm run typecheck && npm run test",
