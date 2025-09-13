@@ -75,73 +75,42 @@ export function registerFullScreenCommands(
           return;
         }
         
-        // First, try to use already-parsed data from Zustand store
-        const storedDreamSongData = store.selectedNodeDreamSongData;
-        if (storedDreamSongData && selectedNode.id === store.selectedNode?.id) {
-          console.log('Using cached DreamSong data from store');
-          await leafManager.openDreamSongFullScreen(selectedNode, storedDreamSongData);
-          uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
-          return;
-        }
-        
-        // Fallback: Parse canvas if no cached data available
-        console.log('No cached data found, parsing canvas...');
-        const canvasParser = serviceManager.getService('canvasParserService');
-        if (!canvasParser) {
-          uiService.showError('Canvas parser service not available');
-          return;
-        }
-        
-        // Try to find and parse DreamSong canvas
+        // Use the new DreamSong architecture to parse blocks
         const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
-        
+
         // Check if canvas exists
         const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
         if (!canvasFile) {
           uiService.showError('No DreamSong.canvas found. Create one first with Ctrl+D');
           return;
         }
-        
-        // Parse the canvas to get DreamSong data
+
         try {
-          const analysis = await canvasParser.analyzeCanvasDependencies(canvasPath);
-          
-          const dreamSongData = {
-            canvasPath,
-            dreamNodePath: selectedNode.repoPath,
-            hasContent: analysis?.totalFiles > 0,
-            totalBlocks: analysis?.totalFiles || 0,
-            blocks: (analysis?.allFiles || []).map((file: any, index: number) => ({
-              id: `block-${index}`,
-              type: 'text' as const,
-              text: `Content from ${file.path}`,
-            })),
-            lastParsed: Date.now()
-          };
-          
-          // Store parsed data for future use
-          store.setSelectedNodeDreamSongData(dreamSongData);
-          
-          await leafManager.openDreamSongFullScreen(selectedNode, dreamSongData);
+          // Use the new DreamSong service layer to parse blocks
+          const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
+          const canvasParserService = new (await import('../services/canvas-parser-service')).CanvasParserService(
+            serviceManager.getVaultService()
+          );
+          const vaultService = serviceManager.getVaultService();
+
+          // Parse canvas using new architecture
+          const canvasData = await canvasParserService.parseCanvas(canvasPath);
+          let blocks = parseCanvasToBlocks(canvasData);
+
+          // Resolve media paths to data URLs
+          blocks = await resolveMediaPaths(blocks, selectedNode.repoPath, vaultService);
+
+          console.log(`Parsed ${blocks.length} blocks for fullscreen view`);
+
+          // Open fullscreen view with parsed blocks
+          await leafManager.openDreamSongFullScreen(selectedNode, blocks);
           uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
-          
+
         } catch (parseError) {
           console.error('Failed to parse DreamSong canvas:', parseError);
-          
-          // Fallback: open with empty state
-          const emptyDreamSong = {
-            canvasPath,
-            dreamNodePath: selectedNode.repoPath,
-            hasContent: false,
-            totalBlocks: 0,
-            blocks: [],
-            lastParsed: Date.now()
-          };
-          
-          // Store empty data for future use
-          store.setSelectedNodeDreamSongData(emptyDreamSong);
-          
-          await leafManager.openDreamSongFullScreen(selectedNode, emptyDreamSong);
+
+          // Fallback: open with empty blocks
+          await leafManager.openDreamSongFullScreen(selectedNode, []);
           uiService.showInfo(`Opened empty DreamSong for ${selectedNode.name}`);
         }
         

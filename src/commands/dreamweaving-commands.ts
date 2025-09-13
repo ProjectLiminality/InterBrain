@@ -783,12 +783,16 @@ export function registerDreamweavingCommands(
     name: 'Clear DreamSong Cache',
     callback: () => {
       try {
-        const store = useInterBrainStore.getState();
-        const beforeCount = store.dreamSongCache.cache.size;
-        const beforeSize = store.dreamSongCache.totalSizeBytes;
-        
+        // const store = useInterBrainStore.getState();
+        // const beforeCount = store.dreamSongCache.cache.size;
+        // const beforeSize = store.dreamSongCache.totalSizeBytes;
+
         // Clear the cache
-        store.clearDreamSongCache();
+        // store.clearDreamSongCache();
+
+        // DreamSong cache removed - now handled by React
+        const beforeCount = 0;
+        const beforeSize = 0;
         
         console.log(`🗑️ [Cache] Cleared DreamSong cache:`);
         console.log(`  - Entries removed: ${beforeCount}`);
@@ -804,48 +808,26 @@ export function registerDreamweavingCommands(
     }
   });
 
-  // Show Cache Statistics
-  plugin.addCommand({
-    id: 'show-cache-statistics',
-    name: 'Show Cache Statistics',
-    callback: () => {
-      try {
-        const store = useInterBrainStore.getState();
-        const cache = store.dreamSongCache;
-        
-        const maxSize = 50 * 1024 * 1024; // 50MB limit
-        const usagePercent = ((cache.totalSizeBytes / maxSize) * 100).toFixed(1);
-        const avgSizeBytes = cache.cache.size > 0 ? cache.totalSizeBytes / cache.cache.size : 0;
-        
-        console.log(`📊 [Cache] DreamSong Cache Statistics:`);
-        console.log(`  - Entries: ${cache.cache.size}`);
-        console.log(`  - Total Size: ${(cache.totalSizeBytes / 1024).toFixed(2)} KB`);
-        console.log(`  - Memory Usage: ${usagePercent}% of 50MB limit`);
-        console.log(`  - Average Entry Size: ${(avgSizeBytes / 1024).toFixed(2)} KB`);
-        console.log(`  - Last Accessed: ${cache.lastAccessTime ? new Date(cache.lastAccessTime).toLocaleString() : 'Never'}`);
-        
-        // Show individual cache entries
-        if (cache.cache.size > 0) {
-          console.log(`  - Cache Entries:`);
-          cache.cache.forEach((entry, cacheKey) => {
-            const nodeId = cacheKey.split('_')[0];
-            const structureHash = cacheKey.split('_')[1];
-            const timeSinceAccess = Date.now() - entry.lastAccessed;
-            const minutesAgo = Math.floor(timeSinceAccess / (1000 * 60));
-            
-            console.log(`    • ${nodeId}: ${(entry.sizeBytes / 1024).toFixed(2)} KB, ${minutesAgo}m ago, hash: ${structureHash.substring(0, 8)}...`);
-          });
-        }
-        
-        uiService.showSuccess(`Cache stats: ${cache.cache.size} entries, ${usagePercent}% of limit used`);
-        
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to show cache statistics:', errorMessage);
-        uiService.showError(`Failed to show cache stats: ${errorMessage}`);
-      }
-    }
-  });
+  // Show Cache Statistics - DISABLED: Cache removed in favor of React state management
+  // plugin.addCommand({
+  //   id: 'show-cache-statistics',
+  //   name: 'Show Cache Statistics',
+  //   callback: () => {
+  //     try {
+  //       // DreamSong cache removed - now handled by React
+  //       console.log(`📊 [Cache] DreamSong cache has been replaced with React state management`);
+  //       console.log(`  - No cached entries (React handles memoization automatically)`);
+  //       console.log(`  - Memory usage optimized by React's built-in mechanisms`);
+  //
+  //       uiService.showInfo(`DreamSong cache replaced with React state management`);
+  //
+  //     } catch (error) {
+  //       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  //       console.error('Failed to show cache statistics:', errorMessage);
+  //       uiService.showError(`Failed to show cache stats: ${errorMessage}`);
+  //     }
+  //   }
+  // });
 
   // Debug: Current Flip State
   plugin.addCommand({

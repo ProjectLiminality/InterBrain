@@ -1,6 +1,6 @@
 import { App, WorkspaceLeaf, Notice } from 'obsidian';
 import { DreamNode, MediaFile } from '../types/dreamnode';
-import { DreamSongData } from '../types/dreamsong';
+import { DreamSongBlock } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../dreamspace/DreamSongFullScreenView';
 
 /**
@@ -121,7 +121,7 @@ export class LeafManagerService {
    * Open DreamSong in right pane
    * Creates 50/50 split on first call, then stacks as tabs. Implements one-leaf-per-node strategy.
    */
-  async openDreamSongFullScreen(dreamNode: DreamNode, dreamSongData: DreamSongData): Promise<void> {
+  async openDreamSongFullScreen(dreamNode: DreamNode, blocks: DreamSongBlock[]): Promise<void> {
     try {
       // Check if we already have a leaf for this DreamNode
       const existingLeaf = this.dreamSongLeaves.get(dreamNode.id);
@@ -129,8 +129,8 @@ export class LeafManagerService {
       if (existingLeaf) {
         // Update existing leaf with new data
         const view = existingLeaf.view as DreamSongFullScreenView;
-        if (view && view.updateDreamSongData) {
-          view.updateDreamSongData(dreamNode, dreamSongData);
+        if (view && view.updateDreamSongBlocks) {
+          view.updateDreamSongBlocks(dreamNode, blocks);
           this.app.workspace.revealLeaf(existingLeaf);
           return;
         } else {
@@ -150,8 +150,8 @@ export class LeafManagerService {
 
       // Get the view instance and update it
       const view = leaf.view as DreamSongFullScreenView;
-      if (view && view.updateDreamSongData) {
-        view.updateDreamSongData(dreamNode, dreamSongData);
+      if (view && view.updateDreamSongBlocks) {
+        view.updateDreamSongBlocks(dreamNode, blocks);
       }
 
       // Track this leaf

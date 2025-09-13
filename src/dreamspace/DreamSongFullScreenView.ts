@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { Root, createRoot } from 'react-dom/client';
 import { StrictMode, createElement } from 'react';
 import { DreamSong } from '../features/dreamweaving/DreamSong';
-import { DreamSongData } from '../types/dreamsong';
+import { DreamSongBlock } from '../types/dreamsong';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore } from '../store/interbrain-store';
 
@@ -11,12 +11,12 @@ export const DREAMSONG_FULLSCREEN_VIEW_TYPE = 'dreamsong-fullscreen-view';
 export class DreamSongFullScreenView extends ItemView {
   private root: Root | null = null;
   private dreamNode: DreamNode | null = null;
-  private dreamSongData: DreamSongData | null = null;
+  private blocks: DreamSongBlock[] = [];
 
-  constructor(leaf: WorkspaceLeaf, dreamNode?: DreamNode, dreamSongData?: DreamSongData) {
+  constructor(leaf: WorkspaceLeaf, dreamNode?: DreamNode, blocks?: DreamSongBlock[]) {
     super(leaf);
     this.dreamNode = dreamNode || null;
-    this.dreamSongData = dreamSongData || null;
+    this.blocks = blocks || [];
   }
 
   getViewType(): string {
@@ -32,13 +32,13 @@ export class DreamSongFullScreenView extends ItemView {
   }
 
   /**
-   * Update the view with new DreamSong data
+   * Update the view with new DreamSong blocks
    */
-  updateDreamSongData(dreamNode: DreamNode, dreamSongData: DreamSongData) {
-    console.log(`Updating DreamSong view with data for: ${dreamNode.name}`);
+  updateDreamSongBlocks(dreamNode: DreamNode, blocks: DreamSongBlock[]) {
+    console.log(`Updating DreamSong view with blocks for: ${dreamNode.name}`);
     this.dreamNode = dreamNode;
-    this.dreamSongData = dreamSongData;
-    
+    this.blocks = blocks;
+
     // Use setTimeout to ensure container is ready and avoid timing issues
     globalThis.setTimeout(() => {
       this.render();
@@ -71,7 +71,7 @@ export class DreamSongFullScreenView extends ItemView {
   private render() {
     console.log('DreamSongFullScreenView render called', {
       hasRoot: !!this.root,
-      hasDreamSongData: !!this.dreamSongData,
+      hasBlocks: !!this.blocks && this.blocks.length > 0,
       dreamNodeName: this.dreamNode?.name
     });
 
@@ -84,8 +84,8 @@ export class DreamSongFullScreenView extends ItemView {
       this.root = createRoot(container);
     }
 
-    if (!this.dreamSongData) {
-      console.log('Rendering loading state (no DreamSong data)');
+    if (!this.blocks || this.blocks.length === 0) {
+      console.log('Rendering loading state (no blocks data)');
       // Show loading or empty state
       this.root.render(
         createElement(StrictMode, null,
@@ -105,12 +105,12 @@ export class DreamSongFullScreenView extends ItemView {
       return;
     }
 
-    console.log('Rendering DreamSong component with data:', this.dreamSongData);
+    console.log('Rendering DreamSong component with blocks:', this.blocks);
     // Render the DreamSong component directly - CSS modules handle all styling
     this.root.render(
       createElement(StrictMode, null,
         createElement(DreamSong, {
-          dreamSongData: this.dreamSongData,
+          blocks: this.blocks,
           sourceDreamNodeId: this.dreamNode?.id,
           dreamNodeName: this.dreamNode?.name,
           onMediaClick: this.handleMediaClick.bind(this),

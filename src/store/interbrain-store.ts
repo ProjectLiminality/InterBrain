@@ -145,20 +145,7 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
-// DreamSong caching system - persisted across sessions
-export interface DreamSongCacheEntry {
-  data: DreamSongData;
-  structureHash: string; // Hash of topological sort + content for smart invalidation
-  lastAccessed: number; // For LRU eviction
-  sizeBytes: number; // Estimated memory footprint
-}
-
-export interface DreamSongCacheState {
-  cache: Map<string, DreamSongCacheEntry>; // Key: `${nodeId}_${structureHash}`
-  totalSizeBytes: number; // Current cache size
-  maxSizeBytes: number; // 50MB limit
-  lastAccessTime: number | null; // Timestamp of last cache access
-}
+// DreamSong cache interfaces removed - now handled by React's built-in caching
 
 // Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
 
@@ -181,12 +168,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   selectedNodeDreamSongData: DreamSongData | null;
   setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
   
-  // DreamSong cache (persisted across sessions)
-  dreamSongCache: DreamSongCacheState;
-  getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
-  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
-  clearDreamSongCache: () => void;
-  evictLRUEntries: () => void;
+  // DreamSong cache removed - now handled by React hook
   
   // Creator mode state
   creatorMode: {
@@ -324,13 +306,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   selectedNode: null,
   selectedNodeDreamSongData: null,
   
-  // DreamSong cache initial state
-  dreamSongCache: {
-    cache: new Map<string, DreamSongCacheEntry>(),
-    totalSizeBytes: 0,
-    maxSizeBytes: 50 * 1024 * 1024, // 50MB limit
-    lastAccessTime: null
-  },
+  // DreamSong cache removed - handled by React hook
   
   creatorMode: {
     isActive: false,
@@ -499,116 +475,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
   
-  // DreamSong cache methods
-  getCachedDreamSong: (nodeId, structureHash) => {
-    const state = get();
-    const cacheKey = `${nodeId}_${structureHash}`;
-    const entry = state.dreamSongCache.cache.get(cacheKey);
-    
-    if (entry) {
-      // Update last accessed time for LRU
-      const now = Date.now();
-      const updatedEntry = { ...entry, lastAccessed: now };
-      set(state => {
-        const newCache = new Map(state.dreamSongCache.cache);
-        newCache.set(cacheKey, updatedEntry);
-        return {
-          dreamSongCache: {
-            ...state.dreamSongCache,
-            cache: newCache,
-            lastAccessTime: now
-          }
-        };
-      });
-      return updatedEntry;
-    }
-    
-    return null;
-  },
-  
-  setCachedDreamSong: (nodeId, structureHash, data) => set(state => {
-    const cacheKey = `${nodeId}_${structureHash}`;
-    
-    // Estimate size (rough calculation: JSON string length * 2 bytes for UTF-16)
-    const sizeBytes = JSON.stringify(data).length * 2;
-    
-    const entry: DreamSongCacheEntry = {
-      data,
-      structureHash,
-      lastAccessed: Date.now(),
-      sizeBytes
-    };
-    
-    const newCache = new Map(state.dreamSongCache.cache);
-    
-    // Remove existing entry if it exists (to update size calculation)
-    const existingEntry = newCache.get(cacheKey);
-    const sizeDelta = existingEntry ? sizeBytes - existingEntry.sizeBytes : sizeBytes;
-    
-    newCache.set(cacheKey, entry);
-    
-    const newState = {
-      dreamSongCache: {
-        ...state.dreamSongCache,
-        cache: newCache,
-        totalSizeBytes: state.dreamSongCache.totalSizeBytes + sizeDelta
-      }
-    };
-    
-    // Check if we need to evict entries after adding
-    if (newState.dreamSongCache.totalSizeBytes > newState.dreamSongCache.maxSizeBytes) {
-      // Trigger LRU eviction
-      if (typeof setTimeout !== 'undefined') {
-        // eslint-disable-next-line no-undef
-        setTimeout(() => get().evictLRUEntries(), 0);
-      } else {
-        // Fallback for non-browser environments
-        get().evictLRUEntries();
-      }
-    }
-    
-    return newState;
-  }),
-  
-  evictLRUEntries: () => set(state => {
-    if (state.dreamSongCache.totalSizeBytes <= state.dreamSongCache.maxSizeBytes) {
-      return state; // No eviction needed
-    }
-    
-    // Sort entries by last accessed time (oldest first)
-    const entries = Array.from(state.dreamSongCache.cache.entries());
-    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-    
-    const newCache = new Map(state.dreamSongCache.cache);
-    let newTotalSize = state.dreamSongCache.totalSizeBytes;
-    
-    // Remove oldest entries until we're under the limit
-    for (const [key, entry] of entries) {
-      if (newTotalSize <= state.dreamSongCache.maxSizeBytes * 0.8) { // Leave 20% buffer
-        break;
-      }
-      newCache.delete(key);
-      newTotalSize -= entry.sizeBytes;
-    }
-    
-    console.log(`DreamSong cache: Evicted ${entries.length - newCache.size} entries. Size: ${newTotalSize} bytes`);
-    
-    return {
-      dreamSongCache: {
-        ...state.dreamSongCache,
-        cache: newCache,
-        totalSizeBytes: newTotalSize
-      }
-    };
-  }),
-  
-  clearDreamSongCache: () => set(state => ({
-    dreamSongCache: {
-      ...state.dreamSongCache,
-      cache: new Map<string, DreamSongCacheEntry>(),
-      totalSizeBytes: 0
-    }
-  })),
+  // DreamSong cache methods removed - handled by React hook
   
   setCreatorMode: (active, nodeId = null) => set({ 
     creatorMode: { isActive: active, nodeId: nodeId } 
@@ -643,6 +510,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     
     // Only log actual changes, not redundant calls
     if (previousLayout !== layout) {
+      console.log(`Layout changed: ${previousLayout} → ${layout}`);
     }
     
     // Detect meaningful layout changes for history tracking
@@ -857,9 +725,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   setIsDragging: (dragging) => set({ isDragging: dragging }),
   
   // Creation state actions
-  startCreation: (position) => set((state) => {
-    const previousLayout = state.spatialLayout;
-    
+  startCreation: (position) => set((_state) => {
     return {
       spatialLayout: 'creation',
       creationState: {
@@ -875,9 +741,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
   
-  startCreationWithData: (position, initialData) => set((state) => {
-    const previousLayout = state.spatialLayout;
-    
+  startCreationWithData: (position, initialData) => set((_state) => {
     return {
       spatialLayout: 'creation',
       creationState: {
@@ -910,9 +774,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   })),
   
-  completeCreation: () => set((state) => {
-    const previousLayout = state.spatialLayout;
-    
+  completeCreation: () => set((_state) => {
     return {
       spatialLayout: 'constellation',
       creationState: {
@@ -923,9 +785,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
   
-  cancelCreation: () => set((state) => {
-    const previousLayout = state.spatialLayout;
-    
+  cancelCreation: () => set((_state) => {
     return {
       spatialLayout: 'constellation',
       creationState: {
@@ -937,9 +797,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
 
   // Edit mode actions
-  startEditMode: (node) => set((state) => {
-    const previousLayout = state.spatialLayout;
-    
+  startEditMode: (node) => set((_state) => {
     return {
       editMode: {
         isActive: true,
@@ -955,7 +813,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
 
-  exitEditMode: () => set((state) => {
+  exitEditMode: () => set((_state) => {
     // Note: We don't change the layout here - the calling code should handle that
     // This allows for proper transitions (edit → liminal-web, edit-search → edit, etc.)
     
@@ -997,9 +855,8 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
 
   setEditModeSearchActive: (active) => set(state => {
-    const previousLayout = state.spatialLayout;
     const newLayout = active ? 'edit-search' as const : 'edit' as const;
-    
+
     return {
       editMode: {
         ...state.editMode,
@@ -1282,29 +1139,19 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, mock relationships, DreamSong cache, and Ollama config
+      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
-        dreamSongCache: {
-          ...state.dreamSongCache,
-          cache: mapToArray(state.dreamSongCache.cache)
-        },
         ...extractOllamaPersistenceData(state),
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
-        const persistedData = persisted as { 
-          dataMode: 'mock' | 'real'; 
+        const persistedData = persisted as {
+          dataMode: 'mock' | 'real';
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
-          dreamSongCache?: {
-            cache: [string, DreamSongCacheEntry][];
-            totalSizeBytes: number;
-            maxSizeBytes: number;
-            lastAccessTime: number | null;
-          };
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
         };
@@ -1313,15 +1160,6 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
-          dreamSongCache: persistedData.dreamSongCache ? {
-            ...persistedData.dreamSongCache,
-            cache: arrayToMap(persistedData.dreamSongCache.cache)
-          } : {
-            cache: new Map<string, DreamSongCacheEntry>(),
-            totalSizeBytes: 0,
-            maxSizeBytes: 50 * 1024 * 1024, // 50MB limit
-            lastAccessTime: null
-          },
           ...restoreOllamaPersistenceData(persistedData),
         };
       },

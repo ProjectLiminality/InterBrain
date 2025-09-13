@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
-import { DreamSongData, DreamSongBlock, MediaInfo } from '../../types/dreamsong';
+import React from 'react';
+import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
 
 interface DreamSongProps {
-  dreamSongData: DreamSongData;
+  blocks: DreamSongBlock[];
   className?: string;
   sourceDreamNodeId?: string; // ID of the DreamNode this DreamSong belongs to (for scroll restoration)
   dreamNodeName?: string; // Name of the DreamNode for display in header
@@ -13,26 +13,27 @@ interface DreamSongProps {
 }
 
 /**
- * DreamSong Component
- * 
- * Pure content component that displays a linear story flow generated from canvas dependency graphs.
- * Features flip-flop layout with alternating media-text positioning.
- * Container-agnostic - can be rendered in any context (embedded, full-screen, etc.).
+ * DreamSong Component - Pure Presentational Component
+ *
+ * Layer 3 of the three-layer DreamSong architecture.
+ * Purely presentational - renders blocks without any state management.
+ * All data transformation happens in Layer 1 (parser).
+ * All state management happens in Layer 2 (hook).
  */
 export const DreamSong: React.FC<DreamSongProps> = ({
-  dreamSongData,
+  blocks,
   className = '',
   sourceDreamNodeId,
   dreamNodeName,
   onMediaClick,
   embedded = false
 }) => {
-  // Memoize blocks to prevent unnecessary re-renders
-  const blocks = useMemo(() => dreamSongData.blocks, [dreamSongData.blocks]);
-
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
 
-  if (!dreamSongData.hasContent) {
+  // Check if we have content to display
+  const hasContent = blocks.length > 0;
+
+  if (!hasContent) {
     return (
       <div className={containerClass} style={{ pointerEvents: 'auto' }}>
         <div className={styles.dreamSongEmptyState}>
@@ -47,19 +48,6 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       </div>
     );
   }
-
-  // Calculate flip-flop index for media-text pairs only
-  const blocksWithFlipFlop = useMemo(() => {
-    let mediaTextPairIndex = 0;
-    return blocks.map((block) => {
-      if (block.type === 'media-text') {
-        const isLeftAligned = mediaTextPairIndex % 2 === 0;
-        mediaTextPairIndex++;
-        return { ...block, isLeftAligned };
-      }
-      return block;
-    });
-  }, [blocks]);
 
   return (
     <div
@@ -79,7 +67,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       </div>
 
       <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
-        {blocksWithFlipFlop.map((block, index) => (
+        {blocks.map((block, index) => (
           <DreamSongBlockComponent
             key={block.id}
             block={block}
@@ -99,9 +87,9 @@ interface DreamSongBlockProps {
 }
 
 /**
- * Individual DreamSong content block
+ * Individual DreamSong content block - Memoized for performance
  */
-const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIndex: _blockIndex, onMediaClick }) => {
+const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockIndex: _blockIndex, onMediaClick }) => {
   const getBlockClassName = (): string => {
     const baseClass = styles.dreamSongBlock;
 
@@ -244,6 +232,9 @@ const DreamSongBlockComponent: React.FC<DreamSongBlockProps> = ({ block, blockIn
 
     </div>
   );
-};
+});
+
+// Add display name for debugging
+DreamSongBlockComponent.displayName = 'DreamSongBlockComponent';
 
 export default DreamSong;

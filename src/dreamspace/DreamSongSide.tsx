@@ -1,9 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { DreamNode } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import { DreamSong } from '../features/dreamweaving/DreamSong';
-import { DreamSongData } from '../types/dreamsong';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { useDreamSongData } from '../hooks/useDreamSongData';
+import { CanvasParserService } from '../services/canvas-parser-service';
+import { serviceManager } from '../services/service-manager';
 import { setIcon } from 'obsidian';
 
 interface DreamSongSideProps {
@@ -15,8 +17,7 @@ interface DreamSongSideProps {
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
-  dreamSongData: DreamSongData | null;
-  isLoadingDreamSong: boolean;
+  // dreamSongData and isLoadingDreamSong removed - handled by hook
   // isVisible removed - relying on CSS backface-visibility for optimization
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -35,8 +36,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   shouldShowFullscreenButton,
   nodeSize: _nodeSize,
   borderWidth,
-  dreamSongData,
-  isLoadingDreamSong,
+  // dreamSongData and isLoadingDreamSong removed - using hook
   // isVisible parameter removed for simplicity
   onMouseEnter,
   onMouseLeave,
@@ -45,6 +45,22 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   onFlipClick,
   onFullScreenClick
 }) => {
+  // Get service instances
+  const canvasParser = useMemo(() => {
+    return new CanvasParserService(serviceManager.getVaultService());
+  }, []);
+
+  const vaultService = useMemo(() => {
+    return serviceManager.getVaultService();
+  }, []);
+
+  // Use the new hook for DreamSong data
+  const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+  const { blocks, hasContent, isLoading: isLoadingDreamSong, error } = useDreamSongData(
+    canvasPath,
+    dreamNode.repoPath,
+    { canvasParser, vaultService }
+  );
   const nodeColors = getNodeColors(dreamNode.type);
   const gitState = getGitVisualState(dreamNode.gitStatus);
   const gitStyle = getGitStateStyle(gitState);
@@ -122,15 +138,15 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             pointerEvents: 'auto' // Enable scrolling interaction
           }}
         >
-          {dreamSongData ? (
-            <div style={{ 
-              height: 'auto', 
+          {hasContent ? (
+            <div style={{
+              height: 'auto',
               minHeight: '100%',
               position: 'relative',
               paddingBottom: '20px' // Extra space to ensure scrollable area
             }}>
               <DreamSong
-                dreamSongData={dreamSongData}
+                blocks={blocks}
                 className="flip-enter"
                 sourceDreamNodeId={dreamNode.id}
                 dreamNodeName={dreamNode.name}
@@ -152,6 +168,25 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           >
             Loading DreamSong...
           </div>
+        ) : error ? (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: dreamNodeStyles.colors.text.primary,
+              pointerEvents: 'auto',
+              flexDirection: 'column',
+              fontSize: '12px',
+              textAlign: 'center',
+              padding: '20px'
+            }}
+          >
+            <div>DreamSong Error</div>
+            <div style={{ marginTop: '8px', opacity: 0.7 }}>{error}</div>
+          </div>
         ) : (
           <div
             style={{
@@ -168,9 +203,9 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           </div>
         )}
         </div>
-        
+
         {/* Fade-to-black overlay - positioned outside scrolling container but inside circular mask */}
-        {dreamSongData && (
+        {hasContent && (
           <div style={getMediaOverlayStyle()} />
         )}
       </div>

@@ -6,10 +6,8 @@ import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { dreamNodeStyles } from './dreamNodeStyles';
-import { DreamSongParserService } from '../services/dreamsong-parser-service';
 import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
-import { DreamSongData } from '../types/dreamsong';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
 import './dreamNodeAnimations.css';
@@ -48,8 +46,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   onDoubleClick,
   enableDynamicScaling = false,
   onHitSphereRef,
-  vaultService,
-  canvasParserService
+  vaultService: _vaultService,
+  canvasParserService: _canvasParserService
 }, ref) => {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
@@ -58,10 +56,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Flip animation state
   const [flipRotation, setFlipRotation] = useState(0);
-  const [dreamSongData, setDreamSongData] = useState<DreamSongData | null>(null);
-  const [hasDreamSong, setHasDreamSong] = useState(false);
-  const [dreamSongHasContent, setDreamSongHasContent] = useState(false);
-  const [isLoadingDreamSong, setIsLoadingDreamSong] = useState(false);
+  // DreamSong state now managed by DreamSongSide component via hook
   
   // Dual-mode position state
   const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
@@ -114,15 +109,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Determine if flip button should be visible
   const shouldShowFlipButton = useMemo(() => {
-    const result = spatialLayout === 'liminal-web' && 
-                   selectedNode?.id === dreamNode.id && 
+    const result = spatialLayout === 'liminal-web' &&
+                   selectedNode?.id === dreamNode.id &&
                    isHovered &&
-                   hasDreamSong &&
-                   dreamSongHasContent && // Only show if canvas has actual content
                    !isDragging;
-    
+
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, hasDreamSong, dreamSongHasContent, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
   // Determine if DreamTalk fullscreen button should be visible (stable version)
   const shouldShowDreamTalkFullscreen = useMemo(() => {
@@ -138,14 +131,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
   // Determine if DreamSong fullscreen button should be visible (stable version)
   const shouldShowDreamSongFullscreen = useMemo(() => {
-    const result = spatialLayout === 'liminal-web' && 
-                   selectedNode?.id === dreamNode.id && 
+    const result = spatialLayout === 'liminal-web' &&
+                   selectedNode?.id === dreamNode.id &&
                    isHovered &&
-                   hasDreamSong && // DreamSong canvas exists
                    !isDragging;
-    
+
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, hasDreamSong, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
   // Register hit sphere reference
   useEffect(() => {
@@ -154,145 +146,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     }
   }, [dreamNode.id, onHitSphereRef]);
   
-  // Check for DreamSong canvas file
-  useEffect(() => {
-    const checkDreamSong = async () => {
-      if (!vaultService || !canvasParserService) {
-        setHasDreamSong(false);
-        setDreamSongHasContent(false);
-        return;
-      }
-      
-      const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
-      
-      try {
-        const exists = await vaultService.fileExists(canvasPath);
-        setHasDreamSong(exists);
-        
-        if (exists) {
-          const dreamSongParser = new DreamSongParserService(vaultService, canvasParserService);
-          const parseResult = await dreamSongParser.parseDreamSong(canvasPath, dreamNode.repoPath);
-          
-          if (parseResult.success && parseResult.data) {
-            setDreamSongHasContent(parseResult.data.hasContent);
-          } else {
-            setDreamSongHasContent(false);
-          }
-        } else {
-          setDreamSongHasContent(false);
-        }
-      } catch (error) {
-        console.error(`Error checking DreamSong for ${dreamNode.id}:`, error);
-        setHasDreamSong(false);
-        setDreamSongHasContent(false);
-      }
-    };
-    
-    checkDreamSong();
-  }, [dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService, selectedNode?.id, spatialLayout]);
-  
-  // Load DreamSong data when node is selected (preload for seamless flip UX)
-  useEffect(() => {
-    const loadDreamSongDataWithCache = async () => {
-      const isSelected = selectedNode?.id === dreamNode.id;
-      if (!isSelected || !hasDreamSong || !vaultService || !canvasParserService) {
-        return;
-      }
-      
-      setIsLoadingDreamSong(true);
-      
-      try {
-        const dreamSongParser = new DreamSongParserService(vaultService, canvasParserService);
-        const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
-        const store = useInterBrainStore.getState();
-        
-        // Generate structure hash for cache invalidation
-        const structureHash = await dreamSongParser.generateStructureHash(canvasPath);
-        
-        if (!structureHash) {
-          console.warn(`Could not generate structure hash for ${canvasPath}`);
-          setIsLoadingDreamSong(false);
-          return;
-        }
-        
-        // Check cache first (L2 cache in Zustand)
-        const cachedEntry = store.getCachedDreamSong(dreamNode.id, structureHash);
-        
-        if (cachedEntry) {
-          console.log(`🚀 DreamSong cache HIT for ${dreamNode.name} (${structureHash})`);
-          setDreamSongData(cachedEntry.data);
-          
-          // Also store in selectedNodeDreamSongData for full-screen consistency
-          if (store.selectedNode?.id === dreamNode.id) {
-            store.setSelectedNodeDreamSongData(cachedEntry.data);
-          }
-          
-          setIsLoadingDreamSong(false);
-          return;
-        }
-        
-        // Cache miss - need to parse
-        console.log(`📝 DreamSong cache MISS for ${dreamNode.name} (${structureHash}) - parsing...`);
-        const result = await dreamSongParser.parseDreamSong(canvasPath, dreamNode.repoPath);
-        
-        if (result.success && result.data) {
-          setDreamSongData(result.data);
-          
-          // Store in cache for future use
-          store.setCachedDreamSong(dreamNode.id, structureHash, result.data);
-          
-          // Store in selectedNodeDreamSongData for full-screen (only for selected node)
-          if (store.selectedNode?.id === dreamNode.id) {
-            store.setSelectedNodeDreamSongData(result.data);
-          }
-          
-          console.log(`✅ DreamSong parsed and cached for ${dreamNode.name}`);
-        } else {
-          console.warn(`Failed to parse DreamSong: ${result.error?.message}`);
-          // Create empty DreamSong data for graceful handling
-          const emptyData = {
-            canvasPath: `${dreamNode.repoPath}/DreamSong.canvas`,
-            dreamNodePath: dreamNode.repoPath,
-            hasContent: false,
-            totalBlocks: 0,
-            blocks: [],
-            lastParsed: Date.now()
-          };
-          setDreamSongData(emptyData);
-          
-          // Cache empty data to prevent repeated parsing of broken canvas
-          store.setCachedDreamSong(dreamNode.id, structureHash, emptyData);
-          
-          // Store empty data for full-screen (only for selected node)
-          if (store.selectedNode?.id === dreamNode.id) {
-            store.setSelectedNodeDreamSongData(emptyData);
-          }
-        }
-      } catch (error) {
-        console.error(`Error loading DreamSong for ${dreamNode.id}:`, error);
-        // Set empty DreamSong data for graceful error handling
-        const emptyData = {
-          canvasPath: `${dreamNode.repoPath}/DreamSong.canvas`,
-          dreamNodePath: dreamNode.repoPath,
-          hasContent: false,
-          totalBlocks: 0,
-          blocks: [],
-          lastParsed: Date.now()
-        };
-        setDreamSongData(emptyData);
-        
-        // Store empty data for selected node
-        const store = useInterBrainStore.getState();
-        if (store.selectedNode?.id === dreamNode.id) {
-          store.setSelectedNodeDreamSongData(emptyData);
-        }
-      } finally {
-        setIsLoadingDreamSong(false);
-      }
-    };
-    
-    loadDreamSongDataWithCache();
-  }, [selectedNode?.id, hasDreamSong, dreamNode.id, dreamNode.repoPath, vaultService, canvasParserService]);
+  // DreamSong logic now handled by DreamSongSide component via hook
   
   // Reset flip state when node is no longer selected
   useEffect(() => {
@@ -842,8 +696,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
                 nodeSize={nodeSize}
                 borderWidth={borderWidth}
-                dreamSongData={dreamSongData}
-                isLoadingDreamSong={isLoadingDreamSong}
                 // Note: DreamSong always rendered, CSS backface-visibility handles optimization
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
