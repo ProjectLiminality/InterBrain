@@ -47,14 +47,27 @@ export function parseCanvasToBlocks(canvasData: CanvasData): DreamSongBlock[] {
   // Find media-text pairs from undirected edges
   const mediaTextPairs = findMediaTextPairs(canvasData.nodes, processedEdges.undirected);
 
-  // Perform topological sort on directed edges only
-  const sortResult = topologicalSort(canvasData.nodes, processedEdges.directed);
+  // Filter nodes for topological sort: exclude text nodes that are part of pairs
+  const textNodesInPairs = new Set(mediaTextPairs.map(pair => pair.textNodeId));
+  const nodesForTopologicalSort = canvasData.nodes.filter(node => !textNodesInPairs.has(node.id));
+
+  console.log('🎵 [Parser] Nodes for topological sort:', {
+    originalCount: canvasData.nodes.length,
+    filteredCount: nodesForTopologicalSort.length,
+    excludedTextNodes: Array.from(textNodesInPairs),
+    mediaTextPairs: mediaTextPairs.length
+  });
+
+  // Perform topological sort on directed edges only, using filtered nodes
+  const sortResult = topologicalSort(nodesForTopologicalSort, processedEdges.directed);
 
   if (sortResult.hasCycle) {
     throw new Error(`Canvas contains circular dependencies: ${sortResult.nodesInCycle?.join(', ')}`);
   }
 
   // Create content blocks from sorted nodes
+  // Note: sortResult.sortedNodeIds only contains media nodes from pairs + standalone nodes
+  // but createContentBlocks still has access to all original nodes via canvasData.nodes
   const blocks = createContentBlocks(
     canvasData.nodes,
     sortResult.sortedNodeIds,
