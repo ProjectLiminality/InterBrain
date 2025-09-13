@@ -15,6 +15,7 @@ export class LeafManagerService {
   private app: App;
   private dreamSongLeaves: Map<string, WorkspaceLeaf> = new Map();
   private dreamTalkLeaves: Map<string, WorkspaceLeaf> = new Map();
+  private canvasLeaves: Map<string, WorkspaceLeaf> = new Map();
   private rightPaneLeaf: WorkspaceLeaf | null = null;
 
   constructor(app: App) {
@@ -41,7 +42,7 @@ export class LeafManagerService {
    * Check if any DreamNode leaves are still open
    */
   private hasOpenLeaves(): boolean {
-    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0;
+    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0 || this.canvasLeaves.size > 0;
   }
 
   /**
@@ -171,6 +172,59 @@ export class LeafManagerService {
   }
 
   /**
+   * Open DreamSong canvas file in right pane
+   * Creates 50/50 split on first call, then stacks as tabs. Implements one-leaf-per-node strategy.
+   */
+  async openDreamSongCanvas(dreamNode: DreamNode, canvasPath: string): Promise<void> {
+    try {
+      console.log(`Opening DreamSong canvas for ${dreamNode.name}:`, canvasPath);
+
+      // Check if we already have a leaf for this DreamNode's canvas
+      const existingLeaf = this.canvasLeaves.get(dreamNode.id);
+
+      if (existingLeaf) {
+        // Leaf exists, just reveal it
+        this.app.workspace.revealLeaf(existingLeaf);
+        console.log(`Revealed existing canvas leaf for ${dreamNode.name}`);
+        return;
+      }
+
+      // Get the file from the vault
+      const file = this.app.vault.getAbstractFileByPath(canvasPath);
+
+      if (!file) {
+        console.error(`Canvas file not found in vault: ${canvasPath}`);
+        new Notice(`Canvas file not found: ${canvasPath}`, 3000);
+        return;
+      }
+
+      // Check if it's actually a file (not a folder)
+      if (file.path !== canvasPath) {
+        console.error(`Path mismatch - expected: ${canvasPath}, got: ${file.path}`);
+        new Notice(`Invalid canvas file path: ${canvasPath}`, 3000);
+        return;
+      }
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+      await leaf.openFile(file as any); // TFile type
+
+      // Track this leaf
+      this.canvasLeaves.set(dreamNode.id, leaf);
+
+      // Set up cleanup when leaf is closed
+      this.setupCanvasLeafCleanup(dreamNode.id, leaf);
+
+      console.log(`Successfully opened ${file.path} in new leaf`);
+      new Notice(`Opened DreamSong canvas for ${dreamNode.name}`);
+
+    } catch (error) {
+      console.error('Failed to open DreamSong canvas:', error);
+      new Notice('Failed to open DreamSong canvas', 3000);
+    }
+  }
+
+  /**
    * Close DreamSong full-screen leaf for a specific DreamNode
    */
   async closeDreamSongFullScreen(dreamNodeId: string): Promise<void> {
@@ -246,6 +300,23 @@ export class LeafManagerService {
   }
 
   /**
+   * Set up automatic cleanup when a canvas leaf is closed by the user
+   */
+  private setupCanvasLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
+    // Listen for leaf detach
+    const originalDetach = leaf.detach.bind(leaf);
+    leaf.detach = async () => {
+      // Only clean up if we still have this leaf tracked
+      if (this.canvasLeaves.has(dreamNodeId)) {
+        this.canvasLeaves.delete(dreamNodeId);
+        console.log(`Auto-cleaned up canvas leaf for node: ${dreamNodeId}`);
+        await this.collapseRightPaneIfEmpty();
+      }
+      return originalDetach();
+    };
+  }
+
+  /**
    * Close DreamTalk full-screen leaf for a specific DreamNode
    */
   async closeDreamTalkFullScreen(dreamNodeId: string): Promise<void> {
@@ -277,13 +348,46 @@ export class LeafManagerService {
   }
 
   /**
+   * Close canvas leaf for a specific DreamNode
+   */
+  async closeCanvasLeaf(dreamNodeId: string): Promise<void> {
+    const leaf = this.canvasLeaves.get(dreamNodeId);
+    if (leaf) {
+      // Remove from map first to prevent cleanup loop
+      this.canvasLeaves.delete(dreamNodeId);
+      await leaf.detach();
+      await this.collapseRightPaneIfEmpty();
+      console.log(`Closed canvas leaf for node: ${dreamNodeId}`);
+    }
+  }
+
+  /**
+   * Close all open canvas leaves
+   */
+  async closeAllCanvasLeaves(): Promise<void> {
+    const promises = Array.from(this.canvasLeaves.keys()).map(nodeId =>
+      this.closeCanvasLeaf(nodeId)
+    );
+    await Promise.all(promises);
+  }
+
+  /**
+   * Check if a DreamNode has an open canvas leaf
+   */
+  isCanvasOpen(dreamNodeId: string): boolean {
+    return this.canvasLeaves.has(dreamNodeId);
+  }
+
+  /**
    * Clean up service resources
    */
   async destroy(): Promise<void> {
     await this.closeAllDreamSongFullScreen();
     await this.closeAllDreamTalkFullScreen();
+    await this.closeAllCanvasLeaves();
     this.dreamSongLeaves.clear();
     this.dreamTalkLeaves.clear();
+    this.canvasLeaves.clear();
     
     // Clean up right pane
     if (this.rightPaneLeaf) {

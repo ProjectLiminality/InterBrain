@@ -41,9 +41,17 @@ export function registerDreamweavingCommands(
         // Check if canvas already exists
         const existingFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
         if (existingFile instanceof TFile) {
-          uiService.showWarning('DreamSong.canvas already exists in this DreamNode');
-          // Open the existing canvas file
-          await plugin.app.workspace.getLeaf().openFile(existingFile);
+          uiService.showInfo('DreamSong.canvas already exists, opening in split view...');
+
+          // Get leaf manager service
+          const leafManager = serviceManager.getService('leafManagerService');
+          if (!leafManager) {
+            uiService.showError('Leaf manager service not available');
+            return;
+          }
+
+          // Open canvas using leaf manager for proper split-screen behavior
+          await leafManager.openDreamSongCanvas(selectedNode, canvasPath);
           uiService.showSuccess('Opened existing DreamSong.canvas');
           return;
         }
@@ -55,7 +63,7 @@ export function registerDreamweavingCommands(
         };
         
         // Create the canvas file using Obsidian API
-        const newFile = await plugin.app.vault.create(canvasPath, JSON.stringify(emptyCanvas, null, 2));
+        await plugin.app.vault.create(canvasPath, JSON.stringify(emptyCanvas, null, 2));
         
         // Commit the new canvas file
         try {
@@ -83,9 +91,16 @@ export function registerDreamweavingCommands(
           console.error('Failed to commit DreamSong canvas:', commitError);
           // Don't fail the whole operation if commit fails
         }
-        
-        // Open the new canvas file
-        await plugin.app.workspace.getLeaf().openFile(newFile);
+
+        // Get leaf manager service for proper split-screen opening
+        const leafManager = serviceManager.getService('leafManagerService');
+        if (!leafManager) {
+          uiService.showError('Leaf manager service not available');
+          return;
+        }
+
+        // Open the new canvas file using leaf manager
+        await leafManager.openDreamSongCanvas(selectedNode, canvasPath);
         uiService.showSuccess(`Created and opened DreamSong.canvas in ${selectedNode.name}`);
         
       } catch (error) {
