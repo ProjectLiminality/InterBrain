@@ -10,6 +10,7 @@ import { DreamSongBlock } from '../types/dreamsong';
 import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
 import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../services/dreamsong';
+import { serviceManager } from '../services/service-manager';
 
 interface UseDreamSongDataOptions {
   canvasParser: CanvasParserService;
@@ -97,6 +98,45 @@ export function useDreamSongData(
   useEffect(() => {
     parseCanvas();
   }, [parseCanvas]);
+
+  // Effect for real-time file change detection
+  useEffect(() => {
+    // Get Obsidian app instance for file watching
+    const app = serviceManager.getApp();
+    if (!app || !canvasPath) {
+      return;
+    }
+
+    const vault = app.vault;
+
+    // Handler for file modification events
+    const handleFileChange = (file: any) => {
+      // Check if the changed file is our canvas
+      if (file.path === canvasPath) {
+        console.log(`🎵 [DreamSong] Canvas file changed: ${canvasPath}, triggering re-parse`);
+
+        // Use a small delay to ensure file write is complete
+        setTimeout(() => {
+          parseCanvas();
+        }, 100);
+      }
+    };
+
+    // Listen for file modifications
+    vault.on('modify', handleFileChange);
+
+    // Also listen for file creation (in case canvas was created after component mount)
+    vault.on('create', handleFileChange);
+
+    console.log(`🎵 [DreamSong] Watching for changes to: ${canvasPath}`);
+
+    // Cleanup listener on unmount or path change
+    return () => {
+      console.log(`🎵 [DreamSong] Stopped watching: ${canvasPath}`);
+      vault.off('modify', handleFileChange);
+      vault.off('create', handleFileChange);
+    };
+  }, [canvasPath, parseCanvas]);
 
   // Derived state
   const hasContent = blocks.length > 0;

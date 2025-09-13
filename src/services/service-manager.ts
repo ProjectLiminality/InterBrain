@@ -201,6 +201,13 @@ export class ServiceManager {
   }
 
   /**
+   * Get Obsidian app instance (only available when plugin is initialized)
+   */
+  getApp() {
+    return this.plugin?.app || null;
+  }
+
+  /**
    * Generic service getter (for backwards compatibility and simpler access)
    */
   getService(serviceName: string) {
