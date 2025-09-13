@@ -150,6 +150,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 className="flip-enter"
                 sourceDreamNodeId={dreamNode.id}
                 dreamNodeName={dreamNode.name}
+                dreamTalkMedia={dreamNode.dreamTalkMedia}
                 onMediaClick={handleMediaClick}
                 embedded={true}
               />

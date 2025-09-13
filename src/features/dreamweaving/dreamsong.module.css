@@ -63,6 +63,39 @@
   margin: 0 auto;
 }
 
+/* DreamTalk section above header */
+.dreamTalkSection {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dreamTalkSection img,
+.dreamTalkSection video,
+.dreamTalkSection audio {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.dreamTalkSection img:hover,
+.dreamTalkSection video:hover {
+  transform: scale(1.02);
+}
+
+/* Responsive adjustments for DreamTalk */
+@media (max-width: 1200px) {
+  .dreamTalkSection {
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    max-width: 90%;
+  }
+}
+
 /* Scrollable content area */
 .dreamSongContent {
   flex: 1;

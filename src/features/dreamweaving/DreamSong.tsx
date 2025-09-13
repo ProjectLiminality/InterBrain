@@ -1,5 +1,6 @@
 import React from 'react';
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
+import { MediaFile } from '../../types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
 
@@ -8,6 +9,7 @@ interface DreamSongProps {
   className?: string;
   sourceDreamNodeId?: string; // ID of the DreamNode this DreamSong belongs to (for scroll restoration)
   dreamNodeName?: string; // Name of the DreamNode for display in header
+  dreamTalkMedia?: MediaFile[]; // DreamTalk media files to display above header
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
   embedded?: boolean; // Whether this is being rendered in embedded context (e.g., 3D sphere back)
 }
@@ -25,6 +27,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   className = '',
   sourceDreamNodeId,
   dreamNodeName,
+  dreamTalkMedia,
   onMediaClick,
   embedded = false
 }) => {
@@ -32,6 +35,64 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
   // Check if we have content to display
   const hasContent = blocks.length > 0;
+
+  // Helper function to render DreamTalk media
+  const renderDreamTalkMedia = (): React.ReactNode => {
+    if (!dreamTalkMedia || dreamTalkMedia.length === 0) {
+      return null;
+    }
+
+    // Use the first media file as the primary DreamTalk
+    const primaryMedia = dreamTalkMedia[0];
+
+    const commonProps = {
+      style: { maxWidth: '100%', height: 'auto', borderRadius: '8px' }
+    };
+
+    switch (primaryMedia.type) {
+      case 'image':
+        return (
+          <img
+            src={primaryMedia.data}
+            alt="DreamTalk"
+            {...commonProps}
+          />
+        );
+
+      case 'video':
+        return (
+          <video
+            src={primaryMedia.data}
+            controls
+            preload="metadata"
+            playsInline
+            style={{ ...commonProps.style, maxHeight: '300px' }}
+          >
+            Your browser does not support video playback.
+          </video>
+        );
+
+      case 'audio':
+        return (
+          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
+              DreamTalk Audio
+            </div>
+            <audio
+              src={primaryMedia.data}
+              controls
+              preload="metadata"
+              style={{ width: '100%' }}
+            >
+              Your browser does not support audio playback.
+            </audio>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   if (!hasContent) {
     return (
@@ -55,6 +116,13 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       style={{ pointerEvents: 'auto' }}
       data-node-id={sourceDreamNodeId}
     >
+      {/* DreamTalk media displayed above everything - only in non-embedded mode */}
+      {!embedded && renderDreamTalkMedia() && (
+        <div className={styles.dreamTalkSection}>
+          {renderDreamTalkMedia()}
+        </div>
+      )}
+
       <div className={styles.dreamSongHeader}>
         <div className={styles.dreamSongTitle}>
           {dreamNodeName || 'DreamSong'}

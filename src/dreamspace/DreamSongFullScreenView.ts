@@ -207,6 +207,7 @@ export class DreamSongFullScreenView extends ItemView {
           blocks: this.blocks,
           sourceDreamNodeId: this.dreamNode?.id,
           dreamNodeName: this.dreamNode?.name,
+          dreamTalkMedia: this.dreamNode?.dreamTalkMedia,
           onMediaClick: this.handleMediaClick.bind(this),
           embedded: false
         })
