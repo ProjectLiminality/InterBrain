@@ -313,6 +313,36 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Open DreamNode in Terminal and run claude command
+    this.addCommand({
+      id: 'open-dreamnode-in-terminal',
+      name: 'Open DreamNode in Terminal (run claude)',
+      hotkeys: [{ modifiers: ['Ctrl'], key: 'c' }],
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode) {
+          this.uiService.showError('No DreamNode selected');
+          return;
+        }
+
+        // Only available in real mode (mock nodes don't have file paths)
+        if (serviceManager.getMode() !== 'real') {
+          this.uiService.showError('Open in Terminal only available in real mode');
+          return;
+        }
+
+        try {
+          // Use git service to open terminal at the repository folder and run claude
+          await this.gitService.openInTerminal(currentNode.repoPath);
+          this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude`);
+        } catch (error) {
+          console.error('Failed to open in Terminal:', error);
+          this.uiService.showError('Failed to open DreamNode in Terminal');
+        }
+      }
+    });
+
     // Delete DreamNode command
     this.addCommand({
       id: 'delete-dreamnode',
