@@ -11,6 +11,7 @@ import ProtoNode3D from '../features/creation/ProtoNode3D';
 import SearchNode3D from '../features/search/SearchNode3D';
 import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../features/edit-mode';
+import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -1045,8 +1046,18 @@ export default function DreamspaceCanvas() {
               </React.Fragment>
             );
           })}
+
+          {/* Constellation edges - render DreamSong relationship threads */}
+          {shouldShowConstellationEdges(spatialLayout) && (
+            <ConstellationEdges
+              dreamNodes={dreamNodes}
+              dreamWorldRef={dreamWorldRef}
+              showEdges={spatialLayout === 'constellation'}
+              opacity={0.6}
+            />
+          )}
         </group>
-        
+
         {/* SpatialOrchestrator - manages all spatial interactions and layouts */}
         <SpatialOrchestrator
           ref={spatialOrchestratorRef}
