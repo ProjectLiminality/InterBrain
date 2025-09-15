@@ -164,6 +164,6 @@ export function useConstellationStats() {
  * Utility to check if constellation edges should be visible based on layout
  */
 export function shouldShowConstellationEdges(spatialLayout: string): boolean {
-  // Show edges in constellation mode, hide in other modes for performance
-  return spatialLayout === 'constellation';
+  // Show edges in all layouts to maintain relationship visibility
+  return true;
 }

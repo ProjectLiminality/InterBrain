@@ -43,6 +43,13 @@ export class ConstellationCommands {
       name: 'Show DreamSong Relationship Statistics',
       callback: () => this.showRelationshipStatistics()
     });
+
+    // Apply constellation layout positioning
+    plugin.addCommand({
+      id: 'apply-constellation-layout',
+      name: 'Apply Constellation Layout',
+      callback: () => this.applyConstellationLayout()
+    });
   }
 
   /**
@@ -108,6 +115,15 @@ export class ConstellationCommands {
           this.uiService.showInfo('📤 Relationship data exported to dreamsong-relationships.json', 3000);
         } catch (exportError) {
           console.error('Failed to auto-export JSON:', exportError);
+        }
+
+        // Auto-apply constellation layout positioning
+        try {
+          await this.applyConstellationLayout();
+          console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
+        } catch (layoutError) {
+          console.error('Failed to auto-apply constellation layout:', layoutError);
+          this.uiService.showError('⚠️ Layout positioning failed, but scan data was saved', 3000);
         }
 
       } else {
@@ -236,6 +252,63 @@ export class ConstellationCommands {
       const errorMessage = `❌ Statistics error: ${error instanceof Error ? error.message : error}`;
       this.uiService.showError(errorMessage, 5000);
       console.error('❌ [Constellation Commands] Statistics error:', error);
+    }
+  }
+
+  /**
+   * Apply constellation layout positioning to DreamNodes
+   */
+  private async applyConstellationLayout(): Promise<void> {
+    console.log('🌌 [Constellation Commands] Applying constellation layout positioning...');
+    const store = useInterBrainStore.getState();
+
+    try {
+      // Check if we have relationship data
+      const relationshipGraph = store.constellationData.relationshipGraph;
+      if (!relationshipGraph) {
+        this.uiService.showError('❌ No relationship data available. Run "Scan Vault for DreamSong Relationships" first.', 5000);
+        return;
+      }
+
+      // Check if DreamSpace canvas API is available
+      const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { applyConstellationLayout?(): Promise<void> } }).__interbrainCanvas;
+      if (!canvasAPI || !canvasAPI.applyConstellationLayout) {
+        this.uiService.showError('❌ 3D space not available. Please open DreamSpace view first.', 5000);
+        return;
+      }
+
+      // Show progress notice
+      const layoutNotice = this.uiService.showInfo('🌌 Computing constellation layout...', 0);
+
+      // Apply the constellation layout via global canvas API
+      await canvasAPI.applyConstellationLayout();
+      const success = true; // If we get here without throwing, it succeeded
+
+      // Hide progress notice
+      layoutNotice.hide();
+
+      if (success) {
+        // Get layout statistics for user feedback
+        const positions = store.constellationData.positions;
+        const positionCount = positions?.size || 0;
+
+        this.uiService.showSuccess(
+          `✅ Constellation layout applied!\n\n📍 ${positionCount} DreamNodes positioned using force-directed algorithm`,
+          5000
+        );
+
+        console.log('✅ [Constellation Commands] Constellation layout applied successfully:', {
+          nodesPositioned: positionCount,
+          hasPositions: !!positions
+        });
+      } else {
+        this.uiService.showError('❌ Failed to apply constellation layout - SpatialOrchestrator not ready', 5000);
+      }
+
+    } catch (error) {
+      const errorMessage = `❌ Layout application failed: ${error instanceof Error ? error.message : error}`;
+      this.uiService.showError(errorMessage, 5000);
+      console.error('❌ [Constellation Commands] Layout error:', error);
     }
   }
 }

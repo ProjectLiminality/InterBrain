@@ -76,42 +76,32 @@ export default function Edge3D({
   // Local hover state for internal management
   const [localHover, setLocalHover] = useState(false);
 
-  // Calculate visual properties based on state
+  // Always white color as requested
+  const finalColor = '#ffffff';
+
+  // Calculate opacity for glow effect
   const finalOpacity = useMemo(() => {
-    let baseOpacity = opacity;
+    let baseOpacity = 0.8; // Higher base opacity for visibility
 
     if (isSelected) {
-      baseOpacity = Math.min(1.0, baseOpacity + 0.3);
+      baseOpacity = 1.0;
     }
 
     if (isHovered || localHover) {
-      baseOpacity = Math.min(1.0, baseOpacity + 0.2);
+      baseOpacity = 1.0; // Full opacity when glowing
     }
 
     return baseOpacity;
-  }, [opacity, isSelected, isHovered, localHover]);
+  }, [isSelected, isHovered, localHover]);
 
-  const finalColor = useMemo(() => {
-    if (isSelected) {
-      return '#ffffff'; // White when selected
-    }
-
-    if (isHovered || localHover) {
-      // Brighten the color on hover
-      return color === '#666666' ? '#aaaaaa' : color;
-    }
-
-    return color;
-  }, [color, isSelected, isHovered, localHover]);
-
-  // Line width based on state
+  // Thin lines with glow effect on hover
   const lineWidth = useMemo(() => {
-    let width = 1;
+    let width = 1; // Much thinner
 
     if (isSelected) {
-      width = 3;
+      width = 2; // Slightly thicker when selected
     } else if (isHovered || localHover) {
-      width = 2;
+      width = 2.5; // Thicker on hover
     }
 
     return width;
@@ -133,15 +123,46 @@ export default function Edge3D({
     onClick?.();
   };
 
+  // Generate arc points once
+  const arcPoints = useMemo(() =>
+    generateArcPoints(sourcePosition, targetPosition),
+    [sourcePosition, targetPosition]
+  );
+
   return (
-    <Line
-      points={generateArcPoints(sourcePosition, targetPosition)}
-      color={finalColor}
-      lineWidth={lineWidth}
-      onClick={handleClick}
-      onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
-    />
+    <group>
+      {/* Invisible thick line for easier intersection detection */}
+      <Line
+        points={arcPoints}
+        color="transparent"
+        lineWidth={12} // Much thicker for easier clicking
+        transparent
+        opacity={0} // Completely invisible
+        onClick={handleClick}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+      />
+
+      {/* Glow effect layer (only visible on hover) */}
+      {(isHovered || localHover) && (
+        <Line
+          points={arcPoints}
+          color={finalColor}
+          lineWidth={lineWidth + 1} // Extra thickness for glow
+          transparent
+          opacity={0.3} // Soft glow
+        />
+      )}
+
+      {/* Main visible line */}
+      <Line
+        points={arcPoints}
+        color={finalColor}
+        lineWidth={lineWidth}
+        transparent
+        opacity={finalOpacity}
+      />
+    </group>
   );
 }
 

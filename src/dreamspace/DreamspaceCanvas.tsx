@@ -286,6 +286,14 @@ export default function DreamspaceCanvas() {
           return true;
         }
         return false;
+      },
+      applyConstellationLayout: async () => {
+        // Apply constellation layout positioning via SpatialOrchestrator
+        if (spatialOrchestratorRef.current) {
+          await spatialOrchestratorRef.current.applyConstellationLayout();
+          return;
+        }
+        throw new Error('SpatialOrchestrator not available');
       }
     };
   }, []);
@@ -1052,7 +1060,7 @@ export default function DreamspaceCanvas() {
             <ConstellationEdges
               dreamNodes={dreamNodes}
               dreamWorldRef={dreamWorldRef}
-              showEdges={spatialLayout === 'constellation'}
+              showEdges={true}
               opacity={0.6}
             />
           )}

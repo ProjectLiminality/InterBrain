@@ -300,9 +300,12 @@ export interface InterBrainState extends OllamaConfigSlice {
     relationshipGraph: DreamSongRelationshipGraph | null;
     lastScanTimestamp: number | null;
     isScanning: boolean;
+    positions: Map<string, [number, number, number]> | null;
+    lastLayoutTimestamp: number | null;
   };
   setRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
   setConstellationScanning: (scanning: boolean) => void;
+  setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
   clearConstellationData: () => void;
 }
 
@@ -415,7 +418,9 @@ export const useInterBrainStore = create<InterBrainState>()(
   constellationData: {
     relationshipGraph: null,
     lastScanTimestamp: null,
-    isScanning: false
+    isScanning: false,
+    positions: null,
+    lastLayoutTimestamp: null
   },
 
   // Actions
@@ -1161,8 +1166,9 @@ export const useInterBrainStore = create<InterBrainState>()(
   },
 
   // Constellation relationship graph actions
-  setRelationshipGraph: (graph) => set(() => ({
+  setRelationshipGraph: (graph) => set((state) => ({
     constellationData: {
+      ...state.constellationData,
       relationshipGraph: graph,
       lastScanTimestamp: graph ? Date.now() : null,
       isScanning: false
@@ -1176,11 +1182,21 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   })),
 
+  setConstellationPositions: (positions) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      positions,
+      lastLayoutTimestamp: positions ? Date.now() : null
+    }
+  })),
+
   clearConstellationData: () => set(() => ({
     constellationData: {
       relationshipGraph: null,
       lastScanTimestamp: null,
-      isScanning: false
+      isScanning: false,
+      positions: null,
+      lastLayoutTimestamp: null
     }
   })),
     }),
@@ -1191,10 +1207,12 @@ export const useInterBrainStore = create<InterBrainState>()(
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
-        constellationData: state.constellationData.relationshipGraph ? {
+        constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions) ? {
           ...state.constellationData,
           relationshipGraph: state.constellationData.relationshipGraph ?
-            serializeRelationshipGraph(state.constellationData.relationshipGraph) : null
+            serializeRelationshipGraph(state.constellationData.relationshipGraph) : null,
+          positions: state.constellationData.positions ?
+            mapToArray(state.constellationData.positions) : null
         } : null,
         ...extractOllamaPersistenceData(state),
       }),
@@ -1208,6 +1226,8 @@ export const useInterBrainStore = create<InterBrainState>()(
             relationshipGraph: SerializableDreamSongGraph | null;
             lastScanTimestamp: number | null;
             isScanning: boolean;
+            positions: [string, [number, number, number]][] | null;
+            lastLayoutTimestamp: number | null;
           } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
@@ -1217,15 +1237,21 @@ export const useInterBrainStore = create<InterBrainState>()(
         let constellationData = {
           relationshipGraph: null as DreamSongRelationshipGraph | null,
           lastScanTimestamp: null as number | null,
-          isScanning: false
+          isScanning: false,
+          positions: null as Map<string, [number, number, number]> | null,
+          lastLayoutTimestamp: null as number | null
         };
 
-        if (persistedData.constellationData?.relationshipGraph) {
+        if (persistedData.constellationData) {
           try {
             constellationData = {
-              relationshipGraph: deserializeRelationshipGraph(persistedData.constellationData.relationshipGraph),
+              relationshipGraph: persistedData.constellationData.relationshipGraph ?
+                deserializeRelationshipGraph(persistedData.constellationData.relationshipGraph) : null,
               lastScanTimestamp: persistedData.constellationData.lastScanTimestamp,
-              isScanning: false
+              isScanning: false,
+              positions: persistedData.constellationData.positions ?
+                arrayToMap(persistedData.constellationData.positions) : null,
+              lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp
             };
           } catch (error) {
             console.warn('Failed to deserialize constellation data:', error);
