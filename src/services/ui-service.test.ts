@@ -25,10 +25,10 @@ describe('UIService', () => {
     it('should create a Notice with success message', async () => {
       const message = 'Operation successful!'
       const { Notice } = await import('obsidian')
-      
+
       uiService.showSuccess(message)
-      
-      expect(Notice).toHaveBeenCalledWith(message)
+
+      expect(Notice).toHaveBeenCalledWith(message, 3000)
     })
   })
 

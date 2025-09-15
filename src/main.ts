@@ -18,6 +18,7 @@ import { registerSearchInterfaceCommands } from './commands/search-interface-com
 import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
+import { ConstellationCommands } from './commands/constellation-commands';
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 
@@ -30,6 +31,7 @@ export default class InterBrainPlugin extends Plugin {
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
   private leafManagerService!: LeafManagerService;
+  private constellationCommands!: ConstellationCommands;
 
   async onload() {
     console.log('InterBrain plugin loaded!');
@@ -62,7 +64,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
-    
+
     // Initialize dreamweaving services
     this.canvasParserService = new CanvasParserService(this.vaultService);
     this.submoduleManagerService = new SubmoduleManagerService(
@@ -71,12 +73,15 @@ export default class InterBrainPlugin extends Plugin {
       this.canvasParserService
     );
     this.leafManagerService = new LeafManagerService(this.app);
-    
+
+    // Initialize constellation commands
+    this.constellationCommands = new ConstellationCommands(this);
+
     // Make services accessible to ServiceManager BEFORE initialization
     (this as any).vaultService = this.vaultService;
     (this as any).canvasParserService = this.canvasParserService;
     (this as any).leafManagerService = this.leafManagerService;
-    
+
     // Initialize service manager with plugin instance and services
     serviceManager.initialize(this);
   }
@@ -84,13 +89,13 @@ export default class InterBrainPlugin extends Plugin {
   private registerCommands(): void {
     // Register semantic search commands
     registerSemanticSearchCommands(this, this.uiService);
-    
+
     // Register search interface commands (search-as-dreamnode UI)
     registerSearchInterfaceCommands(this, this.uiService);
-    
+
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
-    
+
     // Register dreamweaving commands (canvas submodule management)
     registerDreamweavingCommands(
       this,
@@ -99,9 +104,12 @@ export default class InterBrainPlugin extends Plugin {
       this.canvasParserService,
       this.submoduleManagerService
     );
-    
+
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);
+
+    // Register constellation commands (DreamSong relationship analysis)
+    this.constellationCommands.registerCommands(this);
     
     // Open DreamSpace command
     this.addCommand({

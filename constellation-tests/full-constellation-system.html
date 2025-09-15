@@ -121,7 +121,18 @@
         <h3>Full Constellation System</h3>
 
         <div class="section">
-            <h4>Graph Generation</h4>
+            <h4>Data Source</h4>
+            <div style="margin: 10px 0;">
+                <label for="jsonInput">Load DreamSong Relationships JSON:</label>
+                <input type="file" id="jsonInput" accept=".json" style="width: 100%; margin: 5px 0; padding: 5px; background: #333; color: white; border: 1px solid #666; border-radius: 3px;" onchange="loadDreamSongData(event)">
+                <div style="font-size: 10px; color: #aaa; margin-top: 3px;">
+                    Select a dreamsong-relationships.json file exported from InterBrain plugin
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h4>Graph Generation (Mock Data)</h4>
             <div class="slider-container">
                 <label>Number of Clusters:</label>
                 <input type="range" id="clustersSlider" min="3" max="12" step="1" value="6">
@@ -137,7 +148,7 @@
                 <input type="range" id="interEdgesSlider" min="0" max="15" step="1" value="3">
                 <span id="interEdgesValue">3</span>
             </div>
-            <button onclick="generateNewGraph()" class="primary-button">Generate New Graph</button>
+            <button onclick="generateNewGraph()" class="primary-button">Generate Mock Graph</button>
         </div>
 
         <div class="section">
@@ -186,6 +197,7 @@
 
     <div class="stats-panel">
         <h4>System Statistics</h4>
+        <div class="stat-item"><strong>Data Source:</strong> <span id="dataSource">Mock Data</span></div>
         <div class="stat-item"><strong>Total Nodes:</strong> <span id="totalNodes">0</span></div>
         <div class="stat-item"><strong>Total Edges:</strong> <span id="totalEdges">0</span></div>
         <div class="stat-item"><strong>Clusters Found:</strong> <span id="clustersFound">0</span></div>
@@ -219,6 +231,7 @@
         let edgeObjects = [];
         let capObjects = [];
         let sphereObject;
+        let usingRealData = false;
         let isAnimating = false;
 
         // Colors for clusters
@@ -331,27 +344,113 @@
         function detectClusters() {
             updatePipelineStatus("Detecting clusters...");
 
-            const clusterMap = new Map();
-            for (const node of graph.nodes) {
-                if (!clusterMap.has(node.cluster)) {
-                    clusterMap.set(node.cluster, []);
+            // For real DreamSong data, we need to detect clusters using graph connectivity
+            if (usingRealData) {
+                detectConnectedComponents();
+            } else {
+                // For mock data, use predefined cluster assignments
+                const clusterMap = new Map();
+                for (const node of graph.nodes) {
+                    if (!clusterMap.has(node.cluster)) {
+                        clusterMap.set(node.cluster, []);
+                    }
+                    clusterMap.get(node.cluster).push(node.id);
                 }
-                clusterMap.get(node.cluster).push(node.id);
-            }
 
+                clusters = [];
+                let clusterId = 0;
+                for (const [originalId, nodeIds] of clusterMap) {
+                    clusters.push({
+                        id: clusterId++,
+                        originalId,
+                        nodes: nodeIds,
+                        size: nodeIds.length,
+                        center: new THREE.Vector3(),
+                        radius: 0,
+                        color: clusterColors[originalId % clusterColors.length]
+                    });
+                }
+            }
+        }
+
+        // Detect connected components for real DreamSong data
+        function detectConnectedComponents() {
+            const visited = new Set();
             clusters = [];
             let clusterId = 0;
-            for (const [originalId, nodeIds] of clusterMap) {
-                clusters.push({
-                    id: clusterId++,
-                    originalId,
-                    nodes: nodeIds,
-                    size: nodeIds.length,
-                    center: new THREE.Vector3(),
-                    radius: 0,
-                    color: clusterColors[originalId % clusterColors.length]
-                });
+
+            // Build adjacency list
+            const adjacency = new Map();
+            for (const node of graph.nodes) {
+                adjacency.set(node.id, []);
             }
+            for (const edge of graph.edges) {
+                if (adjacency.has(edge.source) && adjacency.has(edge.target)) {
+                    adjacency.get(edge.source).push(edge.target);
+                    adjacency.get(edge.target).push(edge.source);
+                }
+            }
+
+            // DFS to find connected components
+            function dfs(nodeId, component) {
+                visited.add(nodeId);
+                component.push(nodeId);
+
+                for (const neighbor of adjacency.get(nodeId) || []) {
+                    if (!visited.has(neighbor)) {
+                        dfs(neighbor, component);
+                    }
+                }
+            }
+
+            // Find all connected components
+            for (const node of graph.nodes) {
+                if (!visited.has(node.id)) {
+                    const component = [];
+                    dfs(node.id, component);
+
+                    if (component.length > 0) {
+                        // Assign cluster to nodes
+                        for (const nodeId of component) {
+                            const graphNode = graph.nodes.find(n => n.id === nodeId);
+                            if (graphNode) {
+                                graphNode.cluster = clusterId;
+                            }
+                        }
+
+                        clusters.push({
+                            id: clusterId,
+                            originalId: clusterId,
+                            nodes: component,
+                            size: component.length,
+                            center: new THREE.Vector3(),
+                            radius: 0,
+                            color: clusterColors[clusterId % clusterColors.length]
+                        });
+                        clusterId++;
+                    }
+                }
+            }
+
+            // Handle standalone nodes (not connected to anything)
+            for (const node of graph.nodes) {
+                if (node.cluster === -1 || node.cluster === undefined) {
+                    node.cluster = clusterId;
+                    clusters.push({
+                        id: clusterId,
+                        originalId: clusterId,
+                        nodes: [node.id],
+                        size: 1,
+                        center: new THREE.Vector3(),
+                        radius: 0,
+                        color: clusterColors[clusterId % clusterColors.length]
+                    });
+                    clusterId++;
+                }
+            }
+
+            console.log(`Detected ${clusters.length} clusters from DreamSong data:`,
+                clusters.map(c => `C${c.id}: ${c.size} nodes`).join(', '));
         }
 
         // === GLOBAL POSITIONING ===
@@ -667,6 +766,7 @@
         }
 
         function updateStats() {
+            document.getElementById('dataSource').textContent = usingRealData ? 'DreamSong Data' : 'Mock Data';
             document.getElementById('totalNodes').textContent = graph.nodes.length;
             document.getElementById('totalEdges').textContent = graph.edges.length;
             document.getElementById('clustersFound').textContent = clusters.length;
@@ -825,6 +925,72 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // Load DreamSong relationship data from JSON file
+        function loadDreamSongData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            console.log('Loading DreamSong relationship data:', file.name);
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    console.log('Parsed DreamSong data:', data);
+
+                    // Validate data structure
+                    if (!data.nodes || !data.edges || !data.metadata) {
+                        throw new Error('Invalid JSON structure: missing nodes, edges, or metadata');
+                    }
+
+                    // Convert to graph format expected by constellation algorithm
+                    graph = {
+                        nodes: data.nodes.map((node, index) => ({
+                            id: node.id,
+                            label: node.title || `Node ${index}`,
+                            cluster: -1, // Will be assigned during clustering
+                            position: null, // Will be calculated
+                            isStandalone: node.isStandalone || false
+                        })),
+                        edges: data.edges.map(edge => ({
+                            source: edge.source,
+                            target: edge.target,
+                            weight: edge.weight || 1.0,
+                            dreamSongId: edge.dreamSongId || '',
+                            sequenceIndex: edge.sequenceIndex || 0
+                        }))
+                    };
+
+                    usingRealData = true;
+                    console.log(`Loaded ${graph.nodes.length} nodes and ${graph.edges.length} edges from DreamSong data`);
+
+                    // Update UI to show real data loaded
+                    const fileInput = document.getElementById('jsonInput');
+                    fileInput.style.borderColor = '#4CAF50';
+                    fileInput.style.backgroundColor = '#1a4f1a';
+
+                    // Show success message in stats panel
+                    updateStats();
+
+                    // Auto-run constellation algorithm with real data
+                    computeFullLayout();
+
+                    alert(`✅ DreamSong data loaded successfully!\n\n${graph.nodes.length} nodes, ${graph.edges.length} edges\nFrom: ${data.metadata.totalDreamSongs} DreamSongs\n${data.metadata.standaloneNodes} standalone nodes`);
+
+                } catch (error) {
+                    console.error('Failed to parse DreamSong JSON:', error);
+                    alert(`❌ Failed to load DreamSong data:\n\n${error.message}\n\nPlease check the JSON file format.`);
+
+                    // Reset file input
+                    event.target.value = '';
+                    const fileInput = document.getElementById('jsonInput');
+                    fileInput.style.borderColor = '#666';
+                    fileInput.style.backgroundColor = '#333';
+                }
+            };
+            reader.readAsText(file);
+        }
 
         init();
     </script>

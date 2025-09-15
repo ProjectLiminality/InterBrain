@@ -44,6 +44,10 @@ export class VaultService {
     return this.vault;
   }
 
+  getVaultPath(): string {
+    return this.vaultPath;
+  }
+
   async createFolder(folderPath: string): Promise<void> {
     const fullPath = this.getFullPath(folderPath);
     try {

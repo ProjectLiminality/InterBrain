@@ -4,8 +4,8 @@ import { DreamNode } from '../types/dreamnode';
 import { DreamSongData } from '../types/dreamsong';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
-import { 
-  OllamaConfigSlice, 
+import {
+  OllamaConfigSlice,
   createOllamaConfigSlice,
   extractOllamaPersistenceData,
   restoreOllamaPersistenceData,
@@ -14,6 +14,12 @@ import {
 // OllamaConfig imports are in the semantic search slice
 import { VectorData } from '../features/semantic-search/services/indexing-service';
 import { FlipState } from '../types/dreamsong';
+import {
+  DreamSongRelationshipGraph,
+  SerializableDreamSongGraph,
+  serializeRelationshipGraph,
+  deserializeRelationshipGraph
+} from '../types/constellation';
 
 // Helper function to get current scroll position of DreamSong content
 function getDreamSongScrollPosition(nodeId: string): number | null {
@@ -288,6 +294,16 @@ export interface InterBrainState extends OllamaConfigSlice {
   completeFlipAnimation: (nodeId: string) => void;
   resetAllFlips: () => void;
   getNodeFlipState: (nodeId: string) => FlipState | null;
+
+  // DreamSong relationship graph state
+  constellationData: {
+    relationshipGraph: DreamSongRelationshipGraph | null;
+    lastScanTimestamp: number | null;
+    isScanning: boolean;
+  };
+  setRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
+  setConstellationScanning: (scanning: boolean) => void;
+  clearConstellationData: () => void;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -394,7 +410,14 @@ export const useInterBrainStore = create<InterBrainState>()(
     flippedNodeId: null,
     flipStates: new Map<string, FlipState>()
   },
-  
+
+  // Constellation relationship graph initial state
+  constellationData: {
+    relationshipGraph: null,
+    lastScanTimestamp: null,
+    isScanning: false
+  },
+
   // Actions
   setDataMode: (mode) => set({ dataMode: mode }),
   setRealNodes: (nodes) => set({ realNodes: nodes }),
@@ -1136,14 +1159,43 @@ export const useInterBrainStore = create<InterBrainState>()(
     const state = get();
     return state.flipState.flipStates.get(nodeId) || null;
   },
+
+  // Constellation relationship graph actions
+  setRelationshipGraph: (graph) => set(() => ({
+    constellationData: {
+      relationshipGraph: graph,
+      lastScanTimestamp: graph ? Date.now() : null,
+      isScanning: false
+    }
+  })),
+
+  setConstellationScanning: (scanning) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      isScanning: scanning
+    }
+  })),
+
+  clearConstellationData: () => set(() => ({
+    constellationData: {
+      relationshipGraph: null,
+      lastScanTimestamp: null,
+      isScanning: false
+    }
+  })),
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
+      // Only persist real nodes data, data mode, vector data, mock relationships, constellation data, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
+        constellationData: state.constellationData.relationshipGraph ? {
+          ...state.constellationData,
+          relationshipGraph: state.constellationData.relationshipGraph ?
+            serializeRelationshipGraph(state.constellationData.relationshipGraph) : null
+        } : null,
         ...extractOllamaPersistenceData(state),
       }),
       // Custom merge function to handle Map deserialization
@@ -1152,14 +1204,41 @@ export const useInterBrainStore = create<InterBrainState>()(
           dataMode: 'mock' | 'real';
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
+          constellationData?: {
+            relationshipGraph: SerializableDreamSongGraph | null;
+            lastScanTimestamp: number | null;
+            isScanning: boolean;
+          } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
         };
+
+        // Restore constellation data if present
+        let constellationData = {
+          relationshipGraph: null as DreamSongRelationshipGraph | null,
+          lastScanTimestamp: null as number | null,
+          isScanning: false
+        };
+
+        if (persistedData.constellationData?.relationshipGraph) {
+          try {
+            constellationData = {
+              relationshipGraph: deserializeRelationshipGraph(persistedData.constellationData.relationshipGraph),
+              lastScanTimestamp: persistedData.constellationData.lastScanTimestamp,
+              isScanning: false
+            };
+          } catch (error) {
+            console.warn('Failed to deserialize constellation data:', error);
+            // Keep default null state
+          }
+        }
+
         return {
           ...current,
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
+          constellationData,
           ...restoreOllamaPersistenceData(persistedData),
         };
       },
