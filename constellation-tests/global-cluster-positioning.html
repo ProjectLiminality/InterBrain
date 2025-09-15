@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Cluster Positioning: Spherical Cap Packing</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            min-width: 350px;
+        }
+        .slider-container {
+            margin: 15px 0;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 400px;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #444;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #666;
+        }
+        .cluster-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+        }
+        .cluster-item {
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        .color-box {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <div class="controls">
+        <h3>Global Cluster Positioning</h3>
+
+        <div class="slider-container">
+            <label>Coverage Factor:</label>
+            <input type="range" id="coverageSlider" min="0.3" max="0.9" step="0.05" value="0.6">
+            <span id="coverageValue">0.60</span>
+        </div>
+
+        <div class="slider-container">
+            <label>Minimum Cap Radius:</label>
+            <input type="range" id="minRadiusSlider" min="0.02" max="0.15" step="0.01" value="0.05">
+            <span id="minRadiusValue">0.05</span>
+        </div>
+
+        <div class="slider-container">
+            <label>Overlap Margin:</label>
+            <input type="range" id="marginSlider" min="0.01" max="0.10" step="0.005" value="0.03">
+            <span id="marginValue">0.03</span>
+        </div>
+
+        <div class="slider-container">
+            <label>Refinement Iterations:</label>
+            <input type="range" id="iterationsSlider" min="0" max="200" step="10" value="50">
+            <span id="iterationsValue">50</span>
+        </div>
+
+        <button onclick="generateNewClusters()">New Clusters</button>
+        <button onclick="recomputePositioning()">Recompute</button>
+        <button onclick="animateRefinement()">Animate Refinement</button>
+    </div>
+
+    <div class="cluster-info">
+        <h4>Clusters</h4>
+        <div id="clusterList"></div>
+        <div style="margin-top: 10px; font-size: 11px;">
+            <strong>Total Coverage:</strong> <span id="totalCoverage">0%</span><br>
+            <strong>Max Overlap:</strong> <span id="maxOverlap">0.000</span>
+        </div>
+    </div>
+
+    <div class="info">
+        <h4>Global Cluster Positioning</h4>
+        <p><strong>Purpose:</strong> Validates the algorithm for positioning multiple clusters on a sphere without overlap.</p>
+        <p><strong>Algorithm:</strong> Fibonacci lattice for initial placement → iterative refinement to eliminate cap overlaps.</p>
+        <p><strong>Math:</strong> Spherical cap area = 2π(1 - cos(R)), with geodesic distance constraints.</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Global variables
+        let scene, camera, renderer;
+        let clusters = [];
+        let clusterObjects = [];
+        let capObjects = [];
+        let isAnimating = false;
+
+        // Cluster colors for visualization
+        const clusterColors = [
+            0xFF6B6B, 0x4ECDC4, 0x45B7D1, 0x96CEB4, 0xFECA57,
+            0xFF9FF3, 0x54A0FF, 0x5F27CD, 0x00D2D3, 0xFF9F43,
+            0x10AC84, 0xEE5A24, 0x0984E3, 0x6C5CE7, 0xA29BFE
+        ];
+
+        // Mock cluster data - various sizes
+        let clusterSizes = [25, 18, 12, 8, 15, 6, 20, 4, 9, 11, 7, 13];
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000011);
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+
+            // Add reference sphere (wireframe)
+            const sphereGeometry = new THREE.SphereGeometry(1, 32, 16);
+            const sphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x333333,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.1
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            scene.add(sphere);
+
+            // Position camera
+            camera.position.set(0, 0, 2.5);
+            camera.lookAt(0, 0, 0);
+
+            // Initialize clusters
+            computeClusterPositioning();
+            setupControls();
+            animate();
+        }
+
+        // Mathematical functions
+        function fibonacciSphere(n) {
+            const points = [];
+            const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+            for (let i = 0; i < n; i++) {
+                const y = 1 - (2 * i) / (n - 1);
+                const radius = Math.sqrt(1 - y * y);
+                const theta = 2 * Math.PI * i / goldenRatio;
+
+                const x = radius * Math.cos(theta);
+                const z = radius * Math.sin(theta);
+
+                points.push(new THREE.Vector3(x, y, z));
+            }
+            return points;
+        }
+
+        function geodesicDistance(a, b) {
+            const dot = Math.max(-1, Math.min(1, a.dot(b)));
+            return Math.acos(dot);
+        }
+
+        function sphericalCapArea(radius) {
+            return 2 * Math.PI * (1 - Math.cos(radius));
+        }
+
+        function areaToRadius(area) {
+            return Math.acos(1 - area / (2 * Math.PI));
+        }
+
+        function computeClusterRadii() {
+            const coverageFactor = parseFloat(document.getElementById('coverageSlider').value);
+            const minRadius = parseFloat(document.getElementById('minRadiusSlider').value);
+            const totalSphereArea = 4 * Math.PI;
+            const totalMass = clusterSizes.reduce((sum, size) => sum + size, 0);
+
+            const radii = [];
+            let totalUsedArea = 0;
+
+            for (const size of clusterSizes) {
+                const proportionalArea = coverageFactor * totalSphereArea * (size / totalMass);
+                const minArea = sphericalCapArea(minRadius);
+                const area = Math.max(minArea, proportionalArea);
+                const radius = areaToRadius(area);
+
+                radii.push(radius);
+                totalUsedArea += area;
+            }
+
+            // Update UI
+            const coveragePercent = ((totalUsedArea / totalSphereArea) * 100).toFixed(1);
+            document.getElementById('totalCoverage').textContent = coveragePercent + '%';
+
+            return radii;
+        }
+
+        function computeClusterPositioning() {
+            const n = clusterSizes.length;
+            const radii = computeClusterRadii();
+            const margin = parseFloat(document.getElementById('marginSlider').value);
+
+            // Initial Fibonacci placement
+            const fibonacciPoints = fibonacciSphere(n);
+
+            // Sort clusters by size (largest first) and assign to fibonacci points
+            const sortedIndices = clusterSizes
+                .map((size, index) => ({ size, index }))
+                .sort((a, b) => b.size - a.size)
+                .map(item => item.index);
+
+            clusters = [];
+            for (let i = 0; i < n; i++) {
+                const clusterIndex = sortedIndices[i];
+                clusters.push({
+                    id: clusterIndex,
+                    size: clusterSizes[clusterIndex],
+                    radius: radii[clusterIndex],
+                    center: fibonacciPoints[i].clone(),
+                    color: clusterColors[clusterIndex % clusterColors.length]
+                });
+            }
+
+            // Iterative refinement to eliminate overlaps
+            const iterations = parseInt(document.getElementById('iterationsSlider').value);
+            refineClusterPositions(iterations, margin);
+
+            updateVisualization();
+            updateClusterList();
+        }
+
+        function refineClusterPositions(iterations, margin) {
+            const alpha = 0.1; // Step size
+
+            for (let iter = 0; iter < iterations; iter++) {
+                const forces = clusters.map(() => new THREE.Vector3(0, 0, 0));
+
+                // Check all pairs for overlaps
+                for (let i = 0; i < clusters.length; i++) {
+                    for (let j = i + 1; j < clusters.length; j++) {
+                        const ci = clusters[i];
+                        const cj = clusters[j];
+                        const distance = geodesicDistance(ci.center, cj.center);
+                        const requiredDistance = ci.radius + cj.radius + margin;
+
+                        if (distance < requiredDistance) {
+                            const overlap = requiredDistance - distance;
+
+                            // Direction to push apart (tangent space)
+                            const cosTheta = ci.center.dot(cj.center);
+                            const sinTheta = Math.sqrt(1 - cosTheta * cosTheta);
+
+                            if (sinTheta > 1e-10) {
+                                const direction = cj.center.clone()
+                                    .sub(ci.center.clone().multiplyScalar(cosTheta))
+                                    .divideScalar(sinTheta);
+
+                                const forceStrength = alpha * overlap * 0.5;
+                                forces[i].sub(direction.clone().multiplyScalar(forceStrength));
+                                forces[j].add(direction.clone().multiplyScalar(forceStrength));
+                            }
+                        }
+                    }
+                }
+
+                // Apply forces using exponential map
+                for (let i = 0; i < clusters.length; i++) {
+                    if (forces[i].length() > 1e-10) {
+                        clusters[i].center = exponentialMap(clusters[i].center, forces[i]);
+                    }
+                }
+            }
+
+            // Calculate max overlap for display
+            let maxOverlap = 0;
+            for (let i = 0; i < clusters.length; i++) {
+                for (let j = i + 1; j < clusters.length; j++) {
+                    const distance = geodesicDistance(clusters[i].center, clusters[j].center);
+                    const requiredDistance = clusters[i].radius + clusters[j].radius + margin;
+                    const overlap = Math.max(0, requiredDistance - distance);
+                    maxOverlap = Math.max(maxOverlap, overlap);
+                }
+            }
+            document.getElementById('maxOverlap').textContent = maxOverlap.toFixed(3);
+        }
+
+        function exponentialMap(center, tangentVector) {
+            const theta = tangentVector.length();
+            if (theta < 1e-10) return center.clone();
+
+            const result = center.clone().multiplyScalar(Math.cos(theta));
+            const normalized = tangentVector.clone().divideScalar(theta);
+            result.add(normalized.multiplyScalar(Math.sin(theta)));
+            return result.normalize(); // Ensure unit length
+        }
+
+        function updateVisualization() {
+            // Clear existing objects
+            clusterObjects.forEach(obj => scene.remove(obj));
+            capObjects.forEach(obj => scene.remove(obj));
+            clusterObjects = [];
+            capObjects = [];
+
+            // Create cluster center markers and caps
+            for (const cluster of clusters) {
+                // Center marker
+                const centerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+                const centerMaterial = new THREE.MeshLambertMaterial({ color: cluster.color });
+                const centerSphere = new THREE.Mesh(centerGeometry, centerMaterial);
+                centerSphere.position.copy(cluster.center);
+                scene.add(centerSphere);
+                clusterObjects.push(centerSphere);
+
+                // Spherical cap visualization
+                const capGeometry = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, cluster.radius);
+                const capMaterial = new THREE.MeshBasicMaterial({
+                    color: cluster.color,
+                    transparent: true,
+                    opacity: 0.3,
+                    side: THREE.DoubleSide
+                });
+                const cap = new THREE.Mesh(capGeometry, capMaterial);
+
+                // Orient cap to point toward cluster center
+                cap.lookAt(cluster.center);
+                cap.rotateX(Math.PI / 2);
+                cap.position.copy(cluster.center);
+
+                scene.add(cap);
+                capObjects.push(cap);
+
+                // Cap boundary circle
+                const circleGeometry = new THREE.RingGeometry(
+                    Math.sin(cluster.radius) * 0.99,
+                    Math.sin(cluster.radius) * 1.01,
+                    64
+                );
+                const circleMaterial = new THREE.MeshBasicMaterial({
+                    color: cluster.color,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const circle = new THREE.Mesh(circleGeometry, circleMaterial);
+                circle.position.copy(cluster.center.clone().multiplyScalar(Math.cos(cluster.radius)));
+                circle.lookAt(cluster.center);
+                scene.add(circle);
+                capObjects.push(circle);
+            }
+        }
+
+        function updateClusterList() {
+            const clusterList = document.getElementById('clusterList');
+            clusterList.innerHTML = '';
+
+            clusters
+                .sort((a, b) => b.size - a.size)
+                .forEach(cluster => {
+                    const item = document.createElement('div');
+                    item.className = 'cluster-item';
+                    item.innerHTML = `
+                        <span class="color-box" style="background-color: #${cluster.color.toString(16).padStart(6, '0')}"></span>
+                        Cluster ${cluster.id}: ${cluster.size} nodes (R=${cluster.radius.toFixed(3)})
+                    `;
+                    clusterList.appendChild(item);
+                });
+        }
+
+        function setupControls() {
+            // Slider event listeners
+            ['coverage', 'minRadius', 'margin', 'iterations'].forEach(param => {
+                const slider = document.getElementById(param + 'Slider');
+                const value = document.getElementById(param + 'Value');
+
+                slider.addEventListener('input', (e) => {
+                    let val = parseFloat(e.target.value);
+                    if (param === 'coverage') {
+                        value.textContent = val.toFixed(2);
+                    } else if (param === 'iterations') {
+                        value.textContent = val.toString();
+                    } else {
+                        value.textContent = val.toFixed(3);
+                    }
+                });
+            });
+
+            // Mouse controls
+            let mouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            document.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!mouseDown || isAnimating) return;
+
+                const deltaX = e.clientX - mouseX;
+                const deltaY = e.clientY - mouseY;
+
+                const spherical = new THREE.Spherical();
+                spherical.setFromVector3(camera.position);
+
+                spherical.theta -= deltaX * 0.005;
+                spherical.phi += deltaY * 0.005;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+                camera.position.setFromSpherical(spherical);
+                camera.lookAt(0, 0, 0);
+
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            // Zoom
+            renderer.domElement.addEventListener('wheel', (e) => {
+                if (isAnimating) return;
+                const zoom = e.deltaY * 0.001;
+                camera.position.multiplyScalar(1 + zoom);
+            });
+        }
+
+        function generateNewClusters() {
+            // Generate new cluster sizes
+            const numClusters = 4 + Math.floor(Math.random() * 8);
+            clusterSizes = [];
+            for (let i = 0; i < numClusters; i++) {
+                clusterSizes.push(3 + Math.floor(Math.random() * 25));
+            }
+
+            computeClusterPositioning();
+        }
+
+        function recomputePositioning() {
+            computeClusterPositioning();
+        }
+
+        function animateRefinement() {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            const n = clusterSizes.length;
+            const radii = computeClusterRadii();
+            const margin = parseFloat(document.getElementById('marginSlider').value);
+
+            // Reset to fibonacci positions
+            const fibonacciPoints = fibonacciSphere(n);
+            const sortedIndices = clusterSizes
+                .map((size, index) => ({ size, index }))
+                .sort((a, b) => b.size - a.size)
+                .map(item => item.index);
+
+            clusters = [];
+            for (let i = 0; i < n; i++) {
+                const clusterIndex = sortedIndices[i];
+                clusters.push({
+                    id: clusterIndex,
+                    size: clusterSizes[clusterIndex],
+                    radius: radii[clusterIndex],
+                    center: fibonacciPoints[i].clone(),
+                    color: clusterColors[clusterIndex % clusterColors.length]
+                });
+            }
+
+            // Animate refinement
+            let iteration = 0;
+            const maxIterations = parseInt(document.getElementById('iterationsSlider').value);
+
+            function animateStep() {
+                if (iteration < maxIterations) {
+                    refineClusterPositions(1, margin);
+                    updateVisualization();
+                    iteration++;
+                    setTimeout(animateStep, 50);
+                } else {
+                    isAnimating = false;
+                    updateClusterList();
+                }
+            }
+
+            updateVisualization();
+            animateStep();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>

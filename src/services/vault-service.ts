@@ -82,6 +82,48 @@ export class VaultService {
     }
   }
 
+  async readFileAsDataURL(filePath: string): Promise<string> {
+    const fullPath = this.getFullPath(filePath);
+    try {
+      const buffer = fs.readFileSync(fullPath);
+      const mimeType = this.getMimeType(filePath);
+      const base64 = buffer.toString('base64');
+      return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+      throw new Error(`Failed to read file as data URL: ${filePath} (${error})`);
+    }
+  }
+
+  private getMimeType(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'mp4':
+        return 'video/mp4';
+      case 'webm':
+        return 'video/webm';
+      case 'mp3':
+        return 'audio/mp3';
+      case 'wav':
+        return 'audio/wav';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'pdf':
+        return 'application/pdf';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
   async writeFile(filePath: string, content: string): Promise<void> {
     const fullPath = this.getFullPath(filePath);
     try {

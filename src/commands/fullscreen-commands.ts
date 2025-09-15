@@ -75,43 +75,56 @@ export function registerFullScreenCommands(
           return;
         }
         
-        // Use the new DreamSong architecture to parse blocks
+        // Use the useDreamSongData logic to determine if we should show canvas or README
         const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
+        const vaultService = serviceManager.getVaultService();
 
-        // Check if canvas exists
-        const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
-        if (!canvasFile) {
-          uiService.showError('No DreamSong.canvas found. Create one first with Ctrl+D');
-          return;
-        }
+        // Check if canvas exists first
+        const canvasExists = await vaultService.fileExists(canvasPath);
 
-        try {
-          // Use the new DreamSong service layer to parse blocks
-          const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
-          const canvasParserService = new (await import('../services/canvas-parser-service')).CanvasParserService(
-            serviceManager.getVaultService()
-          );
-          const vaultService = serviceManager.getVaultService();
+        if (canvasExists) {
+          // Canvas exists - open DreamSong fullscreen view
+          try {
+            // Use the new DreamSong service layer to parse blocks
+            const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
+            const canvasParserService = new (await import('../services/canvas-parser-service')).CanvasParserService(
+              vaultService
+            );
 
-          // Parse canvas using new architecture
-          const canvasData = await canvasParserService.parseCanvas(canvasPath);
-          let blocks = parseCanvasToBlocks(canvasData, selectedNode.id);
+            // Parse canvas using new architecture
+            const canvasData = await canvasParserService.parseCanvas(canvasPath);
+            let blocks = parseCanvasToBlocks(canvasData, selectedNode.id);
 
-          // Resolve media paths to data URLs
-          blocks = await resolveMediaPaths(blocks, selectedNode.repoPath, vaultService);
+            // Resolve media paths to data URLs
+            blocks = await resolveMediaPaths(blocks, selectedNode.repoPath, vaultService);
 
-          console.log(`Parsed ${blocks.length} blocks for fullscreen view`);
+            console.log(`Parsed ${blocks.length} blocks for canvas fullscreen view`);
 
-          // Open fullscreen view with parsed blocks
-          await leafManager.openDreamSongFullScreen(selectedNode, blocks);
-          uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
+            // Open fullscreen view with parsed blocks
+            await leafManager.openDreamSongFullScreen(selectedNode, blocks);
+            uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
 
-        } catch (parseError) {
-          console.error('Failed to parse DreamSong canvas:', parseError);
+          } catch (parseError) {
+            console.error('Failed to parse DreamSong canvas:', parseError);
 
-          // Fallback: open with empty blocks
-          await leafManager.openDreamSongFullScreen(selectedNode, []);
-          uiService.showInfo(`Opened empty DreamSong for ${selectedNode.name}`);
+            // Fallback: open with empty blocks
+            await leafManager.openDreamSongFullScreen(selectedNode, []);
+            uiService.showInfo(`Opened empty DreamSong for ${selectedNode.name}`);
+          }
+        } else {
+          // No canvas - check for README fallback
+          const readmePath = `${selectedNode.repoPath}/README.md`;
+          const readmeExists = await vaultService.fileExists(readmePath);
+
+          if (readmeExists) {
+            // Open README file directly in Obsidian leaf
+            console.log(`No canvas found, opening README for ${selectedNode.name}`);
+            await leafManager.openReadmeFile(selectedNode);
+            uiService.showSuccess(`Opened README for ${selectedNode.name}`);
+          } else {
+            // No canvas and no README
+            uiService.showError('No DreamSong.canvas or README.md found. Create one first with Ctrl+D or add a README.');
+          }
         }
         
       } catch (error) {

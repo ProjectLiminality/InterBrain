@@ -118,6 +118,56 @@ export class LeafManagerService {
   }
 
   /**
+   * Open README file in right pane
+   * Creates 50/50 split on first call, then stacks as tabs. Same behavior as DreamTalk media.
+   */
+  async openReadmeFile(dreamNode: DreamNode): Promise<void> {
+    try {
+      console.log(`Opening README file for ${dreamNode.name}`);
+
+      // Check if we already have a leaf for this DreamNode's README
+      const existingLeaf = this.dreamTalkLeaves.get(`${dreamNode.id}-readme`);
+
+      if (existingLeaf) {
+        // Leaf exists, just reveal it
+        this.app.workspace.revealLeaf(existingLeaf);
+        console.log(`Revealed existing README leaf for ${dreamNode.name}`);
+        return;
+      }
+
+      // Construct the README path
+      const readmePath = `${dreamNode.repoPath}/README.md`;
+      console.log(`Looking for README at vault path: ${readmePath}`);
+
+      // Get the file from the vault
+      const file = this.app.vault.getAbstractFileByPath(readmePath);
+
+      if (!file) {
+        console.error(`README not found in vault: ${readmePath}`);
+        new Notice(`README not found: ${readmePath}`, 3000);
+        return;
+      }
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+      await leaf.openFile(file as any); // TFile type
+
+      // Track this leaf with special README identifier
+      this.dreamTalkLeaves.set(`${dreamNode.id}-readme`, leaf);
+
+      // Set up cleanup when leaf is closed
+      this.setupDreamTalkLeafCleanup(`${dreamNode.id}-readme`, leaf);
+
+      console.log(`Successfully opened README ${file.path} in new leaf`);
+      new Notice(`Opened README.md`);
+
+    } catch (error) {
+      console.error('Failed to open README file:', error);
+      new Notice('Failed to open README file', 3000);
+    }
+  }
+
+  /**
    * Open DreamSong in right pane
    * Creates 50/50 split on first call, then stacks as tabs. Implements one-leaf-per-node strategy.
    */
