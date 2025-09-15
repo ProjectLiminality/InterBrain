@@ -61,6 +61,18 @@ Comprehensive semantic search capabilities with local AI sovereignty:
 - ✅ Honeycomb Search Layout (Feature #280) - Mathematical precision for 1-36 node positioning
 - ✅ All Epic 5 features complete with comprehensive test coverage and zero warnings
 
+> ✅ **Constellation Layout System Complete**
+Advanced force-directed relationship visualization with mathematical precision:
+- ✅ Fruchterman-Reingold algorithm implementation on spherical surfaces
+- ✅ Connected components clustering with automatic discovery
+- ✅ Global cluster positioning via Fibonacci sphere distribution
+- ✅ Exponential mapping from planar to curved space layouts
+- ✅ Camera-facing orientation with 90° rotation for optimal viewing
+- ✅ Interactive command integration: "Scan Vault for DreamSong Relationships" + "Apply Constellation Layout"
+- ✅ Enhanced edge interaction with 12x thicker invisible hit detection
+- ✅ Persistent relationship visualization across all layout modes
+- ✅ [**Interactive Algorithm Demos**](https://projectliminality.github.io/InterBrain/algorithms/constellation-layout.html) with JSON data support
+
 > 🌱 **Beyond the Plugin:**  
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
 

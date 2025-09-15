@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Full Constellation System: Graph to Sphere</title>
+    <title>InterBrain: Complete Constellation Layout System</title>
     <style>
         body {
             margin: 0;
@@ -125,9 +125,25 @@
             <div style="margin: 10px 0;">
                 <label for="jsonInput">Load DreamSong Relationships JSON:</label>
                 <input type="file" id="jsonInput" accept=".json" style="width: 100%; margin: 5px 0; padding: 5px; background: #333; color: white; border: 1px solid #666; border-radius: 3px;" onchange="loadDreamSongData(event)">
+                <button onclick="loadSampleData()" style="width: 100%; margin: 5px 0; padding: 8px; background: #444; color: white; border: 1px solid #666; border-radius: 3px; cursor: pointer;">Load Sample Data</button>
                 <div style="font-size: 10px; color: #aaa; margin-top: 3px;">
-                    Select a dreamsong-relationships.json file exported from InterBrain plugin
+                    Select a dreamsong-relationships.json file exported from InterBrain plugin, or use sample data
                 </div>
+                <details style="margin-top: 10px; font-size: 11px; color: #aaa;">
+                    <summary>Expected JSON Schema</summary>
+                    <pre style="background: #222; padding: 10px; border-radius: 3px; margin: 5px 0; overflow-x: auto;">{
+  "nodes": [
+    {"id": "node-1", "title": "Node Title", "isStandalone": false}
+  ],
+  "edges": [
+    {"source": "node-1", "target": "node-2", "weight": 1.0}
+  ],
+  "metadata": {
+    "totalNodes": 10, "totalEdges": 15,
+    "totalDreamSongs": 5, "standaloneNodes": 2
+  }
+}</pre>
+                </details>
             </div>
         </div>
 
@@ -990,6 +1006,74 @@
                 }
             };
             reader.readAsText(file);
+        }
+
+        // Load sample DreamSong relationship data
+        function loadSampleData() {
+            console.log('Loading sample DreamSong relationship data...');
+
+            const sampleData = {
+                "nodes": [
+                    {"id": "dreamer-alice", "title": "Alice (Dreamer)", "isStandalone": false},
+                    {"id": "dreamer-bob", "title": "Bob (Dreamer)", "isStandalone": false},
+                    {"id": "dream-ai-ethics", "title": "AI Ethics", "isStandalone": false},
+                    {"id": "dream-sustainability", "title": "Sustainability", "isStandalone": false},
+                    {"id": "dream-education", "title": "Education Reform", "isStandalone": false},
+                    {"id": "dream-creativity", "title": "Creative Expression", "isStandalone": false},
+                    {"id": "dream-community", "title": "Community Building", "isStandalone": false},
+                    {"id": "standalone-node", "title": "Isolated Idea", "isStandalone": true}
+                ],
+                "edges": [
+                    {"source": "dreamer-alice", "target": "dream-ai-ethics", "weight": 1.0},
+                    {"source": "dreamer-alice", "target": "dream-creativity", "weight": 1.0},
+                    {"source": "dreamer-bob", "target": "dream-sustainability", "weight": 1.0},
+                    {"source": "dreamer-bob", "target": "dream-education", "weight": 1.0},
+                    {"source": "dream-ai-ethics", "target": "dream-education", "weight": 0.8},
+                    {"source": "dream-sustainability", "target": "dream-community", "weight": 0.9},
+                    {"source": "dream-creativity", "target": "dream-community", "weight": 0.7},
+                    {"source": "dream-education", "target": "dream-community", "weight": 0.8}
+                ],
+                "metadata": {
+                    "totalNodes": 8,
+                    "totalEdges": 8,
+                    "totalDreamSongs": 6,
+                    "standaloneNodes": 1
+                }
+            };
+
+            try {
+                // Convert to graph format expected by constellation algorithm
+                graph = {
+                    nodes: sampleData.nodes.map((node, index) => ({
+                        id: node.id,
+                        label: node.title || `Node ${index}`,
+                        cluster: -1, // Will be assigned during clustering
+                        position: null, // Will be calculated
+                        isStandalone: node.isStandalone || false
+                    })),
+                    edges: sampleData.edges.map(edge => ({
+                        source: edge.source,
+                        target: edge.target,
+                        weight: edge.weight || 1.0,
+                        sourceNodeTitle: sampleData.nodes.find(n => n.id === edge.source)?.title || edge.source,
+                        targetNodeTitle: sampleData.nodes.find(n => n.id === edge.target)?.title || edge.target
+                    }))
+                };
+
+                // Update data source indicator
+                document.getElementById('dataSource').textContent = 'Sample Data';
+
+                // Compute and visualize
+                computeConstellationLayout();
+                updateVisualization();
+
+                console.log('Sample DreamSong data loaded and visualized:', graph);
+                alert(`✅ Sample DreamSong data loaded successfully!\n\n${graph.nodes.length} nodes, ${graph.edges.length} edges\nIncludes: Dreamers, Dreams, and one standalone node`);
+
+            } catch (error) {
+                console.error('Failed to load sample data:', error);
+                alert(`❌ Failed to load sample data: ${error.message}`);
+            }
         }
 
         init();

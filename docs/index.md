@@ -15,6 +15,7 @@ Welcome to the comprehensive documentation for **InterBrain** - an innovative kn
 
 ### 🧮 Algorithms
 - [**Ring Layout Algorithm**](algorithms/ring-layout.md) - Honeycomb positioning system with interactive demo
+- [**Constellation Layout Algorithm**](algorithms/constellation-layout.md) - Force-directed 3D relationship positioning with interactive demos
 
 ## What is InterBrain?
 
