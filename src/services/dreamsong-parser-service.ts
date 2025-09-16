@@ -496,8 +496,9 @@ export class DreamSongParserService {
       const node = nodesMap.get(nodeId);
       if (!node) continue;
 
-      // Check if this node is part of a pair
-      const mediaTextPair = pairsByMediaId.get(nodeId) || pairsByTextId.get(nodeId);
+      // Only process pairs when we hit the media node, not the text node
+      // This ensures media-text blocks appear at the media node's position in topological order
+      const mediaTextPair = node.type === 'file' ? pairsByMediaId.get(nodeId) : null;
       
       if (mediaTextPair && !processedNodes.has(mediaTextPair.mediaNodeId) && !processedNodes.has(mediaTextPair.textNodeId)) {
         // Create media-text block
