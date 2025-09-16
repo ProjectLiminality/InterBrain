@@ -190,7 +190,19 @@ export class DreamSongParserService {
 
       // Parse canvas data
       const canvasData = await this.canvasParser.parseCanvas(canvasPath);
-      
+
+      // 🔍 LOGGING: Raw canvas node order
+      const rawMediaNodes = canvasData.nodes.filter(node => node.type === 'file');
+      console.log(`🔍 [0. Raw Canvas] ${canvasPath} - ${rawMediaNodes.length} media nodes in canvas order:`);
+      console.log('  - DEBUG: rawMediaNodes array:', rawMediaNodes);
+      console.log('  - DEBUG: First node:', rawMediaNodes[0]);
+      console.log('  - Raw media nodes:', rawMediaNodes.map((node, index) => ({
+        index,
+        filename: node?.file || 'NO FILE PROPERTY',
+        id: node?.id || 'NO ID PROPERTY',
+        type: node?.type || 'NO TYPE PROPERTY'
+      })));
+
       // Validate canvas has content
       if (!canvasData.nodes || canvasData.nodes.length === 0) {
         return this.createErrorResult('empty_content', 'Canvas contains no nodes', canvasPath);
@@ -283,11 +295,17 @@ export class DreamSongParserService {
     // 🔍 LOGGING: Old parser topological sort output
     const nodesMap = new Map(canvasData.nodes.map(n => [n.id, n]));
     const sortedNodes = sortResult.sortedNodeIds.map(id => nodesMap.get(id)).filter(Boolean);
-    const mediaNodes = sortedNodes.filter(node => node.type === 'file');
-    console.log('🔍 [1b. Old Parser Topological Sort] Media files in topological order:');
-    mediaNodes.forEach((node, index) => {
-      console.log(`  [${index}] ${node.file} (id: ${node.id})`);
-    });
+    const mediaNodes = sortedNodes.filter(node => node && node.type === 'file');
+    console.log(`🔍 [1b. Old Parser Topological Sort] ${sortResult.sortedNodeIds.length} sorted IDs, ${mediaNodes.length} media nodes:`);
+    console.log('  - DEBUG: sortedNodes array:', sortedNodes);
+    console.log('  - DEBUG: mediaNodes array:', mediaNodes);
+    console.log('  - DEBUG: First media node:', mediaNodes[0]);
+    console.log('  - Sorted media nodes:', mediaNodes.map((node, index) => ({
+      index,
+      filename: node?.file || 'NO FILE PROPERTY',
+      id: node?.id || 'NO ID PROPERTY',
+      type: node?.type || 'NO TYPE PROPERTY'
+    })));
 
     // Create content blocks from sorted nodes
     const blocks = await this.createContentBlocks(
@@ -296,6 +314,18 @@ export class DreamSongParserService {
       mediaTextPairs,
       dreamNodePath
     );
+
+    // 🔍 LOGGING: Final blocks created by old parser
+    const finalMediaBlocks = blocks.filter(block => block.media);
+    console.log(`🔍 [1c. Old Parser Final Blocks] Created ${blocks.length} total blocks, ${finalMediaBlocks.length} media blocks:`);
+    console.log('  - DEBUG: finalMediaBlocks array:', finalMediaBlocks);
+    console.log('  - DEBUG: First final block:', finalMediaBlocks[0]);
+    console.log('  - Final media blocks:', finalMediaBlocks.map((block, index) => ({
+      index,
+      filename: block?.media?.src?.substring(0, 50) + '...' || 'NO SRC',
+      id: block?.id || 'NO ID',
+      sourceDreamNodeId: block?.media?.sourceDreamNodeId || 'undefined'
+    })));
 
     return {
       canvasPath,
@@ -400,10 +430,10 @@ export class DreamSongParserService {
     const queue: string[] = [];
     const sortedList: string[] = [];
 
-    // Start with nodes that have no incoming edges
-    for (const [nodeId, degree] of inDegree.entries()) {
-      if (degree === 0) {
-        queue.push(nodeId);
+    // Start with nodes that have no incoming edges, preserving original canvas order
+    for (const node of nodes) {
+      if (nodeIds.has(node.id) && inDegree.get(node.id) === 0) {
+        queue.push(node.id);
       }
     }
 

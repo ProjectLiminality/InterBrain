@@ -175,10 +175,10 @@ export function topologicalSort(nodes: CanvasNode[], directedEdges: ProcessedCan
   const queue: string[] = [];
   const sortedList: string[] = [];
 
-  // Start with nodes that have no incoming edges
-  for (const [nodeId, degree] of inDegree.entries()) {
-    if (degree === 0) {
-      queue.push(nodeId);
+  // Start with nodes that have no incoming edges, preserving original order
+  for (const node of nodes) {
+    if (nodeIds.has(node.id) && inDegree.get(node.id) === 0) {
+      queue.push(node.id);
     }
   }
 

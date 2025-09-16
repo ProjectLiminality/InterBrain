@@ -196,10 +196,18 @@ export class DreamSongRelationshipService {
 
         // 🔍 LOGGING: Blocks received from parser
         const mediaBlocks = dreamSongResult.data.blocks.filter(block => block.media);
-        console.log(`🔍 [2. DreamSong Parser] Received blocks for: ${dreamNode.name}`);
-        console.log('  - Media files from parser:', mediaBlocks.map((block, index) => ({
+        console.log(`🔍 [2. DreamSong Parser] Received ${dreamSongResult.data.blocks.length} total blocks, ${mediaBlocks.length} media blocks for: ${dreamNode.name}`);
+        console.log('  - All blocks:', dreamSongResult.data.blocks.map((block, index) => ({
           index,
-          filename: block.media?.src || 'unknown',
+          type: block.type,
+          filename: block.media?.src?.substring(0, 50) + '...' || 'no-media', // Truncate data URLs
+          blockId: block.id,
+          sourceDreamNodeId: block.media?.sourceDreamNodeId || 'undefined'
+        })));
+
+        console.log('  - Media blocks only:', mediaBlocks.map((block, index) => ({
+          index,
+          filename: block.media?.src?.substring(0, 50) + '...' || 'unknown', // Truncate data URLs
           blockId: block.id,
           sourceDreamNodeId: block.media?.sourceDreamNodeId || 'undefined'
         })));
