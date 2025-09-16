@@ -117,12 +117,6 @@ export default function DreamSongThread3D({
     return null;
   }
 
-  // 🔍 LOGGING: Final rendering order
-  console.log(`🔍 [7. Thread Rendering] Rendering ${dreamSongId} with ${validEdges.length} edges:`);
-  validEdges.forEach(({ edge }, index) => {
-    console.log(`  [${index}] seq:${edge.sequenceIndex} ${edge.source}→${edge.target}`);
-  });
-
   return (
     <group name={`dreamsong-thread-${dreamSongId}`}>
       {validEdges.map(({ edge, sourcePosition, targetPosition }, index) => (
