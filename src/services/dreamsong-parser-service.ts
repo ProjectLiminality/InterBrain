@@ -54,18 +54,31 @@ export class DreamSongParserService {
         return 'empty-canvas'; // Special hash for empty canvas
       }
 
+      // 🔍 LOGGING: Show node order before and after sorting for hash
+      const unsortedNodes = canvasData.nodes.map(node => ({
+        id: node.id,
+        text: node.text || '',
+        file: node.file || '',
+        type: node.type,
+        width: node.width,
+        height: node.height
+      }));
+      const sortedNodes = [...unsortedNodes].sort((a, b) => a.id.localeCompare(b.id));
+
+      console.log('🔍 [Cache Hash] Node order BEFORE sorting for hash:');
+      unsortedNodes.filter(n => n.file).forEach((node, index) => {
+        console.log(`  [${index}] ${node.file} (id: ${node.id})`);
+      });
+
+      console.log('🔍 [Cache Hash] Node order AFTER sorting for hash:');
+      sortedNodes.filter(n => n.file).forEach((node, index) => {
+        console.log(`  [${index}] ${node.file} (id: ${node.id})`);
+      });
+
       // Create structure fingerprint - only the parts that affect DreamSong output
       const structureData = {
         // Node content (excluding position)
-        nodes: canvasData.nodes.map(node => ({
-          id: node.id,
-          text: node.text || '',
-          file: node.file || '',
-          type: node.type,
-          width: node.width, // Size matters for layout
-          height: node.height
-          // Deliberately exclude x, y coordinates
-        })).sort((a, b) => a.id.localeCompare(b.id)), // Sort for consistency
+        nodes: sortedNodes, // Already sorted above
         
         // Edge relationships (structure)
         edges: canvasData.edges.map(edge => ({
@@ -217,8 +230,15 @@ export class DreamSongParserService {
     
     // Check cache first
     if (this.parseCache.has(canvasPath)) {
-      console.log(`⚡ [DreamSong Parser] Using cached DreamSong data`);
-      return this.parseCache.get(canvasPath)!;
+      const cachedData = this.parseCache.get(canvasPath)!;
+      console.log(`⚡ [DreamSong Parser] Using cached DreamSong data with ${cachedData.blocks.length} blocks`);
+      // 🔍 LOGGING: Show cached block order
+      const cachedMediaBlocks = cachedData.blocks.filter(block => block.media);
+      console.log('🔍 [Cache] Cached media block order:');
+      cachedMediaBlocks.forEach((block, index) => {
+        console.log(`  [${index}] ${block.media?.src} (id: ${block.id})`);
+      });
+      return cachedData;
     }
 
     // Parse if not cached
@@ -259,6 +279,15 @@ export class DreamSongParserService {
     if (sortResult.hasCycle) {
       throw new Error(`Canvas contains circular dependencies: ${sortResult.nodesInCycle?.join(', ')}`);
     }
+
+    // 🔍 LOGGING: Old parser topological sort output
+    const nodesMap = new Map(canvasData.nodes.map(n => [n.id, n]));
+    const sortedNodes = sortResult.sortedNodeIds.map(id => nodesMap.get(id)).filter(Boolean);
+    const mediaNodes = sortedNodes.filter(node => node.type === 'file');
+    console.log('🔍 [1b. Old Parser Topological Sort] Media files in topological order:');
+    mediaNodes.forEach((node, index) => {
+      console.log(`  [${index}] ${node.file} (id: ${node.id})`);
+    });
 
     // Create content blocks from sorted nodes
     const blocks = await this.createContentBlocks(
