@@ -2,6 +2,7 @@ import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
+import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 
 // Access Node.js modules directly in Electron context
 /* eslint-disable no-undef */
@@ -1177,5 +1178,128 @@ export class GitDreamNodeService {
       // Update .udd file
       await this.updateUDDFile(relatedNode);
     }
+  }
+
+  /**
+   * Create a DreamNode from URL metadata
+   */
+  async createFromUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number]
+  ): Promise<DreamNode> {
+    // Use provided position or calculate random position
+    const nodePosition = position
+      ? position // Position is already calculated in world coordinates
+      : this.calculateNewNodePosition();
+
+    // Create node using existing create method without files
+    const node = await this.create(title, type, undefined, nodePosition);
+
+    // Add URL as dreamTalk media
+    node.dreamTalkMedia = [{
+      path: `url:${urlMetadata.url}`,
+      absolutePath: urlMetadata.url,
+      type: urlMetadata.type,
+      data: urlMetadata.url,
+      size: 0
+    }];
+
+    // Create README content with URL
+    const readmeContent = this.createUrlReadmeContent(urlMetadata, title);
+    await this.writeReadmeFile(node.repoPath, readmeContent);
+
+    // Update .udd file with URL metadata
+    await this.updateUDDFile(node);
+
+    console.log(`GitDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type})`);
+    console.log(`GitDreamNodeService: URL: ${urlMetadata.url}`);
+    return node;
+  }
+
+  /**
+   * Add URL to an existing DreamNode
+   */
+  async addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const node = nodeData.node;
+
+    // Add URL as additional dreamTalk media
+    const urlMedia = {
+      path: `url:${urlMetadata.url}`,
+      absolutePath: urlMetadata.url,
+      type: urlMetadata.type,
+      data: urlMetadata.url,
+      size: 0
+    };
+
+    node.dreamTalkMedia.push(urlMedia);
+
+    // Append URL content to README
+    const urlContent = this.createUrlReadmeContent(urlMetadata);
+    const readmePath = path.join(node.repoPath, 'README.md');
+
+    try {
+      // Read existing README content
+      const existingContent = await fsPromises.readFile(readmePath, 'utf8');
+      const newContent = existingContent + '\n\n' + urlContent;
+      await fsPromises.writeFile(readmePath, newContent);
+    } catch (error) {
+      console.warn(`Failed to update README for node ${nodeId}:`, error);
+      // Create new README if it doesn't exist
+      await this.writeReadmeFile(node.repoPath, urlContent);
+    }
+
+    // Update .udd file
+    await this.updateUDDFile(node);
+
+    // Update store
+    store.updateRealNode(nodeId, {
+      ...nodeData,
+      node,
+      lastSynced: Date.now()
+    });
+
+    console.log(`GitDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
+  }
+
+  /**
+   * Create README content for URLs
+   */
+  private createUrlReadmeContent(urlMetadata: UrlMetadata, title?: string): string {
+    let content = '';
+
+    if (title) {
+      content += `# ${title}\n\n`;
+    }
+
+    if (urlMetadata.type === 'youtube' && urlMetadata.videoId) {
+      // Add YouTube iframe embed for Obsidian
+      content += generateYouTubeIframe(urlMetadata.videoId, 560, 315);
+      content += '\n\n';
+
+      // Add markdown link as backup
+      content += `[${urlMetadata.title || 'YouTube Video'}](${urlMetadata.url})`;
+    } else {
+      // For other URLs, add as markdown link
+      content += generateMarkdownLink(urlMetadata.url, urlMetadata.title);
+    }
+
+    return content;
+  }
+
+  /**
+   * Write README.md file to node repository
+   */
+  private async writeReadmeFile(repoPath: string, content: string): Promise<void> {
+    const readmePath = path.join(repoPath, 'README.md');
+    await fsPromises.writeFile(readmePath, content);
   }
 }

@@ -62,6 +62,16 @@ export default function ConstellationEdges({
     if (!relationshipGraph || !clusteringResult) return [];
 
     const edgeGroups = groupEdgesByDreamSong(relationshipGraph.edges);
+
+    // 🔍 LOGGING: Edge grouping results
+    console.log('🔍 [5. Edge Grouping] Grouped edges by DreamSongId:');
+    for (const [dreamSongId, edges] of edgeGroups) {
+      console.log(`  - ${dreamSongId}: ${edges.length} edges`);
+      edges.forEach((edge, index) => {
+        console.log(`    [${index}] seq:${edge.sequenceIndex} ${edge.source}→${edge.target}`);
+      });
+    }
+
     const threads: Array<{
       dreamSongId: string;
       dreamSongPath: string;
@@ -72,6 +82,12 @@ export default function ConstellationEdges({
     for (const [dreamSongId, edges] of edgeGroups) {
       // Sort edges by sequence index for proper rendering
       const sortedEdges = sortEdgesBySequence(edges);
+
+      // 🔍 LOGGING: After sorting by sequence
+      console.log(`🔍 [6. Edge Sorting] Sorted edges for ${dreamSongId}:`);
+      sortedEdges.forEach((edge, index) => {
+        console.log(`  [${index}] seq:${edge.sequenceIndex} ${edge.source}→${edge.target}`);
+      });
 
       // Get first edge to determine thread color
       const firstEdge = sortedEdges[0];

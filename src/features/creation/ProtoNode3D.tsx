@@ -3,6 +3,7 @@ import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore, ProtoNode } from '../../store/interbrain-store';
+// extractYouTubeVideoId used indirectly through urlMetadata.videoId
 
 interface ProtoNode3DProps {
   position: [number, number, number];
@@ -285,15 +286,16 @@ export default function ProtoNode3D({
             onDrop={handleDrop}
           >
             {/* DreamTalk Media Area or Drop Zone */}
-            {previewMedia || protoNode.dreamTalkFile ? (
+            {previewMedia || protoNode.dreamTalkFile || protoNode.urlMetadata ? (
               <div
                 style={{
                   ...getMediaContainerStyle(),
                   opacity: animatedOpacity // Animate media opacity with main node
                 }}
               >
+                {/* File-based media preview */}
                 {previewMedia && (
-                  <img 
+                  <img
                     src={previewMedia}
                     alt="DreamTalk preview"
                     style={{
@@ -303,6 +305,72 @@ export default function ProtoNode3D({
                     }}
                   />
                 )}
+
+                {/* URL-based media preview */}
+                {protoNode.urlMetadata && !previewMedia && (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      position: 'relative'
+                    }}
+                  >
+                    {protoNode.urlMetadata.type === 'youtube' && protoNode.urlMetadata.videoId ? (
+                      <>
+                        <img
+                          src={`https://img.youtube.com/vi/${protoNode.urlMetadata.videoId}/maxresdefault.jpg`}
+                          alt="YouTube thumbnail"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                        {/* YouTube play icon overlay */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '40%',
+                            height: '40%',
+                            background: 'rgba(255, 0, 0, 0.8)',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '16px',
+                            fontWeight: 'bold',
+                            pointerEvents: 'none'
+                          }}
+                        >
+                          ▶
+                        </div>
+                      </>
+                    ) : (
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: protoNode.urlMetadata.type === 'website'
+                            ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                            : 'rgba(0, 100, 200, 0.8)',
+                          color: '#FFFFFF',
+                          fontSize: '24px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {protoNode.urlMetadata.type === 'website' ? '🔗' : 'URL'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Fade-to-black overlay (same as DreamNode3D) */}
                 <div style={getMediaOverlayStyle()} />
               </div>

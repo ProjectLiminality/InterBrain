@@ -4,15 +4,16 @@ import { GitDreamNodeService } from './git-dreamnode-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
+import { UrlMetadata } from '../utils/url-utils';
 
 /**
  * Service interface that both mock and real implementations will follow
  */
 export interface IDreamNodeService {
   create(
-    title: string, 
-    type: 'dream' | 'dreamer', 
-    dreamTalk?: globalThis.File, 
+    title: string,
+    type: 'dream' | 'dreamer',
+    dreamTalk?: globalThis.File,
     position?: [number, number, number],
     additionalFiles?: globalThis.File[]
   ): Promise<DreamNode>;
@@ -29,12 +30,21 @@ export interface IDreamNodeService {
     nodesWithMedia: number;
   };
   refreshGitStatus?(): Promise<{ updated: number; errors: number }>;
-  
+
   // Relationship management
   updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void>;
   getRelationships(nodeId: string): Promise<string[]>;
   addRelationship(nodeId: string, relatedNodeId: string): Promise<void>;
   removeRelationship(nodeId: string, relatedNodeId: string): Promise<void>;
+
+  // URL-based operations
+  createFromUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number]
+  ): Promise<DreamNode>;
+  addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void>;
 }
 
 /**
@@ -68,45 +78,59 @@ export class ServiceManager {
     const originalUpdateRelationships = this.mockService.updateRelationships.bind(this.mockService);
     const originalAddRelationship = this.mockService.addRelationship.bind(this.mockService);
     const originalRemoveRelationship = this.mockService.removeRelationship.bind(this.mockService);
-    
+    const originalCreateFromUrl = this.mockService.createFromUrl.bind(this.mockService);
+    const originalAddUrlToNode = this.mockService.addUrlToNode.bind(this.mockService);
+
     // Wrap create method
     this.mockService.create = async (...args) => {
       const node = await originalCreate(...args);
       this.syncMockToStore();
       return node;
     };
-    
+
     // Wrap update method
     this.mockService.update = async (...args) => {
       await originalUpdate(...args);
       this.syncMockToStore();
     };
-    
+
     // Wrap delete method
     this.mockService.delete = async (...args) => {
       await originalDelete(...args);
       this.syncMockToStore();
     };
-    
+
     // Wrap addFilesToNode method
     this.mockService.addFilesToNode = async (...args) => {
       await originalAddFiles(...args);
       this.syncMockToStore();
     };
-    
+
     // Wrap relationship methods
     this.mockService.updateRelationships = async (...args) => {
       await originalUpdateRelationships(...args);
       this.syncMockToStore();
     };
-    
+
     this.mockService.addRelationship = async (...args) => {
       await originalAddRelationship(...args);
       this.syncMockToStore();
     };
-    
+
     this.mockService.removeRelationship = async (...args) => {
       await originalRemoveRelationship(...args);
+      this.syncMockToStore();
+    };
+
+    // Wrap URL methods
+    this.mockService.createFromUrl = async (...args) => {
+      const node = await originalCreateFromUrl(...args);
+      this.syncMockToStore();
+      return node;
+    };
+
+    this.mockService.addUrlToNode = async (...args) => {
+      await originalAddUrlToNode(...args);
       this.syncMockToStore();
     };
   }

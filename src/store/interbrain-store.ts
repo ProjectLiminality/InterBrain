@@ -113,6 +113,7 @@ export interface ProtoNode {
   dreamTalkFile?: globalThis.File;
   additionalFiles?: globalThis.File[];
   position: [number, number, number];
+  urlMetadata?: import('../utils/url-utils').UrlMetadata;
 }
 
 export interface ValidationErrors {

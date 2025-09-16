@@ -2,6 +2,7 @@ import React from 'react';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import { setIcon } from 'obsidian';
+import { extractYouTubeVideoId } from '../utils/url-utils';
 
 interface DreamTalkSideProps {
   dreamNode: DreamNode;
@@ -269,10 +270,94 @@ function MediaRenderer({ media }: { media: MediaFile }) {
     borderRadius: '50%'
   };
 
+  // Handle URL-based media (prefix: url:)
+  if (media.path?.startsWith('url:') || media.absolutePath?.startsWith('http')) {
+    const url = media.data || media.absolutePath;
+
+    // YouTube URL handling
+    if (media.type === 'youtube') {
+      const videoId = extractYouTubeVideoId(url);
+      if (videoId) {
+        const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        return (
+          <div style={{...mediaStyle, position: 'relative', overflow: 'hidden'}}>
+            <img
+              src={thumbnailUrl}
+              alt="YouTube video thumbnail"
+              style={mediaStyle}
+              draggable={false}
+            />
+            {/* YouTube play icon overlay */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '40%',
+                height: '40%',
+                background: 'rgba(255, 0, 0, 0.8)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                pointerEvents: 'none'
+              }}
+            >
+              ▶
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Generic website URL handling
+    if (media.type === 'website') {
+      return (
+        <div
+          style={{
+            ...mediaStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: '#FFFFFF',
+            fontSize: '12px',
+            fontWeight: 'bold'
+          }}
+        >
+          🔗
+        </div>
+      );
+    }
+
+    // Fallback for other URL types
+    return (
+      <div
+        style={{
+          ...mediaStyle,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0, 100, 200, 0.8)',
+          color: '#FFFFFF',
+          fontSize: '12px',
+          fontWeight: 'bold'
+        }}
+      >
+        URL
+      </div>
+    );
+  }
+
+  // Handle file-based media (existing logic)
   if (media.type.startsWith('image/')) {
     return (
-      <img 
-        src={media.data} 
+      <img
+        src={media.data}
         alt="DreamTalk symbol"
         style={mediaStyle}
         draggable={false}
@@ -282,7 +367,7 @@ function MediaRenderer({ media }: { media: MediaFile }) {
 
   if (media.type.startsWith('video/')) {
     return (
-      <video 
+      <video
         src={media.data}
         style={mediaStyle}
         muted
@@ -304,11 +389,11 @@ function MediaRenderer({ media }: { media: MediaFile }) {
           background: 'rgba(0, 0, 0, 0.8)'
         }}
       >
-        <audio 
-          controls 
+        <audio
+          controls
           src={media.data}
-          style={{ 
-            width: '90%', 
+          style={{
+            width: '90%',
             maxWidth: '80px',
             filter: 'invert(1)'
           }}
@@ -320,11 +405,11 @@ function MediaRenderer({ media }: { media: MediaFile }) {
   if (media.type.startsWith('application/pdf')) {
     return (
       <div style={{...mediaStyle, overflow: 'hidden'}}>
-        <iframe 
+        <iframe
           src={media.data}
           style={{
             width: '200%',
-            height: '200%', 
+            height: '200%',
             transform: 'scale(0.5) translate(-50%, -50%)',
             transformOrigin: 'top left',
             border: 'none',

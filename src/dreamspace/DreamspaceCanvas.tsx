@@ -19,6 +19,7 @@ import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../services/canvas-parser-service';
 import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
+import { processDroppedUrlData } from '../utils/url-utils';
 
 // Create singleton service instances
 const uiService = new UIService();
@@ -809,17 +810,51 @@ export default function DreamspaceCanvas() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     setIsDragOver(false);
-    
+
+    // Check for files first
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-    
+
+    // Check for text/URL data if no files
+    let urlData: string | null = null;
+    if (files.length === 0) {
+      // Try different data formats for URLs
+      urlData = e.dataTransfer.getData('text/uri-list') ||
+                e.dataTransfer.getData('text/plain') ||
+                e.dataTransfer.getData('text/html') ||
+                null;
+    }
+
+    // Must have either files or URL data
+    if (files.length === 0 && !urlData) return;
+
     const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
     const dropTarget = detectDropTarget(mousePos.x, mousePos.y);
     const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
-    
-    
+
+    // Handle URL drops
+    if (urlData && files.length === 0) {
+      console.log('🔗 URL drop detected:', { urlData, isCommandDrop });
+
+      if (dropTarget.type === 'node' && dropTarget.node) {
+        // Dropping URL on an existing DreamNode
+        await handleUrlDropOnNode(urlData, dropTarget.node);
+      } else {
+        // Dropping URL on empty space
+        if (isCommandDrop) {
+          // Command+Drop: Open ProtoNode3D with URL pre-filled
+          await handleCommandUrlDrop(urlData);
+        } else {
+          // Normal Drop: Create node instantly at drop position
+          await handleNormalUrlDrop(urlData, dropTarget.position);
+        }
+      }
+      setDragMousePosition(null);
+      return;
+    }
+
+    // Handle file drops (existing logic)
     if (dropTarget.type === 'node' && dropTarget.node) {
       // Dropping on an existing DreamNode
       if (isCommandDrop) {
@@ -839,7 +874,7 @@ export default function DreamspaceCanvas() {
         await handleNormalDrop(files, dropTarget.position);
       }
     }
-    
+
     setDragMousePosition(null);
   };
 
@@ -919,21 +954,21 @@ export default function DreamspaceCanvas() {
     try {
       const file = files[0]; // Use first file for title
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
-      
+
       // Use the EXACT same position as the Create DreamNode command
       const spawnPosition: [number, number, number] = [0, 0, -25];
-      
+
       // Separate media files from other files
       const mediaFiles = files.filter(f => isValidMediaFile(f));
       const otherFiles = files.filter(f => !isValidMediaFile(f));
-      
+
       // Use first media file as dreamTalk, rest go to additional files
       const dreamTalkFile = mediaFiles.length > 0 ? mediaFiles[0] : undefined;
       const additionalFiles = [
         ...mediaFiles.slice(1), // Remaining media files
         ...otherFiles // All non-media files (like PDFs)
       ];
-      
+
       // Start creation with pre-filled data including all files
       startCreationWithData(spawnPosition, {
         title: fileNameWithoutExt,
@@ -941,11 +976,124 @@ export default function DreamspaceCanvas() {
         dreamTalkFile: dreamTalkFile,
         additionalFiles: additionalFiles.length > 0 ? additionalFiles : undefined
       });
-      
-      
+
+
     } catch (error) {
       console.error('Failed to start creation from drop:', error);
       uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from drop');
+    }
+  };
+
+  const handleNormalUrlDrop = async (urlData: string, position: [number, number, number]) => {
+    try {
+      const urlMetadata = processDroppedUrlData(urlData);
+
+      if (!urlMetadata || !urlMetadata.isValid) {
+        uiService.showError('Invalid URL dropped');
+        return;
+      }
+
+      console.log('🔗 Creating DreamNode from URL:', urlMetadata);
+
+      const store = useInterBrainStore.getState();
+      const service = serviceManager.getActive();
+
+      // Determine node type based on liminal-web context (same as file drop logic)
+      let nodeType: 'dream' | 'dreamer' = 'dream';
+      let shouldAutoRelate = false;
+      let focusedNodeId: string | null = null;
+
+      if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
+        const focusedNode = store.selectedNode;
+        focusedNodeId = focusedNode.id;
+        nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
+        shouldAutoRelate = true;
+        console.log(`Liminal-web URL drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
+      }
+
+      // Create the DreamNode with URL as the "dreamTalk" (stored in metadata)
+      const newNode = await service.createFromUrl(
+        urlMetadata.title || urlMetadata.url,
+        nodeType,
+        urlMetadata,
+        position
+      );
+
+      // Auto-create relationship if in liminal-web mode
+      if (shouldAutoRelate && focusedNodeId && newNode) {
+        try {
+          await service.addRelationship(focusedNodeId, newNode.id);
+          console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
+          uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
+
+          // Refresh and trigger layout update (same as file drop)
+          const updatedFocusedNode = await service.get(focusedNodeId);
+          if (updatedFocusedNode) {
+            store.setSelectedNode(updatedFocusedNode);
+            globalThis.setTimeout(() => {
+              if (spatialOrchestratorRef.current) {
+                spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
+              }
+            }, 100);
+          }
+        } catch (error) {
+          console.error('Failed to create automatic relationship:', error);
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to create node from URL drop:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to create node from URL drop');
+    }
+  };
+
+  const handleCommandUrlDrop = async (urlData: string) => {
+    try {
+      const urlMetadata = processDroppedUrlData(urlData);
+
+      if (!urlMetadata || !urlMetadata.isValid) {
+        uiService.showError('Invalid URL dropped');
+        return;
+      }
+
+      console.log('🔗 Opening ProtoNode with URL:', urlMetadata);
+
+      // Use the same spawn position as file command drop
+      const spawnPosition: [number, number, number] = [0, 0, -25];
+
+      // Start creation with URL pre-filled in ProtoNode
+      startCreationWithData(spawnPosition, {
+        title: urlMetadata.title || urlMetadata.url,
+        type: 'dream',
+        urlMetadata: urlMetadata // Add URL metadata to proto node data
+      });
+
+    } catch (error) {
+      console.error('Failed to start creation from URL drop:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from URL drop');
+    }
+  };
+
+  const handleUrlDropOnNode = async (urlData: string, node: DreamNode) => {
+    try {
+      const urlMetadata = processDroppedUrlData(urlData);
+
+      if (!urlMetadata || !urlMetadata.isValid) {
+        uiService.showError('Invalid URL dropped');
+        return;
+      }
+
+      console.log('🔗 Adding URL to existing DreamNode:', { url: urlMetadata, node: node.name });
+
+      // Use service to add URL to existing node
+      const service = serviceManager.getActive();
+      await service.addUrlToNode(node.id, urlMetadata);
+
+      uiService.showSuccess(`Added URL to "${node.name}"`);
+
+    } catch (error) {
+      console.error('Failed to add URL to node:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to add URL to node');
     }
   };
 

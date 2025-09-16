@@ -69,6 +69,20 @@ export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: 
     sourceDreamNodeId
   );
 
+  // 🔍 LOGGING: Topological sort output with filenames
+  console.log('🔍 [1. Topological Sort] Media blocks created from canvas:');
+  const mediaBlocks = blocks.filter(block => block.media);
+  if (mediaBlocks.length > 0) {
+    console.log('  - Media files in topological order:', mediaBlocks.map((block, index) => ({
+      index,
+      filename: block.media?.src || 'unknown',
+      blockId: block.id,
+      sourceDreamNodeId: block.media?.sourceDreamNodeId || 'undefined'
+    })));
+  } else {
+    console.log('  - No media blocks found');
+  }
+
   return blocks;
 }
 

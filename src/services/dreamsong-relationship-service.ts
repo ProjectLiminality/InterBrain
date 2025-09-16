@@ -194,6 +194,16 @@ export class DreamSongRelationshipService {
 
         dreamSongsParsed++;
 
+        // 🔍 LOGGING: Blocks received from parser
+        const mediaBlocks = dreamSongResult.data.blocks.filter(block => block.media);
+        console.log(`🔍 [2. DreamSong Parser] Received blocks for: ${dreamNode.name}`);
+        console.log('  - Media files from parser:', mediaBlocks.map((block, index) => ({
+          index,
+          filename: block.media?.src || 'unknown',
+          blockId: block.id,
+          sourceDreamNodeId: block.media?.sourceDreamNodeId || 'undefined'
+        })));
+
         // Extract relationships from this DreamSong
         const edges = await this.extractRelationshipsFromDreamSong(
           dreamSongResult.data,
@@ -226,6 +236,15 @@ export class DreamSongRelationshipService {
   ): Promise<DreamSongEdge[]> {
     const edges: DreamSongEdge[] = [];
 
+    // 🔍 LOGGING: Show all blocks before filtering
+    console.log(`🔍 [3a. Relationship Filter] All blocks in DreamSong:`, dreamSongData.blocks.map((block, index) => ({
+      index,
+      type: block.type,
+      filename: block.media?.src || 'no-media',
+      sourceDreamNodeId: block.media?.sourceDreamNodeId || 'undefined',
+      hasMedia: !!block.media
+    })));
+
     // Filter to only media blocks that have sourceDreamNodeId
     const mediaBlocks = dreamSongData.blocks
       .filter((block: DreamSongBlock) =>
@@ -235,6 +254,14 @@ export class DreamSongRelationshipService {
         sourceDreamNodeId: block.media!.sourceDreamNodeId,
         mediaPath: block.media!.src
       }));
+
+    // 🔍 LOGGING: Show filtered result
+    console.log(`🔍 [3b. Relationship Filter] After filtering to blocks with sourceDreamNodeId:`);
+    console.log('  - Filtered media blocks:', mediaBlocks.map((block, index) => ({
+      index,
+      filename: block.mediaPath,
+      sourceDreamNodeId: block.sourceDreamNodeId
+    })));
 
     if (mediaBlocks.length < config.minSequenceLength) {
       console.log(`📏 [DreamSong Relationships] Skipping ${dreamSongPath}: sequence too short (${mediaBlocks.length})`);
@@ -268,8 +295,15 @@ export class DreamSongRelationshipService {
         uuidToPathMap
       );
 
+      // 🔍 LOGGING: Edge creation details
+      console.log(`🔍 [4. Edge Creation] Creating edge ${i}: ${currentMedia.mediaPath} → ${nextMedia.mediaPath}`);
+      console.log(`    - Source UUID: ${sourceUUID} (from ${currentMedia.sourceDreamNodeId})`);
+      console.log(`    - Target UUID: ${targetUUID} (from ${nextMedia.sourceDreamNodeId})`);
+      console.log(`    - Sequence Index: ${i}`);
+
       // Skip self-loops
       if (sourceUUID === targetUUID) {
+        console.log(`    - SKIPPED: Self-loop detected`);
         continue;
       }
 
@@ -282,6 +316,8 @@ export class DreamSongRelationshipService {
         sequenceIndex: i,
         weight: 1.0
       });
+
+      console.log(`    - ✅ Edge created with sequenceIndex: ${i}`);
 
       // Create backward edge if configured
       if (config.createBidirectionalEdges) {

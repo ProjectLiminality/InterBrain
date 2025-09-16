@@ -2,6 +2,7 @@ import { App, WorkspaceLeaf, Notice } from 'obsidian';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../dreamspace/DreamSongFullScreenView';
+import { generateYouTubeIframe, extractYouTubeVideoId } from '../utils/url-utils';
 
 /**
  * Leaf Manager Service
@@ -59,6 +60,7 @@ export class LeafManagerService {
   /**
    * Open DreamTalk media file in right pane
    * Creates 50/50 split on first call, then stacks as tabs. Implements one-leaf-per-node strategy.
+   * Supports both file-based media and URL-based media (YouTube, websites).
    */
   async openDreamTalkFullScreen(dreamNode: DreamNode, mediaFile: MediaFile): Promise<void> {
     try {
@@ -70,7 +72,7 @@ export class LeafManagerService {
 
       // Check if we already have a leaf for this DreamNode
       const existingLeaf = this.dreamTalkLeaves.get(dreamNode.id);
-      
+
       if (existingLeaf) {
         // Leaf exists, just reveal it
         this.app.workspace.revealLeaf(existingLeaf);
@@ -78,13 +80,19 @@ export class LeafManagerService {
         return;
       }
 
-      // Construct the full path within the vault
+      // Handle URL-based media
+      if (mediaFile.path?.startsWith('url:') || mediaFile.absolutePath?.startsWith('http')) {
+        await this.openUrlInLeaf(dreamNode, mediaFile);
+        return;
+      }
+
+      // Handle file-based media (existing logic)
       const fullPath = `${dreamNode.repoPath}/${mediaFile.path}`;
       console.log(`Looking for file at vault path: ${fullPath}`);
 
       // Get the file from the vault
       const file = this.app.vault.getAbstractFileByPath(fullPath);
-      
+
       if (!file) {
         console.error(`File not found in vault: ${fullPath}`);
         new Notice(`File not found: ${mediaFile.path}`, 3000);
@@ -101,19 +109,64 @@ export class LeafManagerService {
       // Create new leaf in right split group
       const leaf = this.getRightLeaf();
       await leaf.openFile(file as any); // TFile type
-      
+
       // Track this leaf
       this.dreamTalkLeaves.set(dreamNode.id, leaf);
-      
+
       // Set up cleanup when leaf is closed
       this.setupDreamTalkLeafCleanup(dreamNode.id, leaf);
-      
+
       console.log(`Successfully opened ${file.path} in new leaf`);
       new Notice(`Opened ${mediaFile.path}`);
-      
+
     } catch (error) {
       console.error('Failed to open DreamTalk full-screen:', error);
       new Notice('Failed to open DreamTalk in full-screen', 3000);
+    }
+  }
+
+  /**
+   * Open URL-based media in a new leaf with HTML content
+   */
+  private async openUrlInLeaf(dreamNode: DreamNode, mediaFile: MediaFile): Promise<void> {
+    const url = mediaFile.data || mediaFile.absolutePath;
+
+    // Create a temporary HTML file in the vault for the URL content
+    const tempFileName = `temp-dreamtalk-${dreamNode.id}-${Date.now()}.md`;
+    let htmlContent: string;
+
+    if (mediaFile.type === 'youtube') {
+      const videoId = extractYouTubeVideoId(url);
+      if (videoId) {
+        htmlContent = `# ${dreamNode.name}\n\n${generateYouTubeIframe(videoId, 800, 450)}\n\n[Original Link](${url})`;
+      } else {
+        htmlContent = `# ${dreamNode.name}\n\n[${url}](${url})`;
+      }
+    } else {
+      // For other URLs, create a simple markdown link
+      htmlContent = `# ${dreamNode.name}\n\n[${url}](${url})\n\n---\n\n*This is a URL-based DreamTalk. Click the link above to open in your browser.*`;
+    }
+
+    try {
+      // Create temporary file
+      const tempFile = await this.app.vault.create(tempFileName, htmlContent);
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+      await leaf.openFile(tempFile);
+
+      // Track this leaf
+      this.dreamTalkLeaves.set(dreamNode.id, leaf);
+
+      // Set up cleanup when leaf is closed (also delete temp file)
+      this.setupUrlLeafCleanup(dreamNode.id, leaf, tempFile.path);
+
+      console.log(`Successfully opened URL ${url} in new leaf`);
+      new Notice(`Opened ${mediaFile.type === 'youtube' ? 'YouTube video' : 'URL'}: ${dreamNode.name}`);
+
+    } catch (error) {
+      console.error('Failed to create temporary file for URL:', error);
+      new Notice('Failed to open URL in full-screen', 3000);
     }
   }
 
@@ -343,6 +396,35 @@ export class LeafManagerService {
       if (this.dreamTalkLeaves.has(dreamNodeId)) {
         this.dreamTalkLeaves.delete(dreamNodeId);
         console.log(`Auto-cleaned up DreamTalk leaf for node: ${dreamNodeId}`);
+        await this.collapseRightPaneIfEmpty();
+      }
+      return originalDetach();
+    };
+  }
+
+  /**
+   * Set up automatic cleanup for URL-based leaves (also deletes temporary file)
+   */
+  private setupUrlLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf, tempFilePath: string): void {
+    // Listen for leaf detach
+    const originalDetach = leaf.detach.bind(leaf);
+    leaf.detach = async () => {
+      // Only clean up if we still have this leaf tracked
+      if (this.dreamTalkLeaves.has(dreamNodeId)) {
+        this.dreamTalkLeaves.delete(dreamNodeId);
+        console.log(`Auto-cleaned up URL DreamTalk leaf for node: ${dreamNodeId}`);
+
+        // Delete the temporary file
+        try {
+          const tempFile = this.app.vault.getAbstractFileByPath(tempFilePath);
+          if (tempFile) {
+            await this.app.vault.delete(tempFile);
+            console.log(`Deleted temporary file: ${tempFilePath}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to delete temporary file ${tempFilePath}:`, error);
+        }
+
         await this.collapseRightPaneIfEmpty();
       }
       return originalDetach();

@@ -1,4 +1,5 @@
 import { DreamNode, GitStatus } from '../types/dreamnode';
+import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 
 /**
  * MockDreamNodeService - Session-based dynamic storage
@@ -476,21 +477,102 @@ export class MockDreamNodeService {
   }
 
   /**
+   * Create a DreamNode from URL metadata
+   */
+  async createFromUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number]
+  ): Promise<DreamNode> {
+    const id = `dynamic-${type}-${this.idCounter++}`;
+
+    // Use provided position or calculate random position
+    const nodePosition = position
+      ? position // Position is already calculated in world coordinates
+      : this.calculateNewNodePosition();
+
+    // Create dreamTalk content based on URL type
+    const dreamTalkContent = this.createUrlDreamTalkContent(urlMetadata);
+
+    const node: DreamNode = {
+      id,
+      type,
+      name: title,
+      position: nodePosition,
+      dreamTalkMedia: [{
+        path: `url:${urlMetadata.url}`,
+        absolutePath: urlMetadata.url,
+        type: urlMetadata.type,
+        data: urlMetadata.url, // Store the URL as data
+        size: 0 // URLs don't have file size
+      }],
+      dreamSongContent: dreamTalkContent,
+      liminalWebConnections: [],
+      repoPath: `/mock/repos/${id}`,
+      hasUnsavedChanges: false,
+      gitStatus: this.generateMockGitStatus()
+    };
+
+    this.nodes.set(id, node);
+
+    console.log(`MockDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type}) with ID ${id}`);
+    console.log(`MockDreamNodeService: URL: ${urlMetadata.url}`);
+    return node;
+  }
+
+  /**
+   * Add URL to an existing DreamNode
+   */
+  async addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    // Add URL as additional dreamTalk media
+    const urlMedia = {
+      path: `url:${urlMetadata.url}`,
+      absolutePath: urlMetadata.url,
+      type: urlMetadata.type,
+      data: urlMetadata.url,
+      size: 0
+    };
+
+    node.dreamTalkMedia.push(urlMedia);
+
+    // URL content handled by README in real service, skip for mock
+
+    this.nodes.set(nodeId, node);
+
+    console.log(`MockDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
+  }
+
+  /**
+   * Create dreamTalk content for URLs (mock CanvasFile format)
+   */
+  private createUrlDreamTalkContent(urlMetadata: UrlMetadata): import('../types/dreamnode').CanvasFile[] {
+    // For mock service, we don't actually create files, just return empty array
+    // URL content will be handled by README generation in real service
+    return [];
+  }
+
+  /**
    * Calculate position for new nodes
    * Places them on the night sky sphere (5000 units) for proper dynamic scaling
    */
   private calculateNewNodePosition(): [number, number, number] {
     // Place new nodes on the night sky sphere surface (same as other nodes)
     const sphereRadius = 5000; // Night sky sphere radius from DynamicViewScaling
-    
+
     const theta = Math.random() * Math.PI * 2; // Random angle around sphere
     const phi = Math.acos(2 * Math.random() - 1); // Random inclination (uniform distribution)
-    
+
     // Position exactly on sphere surface for consistent behavior with other nodes
     const x = sphereRadius * Math.sin(phi) * Math.cos(theta);
     const y = sphereRadius * Math.sin(phi) * Math.sin(theta);
     const z = sphereRadius * Math.cos(phi);
-    
+
     return [x, y, z];
   }
 }
