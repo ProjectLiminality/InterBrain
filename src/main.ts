@@ -38,8 +38,6 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
-    console.log('InterBrain plugin loaded!');
-    
     // Initialize services
     this.initializeServices();
     

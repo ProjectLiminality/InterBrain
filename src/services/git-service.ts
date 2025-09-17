@@ -41,7 +41,6 @@ export class GitService {
     }
     
     this.vaultPath = vaultPath;
-    console.log('GitService: Vault path:', this.vaultPath);
   }
   
   private getFullPath(repoPath: string): string {

@@ -24,11 +24,9 @@ export class CanvasObserverService {
    */
   start(): void {
     if (this.isEnabled) {
-      console.log('CanvasObserverService: Already started');
       return;
     }
 
-    console.log('CanvasObserverService: Starting canvas observation for .link files');
     this.observeCanvasChanges();
     this.isEnabled = true;
 
@@ -43,8 +41,6 @@ export class CanvasObserverService {
     if (!this.isEnabled) {
       return;
     }
-
-    console.log('CanvasObserverService: Stopping canvas observation');
 
     if (this.observer) {
       this.observer.disconnect();
@@ -62,21 +58,16 @@ export class CanvasObserverService {
     const config = { childList: true, subtree: true };
 
     const callback = (mutationsList: MutationRecord[], observer: MutationObserver) => {
-      console.log('CanvasObserverService: Mutation observed');
       for (const mutation of mutationsList) {
         if (mutation.type === 'childList') {
-          console.log('CanvasObserverService: ChildList mutation detected');
-
           // Handle added nodes
           mutation.addedNodes.forEach(async (node) => {
-            console.log('CanvasObserverService: Node added');
             if (!(node instanceof HTMLElement)) return;
 
             // Look for canvas node content with .link files
             const canvasNodeContent = node.querySelector('.canvas-node-content');
             if (canvasNodeContent && this.isLinkFileNode(canvasNodeContent)) {
               const filePath = this.getFilePath(canvasNodeContent);
-              console.log('CanvasObserverService: Canvas node content added with .link file:', filePath);
               if (filePath) {
                 await this.updateCanvasWithThumbnail(canvasNodeContent, filePath);
               }
@@ -85,7 +76,6 @@ export class CanvasObserverService {
             // Also check if the node itself is a canvas-node-content
             if (node.classList.contains('canvas-node-content') && this.isLinkFileNode(node)) {
               const filePath = this.getFilePath(node);
-              console.log('CanvasObserverService: Direct canvas-node-content added with .link file:', filePath);
               if (filePath) {
                 await this.updateCanvasWithThumbnail(node, filePath);
               }
@@ -97,7 +87,6 @@ export class CanvasObserverService {
 
     this.observer = new MutationObserver(callback);
     this.observer.observe(canvasContainer, config);
-    console.log('CanvasObserverService: MutationObserver initialized');
   }
 
   /**
@@ -121,19 +110,14 @@ export class CanvasObserverService {
    * Get the actual file path from canvas node data attributes
    */
   private getFilePath(canvasNodeContent: Element): string | null {
-    console.log('CanvasObserverService: Starting path detection for canvas node');
-
     // Start with the canvas node content and work our way up
     let currentElement: Element | null = canvasNodeContent;
 
     // Walk up the DOM tree looking for data-path
     while (currentElement) {
-      console.log(`CanvasObserverService: Checking element: ${currentElement.tagName}.${currentElement.className}`);
-
       // Check for data-path attribute
       const dataPath = currentElement.getAttribute('data-path');
       if (dataPath) {
-        console.log('CanvasObserverService: Found data-path:', dataPath);
         if (dataPath.endsWith('.link')) {
           return dataPath;
         }
@@ -144,7 +128,6 @@ export class CanvasObserverService {
       for (const attr of possibleAttrs) {
         const value = currentElement.getAttribute(attr);
         if (value && value.endsWith('.link')) {
-          console.log(`CanvasObserverService: Found file path in ${attr}:`, value);
           return value;
         }
       }
@@ -158,30 +141,16 @@ export class CanvasObserverService {
       }
     }
 
-    // Debug: Print all elements and their attributes for manual inspection
-    console.log('CanvasObserverService: DEBUG - Could not find path, inspecting DOM structure:');
-    let debugElement: Element | null = canvasNodeContent;
-    let level = 0;
-    while (debugElement && level < 5) {
-      const attrs = Array.from(debugElement.attributes).map(attr => `${attr.name}="${attr.value}"`).join(' ');
-      console.log(`  Level ${level}: <${debugElement.tagName.toLowerCase()} ${attrs}>`);
-      debugElement = debugElement.parentElement;
-      level++;
-    }
-
     // Enhanced fallback: search for .link file by name
     const fileName = this.getFileTitle(canvasNodeContent);
     if (fileName && fileName.endsWith('.link')) {
-      console.log('CanvasObserverService: Searching for .link file by name:', fileName);
       const foundPath = this.searchForLinkFile(fileName);
       if (foundPath) {
-        console.log('CanvasObserverService: Found .link file at path:', foundPath);
         return foundPath;
       }
     }
 
     // Last resort: use the title as filename (original behavior)
-    console.warn('CanvasObserverService: Could not find data-path or locate file, falling back to title');
     return fileName;
   }
 
@@ -196,7 +165,6 @@ export class CanvasObserverService {
       // Look for files ending with the target filename
       for (const file of allFiles) {
         if (file.path.endsWith(fileName) && file.path.endsWith('.link')) {
-          console.log('CanvasObserverService: Found matching .link file:', file.path);
           return file.path;
         }
       }
@@ -205,15 +173,12 @@ export class CanvasObserverService {
       const baseFileName = fileName.replace(/\.link$/, '');
       for (const file of allFiles) {
         if (file.path.includes(baseFileName) && file.path.endsWith('.link')) {
-          console.log('CanvasObserverService: Found partial matching .link file:', file.path);
           return file.path;
         }
       }
 
-      console.warn('CanvasObserverService: No matching .link file found for:', fileName);
       return null;
     } catch (error) {
-      console.error('CanvasObserverService: Error searching for .link file:', error);
       return null;
     }
   }
@@ -222,15 +187,11 @@ export class CanvasObserverService {
    * Process existing canvas nodes when service starts
    */
   private async processExistingCanvasNodes(): Promise<void> {
-    console.log('CanvasObserverService: Processing existing canvas nodes');
-
     const canvasNodeContents = document.querySelectorAll('.canvas-node-content');
-    console.log(`CanvasObserverService: Found ${canvasNodeContents.length} existing canvas node contents`);
 
     for (const canvasNodeContent of canvasNodeContents) {
       if (this.isLinkFileNode(canvasNodeContent)) {
         const filePath = this.getFilePath(canvasNodeContent);
-        console.log('CanvasObserverService: Processing existing .link file:', filePath);
         if (filePath) {
           await this.updateCanvasWithThumbnail(canvasNodeContent, filePath);
         }
@@ -243,38 +204,29 @@ export class CanvasObserverService {
    * Based on the proven approach from Canvas Thumbnails plugin
    */
   private async updateCanvasWithThumbnail(canvasNodeContent: Element, filePath: string): Promise<void> {
-    console.log(`CanvasObserverService: Updating canvas with thumbnail for: ${filePath}`);
-
     try {
       // Check if already processed (avoid duplicate processing)
       if (canvasNodeContent.querySelector('.link-thumbnail-container')) {
-        console.log(`CanvasObserverService: Node already processed: ${filePath}`);
         return;
       }
 
       // Read the .link file content using Obsidian vault API
       const file = this.vault.getAbstractFileByPath(filePath);
       if (!file) {
-        console.warn(`CanvasObserverService: File not found in vault: ${filePath}`);
-        console.log(`CanvasObserverService: Available files in vault:`, this.vault.getAllLoadedFiles().map(f => f.path));
         return;
       }
 
-      console.log(`CanvasObserverService: Reading file: ${file.path}`);
       const fileContent = await this.vault.read(file);
-      console.log(`CanvasObserverService: File content (first 200 chars): ${fileContent.substring(0, 200)}`);
 
       const linkMetadata = parseLinkFileContent(fileContent);
 
       if (!linkMetadata) {
-        console.warn(`CanvasObserverService: Could not parse link metadata for: ${filePath}`);
         return;
       }
 
       // Get thumbnail URL
       const thumbnailUrl = getLinkThumbnail(linkMetadata);
       if (!thumbnailUrl) {
-        console.warn(`CanvasObserverService: No thumbnail URL for: ${filePath}`);
         return;
       }
 
@@ -283,10 +235,8 @@ export class CanvasObserverService {
 
       // Replace the entire innerHTML of the canvas node content (proven approach)
       canvasNodeContent.innerHTML = thumbnailHTML;
-
-      console.log(`CanvasObserverService: Successfully replaced preview for: ${filePath}`);
     } catch (error) {
-      console.error(`CanvasObserverService: Error processing ${filePath}:`, error);
+      // Silently handle errors
     }
   }
 

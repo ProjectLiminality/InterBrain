@@ -88,15 +88,12 @@ export function useDreamSongData(
 
         } else {
           // No canvas - try README fallback
-          console.log('No canvas found, trying README fallback');
-
           const readmeBlocks = await readmeParser.parseReadmeToBlocks(dreamNodePath, sourceDreamNodeId);
 
           if (readmeBlocks.length > 0) {
             setBlocks(readmeBlocks);
             setHash(`readme-${dreamNodePath}`); // Simple hash for README
             setIsReadmeFallback(true);
-            console.log(`⚡ Using README as fallback with ${readmeBlocks.length} blocks`);
           } else {
             // No canvas and no README
             setBlocks([]);

@@ -36,10 +36,6 @@ export default function DreamspaceCanvas() {
       const canvas = serviceManager.getCanvasParserService() || undefined;
       setVaultService(vault);
       setCanvasParserService(canvas);
-      console.log('🎯 [DreamspaceCanvas] Services loaded on mount:', {
-        vaultService: !!vault,
-        canvasParserService: !!canvas
-      });
     } catch {
       console.log('Services not available, flip functionality will be disabled');
     }
@@ -104,7 +100,6 @@ export default function DreamspaceCanvas() {
         const store = useInterBrainStore.getState();
         const layout = store.spatialLayout;
         
-        console.log(`🎯 [DreamspaceCanvas] Escape navigation: ${layout} → parent`);
         
         // Complete hierarchical navigation for all states
         switch (layout) {
@@ -151,11 +146,9 @@ export default function DreamspaceCanvas() {
       }, 300); // 300ms debounce to prevent rapid state changes
     };
     
-    console.log(`🎯 [DreamspaceCanvas] Setting up unified escape handler with debouncing`);
     globalThis.document.addEventListener('keydown', handleEscape);
     
     return () => {
-      console.log(`🧹 [DreamspaceCanvas] Removing unified escape handler`);
       if (debounceTimeout) {
         globalThis.clearTimeout(debounceTimeout);
       }

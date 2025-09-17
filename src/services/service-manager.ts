@@ -166,13 +166,6 @@ export class ServiceManager {
     this.canvasParserService = (plugin as any).canvasParserService;
     this.leafManagerService = (plugin as any).leafManagerService;
     
-    // Debug logging
-    console.log('🔧 [ServiceManager] Initialization debug:');
-    console.log('🔧 [ServiceManager] Plugin instance:', !!plugin);
-    console.log('🔧 [ServiceManager] VaultService from plugin:', !!(plugin as any).vaultService);
-    console.log('🔧 [ServiceManager] CanvasParserService from plugin:', !!(plugin as any).canvasParserService);
-    console.log('🔧 [ServiceManager] Stored vaultService:', !!this.vaultService);
-    console.log('🔧 [ServiceManager] Stored canvasParserService:', !!this.canvasParserService);
     
     // Sync with store's data mode
     const store = useInterBrainStore.getState();
@@ -204,7 +197,6 @@ export class ServiceManager {
    * Get VaultService instance (only available when plugin is initialized)
    */
   getVaultService() {
-    console.log('🔧 [ServiceManager] getVaultService() called, returning:', !!this.vaultService);
     return this.vaultService;
   }
 
@@ -212,7 +204,6 @@ export class ServiceManager {
    * Get CanvasParserService instance (only available when plugin is initialized)
    */
   getCanvasParserService() {
-    console.log('🔧 [ServiceManager] getCanvasParserService() called, returning:', !!this.canvasParserService);
     return this.canvasParserService;
   }
 
@@ -220,7 +211,6 @@ export class ServiceManager {
    * Get LeafManagerService instance (only available when plugin is initialized)
    */
   getLeafManagerService() {
-    console.log('🔧 [ServiceManager] getLeafManagerService() called, returning:', !!this.leafManagerService);
     return this.leafManagerService;
   }
 
@@ -243,7 +233,6 @@ export class ServiceManager {
       case 'canvasParserService':
         return this.getCanvasParserService();
       default:
-        console.warn(`🔧 [ServiceManager] Unknown service requested: ${serviceName}`);
         return null;
     }
   }
@@ -253,16 +242,13 @@ export class ServiceManager {
    */
   executeCommand(commandId: string): void {
     if (!this.plugin) {
-      console.warn(`🔧 [ServiceManager] Cannot execute command '${commandId}': Plugin not initialized`);
       return;
     }
     
     try {
       const fullCommandId = `interbrain:${commandId}`;
       this.plugin.app.commands.executeCommandById(fullCommandId);
-      console.log(`🔧 [ServiceManager] Executed command: ${fullCommandId}`);
     } catch (error) {
-      console.error(`🔧 [ServiceManager] Failed to execute command '${commandId}':`, error);
     }
   }
 

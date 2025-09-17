@@ -29,7 +29,6 @@ export class VaultService {
     }
     
     this.vaultPath = vaultPath;
-    console.log('VaultService: Vault path:', this.vaultPath);
   }
   
   private getFullPath(filePath: string): string {

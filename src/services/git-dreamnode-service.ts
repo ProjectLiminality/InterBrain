@@ -68,8 +68,6 @@ export class GitDreamNodeService {
       console.warn('GitDreamNodeService: Could not determine vault path, using fallback template path:', this.templatePath);
     }
     
-    console.log('GitDreamNodeService: Vault path:', this.vaultPath);
-    console.log('GitDreamNodeService: Template path:', this.templatePath);
   }
   
   /**
@@ -276,7 +274,6 @@ export class GitDreamNodeService {
    * Scan vault for DreamNode repositories and sync with store
    */
   async scanVault(): Promise<{ added: number; updated: number; removed: number }> {
-    console.log('GitDreamNodeService: Scanning vault for DreamNodes...');
     const stats = { added: 0, updated: 0, removed: 0 };
     
     try {
@@ -330,7 +327,6 @@ export class GitDreamNodeService {
       console.error('Vault scan error:', error);
     }
     
-    console.log(`GitDreamNodeService: Scan complete. Added: ${stats.added}, Updated: ${stats.updated}, Removed: ${stats.removed}`);
     return stats;
   }
   

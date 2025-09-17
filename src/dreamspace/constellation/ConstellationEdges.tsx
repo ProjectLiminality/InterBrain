@@ -96,8 +96,6 @@ export default function ConstellationEdges({
     return null;
   }
 
-  console.log(`🌌 ConstellationEdges: Rendering ${dreamSongThreads.length} DreamSong threads with ${relationshipGraph.edges.length} total edges`);
-
   return (
     <group name="constellation-edges">
       {dreamSongThreads.map(({ dreamSongId, dreamSongPath, edges, color }) => (

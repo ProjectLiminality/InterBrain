@@ -62,7 +62,6 @@ export class SubmoduleManagerService {
     }
     
     this.vaultPath = vaultPath;
-    console.log('SubmoduleManagerService: Vault path:', this.vaultPath);
   }
 
   private getFullPath(repoPath: string): string {
