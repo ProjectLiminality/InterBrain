@@ -3,6 +3,7 @@ import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
+import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 
 // Access Node.js modules directly in Electron context
 /* eslint-disable no-undef */
@@ -1197,23 +1198,41 @@ export class GitDreamNodeService {
     // Create node using existing create method without files
     const node = await this.create(title, type, undefined, nodePosition);
 
-    // Add URL as dreamTalk media
+    // Generate .link file name and content
+    const linkFileName = getLinkFileName(urlMetadata, title);
+    const linkFileContent = createLinkFileContent(urlMetadata, title);
+
+    console.log(`🔗 [GitDreamNodeService] Creating link file:`, {
+      linkFileName,
+      linkFilePath: path.join(this.vaultPath, node.repoPath, linkFileName),
+      contentLength: linkFileContent.length,
+      contentPreview: linkFileContent.substring(0, 100)
+    });
+
+    // Write .link file to repository
+    const linkFilePath = path.join(this.vaultPath, node.repoPath, linkFileName);
+    await fsPromises.writeFile(linkFilePath, linkFileContent);
+
+    console.log(`🔗 [GitDreamNodeService] Link file written successfully:`, linkFilePath);
+
+    // Update dreamTalk media to reference the .link file
     node.dreamTalkMedia = [{
-      path: `url:${urlMetadata.url}`,
-      absolutePath: urlMetadata.url,
+      path: linkFileName,
+      absolutePath: linkFilePath,
       type: urlMetadata.type,
-      data: urlMetadata.url,
-      size: 0
+      data: linkFileContent, // Store link metadata as data
+      size: linkFileContent.length
     }];
 
     // Create README content with URL
     const readmeContent = this.createUrlReadmeContent(urlMetadata, title);
     await this.writeReadmeFile(node.repoPath, readmeContent);
 
-    // Update .udd file with URL metadata
+    // Update .udd file with .link file path
     await this.updateUDDFile(node);
 
     console.log(`GitDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type})`);
+    console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
     console.log(`GitDreamNodeService: URL: ${urlMetadata.url}`);
     return node;
   }
@@ -1231,20 +1250,37 @@ export class GitDreamNodeService {
 
     const node = nodeData.node;
 
-    // Add URL as additional dreamTalk media
-    const urlMedia = {
-      path: `url:${urlMetadata.url}`,
-      absolutePath: urlMetadata.url,
+    // Generate .link file name and content
+    const linkFileName = getLinkFileName(urlMetadata, node.name);
+    const linkFileContent = createLinkFileContent(urlMetadata, node.name);
+
+    console.log(`🔗 [GitDreamNodeService] Adding link file to existing node:`, {
+      linkFileName,
+      linkFilePath: path.join(this.vaultPath, node.repoPath, linkFileName),
+      contentLength: linkFileContent.length,
+      contentPreview: linkFileContent.substring(0, 100)
+    });
+
+    // Write .link file to repository
+    const linkFilePath = path.join(this.vaultPath, node.repoPath, linkFileName);
+    await fsPromises.writeFile(linkFilePath, linkFileContent);
+
+    console.log(`🔗 [GitDreamNodeService] Link file added successfully:`, linkFilePath);
+
+    // Add .link file as additional dreamTalk media
+    const linkMedia = {
+      path: linkFileName,
+      absolutePath: linkFilePath,
       type: urlMetadata.type,
-      data: urlMetadata.url,
-      size: 0
+      data: linkFileContent,
+      size: linkFileContent.length
     };
 
-    node.dreamTalkMedia.push(urlMedia);
+    node.dreamTalkMedia.push(linkMedia);
 
     // Append URL content to README
     const urlContent = this.createUrlReadmeContent(urlMetadata);
-    const readmePath = path.join(node.repoPath, 'README.md');
+    const readmePath = path.join(this.vaultPath, node.repoPath, 'README.md');
 
     try {
       // Read existing README content
@@ -1268,6 +1304,7 @@ export class GitDreamNodeService {
     });
 
     console.log(`GitDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
+    console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
   }
 
   /**
@@ -1299,7 +1336,7 @@ export class GitDreamNodeService {
    * Write README.md file to node repository
    */
   private async writeReadmeFile(repoPath: string, content: string): Promise<void> {
-    const readmePath = path.join(repoPath, 'README.md');
+    const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
     await fsPromises.writeFile(readmePath, content);
   }
 }

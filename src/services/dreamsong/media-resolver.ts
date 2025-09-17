@@ -8,6 +8,7 @@
 
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
 import { VaultService } from '../vault-service';
+import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../utils/link-file-utils';
 
 // Access Node.js modules directly in Electron context
 /* eslint-disable no-undef */
@@ -54,6 +55,11 @@ export async function resolveMediaInfo(
       return mediaInfo; // Already resolved
     }
 
+    // Handle .link files specially
+    if (mediaInfo.isLinkFile || isLinkFile(mediaInfo.src)) {
+      return await resolveLinkFileInfo(mediaInfo, dreamNodePath, vaultService);
+    }
+
     // Resolve file path to data URL
     const resolvedSrc = await resolveMediaPath(mediaInfo.src, dreamNodePath, vaultService);
 
@@ -69,6 +75,65 @@ export async function resolveMediaInfo(
     };
   } catch (error) {
     console.error(`❌ [Media Resolver] Error resolving media ${mediaInfo.src}:`, error);
+    return mediaInfo; // Return original on error
+  }
+}
+
+/**
+ * Resolve .link file info, extracting metadata and thumbnail URLs
+ */
+async function resolveLinkFileInfo(
+  mediaInfo: MediaInfo,
+  dreamNodePath: string,
+  vaultService: VaultService
+): Promise<MediaInfo> {
+  try {
+    // Check if file exists in vault
+    const filePath = mediaInfo.src;
+    const exists = await vaultService.fileExists(filePath);
+    if (!exists) {
+      console.warn(`🚫 [Media Resolver] .link file not found: ${filePath}`);
+      return mediaInfo;
+    }
+
+    // Read .link file content
+    const fullPath = getFullPath(filePath, vaultService);
+    const linkContent = fs.readFileSync(fullPath, 'utf-8');
+
+    // Parse .link file metadata
+    const linkMetadata = parseLinkFileContent(linkContent);
+    if (!linkMetadata) {
+      console.warn(`🚫 [Media Resolver] Invalid .link file content: ${filePath}`);
+      return mediaInfo;
+    }
+
+    // For YouTube videos, use thumbnail URL
+    if (linkMetadata.type === 'youtube') {
+      const thumbnailUrl = getLinkThumbnail(linkMetadata);
+      if (thumbnailUrl) {
+        return {
+          ...mediaInfo,
+          type: 'video',
+          src: thumbnailUrl, // Use thumbnail URL for Canvas display
+          alt: linkMetadata.title || mediaInfo.alt,
+          isLinkFile: true, // Keep flag for components to know this is a .link file
+          linkMetadata: linkMetadata // Pass full metadata for components
+        };
+      }
+    }
+
+    // For other link types, keep original URL (component will handle display)
+    return {
+      ...mediaInfo,
+      src: linkMetadata.url,
+      alt: linkMetadata.title || mediaInfo.alt,
+      type: linkMetadata.type === 'youtube' ? 'video' : 'image', // Default fallback
+      isLinkFile: true,
+      linkMetadata: linkMetadata // Pass full metadata for components
+    };
+
+  } catch (error) {
+    console.error(`❌ [Media Resolver] Error resolving .link file ${mediaInfo.src}:`, error);
     return mediaInfo; // Return original on error
   }
 }
@@ -193,7 +258,9 @@ export function isMediaFile(filename: string): boolean {
     // Audio
     'mp3', 'wav', 'm4a', 'aac',
     // Documents
-    'pdf'
+    'pdf',
+    // Link files
+    'link'
   ];
 
   return supportedExtensions.includes(ext);
@@ -213,6 +280,9 @@ export function getMediaTypeFromFilename(filename: string): 'video' | 'image' | 
     return 'audio';
   } else if (ext === 'pdf') {
     return 'pdf';
+  } else if (ext === 'link') {
+    // .link files default to video type (will be resolved by media resolver)
+    return 'video';
   }
 
   return null;

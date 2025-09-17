@@ -986,7 +986,7 @@ export default function DreamspaceCanvas() {
 
   const handleNormalUrlDrop = async (urlData: string, position: [number, number, number]) => {
     try {
-      const urlMetadata = processDroppedUrlData(urlData);
+      const urlMetadata = await processDroppedUrlData(urlData);
 
       if (!urlMetadata || !urlMetadata.isValid) {
         uiService.showError('Invalid URL dropped');
@@ -1049,7 +1049,7 @@ export default function DreamspaceCanvas() {
 
   const handleCommandUrlDrop = async (urlData: string) => {
     try {
-      const urlMetadata = processDroppedUrlData(urlData);
+      const urlMetadata = await processDroppedUrlData(urlData);
 
       if (!urlMetadata || !urlMetadata.isValid) {
         uiService.showError('Invalid URL dropped');
@@ -1076,7 +1076,7 @@ export default function DreamspaceCanvas() {
 
   const handleUrlDropOnNode = async (urlData: string, node: DreamNode) => {
     try {
-      const urlMetadata = processDroppedUrlData(urlData);
+      const urlMetadata = await processDroppedUrlData(urlData);
 
       if (!urlMetadata || !urlMetadata.isValid) {
         uiService.showError('Invalid URL dropped');

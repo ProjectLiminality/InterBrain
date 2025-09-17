@@ -3,6 +3,7 @@ import { DreamNode, MediaFile } from '../types/dreamnode';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../dreamspace/DreamSongFullScreenView';
 import { generateYouTubeIframe, extractYouTubeVideoId } from '../utils/url-utils';
+import { parseLinkFileContent, isLinkFile } from '../utils/link-file-utils';
 
 /**
  * Leaf Manager Service
@@ -80,7 +81,13 @@ export class LeafManagerService {
         return;
       }
 
-      // Handle URL-based media
+      // Handle .link files
+      if (isLinkFile(mediaFile.path)) {
+        await this.openLinkFileInLeaf(dreamNode, mediaFile);
+        return;
+      }
+
+      // Handle legacy URL-based media (backward compatibility)
       if (mediaFile.path?.startsWith('url:') || mediaFile.absolutePath?.startsWith('http')) {
         await this.openUrlInLeaf(dreamNode, mediaFile);
         return;
@@ -122,6 +129,54 @@ export class LeafManagerService {
     } catch (error) {
       console.error('Failed to open DreamTalk full-screen:', error);
       new Notice('Failed to open DreamTalk in full-screen', 3000);
+    }
+  }
+
+  /**
+   * Open .link file in a new leaf with HTML content
+   */
+  private async openLinkFileInLeaf(dreamNode: DreamNode, mediaFile: MediaFile): Promise<void> {
+    try {
+      const linkMetadata = parseLinkFileContent(mediaFile.data);
+
+      if (!linkMetadata) {
+        console.error('Failed to parse .link file metadata');
+        new Notice('Invalid .link file format', 3000);
+        return;
+      }
+
+      const url = linkMetadata.url;
+
+      // Create a temporary HTML file in the vault for the URL content
+      const tempFileName = `temp-dreamtalk-${dreamNode.id}-${Date.now()}.md`;
+      let htmlContent: string;
+
+      if (linkMetadata.type === 'youtube' && linkMetadata.videoId) {
+        htmlContent = `# ${dreamNode.name}\n\n${generateYouTubeIframe(linkMetadata.videoId, 800, 450)}\n\n[Original Link](${url})`;
+      } else {
+        // For other URLs, create a simple markdown link
+        htmlContent = `# ${dreamNode.name}\n\n[${url}](${url})\n\n---\n\n*This is a .link file containing: ${linkMetadata.title || url}*`;
+      }
+
+      // Create temporary file
+      const tempFile = await this.app.vault.create(tempFileName, htmlContent);
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+      await leaf.openFile(tempFile);
+
+      // Track this leaf
+      this.dreamTalkLeaves.set(dreamNode.id, leaf);
+
+      // Set up cleanup when leaf is closed (also delete temp file)
+      this.setupUrlLeafCleanup(dreamNode.id, leaf, tempFile.path);
+
+      console.log(`Successfully opened .link file ${mediaFile.path} in new leaf`);
+      new Notice(`Opened ${linkMetadata.type === 'youtube' ? 'YouTube video' : 'link'}: ${dreamNode.name}`);
+
+    } catch (error) {
+      console.error('Failed to open .link file:', error);
+      new Notice('Failed to open .link file in full-screen', 3000);
     }
   }
 

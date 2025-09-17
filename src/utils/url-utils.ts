@@ -41,6 +41,28 @@ export function validateUrl(urlString: string): boolean {
 }
 
 /**
+ * Fetch YouTube video title from video ID
+ */
+async function fetchYouTubeTitle(videoId: string): Promise<string | null> {
+  try {
+    // Use YouTube's oEmbed API to get video title - no API key required
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+
+    const response = await fetch(oembedUrl);
+    if (!response.ok) {
+      console.warn(`Failed to fetch YouTube title: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.title || null;
+  } catch (error) {
+    console.warn('Error fetching YouTube title:', error);
+    return null;
+  }
+}
+
+/**
  * Extract YouTube video ID from various YouTube URL formats
  */
 export function extractYouTubeVideoId(url: string): string | null {
@@ -70,7 +92,7 @@ export function getYouTubeEmbedUrl(videoId: string): string {
 /**
  * Get URL metadata for display and processing
  */
-export function getUrlMetadata(urlString: string): UrlMetadata {
+export async function getUrlMetadata(urlString: string): Promise<UrlMetadata> {
   const isValid = validateUrl(urlString);
 
   if (!isValid) {
@@ -84,13 +106,17 @@ export function getUrlMetadata(urlString: string): UrlMetadata {
   // Check if it's a YouTube URL
   const videoId = extractYouTubeVideoId(urlString);
   if (videoId) {
+    // Fetch the actual video title from YouTube
+    const actualTitle = await fetchYouTubeTitle(videoId);
+    const title = actualTitle || videoId; // Fallback to video ID if fetch fails
+
     return {
       url: urlString,
       type: 'youtube',
       isValid: true,
       videoId,
       embedUrl: getYouTubeEmbedUrl(videoId),
-      title: `YouTube Video: ${videoId}`
+      title: title
     };
   }
 
@@ -123,7 +149,7 @@ export function generateMarkdownLink(url: string, title?: string): string {
 /**
  * Process dropped URL data and extract the first valid URL
  */
-export function processDroppedUrlData(urlData: string): UrlMetadata | null {
+export async function processDroppedUrlData(urlData: string): Promise<UrlMetadata | null> {
   // Clean up the URL data (remove whitespace, newlines)
   const cleanedData = urlData.trim();
 
@@ -132,13 +158,13 @@ export function processDroppedUrlData(urlData: string): UrlMetadata | null {
 
   // If no URLs found, try treating the whole string as a URL
   if (urls.length === 0) {
-    const metadata = getUrlMetadata(cleanedData);
+    const metadata = await getUrlMetadata(cleanedData);
     return metadata.isValid ? metadata : null;
   }
 
   // Return metadata for the first valid URL
   for (const url of urls) {
-    const metadata = getUrlMetadata(url);
+    const metadata = await getUrlMetadata(url);
     if (metadata.isValid) {
       return metadata;
     }

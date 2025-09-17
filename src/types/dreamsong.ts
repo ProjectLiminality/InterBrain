@@ -12,6 +12,8 @@ export interface MediaInfo {
   src: string;
   alt: string;
   sourceDreamNodeId?: string; // ID of the DreamNode this media originates from (for clickable navigation)
+  isLinkFile?: boolean; // Flag to indicate this is a .link file that needs special resolution
+  linkMetadata?: import('../utils/link-file-utils').LinkFileMetadata; // Full link metadata for .link files
 }
 
 // Content block types for DreamSong layout

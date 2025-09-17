@@ -292,6 +292,21 @@ export function createMediaInfoFromNode(fileNode: CanvasNode, sourceDreamNodeId?
   const filename = fileNode.file;
   const extension = filename.split('.').pop()?.toLowerCase() || '';
 
+  // Handle .link files
+  if (extension === 'link') {
+    // For .link files, we'll treat them as a special type that the media resolver will handle
+    const extractedSourceId = extractSourceDreamNodeId(filename);
+    const finalSourceDreamNodeId = extractedSourceId || sourceDreamNodeId;
+
+    return {
+      type: 'video', // Default to video for .link files (will be determined by resolver)
+      src: filename, // Will be resolved by media-resolver to extract actual content
+      alt: createAltText(filename),
+      sourceDreamNodeId: finalSourceDreamNodeId,
+      isLinkFile: true // Flag to indicate this is a .link file
+    };
+  }
+
   let mediaType: 'video' | 'image' | 'audio' | 'pdf';
   if (['mp4', 'webm', 'ogg', 'mov'].includes(extension)) {
     mediaType = 'video';

@@ -1,5 +1,6 @@
 import { DreamNode, GitStatus } from '../types/dreamnode';
-import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
+import { UrlMetadata } from '../utils/url-utils';
+import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 
 /**
  * MockDreamNodeService - Session-based dynamic storage
@@ -492,8 +493,9 @@ export class MockDreamNodeService {
       ? position // Position is already calculated in world coordinates
       : this.calculateNewNodePosition();
 
-    // Create dreamTalk content based on URL type
-    const dreamTalkContent = this.createUrlDreamTalkContent(urlMetadata);
+    // Generate .link file name and content (for mock)
+    const linkFileName = getLinkFileName(urlMetadata, title);
+    const linkFileContent = createLinkFileContent(urlMetadata, title);
 
     const node: DreamNode = {
       id,
@@ -501,13 +503,13 @@ export class MockDreamNodeService {
       name: title,
       position: nodePosition,
       dreamTalkMedia: [{
-        path: `url:${urlMetadata.url}`,
-        absolutePath: urlMetadata.url,
+        path: linkFileName,
+        absolutePath: `/mock/repos/${id}/${linkFileName}`,
         type: urlMetadata.type,
-        data: urlMetadata.url, // Store the URL as data
-        size: 0 // URLs don't have file size
+        data: linkFileContent, // Store the link file content as data
+        size: linkFileContent.length
       }],
-      dreamSongContent: dreamTalkContent,
+      dreamSongContent: [],
       liminalWebConnections: [],
       repoPath: `/mock/repos/${id}`,
       hasUnsavedChanges: false,
@@ -517,6 +519,7 @@ export class MockDreamNodeService {
     this.nodes.set(id, node);
 
     console.log(`MockDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type}) with ID ${id}`);
+    console.log(`MockDreamNodeService: Created .link file: ${linkFileName}`);
     console.log(`MockDreamNodeService: URL: ${urlMetadata.url}`);
     return node;
   }
@@ -530,28 +533,31 @@ export class MockDreamNodeService {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
     }
 
-    // Add URL as additional dreamTalk media
-    const urlMedia = {
-      path: `url:${urlMetadata.url}`,
-      absolutePath: urlMetadata.url,
+    // Generate .link file name and content (for mock)
+    const linkFileName = getLinkFileName(urlMetadata, node.name);
+    const linkFileContent = createLinkFileContent(urlMetadata);
+
+    // Add .link file as additional dreamTalk media
+    const linkMedia = {
+      path: linkFileName,
+      absolutePath: `${node.repoPath}/${linkFileName}`,
       type: urlMetadata.type,
-      data: urlMetadata.url,
-      size: 0
+      data: linkFileContent,
+      size: linkFileContent.length
     };
 
-    node.dreamTalkMedia.push(urlMedia);
-
-    // URL content handled by README in real service, skip for mock
+    node.dreamTalkMedia.push(linkMedia);
 
     this.nodes.set(nodeId, node);
 
     console.log(`MockDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
+    console.log(`MockDreamNodeService: Created .link file: ${linkFileName}`);
   }
 
   /**
    * Create dreamTalk content for URLs (mock CanvasFile format)
    */
-  private createUrlDreamTalkContent(urlMetadata: UrlMetadata): import('../types/dreamnode').CanvasFile[] {
+  private createUrlDreamTalkContent(_urlMetadata: UrlMetadata): import('../types/dreamnode').CanvasFile[] {
     // For mock service, we don't actually create files, just return empty array
     // URL content will be handled by README generation in real service
     return [];

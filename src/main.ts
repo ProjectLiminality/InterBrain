@@ -6,6 +6,7 @@ import { GitTemplateService } from './services/git-template-service';
 import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
+import { LinkFileView, LINK_FILE_VIEW_TYPE } from './views/LinkFileView';
 import { LeafManagerService } from './services/leaf-manager-service';
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
@@ -19,8 +20,10 @@ import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { ConstellationCommands } from './commands/constellation-commands';
+import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
+import { CanvasObserverService } from './services/canvas-observer-service';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -32,6 +35,7 @@ export default class InterBrainPlugin extends Plugin {
   private submoduleManagerService!: SubmoduleManagerService;
   private leafManagerService!: LeafManagerService;
   private constellationCommands!: ConstellationCommands;
+  private canvasObserverService!: CanvasObserverService;
 
   async onload() {
     console.log('InterBrain plugin loaded!');
@@ -49,10 +53,17 @@ export default class InterBrainPlugin extends Plugin {
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
-    
+    this.registerView(LINK_FILE_VIEW_TYPE, (leaf) => new LinkFileView(leaf));
+
+    // Register .link file extension with custom view
+    this.registerExtensions(['link'], LINK_FILE_VIEW_TYPE);
+
     // Register commands
     this.registerCommands();
-    
+
+    // Start canvas observer for .link file preview
+    this.canvasObserverService.start();
+
     // Add ribbon icon
     this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
       this.app.commands.executeCommandById('interbrain:open-dreamspace');
@@ -73,6 +84,7 @@ export default class InterBrainPlugin extends Plugin {
       this.canvasParserService
     );
     this.leafManagerService = new LeafManagerService(this.app);
+    this.canvasObserverService = new CanvasObserverService(this.app);
 
     // Initialize constellation commands
     this.constellationCommands = new ConstellationCommands(this);
@@ -110,6 +122,12 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register constellation commands (DreamSong relationship analysis)
     this.constellationCommands.registerCommands(this);
+
+    // Register link file commands (.link file support)
+    registerLinkFileCommands(this, this.uiService);
+
+    // Enhance file suggestions to include .link files
+    enhanceFileSuggestions(this);
     
     // Open DreamSpace command
     this.addCommand({
@@ -1455,7 +1473,12 @@ export default class InterBrainPlugin extends Plugin {
 
   onunload() {
     console.log('InterBrain plugin unloaded');
-    
+
+    // Stop canvas observer
+    if (this.canvasObserverService) {
+      this.canvasObserverService.stop();
+    }
+
     // Clean up leaf manager service
     if (this.leafManagerService) {
       this.leafManagerService.destroy();

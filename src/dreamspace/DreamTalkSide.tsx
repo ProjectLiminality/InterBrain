@@ -3,6 +3,7 @@ import { DreamNode, MediaFile } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
 import { setIcon } from 'obsidian';
 import { extractYouTubeVideoId } from '../utils/url-utils';
+import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../utils/link-file-utils';
 
 interface DreamTalkSideProps {
   dreamNode: DreamNode;
@@ -270,7 +271,113 @@ function MediaRenderer({ media }: { media: MediaFile }) {
     borderRadius: '50%'
   };
 
-  // Handle URL-based media (prefix: url:)
+  // Handle .link files
+  if (isLinkFile(media.path)) {
+    try {
+      const linkMetadata = parseLinkFileContent(media.data);
+
+      if (linkMetadata) {
+        // YouTube link file handling
+        if (linkMetadata.type === 'youtube' && linkMetadata.videoId) {
+          const thumbnailUrl = getLinkThumbnail(linkMetadata);
+          if (thumbnailUrl) {
+            return (
+              <div style={{...mediaStyle, position: 'relative', overflow: 'hidden'}}>
+                <img
+                  src={thumbnailUrl}
+                  alt="YouTube video thumbnail"
+                  style={mediaStyle}
+                  draggable={false}
+                />
+                {/* YouTube play icon overlay */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '40%',
+                    height: '40%',
+                    background: 'rgba(255, 0, 0, 0.8)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  ▶
+                </div>
+              </div>
+            );
+          }
+        }
+
+        // Generic website link file handling
+        if (linkMetadata.type === 'website') {
+          return (
+            <div
+              style={{
+                ...mediaStyle,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }}
+            >
+              🔗
+            </div>
+          );
+        }
+
+        // Fallback for other link types
+        return (
+          <div
+            style={{
+              ...mediaStyle,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 100, 200, 0.8)',
+              color: '#FFFFFF',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}
+          >
+            LINK
+          </div>
+        );
+      }
+    } catch (error) {
+      console.error('Failed to parse .link file:', error);
+    }
+
+    // Fallback for invalid .link files
+    return (
+      <div
+        style={{
+          ...mediaStyle,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(200, 100, 0, 0.8)',
+          color: '#FFFFFF',
+          fontSize: '10px',
+          fontWeight: 'bold'
+        }}
+      >
+        .LINK
+      </div>
+    );
+  }
+
+  // Handle legacy URL-based media (backward compatibility)
   if (media.path?.startsWith('url:') || media.absolutePath?.startsWith('http')) {
     const url = media.data || media.absolutePath;
 
