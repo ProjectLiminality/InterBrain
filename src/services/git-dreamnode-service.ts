@@ -807,9 +807,18 @@ export class GitDreamNodeService {
       'audio/mp3',
       'audio/wav',
       'audio/ogg',
-      'application/pdf'
+      'application/pdf',
+      // .link files appear as text/plain or application/octet-stream depending on system
+      'text/plain',
+      'application/octet-stream'
     ];
-    
+
+    // Also check file extension for .link files since MIME detection is unreliable
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.link')) {
+      return true;
+    }
+
     return validTypes.includes(file.type);
   }
   

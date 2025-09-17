@@ -197,7 +197,7 @@ export class MockDreamNodeService {
   private isMediaFile(file: globalThis.File): boolean {
     const validTypes = [
       'image/png',
-      'image/jpeg', 
+      'image/jpeg',
       'image/jpg',
       'image/gif',
       'image/webp',
@@ -206,9 +206,18 @@ export class MockDreamNodeService {
       'audio/mp3',
       'audio/wav',
       'audio/ogg',
-      'application/pdf'
+      'application/pdf',
+      // .link files appear as text/plain or application/octet-stream depending on system
+      'text/plain',
+      'application/octet-stream'
     ];
-    
+
+    // Also check file extension for .link files since MIME detection is unreliable
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.link')) {
+      return true;
+    }
+
     return validTypes.includes(file.type);
   }
 

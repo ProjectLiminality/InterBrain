@@ -614,13 +614,22 @@ export default function EditNode3D({
 function isValidMediaFile(file: globalThis.File): boolean {
   const validTypes = [
     'image/png',
-    'image/jpeg', 
+    'image/jpeg',
     'image/jpg',
     'image/gif',
     'image/webp',
     'video/mp4',
-    'video/webm'
+    'video/webm',
+    // .link files may appear as text/plain or application/octet-stream
+    'text/plain',
+    'application/octet-stream'
   ];
-  
+
+  // Check file extension as fallback for unreliable MIME types
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith('.link')) {
+    return true;
+  }
+
   return validTypes.includes(file.type);
 }

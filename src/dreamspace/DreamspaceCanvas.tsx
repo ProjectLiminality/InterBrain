@@ -446,14 +446,23 @@ export default function DreamspaceCanvas() {
   const isValidMediaFile = (file: globalThis.File): boolean => {
     const validTypes = [
       'image/png',
-      'image/jpeg', 
+      'image/jpeg',
       'image/jpg',
       'image/gif',
       'image/webp',
       'video/mp4',
-      'video/webm'
+      'video/webm',
+      // .link files appear as text/plain or application/octet-stream depending on system
+      'text/plain',
+      'application/octet-stream'
     ];
-    
+
+    // Also check file extension for .link files since MIME detection is unreliable
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.link')) {
+      return true;
+    }
+
     return validTypes.includes(file.type);
   };
 

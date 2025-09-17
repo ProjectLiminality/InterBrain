@@ -516,6 +516,9 @@ export class DreamSongParserService {
       mediaType = 'audio';
     } else if (extension === 'pdf') {
       mediaType = 'pdf';
+    } else if (extension === 'link') {
+      // .link files default to video type (YouTube links are primary use case)
+      mediaType = 'video';
     } else {
       return null; // Unsupported media type
     }
@@ -530,12 +533,19 @@ export class DreamSongParserService {
     // Extract source DreamNode ID from file path
     const sourceDreamNodeId = this.extractSourceDreamNodeId(filename, dreamNodePath);
 
-    return {
+    const mediaInfo = {
       type: mediaType,
       src: resolvedSrc,
       alt: this.createAltText(filename),
       sourceDreamNodeId
     };
+
+    // Mark .link files for special handling by media resolver
+    if (extension === 'link') {
+      (mediaInfo as any).isLinkFile = true;
+    }
+
+    return mediaInfo;
   }
 
   /**
