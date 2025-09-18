@@ -142,7 +142,7 @@ export class ReadmeParserService {
       }
 
       // Try to use Obsidian's MarkdownRenderer if available
-      const MarkdownRenderer = (globalThis as any).MarkdownRenderer;
+      const MarkdownRenderer = (globalThis as { MarkdownRenderer?: { renderMarkdown?: (markdown: string, el: HTMLElement, sourcePath: string, app: unknown) => Promise<void> } }).MarkdownRenderer;
       if (MarkdownRenderer && MarkdownRenderer.renderMarkdown) {
         // Create a temporary container for rendering
         const containerEl = globalThis.document.createElement('div');

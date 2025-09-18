@@ -50,7 +50,7 @@ export class SubmoduleManagerService {
 
   private initializeVaultPath(app: App): void {
     // Get vault file system path for Node.js fs operations (same pattern as GitService)
-    const adapter = app.vault.adapter as any;
+    const adapter = app.vault.adapter as { path?: string; basePath?: string };
     
     let vaultPath = '';
     if (typeof adapter.path === 'string') {

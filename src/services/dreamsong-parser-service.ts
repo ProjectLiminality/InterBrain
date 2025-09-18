@@ -18,6 +18,7 @@ import {
   MediaTextPair,
   MediaInfo
 } from '../types/dreamsong';
+import { InterBrainState } from '../store/interbrain-store';
 
 /**
  * DreamSong Parser Service
@@ -104,7 +105,7 @@ export class DreamSongParserService {
     canvasPath: string, 
     dreamNodePath: string, 
     nodeId: string,
-    zustandStore?: any
+    zustandStore?: InterBrainState
   ): Promise<DreamSongParseResult> {
     try {
       // Generate structure hash for cache invalidation
@@ -542,7 +543,7 @@ export class DreamSongParserService {
 
     // Mark .link files for special handling by media resolver
     if (extension === 'link') {
-      (mediaInfo as any).isLinkFile = true;
+      (mediaInfo as MediaInfo & { isLinkFile?: boolean }).isLinkFile = true;
     }
 
     return mediaInfo;
@@ -609,9 +610,8 @@ export class DreamSongParserService {
    * Get vault path from VaultService (helper method)
    */
   private getVaultPath(): string {
-    // Access VaultService's private vaultPath via reflection
-    // This is safe since we're in the same service layer architecture
-    return (this.vaultService as any).vaultPath || '';
+    // Use VaultService's public getVaultPath method
+    return this.vaultService.getVaultPath();
   }
 
   /**

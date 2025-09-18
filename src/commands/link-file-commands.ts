@@ -1,4 +1,4 @@
-import { Plugin, FuzzySuggestModal, TFile } from 'obsidian';
+import { Plugin, FuzzySuggestModal, TFile, App } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { isLinkFile } from '../utils/link-file-utils';
 
@@ -149,9 +149,9 @@ export function enhanceFileSuggestions(plugin: Plugin): void {
   // Cleanup on unload
   plugin.register(() => {
     if (originalIsMediaFile) {
-      (window as any).isMediaFile = originalIsMediaFile;
+      (window as { isMediaFile?: (filename: string) => boolean }).isMediaFile = originalIsMediaFile;
     } else {
-      delete (window as any).isMediaFile;
+      delete (window as { isMediaFile?: (filename: string) => boolean }).isMediaFile;
     }
   });
 }

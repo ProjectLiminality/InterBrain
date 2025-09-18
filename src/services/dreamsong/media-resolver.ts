@@ -203,8 +203,8 @@ function getFullPath(filePath: string, vaultService: VaultService): string {
  * Get vault path from VaultService
  */
 function getVaultPath(vaultService: VaultService): string {
-  // Access VaultService's private vaultPath via reflection
-  return (vaultService as any).vaultPath || '';
+  // Use VaultService's public getVaultPath method
+  return vaultService.getVaultPath();
 }
 
 /**

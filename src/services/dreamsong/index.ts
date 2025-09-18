@@ -46,15 +46,17 @@ export {
 import { parseCanvasToBlocks } from './parser';
 import { generateStructureHash } from './hasher';
 import { resolveMediaPaths } from './media-resolver';
+import { CanvasData } from '../canvas-parser-service';
+import { VaultService } from '../vault-service';
 
 /**
  * Main convenience function that combines all three layers
  * This is the primary API for converting canvas data to resolved DreamSong blocks
  */
 export async function parseAndResolveCanvas(
-  canvasData: any,
+  canvasData: CanvasData,
   dreamNodePath: string,
-  vaultService: any,
+  vaultService: VaultService,
   sourceDreamNodeId?: string
 ) {
   // Layer 1: Parse canvas to blocks
@@ -76,7 +78,7 @@ export async function parseAndResolveCanvas(
 /**
  * Quick parsing without media resolution (for hash-only operations)
  */
-export function parseCanvasForHash(canvasData: any, sourceDreamNodeId?: string) {
+export function parseCanvasForHash(canvasData: CanvasData, sourceDreamNodeId?: string) {
   const blocks = parseCanvasToBlocks(canvasData, sourceDreamNodeId);
   const hash = generateStructureHash(blocks);
 

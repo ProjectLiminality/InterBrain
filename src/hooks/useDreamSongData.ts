@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { TFile } from 'obsidian';
 import { DreamSongBlock } from '../types/dreamsong';
 import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';

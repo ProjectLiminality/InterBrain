@@ -160,7 +160,7 @@ export function getLinkThumbnail(linkMetadata: LinkFileMetadata): string | null 
 /**
  * Validate .link file metadata structure
  */
-export function validateLinkMetadata(metadata: any): metadata is LinkFileMetadata {
+export function validateLinkMetadata(metadata: unknown): metadata is LinkFileMetadata {
   return (
     typeof metadata === 'object' &&
     metadata !== null &&

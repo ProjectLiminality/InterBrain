@@ -1,6 +1,9 @@
 import { DreamNode } from '../types/dreamnode';
 import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
+import { VaultService } from './vault-service';
+import { CanvasParserService } from './canvas-parser-service';
+import { LeafManagerService } from './leaf-manager-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
@@ -55,9 +58,9 @@ export class ServiceManager {
   private realService: GitDreamNodeService | null = null;
   private indexingService: IndexingService;
   private plugin: Plugin | null = null;
-  private vaultService: any | null = null;
-  private canvasParserService: any | null = null;
-  private leafManagerService: any | null = null;
+  private vaultService: VaultService | null = null;
+  private canvasParserService: CanvasParserService | null = null;
+  private leafManagerService: LeafManagerService | null = null;
 
   constructor() {
     this.mockService = mockDreamNodeService;
@@ -162,9 +165,15 @@ export class ServiceManager {
     this.realService = new GitDreamNodeService(plugin);
     
     // Store service references (accessing private properties from main.ts)
-    this.vaultService = (plugin as any).vaultService;
-    this.canvasParserService = (plugin as any).canvasParserService;
-    this.leafManagerService = (plugin as any).leafManagerService;
+    // Store service references (accessing service properties from main.ts)
+    const pluginWithServices = plugin as Plugin & {
+      vaultService: VaultService;
+      canvasParserService: CanvasParserService;
+      leafManagerService: LeafManagerService;
+    };
+    this.vaultService = pluginWithServices.vaultService;
+    this.canvasParserService = pluginWithServices.canvasParserService;
+    this.leafManagerService = pluginWithServices.leafManagerService;
     
     
     // Sync with store's data mode

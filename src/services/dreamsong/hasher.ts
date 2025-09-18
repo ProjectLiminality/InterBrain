@@ -7,6 +7,7 @@
  */
 
 import { DreamSongBlock } from '../../types/dreamsong';
+import { CanvasData, CanvasNode } from '../canvas-parser-service';
 
 // Access Node.js crypto module directly in Electron context
  
@@ -59,11 +60,11 @@ export function generateStructureHash(blocks: DreamSongBlock[]): string {
  * Generate a hash from raw canvas data (before parsing)
  * Useful for detecting changes at the canvas level
  */
-export function generateCanvasStructureHash(canvasData: any): string {
+export function generateCanvasStructureHash(canvasData: CanvasData): string {
   // Extract only structural elements from canvas
   const structureData = {
     // Node content (excluding position)
-    nodes: (canvasData.nodes || []).map((node: any) => ({
+    nodes: (canvasData.nodes || []).map((node: CanvasNode) => ({
       id: node.id,
       text: node.text || '',
       file: node.file || '',
@@ -71,16 +72,16 @@ export function generateCanvasStructureHash(canvasData: any): string {
       width: node.width,
       height: node.height
       // Deliberately exclude x, y coordinates and color
-    })).sort((a: any, b: any) => a.id.localeCompare(b.id)), // Sort for consistency
+    })).sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)), // Sort for consistency
 
     // Edge relationships (structure)
-    edges: (canvasData.edges || []).map((edge: any) => ({
+    edges: (canvasData.edges || []).map((edge: { id: string; fromNode: string; toNode: string; toEnd: string }) => ({
       id: edge.id,
       fromNode: edge.fromNode,
       toNode: edge.toNode,
       toEnd: edge.toEnd
       // Exclude visual properties like color
-    })).sort((a: any, b: any) => a.id.localeCompare(b.id)) // Sort for consistency
+    })).sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)) // Sort for consistency
   };
 
   // Convert to consistent string representation
