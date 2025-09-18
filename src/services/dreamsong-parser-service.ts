@@ -2,10 +2,10 @@ import { VaultService } from './vault-service';
 import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './canvas-parser-service';
 
 // Access Node.js modules directly in Electron context (following VaultService pattern)
-/* eslint-disable no-undef */
+ 
 const fs = require('fs');
 const path = require('path');
-/* eslint-enable no-undef */
+ 
 import { 
   DreamSongData, 
   DreamSongBlock, 

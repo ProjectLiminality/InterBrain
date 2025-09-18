@@ -1055,14 +1055,14 @@ export default class InterBrainPlugin extends Plugin {
             allNodes = Array.from(realNodes.values()).map(data => data.node);
           }
           
-          console.log('DEBUG: Total nodes found:', allNodes.length);
-          console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig);
-          console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ 
-            id: n.id, 
-            type: n.type, 
-            connections: n.liminalWebConnections.length,
-            connectionIds: n.liminalWebConnections.slice(0, 2)
-          })));
+          // console.log('DEBUG: Total nodes found:', allNodes.length); // Debug removed for production
+          // console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig); // Debug removed for production
+          // console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ // Debug removed for production
+          //   id: n.id,
+          //   type: n.type,
+          //   connections: n.liminalWebConnections.length,
+          //   connectionIds: n.liminalWebConnections.slice(0, 2)
+          // })));
           
           // Build relationship graph
           const graph = buildRelationshipGraph(allNodes);
@@ -1125,8 +1125,8 @@ export default class InterBrainPlugin extends Plugin {
           const stats = getRingLayoutStats(positions);
           
           console.log(`\n=== Ring Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
-          console.log('DEBUG: Selected node ID:', selectedNode.id);
-          console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None');
+          // console.log('DEBUG: Selected node ID:', selectedNode.id); // Debug removed for production
+          // console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None'); // Debug removed for production
           console.log('Layout Stats:', stats);
           
           if (positions.centerNode) {

@@ -1,4 +1,4 @@
-import { App, Vault } from 'obsidian';
+import { App, Vault, TFile } from 'obsidian';
 import { parseLinkFileContent, LinkFileMetadata, getLinkThumbnail } from '../utils/link-file-utils';
 
 /**
@@ -57,7 +57,7 @@ export class CanvasObserverService {
     const canvasContainer = document.body;
     const config = { childList: true, subtree: true };
 
-    const callback = (mutationsList: MutationRecord[], observer: MutationObserver) => {
+    const callback = (mutationsList: MutationRecord[], _observer: MutationObserver) => {
       for (const mutation of mutationsList) {
         if (mutation.type === 'childList') {
           // Handle added nodes
@@ -178,7 +178,8 @@ export class CanvasObserverService {
       }
 
       return null;
-    } catch (error) {
+    } catch {
+      // Ignore canvas parsing errors
       return null;
     }
   }
@@ -189,7 +190,7 @@ export class CanvasObserverService {
   private async processExistingCanvasNodes(): Promise<void> {
     const canvasNodeContents = document.querySelectorAll('.canvas-node-content');
 
-    for (const canvasNodeContent of canvasNodeContents) {
+    for (const canvasNodeContent of Array.from(canvasNodeContents)) {
       if (this.isLinkFileNode(canvasNodeContent)) {
         const filePath = this.getFilePath(canvasNodeContent);
         if (filePath) {
@@ -212,11 +213,11 @@ export class CanvasObserverService {
 
       // Read the .link file content using Obsidian vault API
       const file = this.vault.getAbstractFileByPath(filePath);
-      if (!file) {
+      if (!file || !('stat' in file)) {
         return;
       }
 
-      const fileContent = await this.vault.read(file);
+      const fileContent = await this.vault.read(file as TFile);
 
       const linkMetadata = parseLinkFileContent(fileContent);
 
@@ -235,16 +236,16 @@ export class CanvasObserverService {
 
       // Replace the entire innerHTML of the canvas node content (proven approach)
       canvasNodeContent.innerHTML = thumbnailHTML;
-    } catch (error) {
-      // Silently handle errors
+    } catch {
+      // Silently handle thumbnail errors
     }
   }
 
   /**
    * Create the HTML content for the thumbnail replacement
    */
-  private createThumbnailHTML(metadata: LinkFileMetadata, thumbnailUrl: string, fileName: string): string {
-    const fileNameWithoutExtension = fileName.replace('.link', '');
+  private createThumbnailHTML(metadata: LinkFileMetadata, thumbnailUrl: string, _fileName: string): string {
+    // const fileNameWithoutExtension = fileName.replace('.link', ''); // For future use
 
     if (metadata.type === 'youtube') {
       // YouTube video with play button

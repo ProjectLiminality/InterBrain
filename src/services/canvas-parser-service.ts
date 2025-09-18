@@ -115,7 +115,7 @@ export class CanvasParserService {
       
       // Debug: List what files ARE in this directory
       if (!exists && attempts === 0) {
-        console.log(`🔍 [Canvas Parser] DEBUG: Listing files in directory "${currentPath}"`);
+        // console.log(`🔍 [Canvas Parser] DEBUG: Listing files in directory "${currentPath}"`); // Debug removed for production
         try {
           const folder = this.vaultService.obsidianVault.getAbstractFileByPath(currentPath);
           if (folder && 'children' in folder) {

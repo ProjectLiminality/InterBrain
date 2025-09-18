@@ -65,8 +65,8 @@ function generateArcPoints(
 export default function Edge3D({
   sourcePosition,
   targetPosition,
-  color = '#666666',
-  opacity = 0.6,
+  color: _color = '#666666',
+  opacity: _opacity = 0.6,
   isHovered = false,
   isSelected = false,
   onClick,

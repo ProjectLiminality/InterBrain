@@ -14,239 +14,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Development Status
 
-**Phase**: Epic 4 Complete - Ready for Next Epic Planning
-- ✅ **Epic 1 Complete**: Plugin Infrastructure foundation established
-- ✅ **Epic 2 Complete**: 3D Spatial Visualization System with all features implemented
-- ✅ **Epic 3 Complete**: DreamNode Management System with service layer architecture
-- ✅ **Epic 4 COMPLETE**: Liminal Web Layout System - All features implemented including unified edit mode
-- ✅ **Epic 5 COMPLETE**: Semantic Search System
-  - ✅ **Feature #322 COMPLETE**: Intelligent Indexing System - Background indexing with git integration
-  - ✅ **Feature #290 COMPLETE**: Ollama Embedding API Integration - Local semantic search
-  - ✅ **Feature #323 COMPLETE**: Search-as-DreamNode Interface - Unified search/creation UX
-  - ✅ **Feature #280 COMPLETE**: Honeycomb Search Layout - Mathematical precision positioning
+**Current Branch**: `epic/6-dreamweaving-operations`
+**Phase**: Epic 6 Active Development - DreamWeaving Operations
 
-### Full-Screen DreamSong Experience (September 13, 2025)
-**Feature Branch Complete**: feature/fullscreen-dreamsong-experience
-- ✅ **DreamTalk Display**: Shows DreamTalk media above DreamSong header in fullscreen view
-- ✅ **Three-Layer Architecture**: Clean parser/hasher/media-resolver separation for maintainability
-- ✅ **Real-Time Updates**: Automatic canvas file change detection with seamless re-parsing
-- ✅ **Fixed Topological Sort**: Media-text pairs treated as single units in flow ordering
-- ✅ **Universal Media Navigation**: All media files clickable to reveal their source DreamNode
-- ✅ **CSS Modules Integration**: Proper styling with Vite build system
-- ✅ **MIME Type Support**: Correct handling of image/, video/, and audio/ media types
+**Epic Progress Summary**:
+- ✅ **Epics 1-5 Complete**: Foundation through Semantic Search (see CHANGELOG.md for details)
+- 🚀 **Epic 6 Active**: DreamWeaving Operations - Canvas integration and DreamSong workflows
 
-### Epic 4 Complete Status (August 26, 2025)
-**All Features Complete**: Epic 4 - Liminal Web Layout System | Spec: #267
-- ✅ **Feature #316 COMPLETE**: Focused Layout Engine & Spatial Orchestration System  
-- ✅ **Feature #320 COMPLETE**: Undo/Redo Navigation with Mid-Flight Animation Interruption
-- ✅ **Feature #321 COMPLETE**: Unified Edit Mode with semantic search integration
-
-### Epic 4 Achievements (August 12, 2025)
-**Feature #316 Complete**: Focused Layout Engine & Spatial Orchestration System
-**Feature #320 Complete**: Undo/Redo Navigation with Mid-Flight Animation Interruption
-
-**✅ Major Technical Achievements**:
-- ✅ Universal Movement API with advanced easing (easeInQuart, easeOutQuart, easeOutCubic)
-- ✅ SpatialOrchestrator - centralizes all spatial interactions and layout management
-- ✅ Focused Layout Engine with perfect circle positioning and world-space correction
-- ✅ Sphere Rotation Integration ensuring accurate positioning on rotated sphere
-- ✅ Role-based easing system creating consistent movement philosophy
-- ✅ Unified liminal web UX flow with active/inactive node management
-- ✅ Navigation History System - Command+Z/Shift+Z for layout change tracking
-- ✅ Mid-Flight Animation Interruption - seamless rapid undo/redo with smooth redirections
-
-**✅ Key Innovations**:
-- **Differentiated easing**: Slower movement near center, faster at periphery for pleasant UX
-- **World-space quaternion mathematics**: Rotation-aware positioning using inverse transforms
-- **Dual-mode positioning system**: Constellation (continuous) vs active (discrete) modes
-- **Ultra-lightweight history storage**: Only node IDs and layout states (150+ entries)
-- **Seamless animation interruption**: Mid-flight position capture for smooth transitions
-- **Performance optimization**: 101 tests passing with zero technical debt
-
-### Epic 5 Achievements (August 19, 2025)
-**All Features Complete**: Epic 5 - Semantic Search System | Spec: #268
-
-**✅ Completed Features**:
-- ✅ **Feature #322**: Intelligent Indexing System - Background indexing with git integration
-- ✅ **Feature #290**: Ollama Embedding API Integration - Local semantic search with modular architecture
-- ✅ **Feature #323**: Search-as-DreamNode Interface - Unified search/creation UX paradigm
-- ✅ **Feature #280**: Honeycomb Search Layout - Mathematical precision for 1-36 node positioning
-
-**✅ Major Technical Achievements**:
-- ✅ **Complete Semantic Search Pipeline**: From indexing to search to visualization
-- ✅ **Local AI Sovereignty**: Ollama integration for embedding generation without cloud dependencies
-- ✅ **Vertical Slice Architecture**: Self-contained semantic search feature ready for npm extraction
-- ✅ **Search-as-Creation UX**: Revolutionary paradigm where search queries become nodes seamlessly
-- ✅ **Mathematical Layout Precision**: Honeycomb grid with adaptive ring distribution for search results
-- ✅ **Cross-Session Vector Persistence**: Zustand store with Map serialization for vector data
-- ✅ **Git-Integrated Indexing**: Automatic re-indexing on node creation and commit changes
-- ✅ **Zero-Warning Codebase**: 179 tests passing with complete TypeScript type safety
-
-**✅ Key Technical Innovations**:
-- **Experimental Branch Archiving**: Systematic preservation of alternative approaches with documentation
-- **Command Palette UX Patterns**: setTimeout patterns preventing palette freezing during async operations
-- **Intelligent Delta Algorithms**: Git commit-hash based change detection for efficient re-indexing
-- **Real-time Visual Feedback**: SearchNode3D with live query typing and save animations
-- **Error Resilience Patterns**: Graceful degradation when semantic search unavailable
-- **Local-First Architecture**: Complete functionality without external dependencies
-
-**✅ Files Delivered**:
-- `src/features/semantic-search/` (2,500+ lines) - Complete vertical slice implementation
-- `src/services/indexing-service.ts` (446 lines) - Indexing infrastructure
-- `tests/services/indexing-service.test.ts` (483 lines) - Comprehensive test coverage
-- Enhanced 15+ existing files with semantic search integrations
-
-**✅ Architecture Foundation**: Complete semantic search system ready for advanced AI integration and future DreamOS evolution
-
-### Epic 3 Achievements (July 26, 2025)
-**All Features Complete**: #254 - DreamNode Management System | Spec: #266
-
-**✅ Completed Features**:
-- ✅ #283 Proto-node Creation - In-space node creation with unified animation system
-- ✅ #284 Universal Drag-Drop Hit Detection - Scale-aware interaction at any zoom level
-- ✅ #309 Git Template System - Complete DreamNode template with hooks
-- ✅ #312 Service Layer Integration - Mock/real switching for development efficiency
-- ✅ #314 Visual Git State Indicators - Red/blue/clean state hierarchy
-- ✅ #310 Auto-stash Creator Mode - Workspace isolation with git stash operations
-- ✅ #313 Development Mode Toggle - Subsumed into service layer architecture
-- ✅ #315 DreamTalk Component - Moved to Epic 8 for future refinement
-- ✅ #286 DreamWeaving Canvas Integration - Canvas parsing and git submodule management
-
-**✅ Integration Complete**:
-- 204 unit tests passing (100% coverage for new services)
-- Zero lint warnings or errors
-- Full TypeScript type safety
-- Service layer architecture established
-- Documentation updated
-
-### DreamWeaving Canvas Integration Achievement (August 30, 2025)
-**Feature #286 Complete**: DreamWeaving Canvas Integration | Parent Spec: #271
-
-**✅ Core Implementation**:
-- **Canvas Parser Service**: Complete JSON parsing with external dependency detection
-- **Submodule Manager Service**: Git submodule operations with automated path rewriting  
-- **DreamNode Boundary Detection**: Recursive .udd file detection for scope identification
-- **Path Rewriting Engine**: Automatic canvas file path updates after submodule import
-- **Git Safety Integration**: Leverages existing autostash system for clean operations
-
-**✅ Command Integration**:
-- **Create DreamSong Canvas** (Ctrl+D): Creates empty canvas in selected DreamNode with auto-commit
-- **Parse Canvas Dependencies**: Debug command for dependency analysis
-- **Import External DreamNodes**: Debug command for selective submodule import
-- **Update Canvas Paths**: Debug command for path rewriting only
-- **Import and Update Canvas Paths**: Combined command for reliability
-- **Sync Canvas Submodules**: End-to-end workflow with pre-sync commit
-
-**✅ Technical Achievements**:
-- **Real-time Dependency Detection**: Identifies external DreamNode references in canvas files
-- **Automated Submodule Operations**: Direct git submodule add with proper naming conventions
-- **Intelligent Path Construction**: Preserves DreamNode hierarchy with prefix mapping
-- **Atomic Git Operations**: Pre-sync commits preserve work, post-sync commits handled by SubmoduleManager
-- **Robust Error Handling**: Graceful degradation and clear error messaging
-- **Comprehensive Test Coverage**: 25+ additional tests covering canvas parsing and submodule operations
-
-**✅ Usage Examples**:
-
-1. **Create DreamSong Canvas** (Ctrl+D):
-   ```
-   Prerequisites: Select a DreamNode in 3D space
-   Action: Press Ctrl+D or use command palette
-   Result: Creates `DreamSong.canvas` file in selected DreamNode with auto-commit
-   Opens: Canvas file in Obsidian for immediate editing
-   ```
-
-2. **Basic Canvas Workflow**:
-   ```
-   1. Create DreamSong.canvas in your DreamNode (Ctrl+D)
-   2. Add media files from other DreamNodes to the canvas
-   3. External dependencies automatically detected by file paths
-   4. Run "Sync Canvas Submodules" to import dependencies
-   5. Canvas paths updated to reference local submodule copies
-   6. DreamNode becomes fully sovereign (self-contained)
-   ```
-
-3. **Debug Workflow** (Granular Commands):
-   ```
-   1. "Parse Canvas Dependencies" - See what external files are referenced
-   2. "Import External DreamNodes as Submodules" - Import dependencies only
-   3. "Update Canvas File Paths" - Rewrite paths only
-   4. "Import and Update Canvas Paths" - Combined import + rewrite
-   ```
-
-4. **Path Transformation Example**:
-   ```
-   Before: "../../OtherDreamNode/media/video.mp4"
-   After:  "PlayPad/OtherDreamNode/media/video.mp4"
-   
-   Where: PlayPad is the parent DreamNode boundary
-          OtherDreamNode becomes a git submodule
-   ```
-
-### Epic 5 Progress (August 15, 2025)
-**Epic Status**: Active Development - Semantic Search System
-**Current Branch**: epic/5-semantic-search
-
-**✅ Features Complete**: 
-- Ollama Embedding API Integration (feature/ollama-embedding-api)
-- **Feature #290: Semantic Search Implementation** - The Ollama integration work fully satisfied this feature
-
-**✅ Core Implementation Achievements**:
-- ✅ Ollama Local Embedding API Integration - Sovereign AI solution using local models
-- ✅ Modular Feature Architecture - Complete vertical slice at `src/features/semantic-search/`
-- ✅ Zustand Store Slice Pattern - OllamaConfigSlice with clean state management
-- ✅ Service Layer Integration - Factory pattern with app context for semantic operations
-- ✅ Command Organization - 8 semantic search commands across 3 organized command files
-- ✅ Auto-Indexing Pipeline - Nodes automatically indexed on creation and git commit changes
-
-**✅ Technical Achievements**:
-- ✅ **Experimental Branch Archiving Strategy**: Established pattern for preserving alternative approaches
-  - `archive/iframe-approach` - Iframe isolation with Vectra vector database (tagged & documented)
-  - `archive/native-transformers` - Native HuggingFace integration with auto-indexing (tagged & documented)
-  - Comprehensive assessment documents preserve architectural learnings and decision factors
-- ✅ **Vertical Slice Architecture**: Complete self-contained feature ready for npm package extraction
-- ✅ **Local AI Sovereignty**: No cloud dependencies, all processing local via Ollama
-- ✅ **Robust Error Handling**: Graceful degradation when semantic search unavailable
-- ✅ **Performance Optimization**: Background indexing with non-blocking operations
-
-**🎯 Remaining Epic 5 Features**: UI/UX layer features for search visualization and interaction
-
-### Constellation Layout System Achievement (September 15, 2025)
-**Feature Branch Complete**: feature/constellation-layout-system
-
-**✅ Core Implementation**:
-- **Complete Force-Directed Algorithm**: Full Fruchterman-Reingold implementation on spherical surfaces
-- **Connected Components Clustering**: Automatic graph clustering using depth-first search
-- **Global Cluster Positioning**: Fibonacci sphere distribution with camera-facing 90° rotation
-- **Exponential Mapping**: Mathematical projection from 2D tangent planes to 3D sphere surface
-- **Cluster Refinement System**: Iterative overlap elimination using spring-mass simulation
-
-**✅ Technical Achievements**:
-- **5-Phase Algorithm Pipeline**: Complete mathematical transformation from relationship graph to 3D positions
-- **Spherical Mathematics**: Geodesic distance calculations, tangent basis computation, exponential mapping
-- **Camera-Aware Orientation**: Largest clusters appear in user's field of view via coordinate rotation
-- **Enhanced Interaction**: 12x thicker invisible hit detection for precise edge clicking
-- **Universal Edge Visibility**: Persistent relationship visualization across all layout modes
-
-**✅ Command Integration**:
-- **"Scan Vault for DreamSong Relationships"**: Auto-applies constellation layout after scanning
-- **"Apply Constellation Layout"**: Manual positioning trigger via global canvas API
-- **"Show DreamSong Relationship Statistics"**: Graph analysis and validation
-
-**✅ Files Delivered**:
-- `src/dreamspace/constellation/ConstellationLayout.ts` (323 lines) - Main algorithm orchestrator
-- `src/dreamspace/constellation/ForceDirected.ts` (362 lines) - Fruchterman-Reingold implementation
-- `src/dreamspace/constellation/SphericalProjection.ts` (334 lines) - Mathematical utilities
-- `src/dreamspace/constellation/ClusterRefinement.ts` (334 lines) - Overlap elimination
-- `src/dreamspace/constellation/LayoutConfig.ts` (176 lines) - Configuration types
-- Enhanced 6+ existing files with constellation layout integration
-
-**✅ Documentation & Educational Resources**:
-- Complete algorithm documentation at `docs/algorithms/constellation-layout.md`
-- Interactive HTML demos with JSON data support at `docs/interactive/constellation/`
-- Mathematical foundation explanations and usage examples
-- JSON schema documentation for custom data input
-
-**✅ Architecture Foundation**: Complete constellation layout system providing sophisticated relationship visualization that precisely matches the HTML prototype algorithm, ready for advanced AI integration and future DreamOS evolution.
+**Note**: For detailed achievement history of Epics 1-5, see CHANGELOG.md
 
 ## Known Issues & Technical Debt
 
@@ -437,141 +212,17 @@ interface DreamNodeService {
 
 ## Development Workflow
 
-### Epic + Feature Branch Architecture
+**Core Development Commands**: Use slash commands for systematic workflow execution:
+- `/epic-start` - Begin new epic with specification clarity and branch setup
+- `/feature-start` - Start feature with knowledge transfer and issue refinement
+- `/feature-complete` - Complete feature with mandatory user testing and integration
+- `/epic-complete` - Finalize epic with quality assurance, documentation, and release
 
-**Core Strategy**: 3-tier GitHub Issues + Dynamic AI Task Management + Epic-Level Testing/Documentation
-
-### GitHub Issue Structure (3-Tier Hierarchy)
-- **Epic**: High-level functionality units (stable structure)
-- **Specification**: Detailed implementation plans (one per epic - child of epic)
-- **Feature**: User-facing functionality (children of specification - concrete enough to test)
-- **Tasks**: AI handles dynamically via TodoWrite (no GitHub task issues needed)
-
-**Issue Completion Order**: Features → Specification → Epic (bottom-up completion)
-
-### Git Branch Strategy
-```
-main → epic/2-spatial-visualization
-         ├── feature/dreamnode-3d-component
-         ├── feature/layout-state-management  
-         └── feature/advanced-camera-controls
-```
-
-### Epic Development Cycle
-
-**Phase 1: Epic Planning & Specification**
-- Create epic branch off main for complete epic scope
-- **CRITICAL FIRST STEP**: Flesh out specification issue through conversational clarity
-- Only proceed to implementation after specification is clear
-
-**Phase 2: Feature Implementation**
-- Create feature branches off epic branch for individual features
-- **CRITICAL FIRST STEP**: Flesh out feature issue before coding
-- Implement features using TodoWrite for task management
-- Merge completed features back to epic branch
-
-**Phase 3: Epic Integration**
-- Test complete epic functionality on epic branch
-- Write documentation for integrated capabilities  
-- Final integration testing and polish
-
-**Phase 4: Epic Completion**
-- Merge tested, documented epic to main branch
-- **MANDATORY**: Update CHANGELOG.md with epic details via release branch
-- Tag release if appropriate
-- Epic represents coherent functionality unit
-
-### Epic Completion Requirements
-
-**Quality Standards**:
-- All tests passing with comprehensive coverage
-- Zero lint warnings or errors at any level
-- Zero TypeScript compilation errors
-- Clean git state with no uncommitted changes
-
-**Documentation Standards**:
-- CHANGELOG entry based on git commit analysis (not just project memory)
-- Technical documentation updates for architectural changes
-- Project memory updates reflecting completion status
-
-### Core Workflow Pattern: Issue Clarity Before Implementation
-
-**DEEP PATTERN - ALWAYS FOLLOW**:
-1. **Epic Branch Creation**: Start every epic by creating the epic branch
-2. **Specification Clarity**: BEFORE any coding, flesh out specification issue
-3. **Feature Branch Creation**: Only after specification is clear
-4. **Feature Issue Analysis**: Read current GitHub issue body to understand requirements
-5. **Knowledge Transfer Interview**: Conduct interview with potent questions to gain clarity
-6. **Feature Issue Planning**: Flesh out refined issue body with detailed implementation plan
-7. **Implementation**: Only after feature issue is properly planned and detailed
-8. **User Testing Protocol**: ALWAYS stop for user feedback before committing
-9. **Issue Closing**: Only close after successful merge to epic branch - NEVER before
-
-### Cross-Session Memory Pattern
-- **Strategic Planning**: GitHub Issues (Epic/Spec/Feature) 
-- **Tactical Execution**: Claude's native TodoWrite for in-session tasks
-- **Persistent Memory**: Incomplete tasks written to CLAUDE.md at session end
-- **Historical Record**: Git commits document actual work completed
-
-### Session Restart Protocol
-1. Read project CLAUDE.md for incomplete tasks from previous session
-2. `gh issue list --assignee @me --state open` - Check GitHub issue status
-3. `git branch --show-current` - Confirm current branch context
-4. Recreate TodoWrite tasks based on session goals
-5. `git log --oneline -10` - Review recent progress
-
-## CRITICAL FEATURE DEVELOPMENT WORKFLOW
-
-### Phase 1: Issue Analysis & Knowledge Transfer
-**MANDATORY FIRST STEPS - NEVER SKIP**:
-1. **Read Feature Issue**: Use `gh issue view ISSUE_NUMBER` to understand current requirements
-2. **Interview Process**: Ask potent questions to transfer knowledge and gain clarity:
-   - What specific functionality is needed?
-   - What are the key interaction patterns?
-   - What are the performance requirements?
-   - What are potential edge cases or constraints?
-   - How should this integrate with existing features?
-3. **Clarification Discussion**: Short conversation to align understanding
-4. **Issue Body Refinement**: Update GitHub issue with detailed implementation plan
-5. **User Approval**: Get explicit approval before proceeding to implementation
-
-### Phase 2: Implementation
-**AFTER ISSUE CLARITY ACHIEVED**:
-1. **Feature Branch Creation**: Create feature branch off epic branch
-2. **TodoWrite Planning**: Create comprehensive task breakdown
-3. **Implementation**: Follow development rules and patterns
-4. **Unit Tests**: Ensure all tests pass
-5. **Lint & Type Check**: Clean code validation
-
-### Phase 3: User Testing & Validation
-**MANDATORY BEFORE COMMITTING**:
-1. **Stop Implementation**: Never commit without user feedback
-2. **Request User Testing**: Ask user to test the feature and provide feedback
-3. **Iterate Based on Feedback**: Address any issues found during testing
-4. **Commit Only After Validation**: Only commit when user confirms feature works
-
-### Phase 4: Feature Completion
-**FINAL STEPS**:
-1. **Merge to Epic Branch**: Merge feature branch to epic branch
-2. **Update Issue**: Mark all acceptance criteria as complete
-3. **Close Issue**: ONLY close after successful merge - never before
-4. **Clean Up**: Delete feature branch after epic integration
-
-## WORKFLOW ANTI-PATTERNS TO AVOID
-
-### ❌ Never Do These:
-- Skip issue analysis and jump straight to implementation
-- Commit changes without user testing and feedback
-- Close issues before merging to epic branch
-- Assume changes work without validation
-- Plan implementation without understanding requirements
-
-### ✅ Always Do These:
-- Start with issue analysis and knowledge transfer interview
-- Flesh out issue body with detailed planning
-- Stop for user testing before any commits
-- Only close issues after successful merge
-- Validate that features actually work as intended
+**Key Principles**:
+- **Issue Clarity Before Implementation**: Always refine issues through knowledge transfer interviews
+- **User Testing Protocol**: Never commit without user validation
+- **3-Tier Hierarchy**: Epic → Specification → Features
+- **Branch Strategy**: `main → epic/N-name → feature/name-from-issue`
 
 ## Epic Quick Reference
 
@@ -857,6 +508,14 @@ git add -A && git commit -m "User commit message"
 - This single command runs tests, linting, and type checking
 - Replaces the need to run separate npm commands
 - Run this before committing changes or completing features
+
+**VaultService Testing Decision**:
+- **DO NOT create unit tests for VaultService** - Deliberate architectural decision
+- **Rationale**: VaultService is a thin wrapper around Node.js fs operations (migrated from hybrid Obsidian API in commit 753c260)
+- **Why no tests**: Testing direct filesystem operations in unit tests is complex, brittle, and provides little value
+- **Coverage strategy**: Integration tests and real-world usage provide sufficient validation
+- **Previous attempt**: Epic 6 cleanup revealed obsolete tests testing non-existent hybrid API - removed entirely
+- **Future**: If VaultService grows business logic beyond fs wrappers, add tests for that logic only, not fs operations
 
 **Epic Completion Workflow**:
 - **MANDATORY**: Comprehensive quality assurance and documentation updates before merging to main

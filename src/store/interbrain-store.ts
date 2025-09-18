@@ -28,21 +28,21 @@ function getDreamSongScrollPosition(nodeId: string): number | null {
     if (typeof document === 'undefined') return null;
     
     // Look for DreamSong leaf in right pane containing this nodeId
-    // eslint-disable-next-line no-undef
+     
     const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
     if (dreamSongLeaf) {
       const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
       if (scrollContainer && 'scrollTop' in scrollContainer) {
-        // eslint-disable-next-line no-undef
+         
         return (scrollContainer as HTMLElement).scrollTop;
       }
     }
     
     // Also check for embedded DreamSong content in DreamSpace
-    // eslint-disable-next-line no-undef
+     
     const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
     if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
-      // eslint-disable-next-line no-undef
+       
       return (dreamSpaceContent as HTMLElement).scrollTop;
     }
     
@@ -60,22 +60,22 @@ function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number):
     if (typeof document === 'undefined') return;
     
     // Look for DreamSong leaf in right pane containing this nodeId
-    // eslint-disable-next-line no-undef
+     
     const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
     if (dreamSongLeaf) {
       const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
       if (scrollContainer && 'scrollTop' in scrollContainer) {
-        // eslint-disable-next-line no-undef
+         
         (scrollContainer as HTMLElement).scrollTop = scrollPosition;
         return;
       }
     }
     
     // Also check for embedded DreamSong content in DreamSpace
-    // eslint-disable-next-line no-undef
+     
     const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
     if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
-      // eslint-disable-next-line no-undef
+       
       (dreamSpaceContent as HTMLElement).scrollTop = scrollPosition;
     }
   } catch (error) {
@@ -1062,7 +1062,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     if (entry.nodeId && entry.scrollPosition !== null) {
       // Use setTimeout to ensure DOM has updated after state change
       if (typeof setTimeout !== 'undefined') {
-        // eslint-disable-next-line no-undef
+         
         setTimeout(() => {
           restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
         }, 100);

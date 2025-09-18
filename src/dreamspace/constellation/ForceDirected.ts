@@ -44,7 +44,7 @@ export function computeClusterLayout(
   edges: DreamSongEdge[],
   config: ConstellationLayoutConfig
 ): ForceLayoutResult {
-  const startTime = performance.now();
+  // const _startTime = performance.now(); // For future performance monitoring
 
   // Get nodes that belong to this cluster
   const clusterNodes = cluster.nodeIds
@@ -164,7 +164,7 @@ export function computeClusterLayout(
 
     // Apply forces with simulated annealing (cooling)
     const temperature = config.initialTemperature * (1 - iteration / config.forceIterations);
-    let totalDisplacement = 0;
+    // let _totalDisplacement = 0; // For future convergence tracking
 
     for (const node of clusterNodes) {
       const force = forces.get(node.id)!;
@@ -185,7 +185,7 @@ export function computeClusterLayout(
           pos.y = (pos.y / distance) * cluster.radius;
         }
 
-        totalDisplacement += displacement;
+        // _totalDisplacement += displacement; // For future convergence tracking
       }
     }
 

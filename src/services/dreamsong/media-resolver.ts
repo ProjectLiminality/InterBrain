@@ -11,10 +11,10 @@ import { VaultService } from '../vault-service';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../utils/link-file-utils';
 
 // Access Node.js modules directly in Electron context
-/* eslint-disable no-undef */
+ 
 const fs = require('fs');
 const path = require('path');
-/* eslint-enable no-undef */
+ 
 
 /**
  * Resolve media paths in all blocks, converting file paths to data URLs

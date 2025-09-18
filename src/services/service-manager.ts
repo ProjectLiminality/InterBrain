@@ -248,7 +248,8 @@ export class ServiceManager {
     try {
       const fullCommandId = `interbrain:${commandId}`;
       this.plugin.app.commands.executeCommandById(fullCommandId);
-    } catch (error) {
+    } catch {
+      // Command execution errors are handled by Obsidian
     }
   }
 

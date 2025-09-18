@@ -16,10 +16,10 @@ import {
 } from '../types/constellation';
 
 // Access Node.js modules directly in Electron context
-/* eslint-disable no-undef */
+ 
 const fs = require('fs');
 const path = require('path');
-/* eslint-enable no-undef */
+ 
 
 /**
  * DreamSong Relationship Service

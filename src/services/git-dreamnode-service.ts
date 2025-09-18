@@ -6,13 +6,13 @@ import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../uti
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 
 // Access Node.js modules directly in Electron context
-/* eslint-disable no-undef */
+ 
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-/* eslint-enable no-undef */
+ 
 
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;

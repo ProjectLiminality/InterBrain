@@ -1,9 +1,9 @@
 // Access Node.js modules directly in Electron context (following GitDreamNodeService pattern)
-/* eslint-disable no-undef */
+ 
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
-/* eslint-enable no-undef */
+ 
 
 const execAsync = promisify(exec);
 

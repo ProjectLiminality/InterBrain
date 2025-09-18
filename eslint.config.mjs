@@ -17,7 +17,18 @@ export default [
       },
       globals: {
         console: 'readonly',
-        global: 'readonly'
+        global: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        HTMLElement: 'readonly',
+        Element: 'readonly',
+        navigator: 'readonly',
+        setTimeout: 'readonly',
+        fetch: 'readonly',
+        MutationObserver: 'readonly',
+        MutationRecord: 'readonly',
+        performance: 'readonly',
+        require: 'readonly'
       }
     },
     plugins: {

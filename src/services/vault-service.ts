@@ -1,10 +1,10 @@
 import { Vault, App } from 'obsidian';
 
 // Access Node.js modules directly in Electron context (following GitService pattern)
-/* eslint-disable no-undef */
+ 
 const fs = require('fs');
 const path = require('path');
-/* eslint-enable no-undef */
+ 
 
 export class VaultService {
   private vaultPath: string = '';

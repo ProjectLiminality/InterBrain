@@ -9,9 +9,9 @@
 import { DreamSongBlock } from '../../types/dreamsong';
 
 // Access Node.js crypto module directly in Electron context
-/* eslint-disable no-undef */
+ 
 const crypto = require('crypto');
-/* eslint-enable no-undef */
+ 
 
 /**
  * Generate a unique hash from DreamSong blocks structure
