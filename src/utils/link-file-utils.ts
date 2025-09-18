@@ -158,19 +158,36 @@ export function getLinkThumbnail(linkMetadata: LinkFileMetadata): string | null 
 }
 
 /**
+ * Type guard for unknown metadata objects
+ */
+interface UnknownMetadata {
+  url?: unknown;
+  type?: unknown;
+  created?: unknown;
+  title?: unknown;
+  thumbnail?: unknown;
+  videoId?: unknown;
+  embedUrl?: unknown;
+}
+
+/**
  * Validate .link file metadata structure
  */
 export function validateLinkMetadata(metadata: unknown): metadata is LinkFileMetadata {
+  if (typeof metadata !== 'object' || metadata === null) {
+    return false;
+  }
+
+  const meta = metadata as UnknownMetadata;
+
   return (
-    typeof metadata === 'object' &&
-    metadata !== null &&
-    typeof (metadata as any).url === 'string' &&
-    typeof (metadata as any).type === 'string' &&
-    ['youtube', 'website', 'unknown'].includes((metadata as any).type) &&
-    typeof (metadata as any).created === 'string' &&
-    ((metadata as any).title === undefined || typeof (metadata as any).title === 'string') &&
-    ((metadata as any).thumbnail === undefined || typeof (metadata as any).thumbnail === 'string') &&
-    ((metadata as any).videoId === undefined || typeof (metadata as any).videoId === 'string') &&
-    ((metadata as any).embedUrl === undefined || typeof (metadata as any).embedUrl === 'string')
+    typeof meta.url === 'string' &&
+    typeof meta.type === 'string' &&
+    ['youtube', 'website', 'unknown'].includes(meta.type) &&
+    typeof meta.created === 'string' &&
+    (meta.title === undefined || typeof meta.title === 'string') &&
+    (meta.thumbnail === undefined || typeof meta.thumbnail === 'string') &&
+    (meta.videoId === undefined || typeof meta.videoId === 'string') &&
+    (meta.embedUrl === undefined || typeof meta.embedUrl === 'string')
   );
 }

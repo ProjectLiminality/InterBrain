@@ -80,6 +80,7 @@ export class DreamSongFullScreenView extends ItemView {
     };
 
     // Listen for file modifications and creation
+    // Note: Obsidian's event system types may be incomplete - using 'any' for event listeners
     vault.on('modify', this.fileChangeListener as any);
     vault.on('create', this.fileChangeListener as any);
   }

@@ -7,7 +7,7 @@
  */
 
 import { DreamSongBlock } from '../../types/dreamsong';
-import { CanvasData, CanvasNode } from '../canvas-parser-service';
+import { CanvasData, CanvasNode, CanvasEdge } from '../canvas-parser-service';
 
 // Access Node.js crypto module directly in Electron context
  
@@ -75,7 +75,7 @@ export function generateCanvasStructureHash(canvasData: CanvasData): string {
     })).sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)), // Sort for consistency
 
     // Edge relationships (structure)
-    edges: (canvasData.edges || []).map((edge: any) => ({
+    edges: (canvasData.edges || []).map((edge: CanvasEdge) => ({
       id: edge.id,
       fromNode: edge.fromNode,
       toNode: edge.toNode,

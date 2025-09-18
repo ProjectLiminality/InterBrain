@@ -144,6 +144,7 @@ export function useDreamSongData(
     };
 
     // Listen for file modifications
+    // Note: Obsidian's event system types may be incomplete - using 'any' for event listeners
     vault.on('modify', handleFileChange as any);
 
     // Also listen for file creation (in case canvas was created after component mount)

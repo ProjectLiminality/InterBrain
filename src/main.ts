@@ -88,6 +88,7 @@ export default class InterBrainPlugin extends Plugin {
     this.constellationCommands = new ConstellationCommands(this);
 
     // Make services accessible to ServiceManager BEFORE initialization
+    // Note: Using 'any' here is legitimate - we're extending the plugin with dynamic properties
     (this as any).vaultService = this.vaultService;
     (this as any).canvasParserService = this.canvasParserService;
     (this as any).leafManagerService = this.leafManagerService;
