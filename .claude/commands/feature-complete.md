@@ -6,19 +6,21 @@ description: Complete feature development with mandatory user testing, validatio
 # Feature Complete Workflow
 
 ## Usage
-Execute with feature issue number: `/feature-complete #ISSUE_NUMBER` (e.g., `/feature-complete #287`)
+Execute: `/feature-complete` (automatically detects current feature from branch or context)
+Optional: `/feature-complete #287` or `/feature-complete additional context or instructions`
 
 ## CRITICAL USER TESTING PHASE
 
 **⚠️ MANDATORY BEFORE ANY COMMITS ⚠️**
 
-### Phase 1: Pre-Testing Validation
+### Phase 1: Intelligent Feature Detection & Pre-Testing Validation
 
-#### Current State Check
-- **Current branch**: !`git branch --show-current`
-- **Verify feature branch**: Ensure we're on correct feature branch
-- **Git status**: !`git status --short`
-- **Feature issue**: !`gh issue view $ARGUMENTS`
+#### Feature Detection
+- **Current branch**: Run `git branch --show-current`
+- **Extract feature number**: Parse feature number from branch name (e.g., feature/287-something → #287)
+- **Process user context**: Handle any additional context provided after command
+- **Git status**: Run `git status --short`
+- **Feature issue**: Run `gh issue view DETECTED_FEATURE_NUMBER` (from branch name or user context)
 
 #### Implementation Completeness Check
 - [ ] All TodoWrite tasks marked complete
@@ -29,12 +31,11 @@ Execute with feature issue number: `/feature-complete #ISSUE_NUMBER` (e.g., `/fe
 ### Phase 2: Quality Assurance
 
 #### Code Quality Validation
-- **Run all checks**: !`npm run check-all`
+- **Run all checks**: Run `npm run check-all`
 - **Verify zero warnings**: Ensure clean lint, tests, and type checking
 - **Fix any issues**: Address all errors before proceeding
 
 #### Development Environment Check
-- **Dev server status**: !`lsof -i :5173 || echo "Dev server not running - user should start it"`
 - **Obsidian ready**: Confirm development vault accessible for testing
 
 ### Phase 3: Stop for User Testing
@@ -69,7 +70,7 @@ Please provide feedback on anything that needs adjustment.
 
 #### Re-test Cycle (if needed)
 - **Fix reported issues** based on user feedback
-- **Re-run quality checks**: !`npm run check-all`
+- **Re-run quality checks**: Run `npm run check-all`
 - **Request re-testing**: Ask user to verify fixes
 - **Repeat until user confirms** feature works correctly
 
@@ -80,9 +81,9 @@ Please provide feedback on anything that needs adjustment.
 ### Git Operations
 
 #### Commit Feature Work
-- **Stage all changes**: !`git add -A`
-- **Commit with summary**: !`git commit -m "$(cat <<'EOF'
-Feature #$ARGUMENTS: [FEATURE_TITLE]
+- **Stage all changes**: Run `git add -A`
+- **Commit with summary**: Run `git commit -m "$(cat <<'EOF'
+Feature #DETECTED_FEATURE_NUMBER: [FEATURE_TITLE]
 
 [Brief summary of implementation]
 - [Key changes made]
@@ -95,10 +96,10 @@ EOF
 )"`
 
 #### Epic Branch Integration
-- **Switch to epic branch**: !`git checkout epic/EPIC_NUMBER-epic-name`
-- **Pull latest epic**: !`git pull origin epic/EPIC_NUMBER-epic-name`
-- **Merge feature**: !`git merge feature/FEATURE_NAME-from-issue --no-ff`
-- **Push epic branch**: !`git push origin epic/EPIC_NUMBER-epic-name`
+- **Switch to epic branch**: Run `git checkout epic/EPIC_NUMBER-epic-name`
+- **Pull latest epic**: Run `git pull origin epic/EPIC_NUMBER-epic-name`
+- **Merge feature**: Run `git merge feature/FEATURE_NAME-from-issue --no-ff`
+- **Push epic branch**: Run `git push origin epic/EPIC_NUMBER-epic-name`
 
 ### GitHub Issue Management
 
@@ -123,8 +124,8 @@ Mark all acceptance criteria as complete:
 ```
 
 #### Close Feature Issue
-- **Update issue**: !`gh issue edit $ARGUMENTS --body "COMPLETED_ISSUE_BODY"`
-- **Close with summary**: !`gh issue close $ARGUMENTS --comment "Feature implementation complete. User testing passed. Merged to epic branch."`
+- **Update issue**: Run `gh issue edit DETECTED_FEATURE_NUMBER --body "COMPLETED_ISSUE_BODY"`
+- **Close with summary**: Run `gh issue close DETECTED_FEATURE_NUMBER --comment "Feature implementation complete. User testing passed. Merged to epic branch."` (using detected feature number)
 
 ### Project Board Management
 - **Move to Complete**: Reference @CLAUDE.md (lines 680-727) for GraphQL project board updates
@@ -133,8 +134,8 @@ Mark all acceptance criteria as complete:
 ## Phase 5: Cleanup & Next Steps
 
 ### Branch Cleanup
-- **Delete feature branch**: !`git branch -d feature/FEATURE_NAME-from-issue`
-- **Delete remote branch**: !`git push origin --delete feature/FEATURE_NAME-from-issue`
+- **Delete feature branch**: Run `git branch -d feature/FEATURE_NAME-from-issue`
+- **Delete remote branch**: Run `git push origin --delete feature/FEATURE_NAME-from-issue`
 
 ### TodoWrite Cleanup
 - **Mark all feature todos complete**: Update any remaining TodoWrite tasks

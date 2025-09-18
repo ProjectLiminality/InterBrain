@@ -6,19 +6,22 @@ description: Start feature development with issue analysis, knowledge transfer, 
 # Feature Start Workflow
 
 ## Usage
-Execute with feature issue number: `/feature-start #ISSUE_NUMBER` (e.g., `/feature-start #287`)
+Execute: `/feature-start` (automatically detects available features or processes user context)
+Optional: `/feature-start #287` or `/feature-start feature about XYZ` or `/feature-start additional context`
 
 ## CRITICAL PHASE 1: Feature Issue Analysis & Knowledge Transfer
 
 **⚠️ MANDATORY FIRST STEPS - NEVER SKIP THIS PHASE ⚠️**
 
 ### 1. Current Context Check
-- **Current branch**: !`git branch --show-current`
+- **Current branch**: Run `git branch --show-current`
 - **Verify epic branch**: Ensure we're on correct epic branch before feature work
-- **Git status**: !`git status --short`
+- **Git status**: Run `git status --short`
 
-### 2. Read Current Feature Issue
-- **Feature details**: !`gh issue view $ARGUMENTS`
+### 2. Intelligent Feature Detection
+- **Parse user input**: Extract feature number from user context (e.g., "#287", "287", "feature 287")
+- **Auto-detect ready features**: If no specific feature mentioned, find open features in current epic
+- **Feature details**: Run `gh issue view DETECTED_FEATURE_NUMBER` (using detected or selected feature)
 - **Understand existing requirements**: Parse current issue body for:
   - Feature description and scope
   - Existing acceptance criteria
@@ -83,13 +86,13 @@ Based on the discussion, update the GitHub issue with:
 **Only proceed here AFTER completing Phase 1 above**
 
 ### Branch Creation
-- **Ensure on epic branch**: !`git checkout epic/EPIC_NUMBER-epic-name`
-- **Pull latest**: !`git pull origin epic/EPIC_NUMBER-epic-name`
-- **Create feature branch**: !`git checkout -b feature/FEATURE_NAME-from-issue`
-- **Push feature branch**: !`git push -u origin feature/FEATURE_NAME-from-issue`
+- **Ensure on epic branch**: Run `git checkout epic/EPIC_NUMBER-epic-name`
+- **Pull latest**: Run `git pull origin epic/EPIC_NUMBER-epic-name`
+- **Create feature branch**: Run `git checkout -b feature/FEATURE_NAME-from-issue`
+- **Push feature branch**: Run `git push -u origin feature/FEATURE_NAME-from-issue`
 
 ### GitHub Integration
-- **Update feature issue**: !`gh issue edit $ARGUMENTS --body "REFINED_ISSUE_BODY"`
+- **Update feature issue**: Run `gh issue edit DETECTED_FEATURE_NUMBER --body "REFINED_ISSUE_BODY"`
 - **Move to Active**: Reference @CLAUDE.md (lines 680-727) for project board GraphQL
 
 ## Phase 3: Implementation Planning
@@ -127,7 +130,6 @@ Create comprehensive task breakdown following project patterns:
 - [ ] **STOP FOR USER TESTING** - Get explicit feedback
 
 ### Development Environment Check
-- **Dev server status**: !`lsof -i :5173 || echo "Dev server not running - user should start it"`
 - **Plugin reloader ready**: Confirm Obsidian development workflow
 - **Testing protocols**: @CLAUDE.md (lines 784-790)
 

@@ -6,27 +6,33 @@ description: Start a new epic with branch creation, specification clarity, and d
 # Epic Start Workflow
 
 ## Usage
-Execute with epic number: `/epic-start EPIC_NUMBER` (e.g., `/epic-start 6`)
+Execute: `/epic-start` (automatically detects next epic or processes user context)
+Optional: `/epic-start epic-6` or `/epic-start additional context or specific epic`
 
-## Phase 1: Project State Analysis
+## Phase 1: Intelligent Epic Detection & Project State Analysis
+
+### Epic Detection
+- **Parse user input**: Extract epic number from user context (e.g., "epic-6", "6", "Epic 6")
+- **Auto-detect next epic**: If no specific epic mentioned, find next open epic issue
+- **Validate epic exists**: Ensure detected epic has corresponding GitHub issue
 
 ### Current State Check
-- **Current branch**: !`git branch --show-current`
-- **Git status**: !`git status --short`
-- **Recent commits**: !`git log --oneline -5`
-- **Open epics**: !`gh issue list --label epic --state open`
+- **Current branch**: Run `git branch --show-current`
+- **Git status**: Run `git status --short`
+- **Recent commits**: Run `git log --oneline -5`
+- **Open epics**: Run `gh issue list --label epic --state open`
 
 ### Epic Issue Analysis
-- **Epic details**: !`gh issue view $ARGUMENTS`
-- **Find specification issue**: !`gh issue list --label specification --search "epic $ARGUMENTS" --state open`
-- **Specification details**: !`gh issue view SPEC_ISSUE_NUMBER`
+- **Epic details**: Run `gh issue view DETECTED_EPIC_NUMBER` (from user input or next available epic)
+- **Find specification issue**: Run `gh issue list --label specification --search "epic DETECTED_EPIC_NUMBER" --state open`
+- **Specification details**: Run `gh issue view SPEC_ISSUE_NUMBER`
 - **Epic-Spec relationship validation**: Ensure 1:1 relationship exists and spec is ready for refinement
 
 ## Phase 2: Epic Branch Creation
 
 ### Branch Setup
-- **Create epic branch**: !`git checkout main && git pull origin main && git checkout -b epic/$ARGUMENTS-epic-name`
-- **Push epic branch**: !`git push -u origin epic/$ARGUMENTS-epic-name`
+- **Create epic branch**: Run `git checkout main && git pull origin main && git checkout -b epic/DETECTED_EPIC_NUMBER-epic-name`
+- **Push epic branch**: Run `git push -u origin epic/DETECTED_EPIC_NUMBER-epic-name`
 
 ### GitHub Integration
 - **Update epic issue**: Move to "Active" status on project board

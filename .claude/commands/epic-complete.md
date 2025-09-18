@@ -6,18 +6,20 @@ description: Complete epic development with quality assurance, documentation, ve
 # Epic Complete Workflow
 
 ## Usage
-Execute with epic number: `/epic-complete EPIC_NUMBER` (e.g., `/epic-complete 5`)
+Execute: `/epic-complete` (automatically detects current epic from branch)
+Optional: `/epic-complete additional context or instructions`
 
-## Phase 1: Epic Readiness Validation
+## Phase 1: Intelligent Epic Detection & Validation
 
-### Current State Check
-- **Current branch**: !`git branch --show-current`
-- **Verify epic branch**: Ensure we're on correct epic branch
-- **Git status**: !`git status --short`
-- **Epic issue status**: !`gh issue view $ARGUMENTS`
+### Epic Detection from Branch
+- **Current branch**: Run `git branch --show-current`
+- **Extract epic number**: Parse epic number from branch name (e.g., epic/6-dreamweaving-operations → 6)
+- **Additional context**: Process any user-provided context after command
+- **Git status**: Run `git status --short`
+- **Epic issue status**: Run `gh issue view DETECTED_EPIC_NUMBER` (using extracted number)
 
 ### Feature Completion Verification
-- **Epic features**: !`gh issue list --label feature --search "epic $ARGUMENTS" --state all`
+- **Epic features**: Run `gh issue list --label feature --search "epic DETECTED_EPIC_NUMBER" --state all`
 - **Verify all features closed**: Ensure no open features remain for this epic
 - **Epic specification status**: Confirm specification issue is complete
 
@@ -28,15 +30,15 @@ Execute with epic number: `/epic-complete EPIC_NUMBER` (e.g., `/epic-complete 5`
 ## Phase 2: Quality Assurance & Testing
 
 ### Comprehensive Code Validation
-- **Run all checks**: !`npm run check-all`
+- **Run all checks**: Run `npm run check-all`
 - **Zero warnings requirement**: Fix any lint errors, test failures, or type errors
 - **Test coverage review**: Ensure all new functions have appropriate tests
 
 #### If Quality Issues Found:
 1. **Stop epic completion** until issues resolved
 2. **Address each issue** systematically
-3. **Re-run checks**: !`npm run check-all`
-4. **Commit fixes**: !`git add -A && git commit -m "Fix quality issues for epic completion"`
+3. **Re-run checks**: Run `npm run check-all`
+4. **Commit fixes**: Run `git add -A && git commit -m "Fix quality issues for epic completion"`
 
 ### Epic Integration Testing
 - **Manual testing**: Verify epic functionality works end-to-end
@@ -58,8 +60,8 @@ Execute with epic number: `/epic-complete EPIC_NUMBER` (e.g., `/epic-complete 5`
 #### 2. CHANGELOG.md Analysis & Update
 **Critical**: Review git commit history for precise documentation
 
-- **Analyze commits**: !`git log main..epic/$ARGUMENTS-epic-name --oneline`
-- **Review detailed changes**: !`git log main..epic/$ARGUMENTS-epic-name --stat`
+- **Analyze commits**: Run `git log main..HEAD --oneline` (current epic branch)
+- **Review detailed changes**: Run `git log main..HEAD --stat` (current epic branch)
 - **Create new version section**:
   ```markdown
   ## [X.Y.Z] - YYYY-MM-DD - Epic $ARGUMENTS: [EPIC_TITLE]
@@ -91,7 +93,7 @@ Execute with epic number: `/epic-complete EPIC_NUMBER` (e.g., `/epic-complete 5`
 ## Phase 4: Version Release
 
 ### Version Bumping
-- **Read current version**: !`cat package.json | grep '"version"'`
+- **Read current version**: Run `cat package.json | grep '"version"'`
 - **Determine version increment**:
   - Major (X.0.0): Breaking changes or major new functionality
   - Minor (X.Y.0): New features, backwards compatible
@@ -99,33 +101,33 @@ Execute with epic number: `/epic-complete EPIC_NUMBER` (e.g., `/epic-complete 5`
 
 #### Update Version
 - **Bump package.json**: Update version field to new version
-- **Commit version bump**: !`git add package.json && git commit -m "Release vX.Y.Z: Epic $ARGUMENTS - [EPIC_TITLE]"`
+- **Commit version bump**: Run `git add package.json && git commit -m "Release vX.Y.Z: Epic DETECTED_EPIC_NUMBER - [EPIC_TITLE]"` (detect epic from branch)
 
 ### Final Quality Check
-- **Final validation**: !`npm run check-all`
-- **Ensure all changes committed**: !`git status --short`
+- **Final validation**: Run `npm run check-all`
+- **Ensure all changes committed**: Run `git status --short`
 
 ## Phase 5: Main Branch Integration
 
 ### Merge to Main
-- **Switch to main**: !`git checkout main`
-- **Pull latest main**: !`git pull origin main`
-- **Merge epic branch**: !`git merge epic/$ARGUMENTS-epic-name --no-ff -m "Complete Epic $ARGUMENTS: [EPIC_TITLE]"`
-- **Push main**: !`git push origin main`
+- **Switch to main**: Run `git checkout main`
+- **Pull latest main**: Run `git pull origin main`
+- **Merge epic branch**: Run `git merge CURRENT_EPIC_BRANCH --no-ff -m "Complete Epic DETECTED_EPIC_NUMBER: [EPIC_TITLE]"` (merge current epic branch)
+- **Push main**: Run `git push origin main`
 
 ### Create Git Tag
-- **Create tag**: !`git tag vX.Y.Z`
-- **Push tag**: !`git push origin vX.Y.Z`
+- **Create tag**: Run `git tag vX.Y.Z`
+- **Push tag**: Run `git push origin vX.Y.Z`
 
 ## Phase 6: GitHub Release & Project Management
 
 ### Create GitHub Release
-- **Create release**: !`gh release create vX.Y.Z --title "Epic $ARGUMENTS: [EPIC_TITLE]" --notes-from-tag`
+- **Create release**: Run `gh release create vX.Y.Z --title "Epic $ARGUMENTS: [EPIC_TITLE]" --notes-from-tag`
 - **Reference CHANGELOG**: Include comprehensive notes from CHANGELOG.md section
 
 ### Epic Issue Management
 - **Update epic issue**: Mark all success criteria as complete
-- **Close epic issue**: !`gh issue close $ARGUMENTS --comment "Epic $ARGUMENTS complete. All features implemented, tested, and released as vX.Y.Z."`
+- **Close epic issue**: Run `gh issue close DETECTED_EPIC_NUMBER --comment "Epic DETECTED_EPIC_NUMBER complete. All features implemented, tested, and released as vX.Y.Z."`
 - **Update project board**: Reference @CLAUDE.md (lines 680-727) for GraphQL status update
 
 ### Specification Issue Closure
@@ -135,13 +137,13 @@ Execute with epic number: `/epic-complete EPIC_NUMBER` (e.g., `/epic-complete 5`
 ## Phase 7: Cleanup & Next Epic Preparation
 
 ### Branch Cleanup
-- **Delete epic branch**: !`git branch -d epic/$ARGUMENTS-epic-name`
-- **Delete remote epic branch**: !`git push origin --delete epic/$ARGUMENTS-epic-name`
+- **Delete epic branch**: Run `git branch -d CURRENT_EPIC_BRANCH` (delete current epic branch)
+- **Delete remote epic branch**: Run `git push origin --delete CURRENT_EPIC_BRANCH`
 
 ### Project Memory Updates
 - **Final CLAUDE.md update**: Reflect current project state post-epic
 - **Update epic quick reference**: Mark epic complete, update active epic
-- **Commit memory updates**: !`git add CLAUDE.md && git commit -m "Update project memory after Epic $ARGUMENTS completion"`
+- **Commit memory updates**: Run `git add CLAUDE.md && git commit -m "Update project memory after Epic DETECTED_EPIC_NUMBER completion"`
 
 ### Next Epic Planning
 - **Identify next epic**: Review epic roadmap and priorities
