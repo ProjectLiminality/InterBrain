@@ -80,8 +80,8 @@ export class DreamSongFullScreenView extends ItemView {
     };
 
     // Listen for file modifications and creation
-    vault.on('modify', this.fileChangeListener);
-    vault.on('create', this.fileChangeListener);
+    vault.on('modify', this.fileChangeListener as any);
+    vault.on('create', this.fileChangeListener as any);
   }
 
   /**
@@ -99,8 +99,12 @@ export class DreamSongFullScreenView extends ItemView {
       const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
       const { CanvasParserService } = await import('../services/canvas-parser-service');
 
-      const canvasParserService = new CanvasParserService(serviceManager.getVaultService());
       const vaultService = serviceManager.getVaultService();
+      if (!vaultService) {
+        console.error('Vault service not available for re-parsing');
+        return;
+      }
+      const canvasParserService = new CanvasParserService(vaultService);
 
       // Parse canvas using new architecture
       const canvasData = await canvasParserService.parseCanvas(canvasPath);
@@ -125,8 +129,8 @@ export class DreamSongFullScreenView extends ItemView {
     if (this.fileChangeListener) {
       const app = serviceManager.getApp();
       if (app && app.vault) {
-        app.vault.off('modify', this.fileChangeListener);
-        app.vault.off('create', this.fileChangeListener);
+        app.vault.off('modify', this.fileChangeListener as any);
+        app.vault.off('create', this.fileChangeListener as any);
       }
       this.fileChangeListener = null;
     }

@@ -164,13 +164,13 @@ export function validateLinkMetadata(metadata: unknown): metadata is LinkFileMet
   return (
     typeof metadata === 'object' &&
     metadata !== null &&
-    typeof metadata.url === 'string' &&
-    typeof metadata.type === 'string' &&
-    ['youtube', 'website', 'unknown'].includes(metadata.type) &&
-    typeof metadata.created === 'string' &&
-    (metadata.title === undefined || typeof metadata.title === 'string') &&
-    (metadata.thumbnail === undefined || typeof metadata.thumbnail === 'string') &&
-    (metadata.videoId === undefined || typeof metadata.videoId === 'string') &&
-    (metadata.embedUrl === undefined || typeof metadata.embedUrl === 'string')
+    typeof (metadata as any).url === 'string' &&
+    typeof (metadata as any).type === 'string' &&
+    ['youtube', 'website', 'unknown'].includes((metadata as any).type) &&
+    typeof (metadata as any).created === 'string' &&
+    ((metadata as any).title === undefined || typeof (metadata as any).title === 'string') &&
+    ((metadata as any).thumbnail === undefined || typeof (metadata as any).thumbnail === 'string') &&
+    ((metadata as any).videoId === undefined || typeof (metadata as any).videoId === 'string') &&
+    ((metadata as any).embedUrl === undefined || typeof (metadata as any).embedUrl === 'string')
   );
 }

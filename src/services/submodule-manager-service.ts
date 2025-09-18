@@ -58,7 +58,8 @@ export class SubmoduleManagerService {
     } else if (typeof adapter.basePath === 'string') {
       vaultPath = adapter.basePath;
     } else if (adapter.path && typeof adapter.path === 'object') {
-      vaultPath = adapter.path.path || adapter.path.basePath || '';
+      const pathObj = adapter.path as Record<string, string>;
+      vaultPath = pathObj.path || pathObj.basePath || '';
     }
     
     this.vaultPath = vaultPath;

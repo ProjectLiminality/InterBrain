@@ -47,11 +47,19 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
 }) => {
   // Get service instances
   const canvasParser = useMemo(() => {
-    return new CanvasParserService(serviceManager.getVaultService());
+    const vaultService = serviceManager.getVaultService();
+    if (!vaultService) {
+      throw new Error('Vault service not available');
+    }
+    return new CanvasParserService(vaultService);
   }, []);
 
   const vaultService = useMemo(() => {
-    return serviceManager.getVaultService();
+    const service = serviceManager.getVaultService();
+    if (!service) {
+      throw new Error('Vault service not available');
+    }
+    return service;
   }, []);
 
   // Use the new hook for DreamSong data

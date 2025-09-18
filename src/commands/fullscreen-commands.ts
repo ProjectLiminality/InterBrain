@@ -34,7 +34,7 @@ export function registerFullScreenCommands(
         console.log(`Opening DreamTalk full-screen for: ${selectedNode.name}`);
         
         // Get leaf manager service
-        const leafManager = serviceManager.getService('leafManagerService');
+        const leafManager = serviceManager.getLeafManagerService();
         if (!leafManager) {
           uiService.showError('Leaf manager service not available');
           return;
@@ -69,7 +69,7 @@ export function registerFullScreenCommands(
         console.log(`Opening DreamSong full-screen for: ${selectedNode.name}`);
         
         // Get leaf manager service
-        const leafManager = serviceManager.getService('leafManagerService');
+        const leafManager = serviceManager.getLeafManagerService();
         if (!leafManager) {
           uiService.showError('Leaf manager service not available');
           return;
@@ -78,6 +78,10 @@ export function registerFullScreenCommands(
         // Use the useDreamSongData logic to determine if we should show canvas or README
         const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
         const vaultService = serviceManager.getVaultService();
+        if (!vaultService) {
+          uiService.showError('Vault service not available');
+          return;
+        }
 
         // Check if canvas exists first
         const canvasExists = await vaultService.fileExists(canvasPath);

@@ -152,7 +152,12 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
-// DreamSong cache interfaces removed - now handled by React's built-in caching
+// DreamSong cache interface for service layer
+export interface DreamSongCacheEntry {
+  data: DreamSongData;
+  timestamp: number;
+  structureHash: string;
+}
 
 // Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
 
@@ -175,7 +180,10 @@ export interface InterBrainState extends OllamaConfigSlice {
   selectedNodeDreamSongData: DreamSongData | null;
   setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
   
-  // DreamSong cache removed - now handled by React hook
+  // DreamSong cache for service layer
+  dreamSongCache: Map<string, DreamSongCacheEntry>;
+  getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
+  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
   
   // Creator mode state
   creatorMode: {
@@ -325,9 +333,10 @@ export const useInterBrainStore = create<InterBrainState>()(
   ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
   selectedNodeDreamSongData: null,
-  
-  // DreamSong cache removed - handled by React hook
-  
+
+  // DreamSong cache for service layer
+  dreamSongCache: new Map<string, DreamSongCacheEntry>(),
+
   creatorMode: {
     isActive: false,
     nodeId: null
@@ -503,9 +512,27 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
   
   setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
-  
-  // DreamSong cache methods removed - handled by React hook
-  
+
+  // DreamSong cache methods for service layer
+  getCachedDreamSong: (nodeId: string, structureHash: string) => {
+    const cacheKey = `${nodeId}-${structureHash}`;
+    return get().dreamSongCache.get(cacheKey) || null;
+  },
+
+  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => {
+    const cacheKey = `${nodeId}-${structureHash}`;
+    const entry: DreamSongCacheEntry = {
+      data,
+      timestamp: Date.now(),
+      structureHash
+    };
+    set((state) => {
+      const newCache = new Map(state.dreamSongCache);
+      newCache.set(cacheKey, entry);
+      return { dreamSongCache: newCache };
+    });
+  },
+
   setCreatorMode: (active, nodeId = null) => set({ 
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),

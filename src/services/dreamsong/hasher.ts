@@ -75,11 +75,11 @@ export function generateCanvasStructureHash(canvasData: CanvasData): string {
     })).sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)), // Sort for consistency
 
     // Edge relationships (structure)
-    edges: (canvasData.edges || []).map((edge: { id: string; fromNode: string; toNode: string; toEnd: string }) => ({
+    edges: (canvasData.edges || []).map((edge: any) => ({
       id: edge.id,
       fromNode: edge.fromNode,
       toNode: edge.toNode,
-      toEnd: edge.toEnd
+      toEnd: edge.toEnd || '' // Handle optional toEnd property
       // Exclude visual properties like color
     })).sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)) // Sort for consistency
   };

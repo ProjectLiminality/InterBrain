@@ -44,7 +44,7 @@ export function registerDreamweavingCommands(
           uiService.showInfo('DreamSong.canvas already exists, opening in split view...');
 
           // Get leaf manager service
-          const leafManager = serviceManager.getService('leafManagerService');
+          const leafManager = serviceManager.getLeafManagerService();
           if (!leafManager) {
             uiService.showError('Leaf manager service not available');
             return;
@@ -79,7 +79,8 @@ export function registerDreamweavingCommands(
           } else if (typeof adapter.basePath === 'string') {
             vaultPath = adapter.basePath;
           } else if (adapter.path && typeof adapter.path === 'object') {
-            vaultPath = adapter.path.path || adapter.path.basePath || '';
+            const pathObj = adapter.path as Record<string, string>;
+            vaultPath = pathObj.path || pathObj.basePath || '';
           }
           const fullRepoPath = require('path').join(vaultPath, selectedNode.repoPath);
           
@@ -93,7 +94,7 @@ export function registerDreamweavingCommands(
         }
 
         // Get leaf manager service for proper split-screen opening
-        const leafManager = serviceManager.getService('leafManagerService');
+        const leafManager = serviceManager.getLeafManagerService();
         if (!leafManager) {
           uiService.showError('Leaf manager service not available');
           return;
@@ -245,7 +246,8 @@ export function registerDreamweavingCommands(
               } else if (typeof adapter.basePath === 'string') {
                 vaultPath = adapter.basePath;
               } else if (adapter.path && typeof adapter.path === 'object') {
-                vaultPath = adapter.path.path || adapter.path.basePath || '';
+                const pathObj = adapter.path as Record<string, string>;
+                vaultPath = pathObj.path || pathObj.basePath || '';
               }
               const fullRepoPath = require('path').join(vaultPath, analysis.dreamNodeBoundary);
               
@@ -307,7 +309,8 @@ export function registerDreamweavingCommands(
           } else if (typeof adapter.basePath === 'string') {
             vaultPath = adapter.basePath;
           } else if (adapter.path && typeof adapter.path === 'object') {
-            vaultPath = adapter.path.path || adapter.path.basePath || '';
+            const pathObj = adapter.path as Record<string, string>;
+            vaultPath = pathObj.path || pathObj.basePath || '';
           }
           
           // Parse canvas to find the DreamNode boundary

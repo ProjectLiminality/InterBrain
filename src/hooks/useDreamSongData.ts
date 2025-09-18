@@ -144,16 +144,16 @@ export function useDreamSongData(
     };
 
     // Listen for file modifications
-    vault.on('modify', handleFileChange);
+    vault.on('modify', handleFileChange as any);
 
     // Also listen for file creation (in case canvas was created after component mount)
-    vault.on('create', handleFileChange);
+    vault.on('create', handleFileChange as any);
 
 
     // Cleanup listener on unmount or path change
     return () => {
-      vault.off('modify', handleFileChange);
-      vault.off('create', handleFileChange);
+      vault.off('modify', handleFileChange as any);
+      vault.off('create', handleFileChange as any);
     };
   }, [canvasPath, parseCanvas]);
 
