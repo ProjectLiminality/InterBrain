@@ -1,9 +1,9 @@
 // Access Node.js modules directly in Electron context (following GitDreamNodeService pattern)
-/* eslint-disable no-undef */
+ 
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
-/* eslint-enable no-undef */
+ 
 
 const execAsync = promisify(exec);
 
@@ -41,7 +41,6 @@ export class GitService {
     }
     
     this.vaultPath = vaultPath;
-    console.log('GitService: Vault path:', this.vaultPath);
   }
   
   private getFullPath(repoPath: string): string {
@@ -207,14 +206,39 @@ export class GitService {
     const fullPath = this.getFullPath(repoPath);
     try {
       console.log(`GitService: Opening ${fullPath} in Finder`);
-      
+
       // Use macOS 'open' command to reveal the folder in Finder
       await execAsync(`open "${fullPath}"`, { cwd: fullPath });
-      
+
       console.log(`GitService: Successfully opened ${fullPath} in Finder`);
     } catch (error) {
       console.error('GitService: Failed to open in Finder:', error);
       throw new Error(`Failed to open in Finder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Open terminal at repository folder and run claude command
+   */
+  async openInTerminal(repoPath: string): Promise<void> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Opening terminal at ${fullPath} and running claude`);
+
+      // Use osascript to open a new Terminal tab at the specified directory and run claude
+      const script = `
+        tell application "Terminal"
+          do script "cd '${fullPath}' && claude"
+          activate
+        end tell
+      `;
+
+      await execAsync(`osascript -e '${script}'`);
+
+      console.log(`GitService: Successfully opened terminal at ${fullPath} and started claude`);
+    } catch (error) {
+      console.error('GitService: Failed to open in Terminal:', error);
+      throw new Error(`Failed to open in Terminal: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

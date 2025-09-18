@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InterBrain: Complete Constellation Layout System</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            min-width: 350px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        .section {
+            margin: 20px 0;
+            border-top: 1px solid #444;
+            padding-top: 15px;
+        }
+        .section:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+        .slider-container {
+            margin: 10px 0;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 400px;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px 3px;
+            border: none;
+            border-radius: 5px;
+            background: #444;
+            color: white;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        button:hover {
+            background: #666;
+        }
+        .primary-button {
+            background: #0066cc;
+        }
+        .primary-button:hover {
+            background: #0088ff;
+        }
+        .stats-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 250px;
+        }
+        .stat-item {
+            margin: 8px 0;
+            font-size: 12px;
+        }
+        .cluster-item {
+            margin: 5px 0;
+            font-size: 11px;
+        }
+        .color-box {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 6px;
+            border-radius: 2px;
+        }
+        .pipeline-step {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 3px solid #0066cc;
+        }
+        .step-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <div class="controls">
+        <h3>Full Constellation System</h3>
+
+        <div class="section">
+            <h4>Data Source</h4>
+            <div style="margin: 10px 0;">
+                <label for="jsonInput">Load DreamSong Relationships JSON:</label>
+                <input type="file" id="jsonInput" accept=".json" style="width: 100%; margin: 5px 0; padding: 5px; background: #333; color: white; border: 1px solid #666; border-radius: 3px;" onchange="loadDreamSongData(event)">
+                <button onclick="loadSampleData()" style="width: 100%; margin: 5px 0; padding: 8px; background: #444; color: white; border: 1px solid #666; border-radius: 3px; cursor: pointer;">Load Sample Data</button>
+                <div style="font-size: 10px; color: #aaa; margin-top: 3px;">
+                    Select a dreamsong-relationships.json file exported from InterBrain plugin, or use sample data
+                </div>
+                <details style="margin-top: 10px; font-size: 11px; color: #aaa;">
+                    <summary>Expected JSON Schema</summary>
+                    <pre style="background: #222; padding: 10px; border-radius: 3px; margin: 5px 0; overflow-x: auto;">{
+  "nodes": [
+    {"id": "node-1", "title": "Node Title", "isStandalone": false}
+  ],
+  "edges": [
+    {"source": "node-1", "target": "node-2", "weight": 1.0}
+  ],
+  "metadata": {
+    "totalNodes": 10, "totalEdges": 15,
+    "totalDreamSongs": 5, "standaloneNodes": 2
+  }
+}</pre>
+                </details>
+            </div>
+        </div>
+
+        <div class="section">
+            <h4>Graph Generation (Mock Data)</h4>
+            <div class="slider-container">
+                <label>Number of Clusters:</label>
+                <input type="range" id="clustersSlider" min="3" max="12" step="1" value="6">
+                <span id="clustersValue">6</span>
+            </div>
+            <div class="slider-container">
+                <label>Nodes per Cluster:</label>
+                <input type="range" id="clusterSizeSlider" min="5" max="25" step="2" value="12">
+                <span id="clusterSizeValue">12</span>
+            </div>
+            <div class="slider-container">
+                <label>Inter-cluster Edges:</label>
+                <input type="range" id="interEdgesSlider" min="0" max="15" step="1" value="3">
+                <span id="interEdgesValue">3</span>
+            </div>
+            <button onclick="generateNewGraph()" class="primary-button">Generate Mock Graph</button>
+        </div>
+
+        <div class="section">
+            <h4>Global Positioning</h4>
+            <div class="slider-container">
+                <label>Coverage Factor:</label>
+                <input type="range" id="coverageSlider" min="0.3" max="0.8" step="0.05" value="0.55">
+                <span id="coverageValue">0.55</span>
+            </div>
+            <div class="slider-container">
+                <label>Min Cap Radius:</label>
+                <input type="range" id="minRadiusSlider" min="0.03" max="0.12" step="0.01" value="0.06">
+                <span id="minRadiusValue">0.06</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h4>Local Layout</h4>
+            <div class="slider-container">
+                <label>Force Iterations:</label>
+                <input type="range" id="forceIterationsSlider" min="50" max="300" step="25" value="150">
+                <span id="forceIterationsValue">150</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h4>Visualization</h4>
+            <div class="slider-container">
+                <label>Node Size:</label>
+                <input type="range" id="nodeSizeSlider" min="0.01" max="0.05" step="0.005" value="0.025">
+                <span id="nodeSizeValue">0.025</span>
+            </div>
+            <div class="slider-container">
+                <label>Show Caps:</label>
+                <input type="checkbox" id="showCapsCheckbox" checked>
+            </div>
+            <div class="slider-container">
+                <label>Show Sphere:</label>
+                <input type="checkbox" id="showSphereCheckbox" checked>
+            </div>
+        </div>
+
+        <button onclick="recomputeLayout()" class="primary-button">Recompute Layout</button>
+        <button onclick="animatePipeline()">Animate Pipeline</button>
+    </div>
+
+    <div class="stats-panel">
+        <h4>System Statistics</h4>
+        <div class="stat-item"><strong>Data Source:</strong> <span id="dataSource">Mock Data</span></div>
+        <div class="stat-item"><strong>Total Nodes:</strong> <span id="totalNodes">0</span></div>
+        <div class="stat-item"><strong>Total Edges:</strong> <span id="totalEdges">0</span></div>
+        <div class="stat-item"><strong>Clusters Found:</strong> <span id="clustersFound">0</span></div>
+        <div class="stat-item"><strong>Sphere Coverage:</strong> <span id="sphereCoverage">0%</span></div>
+        <div class="stat-item"><strong>Avg Edge Length:</strong> <span id="avgEdgeLength">0.000</span></div>
+        <div class="stat-item"><strong>Max Edge Length:</strong> <span id="maxEdgeLength">0.000</span></div>
+
+        <h4 style="margin-top: 20px;">Clusters</h4>
+        <div id="clusterList"></div>
+
+        <div class="pipeline-step" style="margin-top: 20px;">
+            <div class="step-title">Pipeline Status</div>
+            <div id="pipelineStatus">Ready</div>
+        </div>
+    </div>
+
+    <div class="info">
+        <h4>Complete Constellation System</h4>
+        <p><strong>Purpose:</strong> Full pipeline from graph to constellation visualization on sphere.</p>
+        <p><strong>Pipeline:</strong> Graph generation → Cluster detection → Global positioning → Local layouts → Projection to sphere → Edge rendering.</p>
+        <p><strong>Features:</strong> Interactive controls for all parameters, real-time statistics, and pipeline animation.</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Global variables
+        let scene, camera, renderer;
+        let graph = { nodes: [], edges: [] };
+        let clusters = [];
+        let nodeObjects = [];
+        let edgeObjects = [];
+        let capObjects = [];
+        let sphereObject;
+        let usingRealData = false;
+        let isAnimating = false;
+
+        // Colors for clusters
+        const clusterColors = [
+            0xFF6B6B, 0x4ECDC4, 0x45B7D1, 0x96CEB4, 0xFECA57,
+            0xFF9FF3, 0x54A0FF, 0x5F27CD, 0x00D2D3, 0xFF9F43,
+            0x10AC84, 0xEE5A24, 0x0984E3, 0x6C5CE7, 0xA29BFE
+        ];
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000815);
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+
+            // Reference sphere
+            const sphereGeometry = new THREE.SphereGeometry(1, 32, 16);
+            const sphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x333333,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.15
+            });
+            sphereObject = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            scene.add(sphereObject);
+
+            camera.position.set(0, 0, 2.8);
+            camera.lookAt(0, 0, 0);
+
+            setupControls();
+            generateNewGraph();
+            animate();
+        }
+
+        // === GRAPH GENERATION ===
+        function generateNewGraph() {
+            updatePipelineStatus("Generating graph...");
+
+            const numClusters = parseInt(document.getElementById('clustersSlider').value);
+            const clusterSize = parseInt(document.getElementById('clusterSizeSlider').value);
+            const interEdges = parseInt(document.getElementById('interEdgesSlider').value);
+
+            graph = { nodes: [], edges: [] };
+            let nodeId = 0;
+
+            // Generate clusters
+            const generatedClusters = [];
+            for (let c = 0; c < numClusters; c++) {
+                const size = clusterSize + Math.floor(Math.random() * 8) - 4;
+                const cluster = { nodes: [], edges: [] };
+
+                // Create nodes
+                for (let i = 0; i < size; i++) {
+                    const node = {
+                        id: nodeId++,
+                        cluster: c,
+                        label: `${c}-${i}`
+                    };
+                    graph.nodes.push(node);
+                    cluster.nodes.push(node.id);
+                }
+
+                // Create intra-cluster edges (ensure connectivity)
+                for (let i = 1; i < size; i++) {
+                    const source = cluster.nodes[Math.floor(Math.random() * i)];
+                    const target = cluster.nodes[i];
+                    graph.edges.push({ source, target });
+                    cluster.edges.push(graph.edges.length - 1);
+                }
+
+                // Add some extra intra-cluster edges
+                const extraEdges = Math.floor(size * 0.7);
+                for (let i = 0; i < extraEdges; i++) {
+                    const source = cluster.nodes[Math.floor(Math.random() * size)];
+                    const target = cluster.nodes[Math.floor(Math.random() * size)];
+                    if (source !== target) {
+                        graph.edges.push({ source, target });
+                        cluster.edges.push(graph.edges.length - 1);
+                    }
+                }
+
+                generatedClusters.push(cluster);
+            }
+
+            // Add inter-cluster edges
+            for (let i = 0; i < interEdges; i++) {
+                const c1 = Math.floor(Math.random() * numClusters);
+                const c2 = Math.floor(Math.random() * numClusters);
+                if (c1 !== c2) {
+                    const node1 = generatedClusters[c1].nodes[Math.floor(Math.random() * generatedClusters[c1].nodes.length)];
+                    const node2 = generatedClusters[c2].nodes[Math.floor(Math.random() * generatedClusters[c2].nodes.length)];
+                    graph.edges.push({ source: node1, target: node2 });
+                }
+            }
+
+            computeFullLayout();
+        }
+
+        // === CLUSTER DETECTION ===
+        function detectClusters() {
+            updatePipelineStatus("Detecting clusters...");
+
+            // For real DreamSong data, we need to detect clusters using graph connectivity
+            if (usingRealData) {
+                detectConnectedComponents();
+            } else {
+                // For mock data, use predefined cluster assignments
+                const clusterMap = new Map();
+                for (const node of graph.nodes) {
+                    if (!clusterMap.has(node.cluster)) {
+                        clusterMap.set(node.cluster, []);
+                    }
+                    clusterMap.get(node.cluster).push(node.id);
+                }
+
+                clusters = [];
+                let clusterId = 0;
+                for (const [originalId, nodeIds] of clusterMap) {
+                    clusters.push({
+                        id: clusterId++,
+                        originalId,
+                        nodes: nodeIds,
+                        size: nodeIds.length,
+                        center: new THREE.Vector3(),
+                        radius: 0,
+                        color: clusterColors[originalId % clusterColors.length]
+                    });
+                }
+            }
+        }
+
+        // Detect connected components for real DreamSong data
+        function detectConnectedComponents() {
+            const visited = new Set();
+            clusters = [];
+            let clusterId = 0;
+
+            // Build adjacency list
+            const adjacency = new Map();
+            for (const node of graph.nodes) {
+                adjacency.set(node.id, []);
+            }
+            for (const edge of graph.edges) {
+                if (adjacency.has(edge.source) && adjacency.has(edge.target)) {
+                    adjacency.get(edge.source).push(edge.target);
+                    adjacency.get(edge.target).push(edge.source);
+                }
+            }
+
+            // DFS to find connected components
+            function dfs(nodeId, component) {
+                visited.add(nodeId);
+                component.push(nodeId);
+
+                for (const neighbor of adjacency.get(nodeId) || []) {
+                    if (!visited.has(neighbor)) {
+                        dfs(neighbor, component);
+                    }
+                }
+            }
+
+            // Find all connected components
+            for (const node of graph.nodes) {
+                if (!visited.has(node.id)) {
+                    const component = [];
+                    dfs(node.id, component);
+
+                    if (component.length > 0) {
+                        // Assign cluster to nodes
+                        for (const nodeId of component) {
+                            const graphNode = graph.nodes.find(n => n.id === nodeId);
+                            if (graphNode) {
+                                graphNode.cluster = clusterId;
+                            }
+                        }
+
+                        clusters.push({
+                            id: clusterId,
+                            originalId: clusterId,
+                            nodes: component,
+                            size: component.length,
+                            center: new THREE.Vector3(),
+                            radius: 0,
+                            color: clusterColors[clusterId % clusterColors.length]
+                        });
+                        clusterId++;
+                    }
+                }
+            }
+
+            // Handle standalone nodes (not connected to anything)
+            for (const node of graph.nodes) {
+                if (node.cluster === -1 || node.cluster === undefined) {
+                    node.cluster = clusterId;
+                    clusters.push({
+                        id: clusterId,
+                        originalId: clusterId,
+                        nodes: [node.id],
+                        size: 1,
+                        center: new THREE.Vector3(),
+                        radius: 0,
+                        color: clusterColors[clusterId % clusterColors.length]
+                    });
+                    clusterId++;
+                }
+            }
+
+            console.log(`Detected ${clusters.length} clusters from DreamSong data:`,
+                clusters.map(c => `C${c.id}: ${c.size} nodes`).join(', '));
+        }
+
+        // === GLOBAL POSITIONING ===
+        function computeGlobalPositioning() {
+            updatePipelineStatus("Computing global positioning...");
+
+            const coverageFactor = parseFloat(document.getElementById('coverageSlider').value);
+            const minRadius = parseFloat(document.getElementById('minRadiusSlider').value);
+            const totalSphereArea = 4 * Math.PI;
+            const totalNodes = clusters.reduce((sum, cluster) => sum + cluster.size, 0);
+
+            // Compute cluster radii
+            for (const cluster of clusters) {
+                const proportionalArea = coverageFactor * totalSphereArea * (cluster.size / totalNodes);
+                const minArea = sphericalCapArea(minRadius);
+                const area = Math.max(minArea, proportionalArea);
+                cluster.radius = areaToRadius(area);
+            }
+
+            // Fibonacci placement
+            const fibonacciPoints = fibonacciSphere(clusters.length);
+            const sortedClusters = clusters.slice().sort((a, b) => b.size - a.size);
+
+            for (let i = 0; i < clusters.length; i++) {
+                sortedClusters[i].center = fibonacciPoints[i].clone();
+            }
+
+            // Refinement to eliminate overlaps
+            const iterations = 50;
+            const margin = 0.02;
+            refineClusterPositions(iterations, margin);
+        }
+
+        function fibonacciSphere(n) {
+            const points = [];
+            const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+            for (let i = 0; i < n; i++) {
+                const y = 1 - (2 * i) / (n - 1);
+                const radius = Math.sqrt(1 - y * y);
+                const theta = 2 * Math.PI * i / goldenRatio;
+
+                points.push(new THREE.Vector3(
+                    radius * Math.cos(theta),
+                    y,
+                    radius * Math.sin(theta)
+                ));
+            }
+            return points;
+        }
+
+        function sphericalCapArea(radius) {
+            return 2 * Math.PI * (1 - Math.cos(radius));
+        }
+
+        function areaToRadius(area) {
+            return Math.acos(1 - area / (2 * Math.PI));
+        }
+
+        function geodesicDistance(a, b) {
+            return Math.acos(Math.max(-1, Math.min(1, a.dot(b))));
+        }
+
+        function refineClusterPositions(iterations, margin) {
+            const alpha = 0.15;
+
+            for (let iter = 0; iter < iterations; iter++) {
+                const forces = clusters.map(() => new THREE.Vector3());
+
+                for (let i = 0; i < clusters.length; i++) {
+                    for (let j = i + 1; j < clusters.length; j++) {
+                        const distance = geodesicDistance(clusters[i].center, clusters[j].center);
+                        const required = clusters[i].radius + clusters[j].radius + margin;
+
+                        if (distance < required) {
+                            const overlap = required - distance;
+                            const cosTheta = clusters[i].center.dot(clusters[j].center);
+                            const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta));
+
+                            if (sinTheta > 1e-10) {
+                                const direction = clusters[j].center.clone()
+                                    .sub(clusters[i].center.clone().multiplyScalar(cosTheta))
+                                    .divideScalar(sinTheta);
+
+                                const force = alpha * overlap * 0.5;
+                                forces[i].sub(direction.clone().multiplyScalar(force));
+                                forces[j].add(direction.clone().multiplyScalar(force));
+                            }
+                        }
+                    }
+                }
+
+                // Apply forces
+                for (let i = 0; i < clusters.length; i++) {
+                    if (forces[i].length() > 1e-10) {
+                        clusters[i].center = exponentialMap(clusters[i].center, forces[i]);
+                    }
+                }
+            }
+        }
+
+        // === LOCAL LAYOUT ===
+        function computeLocalLayouts() {
+            updatePipelineStatus("Computing local layouts...");
+
+            const forceIterations = parseInt(document.getElementById('forceIterationsSlider').value);
+
+            for (const cluster of clusters) {
+                computeClusterLayout(cluster, forceIterations);
+            }
+        }
+
+        function computeClusterLayout(cluster, iterations) {
+            const clusterNodes = graph.nodes.filter(node => cluster.nodes.includes(node.id));
+            const clusterEdges = graph.edges.filter(edge =>
+                cluster.nodes.includes(edge.source) && cluster.nodes.includes(edge.target)
+            );
+
+            // Planar force-directed layout
+            const positions = new Map();
+            for (const node of clusterNodes) {
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = Math.random() * 0.3 * cluster.radius;
+                positions.set(node.id, {
+                    x: radius * Math.cos(angle),
+                    y: radius * Math.sin(angle)
+                });
+            }
+
+            // Fruchterman-Reingold
+            const area = Math.PI * cluster.radius * cluster.radius;
+            const k = 0.8 * Math.sqrt(area / clusterNodes.length);
+
+            for (let iter = 0; iter < iterations; iter++) {
+                const forces = new Map();
+                clusterNodes.forEach(node => forces.set(node.id, { x: 0, y: 0 }));
+
+                // Repulsive forces
+                for (let i = 0; i < clusterNodes.length; i++) {
+                    for (let j = i + 1; j < clusterNodes.length; j++) {
+                        const node1 = clusterNodes[i];
+                        const node2 = clusterNodes[j];
+                        const pos1 = positions.get(node1.id);
+                        const pos2 = positions.get(node2.id);
+
+                        const dx = pos1.x - pos2.x;
+                        const dy = pos1.y - pos2.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance > 1e-10) {
+                            const repulsive = k * k / distance;
+                            const fx = (dx / distance) * repulsive;
+                            const fy = (dy / distance) * repulsive;
+
+                            forces.get(node1.id).x += fx;
+                            forces.get(node1.id).y += fy;
+                            forces.get(node2.id).x -= fx;
+                            forces.get(node2.id).y -= fy;
+                        }
+                    }
+                }
+
+                // Attractive forces
+                for (const edge of clusterEdges) {
+                    const pos1 = positions.get(edge.source);
+                    const pos2 = positions.get(edge.target);
+                    const dx = pos1.x - pos2.x;
+                    const dy = pos1.y - pos2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 1e-10) {
+                        const attractive = distance * distance / k;
+                        const fx = (dx / distance) * attractive;
+                        const fy = (dy / distance) * attractive;
+
+                        forces.get(edge.source).x -= fx;
+                        forces.get(edge.source).y -= fy;
+                        forces.get(edge.target).x += fx;
+                        forces.get(edge.target).y += fy;
+                    }
+                }
+
+                // Apply forces with cooling
+                const temp = 0.1 * (1 - iter / iterations);
+                for (const node of clusterNodes) {
+                    const force = forces.get(node.id);
+                    const magnitude = Math.sqrt(force.x * force.x + force.y * force.y);
+
+                    if (magnitude > 1e-10) {
+                        const displacement = Math.min(magnitude, temp);
+                        const pos = positions.get(node.id);
+                        pos.x += (force.x / magnitude) * displacement;
+                        pos.y += (force.y / magnitude) * displacement;
+
+                        // Constrain to cap
+                        const dist = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
+                        if (dist > cluster.radius) {
+                            pos.x = (pos.x / dist) * cluster.radius;
+                            pos.y = (pos.y / dist) * cluster.radius;
+                        }
+                    }
+                }
+            }
+
+            // Project to sphere
+            const basis = getTangentBasis(cluster.center);
+            for (const node of clusterNodes) {
+                const pos = positions.get(node.id);
+                const tangent = basis.e1.clone().multiplyScalar(pos.x)
+                    .add(basis.e2.clone().multiplyScalar(pos.y));
+                node.position = exponentialMap(cluster.center, tangent);
+            }
+        }
+
+        function getTangentBasis(center) {
+            let u = new THREE.Vector3(1, 0, 0);
+            if (Math.abs(center.dot(u)) > 0.9) {
+                u = new THREE.Vector3(0, 1, 0);
+            }
+
+            const e1 = u.clone().sub(center.clone().multiplyScalar(u.dot(center))).normalize();
+            const e2 = center.clone().cross(e1).normalize();
+
+            return { e1, e2 };
+        }
+
+        function exponentialMap(center, tangentVector) {
+            const theta = tangentVector.length();
+            if (theta < 1e-10) return center.clone();
+
+            const result = center.clone().multiplyScalar(Math.cos(theta));
+            const normalized = tangentVector.clone().divideScalar(theta);
+            result.add(normalized.multiplyScalar(Math.sin(theta)));
+            return result.normalize();
+        }
+
+        // === VISUALIZATION ===
+        function updateVisualization() {
+            updatePipelineStatus("Updating visualization...");
+
+            // Clear existing
+            [...nodeObjects, ...edgeObjects, ...capObjects].forEach(obj => scene.remove(obj));
+            nodeObjects = [];
+            edgeObjects = [];
+            capObjects = [];
+
+            const nodeSize = parseFloat(document.getElementById('nodeSizeSlider').value);
+            const showCaps = document.getElementById('showCapsCheckbox').checked;
+
+            // Nodes
+            for (const node of graph.nodes) {
+                if (!node.position) continue;
+
+                const cluster = clusters.find(c => c.nodes.includes(node.id));
+                const geometry = new THREE.SphereGeometry(nodeSize, 12, 12);
+                const material = new THREE.MeshLambertMaterial({
+                    color: cluster ? cluster.color : 0x888888
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(node.position);
+                scene.add(mesh);
+                nodeObjects.push(mesh);
+            }
+
+            // Edges (great circles)
+            for (const edge of graph.edges) {
+                const sourceNode = graph.nodes.find(n => n.id === edge.source);
+                const targetNode = graph.nodes.find(n => n.id === edge.target);
+
+                if (sourceNode?.position && targetNode?.position) {
+                    const points = [];
+                    const steps = 20;
+
+                    for (let i = 0; i <= steps; i++) {
+                        const t = i / steps;
+                        const point = sourceNode.position.clone().lerp(targetNode.position, t).normalize();
+                        points.push(point);
+                    }
+
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const material = new THREE.LineBasicMaterial({
+                        color: 0x666666,
+                        transparent: true,
+                        opacity: 0.6
+                    });
+                    const line = new THREE.Line(geometry, material);
+                    scene.add(line);
+                    edgeObjects.push(line);
+                }
+            }
+
+            // Cluster caps
+            if (showCaps) {
+                for (const cluster of clusters) {
+                    const capGeometry = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, cluster.radius);
+                    const capMaterial = new THREE.MeshBasicMaterial({
+                        color: cluster.color,
+                        transparent: true,
+                        opacity: 0.15,
+                        side: THREE.DoubleSide
+                    });
+                    const cap = new THREE.Mesh(capGeometry, capMaterial);
+                    cap.lookAt(cluster.center);
+                    cap.rotateX(Math.PI / 2);
+                    cap.position.copy(cluster.center);
+                    scene.add(cap);
+                    capObjects.push(cap);
+                }
+            }
+
+            updateStats();
+            updatePipelineStatus("Complete");
+        }
+
+        function updateStats() {
+            document.getElementById('dataSource').textContent = usingRealData ? 'DreamSong Data' : 'Mock Data';
+            document.getElementById('totalNodes').textContent = graph.nodes.length;
+            document.getElementById('totalEdges').textContent = graph.edges.length;
+            document.getElementById('clustersFound').textContent = clusters.length;
+
+            const totalArea = clusters.reduce((sum, c) => sum + sphericalCapArea(c.radius), 0);
+            const coverage = ((totalArea / (4 * Math.PI)) * 100).toFixed(1);
+            document.getElementById('sphereCoverage').textContent = coverage + '%';
+
+            // Edge length statistics
+            let totalLength = 0;
+            let maxLength = 0;
+            let validEdges = 0;
+
+            for (const edge of graph.edges) {
+                const source = graph.nodes.find(n => n.id === edge.source);
+                const target = graph.nodes.find(n => n.id === edge.target);
+
+                if (source?.position && target?.position) {
+                    const length = geodesicDistance(source.position, target.position);
+                    totalLength += length;
+                    maxLength = Math.max(maxLength, length);
+                    validEdges++;
+                }
+            }
+
+            const avgLength = validEdges > 0 ? totalLength / validEdges : 0;
+            document.getElementById('avgEdgeLength').textContent = avgLength.toFixed(3);
+            document.getElementById('maxEdgeLength').textContent = maxLength.toFixed(3);
+
+            // Cluster list
+            const clusterList = document.getElementById('clusterList');
+            clusterList.innerHTML = '';
+            clusters
+                .sort((a, b) => b.size - a.size)
+                .forEach(cluster => {
+                    const item = document.createElement('div');
+                    item.className = 'cluster-item';
+                    item.innerHTML = `
+                        <span class="color-box" style="background-color: #${cluster.color.toString(16).padStart(6, '0')}"></span>
+                        C${cluster.id}: ${cluster.size} nodes (R=${cluster.radius.toFixed(3)})
+                    `;
+                    clusterList.appendChild(item);
+                });
+        }
+
+        function updatePipelineStatus(status) {
+            document.getElementById('pipelineStatus').textContent = status;
+        }
+
+        // === MAIN PIPELINE ===
+        function computeFullLayout() {
+            detectClusters();
+            computeGlobalPositioning();
+            computeLocalLayouts();
+            updateVisualization();
+        }
+
+        function recomputeLayout() {
+            computeFullLayout();
+        }
+
+        function animatePipeline() {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            const steps = [
+                () => { detectClusters(); updateVisualization(); },
+                () => { computeGlobalPositioning(); updateVisualization(); },
+                () => { computeLocalLayouts(); updateVisualization(); }
+            ];
+
+            let step = 0;
+            function nextStep() {
+                if (step < steps.length) {
+                    steps[step]();
+                    step++;
+                    setTimeout(nextStep, 1500);
+                } else {
+                    isAnimating = false;
+                }
+            }
+            nextStep();
+        }
+
+        // === CONTROLS ===
+        function setupControls() {
+            // Sliders
+            ['clusters', 'clusterSize', 'interEdges', 'coverage', 'minRadius', 'forceIterations', 'nodeSize'].forEach(id => {
+                const slider = document.getElementById(id + 'Slider');
+                const value = document.getElementById(id + 'Value');
+
+                slider.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    if (id === 'clusters' || id === 'clusterSize' || id === 'interEdges' || id === 'forceIterations') {
+                        value.textContent = Math.round(val);
+                    } else {
+                        value.textContent = val.toFixed(3);
+                    }
+                });
+            });
+
+            // Checkboxes
+            document.getElementById('showCapsCheckbox').addEventListener('change', updateVisualization);
+            document.getElementById('showSphereCheckbox').addEventListener('change', (e) => {
+                sphereObject.visible = e.target.checked;
+            });
+
+            // Mouse controls
+            let mouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            document.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!mouseDown || isAnimating) return;
+
+                const deltaX = e.clientX - mouseX;
+                const deltaY = e.clientY - mouseY;
+
+                const spherical = new THREE.Spherical();
+                spherical.setFromVector3(camera.position);
+                spherical.theta -= deltaX * 0.005;
+                spherical.phi += deltaY * 0.005;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+                camera.position.setFromSpherical(spherical);
+                camera.lookAt(0, 0, 0);
+
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+                if (isAnimating) return;
+                const zoom = e.deltaY * 0.001;
+                camera.position.multiplyScalar(1 + zoom);
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Load DreamSong relationship data from JSON file
+        function loadDreamSongData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            console.log('Loading DreamSong relationship data:', file.name);
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    console.log('Parsed DreamSong data:', data);
+
+                    // Validate data structure
+                    if (!data.nodes || !data.edges || !data.metadata) {
+                        throw new Error('Invalid JSON structure: missing nodes, edges, or metadata');
+                    }
+
+                    // Convert to graph format expected by constellation algorithm
+                    graph = {
+                        nodes: data.nodes.map((node, index) => ({
+                            id: node.id,
+                            label: node.title || `Node ${index}`,
+                            cluster: -1, // Will be assigned during clustering
+                            position: null, // Will be calculated
+                            isStandalone: node.isStandalone || false
+                        })),
+                        edges: data.edges.map(edge => ({
+                            source: edge.source,
+                            target: edge.target,
+                            weight: edge.weight || 1.0,
+                            dreamSongId: edge.dreamSongId || '',
+                            sequenceIndex: edge.sequenceIndex || 0
+                        }))
+                    };
+
+                    usingRealData = true;
+                    console.log(`Loaded ${graph.nodes.length} nodes and ${graph.edges.length} edges from DreamSong data`);
+
+                    // Update UI to show real data loaded
+                    const fileInput = document.getElementById('jsonInput');
+                    fileInput.style.borderColor = '#4CAF50';
+                    fileInput.style.backgroundColor = '#1a4f1a';
+
+                    // Show success message in stats panel
+                    updateStats();
+
+                    // Auto-run constellation algorithm with real data
+                    computeFullLayout();
+
+                    alert(`✅ DreamSong data loaded successfully!\n\n${graph.nodes.length} nodes, ${graph.edges.length} edges\nFrom: ${data.metadata.totalDreamSongs} DreamSongs\n${data.metadata.standaloneNodes} standalone nodes`);
+
+                } catch (error) {
+                    console.error('Failed to parse DreamSong JSON:', error);
+                    alert(`❌ Failed to load DreamSong data:\n\n${error.message}\n\nPlease check the JSON file format.`);
+
+                    // Reset file input
+                    event.target.value = '';
+                    const fileInput = document.getElementById('jsonInput');
+                    fileInput.style.borderColor = '#666';
+                    fileInput.style.backgroundColor = '#333';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Load sample DreamSong relationship data
+        function loadSampleData() {
+            console.log('Loading sample DreamSong relationship data...');
+
+            const sampleData = {
+                "nodes": [
+                    {"id": "dreamer-alice", "title": "Alice (Dreamer)", "isStandalone": false},
+                    {"id": "dreamer-bob", "title": "Bob (Dreamer)", "isStandalone": false},
+                    {"id": "dream-ai-ethics", "title": "AI Ethics", "isStandalone": false},
+                    {"id": "dream-sustainability", "title": "Sustainability", "isStandalone": false},
+                    {"id": "dream-education", "title": "Education Reform", "isStandalone": false},
+                    {"id": "dream-creativity", "title": "Creative Expression", "isStandalone": false},
+                    {"id": "dream-community", "title": "Community Building", "isStandalone": false},
+                    {"id": "standalone-node", "title": "Isolated Idea", "isStandalone": true}
+                ],
+                "edges": [
+                    {"source": "dreamer-alice", "target": "dream-ai-ethics", "weight": 1.0},
+                    {"source": "dreamer-alice", "target": "dream-creativity", "weight": 1.0},
+                    {"source": "dreamer-bob", "target": "dream-sustainability", "weight": 1.0},
+                    {"source": "dreamer-bob", "target": "dream-education", "weight": 1.0},
+                    {"source": "dream-ai-ethics", "target": "dream-education", "weight": 0.8},
+                    {"source": "dream-sustainability", "target": "dream-community", "weight": 0.9},
+                    {"source": "dream-creativity", "target": "dream-community", "weight": 0.7},
+                    {"source": "dream-education", "target": "dream-community", "weight": 0.8}
+                ],
+                "metadata": {
+                    "totalNodes": 8,
+                    "totalEdges": 8,
+                    "totalDreamSongs": 6,
+                    "standaloneNodes": 1
+                }
+            };
+
+            try {
+                // Convert to graph format expected by constellation algorithm
+                graph = {
+                    nodes: sampleData.nodes.map((node, index) => ({
+                        id: node.id,
+                        label: node.title || `Node ${index}`,
+                        cluster: -1, // Will be assigned during clustering
+                        position: null, // Will be calculated
+                        isStandalone: node.isStandalone || false
+                    })),
+                    edges: sampleData.edges.map(edge => ({
+                        source: edge.source,
+                        target: edge.target,
+                        weight: edge.weight || 1.0,
+                        sourceNodeTitle: sampleData.nodes.find(n => n.id === edge.source)?.title || edge.source,
+                        targetNodeTitle: sampleData.nodes.find(n => n.id === edge.target)?.title || edge.target
+                    }))
+                };
+
+                // Update data source indicator
+                document.getElementById('dataSource').textContent = 'Sample Data';
+
+                // Compute and visualize
+                computeConstellationLayout();
+                updateVisualization();
+
+                console.log('Sample DreamSong data loaded and visualized:', graph);
+                alert(`✅ Sample DreamSong data loaded successfully!\n\n${graph.nodes.length} nodes, ${graph.edges.length} edges\nIncludes: Dreamers, Dreams, and one standalone node`);
+
+            } catch (error) {
+                console.error('Failed to load sample data:', error);
+                alert(`❌ Failed to load sample data: ${error.message}`);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

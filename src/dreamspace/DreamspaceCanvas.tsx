@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { useRef, useEffect } from 'react';
 import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
@@ -12,16 +11,36 @@ import ProtoNode3D from '../features/creation/ProtoNode3D';
 import SearchNode3D from '../features/search/SearchNode3D';
 import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../features/edit-mode';
+import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { UIService } from '../services/ui-service';
+import { VaultService } from '../services/vault-service';
+import { CanvasParserService } from '../services/canvas-parser-service';
 import { CAMERA_INTERSECTION_POINT } from './DynamicViewScaling';
+import { processDroppedUrlData } from '../utils/url-utils';
 
-// Create a singleton UI service instance
+// Create singleton service instances
 const uiService = new UIService();
 
 export default function DreamspaceCanvas() {
+  // Get services inside component so they're available after plugin initialization
+  const [vaultService, setVaultService] = useState<VaultService | undefined>(undefined);
+  const [canvasParserService, setCanvasParserService] = useState<CanvasParserService | undefined>(undefined);
+  
+  // Load services on component mount (after plugin has initialized)
+  useEffect(() => {
+    try {
+      const vault = serviceManager.getVaultService() || undefined;
+      const canvas = serviceManager.getCanvasParserService() || undefined;
+      setVaultService(vault);
+      setCanvasParserService(canvas);
+    } catch {
+      console.log('Services not available, flip functionality will be disabled');
+    }
+  }, []); // Run once on mount
+  
   // Get data mode and mock data configuration from store
   const dataMode = useInterBrainStore(state => state.dataMode);
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
@@ -81,7 +100,6 @@ export default function DreamspaceCanvas() {
         const store = useInterBrainStore.getState();
         const layout = store.spatialLayout;
         
-        console.log(`🎯 [DreamspaceCanvas] Escape navigation: ${layout} → parent`);
         
         // Complete hierarchical navigation for all states
         switch (layout) {
@@ -128,11 +146,9 @@ export default function DreamspaceCanvas() {
       }, 300); // 300ms debounce to prevent rapid state changes
     };
     
-    console.log(`🎯 [DreamspaceCanvas] Setting up unified escape handler with debouncing`);
     globalThis.document.addEventListener('keydown', handleEscape);
     
     return () => {
-      console.log(`🧹 [DreamspaceCanvas] Removing unified escape handler`);
       if (debounceTimeout) {
         globalThis.clearTimeout(debounceTimeout);
       }
@@ -264,6 +280,14 @@ export default function DreamspaceCanvas() {
           return true;
         }
         return false;
+      },
+      applyConstellationLayout: async () => {
+        // Apply constellation layout positioning via SpatialOrchestrator
+        if (spatialOrchestratorRef.current) {
+          await spatialOrchestratorRef.current.applyConstellationLayout();
+          return;
+        }
+        throw new Error('SpatialOrchestrator not available');
       }
     };
   }, []);
@@ -415,14 +439,23 @@ export default function DreamspaceCanvas() {
   const isValidMediaFile = (file: globalThis.File): boolean => {
     const validTypes = [
       'image/png',
-      'image/jpeg', 
+      'image/jpeg',
       'image/jpg',
       'image/gif',
       'image/webp',
       'video/mp4',
-      'video/webm'
+      'video/webm',
+      // .link files appear as text/plain or application/octet-stream depending on system
+      'text/plain',
+      'application/octet-stream'
     ];
-    
+
+    // Also check file extension for .link files since MIME detection is unreliable
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.link')) {
+      return true;
+    }
+
     return validTypes.includes(file.type);
   };
 
@@ -779,17 +812,51 @@ export default function DreamspaceCanvas() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     setIsDragOver(false);
-    
+
+    // Check for files first
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-    
+
+    // Check for text/URL data if no files
+    let urlData: string | null = null;
+    if (files.length === 0) {
+      // Try different data formats for URLs
+      urlData = e.dataTransfer.getData('text/uri-list') ||
+                e.dataTransfer.getData('text/plain') ||
+                e.dataTransfer.getData('text/html') ||
+                null;
+    }
+
+    // Must have either files or URL data
+    if (files.length === 0 && !urlData) return;
+
     const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
     const dropTarget = detectDropTarget(mousePos.x, mousePos.y);
     const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
-    
-    
+
+    // Handle URL drops
+    if (urlData && files.length === 0) {
+      console.log('🔗 URL drop detected:', { urlData, isCommandDrop });
+
+      if (dropTarget.type === 'node' && dropTarget.node) {
+        // Dropping URL on an existing DreamNode
+        await handleUrlDropOnNode(urlData, dropTarget.node);
+      } else {
+        // Dropping URL on empty space
+        if (isCommandDrop) {
+          // Command+Drop: Open ProtoNode3D with URL pre-filled
+          await handleCommandUrlDrop(urlData);
+        } else {
+          // Normal Drop: Create node instantly at drop position
+          await handleNormalUrlDrop(urlData, dropTarget.position);
+        }
+      }
+      setDragMousePosition(null);
+      return;
+    }
+
+    // Handle file drops (existing logic)
     if (dropTarget.type === 'node' && dropTarget.node) {
       // Dropping on an existing DreamNode
       if (isCommandDrop) {
@@ -809,7 +876,7 @@ export default function DreamspaceCanvas() {
         await handleNormalDrop(files, dropTarget.position);
       }
     }
-    
+
     setDragMousePosition(null);
   };
 
@@ -889,21 +956,21 @@ export default function DreamspaceCanvas() {
     try {
       const file = files[0]; // Use first file for title
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
-      
+
       // Use the EXACT same position as the Create DreamNode command
       const spawnPosition: [number, number, number] = [0, 0, -25];
-      
+
       // Separate media files from other files
       const mediaFiles = files.filter(f => isValidMediaFile(f));
       const otherFiles = files.filter(f => !isValidMediaFile(f));
-      
+
       // Use first media file as dreamTalk, rest go to additional files
       const dreamTalkFile = mediaFiles.length > 0 ? mediaFiles[0] : undefined;
       const additionalFiles = [
         ...mediaFiles.slice(1), // Remaining media files
         ...otherFiles // All non-media files (like PDFs)
       ];
-      
+
       // Start creation with pre-filled data including all files
       startCreationWithData(spawnPosition, {
         title: fileNameWithoutExt,
@@ -911,11 +978,124 @@ export default function DreamspaceCanvas() {
         dreamTalkFile: dreamTalkFile,
         additionalFiles: additionalFiles.length > 0 ? additionalFiles : undefined
       });
-      
-      
+
+
     } catch (error) {
       console.error('Failed to start creation from drop:', error);
       uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from drop');
+    }
+  };
+
+  const handleNormalUrlDrop = async (urlData: string, position: [number, number, number]) => {
+    try {
+      const urlMetadata = await processDroppedUrlData(urlData);
+
+      if (!urlMetadata || !urlMetadata.isValid) {
+        uiService.showError('Invalid URL dropped');
+        return;
+      }
+
+      console.log('🔗 Creating DreamNode from URL:', urlMetadata);
+
+      const store = useInterBrainStore.getState();
+      const service = serviceManager.getActive();
+
+      // Determine node type based on liminal-web context (same as file drop logic)
+      let nodeType: 'dream' | 'dreamer' = 'dream';
+      let shouldAutoRelate = false;
+      let focusedNodeId: string | null = null;
+
+      if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
+        const focusedNode = store.selectedNode;
+        focusedNodeId = focusedNode.id;
+        nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
+        shouldAutoRelate = true;
+        console.log(`Liminal-web URL drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
+      }
+
+      // Create the DreamNode with URL as the "dreamTalk" (stored in metadata)
+      const newNode = await service.createFromUrl(
+        urlMetadata.title || urlMetadata.url,
+        nodeType,
+        urlMetadata,
+        position
+      );
+
+      // Auto-create relationship if in liminal-web mode
+      if (shouldAutoRelate && focusedNodeId && newNode) {
+        try {
+          await service.addRelationship(focusedNodeId, newNode.id);
+          console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
+          uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
+
+          // Refresh and trigger layout update (same as file drop)
+          const updatedFocusedNode = await service.get(focusedNodeId);
+          if (updatedFocusedNode) {
+            store.setSelectedNode(updatedFocusedNode);
+            globalThis.setTimeout(() => {
+              if (spatialOrchestratorRef.current) {
+                spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
+              }
+            }, 100);
+          }
+        } catch (error) {
+          console.error('Failed to create automatic relationship:', error);
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to create node from URL drop:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to create node from URL drop');
+    }
+  };
+
+  const handleCommandUrlDrop = async (urlData: string) => {
+    try {
+      const urlMetadata = await processDroppedUrlData(urlData);
+
+      if (!urlMetadata || !urlMetadata.isValid) {
+        uiService.showError('Invalid URL dropped');
+        return;
+      }
+
+      console.log('🔗 Opening ProtoNode with URL:', urlMetadata);
+
+      // Use the same spawn position as file command drop
+      const spawnPosition: [number, number, number] = [0, 0, -25];
+
+      // Start creation with URL pre-filled in ProtoNode
+      startCreationWithData(spawnPosition, {
+        title: urlMetadata.title || urlMetadata.url,
+        type: 'dream',
+        urlMetadata: urlMetadata // Add URL metadata to proto node data
+      });
+
+    } catch (error) {
+      console.error('Failed to start creation from URL drop:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from URL drop');
+    }
+  };
+
+  const handleUrlDropOnNode = async (urlData: string, node: DreamNode) => {
+    try {
+      const urlMetadata = await processDroppedUrlData(urlData);
+
+      if (!urlMetadata || !urlMetadata.isValid) {
+        uiService.showError('Invalid URL dropped');
+        return;
+      }
+
+      console.log('🔗 Adding URL to existing DreamNode:', { url: urlMetadata, node: node.name });
+
+      // Use service to add URL to existing node
+      const service = serviceManager.getActive();
+      await service.addUrlToNode(node.id, urlMetadata);
+
+      uiService.showSuccess(`Added URL to "${node.name}"`);
+
+    } catch (error) {
+      console.error('Failed to add URL to node:', error);
+      uiService.showError(error instanceof Error ? error.message : 'Failed to add URL to node');
     }
   };
 
@@ -1018,12 +1198,24 @@ export default function DreamspaceCanvas() {
                   onDoubleClick={handleNodeDoubleClick}
                   enableDynamicScaling={shouldEnableDynamicScaling}
                   onHitSphereRef={handleHitSphereRef}
+                  vaultService={vaultService}
+                  canvasParserService={canvasParserService}
                 />
               </React.Fragment>
             );
           })}
+
+          {/* Constellation edges - render DreamSong relationship threads */}
+          {shouldShowConstellationEdges(spatialLayout) && (
+            <ConstellationEdges
+              dreamNodes={dreamNodes}
+              dreamWorldRef={dreamWorldRef}
+              showEdges={true}
+              opacity={0.6}
+            />
+          )}
         </group>
-        
+
         {/* SpatialOrchestrator - manages all spatial interactions and layouts */}
         <SpatialOrchestrator
           ref={spatialOrchestratorRef}

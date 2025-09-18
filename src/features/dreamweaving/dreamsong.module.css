@@ -1,0 +1,405 @@
+/* DreamSong Component Styles
+ * Pure content component - implements flip-flop layout with alternating media-text positioning
+ * Container-agnostic - no masking or container-specific styling
+ */
+
+/* Main container - pure content, no shape constraints */
+.dreamSongContainer {
+  width: 100%;
+  max-width: 2600px;
+  margin: 0 auto;
+  min-height: 100vh;
+  overflow-y: auto;
+  position: relative;
+  background: #000000;
+  color: #ffffff;
+  font-family: 'TeX Gyre Termes', Georgia, serif;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Embedded context modifier */
+.dreamSongContainer.embedded {
+  height: auto !important;
+  min-height: 100%;
+  background: transparent;
+  overflow: visible;
+  backface-visibility: hidden; /* Browser-native optimization for hidden faces */
+}
+
+.dreamSongContainer.embedded .dreamSongContent {
+  padding: 8px;
+}
+
+.dreamSongContainer.embedded .dreamSongHeader {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* Header section */
+.dreamSongHeader {
+  text-align: center;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dreamSongTitle {
+  font-size: 4rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.dreamSongSeparator {
+  width: 90%;
+  height: auto;
+  display: block;
+  max-width: 2600px;
+  margin: 0 auto;
+}
+
+/* DreamTalk section above header */
+.dreamTalkSection {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dreamTalkSection img,
+.dreamTalkSection video,
+.dreamTalkSection audio {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.dreamTalkSection img:hover,
+.dreamTalkSection video:hover {
+  transform: scale(1.02);
+}
+
+/* Responsive adjustments for DreamTalk */
+@media (max-width: 1200px) {
+  .dreamTalkSection {
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    max-width: 90%;
+  }
+}
+
+/* Scrollable content area */
+.dreamSongContent {
+  flex: 1;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar styling */
+.dreamSongContent::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dreamSongContent::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.dreamSongContent::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.dreamSongContent::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Empty state styling */
+.dreamSongEmptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.emptyStateIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.emptyStateText {
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.emptyStateSubtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+/* Base block styling */
+.dreamSongBlock {
+  margin-bottom: 75px;
+  position: relative;
+  animation: fade-in 0.4s ease-out;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 95%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dreamSongBlock:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* Text-only blocks - centered */
+.dreamSongBlockText {
+  flex-direction: column;
+}
+
+.dreamSongBlockText .dreamSongTextOnly {
+  max-width: 90%;
+  margin: 0 auto;
+  text-align: left;
+}
+
+/* Media-only blocks - centered */
+.dreamSongBlockMedia {
+  flex-direction: column;
+}
+
+.dreamSongBlockMedia .dreamSongMediaOnly {
+  max-width: 1000px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Media-text paired blocks - FLIP-FLOP LAYOUT */
+.dreamSongBlockMediaText {
+  flex-direction: row;
+}
+
+.dreamSongBlockMediaText .dreamSongMediaText {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 95%;
+  margin: 0 auto;
+  gap: 20px;
+}
+
+/* Left-aligned: Media left, text right */
+.dreamSongBlockLeftAligned .dreamSongMediaText {
+  flex-direction: row;
+}
+
+/* Right-aligned: Text left, media right */
+.dreamSongBlockRightAligned .dreamSongMediaText {
+  flex-direction: row-reverse;
+}
+
+.dreamSongMediaContainer {
+  flex: 2;
+  max-width: 60%;
+  margin: 0;
+}
+
+.dreamSongTextContainer {
+  flex: 1;
+  max-width: 30%;
+  padding: 10px;
+  text-align: left;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Media elements */
+.dreamSongMedia {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.dreamSongMedia:hover {
+  transform: scale(1.02);
+}
+
+.dreamSongMedia[data-type="video"] {
+  max-height: 200px;
+}
+
+.dreamSongMedia[data-type="audio"] {
+  width: 100%;
+}
+
+/* Audio container styling */
+.dreamSongAudioContainer {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.dreamSongAudioLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+/* Text elements */
+.dreamSongText {
+  line-height: 1.5;
+  font-size: 30px !important;
+  color: white;
+}
+
+.dreamSongText p {
+  margin: 0 0 12px 0;
+}
+
+.dreamSongText p:last-child {
+  margin-bottom: 0;
+}
+
+.dreamSongText h1,
+.dreamSongText h2,
+.dreamSongText h3,
+.dreamSongText h4,
+.dreamSongText h5,
+.dreamSongText h6 {
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.dreamSongText strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.dreamSongText em {
+  color: rgba(255, 255, 255, 0.8);
+  font-style: italic;
+}
+
+.dreamSongText code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.dreamSongText blockquote {
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+  padding-left: 12px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+
+.dreamSongText ul,
+.dreamSongText ol {
+  margin: 0 0 12px 0;
+  padding-left: 20px;
+}
+
+.dreamSongText li {
+  margin-bottom: 4px;
+}
+
+/* Error states */
+.dreamSongMediaError {
+  padding: 16px;
+  background: rgba(255, 0, 0, 0.1);
+  border: 1px solid rgba(255, 0, 0, 0.3);
+  border-radius: 8px;
+  color: rgba(255, 100, 100, 1);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Responsive adjustments for mobile devices */
+@media (max-width: 1200px) {
+  .dreamSongBlockMediaText .dreamSongMediaText {
+    flex-direction: column !important;
+    margin-bottom: 0px;
+  }
+
+  .dreamSongMediaContainer {
+    flex: 1;
+    max-width: 90%;
+    margin: 0px 0;
+    order: 1;
+  }
+
+  .dreamSongTextContainer {
+    flex: 1;
+    max-width: 90%;
+    margin: 0px 0;
+    order: 2;
+  }
+
+  .dreamSongTitle {
+    font-size: 2rem;
+  }
+
+  .dreamSongText {
+    font-size: 20px;
+  }
+
+  .dreamsong-container {
+    padding: 10px;
+  }
+}
+
+/* Animation for flip transition entrance */
+.dreamSongContainer.flipEnter {
+  animation: flipIn 0.6s ease-out;
+}
+
+@keyframes flipIn {
+  from {
+    transform: rotateY(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}

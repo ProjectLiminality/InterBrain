@@ -1,18 +1,22 @@
-import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Html } from '@react-three/drei';
+import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { Html, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
-import { DreamNode, MediaFile } from '../types/dreamnode';
+import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
+import { dreamNodeStyles } from './dreamNodeStyles';
+import { CanvasParserService } from '../services/canvas-parser-service';
+import { VaultService } from '../services/vault-service';
+import { DreamTalkSide } from './DreamTalkSide';
+import { DreamSongSide } from './DreamSongSide';
 import './dreamNodeAnimations.css';
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
   moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
   returnToConstellation: (duration?: number, easing?: string) => void;
-  returnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void; // New method for full constellation return with rotation and easing support
+  returnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void;
   interruptAndMoveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
   interruptAndReturnToConstellation: (duration?: number, easing?: string) => void;
   interruptAndReturnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void;
@@ -28,17 +32,12 @@ interface DreamNode3DProps {
   onDoubleClick?: (node: DreamNode) => void;
   enableDynamicScaling?: boolean;
   onHitSphereRef?: (nodeId: string, meshRef: React.RefObject<Mesh | null>) => void;
+  vaultService?: VaultService;
+  canvasParserService?: CanvasParserService;
 }
 
 /**
- * 3D DreamNode component with dual-mode positioning system
- * 
- * Features:
- * - Dual-mode: constellation (continuous radial offset) vs active (discrete interpolation)
- * - Universal movement API for liminal web transitions
- * - Position sovereignty - component owns its position state
- * - Counter-rotation support for world-space positioning
- * - Color coding: blue for Dreams, red for Dreamers
+ * Clean 3D DreamNode component with Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
  */
 const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({ 
   dreamNode, 
@@ -46,12 +45,18 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   onClick, 
   onDoubleClick,
   enableDynamicScaling = false,
-  onHitSphereRef
+  onHitSphereRef,
+  vaultService: _vaultService,
+  canvasParserService: _canvasParserService
 }, ref) => {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
+  
+  // Flip animation state
+  const [flipRotation, setFlipRotation] = useState(0);
+  // DreamSong state now managed by DreamSongSide component via hook
   
   // Dual-mode position state
   const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
@@ -64,60 +69,191 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled'>('liminal');
   const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart'>('easeOutCubic');
   
-  // Check global drag state to prevent hover interference during sphere rotation
+  // Add flip rotation to transition system for unified animations
+  const [targetFlipRotation, setTargetFlipRotation] = useState(0);
+  const [startFlipRotation, setStartFlipRotation] = useState(0);
+  const [shouldAnimateFlip, setShouldAnimateFlip] = useState(false);
+  const [flipAnimationStartTime, setFlipAnimationStartTime] = useState(0);
+  const [flipAnimationDuration, setFlipAnimationDuration] = useState(1000); // Same duration as position movement
+  
+  // No longer need to track flip state - we access live store state directly
+  
+  // Check global drag state
   const isDragging = useInterBrainStore(state => state.isDragging);
   
-  // Subscribe to edit mode state for relationship glow
+  // Flip state management
+  const flipState = useInterBrainStore(state => state.flipState);
+  const setFlippedNode = useInterBrainStore(state => state.setFlippedNode);
+  const completeFlipAnimation = useInterBrainStore(state => state.completeFlipAnimation);
+  const spatialLayout = useInterBrainStore(state => state.spatialLayout);
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+  
+  // Subscribe to edit mode state
   const isEditModeActive = useInterBrainStore(state => state.editMode.isActive);
   const isPendingRelationship = useInterBrainStore(state => 
     state.editMode.pendingRelationships.includes(dreamNode.id)
   );
+  
+  // Get current flip state for this node
+  const nodeFlipState = flipState.flipStates.get(dreamNode.id);
+  const isFlipping = nodeFlipState?.isFlipping || false;
+  
+  // Ensure initial state shows front side
+  useEffect(() => {
+    if (!nodeFlipState) {
+      setFlipRotation(0);
+    }
+  }, [nodeFlipState]);
+  
+  // No longer need tracking - using live store state in imperative handles
+  
+  // Determine if flip button should be visible
+  const shouldShowFlipButton = useMemo(() => {
+    const result = spatialLayout === 'liminal-web' &&
+                   selectedNode?.id === dreamNode.id &&
+                   isHovered &&
+                   !isDragging;
 
-  // Register hit sphere reference with parent component
+    return result;
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
+
+  // Determine if DreamTalk fullscreen button should be visible (stable version)
+  const shouldShowDreamTalkFullscreen = useMemo(() => {
+    const result = spatialLayout === 'liminal-web' && 
+                   selectedNode?.id === dreamNode.id && 
+                   isHovered &&
+                   dreamNode.dreamTalkMedia && 
+                   dreamNode.dreamTalkMedia[0] &&
+                   !isDragging;
+    
+    return result;
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging]);
+
+  // Determine if DreamSong fullscreen button should be visible (stable version)
+  const shouldShowDreamSongFullscreen = useMemo(() => {
+    const result = spatialLayout === 'liminal-web' &&
+                   selectedNode?.id === dreamNode.id &&
+                   isHovered &&
+                   !isDragging;
+
+    return result;
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
+
+  // Register hit sphere reference
   useEffect(() => {
     if (onHitSphereRef && hitSphereRef) {
       onHitSphereRef(dreamNode.id, hitSphereRef);
     }
   }, [dreamNode.id, onHitSphereRef]);
-
-  // Handle mouse events (suppress during sphere rotation to prevent interference)
-  const handleMouseEnter = () => {
-    if (isDragging) {
-      return; // Suppress hover during drag operations
+  
+  // DreamSong logic now handled by DreamSongSide component via hook
+  
+  // Reset flip state when node is no longer selected
+  useEffect(() => {
+    if (spatialLayout !== 'liminal-web' || selectedNode?.id !== dreamNode.id) {
+      if (flipState.flippedNodeId === dreamNode.id) {
+        setFlippedNode(null);
+        // Note: Flip rotation now animates smoothly via Universal Movement API
+        // setFlipRotation(0); // Removed - handled by flip-back animation
+        // Note: Keep dreamSongData in memory for performance - cache handles invalidation
+      }
     }
+  }, [spatialLayout, selectedNode, dreamNode.id, flipState.flippedNodeId, setFlippedNode]);
+
+  // Handle mouse events
+  const handleMouseEnter = () => {
+    if (isDragging) return;
     setIsHovered(true);
     onHover?.(dreamNode, true);
   };
 
   const handleMouseLeave = () => {
-    if (isDragging) {
-      return; // Suppress hover during drag operations
-    }
+    if (isDragging) return;
     setIsHovered(false);
     onHover?.(dreamNode, false);
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    if (isDragging) return; // Suppress click during drag operations
+    if (isDragging) return;
     e.stopPropagation();
     onClick?.(dreamNode);
   };
+  
+  const handleFlipClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDragging || isFlipping) return;
+    
+    console.log('🎯 Flip button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
+    
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      console.log('🎯 About to execute flip-selected-dreamnode command');
+      serviceManager.executeCommand('flip-selected-dreamnode');
+    } catch (error) {
+      console.error('Failed to execute flip command:', error);
+    }
+  }, [isDragging, isFlipping, dreamNode.id, dreamNode.name]);
+
+  const handleDreamTalkFullScreen = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDragging) return;
+    
+    console.log('🎯 DreamTalk fullscreen button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
+    
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      console.log('🎯 About to execute open-dreamtalk-fullscreen command');
+      serviceManager.executeCommand('open-dreamtalk-fullscreen');
+    } catch (error) {
+      console.error('Failed to execute DreamTalk full-screen command:', error);
+    }
+  }, [isDragging, dreamNode.id, dreamNode.name]);
+
+  const handleDreamSongFullScreen = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDragging) return;
+    
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      serviceManager.executeCommand('open-dreamsong-fullscreen');
+    } catch (error) {
+      console.error('Failed to execute DreamSong full-screen command:', error);
+    }
+  }, [isDragging, dreamNode.id, dreamNode.name]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
-    if (isDragging) return; // Suppress double-click during drag operations
+    if (isDragging) return;
     e.stopPropagation();
     onDoubleClick?.(dreamNode);
   };
 
-  // Universal Movement API
+  // Helper to start flip-back animation alongside movement
+  const startFlipBackAnimation = () => {
+    // Get LIVE store state (not stale component state)
+    const liveStoreState = useInterBrainStore.getState();
+    const currentFlipRotation = flipRotation;
+    const storeFlippedNodeId = liveStoreState.flipState.flippedNodeId;
+    const wasFlipped = storeFlippedNodeId === dreamNode.id;
+    
+    // Check if this node was recently flipped (check live store state)
+    if (currentFlipRotation !== 0 || wasFlipped) {
+      // Use current rotation if available, otherwise assume it was Math.PI (fully flipped)
+      const startRotation = currentFlipRotation !== 0 ? currentFlipRotation : Math.PI;
+      setStartFlipRotation(startRotation);
+      setTargetFlipRotation(0);
+      setShouldAnimateFlip(true);
+      setFlipAnimationStartTime(globalThis.performance.now());
+      setFlipAnimationDuration(1000); // 1000ms - same duration as position movement
+    }
+  };
+
+  // Universal Movement API implementation (keeping all the complex logic)
   useImperativeHandle(ref, () => ({
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
-      // Switch to active mode and start transition
-      // CRITICAL FIX: Calculate actual current visual position
+      
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
-        // Calculate constellation position with radial offset
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
@@ -132,23 +268,24 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         actualCurrentPosition = [...currentPosition];
       }
       
+      // Start flip-back animation alongside position movement
+      startFlipBackAnimation();
+      
       setStartPosition(actualCurrentPosition);
-      setCurrentPosition(actualCurrentPosition); // Initialize currentPosition for active mode
+      setCurrentPosition(actualCurrentPosition);
       setTargetPosition(newTargetPosition);
       setTransitionDuration(duration);
       setTransitionStartTime(globalThis.performance.now());
       setPositionMode('active');
       setIsTransitioning(true);
-      setTransitionType('liminal'); // This is a liminal web transition
+      setTransitionType('liminal');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
-      
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
-      // Enhanced method: returns to proper constellation position (with scaling if enabled)
+      
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
-        // Calculate current visual position with radial offset
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
@@ -163,39 +300,33 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         actualCurrentPosition = [...currentPosition];
       }
       
-      // Target position should be sphere surface - constellation mode will handle scaling
+      // Start flip-back animation alongside position movement
+      startFlipBackAnimation();
+      
       const constellationPosition = dreamNode.position;
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(constellationPosition);
       setTransitionDuration(duration);
       setTransitionStartTime(globalThis.performance.now());
-      setPositionMode('active'); // Use active mode for the transition
+      setPositionMode('active');
       setIsTransitioning(true);
-      setTransitionType('constellation'); // This is a constellation return transition
+      setTransitionType('constellation');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
-      // ROBUST METHOD: Returns ANY node to its proper scaled constellation position
-      // Handles both active nodes (from liminal positions) and inactive nodes (from sphere surface)
-      
-      // Calculate target dynamically scaled position for this node
       const anchorPosition = dreamNode.position;
       
-      // Transform anchor position to world space using provided rotation (similar to useFrame logic)
       const worldAnchorPosition = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (worldRotation) {
-        // Apply the sphere's world rotation to get the actual world position
         worldAnchorPosition.applyQuaternion(worldRotation);
       }
       
-      // Calculate what the radial offset should be using dynamic scaling
       const { radialOffset: targetRadialOffset } = calculateDynamicScaling(
         worldAnchorPosition,
         DEFAULT_SCALING_CONFIG
       );
       
-      // Calculate target scaled position
       const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
       const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
       const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
@@ -206,10 +337,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         anchorPosition[2] - normalizedDir[2] * targetRadialOffset
       ];
       
-      // Get actual current position
       let actualCurrentPosition: [number, number, number];
       if (positionMode === 'constellation') {
-        // Calculate current visual position with radial offset
         actualCurrentPosition = [
           anchorPosition[0] - normalizedDir[0] * radialOffset,
           anchorPosition[1] - normalizedDir[1] * radialOffset,
@@ -219,32 +348,27 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         actualCurrentPosition = [...currentPosition];
       }
       
-      // Animate to target scaled position
+      // Start flip-back animation alongside position movement
+      startFlipBackAnimation();
+      
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(targetScaledPosition);
       setTransitionDuration(duration);
       setTransitionStartTime(globalThis.performance.now());
-      setPositionMode('active'); // Use active mode for the transition
+      setPositionMode('active');
       setIsTransitioning(true);
-      setTransitionType('scaled'); // This is a scaled position return transition
+      setTransitionType('scaled');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
       
-      // Determine node's current state for logging (removed unused variables for cleaner build)
-      
-      // Set the target radial offset for when we switch back to constellation mode
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
-      }, duration - 100); // Set slightly before transition completes
+      }, duration - 100);
     },
     interruptAndMoveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
-      // Enhanced method: Can interrupt existing animation using current position as new start point
-      
-      // CRITICAL: Calculate actual current visual position (including mid-flight positions)
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
-        // Calculate constellation position with radial offset
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
@@ -256,11 +380,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           anchorPos[2] - normalizedDir[2] * radialOffset
         ];
       } else {
-        // Node is in active mode - use the current interpolated position
         actualCurrentPosition = [...currentPosition];
       }
       
-      // Start new animation from current position (interrupts existing animation smoothly)
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(newTargetPosition);
@@ -272,12 +394,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     interruptAndReturnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
-      // Enhanced method: Can interrupt existing animation to return to constellation
-      
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
-        // Calculate current visual position with radial offset
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
@@ -289,42 +408,33 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           anchorPos[2] - normalizedDir[2] * radialOffset
         ];
       } else {
-        // Node is in active mode - use the current interpolated position
         actualCurrentPosition = [...currentPosition];
       }
       
-      // Target position should be sphere surface - constellation mode will handle scaling
       const constellationPosition = dreamNode.position;
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(constellationPosition);
       setTransitionDuration(duration);
       setTransitionStartTime(globalThis.performance.now());
-      setPositionMode('active'); // Use active mode for the transition
+      setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('constellation');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     interruptAndReturnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
-      // Enhanced method: Can interrupt existing animation to return to scaled constellation position
-      
-      // Calculate target dynamically scaled position for this node
       const anchorPosition = dreamNode.position;
       
-      // Transform anchor position to world space using provided rotation (similar to useFrame logic)
       const worldAnchorPosition = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (worldRotation) {
-        // Apply the sphere's world rotation to get the actual world position
         worldAnchorPosition.applyQuaternion(worldRotation);
       }
       
-      // Calculate what the radial offset should be using dynamic scaling
       const { radialOffset: targetRadialOffset } = calculateDynamicScaling(
         worldAnchorPosition,
         DEFAULT_SCALING_CONFIG
       );
       
-      // Calculate target scaled position
       const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
       const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
       const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
@@ -335,43 +445,37 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         anchorPosition[2] - normalizedDir[2] * targetRadialOffset
       ];
       
-      // Get actual current position (including mid-flight positions)
       let actualCurrentPosition: [number, number, number];
       if (positionMode === 'constellation') {
-        // Calculate current visual position with radial offset
         actualCurrentPosition = [
           anchorPosition[0] - normalizedDir[0] * radialOffset,
           anchorPosition[1] - normalizedDir[1] * radialOffset,
           anchorPosition[2] - normalizedDir[2] * radialOffset
         ];
       } else {
-        // Node is in active mode - use the current interpolated position
         actualCurrentPosition = [...currentPosition];
       }
       
-      // Animate to target scaled position (interrupts existing animation smoothly)
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(targetScaledPosition);
       setTransitionDuration(duration);
       setTransitionStartTime(globalThis.performance.now());
-      setPositionMode('active'); // Use active mode for the transition
+      setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('scaled');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
       
-      // Set the target radial offset for when we switch back to constellation mode
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
-      }, duration - 100); // Set slightly before transition completes
+      }, duration - 100);
     },
     setActiveState: (active: boolean) => {
       if (active) {
         setPositionMode('active');
-        setCurrentPosition([...currentPosition]); // Preserve current position
+        setCurrentPosition([...currentPosition]);
       } else {
         setPositionMode('constellation');
-        // Reset to original position state
         setCurrentPosition(dreamNode.position);
       }
     },
@@ -379,56 +483,47 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     isMoving: () => isTransitioning
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing]);
   
-  // Dual-mode position calculation with counter-rotation
+  // Position calculation and animation frame logic
   useFrame((_state, _delta) => {
+    // Constellation mode dynamic scaling
     if (positionMode === 'constellation' && enableDynamicScaling && groupRef.current) {
-      // CONSTELLATION MODE: Continuous radial offset calculation (existing behavior)
-      // Get world position of the anchor (includes rotation from parent group)
       const worldPosition = new Vector3();
       groupRef.current.getWorldPosition(worldPosition);
       
-      // But we need to get the world position of the ANCHOR, not the current final position
-      // So we need to calculate where the anchor would be in world space
-      const anchorGroup = groupRef.current.parent; // Get the rotatable group
+      const anchorGroup = groupRef.current.parent;
       const anchorVector = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (anchorGroup) {
         anchorGroup.localToWorld(anchorVector);
       }
       
-      // Calculate dynamic scaling based on anchor's world position
       const { radialOffset: newRadialOffset } = calculateDynamicScaling(
         anchorVector,
         DEFAULT_SCALING_CONFIG
       );
       
-      // Update state if changed
       if (radialOffset !== newRadialOffset) {
         setRadialOffset(newRadialOffset);
       }
-    } else if (positionMode === 'active' && isTransitioning) {
-      // ACTIVE MODE: Discrete position interpolation
+    } 
+    // Active mode transitions
+    else if (positionMode === 'active' && isTransitioning) {
       const elapsed = globalThis.performance.now() - transitionStartTime;
       const progress = Math.min(elapsed / transitionDuration, 1);
       
-      // Apply selected easing function
       let easedProgress: number;
       switch (transitionEasing) {
         case 'easeInQuart':
-          // Strong ease-in for nodes flying OUT to sphere
           easedProgress = Math.pow(progress, 4);
           break;
         case 'easeOutQuart':
-          // Strong ease-out for nodes flying IN from sphere
           easedProgress = 1 - Math.pow(1 - progress, 4);
           break;
         case 'easeOutCubic':
         default:
-          // Default easing for other transitions
           easedProgress = 1 - Math.pow(1 - progress, 3);
           break;
       }
       
-      // Linear interpolation from start to target position
       const newPosition: [number, number, number] = [
         startPosition[0] + (targetPosition[0] - startPosition[0]) * easedProgress,
         startPosition[1] + (targetPosition[1] - startPosition[1]) * easedProgress,
@@ -437,50 +532,66 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       
       setCurrentPosition(newPosition);
       
-      // Check if transition is complete
       if (progress >= 1) {
         setIsTransitioning(false);
-        setCurrentPosition(targetPosition); // Ensure exact target position
+        setCurrentPosition(targetPosition);
         
-        // Handle transition completion based on type
         if (transitionType === 'liminal') {
-          // Liminal web transitions: STAY in active mode at target position
-          // Don't change positionMode - stay active!
+          // Stay in active mode
         } else if (transitionType === 'constellation') {
-          // Constellation return: Switch back to constellation mode
           setPositionMode('constellation');
-          setRadialOffset(0); // Reset radial offset for clean sphere positioning
+          setRadialOffset(0);
         } else if (transitionType === 'scaled') {
-          // Scaled position return: Switch back to constellation mode
           setPositionMode('constellation');
-          // radialOffset was already set during the animation
         }
+      }
+    }
+    
+    // Flip animation updates
+    if (isFlipping) {
+      const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? Math.PI : 0;
+      const animationDuration = 600;
+      const elapsed = globalThis.performance.now() - (nodeFlipState?.animationStartTime || 0);
+      const progress = Math.min(elapsed / animationDuration, 1);
+      
+      const easedProgress = progress < 0.5 
+        ? 2 * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      
+      const newRotation = nodeFlipState?.flipDirection === 'front-to-back' 
+        ? easedProgress * Math.PI
+        : Math.PI - (easedProgress * Math.PI);
+      
+      setFlipRotation(newRotation);
+      
+      if (progress >= 1) {
+        completeFlipAnimation(dreamNode.id);
+        setFlipRotation(targetRotation);
+      }
+    }
+    
+    // Unified flip-back animation (parallel with position movement, but faster)
+    if (shouldAnimateFlip && !isFlipping) {
+      const elapsed = globalThis.performance.now() - flipAnimationStartTime;
+      const progress = Math.min(elapsed / flipAnimationDuration, 1);
+      
+      // Use easeOutCubic for smooth flip-back animation
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      
+      const newFlipRotation = startFlipRotation + (targetFlipRotation - startFlipRotation) * easedProgress;
+      setFlipRotation(newFlipRotation);
+      
+      if (progress >= 1) {
+        setFlipRotation(targetFlipRotation);
+        setShouldAnimateFlip(false);
       }
     }
   });
 
-  // Get consistent colors from shared styles
-  const nodeColors = getNodeColors(dreamNode.type);
-  
-  // Get git visual state and styling
-  const gitState = getGitVisualState(dreamNode.gitStatus);
-  const gitStyle = getGitStateStyle(gitState);
-  
-  // Base size for 3D scaling - will scale with distance due to distanceFactor
-  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
-  const borderWidth = dreamNodeStyles.dimensions.borderWidth; // Use shared border width
-  
-  // Calculate visual component position with radial offset
-  // Anchor point stays at dreamNode.position, visual component moves radially toward camera
+  // Calculate final position
   const anchorPosition = dreamNode.position;
-  
-  // Calculate normalized direction toward origin (radially inward)
   const normalizedDirection = useMemo(() => {
-    const direction = [
-      -anchorPosition[0], // Direction toward origin (radially inward)
-      -anchorPosition[1],
-      -anchorPosition[2]
-    ];
+    const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
     const directionLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
     return [
       direction[0] / directionLength,
@@ -489,8 +600,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     ];
   }, [anchorPosition]);
   
-  // Calculate final position based on mode
-  // CRITICAL: Don't memoize this - we need it to update every render when currentPosition changes
   const finalPosition: [number, number, number] = positionMode === 'constellation'
     ? [
         anchorPosition[0] - normalizedDirection[0] * radialOffset,
@@ -498,164 +607,117 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         anchorPosition[2] - normalizedDirection[2] * radialOffset
       ]
     : currentPosition;
-    
-  // Removed excessive dynamic scaling logging for performance
-  
-  // Using sprite mode for automatic billboarding - no manual rotation needed
-  
-  // Debug logging removed for cleaner console
-  
-  // Wrap in group at final position for world position calculations
-  // Apply hover scaling to the entire group so both visual and hit detection scale together
+
+  // Base size and styling
+  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
+  const borderWidth = dreamNodeStyles.dimensions.borderWidth;
+
+  // Clean Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
   return (
     <group 
       ref={groupRef} 
       position={finalPosition}
     >
-      {/* DreamNode rendering - always visible */}
-        <Html
-          position={[0, 0, 0]}
-          center
-          transform  // Enable 3D transformations
-          sprite     // Always face camera (billboarding)
-          distanceFactor={10}  // Scale based on distance from camera
-          style={{
-            pointerEvents: isDragging ? 'none' : 'auto', // Disable all mouse events during drag
-            userSelect: 'none'
-          }}
-        >
-      <div
-        style={{
-          width: `${nodeSize}px`,
-          height: `${nodeSize}px`,
-          borderRadius: dreamNodeStyles.dimensions.borderRadius,
-          border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
-          background: nodeColors.fill,
-          overflow: 'hidden',
-          position: 'relative',
-          cursor: 'pointer',
-          transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-          transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
-          animation: gitStyle.animation,
-          boxShadow: (() => {
-            // Priority 1: Git status glow (always highest priority)
-            if (gitStyle.glowIntensity > 0) {
-              return getGitGlow(gitState, gitStyle.glowIntensity);
-            }
-            
-            // Priority 2: Edit mode relationship glow
-            if (isEditModeActive && isPendingRelationship) {
-              return getEditModeGlow(25); // Strong gold glow for relationships
-            }
-            
-            // Priority 3: Hover glow (fallback)
-            return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-          })()
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-      >
-        {/* DreamTalk Media Container */}
-        {dreamNode.dreamTalkMedia[0] && (
-          <div style={getMediaContainerStyle()}>
-            <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
-            {/* Fade-to-black overlay */}
-            <div style={getMediaOverlayStyle()} />
-            
-            {/* Hover overlay with name */}
-            {isHovered && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  background: 'rgba(0, 0, 0, 0.7)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: isHovered ? 1 : 0,
-                  transition: 'opacity 0.2s ease-in-out',
-                  pointerEvents: 'none',
-                  zIndex: 10
-                }}
-              >
-                <div
-                  style={{
-                    color: dreamNodeStyles.colors.text.primary,
-                    fontFamily: dreamNodeStyles.typography.fontFamily,
-                    fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
-                    textAlign: 'center',
-                    padding: '8px'
-                  }}
-                >
-                  {dreamNode.name}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Empty state text - when no media */}
-        {!dreamNode.dreamTalkMedia[0] && (
-          <div
+      {/* Billboard component - always faces camera */}
+      <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+        {/* R3F rotating group for true 3D flip animation */}
+        <group rotation={[0, flipRotation, 0]}>
+          {/* First Html component - original DreamTalk */}
+          <Html
+            position={[0, 0, 0.01]}
+            center
+            transform
+            distanceFactor={10}
             style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              fontFamily: dreamNodeStyles.typography.fontFamily,
-              fontSize: `${Math.max(12, nodeSize * 0.08)}px`,
-              textAlign: 'center',
-              padding: '8px'
+              pointerEvents: isDragging ? 'none' : 'auto',
+              userSelect: isHovered ? 'auto' : 'none'
             }}
           >
-            {dreamNode.name}
-          </div>
-        )}
+            {/* Container div */}
+            <div
+              style={{
+                transformStyle: 'preserve-3d',
+                width: `${nodeSize}px`,
+                height: `${nodeSize}px`,
+                position: 'relative'
+              }}
+            >
+              {/* Front side - DreamTalk */}
+              <DreamTalkSide
+                dreamNode={dreamNode}
+                isHovered={isHovered}
+                isEditModeActive={isEditModeActive}
+                isPendingRelationship={isPendingRelationship}
+                shouldShowFlipButton={shouldShowFlipButton}
+                shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
+                nodeSize={nodeSize}
+                borderWidth={borderWidth}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
+                onFlipClick={handleFlipClick}
+                onFullScreenClick={handleDreamTalkFullScreen}
+              />
+            </div>
+          </Html>
 
-
-        {/* Node label */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: `-${nodeSize * 0.25}px`,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            color: dreamNodeStyles.colors.text.primary,
-            fontFamily: dreamNodeStyles.typography.fontFamily,
-            fontSize: `${Math.max(12, nodeSize * 0.1)}px`,
-            textAlign: 'center',
-            background: 'rgba(0, 0, 0, 0.8)',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none'
-          }}
-        >
-          {dreamNode.name}
-        </div>
-      </div>
-    </Html>
+          {/* Second Html component - DreamSong with 3D offset and rotation */}
+          <Html
+            position={[0, 0, -0.01]}
+            rotation={[0, Math.PI, 0]}
+            center
+            transform
+            distanceFactor={10}
+            style={{
+              pointerEvents: isDragging ? 'none' : 'auto',
+              userSelect: isHovered ? 'auto' : 'none'
+            }}
+          >
+            {/* Container div */}
+            <div
+              style={{
+                transformStyle: 'preserve-3d',
+                width: `${nodeSize}px`,
+                height: `${nodeSize}px`,
+                position: 'relative'
+              }}
+            >
+              {/* DreamSong side */}
+              <DreamSongSide
+                dreamNode={dreamNode}
+                isHovered={isHovered}
+                isEditModeActive={isEditModeActive}
+                isPendingRelationship={isPendingRelationship}
+                shouldShowFlipButton={shouldShowFlipButton}
+                shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
+                nodeSize={nodeSize}
+                borderWidth={borderWidth}
+                // Note: DreamSong always rendered, CSS backface-visibility handles optimization
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
+                onFlipClick={handleFlipClick}
+                onFullScreenClick={handleDreamSongFullScreen}
+              />
+            </div>
+          </Html>
+        </group>
+      </Billboard>
     
-    {/* Invisible hit detection sphere - travels with visual node as unified object */}
-    <mesh 
-      ref={hitSphereRef}
-      position={[0, 0, 0]}
-      userData={{ dreamNodeId: dreamNode.id, dreamNode: dreamNode }}
-    >
-      <sphereGeometry args={[12, 8, 8]} />
-      <meshBasicMaterial 
-        transparent={true} 
-        opacity={0}
-      />
-    </mesh>
+      {/* Invisible hit detection sphere */}
+      <mesh 
+        ref={hitSphereRef}
+        position={[0, 0, 0]}
+        userData={{ dreamNodeId: dreamNode.id, dreamNode: dreamNode }}
+      >
+        <sphereGeometry args={[12, 8, 8]} />
+        <meshBasicMaterial 
+          transparent={true} 
+          opacity={0}
+        />
+      </mesh>
     </group>
   );
 });
@@ -663,79 +725,3 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 DreamNode3D.displayName = 'DreamNode3D';
 
 export default DreamNode3D;
-
-/**
- * Renders different types of media in the DreamTalk circle
- */
-function MediaRenderer({ media }: { media: MediaFile }) {
-  const mediaStyle = {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover' as const,
-    borderRadius: '50%'
-  };
-
-  if (media.type.startsWith('image/')) {
-    return (
-      <img 
-        src={media.data} 
-        alt="DreamTalk symbol"
-        style={mediaStyle}
-        draggable={false}
-      />
-    );
-  }
-
-  if (media.type.startsWith('video/')) {
-    return (
-      <video 
-        src={media.data}
-        style={mediaStyle}
-        muted
-        loop
-        autoPlay
-        playsInline
-      />
-    );
-  }
-
-  if (media.type.startsWith('audio/')) {
-    return (
-      <div
-        style={{
-          ...mediaStyle,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(0, 0, 0, 0.8)'
-        }}
-      >
-        <audio 
-          controls 
-          src={media.data}
-          style={{ 
-            width: '90%', 
-            maxWidth: '80px',
-            filter: 'invert(1)'
-          }}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        ...mediaStyle,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#FFFFFF',
-        fontSize: '10px',
-        background: 'rgba(0, 0, 0, 0.8)'
-      }}
-    >
-      {media.type}
-    </div>
-  );
-}

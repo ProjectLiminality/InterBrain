@@ -54,9 +54,6 @@ const RING3_RADIUS = 335;
 const RAW_DISTANCES: [number, number, number] = [RING1_DISTANCE, RING2_DISTANCE, RING3_DISTANCE];
 const RAW_RADII: [number, number, number] = [RING1_RADIUS, RING2_RADIUS, RING3_RADIUS];
 
-// Log the values for reference during development
-console.log('Ring Layout: Raw distances:', RAW_DISTANCES);
-console.log('Ring Layout: Raw radii:', RAW_RADII);
 
 /**
  * Default configuration for ring layout positioning

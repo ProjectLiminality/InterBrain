@@ -1,4 +1,6 @@
 import { DreamNode, GitStatus } from '../types/dreamnode';
+import { UrlMetadata } from '../utils/url-utils';
+import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 
 /**
  * MockDreamNodeService - Session-based dynamic storage
@@ -195,14 +197,27 @@ export class MockDreamNodeService {
   private isMediaFile(file: globalThis.File): boolean {
     const validTypes = [
       'image/png',
-      'image/jpeg', 
+      'image/jpeg',
       'image/jpg',
       'image/gif',
       'image/webp',
       'video/mp4',
-      'video/webm'
+      'video/webm',
+      'audio/mp3',
+      'audio/wav',
+      'audio/ogg',
+      'application/pdf',
+      // .link files appear as text/plain or application/octet-stream depending on system
+      'text/plain',
+      'application/octet-stream'
     ];
-    
+
+    // Also check file extension for .link files since MIME detection is unreliable
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.link')) {
+      return true;
+    }
+
     return validTypes.includes(file.type);
   }
 
@@ -472,21 +487,107 @@ export class MockDreamNodeService {
   }
 
   /**
+   * Create a DreamNode from URL metadata
+   */
+  async createFromUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number]
+  ): Promise<DreamNode> {
+    const id = `dynamic-${type}-${this.idCounter++}`;
+
+    // Use provided position or calculate random position
+    const nodePosition = position
+      ? position // Position is already calculated in world coordinates
+      : this.calculateNewNodePosition();
+
+    // Generate .link file name and content (for mock)
+    const linkFileName = getLinkFileName(urlMetadata, title);
+    const linkFileContent = createLinkFileContent(urlMetadata, title);
+
+    const node: DreamNode = {
+      id,
+      type,
+      name: title,
+      position: nodePosition,
+      dreamTalkMedia: [{
+        path: linkFileName,
+        absolutePath: `/mock/repos/${id}/${linkFileName}`,
+        type: urlMetadata.type,
+        data: linkFileContent, // Store the link file content as data
+        size: linkFileContent.length
+      }],
+      dreamSongContent: [],
+      liminalWebConnections: [],
+      repoPath: `/mock/repos/${id}`,
+      hasUnsavedChanges: false,
+      gitStatus: this.generateMockGitStatus()
+    };
+
+    this.nodes.set(id, node);
+
+    console.log(`MockDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type}) with ID ${id}`);
+    console.log(`MockDreamNodeService: Created .link file: ${linkFileName}`);
+    console.log(`MockDreamNodeService: URL: ${urlMetadata.url}`);
+    return node;
+  }
+
+  /**
+   * Add URL to an existing DreamNode
+   */
+  async addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    // Generate .link file name and content (for mock)
+    const linkFileName = getLinkFileName(urlMetadata, node.name);
+    const linkFileContent = createLinkFileContent(urlMetadata);
+
+    // Add .link file as additional dreamTalk media
+    const linkMedia = {
+      path: linkFileName,
+      absolutePath: `${node.repoPath}/${linkFileName}`,
+      type: urlMetadata.type,
+      data: linkFileContent,
+      size: linkFileContent.length
+    };
+
+    node.dreamTalkMedia.push(linkMedia);
+
+    this.nodes.set(nodeId, node);
+
+    console.log(`MockDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
+    console.log(`MockDreamNodeService: Created .link file: ${linkFileName}`);
+  }
+
+  /**
+   * Create dreamTalk content for URLs (mock CanvasFile format)
+   */
+  private createUrlDreamTalkContent(_urlMetadata: UrlMetadata): import('../types/dreamnode').CanvasFile[] {
+    // For mock service, we don't actually create files, just return empty array
+    // URL content will be handled by README generation in real service
+    return [];
+  }
+
+  /**
    * Calculate position for new nodes
    * Places them on the night sky sphere (5000 units) for proper dynamic scaling
    */
   private calculateNewNodePosition(): [number, number, number] {
     // Place new nodes on the night sky sphere surface (same as other nodes)
     const sphereRadius = 5000; // Night sky sphere radius from DynamicViewScaling
-    
+
     const theta = Math.random() * Math.PI * 2; // Random angle around sphere
     const phi = Math.acos(2 * Math.random() - 1); // Random inclination (uniform distribution)
-    
+
     // Position exactly on sphere surface for consistent behavior with other nodes
     const x = sphereRadius * Math.sin(phi) * Math.cos(theta);
     const y = sphereRadius * Math.sin(phi) * Math.sin(theta);
     const z = sphereRadius * Math.cos(phi);
-    
+
     return [x, y, z];
   }
 }

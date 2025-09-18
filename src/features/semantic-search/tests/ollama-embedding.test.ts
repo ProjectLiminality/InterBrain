@@ -5,6 +5,13 @@ import { OllamaEmbeddingService } from '../services/ollama-embedding-service';
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
+// Mock setTimeout to make retries instant for testing
+const mockSetTimeout = vi.fn((callback: () => void) => {
+  callback(); // Execute immediately
+  return 1; // Return dummy timer ID
+});
+globalThis.setTimeout = mockSetTimeout;
+
 describe('OllamaEmbeddingService', () => {
   let service: OllamaEmbeddingService;
 
@@ -17,6 +24,7 @@ describe('OllamaEmbeddingService', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    mockSetTimeout.mockClear();
   });
 
   describe('generateEmbedding', () => {

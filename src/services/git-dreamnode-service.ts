@@ -2,15 +2,17 @@ import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
+import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
+import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 
 // Access Node.js modules directly in Electron context
-/* eslint-disable no-undef */
+ 
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-/* eslint-enable no-undef */
+ 
 
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;
@@ -59,15 +61,14 @@ export class GitDreamNodeService {
     } else {
       // Fallback - try to get plugin directory from plugin object
       // @ts-ignore - accessing private plugin properties
-      const pluginDir = plugin.app?.vault?.adapter?.basePath ? 
-        path.join(plugin.app.vault.adapter.basePath, '.obsidian', 'plugins', plugin.manifest.id) :
+      const adapter = plugin.app?.vault?.adapter as { basePath?: string };
+      const pluginDir = adapter?.basePath ?
+        path.join(adapter.basePath, '.obsidian', 'plugins', plugin.manifest.id) :
         './DreamNode-template';
       this.templatePath = path.join(pluginDir, 'DreamNode-template');
       console.warn('GitDreamNodeService: Could not determine vault path, using fallback template path:', this.templatePath);
     }
     
-    console.log('GitDreamNodeService: Vault path:', this.vaultPath);
-    console.log('GitDreamNodeService: Template path:', this.templatePath);
   }
   
   /**
@@ -220,7 +221,7 @@ export class GitDreamNodeService {
   }
   
   /**
-   * Delete a DreamNode
+   * Delete a DreamNode and its git repository
    */
   async delete(id: string): Promise<void> {
     const store = useInterBrainStore.getState();
@@ -230,11 +231,27 @@ export class GitDreamNodeService {
       throw new Error(`DreamNode with ID ${id} not found`);
     }
     
-    // Remove from store
+    const nodeName = nodeData.node.name;
+    const repoPath = nodeData.node.repoPath;
+    const fullRepoPath = path.join(this.vaultPath, repoPath);
+    
+    try {
+      // Delete the actual git repository from disk
+      console.log(`GitDreamNodeService: Deleting git repository at ${fullRepoPath}`);
+      
+      // Use recursive removal to delete the entire directory
+      await fsPromises.rm(fullRepoPath, { recursive: true, force: true });
+      
+      console.log(`GitDreamNodeService: Successfully deleted git repository for ${nodeName}`);
+    } catch (error) {
+      console.error(`GitDreamNodeService: Failed to delete git repository for ${nodeName}:`, error);
+      throw new Error(`Failed to delete git repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
+    // Remove from store only after successful deletion
     store.deleteRealNode(id);
     
-    // TODO: Optionally delete git repository from disk
-    console.log(`GitDreamNodeService: Deleted node ${id}`);
+    console.log(`GitDreamNodeService: Deleted node ${nodeName} (${id})`);
   }
   
   /**
@@ -258,7 +275,6 @@ export class GitDreamNodeService {
    * Scan vault for DreamNode repositories and sync with store
    */
   async scanVault(): Promise<{ added: number; updated: number; removed: number }> {
-    console.log('GitDreamNodeService: Scanning vault for DreamNodes...');
     const stats = { added: 0, updated: 0, removed: 0 };
     
     try {
@@ -312,7 +328,6 @@ export class GitDreamNodeService {
       console.error('Vault scan error:', error);
     }
     
-    console.log(`GitDreamNodeService: Scan complete. Added: ${stats.added}, Updated: ${stats.updated}, Removed: ${stats.removed}`);
     return stats;
   }
   
@@ -785,9 +800,22 @@ export class GitDreamNodeService {
       'image/gif',
       'image/webp',
       'video/mp4',
-      'video/webm'
+      'video/webm',
+      'audio/mp3',
+      'audio/wav',
+      'audio/ogg',
+      'application/pdf',
+      // .link files appear as text/plain or application/octet-stream depending on system
+      'text/plain',
+      'application/octet-stream'
     ];
-    
+
+    // Also check file extension for .link files since MIME detection is unreliable
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.link')) {
+      return true;
+    }
+
     return validTypes.includes(file.type);
   }
   
@@ -1157,5 +1185,164 @@ export class GitDreamNodeService {
       // Update .udd file
       await this.updateUDDFile(relatedNode);
     }
+  }
+
+  /**
+   * Create a DreamNode from URL metadata
+   */
+  async createFromUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number]
+  ): Promise<DreamNode> {
+    // Use provided position or calculate random position
+    const nodePosition = position
+      ? position // Position is already calculated in world coordinates
+      : this.calculateNewNodePosition();
+
+    // Create node using existing create method without files
+    const node = await this.create(title, type, undefined, nodePosition);
+
+    // Generate .link file name and content
+    const linkFileName = getLinkFileName(urlMetadata, title);
+    const linkFileContent = createLinkFileContent(urlMetadata, title);
+
+    console.log(`🔗 [GitDreamNodeService] Creating link file:`, {
+      linkFileName,
+      linkFilePath: path.join(this.vaultPath, node.repoPath, linkFileName),
+      contentLength: linkFileContent.length,
+      contentPreview: linkFileContent.substring(0, 100)
+    });
+
+    // Write .link file to repository
+    const linkFilePath = path.join(this.vaultPath, node.repoPath, linkFileName);
+    await fsPromises.writeFile(linkFilePath, linkFileContent);
+
+    console.log(`🔗 [GitDreamNodeService] Link file written successfully:`, linkFilePath);
+
+    // Update dreamTalk media to reference the .link file
+    node.dreamTalkMedia = [{
+      path: linkFileName,
+      absolutePath: linkFilePath,
+      type: urlMetadata.type,
+      data: linkFileContent, // Store link metadata as data
+      size: linkFileContent.length
+    }];
+
+    // Create README content with URL
+    const readmeContent = this.createUrlReadmeContent(urlMetadata, title);
+    await this.writeReadmeFile(node.repoPath, readmeContent);
+
+    // Update .udd file with .link file path
+    await this.updateUDDFile(node);
+
+    console.log(`GitDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type})`);
+    console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
+    console.log(`GitDreamNodeService: URL: ${urlMetadata.url}`);
+    return node;
+  }
+
+  /**
+   * Add URL to an existing DreamNode
+   */
+  async addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const node = nodeData.node;
+
+    // Generate .link file name and content
+    const linkFileName = getLinkFileName(urlMetadata, node.name);
+    const linkFileContent = createLinkFileContent(urlMetadata, node.name);
+
+    console.log(`🔗 [GitDreamNodeService] Adding link file to existing node:`, {
+      linkFileName,
+      linkFilePath: path.join(this.vaultPath, node.repoPath, linkFileName),
+      contentLength: linkFileContent.length,
+      contentPreview: linkFileContent.substring(0, 100)
+    });
+
+    // Write .link file to repository
+    const linkFilePath = path.join(this.vaultPath, node.repoPath, linkFileName);
+    await fsPromises.writeFile(linkFilePath, linkFileContent);
+
+    console.log(`🔗 [GitDreamNodeService] Link file added successfully:`, linkFilePath);
+
+    // Add .link file as additional dreamTalk media
+    const linkMedia = {
+      path: linkFileName,
+      absolutePath: linkFilePath,
+      type: urlMetadata.type,
+      data: linkFileContent,
+      size: linkFileContent.length
+    };
+
+    node.dreamTalkMedia.push(linkMedia);
+
+    // Append URL content to README
+    const urlContent = this.createUrlReadmeContent(urlMetadata);
+    const readmePath = path.join(this.vaultPath, node.repoPath, 'README.md');
+
+    try {
+      // Read existing README content
+      const existingContent = await fsPromises.readFile(readmePath, 'utf8');
+      const newContent = existingContent + '\n\n' + urlContent;
+      await fsPromises.writeFile(readmePath, newContent);
+    } catch (error) {
+      console.warn(`Failed to update README for node ${nodeId}:`, error);
+      // Create new README if it doesn't exist
+      await this.writeReadmeFile(node.repoPath, urlContent);
+    }
+
+    // Update .udd file
+    await this.updateUDDFile(node);
+
+    // Update store
+    store.updateRealNode(nodeId, {
+      ...nodeData,
+      node,
+      lastSynced: Date.now()
+    });
+
+    console.log(`GitDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
+    console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
+  }
+
+  /**
+   * Create README content for URLs
+   */
+  private createUrlReadmeContent(urlMetadata: UrlMetadata, title?: string): string {
+    let content = '';
+
+    if (title) {
+      content += `# ${title}\n\n`;
+    }
+
+    if (urlMetadata.type === 'youtube' && urlMetadata.videoId) {
+      // Add YouTube iframe embed for Obsidian
+      content += generateYouTubeIframe(urlMetadata.videoId, 560, 315);
+      content += '\n\n';
+
+      // Add markdown link as backup
+      content += `[${urlMetadata.title || 'YouTube Video'}](${urlMetadata.url})`;
+    } else {
+      // For other URLs, add as markdown link
+      content += generateMarkdownLink(urlMetadata.url, urlMetadata.title);
+    }
+
+    return content;
+  }
+
+  /**
+   * Write README.md file to node repository
+   */
+  private async writeReadmeFile(repoPath: string, content: string): Promise<void> {
+    const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
+    await fsPromises.writeFile(readmePath, content);
   }
 }

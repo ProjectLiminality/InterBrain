@@ -3,6 +3,7 @@ import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore } from '../../store/interbrain-store';
+import { setIcon } from 'obsidian';
 
 interface EditNode3DProps {
   position: [number, number, number];
@@ -592,8 +593,13 @@ export default function EditNode3D({
                 gap: '4px'
               }}
               title="Toggle relationship search"
+              ref={(el) => {
+                if (el) {
+                  el.innerHTML = '';
+                  setIcon(el, 'lucide-git-compare-arrows');
+                }
+              }}
             >
-              🔗
             </button>
           </div>
         </div>
@@ -608,13 +614,22 @@ export default function EditNode3D({
 function isValidMediaFile(file: globalThis.File): boolean {
   const validTypes = [
     'image/png',
-    'image/jpeg', 
+    'image/jpeg',
     'image/jpg',
     'image/gif',
     'image/webp',
     'video/mp4',
-    'video/webm'
+    'video/webm',
+    // .link files may appear as text/plain or application/octet-stream
+    'text/plain',
+    'application/octet-stream'
   ];
-  
+
+  // Check file extension as fallback for unreliable MIME types
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith('.link')) {
+    return true;
+  }
+
   return validTypes.includes(file.type);
 }

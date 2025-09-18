@@ -6,16 +6,16 @@ export class UIService {
   constructor(app?: App) {
     this.app = app;
   }
-  showSuccess(message: string): void {
-    new Notice(message);
+  showSuccess(message: string, duration: number = 3000): Notice {
+    return new Notice(message, duration);
   }
 
-  showError(message: string): void {
-    new Notice(`Error: ${message}`, 5000);
+  showError(message: string, duration: number = 5000): Notice {
+    return new Notice(`Error: ${message}`, duration);
   }
-  
-  showWarning(message: string): void {
-    new Notice(`⚠️ ${message}`, 4000);
+
+  showWarning(message: string, duration: number = 4000): Notice {
+    return new Notice(`⚠️ ${message}`, duration);
   }
 
   showPlaceholder(message: string): void {
@@ -25,9 +25,9 @@ export class UIService {
   showLoading(message: string): Notice {
     return new Notice(message, 0); // 0 = persistent until dismissed
   }
-  
-  showInfo(message: string): void {
-    new Notice(message, 3000);
+
+  showInfo(message: string, duration: number = 3000): Notice {
+    return new Notice(message, duration);
   }
   
   showProgress(message: string): Notice {

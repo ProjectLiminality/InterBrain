@@ -5,6 +5,9 @@ import { VaultService } from './services/vault-service';
 import { GitTemplateService } from './services/git-template-service';
 import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
+import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
+import { LinkFileView, LINK_FILE_VIEW_TYPE } from './views/LinkFileView';
+import { LeafManagerService } from './services/leaf-manager-service';
 import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
@@ -14,6 +17,13 @@ import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG }
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
 import { registerEditModeCommands } from './commands/edit-mode-commands';
+import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
+import { registerFullScreenCommands } from './commands/fullscreen-commands';
+import { ConstellationCommands } from './commands/constellation-commands';
+import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
+import { CanvasParserService } from './services/canvas-parser-service';
+import { SubmoduleManagerService } from './services/submodule-manager-service';
+import { CanvasObserverService } from './services/canvas-observer-service';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -21,10 +31,13 @@ export default class InterBrainPlugin extends Plugin {
   private gitService!: GitService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
+  private canvasParserService!: CanvasParserService;
+  private submoduleManagerService!: SubmoduleManagerService;
+  private leafManagerService!: LeafManagerService;
+  private constellationCommands!: ConstellationCommands;
+  private canvasObserverService!: CanvasObserverService;
 
   async onload() {
-    console.log('InterBrain plugin loaded!');
-    
     // Initialize services
     this.initializeServices();
     
@@ -37,10 +50,18 @@ export default class InterBrainPlugin extends Plugin {
     
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
-    
+    this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
+    this.registerView(LINK_FILE_VIEW_TYPE, (leaf) => new LinkFileView(leaf));
+
+    // Register .link file extension with custom view
+    this.registerExtensions(['link'], LINK_FILE_VIEW_TYPE);
+
     // Register commands
     this.registerCommands();
-    
+
+    // Start canvas observer for .link file preview
+    this.canvasObserverService.start();
+
     // Add ribbon icon
     this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
       this.app.commands.executeCommandById('interbrain:open-dreamspace');
@@ -50,22 +71,62 @@ export default class InterBrainPlugin extends Plugin {
   private initializeServices(): void {
     this.uiService = new UIService(this.app);
     this.gitService = new GitService(this.app);
-    this.vaultService = new VaultService(this.app.vault);
+    this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
-    
-    // Initialize service manager with plugin instance
+
+    // Initialize dreamweaving services
+    this.canvasParserService = new CanvasParserService(this.vaultService);
+    this.submoduleManagerService = new SubmoduleManagerService(
+      this.app,
+      this.vaultService,
+      this.canvasParserService
+    );
+    this.leafManagerService = new LeafManagerService(this.app);
+    this.canvasObserverService = new CanvasObserverService(this.app);
+
+    // Initialize constellation commands
+    this.constellationCommands = new ConstellationCommands(this);
+
+    // Make services accessible to ServiceManager BEFORE initialization
+    // Note: Using 'any' here is legitimate - we're extending the plugin with dynamic properties
+    (this as any).vaultService = this.vaultService;
+    (this as any).canvasParserService = this.canvasParserService;
+    (this as any).leafManagerService = this.leafManagerService;
+
+    // Initialize service manager with plugin instance and services
     serviceManager.initialize(this);
   }
 
   private registerCommands(): void {
     // Register semantic search commands
     registerSemanticSearchCommands(this, this.uiService);
-    
+
     // Register search interface commands (search-as-dreamnode UI)
     registerSearchInterfaceCommands(this, this.uiService);
-    
+
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
+
+    // Register dreamweaving commands (canvas submodule management)
+    registerDreamweavingCommands(
+      this,
+      this.uiService,
+      this.vaultService,
+      this.canvasParserService,
+      this.submoduleManagerService
+    );
+
+    // Register full-screen commands
+    registerFullScreenCommands(this, this.uiService);
+
+    // Register constellation commands (DreamSong relationship analysis)
+    this.constellationCommands.registerCommands(this);
+
+    // Register link file commands (.link file support)
+    registerLinkFileCommands(this, this.uiService);
+
+    // Enhance file suggestions to include .link files
+    enhanceFileSuggestions(this);
     
     // Open DreamSpace command
     this.addCommand({
@@ -277,6 +338,36 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Open DreamNode in Terminal and run claude command
+    this.addCommand({
+      id: 'open-dreamnode-in-terminal',
+      name: 'Open DreamNode in Terminal (run claude)',
+      hotkeys: [{ modifiers: ['Ctrl'], key: 'c' }],
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode) {
+          this.uiService.showError('No DreamNode selected');
+          return;
+        }
+
+        // Only available in real mode (mock nodes don't have file paths)
+        if (serviceManager.getMode() !== 'real') {
+          this.uiService.showError('Open in Terminal only available in real mode');
+          return;
+        }
+
+        try {
+          // Use git service to open terminal at the repository folder and run claude
+          await this.gitService.openInTerminal(currentNode.repoPath);
+          this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude`);
+        } catch (error) {
+          console.error('Failed to open in Terminal:', error);
+          this.uiService.showError('Failed to open DreamNode in Terminal');
+        }
+      }
+    });
+
     // Delete DreamNode command
     this.addCommand({
       id: 'delete-dreamnode',
@@ -289,11 +380,15 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        // Safety confirmation popup
-        const confirmMessage = `Are you sure you want to delete "${currentNode.name}"?\n\nThis action cannot be undone. All files and git history for this DreamNode will be permanently removed.`;
-        const confirmed = globalThis.confirm(confirmMessage);
+        // Safety confirmation using Obsidian Modal
+        const confirmed = await this.uiService.promptForText(
+          `⚠️ DELETE "${currentNode.name}" ⚠️`,
+          `Type "${currentNode.name}" to confirm permanent deletion`
+        );
         
-        if (!confirmed) {
+        const isConfirmed = confirmed === currentNode.name;
+        
+        if (!isConfirmed) {
           this.uiService.showInfo('Delete operation cancelled');
           return;
         }
@@ -961,14 +1056,14 @@ export default class InterBrainPlugin extends Plugin {
             allNodes = Array.from(realNodes.values()).map(data => data.node);
           }
           
-          console.log('DEBUG: Total nodes found:', allNodes.length);
-          console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig);
-          console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ 
-            id: n.id, 
-            type: n.type, 
-            connections: n.liminalWebConnections.length,
-            connectionIds: n.liminalWebConnections.slice(0, 2)
-          })));
+          // console.log('DEBUG: Total nodes found:', allNodes.length); // Debug removed for production
+          // console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig); // Debug removed for production
+          // console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ // Debug removed for production
+          //   id: n.id,
+          //   type: n.type,
+          //   connections: n.liminalWebConnections.length,
+          //   connectionIds: n.liminalWebConnections.slice(0, 2)
+          // })));
           
           // Build relationship graph
           const graph = buildRelationshipGraph(allNodes);
@@ -1031,8 +1126,8 @@ export default class InterBrainPlugin extends Plugin {
           const stats = getRingLayoutStats(positions);
           
           console.log(`\n=== Ring Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
-          console.log('DEBUG: Selected node ID:', selectedNode.id);
-          console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None');
+          // console.log('DEBUG: Selected node ID:', selectedNode.id); // Debug removed for production
+          // console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None'); // Debug removed for production
           console.log('Layout Stats:', stats);
           
           if (positions.centerNode) {
@@ -1237,6 +1332,9 @@ export default class InterBrainPlugin extends Plugin {
                 this.uiService.showError('Target node no longer exists - skipped to previous state');
               }
             }
+            
+            // Restore visual state (flip state and scroll position) after layout restoration
+            store.restoreVisualState(previousEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);
@@ -1326,6 +1424,9 @@ export default class InterBrainPlugin extends Plugin {
                 this.uiService.showError('Target node no longer exists - skipped to next state');
               }
             }
+            
+            // Restore visual state (flip state and scroll position) after layout restoration
+            store.restoreVisualState(nextEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);
@@ -1371,5 +1472,15 @@ export default class InterBrainPlugin extends Plugin {
 
   onunload() {
     console.log('InterBrain plugin unloaded');
+
+    // Stop canvas observer
+    if (this.canvasObserverService) {
+      this.canvasObserverService.stop();
+    }
+
+    // Clean up leaf manager service
+    if (this.leafManagerService) {
+      this.leafManagerService.destroy();
+    }
   }
 }

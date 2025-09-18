@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InterBrain: Local Cluster Layout Algorithm</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            min-width: 300px;
+        }
+        .slider-container {
+            margin: 15px 0;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 400px;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #444;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <div class="controls">
+        <h3>Local Cluster Layout</h3>
+
+        <div class="slider-container">
+            <label>Projection (0=Planar, 1=Spherical):</label>
+            <input type="range" id="projectionSlider" min="0" max="1" step="0.01" value="0">
+            <span id="projectionValue">0.00</span>
+        </div>
+
+        <div class="slider-container">
+            <label>Force Iterations:</label>
+            <input type="range" id="iterationsSlider" min="50" max="500" step="25" value="200">
+            <span id="iterationsValue">200</span>
+        </div>
+
+        <div class="slider-container">
+            <label>Cap Radius (radians):</label>
+            <input type="range" id="capRadiusSlider" min="0.1" max="1.0" step="0.05" value="0.5">
+            <span id="capRadiusValue">0.50</span>
+        </div>
+
+        <button onclick="regenerateGraph()">New Graph</button>
+        <button onclick="resetLayout()">Reset Layout</button>
+    </div>
+
+    <div class="info">
+        <h4>About This Demo</h4>
+        <p><strong>Purpose:</strong> Validates the local clustering algorithm that transforms a graph into a constellation.</p>
+        <p><strong>Algorithm:</strong> Force-directed layout in tangent plane, then exponential map projection to sphere surface.</p>
+        <p><strong>Controls:</strong> Use the projection slider to smoothly transition between 2D planar and 3D spherical views.</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Global variables
+        let scene, camera, renderer;
+        let nodes = [];
+        let edges = [];
+        let nodeObjects = [];
+        let edgeObjects = [];
+        let planarPositions = [];
+        let sphericalPositions = [];
+        let clusterCenter = new THREE.Vector3(0, 0, 1); // North pole
+        let projectionT = 0;
+        let capRadius = 0.5;
+
+        // Mock graph data - small cluster for testing
+        let graphData = {
+            nodes: [
+                { id: 0, label: "A" },
+                { id: 1, label: "B" },
+                { id: 2, label: "C" },
+                { id: 3, label: "D" },
+                { id: 4, label: "E" },
+                { id: 5, label: "F" },
+                { id: 6, label: "G" }
+            ],
+            edges: [
+                { source: 0, target: 1 },
+                { source: 0, target: 2 },
+                { source: 1, target: 3 },
+                { source: 2, target: 4 },
+                { source: 3, target: 5 },
+                { source: 4, target: 5 },
+                { source: 0, target: 6 },
+                { source: 5, target: 6 }
+            ]
+        };
+
+        // Initialize Three.js
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000011);
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+
+            // Add reference sphere (wireframe)
+            const sphereGeometry = new THREE.SphereGeometry(1, 32, 16);
+            const sphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x333333,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.2
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            scene.add(sphere);
+
+            // Position camera
+            camera.position.set(0, 0, 3);
+            camera.lookAt(0, 0, 0);
+
+            // Initialize layout
+            initializeGraph();
+            setupControls();
+            animate();
+        }
+
+        // Mathematical functions
+        function exponentialMap(center, tangentVector) {
+            const theta = tangentVector.length();
+            if (theta < 1e-10) return center.clone();
+
+            const result = center.clone().multiplyScalar(Math.cos(theta));
+            const normalized = tangentVector.clone().divideScalar(theta);
+            result.add(normalized.multiplyScalar(Math.sin(theta)));
+            return result;
+        }
+
+        function getTangentBasis(center) {
+            // Create orthonormal basis in tangent plane at center
+            let u = new THREE.Vector3(1, 0, 0);
+            if (Math.abs(center.dot(u)) > 0.9) {
+                u = new THREE.Vector3(0, 1, 0);
+            }
+
+            const e1 = u.clone().sub(center.clone().multiplyScalar(u.dot(center))).normalize();
+            const e2 = center.clone().cross(e1).normalize();
+
+            return { e1, e2 };
+        }
+
+        // Force-directed layout algorithm
+        function computePlanarLayout() {
+            const n = graphData.nodes.length;
+            const iterations = parseInt(document.getElementById('iterationsSlider').value);
+
+            // Initialize positions randomly within cap radius
+            planarPositions = [];
+            for (let i = 0; i < n; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = Math.random() * 0.3 * capRadius;
+                planarPositions.push({
+                    x: radius * Math.cos(angle),
+                    y: radius * Math.sin(angle)
+                });
+            }
+
+            // Force-directed algorithm (Fruchterman-Reingold)
+            const area = Math.PI * capRadius * capRadius;
+            const k = 0.8 * Math.sqrt(area / n); // Ideal distance
+
+            for (let iter = 0; iter < iterations; iter++) {
+                const forces = new Array(n).fill(null).map(() => ({ x: 0, y: 0 }));
+
+                // Repulsive forces between all pairs
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        const dx = planarPositions[i].x - planarPositions[j].x;
+                        const dy = planarPositions[i].y - planarPositions[j].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance > 1e-10) {
+                            const repulsive = k * k / distance;
+                            const fx = (dx / distance) * repulsive;
+                            const fy = (dy / distance) * repulsive;
+
+                            forces[i].x += fx;
+                            forces[i].y += fy;
+                            forces[j].x -= fx;
+                            forces[j].y -= fy;
+                        }
+                    }
+                }
+
+                // Attractive forces along edges
+                for (const edge of graphData.edges) {
+                    const i = edge.source;
+                    const j = edge.target;
+                    const dx = planarPositions[i].x - planarPositions[j].x;
+                    const dy = planarPositions[i].y - planarPositions[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 1e-10) {
+                        const attractive = distance * distance / k;
+                        const fx = (dx / distance) * attractive;
+                        const fy = (dy / distance) * attractive;
+
+                        forces[i].x -= fx;
+                        forces[i].y -= fy;
+                        forces[j].x += fx;
+                        forces[j].y += fy;
+                    }
+                }
+
+                // Apply forces with cooling
+                const temp = 0.1 * (1 - iter / iterations);
+                for (let i = 0; i < n; i++) {
+                    const force = Math.sqrt(forces[i].x * forces[i].x + forces[i].y * forces[i].y);
+                    if (force > 1e-10) {
+                        const displacement = Math.min(force, temp);
+                        planarPositions[i].x += (forces[i].x / force) * displacement;
+                        planarPositions[i].y += (forces[i].y / force) * displacement;
+
+                        // Constrain to cap radius
+                        const dist = Math.sqrt(planarPositions[i].x ** 2 + planarPositions[i].y ** 2);
+                        if (dist > capRadius) {
+                            planarPositions[i].x = (planarPositions[i].x / dist) * capRadius;
+                            planarPositions[i].y = (planarPositions[i].y / dist) * capRadius;
+                        }
+                    }
+                }
+            }
+        }
+
+        function computeSphericalPositions() {
+            const basis = getTangentBasis(clusterCenter);
+            sphericalPositions = [];
+
+            for (const pos of planarPositions) {
+                const tangentVector = basis.e1.clone().multiplyScalar(pos.x)
+                    .add(basis.e2.clone().multiplyScalar(pos.y));
+                const spherePos = exponentialMap(clusterCenter, tangentVector);
+                sphericalPositions.push(spherePos);
+            }
+        }
+
+        function updateVisualization() {
+            // Clear existing objects
+            nodeObjects.forEach(obj => scene.remove(obj));
+            edgeObjects.forEach(obj => scene.remove(obj));
+            nodeObjects = [];
+            edgeObjects = [];
+
+            const t = projectionT;
+
+            // Create node objects
+            for (let i = 0; i < graphData.nodes.length; i++) {
+                const geometry = new THREE.SphereGeometry(0.05, 16, 16);
+                const material = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
+                const node = new THREE.Mesh(geometry, material);
+
+                if (t < 1) {
+                    // Interpolate between planar and spherical
+                    const planar = new THREE.Vector3(planarPositions[i].x, planarPositions[i].y, 0);
+                    const spherical = sphericalPositions[i];
+                    node.position.lerpVectors(planar, spherical, t);
+                } else {
+                    node.position.copy(sphericalPositions[i]);
+                }
+
+                scene.add(node);
+                nodeObjects.push(node);
+            }
+
+            // Create edge objects
+            for (const edge of graphData.edges) {
+                const geometry = new THREE.BufferGeometry();
+                const material = new THREE.LineBasicMaterial({ color: 0x666666 });
+
+                const points = [];
+                const sourcePos = nodeObjects[edge.source].position;
+                const targetPos = nodeObjects[edge.target].position;
+
+                if (t > 0.5) {
+                    // Use great circle arc for spherical view
+                    const steps = 20;
+                    for (let i = 0; i <= steps; i++) {
+                        const alpha = i / steps;
+                        const point = sourcePos.clone().lerp(targetPos, alpha).normalize();
+                        points.push(point);
+                    }
+                } else {
+                    // Straight line for planar view
+                    points.push(sourcePos);
+                    points.push(targetPos);
+                }
+
+                geometry.setFromPoints(points);
+                const line = new THREE.Line(geometry, material);
+                scene.add(line);
+                edgeObjects.push(line);
+            }
+        }
+
+        function setupControls() {
+            const projectionSlider = document.getElementById('projectionSlider');
+            const projectionValue = document.getElementById('projectionValue');
+            const iterationsSlider = document.getElementById('iterationsSlider');
+            const iterationsValue = document.getElementById('iterationsValue');
+            const capRadiusSlider = document.getElementById('capRadiusSlider');
+            const capRadiusValue = document.getElementById('capRadiusValue');
+
+            projectionSlider.addEventListener('input', (e) => {
+                projectionT = parseFloat(e.target.value);
+                projectionValue.textContent = projectionT.toFixed(2);
+                updateVisualization();
+            });
+
+            iterationsSlider.addEventListener('input', (e) => {
+                iterationsValue.textContent = e.target.value;
+            });
+
+            capRadiusSlider.addEventListener('input', (e) => {
+                capRadius = parseFloat(e.target.value);
+                capRadiusValue.textContent = capRadius.toFixed(2);
+            });
+
+            // Mouse controls for camera
+            let mouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            document.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!mouseDown) return;
+
+                const deltaX = e.clientX - mouseX;
+                const deltaY = e.clientY - mouseY;
+
+                const spherical = new THREE.Spherical();
+                spherical.setFromVector3(camera.position);
+
+                spherical.theta -= deltaX * 0.005;
+                spherical.phi += deltaY * 0.005;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+                camera.position.setFromSpherical(spherical);
+                camera.lookAt(0, 0, 0);
+
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            // Zoom with scroll
+            renderer.domElement.addEventListener('wheel', (e) => {
+                const zoom = e.deltaY * 0.001;
+                camera.position.multiplyScalar(1 + zoom);
+            });
+        }
+
+        function initializeGraph() {
+            computePlanarLayout();
+            computeSphericalPositions();
+            updateVisualization();
+        }
+
+        function regenerateGraph() {
+            // Create a new random graph
+            const nodeCount = 5 + Math.floor(Math.random() * 8);
+            graphData.nodes = [];
+            graphData.edges = [];
+
+            for (let i = 0; i < nodeCount; i++) {
+                graphData.nodes.push({ id: i, label: String.fromCharCode(65 + i) });
+            }
+
+            // Create random edges ensuring connectivity
+            const edgeCount = nodeCount + Math.floor(Math.random() * nodeCount);
+            const edges = new Set();
+
+            // Ensure connectivity with spanning tree
+            for (let i = 1; i < nodeCount; i++) {
+                const target = Math.floor(Math.random() * i);
+                edges.add(`${target}-${i}`);
+            }
+
+            // Add additional random edges
+            while (edges.size < edgeCount) {
+                const source = Math.floor(Math.random() * nodeCount);
+                const target = Math.floor(Math.random() * nodeCount);
+                if (source !== target) {
+                    const edgeKey = `${Math.min(source, target)}-${Math.max(source, target)}`;
+                    edges.add(edgeKey);
+                }
+            }
+
+            graphData.edges = Array.from(edges).map(edge => {
+                const [source, target] = edge.split('-').map(Number);
+                return { source, target };
+            });
+
+            initializeGraph();
+        }
+
+        function resetLayout() {
+            initializeGraph();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>

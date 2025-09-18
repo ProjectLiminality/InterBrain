@@ -5,6 +5,87 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-09-18 - Epic 6: DreamWeaving Operations (Complete)
+
+### Added
+
+**DreamNode Flip Animation System (Feature #324)**
+- Seamless 3D flip animation revealing DreamSong content on node backside
+- Professional flip button with 3x larger hit area and cursor feedback
+- Bidirectional flipping with proper animation timing and state management
+- Integrated with Obsidian's canvas parsing system for real content display
+- Surgical precision fixes for billboard distortion and hit detection
+
+**Full-Screen DreamSong Experience (Feature #325)**
+- Dedicated full-screen leaf for immersive DreamSong exploration
+- Ctrl+D hotkey integration with smart split-screen detection
+- Real-time file change monitoring with automatic content updates
+- Comprehensive PDF support and enhanced undo-redo functionality
+- Command integration with leaf manager for consistent navigation
+
+**DreamWeaving Canvas Integration (Feature #286)**
+- Complete .canvas and .link file support across the system
+- Canvas-to-DreamSong parsing with three-layer architecture
+- Media path resolution using data URLs for instant playback
+- Topological ordering preservation for logical content flow
+- Terminal command access with Ctrl+C hotkey for DreamNodes
+
+**Constellation Layout System (Feature #326)**
+- Force-directed graph clustering for relationship visualization
+- Mathematical precision positioning for 1-36 node layouts
+- Complete edge rendering system with relationship mapping
+- Interactive demonstrations with comprehensive documentation
+- Spherical graph clustering with constellation threads
+
+### Technical Achievements
+
+**DreamSong Architecture Revolution**
+- Three-layer DreamSong system: DreamTalk → Canvas → README fallback
+- Intelligent caching with L1/L2 cache architecture for performance
+- Service layer consolidation with unified parsing infrastructure
+- Real-time synchronization between 3D view and full-screen experience
+
+**Canvas Parser Enhancement**
+- Complete rewrite of canvas parsing with structural hash caching
+- Support for complex canvas topologies with media-text pair handling
+- .link file metadata extraction with YouTube and website support
+- Robust error handling and graceful degradation patterns
+
+**Developer Experience Infrastructure**
+- Comprehensive slash command system (/epic-start, /feature-complete, etc.)
+- Systematic workflow automation for development lifecycle
+- Quality assurance integration with mandatory testing protocols
+- GitHub CLI integration for seamless project management
+
+**Performance Optimizations**
+- Background indexing system with git integration
+- Intelligent file change detection with selective re-parsing
+- Memory-efficient caching strategies across component hierarchy
+- Optimized animation systems with proper cleanup patterns
+
+### Enhanced
+
+**Spatial Navigation System**
+- Improved transition animations between spatial modes
+- Enhanced escape key navigation with proper state isolation
+- Consolidated layout state management across all view modes
+- Quality-of-life navigation toggles for fluid user experience
+
+**File System Integration**
+- Node.js FileSystem API migration for improved reliability
+- Obsidian-native file streaming for instant media playback
+- Path resolution improvements across service architecture
+- Robust error handling for file operations and git integration
+
+### Fixed
+
+- TypeScript errors across 11 files with comprehensive type safety
+- Service method access patterns with proper null safety
+- Event listener type casting for Obsidian API compatibility
+- Property access on adapter objects with defensive programming
+- Animation state coordination for consistent user experience
+- Billboard distortion in 3D flip animations with surgical precision
+
 ## [0.5.0] - 2025-08-26 - Epic 4: Liminal Web Layout System (Complete)
 
 ### Added

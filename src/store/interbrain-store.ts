@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
+import { DreamSongData } from '../types/dreamsong';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
 import { MockDataConfig } from '../mock/dreamnode-mock-data';
-import { 
-  OllamaConfigSlice, 
+import {
+  OllamaConfigSlice,
   createOllamaConfigSlice,
   extractOllamaPersistenceData,
   restoreOllamaPersistenceData,
@@ -12,6 +13,75 @@ import {
 } from '../features/semantic-search/store/ollama-config-slice';
 // OllamaConfig imports are in the semantic search slice
 import { VectorData } from '../features/semantic-search/services/indexing-service';
+import { FlipState } from '../types/dreamsong';
+import {
+  DreamSongRelationshipGraph,
+  SerializableDreamSongGraph,
+  serializeRelationshipGraph,
+  deserializeRelationshipGraph
+} from '../types/constellation';
+
+// Helper function to get current scroll position of DreamSong content
+function getDreamSongScrollPosition(nodeId: string): number | null {
+  try {
+    // Ensure we're in browser environment
+    if (typeof document === 'undefined') return null;
+    
+    // Look for DreamSong leaf in right pane containing this nodeId
+     
+    const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
+    if (dreamSongLeaf) {
+      const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
+      if (scrollContainer && 'scrollTop' in scrollContainer) {
+         
+        return (scrollContainer as HTMLElement).scrollTop;
+      }
+    }
+    
+    // Also check for embedded DreamSong content in DreamSpace
+     
+    const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
+    if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
+       
+      return (dreamSpaceContent as HTMLElement).scrollTop;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn(`Failed to get scroll position for node ${nodeId}:`, error);
+    return null;
+  }
+}
+
+// Helper function to restore scroll position of DreamSong content
+function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number): void {
+  try {
+    // Ensure we're in browser environment
+    if (typeof document === 'undefined') return;
+    
+    // Look for DreamSong leaf in right pane containing this nodeId
+     
+    const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
+    if (dreamSongLeaf) {
+      const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
+      if (scrollContainer && 'scrollTop' in scrollContainer) {
+         
+        (scrollContainer as HTMLElement).scrollTop = scrollPosition;
+        return;
+      }
+    }
+    
+    // Also check for embedded DreamSong content in DreamSpace
+     
+    const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
+    if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
+       
+      (dreamSpaceContent as HTMLElement).scrollTop = scrollPosition;
+    }
+  } catch (error) {
+    console.warn(`Failed to restore scroll position for node ${nodeId}:`, error);
+  }
+}
 
 // Navigation history types
 export interface NavigationHistoryEntry {
@@ -21,6 +91,10 @@ export interface NavigationHistoryEntry {
   layout: 'constellation' | 'liminal-web';
   /** Timestamp of the navigation action */
   timestamp: number;
+  /** Flip state of the focused node (null if not flipped or no focused node) */
+  flipState: FlipState | null;
+  /** Scroll position in DreamSong content (null if not applicable) */
+  scrollPosition: number | null;
 }
 
 export interface NavigationHistoryState {
@@ -39,6 +113,7 @@ export interface ProtoNode {
   dreamTalkFile?: globalThis.File;
   additionalFiles?: globalThis.File[];
   position: [number, number, number];
+  urlMetadata?: import('../utils/url-utils').UrlMetadata;
 }
 
 export interface ValidationErrors {
@@ -77,6 +152,13 @@ export interface RealNodeData {
   lastSynced: number; // Timestamp of last vault sync
 }
 
+// DreamSong cache interface for service layer
+export interface DreamSongCacheEntry {
+  data: DreamSongData;
+  timestamp: number;
+  structureHash: string;
+}
+
 // Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
 
 export interface InterBrainState extends OllamaConfigSlice {
@@ -93,6 +175,15 @@ export interface InterBrainState extends OllamaConfigSlice {
   // Selected DreamNode state
   selectedNode: DreamNode | null;
   setSelectedNode: (node: DreamNode | null) => void;
+  
+  // Selected DreamNode's DreamSong data (for reuse in full-screen)
+  selectedNodeDreamSongData: DreamSongData | null;
+  setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
+  
+  // DreamSong cache for service layer
+  dreamSongCache: Map<string, DreamSongCacheEntry>;
+  getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
+  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
   
   // Creator mode state
   creatorMode: {
@@ -200,6 +291,31 @@ export interface InterBrainState extends OllamaConfigSlice {
   performUndo: () => boolean;
   performRedo: () => boolean;
   clearNavigationHistory: () => void;
+  restoreVisualState: (entry: NavigationHistoryEntry) => void;
+  
+  // DreamNode flip animation state
+  flipState: {
+    flippedNodeId: string | null;
+    flipStates: Map<string, FlipState>;
+  };
+  setFlippedNode: (nodeId: string | null) => void;
+  startFlipAnimation: (nodeId: string, direction: 'front-to-back' | 'back-to-front') => void;
+  completeFlipAnimation: (nodeId: string) => void;
+  resetAllFlips: () => void;
+  getNodeFlipState: (nodeId: string) => FlipState | null;
+
+  // DreamSong relationship graph state
+  constellationData: {
+    relationshipGraph: DreamSongRelationshipGraph | null;
+    lastScanTimestamp: number | null;
+    isScanning: boolean;
+    positions: Map<string, [number, number, number]> | null;
+    lastLayoutTimestamp: number | null;
+  };
+  setRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
+  setConstellationScanning: (scanning: boolean) => void;
+  setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
+  clearConstellationData: () => void;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -216,6 +332,11 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Initialize Ollama config slice
   ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
+  selectedNodeDreamSongData: null,
+
+  // DreamSong cache for service layer
+  dreamSongCache: new Map<string, DreamSongCacheEntry>(),
+
   creatorMode: {
     isActive: false,
     nodeId: null
@@ -286,7 +407,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     history: [{
       nodeId: null,
       layout: 'constellation',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      flipState: null,
+      scrollPosition: null
     }],
     currentIndex: 0, // Start at the initial constellation state
     maxHistorySize: 150 // High limit for ultra-lightweight entries
@@ -295,6 +418,21 @@ export const useInterBrainStore = create<InterBrainState>()(
   // Flag to disable history tracking during undo/redo operations
   isRestoringFromHistory: false,
   
+  // DreamNode flip animation initial state
+  flipState: {
+    flippedNodeId: null,
+    flipStates: new Map<string, FlipState>()
+  },
+
+  // Constellation relationship graph initial state
+  constellationData: {
+    relationshipGraph: null,
+    lastScanTimestamp: null,
+    isScanning: false,
+    positions: null,
+    lastLayoutTimestamp: null
+  },
+
   // Actions
   setDataMode: (mode) => set({ dataMode: mode }),
   setRealNodes: (nodes) => set({ realNodes: nodes }),
@@ -330,7 +468,9 @@ export const useInterBrainStore = create<InterBrainState>()(
       const newEntry: NavigationHistoryEntry = {
         nodeId: node.id,
         layout: 'liminal-web',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        flipState: state.flipState.flipStates.get(node.id) || null,
+        scrollPosition: getDreamSongScrollPosition(node.id) // We'll implement this helper
       };
       
       // Add to history (reuse existing addHistoryEntry logic)
@@ -370,6 +510,29 @@ export const useInterBrainStore = create<InterBrainState>()(
     // Non-meaningful change - just update selected node
     return { selectedNode: node };
   }),
+  
+  setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
+
+  // DreamSong cache methods for service layer
+  getCachedDreamSong: (nodeId: string, structureHash: string) => {
+    const cacheKey = `${nodeId}-${structureHash}`;
+    return get().dreamSongCache.get(cacheKey) || null;
+  },
+
+  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => {
+    const cacheKey = `${nodeId}-${structureHash}`;
+    const entry: DreamSongCacheEntry = {
+      data,
+      timestamp: Date.now(),
+      structureHash
+    };
+    set((state) => {
+      const newCache = new Map(state.dreamSongCache);
+      newCache.set(cacheKey, entry);
+      return { dreamSongCache: newCache };
+    });
+  },
+
   setCreatorMode: (active, nodeId = null) => set({ 
     creatorMode: { isActive: active, nodeId: nodeId } 
   }),
@@ -403,7 +566,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     
     // Only log actual changes, not redundant calls
     if (previousLayout !== layout) {
-      console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${layout}`);
+      console.log(`Layout changed: ${previousLayout} → ${layout}`);
     }
     
     // Detect meaningful layout changes for history tracking
@@ -421,7 +584,11 @@ export const useInterBrainStore = create<InterBrainState>()(
       const newEntry: NavigationHistoryEntry = {
         nodeId: layout === 'liminal-web' ? selectedNode?.id || null : null,
         layout: layout, // Already narrowed to valid types by isMeaningfulChange condition
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        flipState: (layout === 'liminal-web' && selectedNode) ? 
+          state.flipState.flipStates.get(selectedNode.id) || null : null,
+        scrollPosition: (layout === 'liminal-web' && selectedNode) ? 
+          getDreamSongScrollPosition(selectedNode.id) : null
       };
       
       // Add to history (reuse existing addHistoryEntry logic)
@@ -614,10 +781,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   setIsDragging: (dragging) => set({ isDragging: dragging }),
   
   // Creation state actions
-  startCreation: (position) => set((state) => {
-    const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → creation (starting node creation)`);
-    
+  startCreation: (position) => set((_state) => {
     return {
       spatialLayout: 'creation',
       creationState: {
@@ -633,10 +797,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
   
-  startCreationWithData: (position, initialData) => set((state) => {
-    const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → creation (starting node creation with data)`);
-    
+  startCreationWithData: (position, initialData) => set((_state) => {
     return {
       spatialLayout: 'creation',
       creationState: {
@@ -669,10 +830,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   })),
   
-  completeCreation: () => set((state) => {
-    const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → constellation (completing node creation)`);
-    
+  completeCreation: () => set((_state) => {
     return {
       spatialLayout: 'constellation',
       creationState: {
@@ -683,10 +841,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
   
-  cancelCreation: () => set((state) => {
-    const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → constellation (canceling node creation)`);
-    
+  cancelCreation: () => set((_state) => {
     return {
       spatialLayout: 'constellation',
       creationState: {
@@ -698,10 +853,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   }),
 
   // Edit mode actions
-  startEditMode: (node) => set((state) => {
-    const previousLayout = state.spatialLayout;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → edit (entering edit mode)`);
-    
+  startEditMode: (node) => set((_state) => {
     return {
       editMode: {
         isActive: true,
@@ -717,10 +869,9 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
 
-  exitEditMode: () => set((state) => {
+  exitEditMode: () => set((_state) => {
     // Note: We don't change the layout here - the calling code should handle that
     // This allows for proper transitions (edit → liminal-web, edit-search → edit, etc.)
-    console.log(`📍 [Store] Exiting edit mode (layout remains: ${state.spatialLayout})`);
     
     return {
       editMode: {
@@ -760,10 +911,8 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
 
   setEditModeSearchActive: (active) => set(state => {
-    const previousLayout = state.spatialLayout;
     const newLayout = active ? 'edit-search' as const : 'edit' as const;
-    console.log(`📍 [Store] Spatial layout change: ${previousLayout} → ${newLayout} (edit mode search ${active ? 'activated' : 'deactivated'})`);
-    
+
     return {
       editMode: {
         ...state.editMode,
@@ -825,7 +974,11 @@ export const useInterBrainStore = create<InterBrainState>()(
     const newEntry: NavigationHistoryEntry = {
       nodeId,
       layout,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      flipState: (nodeId && layout === 'liminal-web') ? 
+        state.flipState.flipStates.get(nodeId) || null : null,
+      scrollPosition: (nodeId && layout === 'liminal-web') ? 
+        getDreamSongScrollPosition(nodeId) : null
     };
     
     // If we're not at the end of history (user has undone some actions),
@@ -915,30 +1068,231 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
   
   setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
+  
+  restoreVisualState: (entry) => set((state) => {
+    const newState = { ...state };
+
+    // Restore FlipState if present
+    if (entry.nodeId && entry.flipState) {
+      // Update the flip state for this node
+      const updatedFlipStates = new Map(state.flipState.flipStates);
+      updatedFlipStates.set(entry.nodeId, entry.flipState);
+
+      newState.flipState = {
+        ...state.flipState,
+        flipStates: updatedFlipStates,
+        flippedNodeId: entry.flipState.isFlipped ? entry.nodeId : state.flipState.flippedNodeId
+      };
+    }
+
+    // Restore scroll position (async, but we don't wait for it)
+    if (entry.nodeId && entry.scrollPosition !== null) {
+      // Use setTimeout to ensure DOM has updated after state change
+      if (typeof setTimeout !== 'undefined') {
+         
+        setTimeout(() => {
+          restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
+        }, 100);
+      } else {
+        // Fallback for non-browser environments
+        restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
+      }
+    }
+
+    return newState;
+  }),
+  
+  // DreamNode flip animation actions
+  setFlippedNode: (nodeId) => set((state) => {
+    
+    // Reset previous flipped node if different
+    if (state.flipState.flippedNodeId && state.flipState.flippedNodeId !== nodeId) {
+      const updatedFlipStates = new Map(state.flipState.flipStates);
+      updatedFlipStates.delete(state.flipState.flippedNodeId);
+      
+      return {
+        flipState: {
+          flippedNodeId: nodeId,
+          flipStates: updatedFlipStates
+        }
+      };
+    }
+    
+    return {
+      flipState: {
+        ...state.flipState,
+        flippedNodeId: nodeId
+      }
+    };
+  }),
+  
+  startFlipAnimation: (nodeId, direction) => set((state) => {
+    
+    const updatedFlipStates = new Map(state.flipState.flipStates);
+    
+    const currentFlipState = updatedFlipStates.get(nodeId) || {
+      isFlipped: false,
+      isFlipping: false,
+      flipDirection: 'front-to-back' as const,
+      animationStartTime: 0
+    };
+    
+    const newFlipState = {
+      ...currentFlipState,
+      isFlipping: true,
+      flipDirection: direction,
+      animationStartTime: globalThis.performance.now()
+    };
+    
+    updatedFlipStates.set(nodeId, newFlipState);
+
+    return {
+      ...state,
+      flipState: {
+        ...state.flipState,
+        flipStates: updatedFlipStates,
+        flippedNodeId: nodeId
+      }
+    };
+  }),
+  
+  completeFlipAnimation: (nodeId) => set((state) => {
+    
+    const updatedFlipStates = new Map(state.flipState.flipStates);
+    const currentFlipState = updatedFlipStates.get(nodeId);
+    
+    if (currentFlipState) {
+      const finalFlippedState = currentFlipState.flipDirection === 'front-to-back';
+      const completedFlipState = {
+        ...currentFlipState,
+        isFlipped: finalFlippedState,
+        isFlipping: false,
+        animationStartTime: 0
+      };
+      
+      updatedFlipStates.set(nodeId, completedFlipState);
+    }
+    
+    return {
+      flipState: {
+        ...state.flipState,
+        flipStates: updatedFlipStates
+      }
+    };
+  }),
+  
+  resetAllFlips: () => set(() => ({
+    flipState: {
+      flippedNodeId: null,
+      flipStates: new Map<string, FlipState>()
+    }
+  })),
+  
+  getNodeFlipState: (nodeId) => {
+    const state = get();
+    return state.flipState.flipStates.get(nodeId) || null;
+  },
+
+  // Constellation relationship graph actions
+  setRelationshipGraph: (graph) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      relationshipGraph: graph,
+      lastScanTimestamp: graph ? Date.now() : null,
+      isScanning: false
+    }
+  })),
+
+  setConstellationScanning: (scanning) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      isScanning: scanning
+    }
+  })),
+
+  setConstellationPositions: (positions) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      positions,
+      lastLayoutTimestamp: positions ? Date.now() : null
+    }
+  })),
+
+  clearConstellationData: () => set(() => ({
+    constellationData: {
+      relationshipGraph: null,
+      lastScanTimestamp: null,
+      isScanning: false,
+      positions: null,
+      lastLayoutTimestamp: null
+    }
+  })),
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, mock relationships, and Ollama config
+      // Only persist real nodes data, data mode, vector data, mock relationships, constellation data, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
         realNodes: mapToArray(state.realNodes),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
+        constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions) ? {
+          ...state.constellationData,
+          relationshipGraph: state.constellationData.relationshipGraph ?
+            serializeRelationshipGraph(state.constellationData.relationshipGraph) : null,
+          positions: state.constellationData.positions ?
+            mapToArray(state.constellationData.positions) : null
+        } : null,
         ...extractOllamaPersistenceData(state),
       }),
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
-        const persistedData = persisted as { 
-          dataMode: 'mock' | 'real'; 
+        const persistedData = persisted as {
+          dataMode: 'mock' | 'real';
           realNodes: [string, RealNodeData][];
           mockRelationshipData: [string, string[]][] | null;
+          constellationData?: {
+            relationshipGraph: SerializableDreamSongGraph | null;
+            lastScanTimestamp: number | null;
+            isScanning: boolean;
+            positions: [string, [number, number, number]][] | null;
+            lastLayoutTimestamp: number | null;
+          } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
         };
+
+        // Restore constellation data if present
+        let constellationData = {
+          relationshipGraph: null as DreamSongRelationshipGraph | null,
+          lastScanTimestamp: null as number | null,
+          isScanning: false,
+          positions: null as Map<string, [number, number, number]> | null,
+          lastLayoutTimestamp: null as number | null
+        };
+
+        if (persistedData.constellationData) {
+          try {
+            constellationData = {
+              relationshipGraph: persistedData.constellationData.relationshipGraph ?
+                deserializeRelationshipGraph(persistedData.constellationData.relationshipGraph) : null,
+              lastScanTimestamp: persistedData.constellationData.lastScanTimestamp,
+              isScanning: false,
+              positions: persistedData.constellationData.positions ?
+                arrayToMap(persistedData.constellationData.positions) : null,
+              lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp
+            };
+          } catch (error) {
+            console.warn('Failed to deserialize constellation data:', error);
+            // Keep default null state
+          }
+        }
+
         return {
           ...current,
           dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
           mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
+          constellationData,
           ...restoreOllamaPersistenceData(persistedData),
         };
       },

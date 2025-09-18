@@ -17,7 +17,18 @@ export default [
       },
       globals: {
         console: 'readonly',
-        global: 'readonly'
+        global: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        HTMLElement: 'readonly',
+        Element: 'readonly',
+        navigator: 'readonly',
+        setTimeout: 'readonly',
+        fetch: 'readonly',
+        MutationObserver: 'readonly',
+        MutationRecord: 'readonly',
+        performance: 'readonly',
+        require: 'readonly'
       }
     },
     plugins: {
@@ -37,6 +48,14 @@ export default [
         document: 'readonly',
         window: 'readonly',
         HTMLElement: 'readonly'
+      }
+    }
+  },
+  {
+    files: ['src/commands/dreamweaving-commands.ts', 'src/services/submodule-manager-service.ts'],
+    languageOptions: {
+      globals: {
+        require: 'readonly'
       }
     }
   },

@@ -17,7 +17,9 @@ import { DreamNode } from '../types/dreamnode';
 import { DreamNode3DRef } from './DreamNode3D';
 import { buildRelationshipGraph } from '../utils/relationship-graph';
 import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from './layouts/RingLayout';
+import { computeConstellationLayout, createFallbackLayout } from './constellation/ConstellationLayout';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { serviceManager } from '../services/service-manager';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
@@ -61,9 +63,12 @@ export interface SpatialOrchestratorRef {
   
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
-  
+
   /** Unregister a DreamNode3D ref */
   unregisterNodeRef: (nodeId: string) => void;
+
+  /** Apply constellation layout based on relationship graph */
+  applyConstellationLayout: () => Promise<void>;
 }
 
 interface SpatialOrchestratorProps {
@@ -125,6 +130,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   
   // Store integration
   const setSpatialLayout = useInterBrainStore(state => state.setSpatialLayout);
+  // const resetAllFlips = useInterBrainStore(state => state.resetAllFlips); // Removed - flip reset now handled by nodes
   
   // Track current edit mode search results for dynamic reordering
   const currentEditModeSearchResults = useRef<DreamNode[]>([]);
@@ -334,6 +340,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Start transition
       isTransitioning.current = true;
       focusedNodeId.current = null;
+      
+      // Note: Flip states now reset smoothly via Universal Movement API flip-back animation
+      // resetAllFlips(); // Removed - handled by individual nodes during movement
       
       // Update store to constellation layout mode
       setSpatialLayout('constellation');
@@ -1045,16 +1054,69 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     clearEditModeData: () => {
       console.log(`🧹 [Orchestrator-Cleanup] Clearing stale edit mode data`);
-      
+
       // Clear stable edit mode lists
       relatedNodesList.current = [];
       unrelatedSearchResultsList.current = [];
-      
+
       // Clear edit mode tracking
       currentEditModeSearchResults.current = [];
       currentEditModeCenterNodeId.current = null;
-      
+
       console.log(`✅ [Orchestrator-Cleanup] Edit mode data cleared`);
+    },
+
+    applyConstellationLayout: async () => {
+      console.log('🌌 [SpatialOrchestrator] Applying constellation layout...');
+
+      const store = useInterBrainStore.getState();
+      const relationshipGraph = store.constellationData.relationshipGraph;
+
+      if (!relationshipGraph) {
+        console.warn('⚠️ [SpatialOrchestrator] No relationship graph available for constellation layout');
+        return;
+      }
+
+      try {
+        // Compute constellation layout
+        const layoutResult = computeConstellationLayout(relationshipGraph, dreamNodes);
+
+        if (layoutResult.nodePositions.size === 0) {
+          console.warn('⚠️ [SpatialOrchestrator] Constellation layout returned no positions');
+          return;
+        }
+
+        // Create fallback positions for any missing nodes
+        const completePositions = createFallbackLayout(dreamNodes, layoutResult.nodePositions);
+
+        // Store the positions in the store for persistence
+        store.setConstellationPositions(completePositions);
+
+        // Update positions via service layer (like redistribute command)
+        const service = serviceManager.getActive();
+        let updatedCount = 0;
+
+        for (const [nodeId, position] of completePositions) {
+          try {
+            await service.update(nodeId, { position });
+            updatedCount++;
+            console.log(`Updated position for node ${nodeId}: [${position.join(', ')}]`);
+          } catch (error) {
+            console.warn(`Failed to update position for node ${nodeId}:`, error);
+          }
+        }
+
+        console.log(`✅ [SpatialOrchestrator] Constellation layout applied to ${updatedCount} nodes via service layer`);
+        console.log(`📊 [SpatialOrchestrator] Layout stats:`, {
+          clusters: layoutResult.stats.totalClusters,
+          nodes: layoutResult.stats.totalNodes,
+          edges: layoutResult.stats.totalEdges,
+          computationTime: `${layoutResult.stats.computationTimeMs.toFixed(1)}ms`
+        });
+
+      } catch (error) {
+        console.error('❌ [SpatialOrchestrator] Failed to apply constellation layout:', error);
+      }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
   

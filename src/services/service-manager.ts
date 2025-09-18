@@ -1,18 +1,22 @@
 import { DreamNode } from '../types/dreamnode';
 import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
+import { VaultService } from './vault-service';
+import { CanvasParserService } from './canvas-parser-service';
+import { LeafManagerService } from './leaf-manager-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
+import { UrlMetadata } from '../utils/url-utils';
 
 /**
  * Service interface that both mock and real implementations will follow
  */
 export interface IDreamNodeService {
   create(
-    title: string, 
-    type: 'dream' | 'dreamer', 
-    dreamTalk?: globalThis.File, 
+    title: string,
+    type: 'dream' | 'dreamer',
+    dreamTalk?: globalThis.File,
     position?: [number, number, number],
     additionalFiles?: globalThis.File[]
   ): Promise<DreamNode>;
@@ -29,12 +33,21 @@ export interface IDreamNodeService {
     nodesWithMedia: number;
   };
   refreshGitStatus?(): Promise<{ updated: number; errors: number }>;
-  
+
   // Relationship management
   updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void>;
   getRelationships(nodeId: string): Promise<string[]>;
   addRelationship(nodeId: string, relatedNodeId: string): Promise<void>;
   removeRelationship(nodeId: string, relatedNodeId: string): Promise<void>;
+
+  // URL-based operations
+  createFromUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number]
+  ): Promise<DreamNode>;
+  addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void>;
 }
 
 /**
@@ -45,6 +58,9 @@ export class ServiceManager {
   private realService: GitDreamNodeService | null = null;
   private indexingService: IndexingService;
   private plugin: Plugin | null = null;
+  private vaultService: VaultService | null = null;
+  private canvasParserService: CanvasParserService | null = null;
+  private leafManagerService: LeafManagerService | null = null;
 
   constructor() {
     this.mockService = mockDreamNodeService;
@@ -65,45 +81,59 @@ export class ServiceManager {
     const originalUpdateRelationships = this.mockService.updateRelationships.bind(this.mockService);
     const originalAddRelationship = this.mockService.addRelationship.bind(this.mockService);
     const originalRemoveRelationship = this.mockService.removeRelationship.bind(this.mockService);
-    
+    const originalCreateFromUrl = this.mockService.createFromUrl.bind(this.mockService);
+    const originalAddUrlToNode = this.mockService.addUrlToNode.bind(this.mockService);
+
     // Wrap create method
     this.mockService.create = async (...args) => {
       const node = await originalCreate(...args);
       this.syncMockToStore();
       return node;
     };
-    
+
     // Wrap update method
     this.mockService.update = async (...args) => {
       await originalUpdate(...args);
       this.syncMockToStore();
     };
-    
+
     // Wrap delete method
     this.mockService.delete = async (...args) => {
       await originalDelete(...args);
       this.syncMockToStore();
     };
-    
+
     // Wrap addFilesToNode method
     this.mockService.addFilesToNode = async (...args) => {
       await originalAddFiles(...args);
       this.syncMockToStore();
     };
-    
+
     // Wrap relationship methods
     this.mockService.updateRelationships = async (...args) => {
       await originalUpdateRelationships(...args);
       this.syncMockToStore();
     };
-    
+
     this.mockService.addRelationship = async (...args) => {
       await originalAddRelationship(...args);
       this.syncMockToStore();
     };
-    
+
     this.mockService.removeRelationship = async (...args) => {
       await originalRemoveRelationship(...args);
+      this.syncMockToStore();
+    };
+
+    // Wrap URL methods
+    this.mockService.createFromUrl = async (...args) => {
+      const node = await originalCreateFromUrl(...args);
+      this.syncMockToStore();
+      return node;
+    };
+
+    this.mockService.addUrlToNode = async (...args) => {
+      await originalAddUrlToNode(...args);
       this.syncMockToStore();
     };
   }
@@ -134,6 +164,18 @@ export class ServiceManager {
     this.plugin = plugin;
     this.realService = new GitDreamNodeService(plugin);
     
+    // Store service references (accessing private properties from main.ts)
+    // Store service references (accessing service properties from main.ts)
+    const pluginWithServices = plugin as Plugin & {
+      vaultService: VaultService;
+      canvasParserService: CanvasParserService;
+      leafManagerService: LeafManagerService;
+    };
+    this.vaultService = pluginWithServices.vaultService;
+    this.canvasParserService = pluginWithServices.canvasParserService;
+    this.leafManagerService = pluginWithServices.leafManagerService;
+    
+    
     // Sync with store's data mode
     const store = useInterBrainStore.getState();
     if (store.dataMode === 'real' && this.realService) {
@@ -158,6 +200,66 @@ export class ServiceManager {
     }
     
     return this.mockService;
+  }
+
+  /**
+   * Get VaultService instance (only available when plugin is initialized)
+   */
+  getVaultService() {
+    return this.vaultService;
+  }
+
+  /**
+   * Get CanvasParserService instance (only available when plugin is initialized)
+   */
+  getCanvasParserService() {
+    return this.canvasParserService;
+  }
+
+  /**
+   * Get LeafManagerService instance (only available when plugin is initialized)
+   */
+  getLeafManagerService() {
+    return this.leafManagerService;
+  }
+
+  /**
+   * Get Obsidian app instance (only available when plugin is initialized)
+   */
+  getApp() {
+    return this.plugin?.app || null;
+  }
+
+  /**
+   * Generic service getter (for backwards compatibility and simpler access)
+   */
+  getService(serviceName: string) {
+    switch (serviceName) {
+      case 'leafManagerService':
+        return this.getLeafManagerService();
+      case 'vaultService':
+        return this.getVaultService();
+      case 'canvasParserService':
+        return this.getCanvasParserService();
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Execute a command by ID using the plugin's app instance
+   */
+  executeCommand(commandId: string): void {
+    if (!this.plugin) {
+      return;
+    }
+    
+    try {
+      const fullCommandId = `interbrain:${commandId}`;
+      this.plugin.app.commands.executeCommandById(fullCommandId);
+    } catch {
+      // Command execution errors are handled by Obsidian
+    }
   }
 
   /**
