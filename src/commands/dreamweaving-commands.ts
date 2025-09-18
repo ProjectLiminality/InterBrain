@@ -72,7 +72,7 @@ export function registerDreamweavingCommands(
           const execAsync = promisify(exec);
           
           // Get vault path for git operations
-          const adapter = plugin.app.vault.adapter as any;
+          const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
           let vaultPath = '';
           if (typeof adapter.path === 'string') {
             vaultPath = adapter.path;
@@ -238,7 +238,7 @@ export function registerDreamweavingCommands(
               const execAsync = promisify(exec);
               
               // Get vault path for git operations
-              const adapter = plugin.app.vault.adapter as any;
+              const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
               let vaultPath = '';
               if (typeof adapter.path === 'string') {
                 vaultPath = adapter.path;
@@ -300,7 +300,7 @@ export function registerDreamweavingCommands(
           const execAsync = promisify(exec);
           
           // Get vault path for git operations
-          const adapter = plugin.app.vault.adapter as any;
+          const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
           let vaultPath = '';
           if (typeof adapter.path === 'string') {
             vaultPath = adapter.path;

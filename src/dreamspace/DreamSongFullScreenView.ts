@@ -13,7 +13,7 @@ export class DreamSongFullScreenView extends ItemView {
   private root: Root | null = null;
   private dreamNode: DreamNode | null = null;
   private blocks: DreamSongBlock[] = [];
-  private fileChangeListener: ((file: any) => void) | null = null;
+  private fileChangeListener: ((file: TFile) => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, dreamNode?: DreamNode, blocks?: DreamSongBlock[]) {
     super(leaf);
@@ -70,7 +70,7 @@ export class DreamSongFullScreenView extends ItemView {
     const vault = app.vault;
 
     // Create the file change handler
-    this.fileChangeListener = (file: any) => {
+    this.fileChangeListener = (file: TFile) => {
       if (file.path === canvasPath) {
         // Parse and update with a small delay to ensure file write is complete
         globalThis.setTimeout(() => {
@@ -139,7 +139,7 @@ export class DreamSongFullScreenView extends ItemView {
     container.addClass('dreamsong-fullscreen-container');
 
     // Set up container styling
-    const htmlContainer = container as any;
+    const htmlContainer = container as HTMLElement;
     htmlContainer.style.width = '100%';
     htmlContainer.style.height = '100%';
     htmlContainer.style.overflow = 'auto';

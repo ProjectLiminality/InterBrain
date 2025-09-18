@@ -130,7 +130,7 @@ export function useDreamSongData(
     const vault = app.vault;
 
     // Handler for file modification events
-    const handleFileChange = (file: any) => {
+    const handleFileChange = (file: TFile) => {
       // Check if the changed file is our canvas or README
       const readmePath = `${dreamNodePath}/README.md`;
 

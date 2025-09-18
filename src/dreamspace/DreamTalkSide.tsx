@@ -204,8 +204,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
                 // Scale icon for larger button
                 const iconElement = el.querySelector('.lucide-maximize');
                 if (iconElement) {
-                  (iconElement as any).style.width = '36px';
-                  (iconElement as any).style.height = '36px';
+                  (iconElement as HTMLElement).style.width = '36px';
+                  (iconElement as HTMLElement).style.height = '36px';
                 }
               }
             }}
@@ -248,8 +248,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
               // Scale icon for larger button
               const iconElement = el.querySelector('.lucide-rotate-3d');
               if (iconElement) {
-                (iconElement as any).style.width = '36px';
-                (iconElement as any).style.height = '36px';
+                (iconElement as HTMLElement).style.width = '36px';
+                (iconElement as HTMLElement).style.height = '36px';
               }
             }
           }}

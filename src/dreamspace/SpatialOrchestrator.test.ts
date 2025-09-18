@@ -20,7 +20,7 @@ vi.mock('@react-three/fiber', () => ({}))
 // Mock Zustand store
 const mockSetSpatialLayout = vi.fn()
 const mockStore = {
-  spatialLayout: 'constellation' as any,
+  spatialLayout: 'constellation' as SpatialLayoutType,
   editMode: { pendingRelationships: [] as string[] },
   constellationData: { relationshipGraph: null }
 }
@@ -83,7 +83,7 @@ const mockSetTimeout = vi.fn((callback: () => void, delay: number) => {
   // Store callback for manual execution in tests
   return { callback, delay }
 })
-globalThis.setTimeout = mockSetTimeout as any
+globalThis.setTimeout = mockSetTimeout as typeof setTimeout
 
 describe('SpatialOrchestrator State Machine', () => {
   let mockNodeRef: React.RefObject<DreamNode3DRef>

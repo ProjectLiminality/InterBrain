@@ -28,7 +28,7 @@ export function registerLinkFileCommands(plugin: Plugin, uiService: UIService): 
         const activeView = plugin.app.workspace.getActiveViewOfType(require('obsidian').ItemView);
         if (activeView && activeView.getViewType() === 'canvas') {
           // Add file to canvas at center position
-          const canvas = (activeView as any).canvas;
+          const canvas = (activeView as { canvas?: { addNode?: (node: unknown) => void } }).canvas;
           if (canvas && canvas.addNode) {
             canvas.addNode({
               type: 'file',
@@ -56,7 +56,7 @@ export function registerLinkFileCommands(plugin: Plugin, uiService: UIService): 
 class LinkFileModal extends FuzzySuggestModal<TFile> {
   private onSelectCallback: (file: TFile) => void;
 
-  constructor(app: any, onSelect: (file: TFile) => void) {
+  constructor(app: App, onSelect: (file: TFile) => void) {
     super(app);
     this.onSelectCallback = onSelect;
     this.setPlaceholder('Type to search for link files...');
@@ -73,7 +73,7 @@ class LinkFileModal extends FuzzySuggestModal<TFile> {
     return file.basename;
   }
 
-  renderSuggestion(match: any, el: HTMLElement): void {
+  renderSuggestion(match: { item: TFile }, el: HTMLElement): void {
     const file = match.item;
     // Create custom rendering for .link files
     el.createDiv({ cls: 'suggestion-content' }, (contentEl) => {
@@ -121,7 +121,7 @@ export class EnhancedFileSuggest {
     return mediaExtensions.includes(ext);
   }
 
-  static getMediaFiles(app: any): TFile[] {
+  static getMediaFiles(app: App): TFile[] {
     const allFiles = app.vault.getFiles();
     return allFiles.filter((file: TFile) => this.isMediaFile(file.path));
   }
@@ -133,10 +133,10 @@ export class EnhancedFileSuggest {
  */
 export function enhanceFileSuggestions(plugin: Plugin): void {
   // Store original method if it exists
-  const originalIsMediaFile = (window as any).isMediaFile;
+  const originalIsMediaFile = (window as { isMediaFile?: (filename: string) => boolean }).isMediaFile;
 
   // Override global isMediaFile function if it exists
-  (window as any).isMediaFile = (filename: string) => {
+  (window as { isMediaFile?: (filename: string) => boolean }).isMediaFile = (filename: string) => {
     // Call original implementation first if it exists
     if (originalIsMediaFile && originalIsMediaFile(filename)) {
       return true;
