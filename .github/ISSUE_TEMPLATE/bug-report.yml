@@ -57,7 +57,7 @@ body:
       label: Operating System
       description: Which operating system are you using?
       options:
-        - "macOS (Apple Silicon - M1/M2/M3)"
+        - "macOS (Apple Silicon - M1/M2/M3/M4)"
         - "macOS (Intel)"
         - "Windows"
         - "Linux"
