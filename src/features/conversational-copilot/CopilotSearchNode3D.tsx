@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { dreamNodeStyles, getNodeColors } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore } from '../../store/interbrain-store';
-import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
+// import { semanticSearchService } from '../semantic-search/services/semantic-search-service'; // DISABLED for performance testing
 import { Notice } from 'obsidian';
 
 interface CopilotSearchNode3DProps {
@@ -24,8 +24,10 @@ declare global {
  * Renders at a 3D position using Html from @react-three/drei, following the exact
  * pattern from EditModeSearchNode3D. Integrates Web Speech API for real-time
  * transcription with 500-character FIFO buffer and 5-second debounced search.
+ *
+ * Memoized to prevent unnecessary re-renders when parent components update.
  */
-export default function CopilotSearchNode3D({
+function CopilotSearchNode3D({
   position,
   visible = true
 }: CopilotSearchNode3DProps): React.JSX.Element | null {
@@ -40,14 +42,14 @@ export default function CopilotSearchNode3D({
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(0);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Store integration
-  const {
-    copilotMode,
-    updateTranscriptionBuffer,
-    setListening,
-    searchResults,
-    setSearchResults
-  } = useInterBrainStore();
+  // Store integration with optimized selectors to minimize re-renders
+  const isActive = useInterBrainStore(state => state.copilotMode.isActive);
+  const conversationPartner = useInterBrainStore(state => state.copilotMode.conversationPartner);
+  // DISABLED for performance testing - remove unused store subscriptions:
+  // const updateTranscriptionBuffer = useInterBrainStore(state => state.updateTranscriptionBuffer);
+  // const setListening = useInterBrainStore(state => state.setListening);
+  // const searchResults = useInterBrainStore(state => state.searchResults);
+  // const setSearchResults = useInterBrainStore(state => state.setSearchResults);
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -75,9 +77,9 @@ export default function CopilotSearchNode3D({
           setLocalTranscription(prevValue => {
             const newValue = prevValue + finalTranscript;
 
-            // BACKGROUND: Update store for persistence (this is slower)
-            updateTranscriptionBuffer(newValue);
-            triggerDebouncedSearch(newValue);
+            // DISABLED for performance testing:
+            // updateTranscriptionBuffer(newValue);
+            // triggerDebouncedSearch(newValue);
 
             return newValue;
           });
@@ -88,19 +90,19 @@ export default function CopilotSearchNode3D({
         console.error('Speech recognition error:', event.error);
         setTranscriptionError(`Speech recognition error: ${event.error}`);
         setIsListening(false);
-        setListening(false);
+        // DISABLED for performance testing: setListening(false);
         new Notice(`Speech recognition failed: ${event.error}`);
       };
 
       recognition.onend = () => {
         setIsListening(false);
-        setListening(false);
+        // DISABLED for performance testing: setListening(false);
         console.log('Speech recognition ended');
       };
 
       recognition.onstart = () => {
         setIsListening(true);
-        setListening(true);
+        // DISABLED for performance testing: setListening(true);
         setTranscriptionError(null);
         console.log('Speech recognition started');
         new Notice('Listening... (Press Fn key twice to stop)');
@@ -117,11 +119,13 @@ export default function CopilotSearchNode3D({
         recognitionRef.current.stop();
       }
     };
-  }, [updateTranscriptionBuffer, setListening]);
+  }, []); // DISABLED dependencies for performance testing
 
   // Initialize local state from store on mount
   useEffect(() => {
-    setLocalTranscription(copilotMode.transcriptionBuffer);
+    // DISABLED for performance testing - start with empty transcription
+    // setLocalTranscription(copilotMode.transcriptionBuffer);
+    setLocalTranscription(''); // Start clean for performance testing
   }, []); // Only on mount, not on every store change
 
   // Spawn animation (similar to EditModeSearchNode3D)
@@ -146,7 +150,8 @@ export default function CopilotSearchNode3D({
     }
   }, [visible]);
 
-  // Debounced semantic search (5 seconds for copilot vs 500ms for edit mode)
+  // DISABLED for performance testing - semantic search functionality
+  /*
   const triggerDebouncedSearch = useCallback(async (text: string) => {
     if (!text.trim() || !copilotMode.conversationPartner) return;
 
@@ -191,6 +196,7 @@ export default function CopilotSearchNode3D({
       }
     }, 5000);
   }, [copilotMode.conversationPartner, setSearchResults]);
+  */
 
   // Handle manual input changes with immediate local state update for responsiveness
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,11 +205,9 @@ export default function CopilotSearchNode3D({
     // IMMEDIATE: Update local state for instant responsiveness
     setLocalTranscription(text);
 
-    // BACKGROUND: Update store for persistence (this is slower)
-    updateTranscriptionBuffer(text);
-
-    // BACKGROUND: Trigger debounced search
-    triggerDebouncedSearch(text);
+    // DISABLED for performance testing:
+    // updateTranscriptionBuffer(text);
+    // triggerDebouncedSearch(text);
   };
 
   // Speech recognition is controlled via Fn key twice - manual toggle removed for cleaner UI
@@ -218,7 +222,7 @@ export default function CopilotSearchNode3D({
   }, []);
 
   // Don't render if copilot mode is not active
-  if (!copilotMode.isActive) {
+  if (!isActive) {
     return null;
   }
 
@@ -373,3 +377,6 @@ export default function CopilotSearchNode3D({
     </group>
   );
 }
+
+// Export memoized component to prevent unnecessary re-renders
+export default React.memo(CopilotSearchNode3D);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useInterBrainStore } from '../../store/interbrain-store';
 import CopilotSearchNode3D from './CopilotSearchNode3D';
 
@@ -14,7 +14,8 @@ export default function CopilotModeOverlay() {
   const { copilotMode } = useInterBrainStore();
 
   // Center position for the search interface (closer to camera to overlay person node)
-  const centerPosition: [number, number, number] = [0, 0, -40]; // 10 units closer than person node
+  // Use useMemo to ensure stable reference for React.memo optimization
+  const centerPosition = useMemo((): [number, number, number] => [0, 0, -40], []); // 10 units closer than person node
 
   // Don't render if copilot mode is not active
   if (!copilotMode.isActive || !copilotMode.conversationPartner) {
