@@ -41,6 +41,7 @@ function CopilotSearchNode3D({
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(0);
   const [isSearching, setIsSearching] = useState(false);
+  const [isComposing, setIsComposing] = useState(false); // Track composition events for dictation
 
   // Store integration with optimized selectors to minimize re-renders
   const isActive = useInterBrainStore(state => state.copilotMode.isActive);
@@ -198,16 +199,45 @@ function CopilotSearchNode3D({
   }, [copilotMode.conversationPartner, setSearchResults]);
   */
 
+  // Handle composition events for better dictation support
+  const handleCompositionStart = () => {
+    console.log('🎤 [Composition] Dictation/composition started');
+    setIsComposing(true);
+  };
+
+  const handleCompositionEnd = (event: React.CompositionEvent<HTMLInputElement>) => {
+    console.log('🎤 [Composition] Dictation/composition ended');
+    setIsComposing(false);
+    // Use the composed text directly when composition ends
+    setLocalTranscription(event.currentTarget.value);
+  };
+
   // Handle manual input changes with immediate local state update for responsiveness
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const text = event.target.value;
+    const newText = event.target.value;
+    const oldText = localTranscription;
 
-    // IMMEDIATE: Update local state for instant responsiveness
-    setLocalTranscription(text);
+    // Don't update during composition - let handleCompositionEnd handle it
+    if (isComposing) {
+      console.log('🎤 [Composition] Skipping onChange during composition');
+      return;
+    }
+
+    // Detect abnormal text changes that might indicate macOS dictation retroactive replacement
+    const lengthDiff = Math.abs(newText.length - oldText.length);
+
+    if (lengthDiff > 10) {
+      // Large change detected - likely dictation replacement, trust the new value completely
+      console.log(`🎤 [Dictation] Large text change detected (${lengthDiff} chars), updating to: "${newText.slice(-30)}..."`);
+      setLocalTranscription(newText);
+    } else {
+      // Normal typing change
+      setLocalTranscription(newText);
+    }
 
     // DISABLED for performance testing:
-    // updateTranscriptionBuffer(text);
-    // triggerDebouncedSearch(text);
+    // updateTranscriptionBuffer(newText);
+    // triggerDebouncedSearch(newText);
   };
 
   // Speech recognition is controlled via Fn key twice - manual toggle removed for cleaner UI
@@ -258,15 +288,18 @@ function CopilotSearchNode3D({
             type="text"
             value={localTranscription}
             onChange={handleInputChange}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             onFocus={() => {
               if (searchInputRef.current) {
                 searchInputRef.current.style.borderColor = nodeColors.border;
               }
             }}
-            onBlur={(e) => {
-              // Immediately refocus to maintain persistent highlight
-              e.target.focus();
-            }}
+            // REMOVED onBlur auto-focus - was interfering with macOS dictation retroactive replacement
+            // onBlur={(e) => {
+            //   // Immediately refocus to maintain persistent highlight
+            //   e.target.focus();
+            // }}
             placeholder="Conversation transcription (press Fn twice to start dictation)..."
             style={{
               position: 'relative',
