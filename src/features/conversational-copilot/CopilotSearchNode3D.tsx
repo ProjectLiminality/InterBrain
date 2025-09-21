@@ -33,7 +33,8 @@ export default function CopilotSearchNode3D({
   const searchTimeoutRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  // Local state
+  // Local state for immediate UI responsiveness
+  const [localTranscription, setLocalTranscription] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(0);
@@ -69,15 +70,17 @@ export default function CopilotSearchNode3D({
           }
         }
 
-        // Update the input field with current transcript
-        if (searchInputRef.current && finalTranscript) {
-          const currentValue = searchInputRef.current.value;
-          const newValue = currentValue + finalTranscript;
-          searchInputRef.current.value = newValue;
+        // Update local state with current transcript for immediate responsiveness
+        if (finalTranscript) {
+          setLocalTranscription(prevValue => {
+            const newValue = prevValue + finalTranscript;
 
-          // Update transcription buffer (with FIFO logic)
-          updateTranscriptionBuffer(newValue);
-          triggerDebouncedSearch(newValue);
+            // BACKGROUND: Update store for persistence (this is slower)
+            updateTranscriptionBuffer(newValue);
+            triggerDebouncedSearch(newValue);
+
+            return newValue;
+          });
         }
       };
 
@@ -115,6 +118,11 @@ export default function CopilotSearchNode3D({
       }
     };
   }, [updateTranscriptionBuffer, setListening]);
+
+  // Initialize local state from store on mount
+  useEffect(() => {
+    setLocalTranscription(copilotMode.transcriptionBuffer);
+  }, []); // Only on mount, not on every store change
 
   // Spawn animation (similar to EditModeSearchNode3D)
   useEffect(() => {
@@ -184,10 +192,17 @@ export default function CopilotSearchNode3D({
     }, 5000);
   }, [copilotMode.conversationPartner, setSearchResults]);
 
-  // Handle manual input changes (for fallback when speech recognition fails)
+  // Handle manual input changes with immediate local state update for responsiveness
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const text = event.target.value;
+
+    // IMMEDIATE: Update local state for instant responsiveness
+    setLocalTranscription(text);
+
+    // BACKGROUND: Update store for persistence (this is slower)
     updateTranscriptionBuffer(text);
+
+    // BACKGROUND: Trigger debounced search
     triggerDebouncedSearch(text);
   };
 
@@ -237,7 +252,7 @@ export default function CopilotSearchNode3D({
           <input
             ref={searchInputRef}
             type="text"
-            value={copilotMode.transcriptionBuffer}
+            value={localTranscription}
             onChange={handleInputChange}
             onFocus={() => {
               if (searchInputRef.current) {
