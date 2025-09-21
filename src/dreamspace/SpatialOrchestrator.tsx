@@ -185,10 +185,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Only update to liminal-web if not already in edit mode
-        // Edit mode manages its own layout state
+        // Only update to liminal-web if not already in edit mode or copilot mode
+        // Edit mode and copilot mode manage their own layout state
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
         
@@ -278,10 +278,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Only update to liminal-web if not already in edit mode
-        // Edit mode manages its own layout state
+        // Only update to liminal-web if not already in edit mode or copilot mode
+        // Edit mode and copilot mode manage their own layout state
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
         
@@ -446,7 +446,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
         // Only update to liminal-web if not already in edit mode
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
         

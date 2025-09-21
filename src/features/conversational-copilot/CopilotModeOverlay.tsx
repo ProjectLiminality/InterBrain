@@ -13,8 +13,8 @@ import CopilotSearchNode3D from './CopilotSearchNode3D';
 export default function CopilotModeOverlay() {
   const { copilotMode } = useInterBrainStore();
 
-  // Center position for the search interface (same as edit mode)
-  const centerPosition: [number, number, number] = [0, 0, -50];
+  // Center position for the search interface (closer to camera to overlay person node)
+  const centerPosition: [number, number, number] = [0, 0, -40]; // 10 units closer than person node
 
   // Don't render if copilot mode is not active
   if (!copilotMode.isActive || !copilotMode.conversationPartner) {

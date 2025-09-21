@@ -130,13 +130,19 @@ export default function DreamspaceCanvas() {
             store.setSpatialLayout('constellation');
             break;
             
+          case 'copilot':
+            // Exit copilot mode, go to liminal-web
+            console.log(`🤖 Exit copilot → liminal-web`);
+            store.exitCopilotMode();
+            break;
+
           case 'liminal-web':
             // Exit liminal-web, go to constellation
             console.log(`🕸️ Exit liminal-web → constellation`);
             store.setSelectedNode(null);
             store.setSpatialLayout('constellation');
             break;
-            
+
           case 'constellation':
             // Already at top level
             console.log(`🌌 Already in constellation (root)`);
