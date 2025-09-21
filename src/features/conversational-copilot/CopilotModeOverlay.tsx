@@ -26,9 +26,9 @@ export default function CopilotModeOverlay() {
       {/* Conversation partner is positioned at center by SpatialOrchestrator */}
       {/* We only need to render the transcription/search interface */}
 
-      {/* Transcription and search interface - renders above the conversation partner */}
+      {/* Transcription and search interface - renders at center position (same as edit mode) */}
       <CopilotSearchNode3D
-        position={[centerPosition[0], centerPosition[1] + 40, centerPosition[2]]} // Slightly above center
+        position={centerPosition} // Exact same position as EditModeSearchNode3D
         visible={copilotMode.showSearchField}
       />
 

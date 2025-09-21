@@ -191,19 +191,7 @@ export default function CopilotSearchNode3D({
     triggerDebouncedSearch(text);
   };
 
-  // Manual speech recognition toggle
-  const toggleSpeechRecognition = () => {
-    if (!recognitionRef.current) {
-      new Notice('Speech recognition not available');
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
-      recognitionRef.current.start();
-    }
-  };
+  // Speech recognition is controlled via Fn key twice - manual toggle removed for cleaner UI
 
   // Cleanup debounce timeout on unmount
   useEffect(() => {
@@ -219,9 +207,9 @@ export default function CopilotSearchNode3D({
     return null;
   }
 
-  // Node styling (similar to EditModeSearchNode3D but with copilot-specific styling)
+  // Node styling (exactly matching EditModeSearchNode3D)
   const nodeSize = 133; // 2/3 of 200px, same as edit mode for consistency
-  const nodeColors = getNodeColors('dreamer'); // Use dreamer style since we're talking to a person
+  const nodeColors = getNodeColors('dream'); // Always use dream style for search (matches EditModeSearchNode3D)
 
   return (
     <group position={position}>
@@ -236,13 +224,13 @@ export default function CopilotSearchNode3D({
       >
         <div
           style={{
+            // Remove fixed dimensions to eliminate rectangular blocking
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
-            pointerEvents: 'none',
-            gap: `${nodeSize * 0.05}px`
+            pointerEvents: 'none' // Allow clicks to pass through container
           }}
         >
           {/* Transcription Input Field */}
@@ -263,89 +251,108 @@ export default function CopilotSearchNode3D({
             placeholder="Conversation transcription (press Fn twice to start dictation)..."
             style={{
               position: 'relative',
-              width: `${nodeSize * 1.5}px`, // Wider than edit mode for longer transcriptions
-              height: `${nodeSize * 0.15}px`,
+              width: `${nodeSize * 0.9}px`, // Exact same width as EditModeSearchNode3D: 2/3 of original 200px = 120px (133 * 0.9)
+              height: `${nodeSize * 0.15}px`, // Proportionally smaller height
               padding: `${nodeSize * 0.03}px ${nodeSize * 0.04}px`,
-              background: 'rgba(0, 0, 0, 1.0)',
+              background: 'rgba(0, 0, 0, 1.0)', // Fully opaque black background
               border: `2px solid ${nodeColors.border}`,
-              borderRadius: `${nodeSize * 0.075}px`,
+              borderRadius: `${nodeSize * 0.075}px`, // Pill shape - semicircles on ends
               color: 'white',
-              fontSize: `${nodeSize * 0.05}px`, // Slightly smaller text for longer content
+              fontSize: `${nodeSize * 0.06}px`, // 75% of original size (0.08 * 0.75 = 0.06) - matches EditModeSearchNode3D
               fontFamily: dreamNodeStyles.typography.fontFamily,
               textAlign: 'center',
-              outline: 'none',
-              boxShadow: 'none',
-              pointerEvents: 'auto'
+              outline: 'none', // Remove gray browser outline completely
+              boxShadow: 'none', // Remove any default focus shadow
+              pointerEvents: 'auto' // Enable clicks only on the input itself
             }}
           />
 
-          {/* Speech Recognition Controls */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: `${nodeSize * 0.05}px`,
-            pointerEvents: 'auto'
-          }}>
-            <button
-              onClick={toggleSpeechRecognition}
+          {/* Simplified Speech Recognition Status - matching EditModeSearchNode3D minimal approach */}
+          {isListening && (
+            <div
               style={{
-                padding: `${nodeSize * 0.03}px ${nodeSize * 0.06}px`,
-                border: `1px solid ${nodeColors.border}`,
-                borderRadius: `${nodeSize * 0.03}px`,
-                backgroundColor: isListening ? '#ff4444' : '#44ff44',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: `${nodeSize * 0.04}px`,
-                fontFamily: dreamNodeStyles.typography.fontFamily
+                position: 'relative',
+                marginTop: '4px',
+                fontSize: '10px',
+                color: '#44ff44',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none'
               }}
             >
-              {isListening ? 'Stop' : 'Listen'}
-            </button>
-
-            {/* Status Indicator */}
-            <span style={{
-              color: isListening ? '#44ff44' : '#888888',
-              fontSize: `${nodeSize * 0.04}px`,
-              fontFamily: dreamNodeStyles.typography.fontFamily
-            }}>
-              {isListening ? '🎤 Listening...' : '⏸️ Not listening'}
-            </span>
-          </div>
-
-          {/* Search Loading Indicator */}
-          {isSearching && (
-            <div style={{
-              color: '#ffffff',
-              fontSize: `${nodeSize * 0.04}px`,
-              fontFamily: dreamNodeStyles.typography.fontFamily
-            }}>
-              🔍 Searching...
+              🎤 Listening...
             </div>
           )}
 
-          {/* Error Display */}
+          {/* Elegant Spinning Ring Loading Indicator (copied from EditModeSearchNode3D) */}
+          {isSearching && (
+            <div
+              style={{
+                position: 'absolute',
+                right: `${nodeSize * 0.075}px`, // Distance from right edge to center of right semicircle
+                top: '50%',
+                transform: 'translate(50%, -50%)', // Center the circle on the right semicircle center
+                width: `${nodeSize * 0.12}px`, // Full background circle size
+                height: `${nodeSize * 0.12}px`,
+                pointerEvents: 'none'
+              }}
+            >
+              {/* Background circle - opaque black to hide text behind (full size) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 1.0)'
+                }}
+              />
+
+              {/* Spinning gradient ring - 75% size of background circle */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '12.5%', // Center the 75% sized ring: (100% - 75%) / 2 = 12.5%
+                  left: '12.5%',
+                  width: '75%', // 75% of the background circle size
+                  height: '75%',
+                  borderRadius: '50%',
+                  background: `conic-gradient(from 0deg, transparent 0%, transparent 75%, ${nodeColors.border} 100%)`,
+                  mask: 'radial-gradient(circle, transparent 60%, black 65%)', // Creates ring effect
+                  WebkitMask: 'radial-gradient(circle, transparent 60%, black 65%)', // Safari support
+                  animation: 'spin 1s linear infinite',
+                  opacity: 0.9
+                }}
+              />
+
+              {/* CSS keyframe animation */}
+              <style>
+                {`
+                  @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                `}
+              </style>
+            </div>
+          )}
+
+          {/* Error Status - only show errors, matching EditModeSearchNode3D style */}
           {transcriptionError && (
-            <div style={{
-              color: '#ff4444',
-              fontSize: `${nodeSize * 0.04}px`,
-              fontFamily: dreamNodeStyles.typography.fontFamily,
-              textAlign: 'center',
-              maxWidth: `${nodeSize * 1.5}px`
-            }}>
+            <div
+              style={{
+                position: 'relative',
+                marginTop: '8px',
+                fontSize: '12px',
+                color: '#ff6b6b',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none'
+              }}
+            >
               {transcriptionError}
             </div>
           )}
-
-          {/* Buffer/Results Info */}
-          <div style={{
-            color: '#888888',
-            fontSize: `${nodeSize * 0.035}px`,
-            fontFamily: dreamNodeStyles.typography.fontFamily,
-            textAlign: 'center'
-          }}>
-            Buffer: {copilotMode.transcriptionBuffer.length}/500 chars
-            {searchResults.length > 0 && ` | ${searchResults.length} results`}
-          </div>
         </div>
       </Html>
     </group>
