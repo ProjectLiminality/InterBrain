@@ -25,6 +25,7 @@ import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/lin
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
+import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -41,6 +42,9 @@ export default class InterBrainPlugin extends Plugin {
   async onload() {
     // Initialize services
     this.initializeServices();
+
+    // Initialize transcription service for copilot mode
+    initializeTranscriptionService(this.app);
     
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();

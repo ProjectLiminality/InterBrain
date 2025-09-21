@@ -2,9 +2,10 @@ import { Plugin } from 'obsidian';
 import { UIService } from '../../services/ui-service';
 import { useInterBrainStore } from '../../store/interbrain-store';
 import { serviceManager } from '../../services/service-manager';
+import { getTranscriptionService } from './services/transcription-service';
 
 /**
- * Conversational copilot commands for real-time transcription and semantic search
+ * Conversational copilot commands for markdown-based transcription and semantic search
  */
 export function registerConversationalCopilotCommands(plugin: Plugin, uiService: UIService): void {
 
@@ -66,25 +67,11 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`🎯 [Copilot-Entry] Starting conversation mode with "${freshNode.name}" (${freshNode.id})`);
         store.startCopilotMode(freshNode);
 
-        // Show listening indicator
-        store.setListening(false); // Start not listening until user activates dictation
+        // Start transcription service
+        const transcriptionService = getTranscriptionService();
+        await transcriptionService.startTranscription(freshNode);
 
-        uiService.showSuccess(`Conversation mode activated with "${freshNode.name}". Press Fn key twice to start dictation.`);
-
-        // Auto-focus search field for dictation (handled by the UI component)
-        const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
-        if (canvas) {
-          console.log(`🚀 [Copilot-Layout] Dispatching copilot-mode-layout event for person ${freshNode.id}`);
-          const event = new globalThis.CustomEvent('copilot-mode-layout', {
-            detail: {
-              conversationPartnerId: freshNode.id,
-              showSearchField: store.copilotMode.showSearchField
-            }
-          });
-          canvas.dispatchEvent(event);
-        } else {
-          console.error(`❌ [Copilot-Layout] Canvas element not found - layout event failed`);
-        }
+        uiService.showSuccess(`Conversation mode activated with "${freshNode.name}". Start dictating in the opened file.`);
 
       } catch (error) {
         console.error('Failed to enter conversation mode:', error);
@@ -112,6 +99,10 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const partnerToFocus = store.copilotMode.conversationPartner;
         console.log(`🎯 [Copilot-Exit] Will focus person after exit: "${partnerToFocus?.name}" (${partnerToFocus?.id})`);
 
+        // Stop transcription service first
+        const transcriptionService = getTranscriptionService();
+        await transcriptionService.stopTranscription();
+
         // Exit copilot mode (this also sets layout back to liminal-web)
         store.exitCopilotMode();
 
@@ -132,23 +123,5 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
     }
   });
 
-  // Toggle Copilot Search Field (Debug Command)
-  plugin.addCommand({
-    id: 'toggle-copilot-search-field',
-    name: 'Toggle Copilot Search Field',
-    callback: async () => {
-      const store = useInterBrainStore.getState();
-
-      if (!store.copilotMode.isActive) {
-        uiService.showError('Conversation mode is not active.');
-        return;
-      }
-
-      store.toggleShowSearchField();
-
-      const visibility = store.copilotMode.showSearchField ? 'visible' : 'hidden';
-      uiService.showInfo(`Copilot search field is now ${visibility}`);
-    }
-  });
 
 }

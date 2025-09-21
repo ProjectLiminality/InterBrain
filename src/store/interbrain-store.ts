@@ -149,10 +149,7 @@ export interface EditModeValidationErrors {
 export interface CopilotModeState {
   isActive: boolean;
   conversationPartner: DreamNode | null; // The person node at center
-  transcriptionBuffer: string; // 500-character FIFO buffer
-  isListening: boolean; // Visual indicator state
-  showSearchField: boolean; // Debug toggle for search field visibility
-  lastSearchTimestamp: number; // For 5-second debounced updates
+  transcriptionFilePath: string | null; // Path to active transcription file
 }
 
 // Real node storage - persisted across sessions
@@ -295,9 +292,6 @@ export interface InterBrainState extends OllamaConfigSlice {
   copilotMode: CopilotModeState;
   startCopilotMode: (conversationPartner: DreamNode) => void;
   exitCopilotMode: () => void;
-  updateTranscriptionBuffer: (text: string) => void;
-  setListening: (listening: boolean) => void;
-  toggleShowSearchField: () => void;
 
   // Navigation history management
   navigationHistory: NavigationHistoryState;
@@ -424,10 +418,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   copilotMode: {
     isActive: false,
     conversationPartner: null,
-    transcriptionBuffer: '',
-    isListening: false,
-    showSearchField: true, // Start with debug mode on
-    lastSearchTimestamp: 0
+    transcriptionFilePath: null
   },
 
   // Navigation history initial state (with initial constellation state)
@@ -1015,43 +1006,11 @@ export const useInterBrainStore = create<InterBrainState>()(
       copilotMode: {
         isActive: false,
         conversationPartner: null,
-        transcriptionBuffer: '',
-        isListening: false,
-        showSearchField: true,
-        lastSearchTimestamp: 0
+        transcriptionFilePath: null
       }
     };
   }),
 
-  updateTranscriptionBuffer: (text) => set(state => {
-    // Implement 500-character FIFO buffer
-    let newBuffer = text;
-    if (newBuffer.length > 500) {
-      newBuffer = newBuffer.slice(-500); // Keep last 500 characters
-    }
-
-    return {
-      copilotMode: {
-        ...state.copilotMode,
-        transcriptionBuffer: newBuffer,
-        lastSearchTimestamp: Date.now()
-      }
-    };
-  }),
-
-  setListening: (listening) => set(state => ({
-    copilotMode: {
-      ...state.copilotMode,
-      isListening: listening
-    }
-  })),
-
-  toggleShowSearchField: () => set(state => ({
-    copilotMode: {
-      ...state.copilotMode,
-      showSearchField: !state.copilotMode.showSearchField
-    }
-  })),
 
   // Navigation history actions
   addHistoryEntry: (nodeId, layout) => set(state => {
