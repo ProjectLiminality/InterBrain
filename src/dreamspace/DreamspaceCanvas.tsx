@@ -11,6 +11,7 @@ import ProtoNode3D from '../features/creation/ProtoNode3D';
 import SearchNode3D from '../features/search/SearchNode3D';
 import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../features/edit-mode';
+import CopilotModeOverlay from '../features/conversational-copilot/CopilotModeOverlay';
 import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
@@ -194,7 +195,10 @@ export default function DreamspaceCanvas() {
   // Search results for search mode display
   const searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
-  
+
+  // Copilot mode state for transcription buffer
+  const copilotMode = useInterBrainStore(state => state.copilotMode);
+
   // Search interface state
   const searchInterface = useInterBrainStore(state => state.searchInterface);
   
@@ -1303,7 +1307,10 @@ export default function DreamspaceCanvas() {
         
         {/* Edit mode overlay - render when edit mode is active */}
         <EditModeOverlay />
-        
+
+        {/* Copilot mode overlay - render when copilot mode is active */}
+        <CopilotModeOverlay />
+
         {/* Flying camera controls for debugging - toggleable */}
         {debugFlyingControls && (
           <FlyControls
