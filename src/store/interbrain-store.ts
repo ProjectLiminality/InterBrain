@@ -145,6 +145,16 @@ export interface EditModeValidationErrors {
   relationships?: string;
 }
 
+// Copilot mode state types
+export interface CopilotModeState {
+  isActive: boolean;
+  conversationPartner: DreamNode | null; // The person node at center
+  transcriptionBuffer: string; // 500-character FIFO buffer
+  isListening: boolean; // Visual indicator state
+  showSearchField: boolean; // Debug toggle for search field visibility
+  lastSearchTimestamp: number; // For 5-second debounced updates
+}
+
 // Real node storage - persisted across sessions
 export interface RealNodeData {
   node: DreamNode;
@@ -208,8 +218,8 @@ export interface InterBrainState extends OllamaConfigSlice {
   setSearchSaving: (saving: boolean) => void;
   
   // Spatial layout state - expanded to include edit modes as first-class states
-  spatialLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search';
-  setSpatialLayout: (layout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search') => void;
+  spatialLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
+  setSpatialLayout: (layout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot') => void;
   
   // Fibonacci sphere layout configuration
   fibonacciConfig: FibonacciSphereConfig;
@@ -231,9 +241,9 @@ export interface InterBrainState extends OllamaConfigSlice {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null;
+    previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null) => void;
   
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;
@@ -280,7 +290,15 @@ export interface InterBrainState extends OllamaConfigSlice {
   togglePendingRelationship: (nodeId: string) => void;
   savePendingRelationships: () => void;
   setEditModeValidationErrors: (errors: EditModeValidationErrors) => void;
-  
+
+  // Copilot mode state management
+  copilotMode: CopilotModeState;
+  startCopilotMode: (conversationPartner: DreamNode) => void;
+  exitCopilotMode: () => void;
+  updateTranscriptionBuffer: (text: string) => void;
+  setListening: (listening: boolean) => void;
+  toggleShowSearchField: () => void;
+
   // Navigation history management
   navigationHistory: NavigationHistoryState;
   isRestoringFromHistory: boolean;
@@ -401,7 +419,17 @@ export const useInterBrainStore = create<InterBrainState>()(
     validationErrors: {},
     isSearchingRelationships: false
   },
-  
+
+  // Copilot mode initial state (not active)
+  copilotMode: {
+    isActive: false,
+    conversationPartner: null,
+    transcriptionBuffer: '',
+    isListening: false,
+    showSearchField: true, // Start with debug mode on
+    lastSearchTimestamp: 0
+  },
+
   // Navigation history initial state (with initial constellation state)
   navigationHistory: {
     history: [{
@@ -965,7 +993,66 @@ export const useInterBrainStore = create<InterBrainState>()(
       validationErrors: errors
     }
   })),
-  
+
+  // Copilot mode actions
+  startCopilotMode: (conversationPartner) => set((_state) => {
+    return {
+      spatialLayout: 'copilot',
+      copilotMode: {
+        isActive: true,
+        conversationPartner: { ...conversationPartner }, // Create a copy
+        transcriptionBuffer: '',
+        isListening: false,
+        showSearchField: true, // Start with debug mode on
+        lastSearchTimestamp: 0
+      }
+    };
+  }),
+
+  exitCopilotMode: () => set((_state) => {
+    return {
+      spatialLayout: 'liminal-web', // Return to liminal-web layout
+      copilotMode: {
+        isActive: false,
+        conversationPartner: null,
+        transcriptionBuffer: '',
+        isListening: false,
+        showSearchField: true,
+        lastSearchTimestamp: 0
+      }
+    };
+  }),
+
+  updateTranscriptionBuffer: (text) => set(state => {
+    // Implement 500-character FIFO buffer
+    let newBuffer = text;
+    if (newBuffer.length > 500) {
+      newBuffer = newBuffer.slice(-500); // Keep last 500 characters
+    }
+
+    return {
+      copilotMode: {
+        ...state.copilotMode,
+        transcriptionBuffer: newBuffer,
+        lastSearchTimestamp: Date.now()
+      }
+    };
+  }),
+
+  setListening: (listening) => set(state => ({
+    copilotMode: {
+      ...state.copilotMode,
+      isListening: listening
+    }
+  })),
+
+  toggleShowSearchField: () => set(state => ({
+    copilotMode: {
+      ...state.copilotMode,
+      showSearchField: !state.copilotMode.showSearchField
+    }
+  })),
+
   // Navigation history actions
   addHistoryEntry: (nodeId, layout) => set(state => {
     const { history, currentIndex, maxHistorySize } = state.navigationHistory;
