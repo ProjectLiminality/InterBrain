@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { dreamNodeStyles, getNodeColors } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore } from '../../store/interbrain-store';
-// import { semanticSearchService } from '../semantic-search/services/semantic-search-service'; // DISABLED for performance testing
+import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
 import { Notice } from 'obsidian';
 
 interface CopilotSearchNode3DProps {
@@ -43,11 +43,8 @@ export default function CopilotSearchNode3D({
   // Store integration with optimized selectors to minimize re-renders
   const isActive = useInterBrainStore(state => state.copilotMode.isActive);
   const conversationPartner = useInterBrainStore(state => state.copilotMode.conversationPartner);
-  // DISABLED for performance testing - remove unused store subscriptions:
-  // const updateTranscriptionBuffer = useInterBrainStore(state => state.updateTranscriptionBuffer);
-  // const setListening = useInterBrainStore(state => state.setListening);
-  // const searchResults = useInterBrainStore(state => state.searchResults);
-  // const setSearchResults = useInterBrainStore(state => state.setSearchResults);
+  // Store subscriptions for search functionality
+  const setSearchResults = useInterBrainStore(state => state.setSearchResults);
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -75,9 +72,8 @@ export default function CopilotSearchNode3D({
           setLocalTranscription(prevValue => {
             const newValue = prevValue + finalTranscript;
 
-            // DISABLED for performance testing:
-            // updateTranscriptionBuffer(newValue);
-            // triggerDebouncedSearch(newValue);
+            // Trigger semantic search on speech recognition (but not manual typing)
+            triggerDebouncedSearch(newValue);
 
             return newValue;
           });
@@ -88,19 +84,16 @@ export default function CopilotSearchNode3D({
         console.error('Speech recognition error:', event.error);
         setTranscriptionError(`Speech recognition error: ${event.error}`);
         setIsListening(false);
-        // DISABLED for performance testing: setListening(false);
         new Notice(`Speech recognition failed: ${event.error}`);
       };
 
       recognition.onend = () => {
         setIsListening(false);
-        // DISABLED for performance testing: setListening(false);
         console.log('Speech recognition ended');
       };
 
       recognition.onstart = () => {
         setIsListening(true);
-        // DISABLED for performance testing: setListening(true);
         setTranscriptionError(null);
         console.log('Speech recognition started');
         new Notice('Listening... (Press Fn key twice to stop)');
@@ -148,10 +141,9 @@ export default function CopilotSearchNode3D({
     }
   }, [visible]);
 
-  // DISABLED for performance testing - semantic search functionality
-  /*
+  // Semantic search functionality - triggered only by speech recognition, not manual typing
   const triggerDebouncedSearch = useCallback(async (text: string) => {
-    if (!text.trim() || !copilotMode.conversationPartner) return;
+    if (!text.trim() || !conversationPartner) return;
 
     // Clear existing timeout
     if (searchTimeoutRef.current) {
@@ -174,7 +166,7 @@ export default function CopilotSearchNode3D({
         // Search for opposite-type nodes relative to the conversation partner
         const searchResults = await semanticSearchService.searchOppositeTypeNodes(
           text,
-          copilotMode.conversationPartner!,
+          conversationPartner!,
           {
             maxResults: 35, // Leave room for center node in honeycomb layout
             includeSnippets: false // We don't need snippets for copilot mode
@@ -193,8 +185,7 @@ export default function CopilotSearchNode3D({
         setIsSearching(false);
       }
     }, 5000);
-  }, [copilotMode.conversationPartner, setSearchResults]);
-  */
+  }, [conversationPartner, setSearchResults]);
 
   // Simple input change handler - just like any normal React input
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
