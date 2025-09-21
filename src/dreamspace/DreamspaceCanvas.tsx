@@ -362,6 +362,25 @@ export default function DreamspaceCanvas() {
         }
         break;
         
+      case 'copilot': {
+        // Copilot mode - conversation partner at center with search results around them
+        const store = useInterBrainStore.getState();
+        if (store.copilotMode.isActive && store.copilotMode.conversationPartner) {
+          console.log(`🤖 [Canvas-Layout] Copilot mode for person "${store.copilotMode.conversationPartner.name}" (${store.copilotMode.conversationPartner.id})`);
+          // Position conversation partner at center (like edit mode)
+          spatialOrchestratorRef.current.focusOnNode(store.copilotMode.conversationPartner.id);
+
+          // If we have search results from transcription, show them around the person
+          if (searchResults && searchResults.length > 0) {
+            console.log(`🤖 [Canvas-Layout] Showing ${searchResults.length} copilot search results around person`);
+            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, searchResults);
+          }
+        } else {
+          console.warn(`⚠️ [Canvas-Layout] Copilot mode triggered but no active conversation partner`);
+        }
+        break;
+      }
+
       case 'constellation':
         // Return to constellation
         console.log('DreamspaceCanvas: Returning to constellation mode');
@@ -405,24 +424,43 @@ export default function DreamspaceCanvas() {
     const handleClearEditModeData = (event: globalThis.Event) => {
       const customEvent = event as globalThis.CustomEvent;
       const source = customEvent.detail?.source;
-      
+
       console.log(`🧹 [Canvas-Event] Received clear-edit-mode-data event from ${source}`);
-      
+
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.clearEditModeData();
       } else {
         console.error(`❌ [Canvas-Event] Orchestrator not available for cleanup`);
       }
     };
+
+    // Handle copilot mode layout event (called when entering copilot mode)
+    const handleCopilotModeLayout = (event: globalThis.Event) => {
+      const customEvent = event as globalThis.CustomEvent;
+      const conversationPartnerId = customEvent.detail?.conversationPartnerId;
+      const showSearchField = customEvent.detail?.showSearchField;
+
+      console.log(`🤖 [Canvas-Event] Received copilot-mode-layout event for person ${conversationPartnerId}, searchField: ${showSearchField}`);
+
+      if (conversationPartnerId && spatialOrchestratorRef.current) {
+        // Position the conversation partner at center
+        spatialOrchestratorRef.current.focusOnNode(conversationPartnerId);
+        console.log(`🎯 [Canvas-Event] Positioned conversation partner ${conversationPartnerId} at center`);
+      } else {
+        console.error(`❌ [Canvas-Event] Missing required data - conversationPartnerId: ${!!conversationPartnerId}, orchestrator: ${!!spatialOrchestratorRef.current}`);
+      }
+    };
     
     canvas.addEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
     canvas.addEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
     canvas.addEventListener('clear-edit-mode-data', handleClearEditModeData);
-    
+    canvas.addEventListener('copilot-mode-layout', handleCopilotModeLayout);
+
     return () => {
       canvas.removeEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
       canvas.removeEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
       canvas.removeEventListener('clear-edit-mode-data', handleClearEditModeData);
+      canvas.removeEventListener('copilot-mode-layout', handleCopilotModeLayout);
     };
   }, []);
   
