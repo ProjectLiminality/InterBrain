@@ -24,10 +24,8 @@ declare global {
  * Renders at a 3D position using Html from @react-three/drei, following the exact
  * pattern from EditModeSearchNode3D. Integrates Web Speech API for real-time
  * transcription with 500-character FIFO buffer and 5-second debounced search.
- *
- * Memoized to prevent unnecessary re-renders when parent components update.
  */
-function CopilotSearchNode3D({
+export default function CopilotSearchNode3D({
   position,
   visible = true
 }: CopilotSearchNode3DProps): React.JSX.Element | null {
@@ -41,7 +39,6 @@ function CopilotSearchNode3D({
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [animatedOpacity, setAnimatedOpacity] = useState<number>(0);
   const [isSearching, setIsSearching] = useState(false);
-  const [isComposing, setIsComposing] = useState(false); // Track composition events for dictation
 
   // Store integration with optimized selectors to minimize re-renders
   const isActive = useInterBrainStore(state => state.copilotMode.isActive);
@@ -199,45 +196,9 @@ function CopilotSearchNode3D({
   }, [copilotMode.conversationPartner, setSearchResults]);
   */
 
-  // Handle composition events for better dictation support
-  const handleCompositionStart = () => {
-    console.log('🎤 [Composition] Dictation/composition started');
-    setIsComposing(true);
-  };
-
-  const handleCompositionEnd = (event: React.CompositionEvent<HTMLInputElement>) => {
-    console.log('🎤 [Composition] Dictation/composition ended');
-    setIsComposing(false);
-    // Use the composed text directly when composition ends
-    setLocalTranscription(event.currentTarget.value);
-  };
-
-  // Handle manual input changes with immediate local state update for responsiveness
+  // Simple input change handler - just like any normal React input
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newText = event.target.value;
-    const oldText = localTranscription;
-
-    // Don't update during composition - let handleCompositionEnd handle it
-    if (isComposing) {
-      console.log('🎤 [Composition] Skipping onChange during composition');
-      return;
-    }
-
-    // Detect abnormal text changes that might indicate macOS dictation retroactive replacement
-    const lengthDiff = Math.abs(newText.length - oldText.length);
-
-    if (lengthDiff > 10) {
-      // Large change detected - likely dictation replacement, trust the new value completely
-      console.log(`🎤 [Dictation] Large text change detected (${lengthDiff} chars), updating to: "${newText.slice(-30)}..."`);
-      setLocalTranscription(newText);
-    } else {
-      // Normal typing change
-      setLocalTranscription(newText);
-    }
-
-    // DISABLED for performance testing:
-    // updateTranscriptionBuffer(newText);
-    // triggerDebouncedSearch(newText);
+    setLocalTranscription(event.target.value);
   };
 
   // Speech recognition is controlled via Fn key twice - manual toggle removed for cleaner UI
@@ -288,8 +249,6 @@ function CopilotSearchNode3D({
             type="text"
             value={localTranscription}
             onChange={handleInputChange}
-            onCompositionStart={handleCompositionStart}
-            onCompositionEnd={handleCompositionEnd}
             onFocus={() => {
               if (searchInputRef.current) {
                 searchInputRef.current.style.borderColor = nodeColors.border;
@@ -410,6 +369,3 @@ function CopilotSearchNode3D({
     </group>
   );
 }
-
-// Export memoized component to prevent unnecessary re-renders
-export default React.memo(CopilotSearchNode3D);
