@@ -2,6 +2,7 @@ import { App, TFile, Notice } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { semanticSearchService } from '../../semantic-search/services/semantic-search-service';
 import { useInterBrainStore } from '../../../store/interbrain-store';
+import { VaultService } from '../../../services/vault-service';
 
 /**
  * Transcription Service
@@ -11,6 +12,7 @@ import { useInterBrainStore } from '../../../store/interbrain-store';
  */
 export class TranscriptionService {
   private app: App;
+  private vaultService: VaultService;
   private transcriptionFile: TFile | null = null;
   private fileChangeListener: ((file: TFile) => void) | null = null;
   private searchTimeout: number | null = null;
@@ -19,6 +21,7 @@ export class TranscriptionService {
 
   constructor(app: App) {
     this.app = app;
+    this.vaultService = new VaultService(app);
   }
 
   /**
@@ -32,26 +35,33 @@ export class TranscriptionService {
     }
 
     try {
-      // Create temporary transcription file
-      const fileName = `copilot-transcription-${conversationPartner.id}.md`;
-      let filePath = `.obsidian/plugins/interbrain/${fileName}`;
+      // Generate date-based filename
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().slice(0, 5).replace(':', '-'); // HH-mm
 
-      // Ensure plugin directory exists
-      const pluginDir = '.obsidian/plugins/interbrain';
-      try {
-        if (!await this.app.vault.adapter.exists(pluginDir)) {
-          await this.app.vault.adapter.mkdir(pluginDir);
-          console.log(`📁 [TranscriptionService] Created plugin directory: ${pluginDir}`);
-        }
-      } catch (error) {
-        console.warn(`⚠️ [TranscriptionService] Failed to create directory ${pluginDir}:`, error);
-        // Fallback to root directory if plugin directory fails
-        filePath = fileName;
-        console.log(`📁 [TranscriptionService] Using fallback path: ${filePath}`);
-      }
+      // Check if a file with just the date exists to determine if we need timestamp
+      const baseName = `transcript-${dateStr}`;
+      const baseFileName = `${baseName}.md`;
+      const timestampFileName = `${baseName}-${timeStr}.md`;
 
-      // Create initial content
+      // Build file path in the person's DreamNode repository
+      const baseFilePath = `${conversationPartner.repoPath}/${baseFileName}`;
+      const timestampFilePath = `${conversationPartner.repoPath}/${timestampFileName}`;
+
+      // Check if base file already exists today
+      const baseFileExists = this.app.vault.getAbstractFileByPath(baseFilePath);
+      const fileName = baseFileExists ? timestampFileName : baseFileName;
+      const filePath = baseFileExists ? timestampFilePath : baseFilePath;
+
+      console.log(`📝 [TranscriptionService] Creating transcription file: ${filePath}`);
+
+      // Create initial content with conversation context
+      const sessionTime = now.toLocaleString();
       const initialContent = `# Conversation with ${conversationPartner.name}
+
+**Date**: ${sessionTime}
+**Session**: ${fileName.replace('.md', '')}
 
 *Start dictating here. The last ${this.bufferSize} characters will be used for semantic search.*
 
@@ -59,16 +69,30 @@ export class TranscriptionService {
 
 `;
 
+      // Ensure the person's repository directory exists
+      try {
+        await this.vaultService.ensureDirectoryExists(conversationPartner.repoPath);
+        console.log(`📁 [TranscriptionService] Ensured directory exists: ${conversationPartner.repoPath}`);
+      } catch (error) {
+        console.error(`❌ [TranscriptionService] Failed to ensure directory exists: ${conversationPartner.repoPath}`, error);
+        throw new Error(`Cannot create transcription file: person's repository directory is not accessible.`);
+      }
+
       // Check if file already exists and handle gracefully
       const existingFile = this.app.vault.getAbstractFileByPath(filePath);
       if (existingFile && existingFile instanceof TFile) {
-        // File exists, delete it first to start fresh
-        console.log(`📄 [TranscriptionService] File already exists, deleting: ${filePath}`);
-        await this.app.vault.delete(existingFile);
+        // File exists, append session info instead of overwriting
+        console.log(`📄 [TranscriptionService] File already exists, appending session: ${filePath}`);
+        const existingContent = await this.app.vault.read(existingFile);
+        const sessionHeader = `\n\n## Session ${sessionTime}\n\n`;
+        await this.app.vault.modify(existingFile, existingContent + sessionHeader);
+        this.transcriptionFile = existingFile;
+      } else {
+        // Create new file using VaultService
+        await this.vaultService.writeFile(filePath, initialContent);
+        this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+        console.log(`📝 [TranscriptionService] Created new transcription file: ${filePath}`);
       }
-
-      // Create the file
-      this.transcriptionFile = await this.app.vault.create(filePath, initialContent);
 
       // Open in split view (right pane)
       const leaf = this.app.workspace.getLeaf('split', 'vertical');
