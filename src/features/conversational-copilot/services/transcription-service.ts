@@ -35,24 +35,14 @@ export class TranscriptionService {
     }
 
     try {
-      // Generate date-based filename
+      // Generate date-based filename with time to avoid conflicts
       const now = new Date();
       const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
       const timeStr = now.toTimeString().slice(0, 5).replace(':', '-'); // HH-mm
 
-      // Check if a file with just the date exists to determine if we need timestamp
-      const baseName = `transcript-${dateStr}`;
-      const baseFileName = `${baseName}.md`;
-      const timestampFileName = `${baseName}-${timeStr}.md`;
-
-      // Build file path in the person's DreamNode repository
-      const baseFilePath = `${conversationPartner.repoPath}/${baseFileName}`;
-      const timestampFilePath = `${conversationPartner.repoPath}/${timestampFileName}`;
-
-      // Check if base file already exists today
-      const baseFileExists = this.app.vault.getAbstractFileByPath(baseFilePath);
-      const fileName = baseFileExists ? timestampFileName : baseFileName;
-      const filePath = baseFileExists ? timestampFilePath : baseFilePath;
+      // Always include time to allow multiple transcripts per day
+      const fileName = `transcript-${dateStr}-${timeStr}.md`;
+      const filePath = `${conversationPartner.repoPath}/${fileName}`;
 
       console.log(`📝 [TranscriptionService] Creating transcription file: ${filePath}`);
 
@@ -72,28 +62,48 @@ export class TranscriptionService {
       // VaultService.writeFile will automatically create directories as needed
       console.log(`📁 [TranscriptionService] Target directory: ${conversationPartner.repoPath}`);
 
-      // Check if file already exists and handle gracefully
+      // Create new file using VaultService (filename includes time so conflicts are unlikely)
       const existingFile = this.app.vault.getAbstractFileByPath(filePath);
       if (existingFile && existingFile instanceof TFile) {
-        // File exists, append session info instead of overwriting
-        console.log(`📄 [TranscriptionService] File already exists, appending session: ${filePath}`);
-        const existingContent = await this.app.vault.read(existingFile);
-        const sessionHeader = `\n\n## Session ${sessionTime}\n\n`;
-        await this.app.vault.modify(existingFile, existingContent + sessionHeader);
-        this.transcriptionFile = existingFile;
-      } else {
-        // Create new file using VaultService
-        await this.vaultService.writeFile(filePath, initialContent);
-        this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
-        console.log(`📝 [TranscriptionService] Created new transcription file: ${filePath}`);
+        // Very unlikely with timestamp, but if it exists, delete and recreate
+        console.log(`📄 [TranscriptionService] File exists (unusual), deleting: ${filePath}`);
+        await this.app.vault.delete(existingFile);
       }
 
-      // Open in split view (right pane)
+      await this.vaultService.writeFile(filePath, initialContent);
+      this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+
+      if (!this.transcriptionFile) {
+        throw new Error(`Failed to create transcription file at: ${filePath}`);
+      }
+
+      console.log(`📝 [TranscriptionService] Created transcription file: ${filePath}`);
+
+      // Open in split view (right pane) and position cursor for immediate dictation
       const leaf = this.app.workspace.getLeaf('split', 'vertical');
       await leaf.openFile(this.transcriptionFile);
 
-      // Focus on the file for immediate dictation
+      // Focus the leaf and position cursor at end of file
       this.app.workspace.setActiveLeaf(leaf);
+
+      // Wait a moment for the file to fully load, then position cursor
+      setTimeout(() => {
+        const view = leaf.view;
+        if (view && 'editor' in view && view.editor) {
+          const editor = view.editor;
+          // Position cursor at the very end of the file content
+          const lastLine = editor.lastLine();
+          const lastLineLength = editor.getLine(lastLine).length;
+          editor.setCursor(lastLine, lastLineLength);
+
+          // Focus the editor for immediate dictation
+          editor.focus();
+
+          console.log(`🎯 [TranscriptionService] Cursor positioned at end of file for dictation`);
+        } else {
+          console.warn(`⚠️ [TranscriptionService] Could not access editor for cursor positioning`);
+        }
+      }, 100); // Small delay to ensure file is fully loaded
 
       // Set up file monitoring
       this.setupFileMonitoring();
