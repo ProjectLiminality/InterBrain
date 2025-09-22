@@ -71,13 +71,36 @@ export class TranscriptionService {
       }
 
       await this.vaultService.writeFile(filePath, initialContent);
+
+      // Give Obsidian a moment to recognize the new file
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
 
       if (!this.transcriptionFile) {
-        throw new Error(`Failed to create transcription file at: ${filePath}`);
+        // Try refreshing the vault cache and check again
+        console.warn(`⚠️ [TranscriptionService] File not found in vault cache, attempting refresh...`);
+
+        // Force Obsidian to refresh its file cache
+        const adapter = this.app.vault.adapter;
+        if ('exists' in adapter && typeof adapter.exists === 'function') {
+          const fileExists = await adapter.exists(filePath);
+          console.log(`📁 [TranscriptionService] File exists on filesystem: ${fileExists}`);
+
+          if (fileExists) {
+            // Try to get the file again after a short delay
+            await new Promise(resolve => setTimeout(resolve, 100));
+            this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+          }
+        }
+
+        if (!this.transcriptionFile) {
+          console.error(`❌ [TranscriptionService] File created but not accessible via Obsidian API: ${filePath}`);
+          throw new Error(`File was created but Obsidian cannot access it. This may be a timing issue. Please try again.`);
+        }
       }
 
-      console.log(`📝 [TranscriptionService] Created transcription file: ${filePath}`);
+      console.log(`📝 [TranscriptionService] Successfully created and verified transcription file: ${filePath}`);
 
       // Open in split view (right pane) and position cursor for immediate dictation
       const leaf = this.app.workspace.getLeaf('split', 'vertical');
