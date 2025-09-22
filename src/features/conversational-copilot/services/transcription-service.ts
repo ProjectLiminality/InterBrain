@@ -34,6 +34,11 @@ export class TranscriptionService {
       await this.stopTranscription();
     }
 
+    // Clear any existing search results when starting new conversation session
+    const store = useInterBrainStore.getState();
+    store.setSearchResults([]);
+    console.log(`🧹 [TranscriptionService] Cleared search results for new conversation session`);
+
     try {
       // Generate date-based filename with time to avoid conflicts
       const now = new Date();
@@ -260,7 +265,10 @@ export class TranscriptionService {
 
       // Only trigger search if we have meaningful content
       if (bufferContent.trim().length < 3) {
-        console.log(`⏸️ [TranscriptionService] Buffer too short, skipping search`);
+        console.log(`⏸️ [TranscriptionService] Buffer too short, clearing search results`);
+        // Clear search results when content is insufficient (matches edit mode behavior)
+        const store = useInterBrainStore.getState();
+        store.setSearchResults([]);
         return;
       }
 
@@ -290,6 +298,10 @@ export class TranscriptionService {
 
     try {
       console.log(`🔍 [TranscriptionService] Running semantic search for: "${searchText}"`);
+
+      // Clear existing search results before new search (prevents overlay)
+      store.setSearchResults([]);
+      console.log(`🧹 [TranscriptionService] Cleared previous search results`);
 
       // Check if semantic search is available
       const isAvailable = await semanticSearchService.isSemanticSearchAvailable();
