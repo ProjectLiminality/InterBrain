@@ -298,6 +298,8 @@ export class TranscriptionService {
 
     try {
       console.log(`🔍 [TranscriptionService] Running semantic search for: "${searchText}"`);
+      console.log(`📏 [TranscriptionService] Query length: ${searchText.length} characters`);
+      console.log(`👤 [TranscriptionService] Conversation partner: ${conversationPartner.name} (${conversationPartner.type})`);
 
       // Clear existing search results before new search (prevents overlay)
       store.setSearchResults([]);
@@ -305,12 +307,15 @@ export class TranscriptionService {
 
       // Check if semantic search is available
       const isAvailable = await semanticSearchService.isSemanticSearchAvailable();
+      console.log(`🤖 [TranscriptionService] Semantic search available: ${isAvailable}`);
+
       if (!isAvailable) {
-        console.warn('Semantic search not available');
+        console.warn('⚠️ [TranscriptionService] Semantic search not available, search aborted');
         return;
       }
 
       // Search for opposite-type nodes relative to the conversation partner
+      console.log(`🎯 [TranscriptionService] Calling searchOppositeTypeNodes with maxResults: 35`);
       const searchResults = await semanticSearchService.searchOppositeTypeNodes(
         searchText,
         conversationPartner,
@@ -320,10 +325,19 @@ export class TranscriptionService {
         }
       );
 
-      // Update search results in store (this will trigger layout updates)
-      store.setSearchResults(searchResults.map(result => result.node));
+      console.log(`📊 [TranscriptionService] Raw search results count: ${searchResults.length}`);
+      if (searchResults.length > 0) {
+        const resultIds = searchResults.slice(0, 5).map(r => r.node.id.slice(0, 8)).join(', ');
+        const resultNames = searchResults.slice(0, 5).map(r => r.node.name).join(', ');
+        console.log(`📝 [TranscriptionService] First 5 result IDs: ${resultIds}`);
+        console.log(`📝 [TranscriptionService] First 5 result names: ${resultNames}`);
+      }
 
-      console.log(`✅ [TranscriptionService] Found ${searchResults.length} search results`);
+      // Update search results in store (this will trigger layout updates)
+      const nodeResults = searchResults.map(result => result.node);
+      store.setSearchResults(nodeResults);
+
+      console.log(`✅ [TranscriptionService] Updated store with ${nodeResults.length} search results`);
 
     } catch (error) {
       console.error('Semantic search failed:', error);
