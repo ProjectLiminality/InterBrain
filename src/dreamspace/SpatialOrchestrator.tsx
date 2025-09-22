@@ -748,15 +748,27 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
           console.log(`   New lists - related: ${relatedNodes.length}, unrelated: ${unrelatedSearchNodes.length}`);
         } else {
-          // Subsequent call (new search results) - merge new unrelated nodes with existing lists
-          // Keep existing related nodes, but update unrelated list with new search results
-          const existingUnrelatedIds = new Set(unrelatedSearchResultsList.current.map(n => n.id));
-          const newUnrelatedNodes = unrelatedSearchNodes.filter(node => !existingUnrelatedIds.has(node.id));
-          
-          // Add new unrelated nodes to the list
-          unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
-          
-          console.log(`➕ [Orchestrator-EditMode] Added ${newUnrelatedNodes.length} new unrelated nodes, total unrelated: ${unrelatedSearchResultsList.current.length}`);
+          // Check if we're in copilot mode vs edit mode
+          const store = useInterBrainStore.getState();
+          const isInCopilotMode = store.spatialLayout === 'copilot';
+
+          if (isInCopilotMode) {
+            // COPILOT MODE: Replace entire list with new search results
+            // Copilot needs complete replacement on each search, not accumulation
+            unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
+            console.log(`🤖 [Orchestrator-Copilot] Replaced search results with ${unrelatedSearchNodes.length} nodes`);
+          } else {
+            // EDIT MODE: Keep existing stable list management for relationship editing
+            // Subsequent call (new search results) - merge new unrelated nodes with existing lists
+            // Keep existing related nodes, but update unrelated list with new search results
+            const existingUnrelatedIds = new Set(unrelatedSearchResultsList.current.map(n => n.id));
+            const newUnrelatedNodes = unrelatedSearchNodes.filter(node => !existingUnrelatedIds.has(node.id));
+
+            // Add new unrelated nodes to the list
+            unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
+
+            console.log(`➕ [Orchestrator-EditMode] Added ${newUnrelatedNodes.length} new unrelated nodes, total unrelated: ${unrelatedSearchResultsList.current.length}`);
+          }
         }
         
         // Priority ordering: related nodes first (inner rings), then search results (outer rings)
