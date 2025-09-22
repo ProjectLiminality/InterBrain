@@ -21,7 +21,7 @@ export class TranscriptionService {
 
   constructor(app: App) {
     this.app = app;
-    this.vaultService = new VaultService(app);
+    this.vaultService = new VaultService(app.vault, app);
   }
 
   /**
@@ -69,14 +69,8 @@ export class TranscriptionService {
 
 `;
 
-      // Ensure the person's repository directory exists
-      try {
-        await this.vaultService.ensureDirectoryExists(conversationPartner.repoPath);
-        console.log(`📁 [TranscriptionService] Ensured directory exists: ${conversationPartner.repoPath}`);
-      } catch (error) {
-        console.error(`❌ [TranscriptionService] Failed to ensure directory exists: ${conversationPartner.repoPath}`, error);
-        throw new Error(`Cannot create transcription file: person's repository directory is not accessible.`);
-      }
+      // VaultService.writeFile will automatically create directories as needed
+      console.log(`📁 [TranscriptionService] Target directory: ${conversationPartner.repoPath}`);
 
       // Check if file already exists and handle gracefully
       const existingFile = this.app.vault.getAbstractFileByPath(filePath);
