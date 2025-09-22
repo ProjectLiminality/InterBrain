@@ -25,15 +25,29 @@ export class TranscriptionService {
    * Create and open transcription file for copilot mode
    */
   async startTranscription(conversationPartner: DreamNode): Promise<void> {
+    // Clean up any existing transcription first
+    if (this.transcriptionFile) {
+      console.log(`🧹 [TranscriptionService] Cleaning up existing transcription before starting new one`);
+      await this.stopTranscription();
+    }
+
     try {
       // Create temporary transcription file
       const fileName = `copilot-transcription-${conversationPartner.id}.md`;
-      const filePath = `.obsidian/plugins/interbrain/${fileName}`;
+      let filePath = `.obsidian/plugins/interbrain/${fileName}`;
 
       // Ensure plugin directory exists
       const pluginDir = '.obsidian/plugins/interbrain';
-      if (!await this.app.vault.adapter.exists(pluginDir)) {
-        await this.app.vault.adapter.mkdir(pluginDir);
+      try {
+        if (!await this.app.vault.adapter.exists(pluginDir)) {
+          await this.app.vault.adapter.mkdir(pluginDir);
+          console.log(`📁 [TranscriptionService] Created plugin directory: ${pluginDir}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ [TranscriptionService] Failed to create directory ${pluginDir}:`, error);
+        // Fallback to root directory if plugin directory fails
+        filePath = fileName;
+        console.log(`📁 [TranscriptionService] Using fallback path: ${filePath}`);
       }
 
       // Create initial content
@@ -44,6 +58,14 @@ export class TranscriptionService {
 ---
 
 `;
+
+      // Check if file already exists and handle gracefully
+      const existingFile = this.app.vault.getAbstractFileByPath(filePath);
+      if (existingFile && existingFile instanceof TFile) {
+        // File exists, delete it first to start fresh
+        console.log(`📄 [TranscriptionService] File already exists, deleting: ${filePath}`);
+        await this.app.vault.delete(existingFile);
+      }
 
       // Create the file
       this.transcriptionFile = await this.app.vault.create(filePath, initialContent);
@@ -87,18 +109,33 @@ export class TranscriptionService {
 
       // Close and delete transcription file
       if (this.transcriptionFile) {
-        // Find and close the leaf with this file
-        const leaves = this.app.workspace.getLeavesOfType('markdown');
-        for (const leaf of leaves) {
-          if (leaf.view.file?.path === this.transcriptionFile.path) {
-            await leaf.detach();
-            break;
+        const filePath = this.transcriptionFile.path;
+
+        try {
+          // Find and close the leaf with this file
+          const leaves = this.app.workspace.getLeavesOfType('markdown');
+          for (const leaf of leaves) {
+            if (leaf.view.file?.path === filePath) {
+              await leaf.detach();
+              break;
+            }
           }
+        } catch (error) {
+          console.warn(`⚠️ [TranscriptionService] Failed to close leaf for ${filePath}:`, error);
         }
 
-        // Delete the file
-        await this.app.vault.delete(this.transcriptionFile);
-        console.log(`🗑️ [TranscriptionService] Deleted transcription file: ${this.transcriptionFile.path}`);
+        try {
+          // Delete the file if it still exists
+          const fileStillExists = this.app.vault.getAbstractFileByPath(filePath);
+          if (fileStillExists) {
+            await this.app.vault.delete(this.transcriptionFile);
+            console.log(`🗑️ [TranscriptionService] Deleted transcription file: ${filePath}`);
+          } else {
+            console.log(`📄 [TranscriptionService] File already deleted: ${filePath}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ [TranscriptionService] Failed to delete ${filePath}:`, error);
+        }
 
         this.transcriptionFile = null;
       }
