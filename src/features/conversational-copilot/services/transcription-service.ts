@@ -358,22 +358,17 @@ export class TranscriptionService {
 
       console.log(`✅ [TranscriptionService] Updated store with ${nodeResults.length} search results`);
 
-      // Fix first search layout issue - ensure layout update triggers properly
+      // Fix first search layout issue - force React effect to trigger
       if (!this.hasSearchedOnce) {
         this.hasSearchedOnce = true;
-        console.log(`🎯 [TranscriptionService] First search completed, ensuring layout update`);
+        console.log(`🎯 [TranscriptionService] First search completed, ensuring React effect triggers`);
 
-        // Give a moment for store update to propagate, then trigger layout recalculation
+        // Small delay to ensure React processes the initial render, then force effect trigger
         setTimeout(() => {
-          const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
-          if (canvas) {
-            const event = new globalThis.CustomEvent('copilot-search-update', {
-              detail: { searchResultCount: nodeResults.length }
-            });
-            canvas.dispatchEvent(event);
-            console.log(`🚀 [TranscriptionService] Dispatched layout update event for first search`);
-          }
-        }, 100);
+          // Re-set the same results to force React effect to run
+          store.setSearchResults([...nodeResults]);
+          console.log(`🚀 [TranscriptionService] Forced React effect with ${nodeResults.length} results`);
+        }, 50);
       }
 
     } catch (error) {
