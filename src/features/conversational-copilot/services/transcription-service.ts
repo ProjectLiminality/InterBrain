@@ -45,7 +45,7 @@ export class TranscriptionService {
     this.isSearchCooldownActive = false;
     this.hasSearchedOnce = false;
     if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
+      globalThis.clearTimeout(this.searchTimeout);
       this.searchTimeout = null;
     }
     console.log(`🔄 [TranscriptionService] Reset search throttling state for new session`);
@@ -127,9 +127,9 @@ export class TranscriptionService {
 
       // Wait a moment for the file to fully load, then position cursor
       setTimeout(() => {
-        const view = leaf.view;
+        const view = leaf.view as any;
         if (view && 'editor' in view && view.editor) {
-          const editor = view.editor;
+          const editor = view.editor as any;
           // Position cursor at the very end of the file content
           const lastLine = editor.lastLine();
           const lastLineLength = editor.getLine(lastLine).length;
@@ -164,13 +164,13 @@ export class TranscriptionService {
     try {
       // Remove file monitoring
       if (this.fileChangeListener && this.transcriptionFile) {
-        this.app.vault.off('modify', this.fileChangeListener);
+        (this.app.vault as any).off('modify', this.fileChangeListener);
         this.fileChangeListener = null;
       }
 
       // Clear any pending search
       if (this.searchTimeout) {
-        clearTimeout(this.searchTimeout);
+        globalThis.clearTimeout(this.searchTimeout);
         this.searchTimeout = null;
       }
 
@@ -182,7 +182,7 @@ export class TranscriptionService {
           // Find and close the leaf with this file
           const leaves = this.app.workspace.getLeavesOfType('markdown');
           for (const leaf of leaves) {
-            if (leaf.view.file?.path === filePath) {
+            if ((leaf.view as any).file?.path === filePath) {
               await leaf.detach();
               break;
             }
@@ -231,7 +231,7 @@ export class TranscriptionService {
     };
 
     // Listen for file modifications
-    this.app.vault.on('modify', this.fileChangeListener);
+    (this.app.vault as any).on('modify', this.fileChangeListener);
     console.log(`👂 [TranscriptionService] File monitoring started for: ${this.transcriptionFile.path}`);
   }
 
@@ -291,7 +291,7 @@ export class TranscriptionService {
       // Start 5-second cooldown period
       this.isSearchCooldownActive = true;
       if (this.searchTimeout) {
-        clearTimeout(this.searchTimeout);
+        globalThis.clearTimeout(this.searchTimeout);
       }
       this.searchTimeout = window.setTimeout(() => {
         this.isSearchCooldownActive = false;

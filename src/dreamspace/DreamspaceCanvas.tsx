@@ -203,7 +203,7 @@ export default function DreamspaceCanvas() {
   const selectedNode = useInterBrainStore(state => state.selectedNode);
 
   // Copilot mode state for transcription buffer
-  const copilotMode = useInterBrainStore(state => state.copilotMode);
+  // const copilotMode = useInterBrainStore(state => state.copilotMode);
 
   // Search interface state
   const searchInterface = useInterBrainStore(state => state.searchInterface);

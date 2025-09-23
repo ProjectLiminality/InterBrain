@@ -995,7 +995,8 @@ export const useInterBrainStore = create<InterBrainState>()(
         transcriptionBuffer: '',
         isListening: false,
         showSearchField: true, // Start with debug mode on
-        lastSearchTimestamp: 0
+        lastSearchTimestamp: 0,
+        transcriptionFilePath: null
       }
     };
   }),
