@@ -17,7 +17,7 @@ export class TranscriptionService {
   private fileChangeListener: ((file: TFile) => void) | null = null;
   private searchTimeout: number | null = null;
   private lastContent: string = '';
-  private bufferSize: number = 50; // FIFO buffer size in characters
+  private bufferSize: number = 200; // FIFO buffer size in characters
   private isSearchCooldownActive: boolean = false; // Throttling cooldown state
   private hasSearchedOnce: boolean = false; // Track first search for layout fix
 
