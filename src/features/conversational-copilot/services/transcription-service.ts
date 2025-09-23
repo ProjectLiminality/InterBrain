@@ -18,6 +18,8 @@ export class TranscriptionService {
   private searchTimeout: number | null = null;
   private lastContent: string = '';
   private bufferSize: number = 50; // FIFO buffer size in characters
+  private isSearchCooldownActive: boolean = false; // Throttling cooldown state
+  private hasSearchedOnce: boolean = false; // Track first search for layout fix
 
   constructor(app: App) {
     this.app = app;
@@ -38,6 +40,15 @@ export class TranscriptionService {
     const store = useInterBrainStore.getState();
     store.setSearchResults([]);
     console.log(`🧹 [TranscriptionService] Cleared search results for new conversation session`);
+
+    // Reset throttling and layout tracking for new session
+    this.isSearchCooldownActive = false;
+    this.hasSearchedOnce = false;
+    if (this.searchTimeout) {
+      clearTimeout(this.searchTimeout);
+      this.searchTimeout = null;
+    }
+    console.log(`🔄 [TranscriptionService] Reset search throttling state for new session`);
 
     try {
       // Generate date-based filename with time to avoid conflicts
@@ -258,11 +269,6 @@ export class TranscriptionService {
       // Update last content
       this.lastContent = textContent;
 
-      // Clear existing search timeout
-      if (this.searchTimeout) {
-        clearTimeout(this.searchTimeout);
-      }
-
       // Only trigger search if we have meaningful content
       if (bufferContent.trim().length < 3) {
         console.log(`⏸️ [TranscriptionService] Buffer too short, clearing search results`);
@@ -272,12 +278,25 @@ export class TranscriptionService {
         return;
       }
 
-      // Set new timeout for debounced search (5 seconds)
-      this.searchTimeout = window.setTimeout(() => {
-        this.triggerSemanticSearch(bufferContent);
-      }, 5000);
+      // THROTTLE LOGIC: Search immediately if not in cooldown, ignore if in cooldown
+      if (this.isSearchCooldownActive) {
+        console.log(`⏸️ [TranscriptionService] Search cooldown active, ignoring change (${bufferContent.length} chars)`);
+        return;
+      }
 
-      console.log(`⏱️ [TranscriptionService] Search scheduled in 5 seconds for: "${bufferContent.slice(-20)}..."`);
+      // Search immediately (throttle behavior)
+      console.log(`🔍 [TranscriptionService] Searching immediately (throttle): "${bufferContent.slice(-20)}..."`);
+      this.triggerSemanticSearch(bufferContent);
+
+      // Start 5-second cooldown period
+      this.isSearchCooldownActive = true;
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+      }
+      this.searchTimeout = window.setTimeout(() => {
+        this.isSearchCooldownActive = false;
+        console.log(`✅ [TranscriptionService] Search cooldown ended, ready for next search`);
+      }, 5000);
 
     } catch (error) {
       console.error('Failed to process file change:', error);
@@ -338,6 +357,24 @@ export class TranscriptionService {
       store.setSearchResults(nodeResults);
 
       console.log(`✅ [TranscriptionService] Updated store with ${nodeResults.length} search results`);
+
+      // Fix first search layout issue - ensure layout update triggers properly
+      if (!this.hasSearchedOnce) {
+        this.hasSearchedOnce = true;
+        console.log(`🎯 [TranscriptionService] First search completed, ensuring layout update`);
+
+        // Give a moment for store update to propagate, then trigger layout recalculation
+        setTimeout(() => {
+          const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
+          if (canvas) {
+            const event = new globalThis.CustomEvent('copilot-search-update', {
+              detail: { searchResultCount: nodeResults.length }
+            });
+            canvas.dispatchEvent(event);
+            console.log(`🚀 [TranscriptionService] Dispatched layout update event for first search`);
+          }
+        }, 100);
+      }
 
     } catch (error) {
       console.error('Semantic search failed:', error);
