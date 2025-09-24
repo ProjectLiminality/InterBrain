@@ -91,17 +91,24 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Subscribe to edit mode state
   const isEditModeActive = useInterBrainStore(state => state.editMode.isActive);
   const isPendingRelationship: boolean = useInterBrainStore(state => {
+    const nodeId = dreamNode.id;
+
     // Edit mode relationships
-    if (state.editMode?.pendingRelationships?.includes(dreamNode.id)) {
+    if (state.editMode?.pendingRelationships?.includes(nodeId)) {
+      console.log(`✨ [Glow] ${dreamNode.name} has edit mode glow`);
       return true;
     }
 
     // Copilot mode shared/related nodes
     if (state.spatialLayout === 'copilot' && state.copilotMode?.isActive) {
       const partner = state.copilotMode.conversationPartner;
-      const isShared = state.copilotMode.sharedNodeIds?.includes(dreamNode.id) ?? false;
-      const isRelated = partner?.liminalWebConnections?.includes(dreamNode.id) ?? false;
-      return isShared || isRelated;
+      const isShared = state.copilotMode.sharedNodeIds?.includes(nodeId) ?? false;
+      const isRelated = partner?.liminalWebConnections?.includes(nodeId) ?? false;
+
+      if (isShared || isRelated) {
+        console.log(`✨ [Glow] ${dreamNode.name} has copilot glow (shared: ${isShared}, related: ${isRelated})`);
+        return true;
+      }
     }
 
     return false;

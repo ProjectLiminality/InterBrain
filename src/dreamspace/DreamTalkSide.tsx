@@ -62,8 +62,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
             return getGitGlow(gitState, gitStyle.glowIntensity);
           }
           
-          // Priority 2: Edit mode relationship glow
-          if (isEditModeActive && isPendingRelationship) {
+          // Priority 2: Relationship glow (edit mode OR copilot mode)
+          if (isPendingRelationship) {
             return getEditModeGlow(25); // Strong gold glow for relationships
           }
           

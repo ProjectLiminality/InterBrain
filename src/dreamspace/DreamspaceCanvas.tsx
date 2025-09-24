@@ -739,6 +739,12 @@ export default function DreamspaceCanvas() {
 
       // Track this node as shared
       store.addSharedNode(node.id);
+      console.log(`🔗 [Copilot] Added shared node: ${node.name} (${node.id})`);
+
+      // Get updated state to log current shared nodes
+      const updatedStore = useInterBrainStore.getState();
+      console.log(`🔗 [Copilot] Total shared nodes: ${updatedStore.copilotMode.sharedNodeIds.length}`);
+      console.log(`🔗 [Copilot] Shared node IDs:`, updatedStore.copilotMode.sharedNodeIds);
 
       // Open appropriate fullscreen view
       await openNodeContent(node);
