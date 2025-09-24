@@ -1030,7 +1030,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         console.log(`✅ [Copilot-Exit] Adding ${newRelationships.length} new relationships: ${newRelationships.join(', ')}`);
         console.log(`✅ [Copilot-Exit] "${conversationPartner.name}" now has ${updatedPartner.liminalWebConnections.length} total relationships`);
 
-        // Update the real node in store - this ensures immediate liminal web update
+        // Update the conversation partner node in store
         const existingNodeData = state.realNodes.get(conversationPartner.id);
         if (existingNodeData) {
           state.realNodes.set(conversationPartner.id, {
@@ -1042,6 +1042,22 @@ export const useInterBrainStore = create<InterBrainState>()(
         // Also update selectedNode if it matches the conversation partner
         if (state.selectedNode?.id === conversationPartner.id) {
           state.selectedNode = updatedPartner;
+        }
+
+        // Update bidirectional relationships in store for immediate UI feedback
+        for (const sharedNodeId of newRelationships) {
+          const sharedNodeData = state.realNodes.get(sharedNodeId);
+          if (sharedNodeData) {
+            const updatedSharedNode = {
+              ...sharedNodeData.node,
+              liminalWebConnections: [...sharedNodeData.node.liminalWebConnections, conversationPartner.id]
+            };
+            state.realNodes.set(sharedNodeId, {
+              ...sharedNodeData,
+              node: updatedSharedNode
+            });
+            console.log(`✅ [Copilot-Exit] Updated bidirectional relationship for shared node: ${updatedSharedNode.name}`);
+          }
         }
       } else {
         console.log(`ℹ️ [Copilot-Exit] No new relationships to add - all shared nodes were already related`);

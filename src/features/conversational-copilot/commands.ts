@@ -107,20 +107,26 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         // Exit copilot mode (this processes shared nodes and sets layout back to liminal-web)
         store.exitCopilotMode();
 
-        // Persist relationship changes to disk if there were shared nodes
+        // Persist bidirectional relationship changes to disk if there were shared nodes
         if (partnerToFocus && sharedNodeIds.length > 0) {
           try {
             const dreamNodeService = serviceManager.getActive();
             const newRelationships = sharedNodeIds.filter(id => !partnerToFocus.liminalWebConnections.includes(id));
 
             if (newRelationships.length > 0) {
-              const updatedRelationships = [...partnerToFocus.liminalWebConnections, ...newRelationships];
-              await dreamNodeService.updateRelationships(partnerToFocus.id, updatedRelationships);
-              console.log(`💾 [Copilot-Exit] Persisted ${newRelationships.length} new relationships to disk`);
+              console.log(`💾 [Copilot-Exit] Adding ${newRelationships.length} bidirectional relationships to disk...`);
+
+              // Add each relationship individually to ensure bidirectional processing
+              for (const sharedNodeId of newRelationships) {
+                await dreamNodeService.addRelationship(partnerToFocus.id, sharedNodeId);
+                console.log(`💾 [Copilot-Exit] Added bidirectional relationship: ${partnerToFocus.name} ↔ ${sharedNodeId}`);
+              }
+
+              console.log(`✅ [Copilot-Exit] Successfully persisted ${newRelationships.length} bidirectional relationships`);
             }
           } catch (error) {
-            console.error('Failed to persist relationship changes:', error);
-            uiService.showError('Failed to save relationship changes');
+            console.error('Failed to persist bidirectional relationship changes:', error);
+            uiService.showError('Failed to save bidirectional relationship changes');
           }
         }
 
