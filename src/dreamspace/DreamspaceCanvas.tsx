@@ -212,23 +212,44 @@ export default function DreamspaceCanvas() {
   useEffect(() => {
     if (spatialLayout !== 'copilot') return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
       // Option key on Mac, Alt key on Windows/Linux
       if (e.altKey && !copilotMode.showSearchResults) {
         e.preventDefault();
         console.log('🔍 [Copilot] Option key pressed - showing search results');
         const store = useInterBrainStore.getState();
-        store.freezeSearchResults(); // Capture current search results
+        store.freezeSearchResults(); // Capture latest search results
         store.setShowSearchResults(true);
+
+        // Trigger layout update to show frozen results
+        if (spatialOrchestratorRef.current && store.copilotMode.conversationPartner) {
+          // Force the layout to update with frozen results by calling showEditModeSearchResults
+          // This ensures the display logic runs even if no new search results are coming in
+          // Get fresh state after freezeSearchResults() was called
+          const updatedStore = useInterBrainStore.getState();
+          const frozenResults = updatedStore.copilotMode.frozenSearchResults;
+          if (frozenResults && frozenResults.length > 0) {
+            console.log(`🔍 [Copilot] Displaying ${frozenResults.length} frozen search results`);
+            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, frozenResults);
+          } else {
+            console.log('🔍 [Copilot] No frozen results to display');
+          }
+        }
       }
     };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
+    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
       // Detect when Option/Alt key is released
       if (!e.altKey && copilotMode.showSearchResults) {
         console.log('🔍 [Copilot] Option key released - hiding search results');
         const store = useInterBrainStore.getState();
         store.setShowSearchResults(false);
+
+        // Trigger layout update to hide results by calling with empty array
+        if (spatialOrchestratorRef.current && store.copilotMode.conversationPartner) {
+          console.log('🔍 [Copilot] Hiding search results - clearing layout');
+          spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, []);
+        }
       }
     };
 
