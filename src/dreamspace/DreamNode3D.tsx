@@ -90,9 +90,22 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Subscribe to edit mode state
   const isEditModeActive = useInterBrainStore(state => state.editMode.isActive);
-  const isPendingRelationship = useInterBrainStore(state => 
-    state.editMode.pendingRelationships.includes(dreamNode.id)
-  );
+  const isPendingRelationship: boolean = useInterBrainStore(state => {
+    // Edit mode relationships
+    if (state.editMode?.pendingRelationships?.includes(dreamNode.id)) {
+      return true;
+    }
+
+    // Copilot mode shared/related nodes
+    if (state.spatialLayout === 'copilot' && state.copilotMode?.isActive) {
+      const partner = state.copilotMode.conversationPartner;
+      const isShared = state.copilotMode.sharedNodeIds?.includes(dreamNode.id) ?? false;
+      const isRelated = partner?.liminalWebConnections?.includes(dreamNode.id) ?? false;
+      return isShared || isRelated;
+    }
+
+    return false;
+  });
   
   // Get current flip state for this node
   const nodeFlipState = flipState.flipStates.get(dreamNode.id);

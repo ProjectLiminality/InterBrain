@@ -677,20 +677,86 @@ export default function DreamspaceCanvas() {
     // Hover state handled by individual DreamNode3D components
   };
 
-  const handleNodeClick = (node: DreamNode) => {
+  // Helper function to open appropriate fullscreen content for a node
+  const openNodeContent = async (node: DreamNode) => {
+    const leafManager = serviceManager.getLeafManagerService();
+
+    if (!leafManager || !vaultService || !canvasParserService) {
+      console.error('Services not available for opening content');
+      return;
+    }
+
+    try {
+      // Check for DreamSong first (most rich content)
+      const dreamSongPath = `${node.repoPath}/DreamSong.canvas`;
+      if (await vaultService.fileExists(dreamSongPath)) {
+        console.log(`🎭 [Copilot] Opening DreamSong for ${node.name}`);
+
+        // Parse and open DreamSong (reuse existing pattern from fullscreen-commands.ts)
+        const canvasData = await canvasParserService.parseCanvas(dreamSongPath);
+        const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
+        let blocks = parseCanvasToBlocks(canvasData, node.id);
+        blocks = await resolveMediaPaths(blocks, node.repoPath, vaultService);
+
+        await leafManager.openDreamSongFullScreen(node, blocks);
+        uiService.showSuccess(`Opened DreamSong for ${node.name}`);
+        return;
+      }
+
+      // Check for DreamTalk media
+      if (node.dreamTalkMedia && node.dreamTalkMedia.length > 0) {
+        console.log(`🎤 [Copilot] Opening DreamTalk for ${node.name}`);
+        await leafManager.openDreamTalkFullScreen(node, node.dreamTalkMedia[0]);
+        uiService.showSuccess(`Opened DreamTalk for ${node.name}`);
+        return;
+      }
+
+      // Try README as final fallback
+      const readmePath = `${node.repoPath}/README.md`;
+      if (await vaultService.fileExists(readmePath)) {
+        console.log(`📖 [Copilot] Opening README for ${node.name}`);
+        await leafManager.openReadmeFile(node);
+        uiService.showSuccess(`Opened README for ${node.name}`);
+        return;
+      }
+
+      // Nothing to display
+      console.log(`❌ [Copilot] No content found for ${node.name}`);
+      uiService.showInfo("Nothing to display");
+
+    } catch (error) {
+      console.error(`Failed to open content for ${node.name}:`, error);
+      uiService.showError(`Failed to open content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleNodeClick = async (node: DreamNode) => {
     const store = useInterBrainStore.getState();
-    
+
+    // Handle copilot mode invoke interaction
+    if (store.spatialLayout === 'copilot' && store.copilotMode.isActive) {
+      console.log(`🤖 [Copilot] Invoking node: ${node.name}`);
+
+      // Track this node as shared
+      store.addSharedNode(node.id);
+
+      // Open appropriate fullscreen view
+      await openNodeContent(node);
+
+      return; // Prevent liminal-web navigation
+    }
+
     // Handle edit mode relationship toggling
     if (store.editMode.isActive && store.editMode.editingNode) {
       // In edit mode, clicking a node toggles its relationship status
       store.togglePendingRelationship(node.id);
       console.log(`Edit mode: Toggled relationship with "${node.name}"`);
-      
+
       // Trigger immediate reordering for priority-based positioning
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.reorderEditModeSearchResults();
       }
-      
+
       return; // Don't do normal click handling in edit mode
     }
     
