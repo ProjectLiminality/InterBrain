@@ -88,32 +88,38 @@ export class TranscriptionService {
 
       await this.vaultService.writeFile(filePath, initialContent);
 
-      // Give Obsidian a moment to recognize the new file
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Give Obsidian time to recognize the new file (retry with progressive delays)
+      const maxRetries = 5;
+      const baseDelay = 100; // Start with 100ms
 
-      this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Wait with progressive delay: 100ms, 200ms, 400ms, 800ms, 1600ms
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
 
-      if (!this.transcriptionFile) {
-        // Try refreshing the vault cache and check again
-        console.warn(`⚠️ [TranscriptionService] File not found in vault cache, attempting refresh...`);
+        // Try to get the file from vault
+        this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
 
-        // Force Obsidian to refresh its file cache
-        const adapter = this.app.vault.adapter;
-        if ('exists' in adapter && typeof adapter.exists === 'function') {
-          const fileExists = await adapter.exists(filePath);
-          console.log(`📁 [TranscriptionService] File exists on filesystem: ${fileExists}`);
+        if (this.transcriptionFile) {
+          console.log(`✅ [TranscriptionService] File found in vault on attempt ${attempt} (after ${delay}ms)`);
+          break;
+        }
 
-          if (fileExists) {
-            // Try to get the file again after a short delay
-            await new Promise(resolve => setTimeout(resolve, 100));
-            this.transcriptionFile = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+        console.log(`⏳ [TranscriptionService] Attempt ${attempt}/${maxRetries}: File not yet in vault, waiting ${delay}ms...`);
+
+        // On last attempt, check if file exists on filesystem
+        if (attempt === maxRetries) {
+          const adapter = this.app.vault.adapter;
+          if ('exists' in adapter && typeof adapter.exists === 'function') {
+            const fileExists = await adapter.exists(filePath);
+            console.log(`📁 [TranscriptionService] File exists on filesystem: ${fileExists}`);
           }
         }
+      }
 
-        if (!this.transcriptionFile) {
-          console.error(`❌ [TranscriptionService] File created but not accessible via Obsidian API: ${filePath}`);
-          throw new Error(`File was created but Obsidian cannot access it. This may be a timing issue. Please try again.`);
-        }
+      if (!this.transcriptionFile) {
+        console.error(`❌ [TranscriptionService] File created but not accessible after ${maxRetries} attempts: ${filePath}`);
+        throw new Error(`File was created but Obsidian cannot access it after ${maxRetries} attempts. This may be a vault synchronization issue.`);
       }
 
       console.log(`📝 [TranscriptionService] Successfully created and verified transcription file: ${filePath}`);
