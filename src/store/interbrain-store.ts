@@ -150,6 +150,9 @@ export interface CopilotModeState {
   isActive: boolean;
   conversationPartner: DreamNode | null; // The person node at center
   transcriptionFilePath: string | null; // Path to active transcription file
+  showSearchResults: boolean; // Option key held state for showing/hiding results
+  frozenSearchResults: DreamNode[]; // Snapshot of results when showing
+  sharedNodeIds: string[]; // Track invoked nodes for post-call processing
 }
 
 // Real node storage - persisted across sessions
@@ -292,6 +295,9 @@ export interface InterBrainState extends OllamaConfigSlice {
   copilotMode: CopilotModeState;
   startCopilotMode: (conversationPartner: DreamNode) => void;
   exitCopilotMode: () => void;
+  setShowSearchResults: (show: boolean) => void;
+  freezeSearchResults: () => void;
+  addSharedNode: (nodeId: string) => void;
 
   // Navigation history management
   navigationHistory: NavigationHistoryState;
@@ -418,7 +424,10 @@ export const useInterBrainStore = create<InterBrainState>()(
   copilotMode: {
     isActive: false,
     conversationPartner: null,
-    transcriptionFilePath: null
+    transcriptionFilePath: null,
+    showSearchResults: false,
+    frozenSearchResults: [],
+    sharedNodeIds: []
   },
 
   // Navigation history initial state (with initial constellation state)
@@ -992,11 +1001,10 @@ export const useInterBrainStore = create<InterBrainState>()(
       copilotMode: {
         isActive: true,
         conversationPartner: { ...conversationPartner }, // Create a copy
-        transcriptionBuffer: '',
-        isListening: false,
-        showSearchField: true, // Start with debug mode on
-        lastSearchTimestamp: 0,
-        transcriptionFilePath: null
+        transcriptionFilePath: null,
+        showSearchResults: false,
+        frozenSearchResults: [],
+        sharedNodeIds: []
       }
     };
   }),
@@ -1007,11 +1015,35 @@ export const useInterBrainStore = create<InterBrainState>()(
       copilotMode: {
         isActive: false,
         conversationPartner: null,
-        transcriptionFilePath: null
+        transcriptionFilePath: null,
+        showSearchResults: false,
+        frozenSearchResults: [],
+        sharedNodeIds: []
       }
     };
   }),
 
+  // Copilot show/hide actions
+  setShowSearchResults: (show: boolean) => set((state) => ({
+    copilotMode: {
+      ...state.copilotMode,
+      showSearchResults: show
+    }
+  })),
+
+  freezeSearchResults: () => set((state) => ({
+    copilotMode: {
+      ...state.copilotMode,
+      frozenSearchResults: [...state.searchResults] // Capture current search results
+    }
+  })),
+
+  addSharedNode: (nodeId: string) => set((state) => ({
+    copilotMode: {
+      ...state.copilotMode,
+      sharedNodeIds: [...state.copilotMode.sharedNodeIds, nodeId]
+    }
+  })),
 
   // Navigation history actions
   addHistoryEntry: (nodeId, layout) => set(state => {

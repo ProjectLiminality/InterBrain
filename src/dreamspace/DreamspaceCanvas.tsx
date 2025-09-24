@@ -162,7 +162,7 @@ export default function DreamspaceCanvas() {
       globalThis.document.removeEventListener('keydown', handleEscape);
     };
   }, []); // Single handler, no dependencies
-  
+
   // Drag and drop state
   const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
@@ -203,11 +203,45 @@ export default function DreamspaceCanvas() {
   const selectedNode = useInterBrainStore(state => state.selectedNode);
 
   // Copilot mode state for transcription buffer
-  // const copilotMode = useInterBrainStore(state => state.copilotMode);
+  const copilotMode = useInterBrainStore(state => state.copilotMode);
 
   // Search interface state
   const searchInterface = useInterBrainStore(state => state.searchInterface);
-  
+
+  // Option key handler for copilot mode show/hide
+  useEffect(() => {
+    if (spatialLayout !== 'copilot') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Option key on Mac, Alt key on Windows/Linux
+      if (e.altKey && !copilotMode.showSearchResults) {
+        e.preventDefault();
+        console.log('🔍 [Copilot] Option key pressed - showing search results');
+        const store = useInterBrainStore.getState();
+        store.freezeSearchResults(); // Capture current search results
+        store.setShowSearchResults(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Detect when Option/Alt key is released
+      if (!e.altKey && copilotMode.showSearchResults) {
+        console.log('🔍 [Copilot] Option key released - hiding search results');
+        const store = useInterBrainStore.getState();
+        store.setShowSearchResults(false);
+      }
+    };
+
+    globalThis.document.addEventListener('keydown', handleKeyDown);
+    globalThis.document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      globalThis.document.removeEventListener('keydown', handleKeyDown);
+      globalThis.document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [spatialLayout, copilotMode.showSearchResults]);
+
+
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
   

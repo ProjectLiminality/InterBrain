@@ -771,10 +771,35 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           }
         }
         
-        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
-        const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
+        // Check if we're in copilot mode with show/hide functionality
+        const isInCopilotMode = store.spatialLayout === 'copilot';
+        const shouldShowResults = !isInCopilotMode || store.copilotMode.showSearchResults;
+
+        let orderedNodes: Array<{ id: string; name: string; type: string }>;
+
+        if (!shouldShowResults) {
+          // Hide all search results in copilot mode when Option key not held
+          orderedNodes = [];
+        } else if (isInCopilotMode && store.copilotMode.showSearchResults) {
+          // Show frozen snapshot in copilot mode when Option key is held
+          // Convert full DreamNode objects to simplified format for layout calculation
+          orderedNodes = store.copilotMode.frozenSearchResults.map(node => ({
+            id: node.id,
+            name: node.name,
+            type: node.type
+          }));
+        } else {
+          // Normal edit mode behavior: show live search results
+          orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
+        }
         
-        console.log(`🎯 [Orchestrator-EditMode] Final layout data - ordered nodes: ${orderedNodes.length} (related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length})`);
+        if (isInCopilotMode && store.copilotMode.showSearchResults) {
+          console.log(`🎯 [Orchestrator-Copilot] Showing frozen results: ${orderedNodes.length} nodes`);
+        } else if (isInCopilotMode) {
+          console.log(`🎯 [Orchestrator-Copilot] Hiding results (Option key not held): ${orderedNodes.length} nodes`);
+        } else {
+          console.log(`🎯 [Orchestrator-EditMode] Final layout data - ordered nodes: ${orderedNodes.length} (related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length})`);
+        }
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
