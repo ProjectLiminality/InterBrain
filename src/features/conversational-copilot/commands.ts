@@ -95,16 +95,34 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
       try {
         console.log(`🚪 [Copilot-Exit] Ending conversation mode with "${store.copilotMode.conversationPartner?.name}"`);
 
-        // Capture the conversation partner before exiting copilot mode
+        // Capture the conversation partner and shared nodes before exiting copilot mode
         const partnerToFocus = store.copilotMode.conversationPartner;
+        const sharedNodeIds = [...store.copilotMode.sharedNodeIds]; // Copy before clearing
         console.log(`🎯 [Copilot-Exit] Will focus person after exit: "${partnerToFocus?.name}" (${partnerToFocus?.id})`);
 
         // Stop transcription service first
         const transcriptionService = getTranscriptionService();
         await transcriptionService.stopTranscription();
 
-        // Exit copilot mode (this also sets layout back to liminal-web)
+        // Exit copilot mode (this processes shared nodes and sets layout back to liminal-web)
         store.exitCopilotMode();
+
+        // Persist relationship changes to disk if there were shared nodes
+        if (partnerToFocus && sharedNodeIds.length > 0) {
+          try {
+            const dreamNodeService = serviceManager.getActive();
+            const newRelationships = sharedNodeIds.filter(id => !partnerToFocus.liminalWebConnections.includes(id));
+
+            if (newRelationships.length > 0) {
+              const updatedRelationships = [...partnerToFocus.liminalWebConnections, ...newRelationships];
+              await dreamNodeService.updateRelationships(partnerToFocus.id, updatedRelationships);
+              console.log(`💾 [Copilot-Exit] Persisted ${newRelationships.length} new relationships to disk`);
+            }
+          } catch (error) {
+            console.error('Failed to persist relationship changes:', error);
+            uiService.showError('Failed to save relationship changes');
+          }
+        }
 
         // Clear any search results
         store.setSearchResults([]);

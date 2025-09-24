@@ -1009,9 +1009,47 @@ export const useInterBrainStore = create<InterBrainState>()(
     };
   }),
 
-  exitCopilotMode: () => set((_state) => {
+  exitCopilotMode: () => set((state) => {
+    // PROCESS SHARED NODES BEFORE CLEARING STATE
+    const { conversationPartner, sharedNodeIds } = state.copilotMode;
+
+    if (conversationPartner && sharedNodeIds.length > 0) {
+      console.log(`🔗 [Copilot-Exit] Processing ${sharedNodeIds.length} shared nodes for "${conversationPartner.name}"`);
+      console.log(`🔗 [Copilot-Exit] Shared node IDs: ${sharedNodeIds.join(', ')}`);
+
+      // Filter out nodes that are already related to avoid duplicates
+      const newRelationships = sharedNodeIds.filter(id => !conversationPartner.liminalWebConnections.includes(id));
+
+      if (newRelationships.length > 0) {
+        // Create updated conversation partner with new relationships
+        const updatedPartner = {
+          ...conversationPartner,
+          liminalWebConnections: [...conversationPartner.liminalWebConnections, ...newRelationships]
+        };
+
+        console.log(`✅ [Copilot-Exit] Adding ${newRelationships.length} new relationships: ${newRelationships.join(', ')}`);
+        console.log(`✅ [Copilot-Exit] "${conversationPartner.name}" now has ${updatedPartner.liminalWebConnections.length} total relationships`);
+
+        // Update the real node in store - this ensures immediate liminal web update
+        const existingNodeData = state.realNodes.get(conversationPartner.id);
+        if (existingNodeData) {
+          state.realNodes.set(conversationPartner.id, {
+            ...existingNodeData,
+            node: updatedPartner
+          });
+        }
+
+        // Also update selectedNode if it matches the conversation partner
+        if (state.selectedNode?.id === conversationPartner.id) {
+          state.selectedNode = updatedPartner;
+        }
+      } else {
+        console.log(`ℹ️ [Copilot-Exit] No new relationships to add - all shared nodes were already related`);
+      }
+    }
+
     return {
-      spatialLayout: 'liminal-web', // Return to liminal-web layout
+      spatialLayout: 'liminal-web', // Return to liminal-web layout with updated relationships
       copilotMode: {
         isActive: false,
         conversationPartner: null,

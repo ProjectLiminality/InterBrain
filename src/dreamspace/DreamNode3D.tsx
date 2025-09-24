@@ -95,7 +95,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
     // Edit mode relationships
     if (state.editMode?.pendingRelationships?.includes(nodeId)) {
-      console.log(`✨ [Glow] ${dreamNode.name} has edit mode glow`);
       return true;
     }
 
@@ -104,11 +103,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       const partner = state.copilotMode.conversationPartner;
       const isShared = state.copilotMode.sharedNodeIds?.includes(nodeId) ?? false;
       const isRelated = partner?.liminalWebConnections?.includes(nodeId) ?? false;
-
-      if (isShared || isRelated) {
-        console.log(`✨ [Glow] ${dreamNode.name} has copilot glow (shared: ${isShared}, related: ${isRelated})`);
-        return true;
-      }
+      return isShared || isRelated;
     }
 
     return false;
