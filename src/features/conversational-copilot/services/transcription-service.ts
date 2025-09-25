@@ -151,10 +151,15 @@ export class TranscriptionService {
         }
       }, 100); // Small delay to ensure file is fully loaded
 
-      // Resize the bottom pane to minimal height using proper setDimension method
+      // Resize the bottom pane to minimal height - try multiple approaches with different timing
       setTimeout(() => {
         this.resizeBottomPaneProper(leaf);
-      }, 200); // Allow time for layout to settle
+      }, 200); // Initial attempt
+
+      // Try again after longer delay in case layout needs more time
+      setTimeout(() => {
+        this.resizeBottomPaneFallback(leaf);
+      }, 500); // Fallback approach
 
       // Set up file monitoring
       this.setupFileMonitoring();
@@ -468,46 +473,156 @@ export class TranscriptionService {
    */
   private resizeBottomPaneProper(leaf: WorkspaceLeaf): void {
     try {
+      console.log(`🔍 [TranscriptionService] Starting resize debug - leaf:`, leaf);
+      console.log(`🔍 [TranscriptionService] Leaf parent:`, leaf.parent);
+      console.log(`🔍 [TranscriptionService] Leaf parent type:`, leaf.parent?.type);
+      console.log(`🔍 [TranscriptionService] Leaf parent constructor:`, leaf.parent?.constructor?.name);
+
       // Find the split that contains this leaf
       const split = leaf.parent as WorkspaceSplit;
 
-      if (!split || split.children.length !== 2) {
-        console.warn(`⚠️ [TranscriptionService] Could not find horizontal split with 2 children`);
+      if (!split) {
+        console.error(`❌ [TranscriptionService] No parent found for leaf`);
         return;
       }
 
-      console.log(`📏 [TranscriptionService] Found split with ${split.children.length} children`);
+      console.log(`🔍 [TranscriptionService] Split object:`, split);
+      console.log(`🔍 [TranscriptionService] Split children count:`, split.children?.length);
+      console.log(`🔍 [TranscriptionService] Split children:`, split.children);
+
+      if (!split.children || split.children.length !== 2) {
+        console.warn(`⚠️ [TranscriptionService] Expected 2 children, got ${split.children?.length}`);
+        console.log(`🔍 [TranscriptionService] Full children array:`, split.children);
+        return;
+      }
 
       // Get the top and bottom children
       const topChild = split.children[0] as WorkspaceItem;
       const bottomChild = split.children[1] as WorkspaceItem;
 
+      console.log(`🔍 [TranscriptionService] Top child:`, topChild);
+      console.log(`🔍 [TranscriptionService] Top child type:`, topChild?.type);
+      console.log(`🔍 [TranscriptionService] Top child dimension:`, topChild?.dimension);
+      console.log(`🔍 [TranscriptionService] Top child has setDimension:`, typeof topChild?.setDimension);
+
+      console.log(`🔍 [TranscriptionService] Bottom child:`, bottomChild);
+      console.log(`🔍 [TranscriptionService] Bottom child type:`, bottomChild?.type);
+      console.log(`🔍 [TranscriptionService] Bottom child dimension:`, bottomChild?.dimension);
+      console.log(`🔍 [TranscriptionService] Bottom child has setDimension:`, typeof bottomChild?.setDimension);
+
       // Check if our leaf is the bottom child (transcript)
       const isBottomLeaf = bottomChild.children &&
         bottomChild.children.some(child => child === leaf);
 
-      if (isBottomLeaf) {
-        // Set dimensions: 80% top / 20% bottom for minimal transcript intrusion
-        topChild.setDimension(80);
-        bottomChild.setDimension(20);
+      console.log(`🔍 [TranscriptionService] Is bottom leaf:`, isBottomLeaf);
+      console.log(`🔍 [TranscriptionService] Bottom child children:`, bottomChild.children);
+
+      // Try both approaches and see what works
+      if (typeof topChild?.setDimension === 'function' && typeof bottomChild?.setDimension === 'function') {
+        console.log(`✅ [TranscriptionService] Both children have setDimension method, proceeding...`);
+
+        if (isBottomLeaf) {
+          console.log(`📏 [TranscriptionService] Setting 80/20 ratio (transcript on bottom)`);
+          topChild.setDimension(80);
+          bottomChild.setDimension(20);
+        } else {
+          console.log(`📏 [TranscriptionService] Setting 20/80 ratio (transcript on top)`);
+          topChild.setDimension(20);
+          bottomChild.setDimension(80);
+        }
+
+        console.log(`🔍 [TranscriptionService] After setDimension - top:`, topChild.dimension, `bottom:`, bottomChild.dimension);
 
         // Trigger workspace resize to apply changes
+        console.log(`🔄 [TranscriptionService] Calling requestResize...`);
         this.app.workspace.requestResize();
 
-        console.log(`📏 [TranscriptionService] Resized split to 80/20 ratio for minimal transcript intrusion`);
+        console.log(`✅ [TranscriptionService] Resize operation completed`);
+
+        // Check dimensions after a brief delay
+        setTimeout(() => {
+          console.log(`🔍 [TranscriptionService] Post-resize check - top:`, topChild.dimension, `bottom:`, bottomChild.dimension);
+        }, 100);
+
       } else {
-        // If leaf is top child, still make transcript small
-        topChild.setDimension(20);
-        bottomChild.setDimension(80);
-
-        this.app.workspace.requestResize();
-
-        console.log(`📏 [TranscriptionService] Resized split to 20/80 ratio (transcript on top)`);
+        console.error(`❌ [TranscriptionService] setDimension method not available on children`);
+        console.log(`🔍 [TranscriptionService] Available methods on topChild:`, Object.getOwnPropertyNames(topChild).filter(p => typeof topChild[p] === 'function'));
+        console.log(`🔍 [TranscriptionService] Available methods on bottomChild:`, Object.getOwnPropertyNames(bottomChild).filter(p => typeof bottomChild[p] === 'function'));
       }
 
     } catch (error) {
-      console.error('Failed to resize bottom pane properly:', error);
-      console.error('Error details:', error);
+      console.error('❌ [TranscriptionService] Failed to resize bottom pane properly:', error);
+      console.error('❌ [TranscriptionService] Error details:', error);
+      console.error('❌ [TranscriptionService] Stack trace:', error.stack);
+    }
+  }
+
+  /**
+   * Fallback resize method using DOM manipulation if setDimension doesn't work
+   */
+  private resizeBottomPaneFallback(leaf: WorkspaceLeaf): void {
+    try {
+      console.log(`🔄 [TranscriptionService] Attempting fallback resize method`);
+
+      const leafEl = leaf.containerEl;
+      if (!leafEl) {
+        console.warn(`⚠️ [TranscriptionService] Could not find leaf container element for fallback`);
+        return;
+      }
+
+      // Find the workspace split parent
+      const splitParent = leafEl.closest('.workspace-split.mod-horizontal');
+      if (!splitParent) {
+        console.warn(`⚠️ [TranscriptionService] Could not find horizontal split parent for fallback`);
+        return;
+      }
+
+      console.log(`🔍 [TranscriptionService] Found split parent:`, splitParent);
+
+      // Find all workspace-tabs containers (the actual panes) in this split
+      const allTabContainers = splitParent.querySelectorAll('.workspace-tabs');
+      console.log(`🔍 [TranscriptionService] Found ${allTabContainers.length} tab containers in split`);
+
+      if (allTabContainers.length === 2) {
+        // Identify which workspace-tabs contains the transcript leaf
+        let transcriptTabContainer: HTMLElement | null = null;
+        let dreamspaceTabContainer: HTMLElement | null = null;
+
+        for (const tabContainer of allTabContainers) {
+          if (tabContainer.contains(leafEl)) {
+            transcriptTabContainer = tabContainer as HTMLElement;
+            console.log(`🎯 [TranscriptionService] Found transcript tab container:`, tabContainer);
+          } else {
+            dreamspaceTabContainer = tabContainer as HTMLElement;
+            console.log(`🎯 [TranscriptionService] Found dreamspace tab container:`, tabContainer);
+          }
+        }
+
+        if (transcriptTabContainer && dreamspaceTabContainer) {
+          console.log(`🔄 [TranscriptionService] Setting flex properties on tab containers (panes)`);
+
+          // Apply flex sizing to the pane containers (workspace-tabs)
+          transcriptTabContainer.style.flex = '0 0 120px'; // Fixed height for transcript pane
+          transcriptTabContainer.style.minHeight = '120px';
+          transcriptTabContainer.style.maxHeight = '120px';
+
+          dreamspaceTabContainer.style.flex = '1 1 auto'; // Take remaining space for dreamspace
+
+          // Ensure the parent split has proper flex layout
+          const splitEl = splitParent as HTMLElement;
+          splitEl.style.display = 'flex';
+          splitEl.style.flexDirection = 'column';
+
+          console.log(`✅ [TranscriptionService] Fallback resize applied to workspace-tabs containers`);
+        } else {
+          console.warn(`⚠️ [TranscriptionService] Could not identify transcript and dreamspace tab containers`);
+        }
+      } else {
+        console.warn(`⚠️ [TranscriptionService] Expected 2 tab containers, found ${allTabContainers.length}`);
+      }
+
+    } catch (error) {
+      console.error('❌ [TranscriptionService] Fallback resize failed:', error);
     }
   }
 }
