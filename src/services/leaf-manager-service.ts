@@ -4,13 +4,17 @@ import { DreamSongBlock } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../dreamspace/DreamSongFullScreenView';
 import { generateYouTubeIframe, extractYouTubeVideoId } from '../utils/url-utils';
 import { parseLinkFileContent, isLinkFile } from '../utils/link-file-utils';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 /**
  * Leaf Manager Service
- * 
- * Manages Obsidian leaves for split-screen DreamNode experiences.
- * Creates 50/50 split: DreamSpace on left, single right pane with stacked tabs.
- * All DreamSong/DreamTalk leaves appear as tabs in the right pane.
+ *
+ * Manages Obsidian leaves for DreamNode content viewing.
+ *
+ * Normal mode: Creates 50/50 split with DreamSpace on left, single right pane with stacked tabs.
+ * Copilot mode: Uses fullscreen overlays that cover the entire workspace for video call sharing.
+ *
+ * All DreamSong/DreamTalk leaves appear as tabs in the right pane (normal) or overlays (copilot).
  * Implements one-leaf-per-node strategy with proper cleanup.
  */
 export class LeafManagerService {
@@ -25,15 +29,26 @@ export class LeafManagerService {
   }
 
   /**
-   * Get or create a leaf in the right pane for DreamSong/DreamTalk leaves
+   * Get or create a leaf for DreamSong/DreamTalk leaves
+   * In copilot mode: uses overlay (covers entire workspace)
+   * In normal mode: uses right split pane with tabs
    */
   private getRightLeaf(): WorkspaceLeaf {
+    const store = useInterBrainStore.getState();
+
+    // Check if we're in copilot mode - use overlay instead of split
+    if (store.copilotMode.isActive) {
+      console.log(`🎯 [LeafManager] Copilot mode active - using overlay for fullscreen content`);
+      return this.app.workspace.getLeaf(false); // Overlay mode - covers entire workspace
+    }
+
+    // Normal mode - use split pane with tabs
     // If we don't have a right pane yet, create the initial split
     if (!this.rightPaneLeaf || !this.rightPaneLeaf.parent) {
       this.rightPaneLeaf = this.app.workspace.getLeaf('split', 'vertical');
       return this.rightPaneLeaf;
     }
-    
+
     // We have a right pane, so create a new tab within that specific pane group
     // First make sure the right pane is active, then create a tab
     this.app.workspace.setActiveLeaf(this.rightPaneLeaf);

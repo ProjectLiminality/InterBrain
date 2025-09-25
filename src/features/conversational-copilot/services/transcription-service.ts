@@ -20,6 +20,7 @@ export class TranscriptionService {
   private bufferSize: number = 500; // FIFO buffer size in characters
   private isSearchCooldownActive: boolean = false; // Throttling cooldown state
   private hasSearchedOnce: boolean = false; // Track first search for layout fix
+  private refocusInterval: number | null = null; // Auto-refocus timer
 
   constructor(app: App) {
     this.app = app;
@@ -124,8 +125,8 @@ export class TranscriptionService {
 
       console.log(`📝 [TranscriptionService] Successfully created and verified transcription file: ${filePath}`);
 
-      // Open in split view (right pane) and position cursor for immediate dictation
-      const leaf = this.app.workspace.getLeaf('split', 'vertical');
+      // Open in horizontal split at bottom with minimal height
+      const leaf = this.app.workspace.getLeaf('split', 'horizontal');
       await leaf.openFile(this.transcriptionFile);
 
       // Focus the leaf and position cursor at end of file
@@ -150,11 +151,19 @@ export class TranscriptionService {
         }
       }, 100); // Small delay to ensure file is fully loaded
 
+      // Resize the bottom pane to minimal height after a brief delay
+      setTimeout(() => {
+        this.resizeBottomPane(leaf);
+      }, 200); // Allow time for layout to settle
+
       // Set up file monitoring
       this.setupFileMonitoring();
 
+      // Start auto-refocus to maintain cursor position for dictation
+      this.startAutoRefocus();
+
       console.log(`📝 [TranscriptionService] Created transcription file: ${filePath}`);
-      new Notice(`Transcription started. Dictate in the opened file.`);
+      new Notice(`Transcription started in bottom pane. Dictate in the opened file.`);
 
     } catch (error) {
       console.error('Failed to create transcription file:', error);
@@ -179,6 +188,9 @@ export class TranscriptionService {
         globalThis.clearTimeout(this.searchTimeout);
         this.searchTimeout = null;
       }
+
+      // Stop auto-refocus
+      this.stopAutoRefocus();
 
       // Close and delete transcription file
       if (this.transcriptionFile) {
@@ -396,6 +408,92 @@ export class TranscriptionService {
   setBufferSize(size: number): void {
     this.bufferSize = Math.max(10, Math.min(500, size)); // Clamp between 10 and 500
     console.log(`📏 [TranscriptionService] Buffer size set to: ${this.bufferSize}`);
+  }
+
+  /**
+   * Start auto-refocus to maintain cursor position for dictation
+   */
+  private startAutoRefocus(): void {
+    if (this.refocusInterval) {
+      clearInterval(this.refocusInterval);
+    }
+
+    // Every 500ms, ensure cursor stays at end of transcription file
+    this.refocusInterval = window.setInterval(() => {
+      if (this.transcriptionFile) {
+        this.repositionCursor();
+      }
+    }, 500);
+
+    console.log(`🎯 [TranscriptionService] Auto-refocus started (500ms intervals)`);
+  }
+
+  /**
+   * Stop auto-refocus
+   */
+  private stopAutoRefocus(): void {
+    if (this.refocusInterval) {
+      clearInterval(this.refocusInterval);
+      this.refocusInterval = null;
+      console.log(`🎯 [TranscriptionService] Auto-refocus stopped`);
+    }
+  }
+
+  /**
+   * Reposition cursor at end of transcription file without stealing focus
+   */
+  private repositionCursor(): void {
+    if (!this.transcriptionFile) return;
+
+    // Find transcription leaf across all windows (including pop-out windows)
+    const leaves = this.app.workspace.getLeavesOfType('markdown');
+    for (const leaf of leaves) {
+      const leafFile = (leaf.view as any).file;
+      if (leafFile?.path === this.transcriptionFile.path) {
+        const editor = (leaf.view as any).editor;
+        if (editor) {
+          const lastLine = editor.lastLine();
+          const lastLineLength = editor.getLine(lastLine).length;
+          editor.setCursor(lastLine, lastLineLength);
+          // Don't call focus() - this would steal focus aggressively
+          // Just maintain cursor position for seamless dictation
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Resize bottom pane to minimal height for unobtrusive transcription
+   */
+  private resizeBottomPane(leaf: WorkspaceLeaf): void {
+    try {
+      const leafEl = leaf.containerEl;
+      if (!leafEl) {
+        console.warn(`⚠️ [TranscriptionService] Could not find leaf container element`);
+        return;
+      }
+
+      // Find the parent split that contains this leaf
+      let splitParent = leafEl.closest('.workspace-split.mod-horizontal');
+
+      if (splitParent) {
+        // Set minimal height for the bottom pane
+        const bottomPaneHeight = '120px'; // Enough for 3-4 lines of text
+
+        leafEl.style.height = bottomPaneHeight;
+        leafEl.style.minHeight = bottomPaneHeight;
+        leafEl.style.maxHeight = bottomPaneHeight;
+        leafEl.style.flexGrow = '0';
+        leafEl.style.flexShrink = '0';
+
+        console.log(`📏 [TranscriptionService] Resized bottom pane to ${bottomPaneHeight} for minimal intrusion`);
+      } else {
+        console.warn(`⚠️ [TranscriptionService] Could not find horizontal split parent`);
+      }
+    } catch (error) {
+      console.error('Failed to resize bottom pane:', error);
+    }
   }
 }
 

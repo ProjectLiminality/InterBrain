@@ -1304,6 +1304,12 @@ export default function DreamspaceCanvas() {
             console.log('Empty space clicked during edit mode - ignoring');
             return;
           }
+
+          // Suppress empty space clicks during copilot mode to prevent accidental navigation
+          if (store.copilotMode.isActive) {
+            console.log('Empty space clicked during copilot mode - ignoring to prevent accidental constellation return');
+            return;
+          }
           
           if (store.spatialLayout === 'search') {
             if (store.searchInterface.isActive) {

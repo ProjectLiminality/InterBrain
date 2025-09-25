@@ -996,6 +996,17 @@ export const useInterBrainStore = create<InterBrainState>()(
 
   // Copilot mode actions
   startCopilotMode: (conversationPartner) => set((_state) => {
+    // Hide ribbon for cleaner video call interface
+    try {
+      const app = (globalThis as any).app;
+      if (app?.workspace?.leftRibbon) {
+        app.workspace.leftRibbon.hide();
+        console.log(`🎯 [Copilot-Entry] Hidden ribbon for cleaner interface`);
+      }
+    } catch (error) {
+      console.warn('Failed to hide ribbon:', error);
+    }
+
     return {
       spatialLayout: 'copilot',
       copilotMode: {
@@ -1062,6 +1073,17 @@ export const useInterBrainStore = create<InterBrainState>()(
       } else {
         console.log(`ℹ️ [Copilot-Exit] No new relationships to add - all shared nodes were already related`);
       }
+    }
+
+    // Show ribbon again when exiting copilot mode
+    try {
+      const app = (globalThis as any).app;
+      if (app?.workspace?.leftRibbon) {
+        app.workspace.leftRibbon.show();
+        console.log(`🎯 [Copilot-Exit] Restored ribbon visibility`);
+      }
+    } catch (error) {
+      console.warn('Failed to show ribbon:', error);
     }
 
     return {
