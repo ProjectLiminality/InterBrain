@@ -5,6 +5,7 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../drea
 import { generateYouTubeIframe, extractYouTubeVideoId } from '../utils/url-utils';
 import { parseLinkFileContent, isLinkFile } from '../utils/link-file-utils';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { DREAMSPACE_VIEW_TYPE } from '../dreamspace/DreamspaceView';
 
 /**
  * Leaf Manager Service
@@ -29,17 +30,40 @@ export class LeafManagerService {
   }
 
   /**
+   * Find the dreamspace leaf in the workspace
+   */
+  private findDreamspaceLeaf(): WorkspaceLeaf | null {
+    const leaves = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
+    if (leaves.length > 0) {
+      console.log(`🎯 [LeafManager] Found dreamspace leaf: ${leaves[0].id}`);
+      return leaves[0];
+    }
+    console.warn(`⚠️ [LeafManager] No dreamspace leaf found`);
+    return null;
+  }
+
+  /**
    * Get or create a leaf for DreamSong/DreamTalk leaves
-   * In copilot mode: uses overlay (covers entire workspace)
+   * In copilot mode: overlays specifically on dreamspace leaf (preserving transcript pane)
    * In normal mode: uses right split pane with tabs
    */
   private getRightLeaf(): WorkspaceLeaf {
     const store = useInterBrainStore.getState();
 
-    // Check if we're in copilot mode - use overlay instead of split
+    // Check if we're in copilot mode - overlay specifically on dreamspace leaf
     if (store.copilotMode.isActive) {
-      console.log(`🎯 [LeafManager] Copilot mode active - using overlay for fullscreen content`);
-      return this.app.workspace.getLeaf(false); // Overlay mode - covers entire workspace
+      console.log(`🎯 [LeafManager] Copilot mode active - finding dreamspace leaf for overlay`);
+
+      // Find the dreamspace leaf to overlay on (preserving transcript pane)
+      const dreamspaceLeaf = this.findDreamspaceLeaf();
+      if (dreamspaceLeaf) {
+        // Create overlay specifically on the dreamspace leaf
+        console.log(`🎯 [LeafManager] Creating overlay on dreamspace leaf`);
+        return this.app.workspace.createLeafInParent(dreamspaceLeaf.parent, -1);
+      } else {
+        console.warn(`⚠️ [LeafManager] Could not find dreamspace leaf, falling back to generic overlay`);
+        return this.app.workspace.getLeaf(false);
+      }
     }
 
     // Normal mode - use split pane with tabs

@@ -1,4 +1,4 @@
-import { App, TFile, Notice } from 'obsidian';
+import { App, TFile, Notice, WorkspaceItem, WorkspaceSplit } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { semanticSearchService } from '../../semantic-search/services/semantic-search-service';
 import { useInterBrainStore } from '../../../store/interbrain-store';
@@ -151,9 +151,9 @@ export class TranscriptionService {
         }
       }, 100); // Small delay to ensure file is fully loaded
 
-      // Resize the bottom pane to minimal height after a brief delay
+      // Resize the bottom pane to minimal height using proper setDimension method
       setTimeout(() => {
-        this.resizeBottomPane(leaf);
+        this.resizeBottomPaneProper(leaf);
       }, 200); // Allow time for layout to settle
 
       // Set up file monitoring
@@ -464,35 +464,50 @@ export class TranscriptionService {
   }
 
   /**
-   * Resize bottom pane to minimal height for unobtrusive transcription
+   * Resize bottom pane to minimal height using proper Obsidian API
    */
-  private resizeBottomPane(leaf: WorkspaceLeaf): void {
+  private resizeBottomPaneProper(leaf: WorkspaceLeaf): void {
     try {
-      const leafEl = leaf.containerEl;
-      if (!leafEl) {
-        console.warn(`⚠️ [TranscriptionService] Could not find leaf container element`);
+      // Find the split that contains this leaf
+      const split = leaf.parent as WorkspaceSplit;
+
+      if (!split || split.children.length !== 2) {
+        console.warn(`⚠️ [TranscriptionService] Could not find horizontal split with 2 children`);
         return;
       }
 
-      // Find the parent split that contains this leaf
-      let splitParent = leafEl.closest('.workspace-split.mod-horizontal');
+      console.log(`📏 [TranscriptionService] Found split with ${split.children.length} children`);
 
-      if (splitParent) {
-        // Set minimal height for the bottom pane
-        const bottomPaneHeight = '120px'; // Enough for 3-4 lines of text
+      // Get the top and bottom children
+      const topChild = split.children[0] as WorkspaceItem;
+      const bottomChild = split.children[1] as WorkspaceItem;
 
-        leafEl.style.height = bottomPaneHeight;
-        leafEl.style.minHeight = bottomPaneHeight;
-        leafEl.style.maxHeight = bottomPaneHeight;
-        leafEl.style.flexGrow = '0';
-        leafEl.style.flexShrink = '0';
+      // Check if our leaf is the bottom child (transcript)
+      const isBottomLeaf = bottomChild.children &&
+        bottomChild.children.some(child => child === leaf);
 
-        console.log(`📏 [TranscriptionService] Resized bottom pane to ${bottomPaneHeight} for minimal intrusion`);
+      if (isBottomLeaf) {
+        // Set dimensions: 80% top / 20% bottom for minimal transcript intrusion
+        topChild.setDimension(80);
+        bottomChild.setDimension(20);
+
+        // Trigger workspace resize to apply changes
+        this.app.workspace.requestResize();
+
+        console.log(`📏 [TranscriptionService] Resized split to 80/20 ratio for minimal transcript intrusion`);
       } else {
-        console.warn(`⚠️ [TranscriptionService] Could not find horizontal split parent`);
+        // If leaf is top child, still make transcript small
+        topChild.setDimension(20);
+        bottomChild.setDimension(80);
+
+        this.app.workspace.requestResize();
+
+        console.log(`📏 [TranscriptionService] Resized split to 20/80 ratio (transcript on top)`);
       }
+
     } catch (error) {
-      console.error('Failed to resize bottom pane:', error);
+      console.error('Failed to resize bottom pane properly:', error);
+      console.error('Error details:', error);
     }
   }
 }
