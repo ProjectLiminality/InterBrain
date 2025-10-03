@@ -111,7 +111,7 @@ export class EmailExportService {
 
 		// Add InterBrain download link
 		body += `---\n\n`;
-		body += `💡 **New to InterBrain?** Download and install: https://interbrain.app/download\n\n`;
+		body += `💡 **New to InterBrain?** Download and install: https://github.com/ProjectLiminality/InterBrain?tab=readme-ov-file#installation--setup\n\n`;
 		body += `Once installed, you can click the links above to instantly add these DreamNodes to your vault!\n\n`;
 
 		body += `Looking forward to our next conversation!\n`;

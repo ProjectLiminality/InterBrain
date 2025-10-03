@@ -1,4 +1,4 @@
-import { App, Notice } from 'obsidian';
+import { App, Notice, Plugin } from 'obsidian';
 import { serviceManager } from './service-manager';
 
 /**
@@ -9,31 +9,29 @@ import { serviceManager } from './service-manager';
  */
 export class URIHandlerService {
 	private app: App;
+	private plugin: Plugin;
 
-	constructor(app: App) {
+	constructor(app: App, plugin: Plugin) {
 		this.app = app;
+		this.plugin = plugin;
 	}
 
 	/**
 	 * Register all URI handlers
 	 */
 	registerHandlers(): void {
-		// Check if protocol handler registration is available
-		if (!(this.app as any).registerObsidianProtocolHandler) {
-			console.warn(`⚠️ [URIHandler] Protocol handler registration not available - deep links disabled`);
-			return;
-		}
-
 		try {
 			// Register single node clone handler
-			(this.app as any).registerObsidianProtocolHandler(
+			// Format: obsidian://interbrain-clone?vault=<vault>&uuid=<dreamUUID>
+			this.plugin.registerObsidianProtocolHandler(
 				'interbrain-clone',
 				this.handleSingleNodeClone.bind(this)
 			);
 			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone`);
 
 			// Register batch clone handler
-			(this.app as any).registerObsidianProtocolHandler(
+			// Format: obsidian://interbrain-clone-batch?vault=<vault>&uuids=<uuid1,uuid2,uuid3>
+			this.plugin.registerObsidianProtocolHandler(
 				'interbrain-clone-batch',
 				this.handleBatchNodeClone.bind(this)
 			);
@@ -50,7 +48,8 @@ export class URIHandlerService {
 	 */
 	private async handleSingleNodeClone(params: Record<string, string>): Promise<void> {
 		try {
-			const { uuid } = params;
+			console.log(`🔗 [URIHandler] Single clone handler called with params:`, params);
+			const { uuid, vault } = params;
 
 			if (!uuid) {
 				new Notice('Invalid clone link: missing DreamNode UUID');
@@ -58,17 +57,17 @@ export class URIHandlerService {
 				return;
 			}
 
-			console.log(`🔗 [URIHandler] Cloning DreamNode: ${uuid}`);
-			new Notice(`Cloning DreamNode ${uuid}...`);
+			console.log(`🔗 [URIHandler] Deep link triggered!`);
+			console.log(`🔗 [URIHandler] Vault: ${vault || 'not specified'}`);
+			console.log(`🔗 [URIHandler] DreamNode UUID: ${uuid}`);
+			new Notice(`🔗 Deep link clicked! UUID: ${uuid}`);
 
-			// TODO: Implement actual clone logic via DreamNodeService
-			// For now, just show success
-			await this.cloneDreamNode(uuid);
-
-			new Notice(`Successfully cloned DreamNode!`);
+			// TODO: Implement actual clone logic via DreamNodeService in future epic
+			// For now, just show proof of concept
+			console.log(`✅ [URIHandler] Deep link proof of concept working - ready for clone implementation`);
 		} catch (error) {
-			console.error('Failed to clone DreamNode:', error);
-			new Notice(`Failed to clone DreamNode: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			console.error('Failed to handle clone link:', error);
+			new Notice(`Failed to handle clone link: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 
@@ -78,7 +77,8 @@ export class URIHandlerService {
 	 */
 	private async handleBatchNodeClone(params: Record<string, string>): Promise<void> {
 		try {
-			const { uuids } = params;
+			console.log(`🔗 [URIHandler] Batch clone handler called with params:`, params);
+			const { uuids, vault } = params;
 
 			if (!uuids) {
 				new Notice('Invalid batch clone link: missing UUIDs');
@@ -93,39 +93,18 @@ export class URIHandlerService {
 				return;
 			}
 
-			console.log(`🔗 [URIHandler] Batch cloning ${uuidList.length} DreamNodes`);
-			new Notice(`Cloning ${uuidList.length} DreamNodes...`);
+			console.log(`🔗 [URIHandler] Batch deep link triggered!`);
+			console.log(`🔗 [URIHandler] Vault: ${vault || 'not specified'}`);
+			console.log(`🔗 [URIHandler] DreamNode UUIDs (${uuidList.length}):`, uuidList);
+			new Notice(`🔗 Batch deep link clicked! ${uuidList.length} nodes`);
 
-			// Clone all nodes
-			for (const uuid of uuidList) {
-				await this.cloneDreamNode(uuid);
-			}
-
-			new Notice(`Successfully cloned ${uuidList.length} DreamNodes!`);
+			// TODO: Implement actual batch clone logic in future epic
+			// For now, just show proof of concept
+			console.log(`✅ [URIHandler] Batch deep link proof of concept working - ready for clone implementation`);
 		} catch (error) {
-			console.error('Failed to batch clone DreamNodes:', error);
-			new Notice(`Failed to batch clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			console.error('Failed to handle batch clone link:', error);
+			new Notice(`Failed to handle batch clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
-	}
-
-	/**
-	 * Clone a DreamNode by UUID
-	 * TODO: Implement actual git clone logic
-	 */
-	private async cloneDreamNode(uuid: string): Promise<void> {
-		console.log(`📥 [URIHandler] Cloning DreamNode with UUID: ${uuid}`);
-
-		// Placeholder for actual implementation
-		// This would:
-		// 1. Look up UUID in coherence beacon / registry
-		// 2. Get git remote URL
-		// 3. Clone to vault using GitService
-		// 4. Register in DreamNodeService
-
-		// For now, just simulate delay
-		await new Promise(resolve => setTimeout(resolve, 500));
-
-		console.log(`✅ [URIHandler] Cloned DreamNode: ${uuid}`);
 	}
 
 	/**
@@ -150,8 +129,8 @@ export class URIHandlerService {
 // Singleton instance
 let _uriHandlerService: URIHandlerService | null = null;
 
-export function initializeURIHandlerService(app: App): void {
-	_uriHandlerService = new URIHandlerService(app);
+export function initializeURIHandlerService(app: App, plugin: Plugin): void {
+	_uriHandlerService = new URIHandlerService(app, plugin);
 	_uriHandlerService.registerHandlers();
 	console.log(`🔗 [URIHandler] Service initialized`);
 }

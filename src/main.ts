@@ -72,7 +72,7 @@ export default class InterBrainPlugin extends Plugin {
     initializeEmailExportService(this.app);
 
     // Initialize URI handler service for deep links
-    initializeURIHandlerService(this.app);
+    initializeURIHandlerService(this.app, this);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
