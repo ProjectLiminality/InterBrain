@@ -13,24 +13,30 @@
 export interface UDDFile {
   /** Unique identifier - constant, never changes after creation */
   uuid: string;
-  
+
   /** Display name/title of the DreamNode */
   title: string;
-  
+
   /** Type of DreamNode - determines color coding and relationships */
   type: 'dream' | 'dreamer';
-  
+
   /** Single file reference path for DreamTalk symbol (relative to repo root) */
   dreamTalk: string;
-  
+
   /** Array of UUIDs for horizontal liminal web relationships */
   liminalWebRelationships: string[];
-  
+
   /** Array of UUIDs for vertical holonic relationships - children */
   submodules: string[];
-  
+
   /** Array of UUIDs for vertical holonic relationships - parents */
   supermodules: string[];
+
+  /** Optional contact email (for dreamer-type nodes) */
+  email?: string;
+
+  /** Optional contact phone number (for dreamer-type nodes) */
+  phone?: string;
 }
 
 /**

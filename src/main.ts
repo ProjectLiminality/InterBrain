@@ -22,6 +22,8 @@ import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { ConstellationCommands } from './commands/constellation-commands';
 import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
+import { registerFaceTimeCommands } from './commands/facetime-commands';
+import { FaceTimeService } from './services/facetime-service';
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
@@ -33,6 +35,7 @@ export default class InterBrainPlugin extends Plugin {
   private gitService!: GitService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
+  private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
   private leafManagerService!: LeafManagerService;
@@ -78,6 +81,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
+    this.faceTimeService = new FaceTimeService();
 
     // Initialize dreamweaving services
     this.canvasParserService = new CanvasParserService(this.vaultService);
@@ -114,6 +118,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register conversational copilot commands (real-time transcription and semantic search)
     registerConversationalCopilotCommands(this, this.uiService);
+
+    // Register FaceTime commands (video calling integration)
+    registerFaceTimeCommands(this, this.uiService, this.vaultService, this.faceTimeService);
 
     // Register dreamweaving commands (canvas submodule management)
     registerDreamweavingCommands(
