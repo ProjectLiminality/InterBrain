@@ -199,34 +199,33 @@ end tell
 `;
 
 		console.log(`🍎 [EmailExport] Executing AppleScript to create Mail draft`);
+		console.log(`🍎 [EmailExport] AppleScript preview (first 500 chars):`, appleScript.substring(0, 500));
 
 		try {
-			// Use Electron's shell to execute osascript
-			const { shell } = require('electron');
+			// Access Node.js child_process through Obsidian's environment
+			const { exec } = (window as any).require('child_process');
 
 			// Execute AppleScript
 			const command = `osascript -e '${appleScript.replace(/'/g, "'\\''")}'`;
-			await shell.openExternal(command);
+			console.log(`🍎 [EmailExport] Executing command...`);
+
+			await new Promise<void>((resolve, reject) => {
+				exec(command, (error: any, stdout: any, stderr: any) => {
+					if (error) {
+						console.error('❌ [EmailExport] AppleScript error:', error);
+						console.error('❌ [EmailExport] stderr:', stderr);
+						reject(error);
+					} else {
+						console.log('✅ [EmailExport] AppleScript stdout:', stdout);
+						resolve();
+					}
+				});
+			});
 
 			console.log(`✅ [EmailExport] AppleScript executed successfully`);
 		} catch (error) {
-			console.error('AppleScript execution failed:', error);
-
-			// Fallback: try using Node's child_process if available in Electron context
-			try {
-				// Access Node.js APIs through Electron's remote
-				const { exec } = (window as any).require('child_process');
-				await new Promise<void>((resolve, reject) => {
-					exec(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`, (error: any) => {
-						if (error) reject(error);
-						else resolve();
-					});
-				});
-				console.log(`✅ [EmailExport] AppleScript executed via child_process`);
-			} catch (fallbackError) {
-				console.error('Fallback execution failed:', fallbackError);
-				throw new Error('Failed to create email draft - ensure Apple Mail is installed');
-			}
+			console.error('❌ [EmailExport] AppleScript execution failed:', error);
+			throw new Error('Failed to create email draft - ensure Apple Mail is installed');
 		}
 	}
 }
