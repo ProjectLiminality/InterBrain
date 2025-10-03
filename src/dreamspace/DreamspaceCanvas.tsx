@@ -735,7 +735,19 @@ export default function DreamspaceCanvas() {
 
     // Handle copilot mode invoke interaction
     if (store.spatialLayout === 'copilot' && store.copilotMode.isActive) {
-      console.log(`🤖 [Copilot] Invoking node: ${node.name}`);
+      console.log(`🤖 [Copilot] Invoking node via CLICK: ${node.name}`);
+
+      // CRITICAL: Record invocation for conversation export
+      try {
+        const { getConversationRecordingService } = await import('../features/conversational-copilot/services/conversation-recording-service');
+        const recordingService = getConversationRecordingService();
+        console.log(`🎙️ [Copilot-Click] About to record invocation for: ${node.name}`);
+        await recordingService.recordInvocation(node);
+        console.log(`✅ [Copilot-Click] Invocation recorded successfully`);
+      } catch (error) {
+        console.error('❌ [Copilot-Click] Failed to record invocation:', error);
+        // Don't block the click flow if recording fails
+      }
 
       // Track this node as shared
       store.addSharedNode(node.id);
