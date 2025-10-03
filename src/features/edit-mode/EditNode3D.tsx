@@ -134,7 +134,7 @@ export default function EditNode3D({
       }
 
       try {
-        const metadataPath = `${editingNode.repoPath}/.udd/metadata.json`;
+        const metadataPath = `${editingNode.repoPath}/.udd`;
         const metadataContent = await readFileAsync(metadataPath, 'utf-8');
         const metadata = JSON.parse(metadataContent);
 
@@ -273,7 +273,7 @@ export default function EditNode3D({
       // Save contact info for dreamer nodes before calling onSave
       if (editingNode.type === 'dreamer' && (localEmail || localPhone)) {
         try {
-          const metadataPath = `${editingNode.repoPath}/.udd/metadata.json`;
+          const metadataPath = `${editingNode.repoPath}/.udd`;
           const metadataContent = await readFileAsync(metadataPath, 'utf-8');
           const metadata = JSON.parse(metadataContent);
 

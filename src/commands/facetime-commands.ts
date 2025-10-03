@@ -38,7 +38,7 @@ export function registerFaceTimeCommands(
         console.log(`Starting video call with: ${selectedNode.name}`);
 
         // Read metadata to get contact info
-        const metadataPath = `${selectedNode.repoPath}/.udd/metadata.json`;
+        const metadataPath = `${selectedNode.repoPath}/.udd`;
         let metadata;
 
         try {
@@ -159,7 +159,7 @@ export function registerFaceTimeCommands(
         }
 
         // Read existing metadata
-        const metadataPath = `${selectedNode.repoPath}/.udd/metadata.json`;
+        const metadataPath = `${selectedNode.repoPath}/.udd`;
         let metadata;
 
         try {
