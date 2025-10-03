@@ -113,9 +113,23 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const conversationMetadata = recordingService.getConversationMetadata();
         const conversationStartTime = conversationMetadata.startTime || new Date();
 
-        // Stop transcription service and get transcript file
+        // Get transcript file reference BEFORE stopping (which deletes it)
         const transcriptionService = getTranscriptionService();
         const transcriptFile = (transcriptionService as any).transcriptionFile;
+        console.log(`📝 [Copilot-Exit] Transcript file path:`, transcriptFile?.path || 'null');
+
+        // Read transcript content BEFORE deleting the file
+        let transcriptContent = '';
+        if (transcriptFile) {
+          try {
+            transcriptContent = await plugin.app.vault.read(transcriptFile);
+            console.log(`📝 [Copilot-Exit] Transcript content captured (${transcriptContent.length} chars)`);
+          } catch (error) {
+            console.error('❌ [Copilot-Exit] Failed to read transcript:', error);
+          }
+        }
+
+        // Now safe to stop transcription (which deletes the file)
         await transcriptionService.stopTranscription();
 
         // Stop conversation recording and get invocations
@@ -125,10 +139,10 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         // Generate AI summary and export email if there were invocations or conversation content
         console.log(`📧 [Copilot-Exit] Checking email export conditions...`);
         console.log(`📧 [Copilot-Exit] partnerToFocus:`, partnerToFocus?.name || 'null');
-        console.log(`📧 [Copilot-Exit] transcriptFile:`, transcriptFile?.path || 'null');
+        console.log(`📧 [Copilot-Exit] transcriptContent length:`, transcriptContent.length);
         console.log(`📧 [Copilot-Exit] invocations count:`, invocations.length);
 
-        if (partnerToFocus && transcriptFile) {
+        if (partnerToFocus && transcriptContent) {
           try {
             // Get plugin settings for API key
             const settings = (plugin as any).settings;
@@ -143,12 +157,12 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
               console.log(`📧 [Copilot-Exit] Starting email export flow...`);
               uiService.showInfo('Generating conversation summary...');
 
-              // Generate AI summary
+              // Generate AI summary from transcript content (not file)
               console.log(`📧 [Copilot-Exit] Getting summary service...`);
               const summaryService = getConversationSummaryService();
-              console.log(`📧 [Copilot-Exit] Calling generateSummary...`);
-              const aiSummary = await summaryService.generateSummary(
-                transcriptFile,
+              console.log(`📧 [Copilot-Exit] Calling generateSummary with content...`);
+              const aiSummary = await summaryService.generateSummaryFromContent(
+                transcriptContent,
                 invocations,
                 partnerToFocus,
                 apiKey

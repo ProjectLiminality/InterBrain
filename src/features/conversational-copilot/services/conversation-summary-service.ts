@@ -16,7 +16,7 @@ export class ConversationSummaryService {
 	}
 
 	/**
-	 * Generate conversation summary from transcript and invocations
+	 * Generate conversation summary from transcript file and invocations
 	 */
 	async generateSummary(
 		transcriptFile: TFile,
@@ -27,7 +27,23 @@ export class ConversationSummaryService {
 		try {
 			// Read transcript content
 			const transcriptContent = await this.app.vault.read(transcriptFile);
+			return await this.generateSummaryFromContent(transcriptContent, invocations, conversationPartner, apiKey);
+		} catch (error) {
+			console.error('Failed to generate conversation summary:', error);
+			throw new Error(`Summary generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
 
+	/**
+	 * Generate conversation summary from transcript content string and invocations
+	 */
+	async generateSummaryFromContent(
+		transcriptContent: string,
+		invocations: InvocationEvent[],
+		conversationPartner: DreamNode,
+		apiKey: string
+	): Promise<string> {
+		try {
 			// Extract actual conversation text (skip metadata header)
 			const contentLines = transcriptContent.split('\n');
 			const separatorIndex = contentLines.findIndex(line => line === '---');
