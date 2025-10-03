@@ -1,11 +1,7 @@
 import { App, Notice } from 'obsidian';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { DreamNode } from '../../../types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
-
-const execAsync = promisify(exec);
 
 /**
  * Email Export Service
@@ -156,7 +152,7 @@ export class EmailExportService {
 	}
 
 	/**
-	 * Create Apple Mail draft using AppleScript
+	 * Create Apple Mail draft using AppleScript via Electron
 	 */
 	private async createMailDraft(to: string, subject: string, body: string): Promise<void> {
 		// Escape strings for AppleScript
@@ -186,11 +182,32 @@ end tell
 		console.log(`🍎 [EmailExport] Executing AppleScript to create Mail draft`);
 
 		try {
-			await execAsync(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`);
+			// Use Electron's shell to execute osascript
+			const { shell } = require('electron');
+
+			// Execute AppleScript
+			const command = `osascript -e '${appleScript.replace(/'/g, "'\\''")}'`;
+			await shell.openExternal(command);
+
 			console.log(`✅ [EmailExport] AppleScript executed successfully`);
 		} catch (error) {
 			console.error('AppleScript execution failed:', error);
-			throw new Error('Failed to create email draft - ensure Apple Mail is installed');
+
+			// Fallback: try using Node's child_process if available in Electron context
+			try {
+				// Access Node.js APIs through Electron's remote
+				const { exec } = (window as any).require('child_process');
+				await new Promise<void>((resolve, reject) => {
+					exec(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`, (error: any) => {
+						if (error) reject(error);
+						else resolve();
+					});
+				});
+				console.log(`✅ [EmailExport] AppleScript executed via child_process`);
+			} catch (fallbackError) {
+				console.error('Fallback execution failed:', fallbackError);
+				throw new Error('Failed to create email draft - ensure Apple Mail is installed');
+			}
 		}
 	}
 }
