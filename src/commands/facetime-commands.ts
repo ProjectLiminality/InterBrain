@@ -70,10 +70,10 @@ export function registerFaceTimeCommands(
         // Start the FaceTime call
         await faceTimeService.startCall(contact);
 
-        // TODO Phase 2: Automatically switch to copilot mode here
-        // store.setMode('copilot');
+        // Automatically switch to copilot mode
+        store.setMode('copilot');
 
-        uiService.showSuccess(`FaceTime call started with ${selectedNode.name}`);
+        uiService.showSuccess(`FaceTime call started with ${selectedNode.name} - Copilot mode active`);
       } catch (error) {
         console.error('Start Video Call command failed:', error);
         uiService.showError(
@@ -194,6 +194,35 @@ export function registerFaceTimeCommands(
         console.error('Set Contact Info command failed:', error);
         uiService.showError(
           `Failed to set contact info: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+  });
+
+  // End Video Call - Quits FaceTime and exits copilot mode
+  plugin.addCommand({
+    id: 'end-video-call',
+    name: 'End Video Call',
+    callback: async () => {
+      try {
+        const store = useInterBrainStore.getState();
+
+        // Show loading state
+        uiService.showInfo('Ending FaceTime call...');
+
+        // End the FaceTime call
+        await faceTimeService.endCall();
+
+        // Exit copilot mode if active
+        if (store.mode === 'copilot') {
+          store.setMode('liminal-web');
+        }
+
+        uiService.showSuccess('FaceTime call ended - Copilot mode deactivated');
+      } catch (error) {
+        console.error('End Video Call command failed:', error);
+        uiService.showError(
+          `Failed to end video call: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
     }
