@@ -11,6 +11,7 @@ import ProtoNode3D from '../features/creation/ProtoNode3D';
 import SearchNode3D from '../features/search/SearchNode3D';
 import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../features/edit-mode';
+import CopilotModeOverlay from '../features/conversational-copilot/CopilotModeOverlay';
 import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
@@ -129,13 +130,19 @@ export default function DreamspaceCanvas() {
             store.setSpatialLayout('constellation');
             break;
             
+          case 'copilot':
+            // Exit copilot mode, go to liminal-web
+            console.log(`🤖 Exit copilot → liminal-web`);
+            store.exitCopilotMode();
+            break;
+
           case 'liminal-web':
             // Exit liminal-web, go to constellation
             console.log(`🕸️ Exit liminal-web → constellation`);
             store.setSelectedNode(null);
             store.setSpatialLayout('constellation');
             break;
-            
+
           case 'constellation':
             // Already at top level
             console.log(`🌌 Already in constellation (root)`);
@@ -155,7 +162,7 @@ export default function DreamspaceCanvas() {
       globalThis.document.removeEventListener('keydown', handleEscape);
     };
   }, []); // Single handler, no dependencies
-  
+
   // Drag and drop state
   const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
@@ -194,10 +201,68 @@ export default function DreamspaceCanvas() {
   // Search results for search mode display
   const searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
-  
+
+  // Copilot mode state for transcription buffer
+  const copilotMode = useInterBrainStore(state => state.copilotMode);
+
   // Search interface state
   const searchInterface = useInterBrainStore(state => state.searchInterface);
-  
+
+  // Option key handler for copilot mode show/hide
+  useEffect(() => {
+    if (spatialLayout !== 'copilot') return;
+
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Option key on Mac, Alt key on Windows/Linux
+      if (e.altKey && !copilotMode.showSearchResults) {
+        e.preventDefault();
+        console.log('🔍 [Copilot] Option key pressed - showing search results');
+        const store = useInterBrainStore.getState();
+        store.freezeSearchResults(); // Capture latest search results
+        store.setShowSearchResults(true);
+
+        // Trigger layout update to show frozen results
+        if (spatialOrchestratorRef.current && store.copilotMode.conversationPartner) {
+          // Force the layout to update with frozen results by calling showEditModeSearchResults
+          // This ensures the display logic runs even if no new search results are coming in
+          // Get fresh state after freezeSearchResults() was called
+          const updatedStore = useInterBrainStore.getState();
+          const frozenResults = updatedStore.copilotMode.frozenSearchResults;
+          if (frozenResults && frozenResults.length > 0) {
+            console.log(`🔍 [Copilot] Displaying ${frozenResults.length} frozen search results`);
+            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, frozenResults);
+          } else {
+            console.log('🔍 [Copilot] No frozen results to display');
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
+      // Detect when Option/Alt key is released
+      if (!e.altKey && copilotMode.showSearchResults) {
+        console.log('🔍 [Copilot] Option key released - hiding search results');
+        const store = useInterBrainStore.getState();
+        store.setShowSearchResults(false);
+
+        // Trigger layout update to hide results by calling with empty array
+        if (spatialOrchestratorRef.current && store.copilotMode.conversationPartner) {
+          console.log('🔍 [Copilot] Hiding search results - clearing layout');
+          spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, []);
+        }
+      }
+    };
+
+    globalThis.document.addEventListener('keydown', handleKeyDown);
+    globalThis.document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      globalThis.document.removeEventListener('keydown', handleKeyDown);
+      globalThis.document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [spatialLayout, copilotMode.showSearchResults]);
+
+
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
   
@@ -362,6 +427,25 @@ export default function DreamspaceCanvas() {
         }
         break;
         
+      case 'copilot': {
+        // Copilot mode - conversation partner at center with search results around them
+        const store = useInterBrainStore.getState();
+        if (store.copilotMode.isActive && store.copilotMode.conversationPartner) {
+          console.log(`🤖 [Canvas-Layout] Copilot mode for person "${store.copilotMode.conversationPartner.name}" (${store.copilotMode.conversationPartner.id})`);
+          // Position conversation partner at center (like edit mode)
+          spatialOrchestratorRef.current.focusOnNode(store.copilotMode.conversationPartner.id);
+
+          // If we have search results from transcription, show them around the person
+          if (searchResults && searchResults.length > 0) {
+            console.log(`🤖 [Canvas-Layout] Showing ${searchResults.length} copilot search results around person`);
+            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, searchResults);
+          }
+        } else {
+          console.warn(`⚠️ [Canvas-Layout] Copilot mode triggered but no active conversation partner`);
+        }
+        break;
+      }
+
       case 'constellation':
         // Return to constellation
         console.log('DreamspaceCanvas: Returning to constellation mode');
@@ -405,24 +489,43 @@ export default function DreamspaceCanvas() {
     const handleClearEditModeData = (event: globalThis.Event) => {
       const customEvent = event as globalThis.CustomEvent;
       const source = customEvent.detail?.source;
-      
+
       console.log(`🧹 [Canvas-Event] Received clear-edit-mode-data event from ${source}`);
-      
+
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.clearEditModeData();
       } else {
         console.error(`❌ [Canvas-Event] Orchestrator not available for cleanup`);
       }
     };
+
+    // Handle copilot mode layout event (called when entering copilot mode)
+    const handleCopilotModeLayout = (event: globalThis.Event) => {
+      const customEvent = event as globalThis.CustomEvent;
+      const conversationPartnerId = customEvent.detail?.conversationPartnerId;
+      const showSearchField = customEvent.detail?.showSearchField;
+
+      console.log(`🤖 [Canvas-Event] Received copilot-mode-layout event for person ${conversationPartnerId}, searchField: ${showSearchField}`);
+
+      if (conversationPartnerId && spatialOrchestratorRef.current) {
+        // Position the conversation partner at center
+        spatialOrchestratorRef.current.focusOnNode(conversationPartnerId);
+        console.log(`🎯 [Canvas-Event] Positioned conversation partner ${conversationPartnerId} at center`);
+      } else {
+        console.error(`❌ [Canvas-Event] Missing required data - conversationPartnerId: ${!!conversationPartnerId}, orchestrator: ${!!spatialOrchestratorRef.current}`);
+      }
+    };
     
     canvas.addEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
     canvas.addEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
     canvas.addEventListener('clear-edit-mode-data', handleClearEditModeData);
-    
+    canvas.addEventListener('copilot-mode-layout', handleCopilotModeLayout);
+
     return () => {
       canvas.removeEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
       canvas.removeEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
       canvas.removeEventListener('clear-edit-mode-data', handleClearEditModeData);
+      canvas.removeEventListener('copilot-mode-layout', handleCopilotModeLayout);
     };
   }, []);
   
@@ -574,20 +677,92 @@ export default function DreamspaceCanvas() {
     // Hover state handled by individual DreamNode3D components
   };
 
-  const handleNodeClick = (node: DreamNode) => {
+  // Helper function to open appropriate fullscreen content for a node
+  const openNodeContent = async (node: DreamNode) => {
+    const leafManager = serviceManager.getLeafManagerService();
+
+    if (!leafManager || !vaultService || !canvasParserService) {
+      console.error('Services not available for opening content');
+      return;
+    }
+
+    try {
+      // Check for DreamSong first (most rich content)
+      const dreamSongPath = `${node.repoPath}/DreamSong.canvas`;
+      if (await vaultService.fileExists(dreamSongPath)) {
+        console.log(`🎭 [Copilot] Opening DreamSong for ${node.name}`);
+
+        // Parse and open DreamSong (reuse existing pattern from fullscreen-commands.ts)
+        const canvasData = await canvasParserService.parseCanvas(dreamSongPath);
+        const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
+        let blocks = parseCanvasToBlocks(canvasData, node.id);
+        blocks = await resolveMediaPaths(blocks, node.repoPath, vaultService);
+
+        await leafManager.openDreamSongFullScreen(node, blocks);
+        uiService.showSuccess(`Opened DreamSong for ${node.name}`);
+        return;
+      }
+
+      // Check for DreamTalk media
+      if (node.dreamTalkMedia && node.dreamTalkMedia.length > 0) {
+        console.log(`🎤 [Copilot] Opening DreamTalk for ${node.name}`);
+        await leafManager.openDreamTalkFullScreen(node, node.dreamTalkMedia[0]);
+        uiService.showSuccess(`Opened DreamTalk for ${node.name}`);
+        return;
+      }
+
+      // Try README as final fallback
+      const readmePath = `${node.repoPath}/README.md`;
+      if (await vaultService.fileExists(readmePath)) {
+        console.log(`📖 [Copilot] Opening README for ${node.name}`);
+        await leafManager.openReadmeFile(node);
+        uiService.showSuccess(`Opened README for ${node.name}`);
+        return;
+      }
+
+      // Nothing to display
+      console.log(`❌ [Copilot] No content found for ${node.name}`);
+      uiService.showInfo("Nothing to display");
+
+    } catch (error) {
+      console.error(`Failed to open content for ${node.name}:`, error);
+      uiService.showError(`Failed to open content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleNodeClick = async (node: DreamNode) => {
     const store = useInterBrainStore.getState();
-    
+
+    // Handle copilot mode invoke interaction
+    if (store.spatialLayout === 'copilot' && store.copilotMode.isActive) {
+      console.log(`🤖 [Copilot] Invoking node: ${node.name}`);
+
+      // Track this node as shared
+      store.addSharedNode(node.id);
+      console.log(`🔗 [Copilot] Added shared node: ${node.name} (${node.id})`);
+
+      // Get updated state to log current shared nodes
+      const updatedStore = useInterBrainStore.getState();
+      console.log(`🔗 [Copilot] Total shared nodes: ${updatedStore.copilotMode.sharedNodeIds.length}`);
+      console.log(`🔗 [Copilot] Shared node IDs:`, updatedStore.copilotMode.sharedNodeIds);
+
+      // Open appropriate fullscreen view
+      await openNodeContent(node);
+
+      return; // Prevent liminal-web navigation
+    }
+
     // Handle edit mode relationship toggling
     if (store.editMode.isActive && store.editMode.editingNode) {
       // In edit mode, clicking a node toggles its relationship status
       store.togglePendingRelationship(node.id);
       console.log(`Edit mode: Toggled relationship with "${node.name}"`);
-      
+
       // Trigger immediate reordering for priority-based positioning
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.reorderEditModeSearchResults();
       }
-      
+
       return; // Don't do normal click handling in edit mode
     }
     
@@ -1129,6 +1304,12 @@ export default function DreamspaceCanvas() {
             console.log('Empty space clicked during edit mode - ignoring');
             return;
           }
+
+          // Suppress empty space clicks during copilot mode to prevent accidental navigation
+          if (store.copilotMode.isActive) {
+            console.log('Empty space clicked during copilot mode - ignoring to prevent accidental constellation return');
+            return;
+          }
           
           if (store.spatialLayout === 'search') {
             if (store.searchInterface.isActive) {
@@ -1265,7 +1446,10 @@ export default function DreamspaceCanvas() {
         
         {/* Edit mode overlay - render when edit mode is active */}
         <EditModeOverlay />
-        
+
+        {/* Copilot mode overlay - render when copilot mode is active */}
+        <CopilotModeOverlay />
+
         {/* Flying camera controls for debugging - toggleable */}
         {debugFlyingControls && (
           <FlyControls

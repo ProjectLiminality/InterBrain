@@ -145,6 +145,16 @@ export interface EditModeValidationErrors {
   relationships?: string;
 }
 
+// Copilot mode state types
+export interface CopilotModeState {
+  isActive: boolean;
+  conversationPartner: DreamNode | null; // The person node at center
+  transcriptionFilePath: string | null; // Path to active transcription file
+  showSearchResults: boolean; // Option key held state for showing/hiding results
+  frozenSearchResults: DreamNode[]; // Snapshot of results when showing
+  sharedNodeIds: string[]; // Track invoked nodes for post-call processing
+}
+
 // Real node storage - persisted across sessions
 export interface RealNodeData {
   node: DreamNode;
@@ -208,8 +218,8 @@ export interface InterBrainState extends OllamaConfigSlice {
   setSearchSaving: (saving: boolean) => void;
   
   // Spatial layout state - expanded to include edit modes as first-class states
-  spatialLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search';
-  setSpatialLayout: (layout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search') => void;
+  spatialLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
+  setSpatialLayout: (layout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot') => void;
   
   // Fibonacci sphere layout configuration
   fibonacciConfig: FibonacciSphereConfig;
@@ -231,9 +241,9 @@ export interface InterBrainState extends OllamaConfigSlice {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null;
+    previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null) => void;
   
   // Debug wireframe sphere toggle
   debugWireframeSphere: boolean;
@@ -280,7 +290,15 @@ export interface InterBrainState extends OllamaConfigSlice {
   togglePendingRelationship: (nodeId: string) => void;
   savePendingRelationships: () => void;
   setEditModeValidationErrors: (errors: EditModeValidationErrors) => void;
-  
+
+  // Copilot mode state management
+  copilotMode: CopilotModeState;
+  startCopilotMode: (conversationPartner: DreamNode) => void;
+  exitCopilotMode: () => void;
+  setShowSearchResults: (show: boolean) => void;
+  freezeSearchResults: () => void;
+  addSharedNode: (nodeId: string) => void;
+
   // Navigation history management
   navigationHistory: NavigationHistoryState;
   isRestoringFromHistory: boolean;
@@ -401,7 +419,17 @@ export const useInterBrainStore = create<InterBrainState>()(
     validationErrors: {},
     isSearchingRelationships: false
   },
-  
+
+  // Copilot mode initial state (not active)
+  copilotMode: {
+    isActive: false,
+    conversationPartner: null,
+    transcriptionFilePath: null,
+    showSearchResults: false,
+    frozenSearchResults: [],
+    sharedNodeIds: []
+  },
+
   // Navigation history initial state (with initial constellation state)
   navigationHistory: {
     history: [{
@@ -965,7 +993,134 @@ export const useInterBrainStore = create<InterBrainState>()(
       validationErrors: errors
     }
   })),
-  
+
+  // Copilot mode actions
+  startCopilotMode: (conversationPartner) => set((_state) => {
+    // Hide ribbon for cleaner video call interface
+    try {
+      const app = (globalThis as any).app;
+      if (app?.workspace?.leftRibbon) {
+        app.workspace.leftRibbon.hide();
+        console.log(`🎯 [Copilot-Entry] Hidden ribbon for cleaner interface`);
+      }
+    } catch (error) {
+      console.warn('Failed to hide ribbon:', error);
+    }
+
+    return {
+      spatialLayout: 'copilot',
+      copilotMode: {
+        isActive: true,
+        conversationPartner: { ...conversationPartner }, // Create a copy
+        transcriptionFilePath: null,
+        showSearchResults: false,
+        frozenSearchResults: [],
+        sharedNodeIds: []
+      }
+    };
+  }),
+
+  exitCopilotMode: () => set((state) => {
+    // PROCESS SHARED NODES BEFORE CLEARING STATE
+    const { conversationPartner, sharedNodeIds } = state.copilotMode;
+
+    if (conversationPartner && sharedNodeIds.length > 0) {
+      console.log(`🔗 [Copilot-Exit] Processing ${sharedNodeIds.length} shared nodes for "${conversationPartner.name}"`);
+      console.log(`🔗 [Copilot-Exit] Shared node IDs: ${sharedNodeIds.join(', ')}`);
+
+      // Filter out nodes that are already related to avoid duplicates
+      const newRelationships = sharedNodeIds.filter(id => !conversationPartner.liminalWebConnections.includes(id));
+
+      if (newRelationships.length > 0) {
+        // Create updated conversation partner with new relationships
+        const updatedPartner = {
+          ...conversationPartner,
+          liminalWebConnections: [...conversationPartner.liminalWebConnections, ...newRelationships]
+        };
+
+        console.log(`✅ [Copilot-Exit] Adding ${newRelationships.length} new relationships: ${newRelationships.join(', ')}`);
+        console.log(`✅ [Copilot-Exit] "${conversationPartner.name}" now has ${updatedPartner.liminalWebConnections.length} total relationships`);
+
+        // Update the conversation partner node in store
+        const existingNodeData = state.realNodes.get(conversationPartner.id);
+        if (existingNodeData) {
+          state.realNodes.set(conversationPartner.id, {
+            ...existingNodeData,
+            node: updatedPartner
+          });
+        }
+
+        // Also update selectedNode if it matches the conversation partner
+        if (state.selectedNode?.id === conversationPartner.id) {
+          state.selectedNode = updatedPartner;
+        }
+
+        // Update bidirectional relationships in store for immediate UI feedback
+        for (const sharedNodeId of newRelationships) {
+          const sharedNodeData = state.realNodes.get(sharedNodeId);
+          if (sharedNodeData) {
+            const updatedSharedNode = {
+              ...sharedNodeData.node,
+              liminalWebConnections: [...sharedNodeData.node.liminalWebConnections, conversationPartner.id]
+            };
+            state.realNodes.set(sharedNodeId, {
+              ...sharedNodeData,
+              node: updatedSharedNode
+            });
+            console.log(`✅ [Copilot-Exit] Updated bidirectional relationship for shared node: ${updatedSharedNode.name}`);
+          }
+        }
+      } else {
+        console.log(`ℹ️ [Copilot-Exit] No new relationships to add - all shared nodes were already related`);
+      }
+    }
+
+    // Show ribbon again when exiting copilot mode
+    try {
+      const app = (globalThis as any).app;
+      if (app?.workspace?.leftRibbon) {
+        app.workspace.leftRibbon.show();
+        console.log(`🎯 [Copilot-Exit] Restored ribbon visibility`);
+      }
+    } catch (error) {
+      console.warn('Failed to show ribbon:', error);
+    }
+
+    return {
+      spatialLayout: 'liminal-web', // Return to liminal-web layout with updated relationships
+      copilotMode: {
+        isActive: false,
+        conversationPartner: null,
+        transcriptionFilePath: null,
+        showSearchResults: false,
+        frozenSearchResults: [],
+        sharedNodeIds: []
+      }
+    };
+  }),
+
+  // Copilot show/hide actions
+  setShowSearchResults: (show: boolean) => set((state) => ({
+    copilotMode: {
+      ...state.copilotMode,
+      showSearchResults: show
+    }
+  })),
+
+  freezeSearchResults: () => set((state) => ({
+    copilotMode: {
+      ...state.copilotMode,
+      frozenSearchResults: [...state.searchResults] // Capture current search results
+    }
+  })),
+
+  addSharedNode: (nodeId: string) => set((state) => ({
+    copilotMode: {
+      ...state.copilotMode,
+      sharedNodeIds: [...state.copilotMode.sharedNodeIds, nodeId]
+    }
+  })),
+
   // Navigation history actions
   addHistoryEntry: (nodeId, layout) => set(state => {
     const { history, currentIndex, maxHistorySize } = state.navigationHistory;

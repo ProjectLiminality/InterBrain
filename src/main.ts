@@ -17,6 +17,7 @@ import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG }
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
 import { registerEditModeCommands } from './commands/edit-mode-commands';
+import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { ConstellationCommands } from './commands/constellation-commands';
@@ -24,6 +25,7 @@ import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/lin
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
+import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 
 export default class InterBrainPlugin extends Plugin {
   // Service instances
@@ -40,6 +42,9 @@ export default class InterBrainPlugin extends Plugin {
   async onload() {
     // Initialize services
     this.initializeServices();
+
+    // Initialize transcription service for copilot mode
+    initializeTranscriptionService(this.app);
     
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
@@ -106,6 +111,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
+
+    // Register conversational copilot commands (real-time transcription and semantic search)
+    registerConversationalCopilotCommands(this, this.uiService);
 
     // Register dreamweaving commands (canvas submodule management)
     registerDreamweavingCommands(

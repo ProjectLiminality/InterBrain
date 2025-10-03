@@ -185,10 +185,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Only update to liminal-web if not already in edit mode
-        // Edit mode manages its own layout state
+        // Only update to liminal-web if not already in edit mode or copilot mode
+        // Edit mode and copilot mode manage their own layout state
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
         
@@ -278,10 +278,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         focusedNodeId.current = nodeId;
         
-        // Only update to liminal-web if not already in edit mode
-        // Edit mode manages its own layout state
+        // Only update to liminal-web if not already in edit mode or copilot mode
+        // Edit mode and copilot mode manage their own layout state
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
         
@@ -446,7 +446,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
         // Only update to liminal-web if not already in edit mode
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
         
@@ -748,21 +748,58 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
           console.log(`   New lists - related: ${relatedNodes.length}, unrelated: ${unrelatedSearchNodes.length}`);
         } else {
-          // Subsequent call (new search results) - merge new unrelated nodes with existing lists
-          // Keep existing related nodes, but update unrelated list with new search results
-          const existingUnrelatedIds = new Set(unrelatedSearchResultsList.current.map(n => n.id));
-          const newUnrelatedNodes = unrelatedSearchNodes.filter(node => !existingUnrelatedIds.has(node.id));
-          
-          // Add new unrelated nodes to the list
-          unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
-          
-          console.log(`➕ [Orchestrator-EditMode] Added ${newUnrelatedNodes.length} new unrelated nodes, total unrelated: ${unrelatedSearchResultsList.current.length}`);
+          // Check if we're in copilot mode vs edit mode
+          const store = useInterBrainStore.getState();
+          const isInCopilotMode = store.spatialLayout === 'copilot';
+
+          if (isInCopilotMode) {
+            // COPILOT MODE: Replace entire list with new search results
+            // Copilot needs complete replacement on each search, not accumulation
+            unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
+            console.log(`🤖 [Orchestrator-Copilot] Replaced search results with ${unrelatedSearchNodes.length} nodes`);
+          } else {
+            // EDIT MODE: Keep existing stable list management for relationship editing
+            // Subsequent call (new search results) - merge new unrelated nodes with existing lists
+            // Keep existing related nodes, but update unrelated list with new search results
+            const existingUnrelatedIds = new Set(unrelatedSearchResultsList.current.map(n => n.id));
+            const newUnrelatedNodes = unrelatedSearchNodes.filter(node => !existingUnrelatedIds.has(node.id));
+
+            // Add new unrelated nodes to the list
+            unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
+
+            console.log(`➕ [Orchestrator-EditMode] Added ${newUnrelatedNodes.length} new unrelated nodes, total unrelated: ${unrelatedSearchResultsList.current.length}`);
+          }
         }
         
-        // Priority ordering: related nodes first (inner rings), then search results (outer rings)
-        const orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
+        // Check if we're in copilot mode with show/hide functionality
+        const isInCopilotMode = store.spatialLayout === 'copilot';
+        const shouldShowResults = !isInCopilotMode || store.copilotMode.showSearchResults;
+
+        let orderedNodes: Array<{ id: string; name: string; type: string }>;
+
+        if (!shouldShowResults) {
+          // Hide all search results in copilot mode when Option key not held
+          orderedNodes = [];
+        } else if (isInCopilotMode && store.copilotMode.showSearchResults) {
+          // Show frozen snapshot in copilot mode when Option key is held
+          // Convert full DreamNode objects to simplified format for layout calculation
+          orderedNodes = store.copilotMode.frozenSearchResults.map(node => ({
+            id: node.id,
+            name: node.name,
+            type: node.type
+          }));
+        } else {
+          // Normal edit mode behavior: show live search results
+          orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
+        }
         
-        console.log(`🎯 [Orchestrator-EditMode] Final layout data - ordered nodes: ${orderedNodes.length} (related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length})`);
+        if (isInCopilotMode && store.copilotMode.showSearchResults) {
+          console.log(`🎯 [Orchestrator-Copilot] Showing frozen results: ${orderedNodes.length} nodes`);
+        } else if (isInCopilotMode) {
+          console.log(`🎯 [Orchestrator-Copilot] Hiding results (Option key not held): ${orderedNodes.length} nodes`);
+        } else {
+          console.log(`🎯 [Orchestrator-EditMode] Final layout data - ordered nodes: ${orderedNodes.length} (related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length})`);
+        }
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);

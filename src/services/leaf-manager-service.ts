@@ -4,13 +4,18 @@ import { DreamSongBlock } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../dreamspace/DreamSongFullScreenView';
 import { generateYouTubeIframe, extractYouTubeVideoId } from '../utils/url-utils';
 import { parseLinkFileContent, isLinkFile } from '../utils/link-file-utils';
+import { useInterBrainStore } from '../store/interbrain-store';
+import { DREAMSPACE_VIEW_TYPE } from '../dreamspace/DreamspaceView';
 
 /**
  * Leaf Manager Service
- * 
- * Manages Obsidian leaves for split-screen DreamNode experiences.
- * Creates 50/50 split: DreamSpace on left, single right pane with stacked tabs.
- * All DreamSong/DreamTalk leaves appear as tabs in the right pane.
+ *
+ * Manages Obsidian leaves for DreamNode content viewing.
+ *
+ * Normal mode: Creates 50/50 split with DreamSpace on left, single right pane with stacked tabs.
+ * Copilot mode: Uses fullscreen overlays that cover the entire workspace for video call sharing.
+ *
+ * All DreamSong/DreamTalk leaves appear as tabs in the right pane (normal) or overlays (copilot).
  * Implements one-leaf-per-node strategy with proper cleanup.
  */
 export class LeafManagerService {
@@ -25,15 +30,55 @@ export class LeafManagerService {
   }
 
   /**
-   * Get or create a leaf in the right pane for DreamSong/DreamTalk leaves
+   * Find the dreamspace leaf in the workspace
+   */
+  private findDreamspaceLeaf(): WorkspaceLeaf | null {
+    const leaves = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
+    if (leaves.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.log(`🎯 [LeafManager] Found dreamspace leaf: ${(leaves[0] as any).id}`);
+      return leaves[0];
+    }
+    console.warn(`⚠️ [LeafManager] No dreamspace leaf found`);
+    return null;
+  }
+
+  /**
+   * Get or create a leaf for DreamSong/DreamTalk leaves
+   * In copilot mode: overlays specifically on dreamspace leaf (preserving transcript pane)
+   * In normal mode: uses right split pane with tabs
    */
   private getRightLeaf(): WorkspaceLeaf {
+    const store = useInterBrainStore.getState();
+
+    // Check if we're in copilot mode - overlay specifically on dreamspace leaf
+    if (store.copilotMode.isActive) {
+      console.log(`🎯 [LeafManager] Copilot mode active - finding dreamspace leaf for overlay`);
+
+      // Find the dreamspace leaf to overlay on (preserving transcript pane)
+      const dreamspaceLeaf = this.findDreamspaceLeaf();
+      if (dreamspaceLeaf) {
+        // Create overlay specifically on the dreamspace leaf
+        console.log(`🎯 [LeafManager] Creating overlay on dreamspace leaf`);
+        const overlayLeaf = this.app.workspace.createLeafInParent(dreamspaceLeaf.parent, -1);
+
+        // Set up simple refocus workaround: when overlay closes, refocus transcript
+        this.setupOverlayCloseHandler(overlayLeaf);
+
+        return overlayLeaf;
+      } else {
+        console.warn(`⚠️ [LeafManager] Could not find dreamspace leaf, falling back to generic overlay`);
+        return this.app.workspace.getLeaf(false);
+      }
+    }
+
+    // Normal mode - use split pane with tabs
     // If we don't have a right pane yet, create the initial split
     if (!this.rightPaneLeaf || !this.rightPaneLeaf.parent) {
       this.rightPaneLeaf = this.app.workspace.getLeaf('split', 'vertical');
       return this.rightPaneLeaf;
     }
-    
+
     // We have a right pane, so create a new tab within that specific pane group
     // First make sure the right pane is active, then create a tab
     this.app.workspace.setActiveLeaf(this.rightPaneLeaf);
@@ -566,6 +611,109 @@ export class LeafManagerService {
   }
 
   /**
+   * Set up handler to refocus transcript when overlay closes in copilot mode
+   * Simple workaround: clicking X button breaks focus, so we programmatically refocus
+   */
+  private setupOverlayCloseHandler(overlayLeaf: WorkspaceLeaf): void {
+    // Use workspace layout-change event to detect when this specific leaf closes
+    const handler = this.app.workspace.on('layout-change', () => {
+      const store = useInterBrainStore.getState();
+
+      // Check if we're still in copilot mode
+      if (!store.copilotMode.isActive) {
+        this.app.workspace.offref(eventRef);
+        return;
+      }
+
+      // Check if the overlay leaf still exists in the workspace
+      const allLeaves = this.app.workspace.getLeavesOfType(DREAMSONG_FULLSCREEN_VIEW_TYPE);
+      const leafStillExists = allLeaves.includes(overlayLeaf);
+
+      // If leaf was closed, trigger refocus and cleanup this listener
+      if (!leafStillExists) {
+        console.log(`🎯 [LeafManager] Overlay closed, refocusing transcript (simple workaround)`);
+
+        // Simple refocus: click the dreamspace to restore window focus, then let periodic check handle it
+        // Even simpler: just call setActiveLeaf on the transcript leaf
+        const transcriptLeaves = this.app.workspace.getLeavesOfType('markdown');
+        const transcriptLeaf = transcriptLeaves.find(leaf => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const file = (leaf.view as any).file;
+          return file && file.path && file.path.includes('transcript-');
+        });
+
+        if (transcriptLeaf) {
+          // Small delay to let Obsidian settle after close
+          setTimeout(() => {
+            // Try to focus the Electron window directly (more aggressive than window.focus())
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const electron = (window as any).require?.('electron');
+              if (electron?.remote?.getCurrentWindow) {
+                const currentWindow = electron.remote.getCurrentWindow();
+                currentWindow.focus();
+                console.log(`🪟 [LeafManager] Focused Electron window via remote`);
+              } else if (electron?.BrowserWindow) {
+                const currentWindow = electron.BrowserWindow.getFocusedWindow();
+                if (currentWindow) {
+                  currentWindow.focus();
+                  console.log(`🪟 [LeafManager] Focused Electron window via BrowserWindow`);
+                }
+              } else {
+                // Fallback to regular window.focus()
+                window.focus();
+                console.log(`🪟 [LeafManager] Focused window (fallback)`);
+              }
+            } catch {
+              // If electron access fails, fall back to window.focus()
+              window.focus();
+              console.log(`🪟 [LeafManager] Focused window (error fallback)`);
+            }
+
+            this.app.workspace.setActiveLeaf(transcriptLeaf, { focus: true });
+
+            // Also focus the editor
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const editor = (transcriptLeaf.view as any).editor;
+            if (editor) {
+              if (editor.focus) {
+                editor.focus();
+              }
+
+              // ULTRA HACK: Simulate a click on the editor to trigger whatever input state needs to activate
+              // This mimics what happens when user manually clicks
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const editorElement = (editor as any).cm?.dom;
+                if (editorElement) {
+                  // Dispatch a click event to the editor DOM element
+                  const clickEvent = new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window
+                  });
+                  editorElement.dispatchEvent(clickEvent);
+                  console.log(`🖱️ [LeafManager] Simulated click on editor element`);
+                }
+              } catch {
+                console.log(`⚠️ [LeafManager] Could not simulate click on editor`);
+              }
+            }
+
+            console.log(`✅ [LeafManager] Transcript refocused after overlay close`);
+          }, 100); // Increased delay to 100ms
+        }
+
+        // Cleanup this one-time handler
+        this.app.workspace.offref(eventRef);
+      }
+    });
+
+    const eventRef = handler;
+    console.log(`🎯 [LeafManager] Set up overlay close handler for transcript refocus`);
+  }
+
+  /**
    * Clean up service resources
    */
   async destroy(): Promise<void> {
@@ -575,7 +723,7 @@ export class LeafManagerService {
     this.dreamSongLeaves.clear();
     this.dreamTalkLeaves.clear();
     this.canvasLeaves.clear();
-    
+
     // Clean up right pane
     if (this.rightPaneLeaf) {
       await this.rightPaneLeaf.detach();

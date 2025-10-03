@@ -68,10 +68,10 @@ export class IndexingService implements IIndexingService {
     completed: 0,
     status: 'idle'
   };
-  
+
   private indexTimes: number[] = [];
   private embeddingService: IEmbeddingService;
-  
+
   constructor(embeddingService?: IEmbeddingService) {
     this.embeddingService = embeddingService || ollamaEmbeddingService;
     console.log('IndexingService: Initialized with embedding service');
@@ -85,7 +85,7 @@ export class IndexingService implements IIndexingService {
     
     try {
       // Simple text extraction for now
-      const textContent = this.extractTextContent(node);
+      const textContent = await this.extractTextContent(node);
       const wordCount = textContent.split(/\s+/).filter(w => w.length > 0).length;
       
       // Generate semantic embedding using Ollama
@@ -347,25 +347,45 @@ export class IndexingService implements IIndexingService {
   /**
    * Helper: Extract text content from a DreamNode
    */
-  private extractTextContent(node: DreamNode): string {
+  private async extractTextContent(node: DreamNode): Promise<string> {
     const parts: string[] = [node.name];
-    
+
     // Add DreamTalk filename if present
     if (node.dreamTalkMedia.length > 0) {
       parts.push(`Media: ${node.dreamTalkMedia[0].path}`);
     }
-    
+
     // Add DreamSong content if present
     if (node.dreamSongContent.length > 0) {
       // Convert canvas files to text representation
       parts.push(...node.dreamSongContent.map(canvas => `Canvas: ${canvas.path}`));
     }
-    
+
     // Add connection information
     if (node.liminalWebConnections.length > 0) {
       parts.push(`Connections: ${node.liminalWebConnections.join(', ')}`);
     }
-    
+
+    // Add README content if present and VaultService is available
+    try {
+      // Get VaultService from serviceManager when needed
+      const { serviceManager } = await import('../../../services/service-manager');
+      const vaultService = serviceManager.getVaultService();
+
+      if (vaultService) {
+        const readmePath = `${node.repoPath}/README.md`;
+        if (await vaultService.fileExists(readmePath)) {
+          const readmeContent = await vaultService.readFile(readmePath);
+          if (readmeContent.trim()) {
+            parts.push(`README: ${readmeContent}`);
+          }
+        }
+      }
+    } catch (error) {
+      // Silently skip if README doesn't exist or can't be read
+      console.debug(`IndexingService: Could not read README for ${node.name}:`, error);
+    }
+
     return parts.join(' ');
   }
   

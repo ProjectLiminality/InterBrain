@@ -38,12 +38,12 @@ export class DreamNodeService {
   }
 
   // Layout management methods
-  setLayout(layout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search'): void {
+  setLayout(layout: 'constellation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot'): void {
     const store = useInterBrainStore.getState();
     store.setSpatialLayout(layout);
   }
 
-  getCurrentLayout(): 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' {
+  getCurrentLayout(): 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' {
     return useInterBrainStore.getState().spatialLayout;
   }
 
