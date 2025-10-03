@@ -3,8 +3,13 @@ import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore } from '../../store/interbrain-store';
-import { VaultService } from '../../services/vault-service';
 import { setIcon } from 'obsidian';
+
+// Access Node.js fs module directly
+const fs = require('fs');
+const { promisify } = require('util');
+const readFileAsync = promisify(fs.readFile);
+const writeFileAsync = promisify(fs.writeFile);
 
 interface EditNode3DProps {
   position: [number, number, number];
@@ -129,9 +134,8 @@ export default function EditNode3D({
       }
 
       try {
-        const vaultService = new VaultService();
         const metadataPath = `${editingNode.repoPath}/.udd/metadata.json`;
-        const metadataContent = await vaultService.readFile(metadataPath);
+        const metadataContent = await readFileAsync(metadataPath, 'utf-8');
         const metadata = JSON.parse(metadataContent);
 
         setLocalEmail(metadata.email || '');
@@ -269,9 +273,8 @@ export default function EditNode3D({
       // Save contact info for dreamer nodes before calling onSave
       if (editingNode.type === 'dreamer' && (localEmail || localPhone)) {
         try {
-          const vaultService = new VaultService();
           const metadataPath = `${editingNode.repoPath}/.udd/metadata.json`;
-          const metadataContent = await vaultService.readFile(metadataPath);
+          const metadataContent = await readFileAsync(metadataPath, 'utf-8');
           const metadata = JSON.parse(metadataContent);
 
           // Update contact fields
@@ -279,7 +282,7 @@ export default function EditNode3D({
           metadata.phone = localPhone || undefined;
 
           // Write back to metadata file
-          await vaultService.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+          await writeFileAsync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
           console.log(`Saved contact info for ${editingNode.name}:`, { email: localEmail, phone: localPhone });
         } catch (error) {
           console.error('Failed to save contact info:', error);

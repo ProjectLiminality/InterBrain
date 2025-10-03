@@ -1,4 +1,4 @@
-import { Plugin, Notice } from 'obsidian';
+import { Plugin } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { FaceTimeService } from '../services/facetime-service';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -71,7 +71,7 @@ export function registerFaceTimeCommands(
         await faceTimeService.startCall(contact);
 
         // Automatically switch to copilot mode
-        store.setMode('copilot');
+        store.setSpatialLayout('copilot');
 
         uiService.showSuccess(`FaceTime call started with ${selectedNode.name} - Copilot mode active`);
       } catch (error) {
@@ -122,7 +122,7 @@ export function registerFaceTimeCommands(
 
           document.body.appendChild(modal);
 
-          const input = modal.querySelector('#contact-input') as HTMLInputElement;
+          const input = modal.querySelector('#contact-input') as globalThis.HTMLInputElement;
           const saveBtn = modal.querySelector('#save-btn');
           const cancelBtn = modal.querySelector('#cancel-btn');
 
@@ -214,8 +214,8 @@ export function registerFaceTimeCommands(
         await faceTimeService.endCall();
 
         // Exit copilot mode if active
-        if (store.mode === 'copilot') {
-          store.setMode('liminal-web');
+        if (store.spatialLayout === 'copilot') {
+          store.setSpatialLayout('liminal-web');
         }
 
         uiService.showSuccess('FaceTime call ended - Copilot mode deactivated');
