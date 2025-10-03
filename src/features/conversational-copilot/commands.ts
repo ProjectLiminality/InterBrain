@@ -3,6 +3,7 @@ import { UIService } from '../../services/ui-service';
 import { useInterBrainStore } from '../../store/interbrain-store';
 import { serviceManager } from '../../services/service-manager';
 import { getTranscriptionService } from './services/transcription-service';
+import { getConversationRecordingService } from './services/conversation-recording-service';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -71,6 +72,11 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const transcriptionService = getTranscriptionService();
         await transcriptionService.startTranscription(freshNode);
 
+        // Start conversation recording
+        const recordingService = getConversationRecordingService();
+        recordingService.startRecording(freshNode);
+        console.log(`🎙️ [Copilot] Started recording invocations for conversation with ${freshNode.name}`);
+
         uiService.showSuccess(`Conversation mode activated with "${freshNode.name}". Start dictating in the opened file.`);
 
       } catch (error) {
@@ -103,6 +109,13 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         // Stop transcription service first
         const transcriptionService = getTranscriptionService();
         await transcriptionService.stopTranscription();
+
+        // Stop conversation recording and get invocations
+        const recordingService = getConversationRecordingService();
+        const invocations = recordingService.stopRecording();
+        console.log(`🎙️ [Copilot] Stopped recording - captured ${invocations.length} invocations`);
+
+        // TODO: Export conversation summary with invocations (Feature #331 integration point)
 
         // Exit copilot mode (this processes shared nodes and sets layout back to liminal-web)
         store.exitCopilotMode();

@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
+import { getConversationRecordingService } from '../features/conversational-copilot/services/conversation-recording-service';
 
 /**
  * Full-screen commands for DreamTalk and DreamSong experiences
@@ -67,7 +68,19 @@ export function registerFullScreenCommands(
         }
         
         console.log(`Opening DreamSong full-screen for: ${selectedNode.name}`);
-        
+
+        // Record invocation if in copilot mode
+        if (store.copilotMode.isActive) {
+          try {
+            const recordingService = getConversationRecordingService();
+            await recordingService.recordInvocation(selectedNode);
+            console.log(`🎙️ [DreamSong] Recorded invocation for conversation export`);
+          } catch (error) {
+            console.warn(`⚠️ [DreamSong] Failed to record invocation:`, error);
+            // Don't block the fullscreen opening if recording fails
+          }
+        }
+
         // Get leaf manager service
         const leafManager = serviceManager.getLeafManagerService();
         if (!leafManager) {
