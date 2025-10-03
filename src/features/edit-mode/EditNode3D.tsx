@@ -600,14 +600,14 @@ export default function EditNode3D({
             <div
               style={{
                 position: 'absolute',
-                top: `${nodeSize + (validationErrors.title ? 80 : 60)}px`,
+                top: `${nodeSize + (validationErrors.title ? 90 : 70)}px`,
                 left: '50%',
                 transform: 'translateX(-50%)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px',
+                gap: '8px',
                 opacity: animatedUIOpacity,
-                width: '200px'
+                width: '300px'
               }}
             >
               <input
@@ -616,12 +616,12 @@ export default function EditNode3D({
                 onChange={handleEmailChange}
                 placeholder="Email (optional)"
                 style={{
-                  padding: '6px 10px',
+                  padding: '9px 15px',
                   background: 'rgba(0,0,0,0.5)',
                   border: '1px solid rgba(255,255,255,0.3)',
                   borderRadius: '4px',
                   color: 'white',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
                   outline: 'none'
@@ -635,12 +635,12 @@ export default function EditNode3D({
                 onChange={handlePhoneChange}
                 placeholder="Phone (optional)"
                 style={{
-                  padding: '6px 10px',
+                  padding: '9px 15px',
                   background: 'rgba(0,0,0,0.5)',
                   border: '1px solid rgba(255,255,255,0.3)',
                   borderRadius: '4px',
                   color: 'white',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
                   outline: 'none'
@@ -655,7 +655,7 @@ export default function EditNode3D({
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 200 : 180) : (validationErrors.title ? 120 : 100))}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 220 : 200) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',

@@ -70,10 +70,10 @@ export function registerFaceTimeCommands(
         // Start the FaceTime call
         await faceTimeService.startCall(contact);
 
-        // Automatically switch to copilot mode with the selected person as conversation partner
-        store.startCopilotMode(selectedNode);
+        // Trigger the full Start Conversation Mode command (which handles copilot mode + transcription)
+        (plugin.app as any).commands.executeCommandById('interbrain:start-conversation-mode');
 
-        uiService.showSuccess(`FaceTime call started with ${selectedNode.name} - Copilot mode active`);
+        uiService.showSuccess(`FaceTime call started with ${selectedNode.name}`);
       } catch (error) {
         console.error('Start Video Call command failed:', error);
         uiService.showError(
@@ -213,12 +213,12 @@ export function registerFaceTimeCommands(
         // End the FaceTime call
         await faceTimeService.endCall();
 
-        // Exit copilot mode if active
+        // Trigger the full End Conversation Mode command (which handles copilot exit + cleanup)
         if (store.spatialLayout === 'copilot') {
-          store.exitCopilotMode();
+          (plugin.app as any).commands.executeCommandById('interbrain:end-conversation-mode');
         }
 
-        uiService.showSuccess('FaceTime call ended - Copilot mode deactivated');
+        uiService.showSuccess('FaceTime call ended');
       } catch (error) {
         console.error('End Video Call command failed:', error);
         uiService.showError(
