@@ -18,10 +18,14 @@ export class FaceTimeService {
   async isFaceTimeAvailable(): Promise<boolean> {
     try {
       // Check if we're on macOS and FaceTime app exists
-      const { stdout } = await execAsync('osascript -e "exists application \\"FaceTime\\""');
+      const { stdout, stderr } = await execAsync('osascript -e "exists application \\"FaceTime\\""');
+      console.log('[FaceTimeService] Availability check stdout:', JSON.stringify(stdout));
+      console.log('[FaceTimeService] Availability check stderr:', JSON.stringify(stderr));
+      console.log('[FaceTimeService] Trimmed stdout:', JSON.stringify(stdout.trim()));
+      console.log('[FaceTimeService] Is available?', stdout.trim() === 'true');
       return stdout.trim() === 'true';
     } catch (error) {
-      console.error('FaceTime availability check failed:', error);
+      console.error('[FaceTimeService] Availability check failed with error:', error);
       return false;
     }
   }
