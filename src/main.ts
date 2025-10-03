@@ -28,6 +28,7 @@ import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
+import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -57,6 +58,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize transcription service for copilot mode
     initializeTranscriptionService(this.app);
+
+    // Initialize conversation recording service for invocation tracking
+    initializeConversationRecordingService(this.app);
     
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
