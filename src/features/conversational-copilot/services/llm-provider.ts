@@ -5,6 +5,8 @@
  * Currently supports Claude API, designed for easy OpenRouter/open-source model integration.
  */
 
+import { requestUrl } from 'obsidian';
+
 export interface LLMMessage {
 	role: 'user' | 'assistant' | 'system';
 	content: string;
@@ -74,22 +76,25 @@ export class ClaudeProvider implements LLMProvider {
 		};
 
 		try {
-			const response = await fetch(this.apiEndpoint, {
+			// Use Obsidian's requestUrl to avoid CORS issues
+			const response = await requestUrl({
+				url: this.apiEndpoint,
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'x-api-key': this.apiKey,
 					'anthropic-version': '2023-06-01'
 				},
-				body: JSON.stringify(requestBody)
+				body: JSON.stringify(requestBody),
+				throw: false // Don't throw on error status codes
 			});
 
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
+			if (response.status !== 200) {
+				const errorData = response.json || {};
 				throw new Error(`Claude API error: ${response.status} - ${JSON.stringify(errorData)}`);
 			}
 
-			const data = await response.json();
+			const data = response.json;
 
 			return {
 				content: data.content[0].text,
