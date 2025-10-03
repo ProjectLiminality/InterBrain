@@ -34,6 +34,8 @@ export default function EditNode3D({
   
   // Local UI state for immediate responsiveness
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
+  const [localEmail, setLocalEmail] = useState('');
+  const [localPhone, setLocalPhone] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -115,6 +117,20 @@ export default function EditNode3D({
       setLocalTitle(editingNode.name);
     }
   }, [editingNode?.name]);
+
+  // Load contact info from editingNode (for dreamer nodes only)
+  // Only reload when node ID changes, not when email/phone fields update
+  useEffect(() => {
+    if (!editingNode || editingNode.type !== 'dreamer') {
+      setLocalEmail('');
+      setLocalPhone('');
+      return;
+    }
+
+    // Load from the DreamNode which is already populated by the service layer
+    setLocalEmail(editingNode.email || '');
+    setLocalPhone(editingNode.phone || '');
+  }, [editingNode?.id, editingNode?.type]); // Only depend on ID and type, not the whole object
   
   if (!editingNode) {
     return null; // Should not render if no node is being edited
@@ -169,14 +185,26 @@ export default function EditNode3D({
   
   const handleTypeChange = (type: 'dream' | 'dreamer') => {
     updateEditingNodeMetadata({ type });
-    
+
     // TODO: Add warning about type change affecting relationships
     console.warn('Type change in edit mode - relationship implications need to be handled');
-    
+
     // Refocus text input after type change to maintain persistent focus
     globalThis.setTimeout(() => {
       titleInputRef.current?.focus();
     }, 0);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const email = e.target.value;
+    setLocalEmail(email);
+    updateEditingNodeMetadata({ email });
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const phone = e.target.value;
+    setLocalPhone(phone);
+    updateEditingNodeMetadata({ phone });
   };
   
   // File handling (same patterns as ProtoNode3D)
@@ -222,17 +250,17 @@ export default function EditNode3D({
     }
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (validateTitle(localTitle)) {
       setIsAnimating(true);
-      
+
       // Start save animation (fading out UI controls)
       animationStartTime.current = Date.now();
-      
+
       // Call onSave to trigger data persistence and liminal web transition
-      // The parent component will handle the spatial layout change
+      // The parent component (EditModeOverlay) will handle saving all metadata including contact info
       onSave();
-      
+
       // The animation continues running to fade out the UI controls
       // EditModeOverlay will handle exit after successful save
       globalThis.setTimeout(() => {
@@ -513,12 +541,74 @@ export default function EditNode3D({
               Dreamer
             </button>
           </div>
-          
+
+          {/* Contact Info Fields (only for dreamer nodes) */}
+          {editingNode.type === 'dreamer' && (
+            <div
+              style={{
+                position: 'absolute',
+                top: `${nodeSize + (validationErrors.title ? 100 : 80)}px`,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                opacity: animatedUIOpacity,
+                width: '300px'
+              }}
+            >
+              <input
+                type="email"
+                value={localEmail}
+                onChange={handleEmailChange}
+                placeholder="Email (optional)"
+                className="contact-field-email"
+                style={{
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '24px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="tel"
+                value={localPhone}
+                onChange={handlePhoneChange}
+                placeholder="Phone (optional)"
+                className="contact-field-phone"
+                style={{
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '24px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (validationErrors.title ? 120 : 100)}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 240 : 220) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',

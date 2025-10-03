@@ -63,11 +63,18 @@ export default function EditModeOverlay() {
       }
       
       // 2. Save metadata changes (let service layer handle if no changes)
-      await dreamNodeService.update(editMode.editingNode.id, {
+      const updates: Partial<DreamNode> = {
         name: editMode.editingNode.name,
         type: editMode.editingNode.type
-        // Add other metadata fields as needed
-      });
+      };
+
+      // Include contact info only for dreamer-type nodes
+      if (editMode.editingNode.type === 'dreamer') {
+        updates.email = editMode.editingNode.email;
+        updates.phone = editMode.editingNode.phone;
+      }
+
+      await dreamNodeService.update(editMode.editingNode.id, updates);
       
       // 3. Save relationship changes through service layer
       await dreamNodeService.updateRelationships(

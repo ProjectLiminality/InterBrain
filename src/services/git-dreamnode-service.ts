@@ -120,7 +120,9 @@ export class GitDreamNodeService {
       liminalWebConnections: [],
       repoPath: repoName, // Relative to vault
       hasUnsavedChanges: false,
-      gitStatus: await this.checkGitStatus(repoPath)
+      gitStatus: await this.checkGitStatus(repoPath),
+      email: undefined,
+      phone: undefined
     };
     
     // Update store immediately for snappy UI
@@ -210,9 +212,9 @@ export class GitDreamNodeService {
     });
     
     // If metadata changed, update .udd file and auto-commit
-    if (changes.name || changes.type || changes.dreamTalkMedia) {
+    if (changes.name || changes.type || changes.dreamTalkMedia || changes.email !== undefined || changes.phone !== undefined) {
       await this.updateUDDFile(updatedNode);
-      
+
       // Auto-commit changes if enabled (only for actual file changes, not position)
       await this.autoCommitChanges(updatedNode, changes);
     }
@@ -500,7 +502,9 @@ export class GitDreamNodeService {
       dreamSongContent: [],
       liminalWebConnections: udd.liminalWebRelationships || [],
       repoPath: repoName,
-      hasUnsavedChanges: false
+      hasUnsavedChanges: false,
+      email: udd.email,
+      phone: udd.phone
     };
     
     // Add to store
@@ -529,9 +533,11 @@ export class GitDreamNodeService {
     const node = { ...existingData.node };
     
     // Check metadata changes
-    if (node.name !== udd.title || node.type !== udd.type) {
+    if (node.name !== udd.title || node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone) {
       node.name = udd.title;
       node.type = udd.type;
+      node.email = udd.email;
+      node.phone = udd.phone;
       updated = true;
     }
     
@@ -579,7 +585,7 @@ export class GitDreamNodeService {
    */
   private async updateUDDFile(node: DreamNode): Promise<void> {
     const uddPath = path.join(this.vaultPath, node.repoPath, '.udd');
-    
+
     const udd: UDDFile = {
       uuid: node.id,
       title: node.name,
@@ -589,7 +595,13 @@ export class GitDreamNodeService {
       submodules: [],
       supermodules: []
     };
-    
+
+    // Include contact fields only for dreamer nodes
+    if (node.type === 'dreamer') {
+      if (node.email) udd.email = node.email;
+      if (node.phone) udd.phone = node.phone;
+    }
+
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
   }
   
