@@ -1,5 +1,4 @@
 import { App, Notice, Plugin } from 'obsidian';
-import { serviceManager } from './service-manager';
 
 /**
  * URI Handler Service
