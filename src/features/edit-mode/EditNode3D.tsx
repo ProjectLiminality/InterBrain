@@ -600,12 +600,12 @@ export default function EditNode3D({
             <div
               style={{
                 position: 'absolute',
-                top: `${nodeSize + (validationErrors.title ? 90 : 70)}px`,
+                top: `${nodeSize + (validationErrors.title ? 100 : 80)}px`,
                 left: '50%',
                 transform: 'translateX(-50%)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px',
+                gap: '10px',
                 opacity: animatedUIOpacity,
                 width: '300px'
               }}
@@ -616,15 +616,17 @@ export default function EditNode3D({
                 onChange={handleEmailChange}
                 placeholder="Email (optional)"
                 style={{
-                  padding: '9px 15px',
-                  background: 'rgba(0,0,0,0.5)',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  borderRadius: '4px',
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '6px',
                   color: 'white',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
-                  outline: 'none'
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box'
                 }}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -635,15 +637,17 @@ export default function EditNode3D({
                 onChange={handlePhoneChange}
                 placeholder="Phone (optional)"
                 style={{
-                  padding: '9px 15px',
-                  background: 'rgba(0,0,0,0.5)',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  borderRadius: '4px',
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '6px',
                   color: 'white',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
-                  outline: 'none'
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box'
                 }}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -655,7 +659,7 @@ export default function EditNode3D({
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 220 : 200) : (validationErrors.title ? 120 : 100))}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 240 : 220) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
