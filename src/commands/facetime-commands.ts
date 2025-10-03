@@ -70,8 +70,8 @@ export function registerFaceTimeCommands(
         // Start the FaceTime call
         await faceTimeService.startCall(contact);
 
-        // Automatically switch to copilot mode
-        store.setSpatialLayout('copilot');
+        // Automatically switch to copilot mode with the selected person as conversation partner
+        store.startCopilotMode(selectedNode);
 
         uiService.showSuccess(`FaceTime call started with ${selectedNode.name} - Copilot mode active`);
       } catch (error) {
@@ -215,7 +215,7 @@ export function registerFaceTimeCommands(
 
         // Exit copilot mode if active
         if (store.spatialLayout === 'copilot') {
-          store.setSpatialLayout('liminal-web');
+          store.exitCopilotMode();
         }
 
         uiService.showSuccess('FaceTime call ended - Copilot mode deactivated');

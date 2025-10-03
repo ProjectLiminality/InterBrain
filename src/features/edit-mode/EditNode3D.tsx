@@ -7,9 +7,24 @@ import { setIcon } from 'obsidian';
 
 // Access Node.js fs module directly
 const fs = require('fs');
+const path = require('path');
 const { promisify } = require('util');
 const readFileAsync = promisify(fs.readFile);
 const writeFileAsync = promisify(fs.writeFile);
+
+// Helper to get vault path from app
+function getVaultPath(): string {
+  const app = (window as any).app;
+  if (!app) return '';
+
+  const adapter = app.vault.adapter as { path?: string; basePath?: string };
+  if (typeof adapter.path === 'string') {
+    return adapter.path;
+  } else if (typeof adapter.basePath === 'string') {
+    return adapter.basePath;
+  }
+  return '';
+}
 
 interface EditNode3DProps {
   position: [number, number, number];
@@ -134,12 +149,15 @@ export default function EditNode3D({
       }
 
       try {
-        const metadataPath = `${editingNode.repoPath}/.udd`;
+        const vaultPath = getVaultPath();
+        const metadataPath = path.join(vaultPath, editingNode.repoPath, '.udd');
+        console.log('[EditNode3D] Loading contact info from:', metadataPath);
         const metadataContent = await readFileAsync(metadataPath, 'utf-8');
         const metadata = JSON.parse(metadataContent);
 
         setLocalEmail(metadata.email || '');
         setLocalPhone(metadata.phone || '');
+        console.log('[EditNode3D] Loaded contact info:', { email: metadata.email, phone: metadata.phone });
       } catch (error) {
         console.error('Failed to load contact info:', error);
         // Silently fail - fields will remain empty
@@ -273,7 +291,9 @@ export default function EditNode3D({
       // Save contact info for dreamer nodes before calling onSave
       if (editingNode.type === 'dreamer' && (localEmail || localPhone)) {
         try {
-          const metadataPath = `${editingNode.repoPath}/.udd`;
+          const vaultPath = getVaultPath();
+          const metadataPath = path.join(vaultPath, editingNode.repoPath, '.udd');
+          console.log('[EditNode3D] Saving contact info to:', metadataPath);
           const metadataContent = await readFileAsync(metadataPath, 'utf-8');
           const metadata = JSON.parse(metadataContent);
 
@@ -283,7 +303,7 @@ export default function EditNode3D({
 
           // Write back to metadata file
           await writeFileAsync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
-          console.log(`Saved contact info for ${editingNode.name}:`, { email: localEmail, phone: localPhone });
+          console.log(`[EditNode3D] Saved contact info for ${editingNode.name}:`, { email: localEmail, phone: localPhone });
         } catch (error) {
           console.error('Failed to save contact info:', error);
           // Continue with save anyway - contact info is optional
