@@ -35,7 +35,8 @@ export class LeafManagerService {
   private findDreamspaceLeaf(): WorkspaceLeaf | null {
     const leaves = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
     if (leaves.length > 0) {
-      console.log(`🎯 [LeafManager] Found dreamspace leaf: ${leaves[0].id}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.log(`🎯 [LeafManager] Found dreamspace leaf: ${(leaves[0] as any).id}`);
       return leaves[0];
     }
     console.warn(`⚠️ [LeafManager] No dreamspace leaf found`);

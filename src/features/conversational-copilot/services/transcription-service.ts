@@ -1,4 +1,4 @@
-import { App, TFile, Notice, WorkspaceItem, WorkspaceSplit } from 'obsidian';
+import { App, TFile, Notice, WorkspaceLeaf, EventRef } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { semanticSearchService } from '../../semantic-search/services/semantic-search-service';
 import { useInterBrainStore } from '../../../store/interbrain-store';
@@ -21,6 +21,10 @@ export class TranscriptionService {
   private isSearchCooldownActive: boolean = false; // Throttling cooldown state
   private hasSearchedOnce: boolean = false; // Track first search for layout fix
   private refocusInterval: number | null = null; // Auto-refocus timer
+  private transcriptLeaf: WorkspaceLeaf | null = null; // Reference to transcript leaf
+  private activeLeafListener: EventRef | null = null; // Active leaf change listener
+  private layoutChangeListener: EventRef | null = null; // Layout change listener for X button
+  private windowFocusListener: (() => void) | null = null; // Window focus listener for Electron focus issues
 
   constructor(app: App) {
     this.app = app;
@@ -129,8 +133,11 @@ export class TranscriptionService {
       const leaf = this.app.workspace.getLeaf('split', 'horizontal');
       await leaf.openFile(this.transcriptionFile);
 
+      // Store reference to transcript leaf for refocus logic
+      this.transcriptLeaf = leaf;
+
       // Focus the leaf and position cursor at end of file
-      this.app.workspace.setActiveLeaf(leaf);
+      this.app.workspace.setActiveLeaf(leaf, { focus: true });
 
       // Wait a moment for the file to fully load, then position cursor
       setTimeout(() => {
@@ -164,7 +171,13 @@ export class TranscriptionService {
       // Set up file monitoring
       this.setupFileMonitoring();
 
-      // Start auto-refocus to maintain cursor position for dictation
+      // Set up active leaf listener for smart refocus
+      this.setupActiveLeafListener();
+
+      // Set up window focus listener for Electron focus issues (windowed mode)
+      this.setupWindowFocusListener();
+
+      // Start auto-refocus timer as fallback
       this.startAutoRefocus();
 
       console.log(`📝 [TranscriptionService] Created transcription file: ${filePath}`);
@@ -194,8 +207,32 @@ export class TranscriptionService {
         this.searchTimeout = null;
       }
 
-      // Stop auto-refocus
+      // Stop auto-refocus timer
       this.stopAutoRefocus();
+
+      // Remove active leaf listener
+      if (this.activeLeafListener) {
+        this.app.workspace.offref(this.activeLeafListener);
+        this.activeLeafListener = null;
+        console.log(`🎯 [TranscriptionService] Active leaf listener removed`);
+      }
+
+      // Remove layout change listener
+      if (this.layoutChangeListener) {
+        this.app.workspace.offref(this.layoutChangeListener);
+        this.layoutChangeListener = null;
+        console.log(`🎯 [TranscriptionService] Layout change listener removed`);
+      }
+
+      // Remove window focus listener
+      if (this.windowFocusListener) {
+        window.removeEventListener('focus', this.windowFocusListener);
+        this.windowFocusListener = null;
+        console.log(`🎯 [TranscriptionService] Window focus listener removed`);
+      }
+
+      // Clear leaf reference
+      this.transcriptLeaf = null;
 
       // Close and delete transcription file
       if (this.transcriptionFile) {
@@ -420,12 +457,47 @@ export class TranscriptionService {
    */
   private startAutoRefocus(): void {
     if (this.refocusInterval) {
-      clearInterval(this.refocusInterval);
+      window.clearInterval(this.refocusInterval);
     }
 
-    // Every 500ms, ensure cursor stays at end of transcription file
+    // Every 500ms, ensure transcript leaf is active and cursor is at end
     this.refocusInterval = window.setInterval(() => {
-      if (this.transcriptionFile) {
+      const store = useInterBrainStore.getState();
+
+      // Only in copilot mode
+      if (!store.copilotMode.isActive) {
+        return;
+      }
+
+      // Check if transcript leaf is the active leaf
+      if (this.transcriptLeaf && this.app.workspace.activeLeaf !== this.transcriptLeaf) {
+        console.log(`🎯 [TranscriptionService] Transcript not active, refocusing...`);
+
+        // FIRST: Focus the Obsidian window itself (critical for Electron focus hierarchy)
+        window.focus();
+
+        // THEN: Small delay for window focus to settle before focusing editor
+        setTimeout(() => {
+          if (!this.transcriptLeaf) return;
+
+          // Restore focus to transcript leaf
+          this.app.workspace.setActiveLeaf(this.transcriptLeaf, { focus: true });
+
+          // Also reposition cursor
+          const view = this.transcriptLeaf.view as any;
+          if (view && 'editor' in view && view.editor) {
+            const editor = view.editor;
+            const lastLine = editor.lastLine();
+            const lastLineLength = editor.getLine(lastLine).length;
+            editor.setCursor(lastLine, lastLineLength);
+            if (editor.focus) {
+              editor.focus();
+            }
+            console.log(`✅ [TranscriptionService] Window focused, transcript refocused, cursor repositioned`);
+          }
+        }, 50); // 50ms delay for window focus to take effect
+      } else if (this.transcriptionFile) {
+        // Already active, just maintain cursor position
         this.repositionCursor();
       }
     }, 500);
@@ -438,7 +510,7 @@ export class TranscriptionService {
    */
   private stopAutoRefocus(): void {
     if (this.refocusInterval) {
-      clearInterval(this.refocusInterval);
+      window.clearInterval(this.refocusInterval);
       this.refocusInterval = null;
       console.log(`🎯 [TranscriptionService] Auto-refocus stopped`);
     }
@@ -470,16 +542,21 @@ export class TranscriptionService {
 
   /**
    * Resize bottom pane to minimal height using proper Obsidian API
+   * NOTE: Uses undocumented Obsidian internal APIs - cast to any to bypass TypeScript
    */
   private resizeBottomPaneProper(leaf: WorkspaceLeaf): void {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const leafAny = leaf as any;
+
       console.log(`🔍 [TranscriptionService] Starting resize debug - leaf:`, leaf);
-      console.log(`🔍 [TranscriptionService] Leaf parent:`, leaf.parent);
-      console.log(`🔍 [TranscriptionService] Leaf parent type:`, leaf.parent?.type);
-      console.log(`🔍 [TranscriptionService] Leaf parent constructor:`, leaf.parent?.constructor?.name);
+      console.log(`🔍 [TranscriptionService] Leaf parent:`, leafAny.parent);
+      console.log(`🔍 [TranscriptionService] Leaf parent type:`, leafAny.parent?.type);
+      console.log(`🔍 [TranscriptionService] Leaf parent constructor:`, leafAny.parent?.constructor?.name);
 
       // Find the split that contains this leaf
-      const split = leaf.parent as WorkspaceSplit;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const split = leafAny.parent as any;
 
       if (!split) {
         console.error(`❌ [TranscriptionService] No parent found for leaf`);
@@ -497,8 +574,10 @@ export class TranscriptionService {
       }
 
       // Get the top and bottom children
-      const topChild = split.children[0] as WorkspaceItem;
-      const bottomChild = split.children[1] as WorkspaceItem;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const topChild = split.children[0] as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bottomChild = split.children[1] as any;
 
       console.log(`🔍 [TranscriptionService] Top child:`, topChild);
       console.log(`🔍 [TranscriptionService] Top child type:`, topChild?.type);
@@ -512,7 +591,7 @@ export class TranscriptionService {
 
       // Check if our leaf is the bottom child (transcript)
       const isBottomLeaf = bottomChild.children &&
-        bottomChild.children.some(child => child === leaf);
+        bottomChild.children.some((child: any) => child === leaf);
 
       console.log(`🔍 [TranscriptionService] Is bottom leaf:`, isBottomLeaf);
       console.log(`🔍 [TranscriptionService] Bottom child children:`, bottomChild.children);
@@ -535,7 +614,8 @@ export class TranscriptionService {
 
         // Trigger workspace resize to apply changes
         console.log(`🔄 [TranscriptionService] Calling requestResize...`);
-        this.app.workspace.requestResize();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (this.app.workspace as any).requestResize();
 
         console.log(`✅ [TranscriptionService] Resize operation completed`);
 
@@ -552,19 +632,21 @@ export class TranscriptionService {
 
     } catch (error) {
       console.error('❌ [TranscriptionService] Failed to resize bottom pane properly:', error);
-      console.error('❌ [TranscriptionService] Error details:', error);
-      console.error('❌ [TranscriptionService] Stack trace:', error.stack);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.error('❌ [TranscriptionService] Error details:', (error as any).stack);
     }
   }
 
   /**
    * Fallback resize method using DOM manipulation if setDimension doesn't work
+   * NOTE: Uses undocumented Obsidian internal DOM APIs - cast to any to bypass TypeScript
    */
   private resizeBottomPaneFallback(leaf: WorkspaceLeaf): void {
     try {
       console.log(`🔄 [TranscriptionService] Attempting fallback resize method`);
 
-      const leafEl = leaf.containerEl;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const leafEl = (leaf as any).containerEl;
       if (!leafEl) {
         console.warn(`⚠️ [TranscriptionService] Could not find leaf container element for fallback`);
         return;
@@ -624,6 +706,164 @@ export class TranscriptionService {
     } catch (error) {
       console.error('❌ [TranscriptionService] Fallback resize failed:', error);
     }
+  }
+
+  /**
+   * Set up workspace event listeners for smart refocus
+   */
+  private setupActiveLeafListener(): void {
+    // Listen to active leaf changes (switching between panes)
+    this.activeLeafListener = this.app.workspace.on(
+      'active-leaf-change',
+      (leaf) => this.handleActiveLeafChange(leaf)
+    );
+    console.log(`🎯 [TranscriptionService] Active leaf change listener registered`);
+
+    // Listen to layout changes (for X button / pane closure detection)
+    this.layoutChangeListener = this.app.workspace.on(
+      'layout-change',
+      () => this.handleLayoutChange()
+    );
+    console.log(`🎯 [TranscriptionService] Layout change listener registered`);
+  }
+
+  /**
+   * Handle active leaf changes - refocus transcript when appropriate
+   */
+  private handleActiveLeafChange(newLeaf: WorkspaceLeaf | null): void {
+    const store = useInterBrainStore.getState();
+
+    // Only auto-refocus if in copilot mode
+    if (!store.copilotMode.isActive) {
+      return;
+    }
+
+    // If focus moved away from transcript OR newLeaf is null (pane closed), schedule refocus
+    if ((newLeaf !== this.transcriptLeaf || newLeaf === null) && this.transcriptLeaf) {
+      console.log(`🎯 [TranscriptionService] Focus moved away from transcript (newLeaf: ${newLeaf ? 'exists' : 'null'}), scheduling refocus`);
+
+      // Small delay to let Obsidian settle and user interactions complete
+      setTimeout(() => {
+        // Double-check we're still in copilot mode before refocusing
+        const currentStore = useInterBrainStore.getState();
+        if (currentStore.copilotMode.isActive) {
+          this.refocusTranscriptLeaf();
+        }
+      }, 150);
+    }
+  }
+
+  /**
+   * Handle layout changes - specifically for X button / pane closure detection
+   */
+  private handleLayoutChange(): void {
+    const store = useInterBrainStore.getState();
+
+    // Only auto-refocus if in copilot mode
+    if (!store.copilotMode.isActive) {
+      return;
+    }
+
+    // Check if transcript leaf still exists
+    if (!this.transcriptLeaf) {
+      return;
+    }
+
+    // Check if current active leaf is NOT the transcript
+    const activeLeaf = this.app.workspace.activeLeaf;
+
+    if (activeLeaf !== this.transcriptLeaf) {
+      console.log(`🎯 [TranscriptionService] Layout changed (possibly X button), refocusing transcript`);
+
+      // Small delay to let Obsidian settle after pane closure
+      setTimeout(() => {
+        // Double-check we're still in copilot mode before refocusing
+        const currentStore = useInterBrainStore.getState();
+        if (currentStore.copilotMode.isActive) {
+          this.refocusTranscriptLeaf();
+        }
+      }, 150);
+    }
+  }
+
+  /**
+   * Actively refocus the transcript leaf with focus management
+   */
+  private refocusTranscriptLeaf(): void {
+    if (!this.transcriptLeaf) {
+      console.warn(`⚠️ [TranscriptionService] No transcript leaf reference to refocus`);
+      return;
+    }
+
+    try {
+      console.log(`🎯 [TranscriptionService] Actively refocusing transcript leaf (event-driven)`);
+
+      // FIRST: Focus the Obsidian window itself
+      window.focus();
+
+      // THEN: Small delay for window focus to settle
+      setTimeout(() => {
+        if (!this.transcriptLeaf) return;
+
+        // Restore focus to transcript leaf
+        this.app.workspace.setActiveLeaf(this.transcriptLeaf, { focus: true });
+
+        // Also reposition cursor at end and focus editor
+        const view = this.transcriptLeaf.view as any;
+        if (view && 'editor' in view && view.editor) {
+          const editor = view.editor;
+          const lastLine = editor.lastLine();
+          const lastLineLength = editor.getLine(lastLine).length;
+          editor.setCursor(lastLine, lastLineLength);
+
+          // Ensure editor has focus for dictation
+          if (editor.focus) {
+            editor.focus();
+          }
+
+          console.log(`✅ [TranscriptionService] Window focused, transcript refocused, cursor repositioned`);
+        } else {
+          console.warn(`⚠️ [TranscriptionService] Could not access editor in transcript leaf`);
+        }
+      }, 50); // 50ms delay for window focus to take effect
+
+    } catch (error) {
+      console.error('❌ [TranscriptionService] Failed to refocus transcript leaf:', error);
+    }
+  }
+
+  /**
+   * Set up window focus listener to handle Electron focus issues in windowed mode
+   *
+   * In windowed mode (non-fullscreen), clicking X button to close DreamSong overlay
+   * can cause the Electron BrowserWindow to lose focus. When window regains focus,
+   * we immediately refocus the transcript.
+   */
+  private setupWindowFocusListener(): void {
+    this.windowFocusListener = () => {
+      const store = useInterBrainStore.getState();
+
+      // Only in copilot mode
+      if (!store.copilotMode.isActive) {
+        return;
+      }
+
+      // Only if transcript leaf exists and is NOT currently active
+      if (this.transcriptLeaf && this.app.workspace.activeLeaf !== this.transcriptLeaf) {
+        console.log(`🪟 [TranscriptionService] Window regained focus, refocusing transcript`);
+
+        // Small delay to let Electron window focus settle
+        setTimeout(() => {
+          const currentStore = useInterBrainStore.getState();
+          if (currentStore.copilotMode.isActive) {
+            this.refocusTranscriptLeaf();
+          }
+        }, 100);
+      }
+    };
+
+    window.addEventListener('focus', this.windowFocusListener);
+    console.log(`🪟 [TranscriptionService] Window focus listener registered (for Electron windowed mode fix)`);
   }
 }
 

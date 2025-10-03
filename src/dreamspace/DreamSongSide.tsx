@@ -30,7 +30,7 @@ interface DreamSongSideProps {
 export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   dreamNode,
   isHovered,
-  isEditModeActive,
+  isEditModeActive: _isEditModeActive,
   isPendingRelationship,
   shouldShowFlipButton,
   shouldShowFullscreenButton,

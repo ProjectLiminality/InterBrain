@@ -25,7 +25,7 @@ interface DreamTalkSideProps {
 export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   dreamNode,
   isHovered,
-  isEditModeActive,
+  isEditModeActive: _isEditModeActive,
   isPendingRelationship,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
