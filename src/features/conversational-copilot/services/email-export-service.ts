@@ -168,27 +168,32 @@ export class EmailExportService {
 	 * Create Apple Mail draft using AppleScript via Electron
 	 */
 	private async createMailDraft(to: string, subject: string, body: string): Promise<void> {
-		// Escape strings for AppleScript
-		const escapeAS = (str: string): string => {
+		// Escape strings for AppleScript (different for subject vs HTML body)
+		const escapeASText = (str: string): string => {
 			return str
 				.replace(/\\/g, '\\\\')
-				.replace(/"/g, '\\"')
-				.replace(/\n/g, '\\n')
-				.replace(/\r/g, '\\r');
+				.replace(/"/g, '\\"');
 		};
 
-		const escapedTo = escapeAS(to);
-		const escapedSubject = escapeAS(subject);
-		const escapedBody = escapeAS(body);
+		const escapedTo = escapeASText(to);
+		const escapedSubject = escapeASText(subject);
+
+		// For HTML content, we need to escape quotes but preserve the HTML structure
+		// We'll write the HTML to a temporary variable in AppleScript
+		const escapedBody = body
+			.replace(/\\/g, '\\\\')
+			.replace(/"/g, '\\"')
+			.replace(/\$/g, '\\$'); // Escape dollar signs for AppleScript
 
 		// Build AppleScript to create email draft with HTML content
 		const appleScript = `
 tell application "Mail"
 	activate
+	set htmlContent to "${escapedBody}"
 	set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", visible:true}
 	tell newMessage
 		${to ? `make new to recipient at end of to recipients with properties {address:"${escapedTo}"}` : ''}
-		set html content to "${escapedBody}"
+		set html content to htmlContent
 	end tell
 end tell
 `;
