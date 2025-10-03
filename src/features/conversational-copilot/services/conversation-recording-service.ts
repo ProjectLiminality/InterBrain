@@ -61,6 +61,9 @@ export class ConversationRecordingService {
 	 * Record a DreamNode invocation
 	 */
 	async recordInvocation(node: DreamNode): Promise<void> {
+		console.log(`🎙️ [ConversationRecording] recordInvocation called for: ${node.name}`);
+		console.log(`🎙️ [ConversationRecording] isRecording state: ${this.isRecording}`);
+
 		if (!this.isRecording) {
 			console.warn(`⚠️ [ConversationRecording] Not recording, ignoring invocation of ${node.name}`);
 			return;
@@ -74,9 +77,12 @@ export class ConversationRecordingService {
 
 		this.invocations.push(invocationEvent);
 		console.log(`✅ [ConversationRecording] Recorded invocation #${this.invocations.length}: ${node.name} at ${invocationEvent.timestamp.toLocaleTimeString()}`);
+		console.log(`📝 [ConversationRecording] Total invocations so far: ${this.invocations.length}`);
 
 		// Embed invocation marker in transcript
+		console.log(`📝 [ConversationRecording] About to embed invocation in transcript`);
 		await this.embedInvocationInTranscript(node);
+		console.log(`✅ [ConversationRecording] Embedding complete`);
 	}
 
 	/**
@@ -84,8 +90,13 @@ export class ConversationRecordingService {
 	 */
 	private async embedInvocationInTranscript(node: DreamNode): Promise<void> {
 		try {
+			console.log(`📝 [ConversationRecording] embedInvocationInTranscript starting for: ${node.name}`);
+
 			const transcriptionService = getTranscriptionService();
+			console.log(`📝 [ConversationRecording] Got transcription service:`, !!transcriptionService);
+
 			const transcriptionFile = (transcriptionService as any).transcriptionFile as TFile | null;
+			console.log(`📝 [ConversationRecording] Transcription file:`, transcriptionFile?.path || 'null');
 
 			if (!transcriptionFile) {
 				console.warn(`⚠️ [ConversationRecording] No active transcript file to embed invocation`);
@@ -93,18 +104,25 @@ export class ConversationRecordingService {
 			}
 
 			// Read current content
+			console.log(`📝 [ConversationRecording] Reading current transcript content...`);
 			const currentContent = await this.app.vault.read(transcriptionFile);
+			console.log(`📝 [ConversationRecording] Current content length: ${currentContent.length} chars`);
+			console.log(`📝 [ConversationRecording] Last 100 chars: "${currentContent.slice(-100)}"`);
 
 			// Append invocation marker inline (like subtitle notation)
 			const invocationMarker = ` (Invoked: ${node.name})`;
 			const updatedContent = currentContent + invocationMarker;
+			console.log(`📝 [ConversationRecording] Appending marker: "${invocationMarker}"`);
+			console.log(`📝 [ConversationRecording] New content length: ${updatedContent.length} chars`);
 
 			// Write back to file
+			console.log(`📝 [ConversationRecording] Writing updated content to file...`);
 			await this.app.vault.modify(transcriptionFile, updatedContent);
 
-			console.log(`📝 [ConversationRecording] Embedded invocation marker in transcript: "${invocationMarker}"`);
+			console.log(`✅ [ConversationRecording] Successfully embedded invocation marker in transcript: "${invocationMarker}"`);
 		} catch (error) {
 			console.error('❌ [ConversationRecording] Failed to embed invocation in transcript:', error);
+			console.error('❌ [ConversationRecording] Error stack:', (error as Error).stack);
 		}
 	}
 

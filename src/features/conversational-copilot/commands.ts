@@ -123,20 +123,30 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`🎙️ [Copilot] Stopped recording - captured ${invocations.length} invocations`);
 
         // Generate AI summary and export email if there were invocations or conversation content
+        console.log(`📧 [Copilot-Exit] Checking email export conditions...`);
+        console.log(`📧 [Copilot-Exit] partnerToFocus:`, partnerToFocus?.name || 'null');
+        console.log(`📧 [Copilot-Exit] transcriptFile:`, transcriptFile?.path || 'null');
+        console.log(`📧 [Copilot-Exit] invocations count:`, invocations.length);
+
         if (partnerToFocus && transcriptFile) {
           try {
             // Get plugin settings for API key
             const settings = (plugin as any).settings;
+            console.log(`📧 [Copilot-Exit] Plugin settings:`, !!settings);
             const apiKey = settings?.claudeApiKey;
+            console.log(`📧 [Copilot-Exit] API key configured:`, apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO');
 
             if (!apiKey) {
               console.warn(`⚠️ [Copilot-Exit] No Claude API key configured - skipping AI summary`);
               uiService.showInfo('Email export skipped - configure Claude API key in settings');
             } else {
+              console.log(`📧 [Copilot-Exit] Starting email export flow...`);
               uiService.showInfo('Generating conversation summary...');
 
               // Generate AI summary
+              console.log(`📧 [Copilot-Exit] Getting summary service...`);
               const summaryService = getConversationSummaryService();
+              console.log(`📧 [Copilot-Exit] Calling generateSummary...`);
               const aiSummary = await summaryService.generateSummary(
                 transcriptFile,
                 invocations,
@@ -144,11 +154,14 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                 apiKey
               );
 
-              console.log(`✅ [Copilot-Exit] AI summary generated`);
+              console.log(`✅ [Copilot-Exit] AI summary generated (length: ${aiSummary.length})`);
+              console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, 200)}..."`);
 
               // Export to email
+              console.log(`📧 [Copilot-Exit] Getting email service...`);
               const emailService = getEmailExportService();
               const conversationEndTime = new Date();
+              console.log(`📧 [Copilot-Exit] Calling exportToEmail...`);
 
               await emailService.exportToEmail(
                 partnerToFocus,
@@ -158,12 +171,16 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                 aiSummary
               );
 
-              console.log(`✅ [Copilot-Exit] Email draft created`);
+              console.log(`✅ [Copilot-Exit] Email draft created successfully`);
+              uiService.showSuccess('Email draft created in Apple Mail');
             }
           } catch (error) {
-            console.error('Failed to generate summary or export email:', error);
+            console.error('❌ [Copilot-Exit] Failed to generate summary or export email:', error);
+            console.error('❌ [Copilot-Exit] Error stack:', (error as Error).stack);
             uiService.showError('Failed to create email summary - check console for details');
           }
+        } else {
+          console.warn(`⚠️ [Copilot-Exit] Skipping email export - missing requirements`);
         }
 
         // Exit copilot mode (this processes shared nodes and sets layout back to liminal-web)
