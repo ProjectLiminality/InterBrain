@@ -202,11 +202,24 @@ end tell
 		console.log(`🍎 [EmailExport] AppleScript preview (first 500 chars):`, appleScript.substring(0, 500));
 
 		try {
+			// Check if require is available
+			if (!(window as any).require) {
+				console.error('❌ [EmailExport] window.require is not available');
+				throw new Error('Node.js require not available in this environment');
+			}
+
+			console.log('✅ [EmailExport] window.require is available');
+
 			// Access Node.js child_process through Obsidian's environment
-			const { exec } = (window as any).require('child_process');
+			const childProcess = (window as any).require('child_process');
+			console.log('✅ [EmailExport] child_process module loaded:', !!childProcess);
+
+			const { exec } = childProcess;
+			console.log('✅ [EmailExport] exec function available:', typeof exec);
 
 			// Execute AppleScript
 			const command = `osascript -e '${appleScript.replace(/'/g, "'\\''")}'`;
+			console.log(`🍎 [EmailExport] Command length:`, command.length);
 			console.log(`🍎 [EmailExport] Executing command...`);
 
 			await new Promise<void>((resolve, reject) => {
