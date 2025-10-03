@@ -5,27 +5,6 @@ import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, ge
 import { useInterBrainStore } from '../../store/interbrain-store';
 import { setIcon } from 'obsidian';
 
-// Access Node.js fs module directly
-const fs = require('fs');
-const path = require('path');
-const { promisify } = require('util');
-const readFileAsync = promisify(fs.readFile);
-const writeFileAsync = promisify(fs.writeFile);
-
-// Helper to get vault path from app
-function getVaultPath(): string {
-  const app = (window as any).app;
-  if (!app) return '';
-
-  const adapter = app.vault.adapter as { path?: string; basePath?: string };
-  if (typeof adapter.path === 'string') {
-    return adapter.path;
-  } else if (typeof adapter.basePath === 'string') {
-    return adapter.basePath;
-  }
-  return '';
-}
-
 interface EditNode3DProps {
   position: [number, number, number];
   onSave: () => void;
@@ -139,32 +118,17 @@ export default function EditNode3D({
     }
   }, [editingNode?.name]);
 
-  // Load contact info from metadata (for dreamer nodes only)
+  // Load contact info from editingNode (for dreamer nodes only)
   useEffect(() => {
-    const loadContactInfo = async () => {
-      if (!editingNode || editingNode.type !== 'dreamer') {
-        setLocalEmail('');
-        setLocalPhone('');
-        return;
-      }
+    if (!editingNode || editingNode.type !== 'dreamer') {
+      setLocalEmail('');
+      setLocalPhone('');
+      return;
+    }
 
-      try {
-        const vaultPath = getVaultPath();
-        const metadataPath = path.join(vaultPath, editingNode.repoPath, '.udd');
-        console.log('[EditNode3D] Loading contact info from:', metadataPath);
-        const metadataContent = await readFileAsync(metadataPath, 'utf-8');
-        const metadata = JSON.parse(metadataContent);
-
-        setLocalEmail(metadata.email || '');
-        setLocalPhone(metadata.phone || '');
-        console.log('[EditNode3D] Loaded contact info:', { email: metadata.email, phone: metadata.phone });
-      } catch (error) {
-        console.error('Failed to load contact info:', error);
-        // Silently fail - fields will remain empty
-      }
-    };
-
-    loadContactInfo();
+    // Load from the DreamNode which is already populated by the service layer
+    setLocalEmail(editingNode.email || '');
+    setLocalPhone(editingNode.phone || '');
   }, [editingNode]);
   
   if (!editingNode) {
@@ -231,11 +195,15 @@ export default function EditNode3D({
   };
 
   const handleEmailChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    setLocalEmail(e.target.value);
+    const email = e.target.value;
+    setLocalEmail(email);
+    updateEditingNodeMetadata({ email });
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    setLocalPhone(e.target.value);
+    const phone = e.target.value;
+    setLocalPhone(phone);
+    updateEditingNodeMetadata({ phone });
   };
   
   // File handling (same patterns as ProtoNode3D)
@@ -288,30 +256,8 @@ export default function EditNode3D({
       // Start save animation (fading out UI controls)
       animationStartTime.current = Date.now();
 
-      // Save contact info for dreamer nodes before calling onSave
-      if (editingNode.type === 'dreamer' && (localEmail || localPhone)) {
-        try {
-          const vaultPath = getVaultPath();
-          const metadataPath = path.join(vaultPath, editingNode.repoPath, '.udd');
-          console.log('[EditNode3D] Saving contact info to:', metadataPath);
-          const metadataContent = await readFileAsync(metadataPath, 'utf-8');
-          const metadata = JSON.parse(metadataContent);
-
-          // Update contact fields
-          metadata.email = localEmail || undefined;
-          metadata.phone = localPhone || undefined;
-
-          // Write back to metadata file
-          await writeFileAsync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
-          console.log(`[EditNode3D] Saved contact info for ${editingNode.name}:`, { email: localEmail, phone: localPhone });
-        } catch (error) {
-          console.error('Failed to save contact info:', error);
-          // Continue with save anyway - contact info is optional
-        }
-      }
-
       // Call onSave to trigger data persistence and liminal web transition
-      // The parent component will handle the spatial layout change
+      // The parent component (EditModeOverlay) will handle saving all metadata including contact info
       onSave();
 
       // The animation continues running to fade out the UI controls

@@ -73,6 +73,12 @@ export interface DreamNode {
   
   /** Git status information for visual indicators */
   gitStatus?: GitStatus;
+
+  /** Optional contact email (for dreamer-type nodes) */
+  email?: string;
+
+  /** Optional contact phone number (for dreamer-type nodes) */
+  phone?: string;
 }
 
 /**
