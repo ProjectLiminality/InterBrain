@@ -687,7 +687,7 @@ export class LeafManagerService {
                 const editorElement = (editor as any).cm?.dom;
                 if (editorElement) {
                   // Dispatch a click event to the editor DOM element
-                  const clickEvent = new MouseEvent('click', {
+                  const clickEvent = new window.MouseEvent('click', {
                     bubbles: true,
                     cancelable: true,
                     view: window
