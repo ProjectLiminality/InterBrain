@@ -617,10 +617,10 @@ export default function EditNode3D({
                 placeholder="Email (optional)"
                 style={{
                   padding: '14px 16px',
-                  background: 'rgba(0,0,0,0.95)',
-                  border: '1px solid rgba(255,255,255,0.5)',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
                   borderRadius: '6px',
-                  color: 'rgba(255,255,255,0.95)',
+                  color: 'white',
                   fontSize: '16px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
@@ -638,10 +638,10 @@ export default function EditNode3D({
                 placeholder="Phone (optional)"
                 style={{
                   padding: '14px 16px',
-                  background: 'rgba(0,0,0,0.95)',
-                  border: '1px solid rgba(255,255,255,0.5)',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
                   borderRadius: '6px',
-                  color: 'rgba(255,255,255,0.95)',
+                  color: 'white',
                   fontSize: '16px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
