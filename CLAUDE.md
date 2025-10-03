@@ -65,7 +65,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Or: Deeper investigation into animation state coordination
 - Current workaround: Users can manually go constellation → search/creation
 
-### Proto Node Fly-In Animation Issues  
+### Copilot Mode Transcript Refocus Polish
+**Status**: Deferred - Works but needs reliability improvement (October 3, 2025)
+**Issue**: After closing DreamSong/DreamTalk overlay with X button in copilot mode, transcript refocus is not 100% reliable in windowed mode (works fine in fullscreen):
+- **Current behavior**: Multiple refocus mechanisms trigger (event-driven, periodic check, overlay close handler)
+- **Expected**: Transcript should regain focus immediately for seamless dictation
+- **Workaround**: User can click anywhere in dreamspace or on transcript pane to restore focus
+
+**Attempted Solutions**:
+- Window focus listeners (browser window.focus())
+- Electron BrowserWindow.focus() via remote API
+- Programmatic click simulation on editor element
+- Multiple timing delays and refocus strategies
+
+**Root Cause**: In windowed mode, clicking X button causes Electron window to lose focus. Multiple refocus attempts trigger but dictation doesn't immediately resume. Likely macOS-specific input activation state issue.
+
+**Next Steps**:
+- Consider accepting current behavior as "good enough" - foundation works
+- Or: Investigate macOS accessibility APIs for input state activation
+- Current workaround is acceptable for MVP
+
+### Proto Node Fly-In Animation Issues
 **Status**: Deferred - Animation system complexity (August 26, 2025)
 **Issue**: Proto node creation animation system needs refinement:
 - **Desired behavior**: Fly-in animation when entering creation mode (like SearchNode3D)
