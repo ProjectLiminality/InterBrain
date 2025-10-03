@@ -67,7 +67,7 @@ export class EmailExportService {
 	}
 
 	/**
-	 * Build email body with metadata, summary, and deep links (HTML format)
+	 * Build email body with metadata, summary, and deep links
 	 */
 	private buildEmailBody(
 		conversationPartner: DreamNode,
@@ -81,53 +81,40 @@ export class EmailExportService {
 		const dateStr = startTime.toLocaleDateString();
 		const timeStr = startTime.toLocaleTimeString();
 
-		// Build HTML email body with clickable links
-		let body = `<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6;">`;
-		body += `<p>Hi ${conversationPartner.name},</p>`;
-		body += `<p>Here's a summary of our call on ${dateStr} at ${timeStr} (Duration: ${duration}):</p>`;
+		// Build email body
+		let body = `Hi ${conversationPartner.name},\n\n`;
+		body += `Here's a summary of our call on ${dateStr} at ${timeStr} (Duration: ${duration}):\n\n`;
 
-		// Add AI-generated summary (preserve line breaks)
-		body += `<div style="margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;">`;
-		body += aiSummary.replace(/\n/g, '<br>');
-		body += `</div>`;
+		// Add AI-generated summary
+		body += `${aiSummary}\n\n`;
 
 		// Add invoked DreamNodes section if any
 		if (invocations.length > 0) {
-			body += `<hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">`;
-			body += `<h2 style="color: #333;">Shared DreamNodes</h2>`;
-			body += `<p>During our conversation, I shared ${invocations.length} DreamNode${invocations.length > 1 ? 's' : ''}:</p>`;
-			body += `<ul style="list-style: none; padding: 0;">`;
+			body += `---\n\n`;
+			body += `## Shared DreamNodes\n\n`;
+			body += `During our conversation, I shared ${invocations.length} DreamNode${invocations.length > 1 ? 's' : ''}:\n\n`;
 
 			invocations.forEach((inv, i) => {
 				const invTimeStr = inv.timestamp.toLocaleTimeString();
 				const deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);
-				body += `<li style="margin: 15px 0; padding: 10px; background: #f9f9f9; border-left: 3px solid #4a90e2;">`;
-				body += `<strong>${i + 1}. ${inv.nodeName}</strong> <span style="color: #666;">(${invTimeStr})</span><br>`;
-				body += `<a href="${deepLink}" style="color: #4a90e2; text-decoration: none;">→ Click to clone this DreamNode</a>`;
-				body += `</li>`;
+				body += `${i + 1}. **${inv.nodeName}** (${invTimeStr})\n`;
+				body += `   → ${deepLink}\n\n`;
 			});
-
-			body += `</ul>`;
 
 			// Add batch clone link if multiple nodes
 			if (invocations.length > 1) {
 				const uuids = invocations.map(inv => inv.dreamUUID);
 				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, uuids);
-				body += `<p style="margin: 20px 0; padding: 15px; background: #e8f4f8; border-radius: 5px;">`;
-				body += `📦 <strong>Clone all shared nodes at once:</strong> `;
-				body += `<a href="${batchLink}" style="color: #4a90e2; text-decoration: none;">Click here to clone all ${invocations.length} nodes</a>`;
-				body += `</p>`;
+				body += `📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
 			}
 		}
 
 		// Add InterBrain download link
-		body += `<hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">`;
-		body += `<p>💡 <strong>New to InterBrain?</strong> `;
-		body += `<a href="https://github.com/ProjectLiminality/InterBrain?tab=readme-ov-file#installation--setup" style="color: #4a90e2;">Download and install here</a></p>`;
-		body += `<p style="color: #666; font-size: 14px;">Once installed, you can click the links above to instantly add these DreamNodes to your vault!</p>`;
+		body += `---\n\n`;
+		body += `💡 **New to InterBrain?** Download and install: https://github.com/ProjectLiminality/InterBrain?tab=readme-ov-file#installation--setup\n\n`;
+		body += `Once installed, you can click the links above to instantly add these DreamNodes to your vault!\n\n`;
 
-		body += `<p style="margin-top: 30px;">Looking forward to our next conversation!</p>`;
-		body += `</body></html>`;
+		body += `Looking forward to our next conversation!\n`;
 
 		return body;
 	}
@@ -168,32 +155,26 @@ export class EmailExportService {
 	 * Create Apple Mail draft using AppleScript via Electron
 	 */
 	private async createMailDraft(to: string, subject: string, body: string): Promise<void> {
-		// Escape strings for AppleScript (different for subject vs HTML body)
-		const escapeASText = (str: string): string => {
+		// Escape strings for AppleScript
+		const escapeAS = (str: string): string => {
 			return str
 				.replace(/\\/g, '\\\\')
-				.replace(/"/g, '\\"');
+				.replace(/"/g, '\\"')
+				.replace(/\n/g, '\\n')
+				.replace(/\r/g, '\\r');
 		};
 
-		const escapedTo = escapeASText(to);
-		const escapedSubject = escapeASText(subject);
+		const escapedTo = escapeAS(to);
+		const escapedSubject = escapeAS(subject);
+		const escapedBody = escapeAS(body);
 
-		// For HTML content, we need to escape quotes but preserve the HTML structure
-		// We'll write the HTML to a temporary variable in AppleScript
-		const escapedBody = body
-			.replace(/\\/g, '\\\\')
-			.replace(/"/g, '\\"')
-			.replace(/\$/g, '\\$'); // Escape dollar signs for AppleScript
-
-		// Build AppleScript to create email draft with HTML content
+		// Build AppleScript to create email draft
 		const appleScript = `
 tell application "Mail"
 	activate
-	set htmlContent to "${escapedBody}"
-	set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", visible:true}
+	set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", content:"${escapedBody}", visible:true}
 	tell newMessage
 		${to ? `make new to recipient at end of to recipients with properties {address:"${escapedTo}"}` : ''}
-		set html content to htmlContent
 	end tell
 end tell
 `;
