@@ -29,6 +29,7 @@ import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
+import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -61,6 +62,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize conversation recording service for invocation tracking
     initializeConversationRecordingService(this.app);
+
+    // Initialize conversation summary service for AI-powered summaries
+    initializeConversationSummaryService(this.app);
     
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
