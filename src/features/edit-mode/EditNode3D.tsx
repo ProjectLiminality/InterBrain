@@ -119,6 +119,7 @@ export default function EditNode3D({
   }, [editingNode?.name]);
 
   // Load contact info from editingNode (for dreamer nodes only)
+  // Only reload when node ID changes, not when email/phone fields update
   useEffect(() => {
     if (!editingNode || editingNode.type !== 'dreamer') {
       setLocalEmail('');
@@ -129,7 +130,7 @@ export default function EditNode3D({
     // Load from the DreamNode which is already populated by the service layer
     setLocalEmail(editingNode.email || '');
     setLocalPhone(editingNode.phone || '');
-  }, [editingNode]);
+  }, [editingNode?.id, editingNode?.type]); // Only depend on ID and type, not the whole object
   
   if (!editingNode) {
     return null; // Should not render if no node is being edited
