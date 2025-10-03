@@ -28,8 +28,11 @@ import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
+import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
+  settings!: InterBrainSettings;
+
   // Service instances
   private uiService!: UIService;
   private gitService!: GitService;
@@ -43,6 +46,12 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
+    // Load settings
+    await this.loadSettings();
+
+    // Add settings tab
+    this.addSettingTab(new InterBrainSettingTab(this.app, this));
+
     // Initialize services
     this.initializeServices();
 
@@ -1483,6 +1492,14 @@ export default class InterBrainPlugin extends Plugin {
       console.error('Failed to get available nodes:', error);
       return [];
     }
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
   }
 
   onunload() {
