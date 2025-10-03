@@ -615,13 +615,14 @@ export default function EditNode3D({
                 value={localEmail}
                 onChange={handleEmailChange}
                 placeholder="Email (optional)"
+                className="contact-field-email"
                 style={{
                   padding: '14px 16px',
                   background: 'rgba(0,0,0,0.6)',
                   border: '1px solid rgba(255,255,255,0.4)',
                   borderRadius: '6px',
                   color: 'white',
-                  fontSize: '16px',
+                  fontSize: '24px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
                   outline: 'none',
@@ -636,13 +637,14 @@ export default function EditNode3D({
                 value={localPhone}
                 onChange={handlePhoneChange}
                 placeholder="Phone (optional)"
+                className="contact-field-phone"
                 style={{
                   padding: '14px 16px',
                   background: 'rgba(0,0,0,0.6)',
                   border: '1px solid rgba(255,255,255,0.4)',
                   borderRadius: '6px',
                   color: 'white',
-                  fontSize: '16px',
+                  fontSize: '24px',
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   textAlign: 'center',
                   outline: 'none',
