@@ -3,6 +3,7 @@ import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
 import { useInterBrainStore } from '../../store/interbrain-store';
+import { VaultService } from '../../services/vault-service';
 import { setIcon } from 'obsidian';
 
 interface EditNode3DProps {
@@ -34,6 +35,8 @@ export default function EditNode3D({
   
   // Local UI state for immediate responsiveness
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
+  const [localEmail, setLocalEmail] = useState('');
+  const [localPhone, setLocalPhone] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -115,6 +118,32 @@ export default function EditNode3D({
       setLocalTitle(editingNode.name);
     }
   }, [editingNode?.name]);
+
+  // Load contact info from metadata (for dreamer nodes only)
+  useEffect(() => {
+    const loadContactInfo = async () => {
+      if (!editingNode || editingNode.type !== 'dreamer') {
+        setLocalEmail('');
+        setLocalPhone('');
+        return;
+      }
+
+      try {
+        const vaultService = new VaultService();
+        const metadataPath = `${editingNode.repoPath}/.udd/metadata.json`;
+        const metadataContent = await vaultService.readFile(metadataPath);
+        const metadata = JSON.parse(metadataContent);
+
+        setLocalEmail(metadata.email || '');
+        setLocalPhone(metadata.phone || '');
+      } catch (error) {
+        console.error('Failed to load contact info:', error);
+        // Silently fail - fields will remain empty
+      }
+    };
+
+    loadContactInfo();
+  }, [editingNode]);
   
   if (!editingNode) {
     return null; // Should not render if no node is being edited
@@ -169,14 +198,22 @@ export default function EditNode3D({
   
   const handleTypeChange = (type: 'dream' | 'dreamer') => {
     updateEditingNodeMetadata({ type });
-    
+
     // TODO: Add warning about type change affecting relationships
     console.warn('Type change in edit mode - relationship implications need to be handled');
-    
+
     // Refocus text input after type change to maintain persistent focus
     globalThis.setTimeout(() => {
       titleInputRef.current?.focus();
     }, 0);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    setLocalEmail(e.target.value);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    setLocalPhone(e.target.value);
   };
   
   // File handling (same patterns as ProtoNode3D)
@@ -222,17 +259,38 @@ export default function EditNode3D({
     }
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (validateTitle(localTitle)) {
       setIsAnimating(true);
-      
+
       // Start save animation (fading out UI controls)
       animationStartTime.current = Date.now();
-      
+
+      // Save contact info for dreamer nodes before calling onSave
+      if (editingNode.type === 'dreamer' && (localEmail || localPhone)) {
+        try {
+          const vaultService = new VaultService();
+          const metadataPath = `${editingNode.repoPath}/.udd/metadata.json`;
+          const metadataContent = await vaultService.readFile(metadataPath);
+          const metadata = JSON.parse(metadataContent);
+
+          // Update contact fields
+          metadata.email = localEmail || undefined;
+          metadata.phone = localPhone || undefined;
+
+          // Write back to metadata file
+          await vaultService.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+          console.log(`Saved contact info for ${editingNode.name}:`, { email: localEmail, phone: localPhone });
+        } catch (error) {
+          console.error('Failed to save contact info:', error);
+          // Continue with save anyway - contact info is optional
+        }
+      }
+
       // Call onSave to trigger data persistence and liminal web transition
       // The parent component will handle the spatial layout change
       onSave();
-      
+
       // The animation continues running to fade out the UI controls
       // EditModeOverlay will handle exit after successful save
       globalThis.setTimeout(() => {
@@ -513,12 +571,68 @@ export default function EditNode3D({
               Dreamer
             </button>
           </div>
-          
+
+          {/* Contact Info Fields (only for dreamer nodes) */}
+          {editingNode.type === 'dreamer' && (
+            <div
+              style={{
+                position: 'absolute',
+                top: `${nodeSize + (validationErrors.title ? 80 : 60)}px`,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                opacity: animatedUIOpacity,
+                width: '200px'
+              }}
+            >
+              <input
+                type="email"
+                value={localEmail}
+                onChange={handleEmailChange}
+                placeholder="Email (optional)"
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(0,0,0,0.5)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: '4px',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+              <input
+                type="tel"
+                value={localPhone}
+                onChange={handlePhoneChange}
+                placeholder="Phone (optional)"
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(0,0,0,0.5)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: '4px',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (validationErrors.title ? 120 : 100)}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 200 : 180) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
