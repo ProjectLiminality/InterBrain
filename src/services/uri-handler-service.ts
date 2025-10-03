@@ -18,19 +18,30 @@ export class URIHandlerService {
 	 * Register all URI handlers
 	 */
 	registerHandlers(): void {
-		// Register single node clone handler
-		(this.app as any).registerObsidianProtocolHandler(
-			'interbrain-clone',
-			this.handleSingleNodeClone.bind(this)
-		);
-		console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone`);
+		// Check if protocol handler registration is available
+		if (!(this.app as any).registerObsidianProtocolHandler) {
+			console.warn(`⚠️ [URIHandler] Protocol handler registration not available - deep links disabled`);
+			return;
+		}
 
-		// Register batch clone handler
-		(this.app as any).registerObsidianProtocolHandler(
-			'interbrain-clone-batch',
-			this.handleBatchNodeClone.bind(this)
-		);
-		console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone-batch`);
+		try {
+			// Register single node clone handler
+			(this.app as any).registerObsidianProtocolHandler(
+				'interbrain-clone',
+				this.handleSingleNodeClone.bind(this)
+			);
+			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone`);
+
+			// Register batch clone handler
+			(this.app as any).registerObsidianProtocolHandler(
+				'interbrain-clone-batch',
+				this.handleBatchNodeClone.bind(this)
+			);
+			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone-batch`);
+		} catch (error) {
+			console.error('Failed to register URI handlers:', error);
+			console.warn(`⚠️ [URIHandler] Deep links will not be functional`);
+		}
 	}
 
 	/**
