@@ -22,9 +22,15 @@ export class TranscriptionService implements ITranscriptionService {
 	 */
 	getScriptPath(): string {
 		const path = require('path');
+		const fs = require('fs');
 		const pluginDir = this.plugin.manifest.dir || '';
+
+		// Resolve symlinks to get the actual source directory
+		const realPluginDir = fs.realpathSync(pluginDir);
+
 		const scriptPath = path.join(
-			pluginDir,
+			realPluginDir,
+			'src',
 			'features',
 			'realtime-transcription',
 			'scripts',
@@ -39,9 +45,15 @@ export class TranscriptionService implements ITranscriptionService {
 	 */
 	private getVenvPython(): string | null {
 		const path = require('path');
+		const fs = require('fs');
 		const pluginDir = this.plugin.manifest.dir || '';
+
+		// Resolve symlinks to get the actual source directory
+		const realPluginDir = fs.realpathSync(pluginDir);
+
 		const scriptsDir = path.join(
-			pluginDir,
+			realPluginDir,
+			'src',
 			'features',
 			'realtime-transcription',
 			'scripts'
