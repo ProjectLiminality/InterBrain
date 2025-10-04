@@ -20,6 +20,7 @@ import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
+import { registerTranscriptionCommands, cleanupTranscriptionService } from './features/realtime-transcription';
 import { ConstellationCommands } from './commands/constellation-commands';
 import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
 import { registerFaceTimeCommands } from './commands/facetime-commands';
@@ -167,6 +168,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Enhance file suggestions to include .link files
     enhanceFileSuggestions(this);
+
+    // Register real-time transcription commands
+    registerTranscriptionCommands(this);
     
     // Open DreamSpace command
     this.addCommand({
@@ -1530,5 +1534,8 @@ export default class InterBrainPlugin extends Plugin {
     if (this.leafManagerService) {
       this.leafManagerService.destroy();
     }
+
+    // Clean up transcription service
+    cleanupTranscriptionService(this);
   }
 }
