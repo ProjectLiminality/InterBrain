@@ -15,20 +15,32 @@ import signal
 import sys
 import os
 import tempfile
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Set up logging directory BEFORE importing RealtimeSTT
-# This prevents it from trying to write to read-only root directory
-os.environ['REALTIMESTT_LOG_DIR'] = tempfile.gettempdir()
+# Disable file logging completely by using NullHandler
+# This prevents RealtimeSTT from trying to write log files
+logging.basicConfig(level=logging.WARNING, handlers=[logging.NullHandler()])
 
-# Also try to change working directory to temp to prevent root writes
-original_cwd = os.getcwd()
-try:
-    os.chdir(tempfile.gettempdir())
-except Exception:
-    pass  # If we can't change, continue anyway
+# Also suppress all file handler creation attempts
+class NoFileHandler:
+    """Mock file handler that does nothing"""
+    def __init__(self, *args, **kwargs):
+        pass
+    def setLevel(self, *args, **kwargs):
+        pass
+    def setFormatter(self, *args, **kwargs):
+        pass
+    def emit(self, *args, **kwargs):
+        pass
+    def close(self, *args, **kwargs):
+        pass
+
+# Replace FileHandler with our mock before importing RealtimeSTT
+original_file_handler = logging.FileHandler
+logging.FileHandler = NoFileHandler
 
 # Check for required dependencies
 try:
@@ -38,11 +50,8 @@ except ImportError as e:
     print("Run: pip install -r requirements.txt")
     sys.exit(1)
 finally:
-    # Restore original working directory
-    try:
-        os.chdir(original_cwd)
-    except Exception:
-        pass
+    # Restore original FileHandler (good citizenship)
+    logging.FileHandler = original_file_handler
 
 
 class TranscriptionSession:
