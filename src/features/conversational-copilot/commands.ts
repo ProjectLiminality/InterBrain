@@ -71,6 +71,17 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`🎯 [Copilot-Entry] Starting conversation mode with "${freshNode.name}" (${freshNode.id})`);
         store.startCopilotMode(freshNode);
 
+        // Immediately send all liminal-web nodes to constellation (sphere surface)
+        // This creates visual cleanup before semantic search results appear
+        console.log(`🌌 [Copilot-Entry] Triggering immediate fly-out to sphere for visual cleanup`);
+        const { returnToConstellation } = (globalThis as any).__dreamspace_orchestrator || {};
+        if (returnToConstellation) {
+          returnToConstellation();
+          console.log(`✅ [Copilot-Entry] Triggered constellation layout (nodes flying to sphere)`);
+        } else {
+          console.warn(`⚠️ [Copilot-Entry] Could not access orchestrator returnToConstellation method`);
+        }
+
         // Create transcript file in DreamNode folder (OLD service - creates file + semantic search monitoring)
         const oldTranscriptionService = getTranscriptionService();
         await oldTranscriptionService.startTranscription(freshNode);

@@ -19,7 +19,6 @@ export class TranscriptionService {
   private lastContent: string = '';
   private bufferSize: number = 500; // FIFO buffer size in characters
   private isSearchCooldownActive: boolean = false; // Throttling cooldown state
-  private hasSearchedOnce: boolean = false; // Track first search for layout fix
   private refocusInterval: number | null = null; // Auto-refocus timer
   private transcriptLeaf: WorkspaceLeaf | null = null; // Reference to transcript leaf
   private activeLeafListener: EventRef | null = null; // Active leaf change listener
@@ -46,9 +45,8 @@ export class TranscriptionService {
     store.setSearchResults([]);
     console.log(`🧹 [TranscriptionService] Cleared search results for new conversation session`);
 
-    // Reset throttling and layout tracking for new session
+    // Reset throttling for new session
     this.isSearchCooldownActive = false;
-    this.hasSearchedOnce = false;
     if (this.searchTimeout) {
       globalThis.clearTimeout(this.searchTimeout);
       this.searchTimeout = null;
@@ -326,9 +324,9 @@ export class TranscriptionService {
       console.log(`📏 [TranscriptionService] Query length: ${searchText.length} characters`);
       console.log(`👤 [TranscriptionService] Conversation partner: ${conversationPartner.name} (${conversationPartner.type})`);
 
-      // Clear existing search results before new search (prevents overlay)
-      store.setSearchResults([]);
-      console.log(`🧹 [TranscriptionService] Cleared previous search results`);
+      // NOTE: Do NOT clear search results here - it causes jiggling/flutter
+      // The SpatialOrchestrator handles copilot mode replacement correctly (line 758)
+      // Clearing causes all nodes to fly out, then fly back in with new results
 
       // Check if semantic search is available
       const isAvailable = await semanticSearchService.isSemanticSearchAvailable();
@@ -363,19 +361,6 @@ export class TranscriptionService {
       store.setSearchResults(nodeResults);
 
       console.log(`✅ [TranscriptionService] Updated store with ${nodeResults.length} search results`);
-
-      // Fix first search layout issue - force React effect to trigger
-      if (!this.hasSearchedOnce) {
-        this.hasSearchedOnce = true;
-        console.log(`🎯 [TranscriptionService] First search completed, ensuring React effect triggers`);
-
-        // Small delay to ensure React processes the initial render, then force effect trigger
-        setTimeout(() => {
-          // Re-set the same results to force React effect to run
-          store.setSearchResults([...nodeResults]);
-          console.log(`🚀 [TranscriptionService] Forced React effect with ${nodeResults.length} results`);
-        }, 50);
-      }
 
     } catch (error) {
       console.error('Semantic search failed:', error);

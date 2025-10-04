@@ -13,6 +13,7 @@ Usage:
 import argparse
 import signal
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -34,12 +35,16 @@ class TranscriptionSession:
         output_path: Path,
         model: str = "small.en",
         language: Optional[str] = None,
+        start_time: Optional[float] = None,
     ):
         self.output_path = output_path
         self.model = model
         self.language = language
         self.running = False
         self.recorder = None
+
+        # Use provided start time or current time for relative timestamps
+        self.start_time = start_time if start_time is not None else time.time()
 
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -52,13 +57,21 @@ class TranscriptionSession:
         sys.exit(0)
 
 
+    def _format_relative_time(self, elapsed_seconds: float) -> str:
+        """Format elapsed time as MM:SS"""
+        minutes = int(elapsed_seconds // 60)
+        seconds = int(elapsed_seconds % 60)
+        return f"{minutes}:{seconds:02d}"
+
     def _write_transcript(self, text: str):
-        """Write transcribed text to output file with timestamp."""
+        """Write transcribed text to output file with relative timestamp."""
         if not text or not text.strip():
             print("⚠️  Empty text, skipping write")
             return
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Calculate elapsed time since session start
+        elapsed = time.time() - self.start_time
+        timestamp = self._format_relative_time(elapsed)
         line = f"[{timestamp}] {text.strip()}\n\n"
 
         try:
@@ -153,6 +166,11 @@ def main():
         type=str,
         help='Audio input device (not used with RealtimeSTT - uses default mic)'
     )
+    parser.add_argument(
+        '--start-time',
+        type=float,
+        help='Session start time (Unix timestamp) for relative timestamps'
+    )
 
     args = parser.parse_args()
 
@@ -166,7 +184,8 @@ def main():
     session = TranscriptionSession(
         output_path=output_path,
         model=args.model,
-        language=args.language
+        language=args.language,
+        start_time=args.start_time
     )
 
     try:

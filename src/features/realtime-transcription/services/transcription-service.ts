@@ -11,6 +11,7 @@ export class TranscriptionService implements ITranscriptionService {
 	private uiService: UIService;
 	private currentProcess: ChildProcess | null = null;
 	private currentOutputPath: string | null = null;
+	private sessionStartTime: number | null = null; // Unix timestamp in seconds
 
 	constructor(plugin: InterBrainPlugin) {
 		this.plugin = plugin;
@@ -139,6 +140,10 @@ export class TranscriptionService implements ITranscriptionService {
 			return;
 		}
 
+		// Record session start time for relative timestamps
+		this.sessionStartTime = Date.now() / 1000; // Convert to Unix timestamp in seconds
+		console.log(`[Transcription] Session start time: ${this.sessionStartTime}`);
+
 		// Build command arguments
 		// Prefer venv Python if available, otherwise use system Python
 		const venvPython = this.getVenvPython();
@@ -163,9 +168,9 @@ export class TranscriptionService implements ITranscriptionService {
 		if (process.platform === 'darwin') {
 			const wrapperScript = path.join(path.dirname(scriptPath), 'run-with-libs.sh');
 			pythonCommand = wrapperScript;
-			args = [basePythonCommand, scriptPath, '--output', outputPath, '--model', model];
+			args = [basePythonCommand, scriptPath, '--output', outputPath, '--model', model, '--start-time', this.sessionStartTime!.toString()];
 		} else {
-			args = [scriptPath, '--output', outputPath, '--model', model];
+			args = [scriptPath, '--output', outputPath, '--model', model, '--start-time', this.sessionStartTime!.toString()];
 		}
 
 		if (config.device) {
@@ -278,6 +283,13 @@ export class TranscriptionService implements ITranscriptionService {
 	}
 
 	/**
+	 * Get session start time (for synced relative timestamps)
+	 */
+	getSessionStartTime(): number | null {
+		return this.sessionStartTime;
+	}
+
+	/**
 	 * Clean up any running transcription process
 	 * Called when plugin is unloaded
 	 */
@@ -287,6 +299,7 @@ export class TranscriptionService implements ITranscriptionService {
 			this.currentProcess.kill('SIGTERM');
 			this.currentProcess = null;
 			this.currentOutputPath = null;
+			this.sessionStartTime = null;
 		}
 	}
 }

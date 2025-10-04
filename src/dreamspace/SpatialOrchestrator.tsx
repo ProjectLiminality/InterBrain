@@ -1156,9 +1156,65 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
-  
+
+  // Expose orchestrator API globally for command access
+  useEffect(() => {
+    const api = {
+      returnToConstellation: () => {
+        console.log(`🌌 [Orchestrator-GlobalAPI] returnToConstellation called externally`);
+        // Start transition
+        isTransitioning.current = true;
+        focusedNodeId.current = null;
+
+        // Update store to constellation layout mode
+        const { setSpatialLayout } = useInterBrainStore.getState();
+        setSpatialLayout('constellation');
+
+        // Get current sphere rotation
+        let worldRotation = undefined;
+        if (dreamWorldRef.current) {
+          worldRotation = dreamWorldRef.current.quaternion.clone();
+        }
+
+        // Calculate constellation positions
+        const constellationPositions = new Map<string, [number, number, number]>();
+        dreamNodes.forEach(node => {
+          if (node.position) {
+            constellationPositions.set(node.id, node.position);
+          }
+        });
+
+        // Move all nodes to constellation
+        dreamNodes.forEach(node => {
+          const nodeRef = nodeRefs.current.get(node.id);
+          const constellationPos = constellationPositions.get(node.id);
+
+          if (nodeRef?.current && constellationPos) {
+            const scaledPosition = calculateScaledPositionFromSphere(
+              constellationPos,
+              worldRotation
+            );
+
+            nodeRef.current.moveTo(scaledPosition[0], scaledPosition[1], scaledPosition[2], transitionDuration);
+            nodeRef.current.setActiveState(false);
+          }
+        });
+
+        isTransitioning.current = false;
+        console.log(`✅ [Orchestrator-GlobalAPI] All nodes sent to constellation`);
+      }
+    };
+
+    (globalThis as any).__dreamspace_orchestrator = api;
+    console.log(`🌐 [Orchestrator] Exposed global API`);
+
+    return () => {
+      delete (globalThis as any).__dreamspace_orchestrator;
+    };
+  }, [dreamNodes, transitionDuration]);
+
   // Removed excessive node count logging
-  
+
   // Call ready callback on mount
   useEffect(() => {
     onOrchestratorReady?.();

@@ -1,6 +1,7 @@
 import { App, TFile } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { getTranscriptionService } from './transcription-service';
+import { getRealtimeTranscriptionService } from '../../realtime-transcription';
 
 /**
  * Invocation Event
@@ -109,9 +110,22 @@ export class ConversationRecordingService {
 			console.log(`📝 [ConversationRecording] Current content length: ${currentContent.length} chars`);
 			console.log(`📝 [ConversationRecording] Last 100 chars: "${currentContent.slice(-100)}"`);
 
-			// Append invocation marker with timestamp (matches Python transcription format)
-			// Note: Python script adds \n\n after each line, so we do the same for consistency
-			const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' '); // YYYY-MM-DD HH:MM:SS
+			// Calculate relative timestamp matching Python format
+			const pythonTranscriptionService = getRealtimeTranscriptionService();
+			const sessionStartTime = pythonTranscriptionService.getSessionStartTime();
+
+			let timestamp: string;
+			if (sessionStartTime) {
+				// Use same start time as Python transcription for synchronized timestamps
+				const elapsed = Date.now() / 1000 - sessionStartTime;
+				const minutes = Math.floor(elapsed / 60);
+				const seconds = Math.floor(elapsed % 60);
+				timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+			} else {
+				// Fallback if start time not available (shouldn't happen)
+				timestamp = '0:00';
+			}
+
 			const invocationMarker = `[${timestamp}] 🔮 Invoked: ${node.name}\n\n`;
 			const updatedContent = currentContent + invocationMarker;
 			console.log(`📝 [ConversationRecording] Appending marker: "${invocationMarker.trim()}"`);
