@@ -64,24 +64,16 @@ pip install --upgrade pip > /dev/null 2>&1
 # Install dependencies
 echo "📥 Installing dependencies..."
 
-# Install whisper-streaming without pyalsaaudio (Linux-only dependency)
-pip install --no-deps whisper-streaming
-pip install sounddevice numpy faster-whisper
-
-# Install other dependencies
-pip install librosa opus-fast-mosestokenizer websockets
-
-# Fix mosestokenizer library linking on macOS
+# Check for portaudio on macOS (required by RealtimeSTT)
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "🔧 Fixing mosestokenizer library linking..."
-    MOSES_LIB="$VENV_DIR/lib/python*/site-packages/mosestokenizer/lib/_mosestokenizer.cpython-*-darwin.so"
-    for lib in $MOSES_LIB; do
-        if [ -f "$lib" ]; then
-            install_name_tool -add_rpath /opt/homebrew/opt/gettext/lib "$lib" 2>/dev/null || true
-            echo "✅ Patched mosestokenizer library"
-        fi
-    done
+    if ! brew list portaudio &> /dev/null; then
+        echo "📦 Installing portaudio (required by RealtimeSTT)..."
+        brew install portaudio
+    fi
 fi
+
+# Install RealtimeSTT and dependencies
+pip install RealtimeSTT numpy
 
 echo ""
 echo "✅ Setup complete!"
