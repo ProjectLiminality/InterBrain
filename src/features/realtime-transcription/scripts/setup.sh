@@ -9,14 +9,22 @@ VENV_DIR="$SCRIPT_DIR/venv"
 
 echo "🔧 Setting up Real-Time Transcription environment..."
 
-# Check if Python 3 is available
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD=python3
-elif command -v python &> /dev/null; then
-    PYTHON_CMD=python
+# Check for compatible Python version (3.9-3.12 required by whisper-streaming)
+if command -v python3.12 &> /dev/null; then
+    PYTHON_CMD=python3.12
+elif command -v python3.11 &> /dev/null; then
+    PYTHON_CMD=python3.11
+elif command -v python3.10 &> /dev/null; then
+    PYTHON_CMD=python3.10
+elif command -v python3.9 &> /dev/null; then
+    PYTHON_CMD=python3.9
 else
-    echo "❌ Python 3.8+ is required but not found."
-    echo "Please install Python from https://www.python.org/downloads/"
+    echo "❌ Python 3.9-3.12 is required for whisper-streaming."
+    echo "Found Python version:"
+    python3 --version 2>&1 || echo "No python3 found"
+    echo ""
+    echo "Please install a compatible Python version:"
+    echo "  brew install python@3.12"
     exit 1
 fi
 
@@ -42,7 +50,11 @@ pip install --upgrade pip > /dev/null 2>&1
 
 # Install dependencies
 echo "📥 Installing dependencies..."
-pip install -r "$SCRIPT_DIR/requirements.txt"
+# Install whisper-streaming without pyalsaaudio (Linux-only dependency)
+pip install --no-deps whisper-streaming
+pip install sounddevice numpy faster-whisper
+# Now install whisper-streaming's other dependencies
+pip install librosa opus-fast-mosestokenizer websockets
 
 echo ""
 echo "✅ Setup complete!"
