@@ -15,19 +15,36 @@ This feature provides seamless voice-to-text capture during conversations, meeti
 
 ## Installation
 
-### Python Dependencies
+### Automated Setup (Recommended)
+
+The feature includes setup scripts that create a **self-contained virtual environment** inside the feature directory. This keeps all Python dependencies isolated and modular.
+
+**macOS/Linux:**
+```bash
+cd src/features/realtime-transcription/scripts
+./setup.sh
+```
+
+**Windows:**
+```cmd
+cd src\features\realtime-transcription\scripts
+setup.bat
+```
+
+This will:
+1. Create a virtual environment at `scripts/venv/`
+2. Install all Python dependencies locally
+3. Download the whisper model on first transcription (~500MB)
+
+### Manual Installation (Alternative)
+
+If you prefer to use your system Python:
 
 ```bash
 pip install -r src/features/realtime-transcription/scripts/requirements.txt
 ```
 
-### First Run
-
-The whisper model will auto-download on first run (~500MB for small.en):
-
-```bash
-python3 src/features/realtime-transcription/scripts/interbrain-transcribe.py --output test.md
-```
+**Note**: The Obsidian plugin will **automatically detect and use** the virtual environment if it exists, otherwise it falls back to system Python.
 
 ## Usage
 

@@ -115,3 +115,8 @@ main.js
 # Temporary files
 *.tmp
 *.temp
+
+# Python virtual environments
+src/features/realtime-transcription/scripts/venv/
+*.pyc
+__pycache__/

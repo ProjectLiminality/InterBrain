@@ -38,6 +38,45 @@ export class TranscriptionService implements ITranscriptionService {
 	}
 
 	/**
+	 * Get the path to the virtual environment Python executable
+	 * Returns venv python if it exists, otherwise null
+	 */
+	private getVenvPython(): string | null {
+		const pluginDir = this.plugin.manifest.dir || '';
+		const scriptsDir = path.join(
+			pluginDir,
+			'features',
+			'realtime-transcription',
+			'scripts'
+		);
+
+		// eslint-disable-next-line no-undef
+		if (process.platform === 'win32') {
+			const venvPython = path.join(scriptsDir, 'venv', 'Scripts', 'python.exe');
+			try {
+				// Check if file exists synchronously
+				const fs = require('fs');
+				if (fs.existsSync(venvPython)) {
+					return venvPython;
+				}
+			} catch {
+				return null;
+			}
+		} else {
+			const venvPython = path.join(scriptsDir, 'venv', 'bin', 'python3');
+			try {
+				const fs = require('fs');
+				if (fs.existsSync(venvPython)) {
+					return venvPython;
+				}
+			} catch {
+				return null;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Check if Python 3 is available on the system
 	 */
 	async checkPythonAvailable(): Promise<boolean> {
@@ -81,10 +120,19 @@ export class TranscriptionService implements ITranscriptionService {
 		}
 
 		// Build command arguments
+		// Prefer venv Python if available, otherwise use system Python
+		const venvPython = this.getVenvPython();
 		// eslint-disable-next-line no-undef
-		const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+		const pythonCommand = venvPython || (process.platform === 'win32' ? 'python' : 'python3');
 		const scriptPath = this.getScriptPath();
 		const model = config.model || 'small.en';
+
+		// Log which Python we're using
+		if (venvPython) {
+			console.log('[Transcription] Using virtual environment Python:', venvPython);
+		} else {
+			console.log('[Transcription] Using system Python:', pythonCommand);
+		}
 
 		const args = [
 			scriptPath,
