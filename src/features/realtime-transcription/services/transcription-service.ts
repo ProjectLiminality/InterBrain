@@ -23,7 +23,11 @@ export class TranscriptionService implements ITranscriptionService {
 	getScriptPath(): string {
 		const path = require('path');
 		const fs = require('fs');
-		const pluginDir = this.plugin.manifest.dir || '';
+		const pluginDir = this.plugin.manifest.dir;
+
+		if (!pluginDir) {
+			throw new Error('Plugin directory not available in manifest');
+		}
 
 		// Resolve symlinks to get the actual source directory
 		const realPluginDir = fs.realpathSync(pluginDir);
@@ -46,41 +50,39 @@ export class TranscriptionService implements ITranscriptionService {
 	private getVenvPython(): string | null {
 		const path = require('path');
 		const fs = require('fs');
-		const pluginDir = this.plugin.manifest.dir || '';
+		const pluginDir = this.plugin.manifest.dir;
 
-		// Resolve symlinks to get the actual source directory
-		const realPluginDir = fs.realpathSync(pluginDir);
+		if (!pluginDir) {
+			console.warn('[Transcription] Plugin directory not available, cannot check for venv');
+			return null;
+		}
 
-		const scriptsDir = path.join(
-			realPluginDir,
-			'src',
-			'features',
-			'realtime-transcription',
-			'scripts'
-		);
+		try {
+			// Resolve symlinks to get the actual source directory
+			const realPluginDir = fs.realpathSync(pluginDir);
 
-		// eslint-disable-next-line no-undef
-		if (process.platform === 'win32') {
-			const venvPython = path.join(scriptsDir, 'venv', 'Scripts', 'python.exe');
-			try {
-				// Check if file exists synchronously
-				const fs = require('fs');
+			const scriptsDir = path.join(
+				realPluginDir,
+				'src',
+				'features',
+				'realtime-transcription',
+				'scripts'
+			);
+
+			// eslint-disable-next-line no-undef
+			if (process.platform === 'win32') {
+				const venvPython = path.join(scriptsDir, 'venv', 'Scripts', 'python.exe');
 				if (fs.existsSync(venvPython)) {
 					return venvPython;
 				}
-			} catch {
-				return null;
-			}
-		} else {
-			const venvPython = path.join(scriptsDir, 'venv', 'bin', 'python3');
-			try {
-				const fs = require('fs');
+			} else {
+				const venvPython = path.join(scriptsDir, 'venv', 'bin', 'python3');
 				if (fs.existsSync(venvPython)) {
 					return venvPython;
 				}
-			} catch {
-				return null;
 			}
+		} catch (error) {
+			console.warn('[Transcription] Error checking for venv:', error);
 		}
 		return null;
 	}
