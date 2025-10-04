@@ -173,7 +173,13 @@ export class TranscriptionService implements ITranscriptionService {
 		// Spawn Python process
 		try {
 			const { spawn } = require('child_process');
-			this.currentProcess = spawn(pythonCommand, args);
+
+			// Set up environment to help mosestokenizer find gettext library
+			const env = { ...process.env };
+			env.DYLD_LIBRARY_PATH = '/opt/homebrew/opt/gettext/lib' +
+				(env.DYLD_LIBRARY_PATH ? ':' + env.DYLD_LIBRARY_PATH : '');
+
+			this.currentProcess = spawn(pythonCommand, args, { env });
 			this.currentOutputPath = outputPath;
 
 			// Monitor stdout for status updates
