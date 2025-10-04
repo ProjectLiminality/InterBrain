@@ -111,7 +111,7 @@ export class ConversationRecordingService {
 
 			// Append invocation marker with timestamp (matches Python transcription format)
 			const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' '); // YYYY-MM-DD HH:MM:SS
-			const invocationMarker = `\n\n[${timestamp}] 🔮 Invoked: ${node.name}\n\n`;
+			const invocationMarker = `\n[${timestamp}] 🔮 Invoked: ${node.name}\n`;
 			const updatedContent = currentContent + invocationMarker;
 			console.log(`📝 [ConversationRecording] Appending marker: "${invocationMarker.trim()}"`);
 			console.log(`📝 [ConversationRecording] New content length: ${updatedContent.length} chars`);
