@@ -189,7 +189,17 @@ export default function DreamspaceCanvas() {
   
   // SpatialOrchestrator reference for controlling all spatial interactions
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
-  
+
+  // Expose orchestrator ref globally for command access
+  useEffect(() => {
+    (globalThis as any).__dreamspace_orchestrator_ref = spatialOrchestratorRef;
+    console.log(`🌐 [Canvas] Exposed orchestrator ref globally`);
+
+    return () => {
+      delete (globalThis as any).__dreamspace_orchestrator_ref;
+    };
+  }, []);
+
   // Debug visualization states from store
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
   const debugIntersectionPoint = useInterBrainStore(state => state.debugIntersectionPoint);

@@ -1157,49 +1157,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 
-  // Expose orchestrator API globally for command access
-  useEffect(() => {
-    const api = {
-      returnToConstellation: () => {
-        console.log(`🌌 [Orchestrator-GlobalAPI] returnToConstellation called externally`);
-        // Start transition
-        isTransitioning.current = true;
-        focusedNodeId.current = null;
-
-        // Update store to constellation layout mode
-        const { setSpatialLayout } = useInterBrainStore.getState();
-        setSpatialLayout('constellation');
-
-        // Get current sphere rotation for accurate scaled position calculation
-        let worldRotation = undefined;
-        if (dreamWorldRef.current) {
-          worldRotation = dreamWorldRef.current.quaternion.clone();
-        }
-
-        // Return ALL nodes to their scaled constellation positions
-        nodeRefs.current.forEach((nodeRef) => {
-          if (nodeRef.current) {
-            // Use default easing for external calls
-            nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation, 'easeOutCubic');
-          }
-        });
-
-        // Set transition complete after animation duration
-        globalThis.setTimeout(() => {
-          isTransitioning.current = false;
-          console.log(`✅ [Orchestrator-GlobalAPI] All nodes returned to constellation`);
-        }, transitionDuration);
-      }
-    };
-
-    (globalThis as any).__dreamspace_orchestrator = api;
-    console.log(`🌐 [Orchestrator] Exposed global API`);
-
-    return () => {
-      delete (globalThis as any).__dreamspace_orchestrator;
-    };
-  }, [transitionDuration]);
-
   // Removed excessive node count logging
 
   // Call ready callback on mount

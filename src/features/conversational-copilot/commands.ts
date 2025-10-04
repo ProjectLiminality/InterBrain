@@ -71,16 +71,19 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`🎯 [Copilot-Entry] Starting conversation mode with "${freshNode.name}" (${freshNode.id})`);
         store.startCopilotMode(freshNode);
 
-        // Immediately send all liminal-web nodes to constellation (sphere surface)
-        // This creates visual cleanup before semantic search results appear
-        console.log(`🌌 [Copilot-Entry] Triggering immediate fly-out to sphere for visual cleanup`);
-        const { returnToConstellation } = (globalThis as any).__dreamspace_orchestrator || {};
-        if (returnToConstellation) {
-          returnToConstellation();
-          console.log(`✅ [Copilot-Entry] Triggered constellation layout (nodes flying to sphere)`);
-        } else {
-          console.warn(`⚠️ [Copilot-Entry] Could not access orchestrator returnToConstellation method`);
-        }
+        // Wait for React to process the layout change, then trigger fly-out animation
+        // We need to explicitly call showEditModeSearchResults with empty array
+        // to make all nodes fly to sphere surface (copilot behavior with Option key not held)
+        setTimeout(() => {
+          console.log(`🌌 [Copilot-Entry] Triggering immediate fly-out with empty search results`);
+          const orchestrator = (globalThis as any).__dreamspace_orchestrator_ref;
+          if (orchestrator?.current?.showEditModeSearchResults) {
+            orchestrator.current.showEditModeSearchResults(freshNode.id, []);
+            console.log(`✅ [Copilot-Entry] Called showEditModeSearchResults with empty array - all nodes flying to sphere`);
+          } else {
+            console.warn(`⚠️ [Copilot-Entry] Could not access orchestrator ref`);
+          }
+        }, 100); // Small delay to ensure copilot mode is active
 
         // Create transcript file in DreamNode folder (OLD service - creates file + semantic search monitoring)
         const oldTranscriptionService = getTranscriptionService();
