@@ -109,10 +109,11 @@ export class ConversationRecordingService {
 			console.log(`📝 [ConversationRecording] Current content length: ${currentContent.length} chars`);
 			console.log(`📝 [ConversationRecording] Last 100 chars: "${currentContent.slice(-100)}"`);
 
-			// Append invocation marker inline (like subtitle notation)
-			const invocationMarker = ` (Invoked: ${node.name})`;
+			// Append invocation marker with timestamp (matches Python transcription format)
+			const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' '); // YYYY-MM-DD HH:MM:SS
+			const invocationMarker = `\n\n[${timestamp}] 🔮 Invoked: ${node.name}\n\n`;
 			const updatedContent = currentContent + invocationMarker;
-			console.log(`📝 [ConversationRecording] Appending marker: "${invocationMarker}"`);
+			console.log(`📝 [ConversationRecording] Appending marker: "${invocationMarker.trim()}"`);
 			console.log(`📝 [ConversationRecording] New content length: ${updatedContent.length} chars`);
 
 			// Write back to file

@@ -6,6 +6,7 @@ import { getTranscriptionService } from './services/transcription-service';
 import { getConversationRecordingService } from './services/conversation-recording-service';
 import { getConversationSummaryService } from './services/conversation-summary-service';
 import { getEmailExportService } from './services/email-export-service';
+import { TranscriptionService as PythonTranscriptionService } from '../realtime-transcription/services/transcription-service';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -70,16 +71,33 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`🎯 [Copilot-Entry] Starting conversation mode with "${freshNode.name}" (${freshNode.id})`);
         store.startCopilotMode(freshNode);
 
-        // Start transcription service
-        const transcriptionService = getTranscriptionService();
-        await transcriptionService.startTranscription(freshNode);
+        // Create transcript file in DreamNode folder (OLD service - creates file + semantic search monitoring)
+        const oldTranscriptionService = getTranscriptionService();
+        await oldTranscriptionService.startTranscription(freshNode);
 
-        // Start conversation recording
+        // Get the transcript file path for Python transcription
+        const transcriptFile = (oldTranscriptionService as any).transcriptionFile;
+        if (!transcriptFile) {
+          throw new Error('Failed to create transcript file');
+        }
+
+        // Get absolute file system path for Python transcription
+        const vaultPath = (plugin.app.vault.adapter as any).basePath;
+        const path = require('path');
+        const absoluteTranscriptPath = path.join(vaultPath, transcriptFile.path);
+
+        // Start Python real-time transcription to the transcript file
+        const pythonTranscriptionService = new PythonTranscriptionService(plugin as any);
+        await pythonTranscriptionService.startTranscription(absoluteTranscriptPath, {
+          model: 'small.en'
+        });
+
+        // Start conversation recording (for DreamNode invocations)
         const recordingService = getConversationRecordingService();
         recordingService.startRecording(freshNode);
         console.log(`🎙️ [Copilot] Started recording invocations for conversation with ${freshNode.name}`);
 
-        uiService.showSuccess(`Conversation mode activated with "${freshNode.name}". Start dictating in the opened file.`);
+        uiService.showSuccess(`Conversation mode activated with "${freshNode.name}". Start speaking!`);
 
       } catch (error) {
         console.error('Failed to enter conversation mode:', error);
@@ -129,7 +147,11 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
           }
         }
 
-        // Now safe to stop transcription (which deletes the file)
+        // Stop Python transcription first
+        const pythonTranscriptionService = new PythonTranscriptionService(plugin as any);
+        await pythonTranscriptionService.stopTranscription();
+
+        // Stop old transcription service (preserves file, stops monitoring)
         await transcriptionService.stopTranscription();
 
         // Stop conversation recording and get invocations

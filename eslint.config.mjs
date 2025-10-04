@@ -60,6 +60,11 @@ export default [
     }
   },
   {
-    ignores: ['main.js', 'node_modules/', '*.d.ts']
+    ignores: [
+      'main.js',
+      'node_modules/',
+      '*.d.ts',
+      'src/features/realtime-transcription/scripts/venv/**'
+    ]
   }
 ];

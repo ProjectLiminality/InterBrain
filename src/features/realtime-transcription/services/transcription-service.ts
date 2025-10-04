@@ -188,7 +188,7 @@ export class TranscriptionService implements ITranscriptionService {
 
 			// Monitor stdout for status updates
 			// eslint-disable-next-line no-undef
-			this.currentProcess.stdout?.on('data', (data: Buffer) => {
+			this.currentProcess?.stdout?.on('data', (data: Buffer) => {
 				const output = data.toString().trim();
 				console.log(`[Transcription STDOUT] ${output}`);
 
@@ -208,7 +208,7 @@ export class TranscriptionService implements ITranscriptionService {
 
 			// Monitor stderr for errors
 			// eslint-disable-next-line no-undef
-			this.currentProcess.stderr?.on('data', (data: Buffer) => {
+			this.currentProcess?.stderr?.on('data', (data: Buffer) => {
 				const error = data.toString().trim();
 				console.error(`[Transcription STDERR] ${error}`);
 
@@ -223,7 +223,7 @@ export class TranscriptionService implements ITranscriptionService {
 			});
 
 			// Handle process exit
-			this.currentProcess.on('close', (code: number) => {
+			this.currentProcess?.on('close', (code: number) => {
 				console.log(`[Transcription] Process exited with code ${code}`);
 
 				if (code === 0) {
@@ -239,7 +239,7 @@ export class TranscriptionService implements ITranscriptionService {
 			});
 
 			// Handle process errors
-			this.currentProcess.on('error', (error: Error) => {
+			this.currentProcess?.on('error', (error: Error) => {
 				console.error('[Transcription] Process error:', error);
 				this.uiService.showError(`Failed to start transcription: ${error.message}`);
 				this.currentProcess = null;

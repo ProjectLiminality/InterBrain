@@ -129,59 +129,14 @@ export class TranscriptionService {
 
       console.log(`📝 [TranscriptionService] Successfully created and verified transcription file: ${filePath}`);
 
-      // Open in horizontal split at bottom with minimal height
-      const leaf = this.app.workspace.getLeaf('split', 'horizontal');
-      await leaf.openFile(this.transcriptionFile);
+      // DISABLED: Workspace split logic removed - Python transcription handles audio input
+      // The file is created and monitored for semantic search, but no UI/editor opening
 
-      // Store reference to transcript leaf for refocus logic
-      this.transcriptLeaf = leaf;
-
-      // Focus the leaf and position cursor at end of file
-      this.app.workspace.setActiveLeaf(leaf, { focus: true });
-
-      // Wait a moment for the file to fully load, then position cursor
-      setTimeout(() => {
-        const view = leaf.view as any;
-        if (view && 'editor' in view && view.editor) {
-          const editor = view.editor as any;
-          // Position cursor at the very end of the file content
-          const lastLine = editor.lastLine();
-          const lastLineLength = editor.getLine(lastLine).length;
-          editor.setCursor(lastLine, lastLineLength);
-
-          // Focus the editor for immediate dictation
-          editor.focus();
-
-          console.log(`🎯 [TranscriptionService] Cursor positioned at end of file for dictation`);
-        } else {
-          console.warn(`⚠️ [TranscriptionService] Could not access editor for cursor positioning`);
-        }
-      }, 100); // Small delay to ensure file is fully loaded
-
-      // Resize the bottom pane to minimal height - try multiple approaches with different timing
-      setTimeout(() => {
-        this.resizeBottomPaneProper(leaf);
-      }, 200); // Initial attempt
-
-      // Try again after longer delay in case layout needs more time
-      setTimeout(() => {
-        this.resizeBottomPaneFallback(leaf);
-      }, 500); // Fallback approach
-
-      // Set up file monitoring
+      // Set up file monitoring for semantic search
       this.setupFileMonitoring();
 
-      // Set up active leaf listener for smart refocus
-      this.setupActiveLeafListener();
-
-      // Set up window focus listener for Electron focus issues (windowed mode)
-      this.setupWindowFocusListener();
-
-      // Start auto-refocus timer as fallback
-      this.startAutoRefocus();
-
-      console.log(`📝 [TranscriptionService] Created transcription file: ${filePath}`);
-      new Notice(`Transcription started in bottom pane. Dictate in the opened file.`);
+      console.log(`📝 [TranscriptionService] Created transcription file (background mode): ${filePath}`);
+      new Notice(`Transcription started. Speak into your microphone.`);
 
     } catch (error) {
       console.error('Failed to create transcription file:', error);
@@ -234,38 +189,10 @@ export class TranscriptionService {
       // Clear leaf reference
       this.transcriptLeaf = null;
 
-      // Close and delete transcription file
-      if (this.transcriptionFile) {
-        const filePath = this.transcriptionFile.path;
-
-        try {
-          // Find and close the leaf with this file
-          const leaves = this.app.workspace.getLeavesOfType('markdown');
-          for (const leaf of leaves) {
-            if ((leaf.view as any).file?.path === filePath) {
-              await leaf.detach();
-              break;
-            }
-          }
-        } catch (error) {
-          console.warn(`⚠️ [TranscriptionService] Failed to close leaf for ${filePath}:`, error);
-        }
-
-        try {
-          // Delete the file if it still exists
-          const fileStillExists = this.app.vault.getAbstractFileByPath(filePath);
-          if (fileStillExists) {
-            await this.app.vault.delete(this.transcriptionFile);
-            console.log(`🗑️ [TranscriptionService] Deleted transcription file: ${filePath}`);
-          } else {
-            console.log(`📄 [TranscriptionService] File already deleted: ${filePath}`);
-          }
-        } catch (error) {
-          console.warn(`⚠️ [TranscriptionService] Failed to delete ${filePath}:`, error);
-        }
-
-        this.transcriptionFile = null;
-      }
+      // DISABLED: File deletion removed - transcript file is kept in DreamNode folder
+      // The transcript is a permanent record of the conversation
+      console.log(`📝 [TranscriptionService] Transcript file preserved in DreamNode folder`);
+      this.transcriptionFile = null;
 
       // Reset state
       this.lastContent = '';
@@ -319,10 +246,29 @@ export class TranscriptionService {
 
       console.log(`📄 [TranscriptionService] Content changed, length: ${textContent.length}`);
 
+      // Filter out timestamps and invocation markers for semantic search
+      // Format: [YYYY-MM-DD HH:MM:SS] transcription text
+      // Format: [YYYY-MM-DD HH:MM:SS] 🔮 Invoked: NodeName
+      const filteredContent = textContent
+        .split('\n')
+        .map(line => {
+          // Remove timestamp prefix [YYYY-MM-DD HH:MM:SS]
+          const withoutTimestamp = line.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*/, '');
+          // Skip invocation lines entirely
+          if (withoutTimestamp.startsWith('🔮 Invoked:')) {
+            return '';
+          }
+          return withoutTimestamp;
+        })
+        .filter(line => line.trim().length > 0) // Remove empty lines
+        .join(' '); // Join with spaces for semantic search
+
+      console.log(`🧹 [TranscriptionService] Filtered content length: ${filteredContent.length} (from ${textContent.length})`);
+
       // Apply FIFO buffer logic - take last N characters
-      const bufferContent = textContent.length > this.bufferSize
-        ? textContent.slice(-this.bufferSize)
-        : textContent;
+      const bufferContent = filteredContent.length > this.bufferSize
+        ? filteredContent.slice(-this.bufferSize)
+        : filteredContent;
 
       console.log(`🔤 [TranscriptionService] Buffer content (${bufferContent.length} chars): "${bufferContent}"`);
 
