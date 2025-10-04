@@ -23,11 +23,12 @@ export class TranscriptionService implements ITranscriptionService {
 	getScriptPath(): string {
 		const path = require('path');
 		const fs = require('fs');
-		const pluginDir = this.plugin.manifest.dir;
 
-		if (!pluginDir) {
-			throw new Error('Plugin directory not available in manifest');
-		}
+		// Use app.vault.adapter to get the vault's base path
+		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+
+		// Plugin is installed at vault/.obsidian/plugins/interbrain
+		const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
 
 		// Resolve symlinks to get the actual source directory
 		const realPluginDir = fs.realpathSync(pluginDir);
@@ -40,6 +41,8 @@ export class TranscriptionService implements ITranscriptionService {
 			'scripts',
 			'interbrain-transcribe.py'
 		);
+
+		console.log('[Transcription] Script path resolved:', scriptPath);
 		return scriptPath;
 	}
 
@@ -50,14 +53,14 @@ export class TranscriptionService implements ITranscriptionService {
 	private getVenvPython(): string | null {
 		const path = require('path');
 		const fs = require('fs');
-		const pluginDir = this.plugin.manifest.dir;
-
-		if (!pluginDir) {
-			console.warn('[Transcription] Plugin directory not available, cannot check for venv');
-			return null;
-		}
 
 		try {
+			// Use app.vault.adapter to get the vault's base path
+			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+
+			// Plugin is installed at vault/.obsidian/plugins/interbrain
+			const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
+
 			// Resolve symlinks to get the actual source directory
 			const realPluginDir = fs.realpathSync(pluginDir);
 
@@ -73,11 +76,13 @@ export class TranscriptionService implements ITranscriptionService {
 			if (process.platform === 'win32') {
 				const venvPython = path.join(scriptsDir, 'venv', 'Scripts', 'python.exe');
 				if (fs.existsSync(venvPython)) {
+					console.log('[Transcription] Found venv Python (Windows):', venvPython);
 					return venvPython;
 				}
 			} else {
 				const venvPython = path.join(scriptsDir, 'venv', 'bin', 'python3');
 				if (fs.existsSync(venvPython)) {
+					console.log('[Transcription] Found venv Python (Unix):', venvPython);
 					return venvPython;
 				}
 			}
