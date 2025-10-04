@@ -184,17 +184,25 @@ export class TranscriptionService implements ITranscriptionService {
 			this.currentProcess = spawn(pythonCommand, args);
 			this.currentOutputPath = outputPath;
 
+			console.log('[Transcription] Process spawned, waiting for output...');
+
 			// Monitor stdout for status updates
 			// eslint-disable-next-line no-undef
 			this.currentProcess.stdout?.on('data', (data: Buffer) => {
 				const output = data.toString().trim();
-				console.log(`[Transcription] ${output}`);
+				console.log(`[Transcription STDOUT] ${output}`);
 
 				// Show user-friendly notifications for key events
 				if (output.includes('Starting transcription')) {
 					this.uiService.showSuccess('🎙️ Transcription started');
 				} else if (output.includes('Model loaded successfully')) {
+					this.uiService.showSuccess('✅ Whisper model loaded');
 					console.log('[Transcription] Whisper model ready');
+				} else if (output.includes('Listening')) {
+					this.uiService.showSuccess('🎤 Listening for speech...');
+				} else if (output.startsWith('✅')) {
+					// This is a transcribed line - show it
+					this.uiService.showInfo(`Transcribed: ${output.substring(2).trim()}`);
 				}
 			});
 
@@ -202,7 +210,7 @@ export class TranscriptionService implements ITranscriptionService {
 			// eslint-disable-next-line no-undef
 			this.currentProcess.stderr?.on('data', (data: Buffer) => {
 				const error = data.toString().trim();
-				console.error(`[Transcription Error] ${error}`);
+				console.error(`[Transcription STDERR] ${error}`);
 
 				// Handle specific error cases
 				if (error.includes('permission denied') || error.includes('Permission denied')) {
