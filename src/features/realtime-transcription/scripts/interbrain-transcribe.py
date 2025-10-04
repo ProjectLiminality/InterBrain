@@ -13,34 +13,9 @@ Usage:
 import argparse
 import signal
 import sys
-import os
-import tempfile
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
-# Disable file logging completely by using NullHandler
-# This prevents RealtimeSTT from trying to write log files
-logging.basicConfig(level=logging.WARNING, handlers=[logging.NullHandler()])
-
-# Also suppress all file handler creation attempts
-class NoFileHandler:
-    """Mock file handler that does nothing"""
-    def __init__(self, *args, **kwargs):
-        pass
-    def setLevel(self, *args, **kwargs):
-        pass
-    def setFormatter(self, *args, **kwargs):
-        pass
-    def emit(self, *args, **kwargs):
-        pass
-    def close(self, *args, **kwargs):
-        pass
-
-# Replace FileHandler with our mock before importing RealtimeSTT
-original_file_handler = logging.FileHandler
-logging.FileHandler = NoFileHandler
 
 # Check for required dependencies
 try:
@@ -49,9 +24,6 @@ except ImportError as e:
     print(f"❌ Missing dependency: {e}")
     print("Run: pip install -r requirements.txt")
     sys.exit(1)
-finally:
-    # Restore original FileHandler (good citizenship)
-    logging.FileHandler = original_file_handler
 
 
 class TranscriptionSession:
@@ -107,6 +79,7 @@ class TranscriptionSession:
             recorder_config = {
                 'model': self.model,
                 'language': self.language or 'en',
+                'no_log_file': True,  # Disable log file (prevents read-only filesystem errors on macOS)
                 'silero_sensitivity': 0.4,  # Voice activity detection sensitivity
                 'webrtc_sensitivity': 2,    # Additional VAD for better detection
                 'post_speech_silence_duration': 0.4,  # Wait 400ms after speech ends
