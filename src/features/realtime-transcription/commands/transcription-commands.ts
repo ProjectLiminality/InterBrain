@@ -1,17 +1,13 @@
 import type InterBrainPlugin from '../../../main';
-import { TranscriptionService } from '../services/transcription-service';
+import { getRealtimeTranscriptionService } from '../services/transcription-service';
 import { UIService } from '../../../services/ui-service';
 
 /**
  * Register real-time transcription commands
  */
 export function registerTranscriptionCommands(plugin: InterBrainPlugin): void {
-	const transcriptionService = new TranscriptionService(plugin);
+	const transcriptionService = getRealtimeTranscriptionService();
 	const uiService = new UIService(plugin.app);
-
-	// Store transcription service on plugin for cleanup
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	(plugin as any).transcriptionService = transcriptionService;
 
 	/**
 	 * Command: Start Real-Time Transcription
@@ -71,10 +67,7 @@ export function registerTranscriptionCommands(plugin: InterBrainPlugin): void {
 /**
  * Cleanup transcription service on plugin unload
  */
-export function cleanupTranscriptionService(plugin: InterBrainPlugin): void {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const transcriptionService = (plugin as any).transcriptionService as TranscriptionService | undefined;
-	if (transcriptionService) {
-		transcriptionService.cleanup();
-	}
+export function cleanupTranscriptionService(): void {
+	const transcriptionService = getRealtimeTranscriptionService();
+	transcriptionService.cleanup();
 }

@@ -290,3 +290,18 @@ export class TranscriptionService implements ITranscriptionService {
 		}
 	}
 }
+
+// Singleton instance - prevents multiple instances from losing track of running processes
+let _transcriptionServiceInstance: TranscriptionService | null = null;
+
+export function initializeRealtimeTranscriptionService(plugin: InterBrainPlugin): void {
+	_transcriptionServiceInstance = new TranscriptionService(plugin);
+	console.log('[RealtimeTranscription] Service initialized');
+}
+
+export function getRealtimeTranscriptionService(): TranscriptionService {
+	if (!_transcriptionServiceInstance) {
+		throw new Error('RealtimeTranscriptionService not initialized. Call initializeRealtimeTranscriptionService() first.');
+	}
+	return _transcriptionServiceInstance;
+}

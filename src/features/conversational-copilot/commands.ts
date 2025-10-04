@@ -6,7 +6,7 @@ import { getTranscriptionService } from './services/transcription-service';
 import { getConversationRecordingService } from './services/conversation-recording-service';
 import { getConversationSummaryService } from './services/conversation-summary-service';
 import { getEmailExportService } from './services/email-export-service';
-import { TranscriptionService as PythonTranscriptionService } from '../realtime-transcription/services/transcription-service';
+import { getRealtimeTranscriptionService } from '../realtime-transcription';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -87,7 +87,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const absoluteTranscriptPath = path.join(vaultPath, transcriptFile.path);
 
         // Start Python real-time transcription to the transcript file
-        const pythonTranscriptionService = new PythonTranscriptionService(plugin as any);
+        const pythonTranscriptionService = getRealtimeTranscriptionService();
         await pythonTranscriptionService.startTranscription(absoluteTranscriptPath, {
           model: 'small.en'
         });
@@ -148,7 +148,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         }
 
         // Stop Python transcription first
-        const pythonTranscriptionService = new PythonTranscriptionService(plugin as any);
+        const pythonTranscriptionService = getRealtimeTranscriptionService();
         await pythonTranscriptionService.stopTranscription();
 
         // Stop old transcription service (preserves file, stops monitoring)

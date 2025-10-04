@@ -5,7 +5,11 @@
  * Provides seamless voice-to-text capture during conversations, meetings, and ideation sessions.
  */
 
-export { TranscriptionService } from './services/transcription-service';
+export {
+	TranscriptionService,
+	initializeRealtimeTranscriptionService,
+	getRealtimeTranscriptionService
+} from './services/transcription-service';
 export { registerTranscriptionCommands, cleanupTranscriptionService } from './commands/transcription-commands';
 export type {
 	TranscriptionProcess,
