@@ -1170,38 +1170,25 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const { setSpatialLayout } = useInterBrainStore.getState();
         setSpatialLayout('constellation');
 
-        // Get current sphere rotation
+        // Get current sphere rotation for accurate scaled position calculation
         let worldRotation = undefined;
         if (dreamWorldRef.current) {
           worldRotation = dreamWorldRef.current.quaternion.clone();
         }
 
-        // Calculate constellation positions
-        const constellationPositions = new Map<string, [number, number, number]>();
-        dreamNodes.forEach(node => {
-          if (node.position) {
-            constellationPositions.set(node.id, node.position);
+        // Return ALL nodes to their scaled constellation positions
+        nodeRefs.current.forEach((nodeRef) => {
+          if (nodeRef.current) {
+            // Use default easing for external calls
+            nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation, 'easeOutCubic');
           }
         });
 
-        // Move all nodes to constellation
-        dreamNodes.forEach(node => {
-          const nodeRef = nodeRefs.current.get(node.id);
-          const constellationPos = constellationPositions.get(node.id);
-
-          if (nodeRef?.current && constellationPos) {
-            const scaledPosition = calculateScaledPositionFromSphere(
-              constellationPos,
-              worldRotation
-            );
-
-            nodeRef.current.moveTo(scaledPosition[0], scaledPosition[1], scaledPosition[2], transitionDuration);
-            nodeRef.current.setActiveState(false);
-          }
-        });
-
-        isTransitioning.current = false;
-        console.log(`✅ [Orchestrator-GlobalAPI] All nodes sent to constellation`);
+        // Set transition complete after animation duration
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+          console.log(`✅ [Orchestrator-GlobalAPI] All nodes returned to constellation`);
+        }, transitionDuration);
       }
     };
 
@@ -1211,7 +1198,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     return () => {
       delete (globalThis as any).__dreamspace_orchestrator;
     };
-  }, [dreamNodes, transitionDuration]);
+  }, [transitionDuration]);
 
   // Removed excessive node count logging
 
