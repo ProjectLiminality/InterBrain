@@ -13,9 +13,22 @@ Usage:
 import argparse
 import signal
 import sys
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+# Set up logging directory BEFORE importing RealtimeSTT
+# This prevents it from trying to write to read-only root directory
+os.environ['REALTIMESTT_LOG_DIR'] = tempfile.gettempdir()
+
+# Also try to change working directory to temp to prevent root writes
+original_cwd = os.getcwd()
+try:
+    os.chdir(tempfile.gettempdir())
+except Exception:
+    pass  # If we can't change, continue anyway
 
 # Check for required dependencies
 try:
@@ -24,6 +37,12 @@ except ImportError as e:
     print(f"❌ Missing dependency: {e}")
     print("Run: pip install -r requirements.txt")
     sys.exit(1)
+finally:
+    # Restore original working directory
+    try:
+        os.chdir(original_cwd)
+    except Exception:
+        pass
 
 
 class TranscriptionSession:
@@ -76,13 +95,6 @@ class TranscriptionSession:
 
         try:
             # Initialize recorder with faster-whisper model
-            import tempfile
-            import os
-
-            # Set up logging in temp directory instead of root
-            log_dir = tempfile.gettempdir()
-            log_file = os.path.join(log_dir, 'realtimestt.log')
-
             recorder_config = {
                 'model': self.model,
                 'language': self.language or 'en',
@@ -98,7 +110,6 @@ class TranscriptionSession:
                 'level': 'WARNING',  # Reduce log verbosity
             }
 
-            print(f"📝 Log file: {log_file}")
             self.recorder = AudioToTextRecorder(**recorder_config)
 
             print("✅ Model loaded successfully")
