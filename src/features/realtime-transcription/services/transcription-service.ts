@@ -143,7 +143,7 @@ export class TranscriptionService implements ITranscriptionService {
 		// Prefer venv Python if available, otherwise use system Python
 		const venvPython = this.getVenvPython();
 		// eslint-disable-next-line no-undef
-		const pythonCommand = venvPython || (process.platform === 'win32' ? 'python' : 'python3');
+		const basePythonCommand = venvPython || (process.platform === 'win32' ? 'python' : 'python3');
 		const scriptPath = this.getScriptPath();
 		const model = config.model || 'small.en';
 
@@ -151,14 +151,22 @@ export class TranscriptionService implements ITranscriptionService {
 		if (venvPython) {
 			console.log('[Transcription] Using virtual environment Python:', venvPython);
 		} else {
-			console.log('[Transcription] Using system Python:', pythonCommand);
+			console.log('[Transcription] Using system Python:', basePythonCommand);
 		}
 
-		const args = [
-			scriptPath,
-			'--output', outputPath,
-			'--model', model
-		];
+		// On macOS, use wrapper script to set DYLD_FALLBACK_LIBRARY_PATH for gettext
+		const path = require('path');
+		let pythonCommand = basePythonCommand;
+		let args: string[];
+
+		// eslint-disable-next-line no-undef
+		if (process.platform === 'darwin') {
+			const wrapperScript = path.join(path.dirname(scriptPath), 'run-with-libs.sh');
+			pythonCommand = wrapperScript;
+			args = [basePythonCommand, scriptPath, '--output', outputPath, '--model', model];
+		} else {
+			args = [scriptPath, '--output', outputPath, '--model', model];
+		}
 
 		if (config.device) {
 			args.push('--device', config.device);
@@ -173,13 +181,7 @@ export class TranscriptionService implements ITranscriptionService {
 		// Spawn Python process
 		try {
 			const { spawn } = require('child_process');
-
-			// Set up environment to help mosestokenizer find gettext library
-			const env = { ...process.env };
-			env.DYLD_LIBRARY_PATH = '/opt/homebrew/opt/gettext/lib' +
-				(env.DYLD_LIBRARY_PATH ? ':' + env.DYLD_LIBRARY_PATH : '');
-
-			this.currentProcess = spawn(pythonCommand, args, { env });
+			this.currentProcess = spawn(pythonCommand, args);
 			this.currentOutputPath = outputPath;
 
 			// Monitor stdout for status updates

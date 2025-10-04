@@ -71,6 +71,18 @@ pip install sounddevice numpy faster-whisper
 # Install other dependencies
 pip install librosa opus-fast-mosestokenizer websockets
 
+# Fix mosestokenizer library linking on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "🔧 Fixing mosestokenizer library linking..."
+    MOSES_LIB="$VENV_DIR/lib/python*/site-packages/mosestokenizer/lib/_mosestokenizer.cpython-*-darwin.so"
+    for lib in $MOSES_LIB; do
+        if [ -f "$lib" ]; then
+            install_name_tool -add_rpath /opt/homebrew/opt/gettext/lib "$lib" 2>/dev/null || true
+            echo "✅ Patched mosestokenizer library"
+        fi
+    done
+fi
+
 echo ""
 echo "✅ Setup complete!"
 echo ""
