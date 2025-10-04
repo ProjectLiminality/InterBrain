@@ -86,7 +86,7 @@ class TranscriptionSession:
                 'no_log_file': True,  # Disable log file (prevents read-only filesystem errors on macOS)
                 'silero_sensitivity': 0.4,  # Voice activity detection sensitivity
                 'webrtc_sensitivity': 2,    # Additional VAD for better detection
-                'post_speech_silence_duration': 0.4,  # Wait 400ms after speech ends
+                'post_speech_silence_duration': 0.2,  # Wait 200ms after speech ends (reduced for more frequent commits)
                 'min_length_of_recording': 0.5,  # Minimum 500ms recording
                 'min_gap_between_recordings': 0,  # No gap between recordings
                 'level': 'WARNING',  # Reduce log verbosity
