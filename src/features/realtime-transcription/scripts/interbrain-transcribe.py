@@ -76,6 +76,13 @@ class TranscriptionSession:
 
         try:
             # Initialize recorder with faster-whisper model
+            import tempfile
+            import os
+
+            # Set up logging in temp directory instead of root
+            log_dir = tempfile.gettempdir()
+            log_file = os.path.join(log_dir, 'realtimestt.log')
+
             recorder_config = {
                 'model': self.model,
                 'language': self.language or 'en',
@@ -88,8 +95,10 @@ class TranscriptionSession:
                 'realtime_processing_pause': 0.02,  # 20ms processing pause
                 'on_realtime_transcription_update': lambda text: None,  # Ignore partial updates
                 'on_realtime_transcription_stabilized': self._write_transcript,  # Write stable transcripts
+                'level': 'WARNING',  # Reduce log verbosity
             }
 
+            print(f"📝 Log file: {log_file}")
             self.recorder = AudioToTextRecorder(**recorder_config)
 
             print("✅ Model loaded successfully")
