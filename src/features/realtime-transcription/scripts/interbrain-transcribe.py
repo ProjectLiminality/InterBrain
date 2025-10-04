@@ -51,19 +51,27 @@ class TranscriptionSession:
         self.stop()
         sys.exit(0)
 
+    def _on_update(self, text: str):
+        """Called when partial transcription is updated (not stabilized yet)."""
+        print(f"🔄 Partial update: '{text}'")
+
     def _write_transcript(self, text: str):
         """Write transcribed text to output file with timestamp."""
+        print(f"🔔 _write_transcript called with: '{text}'")
+
         if not text or not text.strip():
+            print("⚠️  Empty text, skipping write")
             return
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {text.strip()}\n\n"
 
         try:
+            print(f"📝 Writing to file: {self.output_path}")
             with open(self.output_path, 'a', encoding='utf-8') as f:
                 f.write(line)
                 f.flush()  # Ensure immediate write
-            print(f"✅ {text.strip()}")
+            print(f"✅ Successfully wrote: {text.strip()}")
         except Exception as e:
             print(f"❌ Error writing to file: {e}", file=sys.stderr)
 
@@ -76,6 +84,8 @@ class TranscriptionSession:
 
         try:
             # Initialize recorder with faster-whisper model
+            print("⏳ Initializing recorder (may take time on first run to download model)...")
+
             recorder_config = {
                 'model': self.model,
                 'language': self.language or 'en',
@@ -87,7 +97,7 @@ class TranscriptionSession:
                 'min_gap_between_recordings': 0,  # No gap between recordings
                 'enable_realtime_transcription': True,  # Real-time mode
                 'realtime_processing_pause': 0.02,  # 20ms processing pause
-                'on_realtime_transcription_update': lambda text: None,  # Ignore partial updates
+                'on_realtime_transcription_update': self._on_update,  # Log partial updates
                 'on_realtime_transcription_stabilized': self._write_transcript,  # Write stable transcripts
                 'level': 'WARNING',  # Reduce log verbosity
             }
@@ -95,13 +105,16 @@ class TranscriptionSession:
             self.recorder = AudioToTextRecorder(**recorder_config)
 
             print("✅ Model loaded successfully")
-            print("🎤 Listening...")
+            print("🎤 Listening for speech...")
+            print("💡 Try speaking clearly into your microphone")
 
             self.running = True
 
             # Start recorder - it will call our callback when transcripts are ready
             while self.running:
-                self.recorder.text()  # This blocks until speech is detected and transcribed
+                print("🔄 Waiting for speech...")
+                text = self.recorder.text()  # This blocks until speech is detected and transcribed
+                print(f"🎯 recorder.text() returned: '{text}'")
 
         except KeyboardInterrupt:
             print("\n🛑 Stopped by user")
