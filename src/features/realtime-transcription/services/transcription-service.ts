@@ -1,12 +1,7 @@
 import type { ChildProcess } from 'child_process';
-import { spawn, exec } from 'child_process';
-import { promisify } from 'util';
-import * as path from 'path';
 import type InterBrainPlugin from '../../../main';
 import { UIService } from '../../../services/ui-service';
 import type { ITranscriptionService, TranscriptionConfig } from '../types/transcription-types';
-
-const execAsync = promisify(exec);
 
 /**
  * Service for managing real-time transcription processes
@@ -26,6 +21,7 @@ export class TranscriptionService implements ITranscriptionService {
 	 * Get the path to the Python transcription script
 	 */
 	getScriptPath(): string {
+		const path = require('path');
 		const pluginDir = this.plugin.manifest.dir || '';
 		const scriptPath = path.join(
 			pluginDir,
@@ -42,6 +38,7 @@ export class TranscriptionService implements ITranscriptionService {
 	 * Returns venv python if it exists, otherwise null
 	 */
 	private getVenvPython(): string | null {
+		const path = require('path');
 		const pluginDir = this.plugin.manifest.dir || '';
 		const scriptsDir = path.join(
 			pluginDir,
@@ -80,14 +77,18 @@ export class TranscriptionService implements ITranscriptionService {
 	 * Check if Python 3 is available on the system
 	 */
 	async checkPythonAvailable(): Promise<boolean> {
-		try {
-			// eslint-disable-next-line no-undef
-			const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-			const result = await execAsync(`${pythonCommand} --version`);
-			return result.stdout !== undefined;
-		} catch {
-			return false;
-		}
+		return new Promise((resolve) => {
+			try {
+				const { exec } = require('child_process');
+				// eslint-disable-next-line no-undef
+				const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+				exec(`${pythonCommand} --version`, (error: Error | null) => {
+					resolve(!error);
+				});
+			} catch {
+				resolve(false);
+			}
+		});
 	}
 
 	/**
@@ -152,6 +153,7 @@ export class TranscriptionService implements ITranscriptionService {
 
 		// Spawn Python process
 		try {
+			const { spawn } = require('child_process');
 			this.currentProcess = spawn(pythonCommand, args);
 			this.currentOutputPath = outputPath;
 
