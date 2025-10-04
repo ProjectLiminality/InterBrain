@@ -9,6 +9,19 @@ VENV_DIR="$SCRIPT_DIR/venv"
 
 echo "🔧 Setting up Real-Time Transcription environment..."
 
+# Check for gettext (required by mosestokenizer)
+if ! command -v msgfmt &> /dev/null; then
+    echo "📦 Installing gettext (required by mosestokenizer)..."
+    if command -v brew &> /dev/null; then
+        brew install gettext
+    else
+        echo "⚠️  gettext not found. Please install it manually:"
+        echo "  macOS: brew install gettext"
+        echo "  Ubuntu/Debian: sudo apt-get install gettext"
+        exit 1
+    fi
+fi
+
 # Check for compatible Python version (3.9-3.12 required by whisper-streaming)
 if command -v python3.12 &> /dev/null; then
     PYTHON_CMD=python3.12
@@ -50,10 +63,12 @@ pip install --upgrade pip > /dev/null 2>&1
 
 # Install dependencies
 echo "📥 Installing dependencies..."
+
 # Install whisper-streaming without pyalsaaudio (Linux-only dependency)
 pip install --no-deps whisper-streaming
 pip install sounddevice numpy faster-whisper
-# Now install whisper-streaming's other dependencies
+
+# Install other dependencies
 pip install librosa opus-fast-mosestokenizer websockets
 
 echo ""
