@@ -129,6 +129,11 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const sharedNodeIds = [...store.copilotMode.sharedNodeIds]; // Copy before clearing
         console.log(`🎯 [Copilot-Exit] Will focus person after exit: "${partnerToFocus?.name}" (${partnerToFocus?.id})`);
 
+        // Exit copilot mode IMMEDIATELY for responsive UI
+        // This switches layout back to liminal-web and focuses the person
+        store.exitCopilotMode();
+        console.log(`🌐 [Copilot-Exit] Exited copilot mode - layout switched to liminal-web`);
+
         // Capture conversation metadata before stopping services
         const recordingService = getConversationRecordingService();
         const conversationMetadata = recordingService.getConversationMetadata();
@@ -221,9 +226,6 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         } else {
           console.warn(`⚠️ [Copilot-Exit] Skipping email export - missing requirements`);
         }
-
-        // Exit copilot mode (this processes shared nodes and sets layout back to liminal-web)
-        store.exitCopilotMode();
 
         // Persist bidirectional relationship changes to disk if there were shared nodes
         if (partnerToFocus && sharedNodeIds.length > 0) {
