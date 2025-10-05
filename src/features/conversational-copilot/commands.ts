@@ -172,7 +172,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`📧 [Copilot-Exit] transcriptContent length:`, transcriptContent.length);
         console.log(`📧 [Copilot-Exit] invocations count:`, invocations.length);
 
-        if (partnerToFocus && transcriptContent) {
+        if (partnerToFocus && (transcriptContent || invocations.length > 0)) {
           try {
             // Get plugin settings for API key
             const settings = (plugin as any).settings;
@@ -180,18 +180,22 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
             const apiKey = settings?.claudeApiKey;
             console.log(`📧 [Copilot-Exit] API key configured:`, apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO');
 
-            if (!apiKey) {
-              console.warn(`⚠️ [Copilot-Exit] No Claude API key configured - skipping AI summary`);
-              uiService.showInfo('Email export skipped - configure Claude API key in settings');
-            } else {
-              console.log(`📧 [Copilot-Exit] Starting email export flow...`);
-              uiService.showInfo('Generating conversation summary...');
+            let aiSummary = '';
 
-              // Generate AI summary from transcript content (not file)
+            if (!apiKey) {
+              console.warn(`⚠️ [Copilot-Exit] No Claude API key configured - using basic summary`);
+              uiService.showInfo('Creating email with shared DreamNodes (AI summary disabled)');
+              // Fallback: No AI summary, just list shared nodes
+              aiSummary = ''; // Empty string will trigger basic template in email service
+            } else {
+              console.log(`📧 [Copilot-Exit] Starting AI summary generation...`);
+              uiService.showInfo('Generating AI conversation summary...');
+
+              // Generate AI summary from transcript content
               console.log(`📧 [Copilot-Exit] Getting summary service...`);
               const summaryService = getConversationSummaryService();
               console.log(`📧 [Copilot-Exit] Calling generateSummary with content...`);
-              const aiSummary = await summaryService.generateSummaryFromContent(
+              aiSummary = await summaryService.generateSummaryFromContent(
                 transcriptContent,
                 invocations,
                 partnerToFocus,
@@ -200,31 +204,31 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
 
               console.log(`✅ [Copilot-Exit] AI summary generated (length: ${aiSummary.length})`);
               console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, 200)}..."`);
-
-              // Export to email
-              console.log(`📧 [Copilot-Exit] Getting email service...`);
-              const emailService = getEmailExportService();
-              const conversationEndTime = new Date();
-              console.log(`📧 [Copilot-Exit] Calling exportToEmail...`);
-
-              await emailService.exportToEmail(
-                partnerToFocus,
-                conversationStartTime,
-                conversationEndTime,
-                invocations,
-                aiSummary
-              );
-
-              console.log(`✅ [Copilot-Exit] Email draft created successfully`);
-              uiService.showSuccess('Email draft created in Apple Mail');
             }
+
+            // Export to email (works with or without AI summary)
+            console.log(`📧 [Copilot-Exit] Getting email service...`);
+            const emailService = getEmailExportService();
+            const conversationEndTime = new Date();
+            console.log(`📧 [Copilot-Exit] Calling exportToEmail...`);
+
+            await emailService.exportToEmail(
+              partnerToFocus,
+              conversationStartTime,
+              conversationEndTime,
+              invocations,
+              aiSummary
+            );
+
+            console.log(`✅ [Copilot-Exit] Email draft created successfully`);
+            uiService.showSuccess('Email draft created in Apple Mail');
           } catch (error) {
             console.error('❌ [Copilot-Exit] Failed to generate summary or export email:', error);
             console.error('❌ [Copilot-Exit] Error stack:', (error as Error).stack);
             uiService.showError('Failed to create email summary - check console for details');
           }
         } else {
-          console.warn(`⚠️ [Copilot-Exit] Skipping email export - missing requirements`);
+          console.warn(`⚠️ [Copilot-Exit] Skipping email export - no content or invocations`);
         }
 
         // Persist bidirectional relationship changes to disk if there were shared nodes

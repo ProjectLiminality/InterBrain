@@ -85,8 +85,10 @@ export class EmailExportService {
 		let body = `Hi ${conversationPartner.name},\n\n`;
 		body += `Here's a summary of our call on ${dateStr} at ${timeStr} (Duration: ${duration}):\n\n`;
 
-		// Add AI-generated summary
-		body += `${aiSummary}\n\n`;
+		// Add AI-generated summary (if available)
+		if (aiSummary && aiSummary.trim()) {
+			body += `${aiSummary}\n\n`;
+		}
 
 		// Add invoked DreamNodes section if any
 		if (invocations.length > 0) {
