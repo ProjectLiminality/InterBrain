@@ -5,6 +5,113 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-10-05 - Epic 7: Conversational Copilot System (Complete)
+
+### Added
+
+**Complete Copilot System with Real-time Search (Feature #327)**
+- Person-centered conversational mode with semantic search-driven UX
+- Real-time transcription with 500-character context window for semantic search
+- Option key press-and-hold to show/hide search results honeycomb
+- Fullscreen DreamTalk/DreamSong overlays on dreamspace canvas
+- Shared nodes tracking with bidirectional relationship management
+- README and docs/ directory indexing for documentation-aware search
+
+**FaceTime Integration & Call Automation (Feature #333)**
+- AppleScript-based FaceTime call initiation from Obsidian commands
+- Contact metadata system (email/phone) for person DreamNodes
+- Automatic copilot mode activation on call start
+- Integrated end-call command with automatic cleanup
+- Seamless conversation workflow from call to copilot mode
+
+**Real-Time Transcription System (Feature #335)**
+- whisper_streaming integration with LocalAgreement-2 for duplicate prevention
+- Python CLI with sub-5-second latency speech-to-text
+- Self-contained virtual environment with automatic dependency management
+- Obsidian process management via command palette
+- Timestamped markdown output with instant file updates
+- Cross-platform support (macOS, Windows, Linux)
+
+**Conversation Recording & Export System (Feature #331)**
+- DreamNode invocation tracking during conversations
+- Real-time transcript embedding of invoked nodes
+- AI-powered conversation summaries via Claude API
+- Email export with pre-filled Apple Mail drafts
+- Obsidian URI deep links for one-click node cloning
+- Batch clone links for sharing multiple DreamNodes
+- Graceful fallback when AI API unavailable
+
+### Technical Achievements
+
+**Conversational Architecture**
+- Copilot spatial mode with person node at center
+- Semantic search integration driving real-time node discovery
+- 500-char rolling context window for focused search relevance
+- Auto-hide/show ribbon for cleaner video call interface
+- Multi-window transcript refocus with focus restoration mechanisms
+
+**Python Integration Innovation**
+- Virtual environment isolation with pip dependency management
+- Symlink-aware script path resolution for development workflow
+- Python 3.13 compatibility with cross-platform dependency handling
+- Process lifecycle management with graceful cleanup
+- stdout/stderr monitoring for real-time feedback
+
+**AI & LLM Integration**
+- Provider abstraction layer supporting multiple LLM backends
+- Claude API integration via Obsidian's requestUrl (CORS workaround)
+- Conversation summarization with invocation context awareness
+- Plugin settings tab for API key configuration
+- Future-ready architecture for OpenRouter and open-source models
+
+**Deep Linking System**
+- Custom Obsidian URI protocol handlers (`obsidian://interbrain-clone`)
+- Single node and batch clone URI support
+- Proof-of-concept implementation with console logging
+- Foundation for future peer-to-peer DreamNode sharing
+- Plain text email format with clickable deep links
+
+**macOS System Integration**
+- AppleScript execution via Node.js child_process
+- Apple Mail draft generation with pre-filled content
+- FaceTime automation with contact resolution
+- Electron window focus management for dictation continuity
+- System-level integration without external dependencies
+
+### Enhanced
+
+**Spatial Orchestrator**
+- Immediate fly-out animation on empty search results
+- Copilot-aware layout state management
+- Enhanced global API for scaled position restoration
+- Proper animation timing for video call transitions
+
+**Transcription UX Polish**
+- Relative timestamps ("Just now", "1 minute ago")
+- Improved invocation formatting with single blank lines
+- Blocking mode to prevent transcription duplication
+- Comprehensive debug logging for troubleshooting
+- Focus restoration mechanisms for seamless dictation
+
+**Code Quality**
+- Disabled `no-explicit-any` ESLint rule for undocumented Obsidian APIs
+- 208 tests passing with zero TypeScript errors
+- Clean separation of concerns across service layers
+- Singleton pattern for transcription service lifecycle
+
+### Fixed
+
+- CORS issues with Claude API using Obsidian's `requestUrl()`
+- Email export transcript capture timing (read before deletion)
+- Click-based invocation tracking (decoupled from hotkey selection)
+- Python virtual environment path resolution across platforms
+- RealtimeSTT log file writing to read-only directories
+- Transcription duplication through blocking mode implementation
+- Invocation formatting consistency with blank line normalization
+- Electron environment detection for email export
+- URI handler graceful fallback registration
+- FaceTime call responsiveness by exiting copilot mode first
+
 ## [0.6.0] - 2025-09-18 - Epic 6: DreamWeaving Operations (Complete)
 
 ### Added
