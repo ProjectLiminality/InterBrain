@@ -120,3 +120,7 @@ main.js
 src/features/realtime-transcription/scripts/venv/
 *.pyc
 __pycache__/
+
+# Sensitive data files
+data.json
+copilot-transcription-*.md
