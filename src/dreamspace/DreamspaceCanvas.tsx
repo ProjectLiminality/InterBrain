@@ -435,8 +435,10 @@ export default function DreamspaceCanvas() {
           // Position conversation partner at center (like edit mode)
           spatialOrchestratorRef.current.focusOnNode(store.copilotMode.conversationPartner.id);
 
-          // If we have search results from transcription, show them around the person
-          if (searchResults && searchResults.length > 0) {
+          // Always call showEditModeSearchResults to trigger layout (even with empty array)
+          // Empty array = all nodes fly to sphere (Option key not held behavior)
+          // Non-empty array = relevant nodes in honeycomb, rest on sphere
+          if (searchResults) {
             console.log(`🤖 [Canvas-Layout] Showing ${searchResults.length} copilot search results around person`);
             spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, searchResults);
           }
