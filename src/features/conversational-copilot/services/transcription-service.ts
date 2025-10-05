@@ -477,7 +477,7 @@ export class TranscriptionService {
    */
   private resizeBottomPaneProper(leaf: WorkspaceLeaf): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const leafAny = leaf as any;
 
       console.log(`🔍 [TranscriptionService] Starting resize debug - leaf:`, leaf);
@@ -486,7 +486,7 @@ export class TranscriptionService {
       console.log(`🔍 [TranscriptionService] Leaf parent constructor:`, leafAny.parent?.constructor?.name);
 
       // Find the split that contains this leaf
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const split = leafAny.parent as any;
 
       if (!split) {
@@ -505,9 +505,9 @@ export class TranscriptionService {
       }
 
       // Get the top and bottom children
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const topChild = split.children[0] as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const bottomChild = split.children[1] as any;
 
       console.log(`🔍 [TranscriptionService] Top child:`, topChild);
@@ -545,7 +545,7 @@ export class TranscriptionService {
 
         // Trigger workspace resize to apply changes
         console.log(`🔄 [TranscriptionService] Calling requestResize...`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (this.app.workspace as any).requestResize();
 
         console.log(`✅ [TranscriptionService] Resize operation completed`);
@@ -563,7 +563,7 @@ export class TranscriptionService {
 
     } catch (error) {
       console.error('❌ [TranscriptionService] Failed to resize bottom pane properly:', error);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       console.error('❌ [TranscriptionService] Error details:', (error as any).stack);
     }
   }
@@ -576,7 +576,7 @@ export class TranscriptionService {
     try {
       console.log(`🔄 [TranscriptionService] Attempting fallback resize method`);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const leafEl = (leaf as any).containerEl;
       if (!leafEl) {
         console.warn(`⚠️ [TranscriptionService] Could not find leaf container element for fallback`);

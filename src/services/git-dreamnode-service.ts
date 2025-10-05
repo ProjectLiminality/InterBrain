@@ -47,7 +47,7 @@ export class GitDreamNodeService {
       vaultPath = adapter.basePath;
     } else if (adapter.path && typeof adapter.path === 'object') {
       // Sometimes path is an object with properties
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       vaultPath = (adapter.path as any).path || (adapter.path as any).basePath || '';
     }
     

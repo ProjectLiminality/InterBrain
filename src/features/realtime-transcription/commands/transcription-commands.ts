@@ -31,7 +31,7 @@ export function registerTranscriptionCommands(plugin: InterBrainPlugin): void {
 			}
 
 			// Get full file path (construct manually since getFullPath is private)
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			 
 			const vaultPath = (plugin.app.vault.adapter as any).basePath;
 			const transcriptPath = require('path').join(vaultPath, activeFile.path);
 

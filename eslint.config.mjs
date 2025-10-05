@@ -36,7 +36,9 @@ export default [
     },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // Disabled: Epic 7 requires `any` for undocumented Obsidian internal APIs
+      // (commands.executeCommandById, vault.adapter.basePath, workspace internals, etc.)
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       'no-unused-vars': 'off' // Disable base rule as it can report incorrect errors
     }

@@ -35,7 +35,7 @@ export class LeafManagerService {
   private findDreamspaceLeaf(): WorkspaceLeaf | null {
     const leaves = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
     if (leaves.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       console.log(`🎯 [LeafManager] Found dreamspace leaf: ${(leaves[0] as any).id}`);
       return leaves[0];
     }
@@ -637,7 +637,7 @@ export class LeafManagerService {
         // Even simpler: just call setActiveLeaf on the transcript leaf
         const transcriptLeaves = this.app.workspace.getLeavesOfType('markdown');
         const transcriptLeaf = transcriptLeaves.find(leaf => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           const file = (leaf.view as any).file;
           return file && file.path && file.path.includes('transcript-');
         });
@@ -647,7 +647,7 @@ export class LeafManagerService {
           setTimeout(() => {
             // Try to focus the Electron window directly (more aggressive than window.focus())
             try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               const electron = (window as any).require?.('electron');
               if (electron?.remote?.getCurrentWindow) {
                 const currentWindow = electron.remote.getCurrentWindow();
@@ -673,7 +673,7 @@ export class LeafManagerService {
             this.app.workspace.setActiveLeaf(transcriptLeaf, { focus: true });
 
             // Also focus the editor
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             const editor = (transcriptLeaf.view as any).editor;
             if (editor) {
               if (editor.focus) {
@@ -683,7 +683,7 @@ export class LeafManagerService {
               // ULTRA HACK: Simulate a click on the editor to trigger whatever input state needs to activate
               // This mimics what happens when user manually clicks
               try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                 
                 const editorElement = (editor as any).cm?.dom;
                 if (editorElement) {
                   // Dispatch a click event to the editor DOM element
