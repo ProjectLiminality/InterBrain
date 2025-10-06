@@ -29,7 +29,7 @@ export interface RadicleService {
   /**
    * Initialize a DreamNode repository with Radicle
    */
-  init(dreamNodePath: string): Promise<void>;
+  init(dreamNodePath: string, name?: string, description?: string): Promise<void>;
 
   /**
    * Clone a DreamNode from the Radicle network
@@ -137,15 +137,25 @@ export class RadicleServiceImpl implements RadicleService {
     return this._radCommand;
   }
 
-  async init(dreamNodePath: string): Promise<void> {
+  async init(dreamNodePath: string, name?: string, description?: string): Promise<void> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
     try {
       const radCmd = this.getRadCommand();
-      console.log(`RadicleService: Running '${radCmd} init --default-branch main' in ${dreamNodePath}`);
-      const result = await execAsync(`"${radCmd}" init --default-branch main`, {
+
+      // Build command with optional name and description
+      let command = `"${radCmd}" init --default-branch main --no-confirm`;
+      if (name) {
+        command += ` --name "${name}"`;
+      }
+      if (description) {
+        command += ` --description "${description}"`;
+      }
+
+      console.log(`RadicleService: Running '${command}' in ${dreamNodePath}`);
+      const result = await execAsync(command, {
         cwd: dreamNodePath,
       });
       console.log('RadicleService: rad init output:', result.stdout);

@@ -404,7 +404,8 @@ export class GitDreamNodeService {
         const radicleService = serviceManager.getRadicleService();
         if (await radicleService.isAvailable()) {
           console.log(`GitDreamNodeService: Initializing Radicle for ${title}...`);
-          await radicleService.init(repoPath);
+          // Pass title as name and a simple description
+          await radicleService.init(repoPath, title, `DreamNode: ${title}`);
           console.log(`GitDreamNodeService: Radicle initialized successfully`);
         } else {
           console.log(`GitDreamNodeService: Radicle CLI not available, skipping Radicle init`);
