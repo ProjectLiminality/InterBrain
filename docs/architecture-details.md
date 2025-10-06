@@ -7,7 +7,7 @@ This document contains detailed technical implementation information for the Int
 ### Creation & Initialization
 
 - **Immediate git setup**: `git init` + initial commit on DreamNode creation
-- **Metadata storage**: `.udd` file (Universal Dream Description) with JSON schema
+- **Metadata storage**: `.udd` **single JSON file** (Universal Dream Description) with complete schema
 - **Primary identifiers**: UUID-based (either custom generated or Radicle ID)
 - **Initial commit**: Includes metadata file + any provided files (DreamTalk symbols)
 
@@ -45,8 +45,7 @@ interface DreamNodeService {
 **DreamNode Template Structure**:
 ```
 DreamNode-template/
-├── .udd/
-│   └── metadata.json     # UUID, title, type, dreamTalk
+├── .udd                  # Single JSON file containing: UUID, title, type, dreamTalk, relationships, email, phone, radicleId
 ├── hooks/
 │   ├── pre-commit        # Coherence beacon updates
 │   ├── post-commit       # Relationship tracking
@@ -108,7 +107,7 @@ DreamNode-template/
 ### Technical Questions (To Be Resolved)
 
 1. **Git Hook Type**: Post-commit hooks for detecting submodule additions?
-2. **Storage Location**: Super module tracking in .udd metadata vs git-native approach?
+2. **Storage Location**: Super module tracking in .udd file (single JSON) vs git-native approach?
 3. **UI Implementation**: Beacon trigger as separate button or "Save & Share" checkbox?
 4. **Acceptance Flow**: Same inbox as DreamWalk or separate UI for Radicle-based offers?
 
