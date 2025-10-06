@@ -126,6 +126,26 @@ Current development progress is tracked through [**GitHub Issues**](https://gith
 3. **Check Status**: Use command palette "Ollama: Check Status" to verify setup
 4. **Index**: Run "Full Index" command to enable semantic search on your DreamNodes
 
+### Optional: Radicle Network Setup (Peer-to-Peer Sharing)
+
+**Note**: Radicle enables peer-to-peer DreamNode sharing without centralized servers. This is optional - DreamNodes work fully offline without it.
+
+**Platform Support**:
+- ✅ **macOS & Linux**: Full Radicle support
+- ⚠️ **Windows**: GitHub-based sharing coming soon (use local-only DreamNodes for now)
+
+**Setup Steps (macOS/Linux)**:
+1. **Install Radicle**: Download from [radicle.xyz](https://radicle.xyz) and follow their installation guide
+2. **Create Identity**: Run `rad auth` to set up your Radicle identity
+3. **Verify**: The "Share DreamNode" command will appear in InterBrain's command palette once Radicle is detected
+
+**Using Radicle Network**:
+- **Share DreamNode**: After making commits (saves), use "Share DreamNode" to push to the Radicle network
+- **Clone DreamNode**: Use "Clone DreamNode from Radicle Network" and enter a friend's Radicle ID
+- **Auto-Init**: New DreamNodes automatically initialize with Radicle if it's installed
+
+**What is Radicle?**: A peer-to-peer alternative to GitHub that enables decentralized code collaboration. Your DreamNodes sync directly with trusted peers instead of through centralized servers. Perfect for private knowledge sharing within friend/family networks.
+
 ### Getting Started
 
 Once installed, try this simple exercise to build your first liminal web:
