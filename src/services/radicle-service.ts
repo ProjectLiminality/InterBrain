@@ -6,10 +6,11 @@
  */
 
 // Access Node.js modules directly in Electron context
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
 const os = require('os');
 const path = require('path');
+const process = require('process');
 
 const execAsync = promisify(exec);
 
@@ -28,19 +29,22 @@ export interface RadicleService {
 
   /**
    * Initialize a DreamNode repository with Radicle
+   * @param passphrase Optional passphrase (uses ssh-agent if not provided)
    */
-  init(dreamNodePath: string, name?: string, description?: string): Promise<void>;
+  init(dreamNodePath: string, name?: string, description?: string, passphrase?: string): Promise<void>;
 
   /**
    * Clone a DreamNode from the Radicle network
+   * @param passphrase Optional passphrase (uses ssh-agent if not provided)
    * @returns The name of the cloned DreamNode (derived from Radicle metadata)
    */
-  clone(radicleId: string, destinationPath: string): Promise<string>;
+  clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<string>;
 
   /**
-   * Share DreamNode to Radicle network (push changes)
+   * Share DreamNode to Radicle network (sync changes)
+   * @param passphrase Optional passphrase (uses ssh-agent if not provided)
    */
-  share(dreamNodePath: string): Promise<void>;
+  share(dreamNodePath: string, passphrase?: string): Promise<void>;
 
   /**
    * Check if there are local commits to share
@@ -137,76 +141,78 @@ export class RadicleServiceImpl implements RadicleService {
     return this._radCommand;
   }
 
-  async init(dreamNodePath: string, name?: string, description?: string): Promise<void> {
+  async init(dreamNodePath: string, name?: string, description?: string, passphrase?: string): Promise<void> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
-    return new Promise((resolve, reject) => {
-      const radCmd = this.getRadCommand();
+    const radCmd = this.getRadCommand();
 
-      // Build args array
-      const args = ['init', '--default-branch', 'main', '--no-confirm'];
-      if (name) {
-        args.push('--name', name);
-      }
-      if (description) {
-        args.push('--description', description);
-      }
+    // Build command with proper flags to bypass TTY requirements
+    const args = ['init', '--public', '--default-branch', 'main', '--no-confirm'];
+    if (name) {
+      args.push('--name', name);
+    }
+    if (description) {
+      args.push('--description', description);
+    }
 
-      console.log(`RadicleService: Running '${radCmd} ${args.join(' ')}' in ${dreamNodePath}`);
+    const command = `"${radCmd}" ${args.join(' ')}`;
+    console.log(`RadicleService: Running '${command}' in ${dreamNodePath}`);
 
-      // Use spawn with detached stdio to avoid TTY requirement
-      const child = spawn(radCmd, args, {
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+      console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
+    } else {
+      console.log('RadicleService: No passphrase provided, relying on ssh-agent');
+    }
+
+    try {
+      const result = await execAsync(command, {
         cwd: dreamNodePath,
-        stdio: ['ignore', 'pipe', 'pipe'], // stdin: ignore, stdout/stderr: pipe
-        detached: false,
+        env: env,
       });
 
-      let stdout = '';
-      let stderr = '';
+      console.log('RadicleService: rad init output:', result.stdout);
+      if (result.stderr) {
+        console.warn('RadicleService: rad init stderr:', result.stderr);
+      }
+    } catch (error: any) {
+      console.error('RadicleService: rad init failed:', error);
 
-      child.stdout.on('data', (data: any) => {
-        stdout += data.toString();
-      });
+      // Check if error is due to missing passphrase
+      if (error.message && error.message.includes('RAD_PASSPHRASE')) {
+        throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
+      }
 
-      child.stderr.on('data', (data: any) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code: number) => {
-        if (code === 0) {
-          console.log('RadicleService: rad init output:', stdout);
-          if (stderr) {
-            console.warn('RadicleService: rad init stderr:', stderr);
-          }
-          resolve();
-        } else {
-          console.error('RadicleService: rad init failed with code:', code);
-          console.error('RadicleService: rad init stderr:', stderr);
-          console.error('RadicleService: rad init stdout:', stdout);
-          reject(new Error(`Failed to initialize Radicle: ${stderr || stdout || `Exit code ${code}`}`));
-        }
-      });
-
-      child.on('error', (err: Error) => {
-        console.error('RadicleService: rad init spawn error:', err);
-        reject(new Error(`Failed to spawn rad init: ${err.message}`));
-      });
-    });
+      throw new Error(`Failed to initialize Radicle: ${error.message || 'Unknown error'}`);
+    }
   }
 
-  async clone(radicleId: string, destinationPath: string): Promise<string> {
+  async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<string> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    const radCmd = this.getRadCommand();
+
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+      console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
+    } else {
+      console.log('RadicleService: No passphrase provided, relying on ssh-agent');
     }
 
     try {
       // Clone the repository
-      const radCmd = this.getRadCommand();
       console.log(`RadicleService: Running '${radCmd} clone ${radicleId}' in ${destinationPath}`);
       const cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
         cwd: destinationPath,
+        env: env,
       });
       console.log('RadicleService: rad clone output:', cloneResult.stdout);
       if (cloneResult.stderr) {
@@ -218,6 +224,7 @@ export class RadicleServiceImpl implements RadicleService {
       console.log(`RadicleService: Inspecting ${radicleId} for repository name...`);
       const { stdout } = await execAsync(`"${radCmd}" inspect ${radicleId} --field name`, {
         cwd: destinationPath,
+        env: env,
       });
 
       const repoName = stdout.trim();
@@ -227,30 +234,53 @@ export class RadicleServiceImpl implements RadicleService {
       }
 
       return repoName;
-    } catch (error) {
+    } catch (error: any) {
       console.error('RadicleService: rad clone failed:', error);
-      throw new Error(`Failed to clone from Radicle network: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      // Check if error is due to missing passphrase
+      if (error.message && error.message.includes('RAD_PASSPHRASE')) {
+        throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
+      }
+
+      throw new Error(`Failed to clone from Radicle network: ${error.message || 'Unknown error'}`);
     }
   }
 
-  async share(dreamNodePath: string): Promise<void> {
+  async share(dreamNodePath: string, passphrase?: string): Promise<void> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
+    const radCmd = this.getRadCommand();
+
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+      console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
+    } else {
+      console.log('RadicleService: No passphrase provided, relying on ssh-agent');
+    }
+
     try {
-      const radCmd = this.getRadCommand();
-      console.log(`RadicleService: Running '${radCmd} push' in ${dreamNodePath}`);
-      const result = await execAsync(`"${radCmd}" push`, {
+      console.log(`RadicleService: Running '${radCmd} sync' in ${dreamNodePath}`);
+      const result = await execAsync(`"${radCmd}" sync`, {
         cwd: dreamNodePath,
+        env: env,
       });
-      console.log('RadicleService: rad push output:', result.stdout);
+      console.log('RadicleService: rad sync output:', result.stdout);
       if (result.stderr) {
-        console.warn('RadicleService: rad push stderr:', result.stderr);
+        console.warn('RadicleService: rad sync stderr:', result.stderr);
       }
-    } catch (error) {
-      console.error('RadicleService: rad push failed:', error);
-      throw new Error(`Failed to share to Radicle network: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: any) {
+      console.error('RadicleService: rad sync failed:', error);
+
+      // Check if error is due to missing passphrase
+      if (error.message && error.message.includes('RAD_PASSPHRASE')) {
+        throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
+      }
+
+      throw new Error(`Failed to share to Radicle network: ${error.message || 'Unknown error'}`);
     }
   }
 

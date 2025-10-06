@@ -3,6 +3,7 @@ import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
 import { VaultService } from './services/vault-service';
 import { GitTemplateService } from './services/git-template-service';
+import { PassphraseManager } from './services/passphrase-manager';
 import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
@@ -48,6 +49,7 @@ export default class InterBrainPlugin extends Plugin {
   private gitService!: GitService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
+  private passphraseManager!: PassphraseManager;
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
@@ -112,6 +114,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
+    this.passphraseManager = new PassphraseManager(this.uiService);
     this.faceTimeService = new FaceTimeService();
 
     // Initialize dreamweaving services
@@ -163,7 +166,7 @@ export default class InterBrainPlugin extends Plugin {
     );
 
     // Register Radicle commands (peer-to-peer networking)
-    registerRadicleCommands(this, this.uiService);
+    registerRadicleCommands(this, this.uiService, this.passphraseManager);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);
@@ -1533,6 +1536,11 @@ export default class InterBrainPlugin extends Plugin {
 
   onunload() {
     console.log('InterBrain plugin unloaded');
+
+    // Clear passphrase from memory for security
+    if (this.passphraseManager) {
+      this.passphraseManager.clearPassphrase();
+    }
 
     // Stop canvas observer
     if (this.canvasObserverService) {

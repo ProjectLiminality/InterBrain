@@ -399,12 +399,23 @@ export class GitDreamNodeService {
       const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
       console.log(`GitDreamNodeService: Git commit result:`, commitResult);
 
-      // Note: Automatic Radicle initialization is disabled due to TTY requirements
-      // Users can manually run 'rad init' in their DreamNode directories
-      // or use the "Initialize DreamNode with Radicle" command from Terminal
+      // Automatically initialize Radicle for peer-to-peer sharing
       const radicleService = serviceManager.getRadicleService();
       if (await radicleService.isAvailable()) {
-        console.log(`GitDreamNodeService: Radicle CLI detected. Run 'rad init' in ${repoPath} to enable peer-to-peer sharing.`);
+        console.log(`GitDreamNodeService: Radicle CLI detected, attempting automatic initialization...`);
+        try {
+          // Try without passphrase first (ssh-agent)
+          const sanitizedName = this.sanitizeRepoName(title);
+          await radicleService.init(repoPath, sanitizedName, `DreamNode: ${title}`);
+          console.log(`GitDreamNodeService: Radicle initialized successfully for ${sanitizedName}`);
+        } catch (error: any) {
+          // If passphrase is needed, log it but don't fail DreamNode creation
+          if (error.message && error.message.includes('passphrase')) {
+            console.log(`GitDreamNodeService: Radicle initialization skipped - passphrase required. Use 'Share DreamNode' command to initialize with passphrase.`);
+          } else {
+            console.warn(`GitDreamNodeService: Radicle initialization failed:`, error);
+          }
+        }
       }
 
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);

@@ -2,6 +2,7 @@ import { Plugin, Notice } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
+import { PassphraseManager } from '../services/passphrase-manager';
 
 /**
  * Radicle commands for peer-to-peer DreamNode sharing
@@ -9,7 +10,8 @@ import { serviceManager } from '../services/service-manager';
  */
 export function registerRadicleCommands(
   plugin: Plugin,
-  uiService: UIService
+  uiService: UIService,
+  passphraseManager: PassphraseManager
 ): void {
 
   // Share DreamNode - Push local commits to Radicle network
@@ -48,20 +50,45 @@ export function registerRadicleCommands(
 
         // Show status indicator
         const notice = new Notice('Sharing to Radicle network...', 0);
-        console.log(`RadicleCommands: Starting rad push for ${selectedNode.name}...`);
+        console.log(`RadicleCommands: Starting rad sync for ${selectedNode.name}...`);
 
         try {
-          // Share to Radicle network
+          // Try sharing without passphrase first (ssh-agent)
           await radicleService.share(selectedNode.repoPath);
 
           // Success notification
           notice.hide();
           console.log(`RadicleCommands: Successfully shared ${selectedNode.name} to Radicle network`);
           uiService.showSuccess(`${selectedNode.name} shared successfully!`);
-        } catch (error) {
-          notice.hide();
-          console.error('RadicleCommands: Failed to share DreamNode:', error);
-          uiService.showError(`Failed to share: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } catch (error: any) {
+          // If passphrase is needed, prompt and retry
+          if (error.message && error.message.includes('passphrase')) {
+            notice.hide();
+            console.log('RadicleCommands: Passphrase required, prompting user...');
+
+            const passphrase = await passphraseManager.getPassphrase();
+            if (!passphrase) {
+              console.log('RadicleCommands: User cancelled passphrase prompt');
+              return;
+            }
+
+            // Retry with passphrase
+            const retryNotice = new Notice('Sharing to Radicle network...', 0);
+            try {
+              await radicleService.share(selectedNode.repoPath, passphrase);
+              retryNotice.hide();
+              console.log(`RadicleCommands: Successfully shared ${selectedNode.name} with passphrase`);
+              uiService.showSuccess(`${selectedNode.name} shared successfully!`);
+            } catch (retryError) {
+              retryNotice.hide();
+              console.error('RadicleCommands: Failed to share with passphrase:', retryError);
+              uiService.showError(`Failed to share: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+            }
+          } else {
+            notice.hide();
+            console.error('RadicleCommands: Failed to share DreamNode:', error);
+            uiService.showError(`Failed to share: ${error.message || 'Unknown error'}`);
+          }
         }
       } catch (error) {
         console.error('RadicleCommands: Share DreamNode command failed:', error);
@@ -121,7 +148,7 @@ export function registerRadicleCommands(
         console.log('RadicleCommands: Starting rad clone...');
 
         try {
-          // Clone from Radicle network - service returns the derived name
+          // Try cloning without passphrase first (ssh-agent)
           const repoName = await radicleService.clone(radicleId.trim(), vaultPath);
 
           // Success notification
@@ -139,14 +166,85 @@ export function registerRadicleCommands(
 
           // Notify user to look for the new node
           uiService.showInfo(`Look for "${repoName}" in your DreamNodes`);
-        } catch (error) {
-          notice.hide();
-          console.error('RadicleCommands: Failed to clone DreamNode:', error);
-          uiService.showError(`Failed to clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } catch (error: any) {
+          // If passphrase is needed, prompt and retry
+          if (error.message && error.message.includes('passphrase')) {
+            notice.hide();
+            console.log('RadicleCommands: Passphrase required, prompting user...');
+
+            const passphrase = await passphraseManager.getPassphrase();
+            if (!passphrase) {
+              console.log('RadicleCommands: User cancelled passphrase prompt');
+              return;
+            }
+
+            // Retry with passphrase
+            const retryNotice = new Notice('Cloning from Radicle network...', 0);
+            try {
+              const repoName = await radicleService.clone(radicleId.trim(), vaultPath, passphrase);
+              retryNotice.hide();
+              console.log(`RadicleCommands: Successfully cloned ${repoName} with passphrase`);
+              uiService.showSuccess(`${repoName} cloned successfully!`);
+
+              // Trigger vault scan
+              const dreamNodeService = serviceManager.getActive();
+              if (dreamNodeService.refreshGitStatus) {
+                await dreamNodeService.refreshGitStatus();
+              }
+
+              uiService.showInfo(`Look for "${repoName}" in your DreamNodes`);
+            } catch (retryError) {
+              retryNotice.hide();
+              console.error('RadicleCommands: Failed to clone with passphrase:', retryError);
+              uiService.showError(`Failed to clone: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+            }
+          } else {
+            notice.hide();
+            console.error('RadicleCommands: Failed to clone DreamNode:', error);
+            uiService.showError(`Failed to clone: ${error.message || 'Unknown error'}`);
+          }
         }
       } catch (error) {
         console.error('RadicleCommands: Clone from Radicle command failed:', error);
         uiService.showError('Failed to clone DreamNode');
+      }
+    }
+  });
+
+  // Configure Radicle Passphrase - Optional command for users without ssh-agent
+  plugin.addCommand({
+    id: 'configure-radicle-passphrase',
+    name: 'Configure Radicle Passphrase',
+    callback: async () => {
+      try {
+        console.log('RadicleCommands: Configure Radicle Passphrase command initiated');
+        const radicleService = serviceManager.getRadicleService();
+
+        // Check if Radicle is available
+        const isAvailable = await radicleService.isAvailable();
+        if (!isAvailable) {
+          uiService.showError('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+          return;
+        }
+
+        // Prompt for passphrase
+        const passphrase = await uiService.promptForText(
+          'Enter your Radicle passphrase (stored in memory for this session only)',
+          ''
+        );
+
+        if (!passphrase || passphrase.trim() === '') {
+          console.log('RadicleCommands: User cancelled passphrase configuration');
+          return;
+        }
+
+        // Store in PassphraseManager
+        passphraseManager.setPassphrase(passphrase.trim());
+        console.log('RadicleCommands: Passphrase configured successfully');
+        uiService.showSuccess('Radicle passphrase configured for this session');
+      } catch (error) {
+        console.error('RadicleCommands: Configure Radicle Passphrase command failed:', error);
+        uiService.showError('Failed to configure passphrase');
       }
     }
   });
