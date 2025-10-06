@@ -6,7 +6,7 @@
  */
 
 // Access Node.js modules directly in Electron context
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { promisify } = require('util');
 const os = require('os');
 const path = require('path');
@@ -142,37 +142,58 @@ export class RadicleServiceImpl implements RadicleService {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
-    try {
+    return new Promise((resolve, reject) => {
       const radCmd = this.getRadCommand();
 
-      // Build command with optional name and description
-      let command = `"${radCmd}" init --default-branch main --no-confirm`;
+      // Build args array
+      const args = ['init', '--default-branch', 'main', '--no-confirm'];
       if (name) {
-        command += ` --name "${name}"`;
+        args.push('--name', name);
       }
       if (description) {
-        command += ` --description "${description}"`;
+        args.push('--description', description);
       }
 
-      // Pipe empty input to avoid TTY requirement
-      command = `echo "" | ${command}`;
+      console.log(`RadicleService: Running '${radCmd} ${args.join(' ')}' in ${dreamNodePath}`);
 
-      console.log(`RadicleService: Running '${command}' in ${dreamNodePath}`);
-      const result = await execAsync(command, {
+      // Use spawn with detached stdio to avoid TTY requirement
+      const child = spawn(radCmd, args, {
         cwd: dreamNodePath,
-        shell: '/bin/bash', // Use bash to handle pipe
+        stdio: ['ignore', 'pipe', 'pipe'], // stdin: ignore, stdout/stderr: pipe
+        detached: false,
       });
-      console.log('RadicleService: rad init output:', result.stdout);
-      if (result.stderr) {
-        console.warn('RadicleService: rad init stderr:', result.stderr);
-      }
-    } catch (error: any) {
-      // Graceful error - log but don't break DreamNode creation
-      console.error('RadicleService: rad init failed:', error);
-      console.error('RadicleService: rad init stderr:', error.stderr);
-      console.error('RadicleService: rad init stdout:', error.stdout);
-      throw new Error(`Failed to initialize Radicle: ${error.stderr || error.message || 'Unknown error'}`);
-    }
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data: any) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data: any) => {
+        stderr += data.toString();
+      });
+
+      child.on('close', (code: number) => {
+        if (code === 0) {
+          console.log('RadicleService: rad init output:', stdout);
+          if (stderr) {
+            console.warn('RadicleService: rad init stderr:', stderr);
+          }
+          resolve();
+        } else {
+          console.error('RadicleService: rad init failed with code:', code);
+          console.error('RadicleService: rad init stderr:', stderr);
+          console.error('RadicleService: rad init stdout:', stdout);
+          reject(new Error(`Failed to initialize Radicle: ${stderr || stdout || `Exit code ${code}`}`));
+        }
+      });
+
+      child.on('error', (err: Error) => {
+        console.error('RadicleService: rad init spawn error:', err);
+        reject(new Error(`Failed to spawn rad init: ${err.message}`));
+      });
+    });
   }
 
   async clone(radicleId: string, destinationPath: string): Promise<string> {
