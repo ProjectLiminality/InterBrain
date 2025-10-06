@@ -9,6 +9,7 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const os = require('os');
+const path = require('path');
 
 const execAsync = promisify(exec);
 
@@ -55,6 +56,7 @@ export interface RadicleService {
 export class RadicleServiceImpl implements RadicleService {
   private _isAvailable: boolean | null = null;
   private _isPlatformSupported: boolean | null = null;
+  private _radCommand: string | null = null;
 
   /**
    * Check if current platform supports Radicle (macOS/Linux only)
@@ -76,6 +78,31 @@ export class RadicleServiceImpl implements RadicleService {
     return this._isPlatformSupported;
   }
 
+  /**
+   * Find the rad command in common installation locations
+   */
+  private async findRadCommand(): Promise<string | null> {
+    const homeDir = os.homedir();
+    const possiblePaths = [
+      'rad', // Try PATH first
+      path.join(homeDir, '.radicle', 'bin', 'rad'), // Standard Radicle install location
+      '/usr/local/bin/rad', // Homebrew default
+      '/opt/homebrew/bin/rad', // Homebrew on Apple Silicon
+    ];
+
+    for (const radPath of possiblePaths) {
+      try {
+        await execAsync(`"${radPath}" --version`);
+        console.log(`RadicleService: Found rad command at: ${radPath}`);
+        return radPath;
+      } catch {
+        // Continue to next path
+      }
+    }
+
+    return null;
+  }
+
   async isAvailable(): Promise<boolean> {
     // Cache the result - CLI availability doesn't change during runtime
     if (this._isAvailable !== null) {
@@ -84,18 +111,30 @@ export class RadicleServiceImpl implements RadicleService {
 
     // Platform check first
     if (!this.isPlatformSupported()) {
+      console.log('RadicleService: Platform not supported');
       this._isAvailable = false;
       return false;
     }
 
-    try {
-      await execAsync('rad --version');
-      this._isAvailable = true;
-      return true;
-    } catch {
-      this._isAvailable = false;
-      return false;
+    // Find rad command
+    this._radCommand = await this.findRadCommand();
+    this._isAvailable = this._radCommand !== null;
+
+    if (!this._isAvailable) {
+      console.log('RadicleService: rad command not found in any standard location');
     }
+
+    return this._isAvailable;
+  }
+
+  /**
+   * Get the rad command (with full path if needed)
+   */
+  private getRadCommand(): string {
+    if (!this._radCommand) {
+      throw new Error('Radicle CLI not available');
+    }
+    return this._radCommand;
   }
 
   async init(dreamNodePath: string): Promise<void> {
@@ -104,8 +143,9 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      console.log(`RadicleService: Running 'rad init --default-branch main' in ${dreamNodePath}`);
-      const result = await execAsync('rad init --default-branch main', {
+      const radCmd = this.getRadCommand();
+      console.log(`RadicleService: Running '${radCmd} init --default-branch main' in ${dreamNodePath}`);
+      const result = await execAsync(`"${radCmd}" init --default-branch main`, {
         cwd: dreamNodePath,
       });
       console.log('RadicleService: rad init output:', result.stdout);
@@ -126,8 +166,9 @@ export class RadicleServiceImpl implements RadicleService {
 
     try {
       // Clone the repository
-      console.log(`RadicleService: Running 'rad clone ${radicleId}' in ${destinationPath}`);
-      const cloneResult = await execAsync(`rad clone ${radicleId}`, {
+      const radCmd = this.getRadCommand();
+      console.log(`RadicleService: Running '${radCmd} clone ${radicleId}' in ${destinationPath}`);
+      const cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
         cwd: destinationPath,
       });
       console.log('RadicleService: rad clone output:', cloneResult.stdout);
@@ -138,7 +179,7 @@ export class RadicleServiceImpl implements RadicleService {
       // Extract the repository name from Radicle metadata
       // The cloned directory name is typically the repo name
       console.log(`RadicleService: Inspecting ${radicleId} for repository name...`);
-      const { stdout } = await execAsync(`rad inspect ${radicleId} --field name`, {
+      const { stdout } = await execAsync(`"${radCmd}" inspect ${radicleId} --field name`, {
         cwd: destinationPath,
       });
 
@@ -161,8 +202,9 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      console.log(`RadicleService: Running 'rad push' in ${dreamNodePath}`);
-      const result = await execAsync('rad push', {
+      const radCmd = this.getRadCommand();
+      console.log(`RadicleService: Running '${radCmd} push' in ${dreamNodePath}`);
+      const result = await execAsync(`"${radCmd}" push`, {
         cwd: dreamNodePath,
       });
       console.log('RadicleService: rad push output:', result.stdout);
@@ -204,13 +246,15 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      const { stdout } = await execAsync('rad self --did');
+      const radCmd = this.getRadCommand();
+      const { stdout } = await execAsync(`"${radCmd}" self --did`);
       const did = stdout.trim();
 
       // Try to get alias (optional)
       let alias: string | undefined;
       try {
-        const aliasResult = await execAsync('rad self --alias');
+        const radCmd = this.getRadCommand();
+        const aliasResult = await execAsync(`"${radCmd}" self --alias`);
         alias = aliasResult.stdout.trim();
       } catch {
         // Alias is optional, continue without it
