@@ -140,9 +140,10 @@ Current development progress is tracked through [**GitHub Issues**](https://gith
 3. **Verify**: The "Share DreamNode" command will appear in InterBrain's command palette once Radicle is detected
 
 **Using Radicle Network**:
+- **Initialize**: After creating a DreamNode, open Terminal in that directory and run `rad init --name "YourNodeName"`
 - **Share DreamNode**: After making commits (saves), use "Share DreamNode" to push to the Radicle network
 - **Clone DreamNode**: Use "Clone DreamNode from Radicle Network" and enter a friend's Radicle ID
-- **Auto-Init**: New DreamNodes automatically initialize with Radicle if it's installed
+- **Note**: Automatic initialization during DreamNode creation is not yet supported due to Radicle CLI requirements
 
 **What is Radicle?**: A peer-to-peer alternative to GitHub that enables decentralized code collaboration. Your DreamNodes sync directly with trusted peers instead of through centralized servers. Perfect for private knowledge sharing within friend/family networks.
 
