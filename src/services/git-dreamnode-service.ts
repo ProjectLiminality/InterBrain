@@ -4,6 +4,7 @@ import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
+import { serviceManager } from './service-manager';
 
 // Access Node.js modules directly in Electron context
  
@@ -397,7 +398,22 @@ export class GitDreamNodeService {
       const escapedTitle = title.replace(/"/g, '\\"');
       const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
       console.log(`GitDreamNodeService: Git commit result:`, commitResult);
-      
+
+      // Initialize Radicle if available (graceful failure)
+      try {
+        const radicleService = serviceManager.getRadicleService();
+        if (await radicleService.isAvailable()) {
+          console.log(`GitDreamNodeService: Initializing Radicle for ${title}...`);
+          await radicleService.init(repoPath);
+          console.log(`GitDreamNodeService: Radicle initialized successfully`);
+        } else {
+          console.log(`GitDreamNodeService: Radicle CLI not available, skipping Radicle init`);
+        }
+      } catch (radicleError) {
+        // Graceful error handling - don't break DreamNode creation
+        console.warn(`GitDreamNodeService: Radicle init failed, continuing without Radicle:`, radicleError);
+      }
+
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
     } catch (error) {
       console.error('Failed to create git repository:', error);
