@@ -399,6 +399,10 @@ export class GitDreamNodeService {
       const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
       console.log(`GitDreamNodeService: Git commit result:`, commitResult);
 
+      // Verify git repository is fully initialized before rad init
+      await execAsync('git status', { cwd: repoPath });
+      console.log(`GitDreamNodeService: Git repository verified at ${repoPath}`);
+
       // Automatically initialize Radicle for peer-to-peer sharing
       const radicleService = serviceManager.getRadicleService();
       if (await radicleService.isAvailable()) {
