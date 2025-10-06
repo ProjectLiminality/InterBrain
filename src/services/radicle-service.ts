@@ -181,13 +181,16 @@ export class RadicleServiceImpl implements RadicleService {
       }
     } catch (error: any) {
       console.error('RadicleService: rad init failed:', error);
+      console.error('RadicleService: rad init stdout:', error.stdout);
+      console.error('RadicleService: rad init stderr:', error.stderr);
 
       // Check if error is due to missing passphrase
-      if (error.message && error.message.includes('RAD_PASSPHRASE')) {
+      const errorOutput = error.stderr || error.stdout || error.message || '';
+      if (errorOutput.includes('RAD_PASSPHRASE') || errorOutput.includes('passphrase')) {
         throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
       }
 
-      throw new Error(`Failed to initialize Radicle: ${error.message || 'Unknown error'}`);
+      throw new Error(`Failed to initialize Radicle: ${errorOutput || error.message || 'Unknown error'}`);
     }
   }
 
