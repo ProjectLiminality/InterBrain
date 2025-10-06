@@ -104,12 +104,17 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      await execAsync('rad init --default-branch main', {
+      console.log(`RadicleService: Running 'rad init --default-branch main' in ${dreamNodePath}`);
+      const result = await execAsync('rad init --default-branch main', {
         cwd: dreamNodePath,
       });
+      console.log('RadicleService: rad init output:', result.stdout);
+      if (result.stderr) {
+        console.warn('RadicleService: rad init stderr:', result.stderr);
+      }
     } catch (error) {
       // Graceful error - log but don't break DreamNode creation
-      console.error('Radicle init failed:', error);
+      console.error('RadicleService: rad init failed:', error);
       throw new Error(`Failed to initialize Radicle: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -121,24 +126,31 @@ export class RadicleServiceImpl implements RadicleService {
 
     try {
       // Clone the repository
-      await execAsync(`rad clone ${radicleId}`, {
+      console.log(`RadicleService: Running 'rad clone ${radicleId}' in ${destinationPath}`);
+      const cloneResult = await execAsync(`rad clone ${radicleId}`, {
         cwd: destinationPath,
       });
+      console.log('RadicleService: rad clone output:', cloneResult.stdout);
+      if (cloneResult.stderr) {
+        console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
+      }
 
       // Extract the repository name from Radicle metadata
       // The cloned directory name is typically the repo name
+      console.log(`RadicleService: Inspecting ${radicleId} for repository name...`);
       const { stdout } = await execAsync(`rad inspect ${radicleId} --field name`, {
         cwd: destinationPath,
       });
 
       const repoName = stdout.trim();
+      console.log(`RadicleService: Determined repository name: ${repoName}`);
       if (!repoName) {
         throw new Error('Could not determine repository name from Radicle metadata');
       }
 
       return repoName;
     } catch (error) {
-      console.error('Radicle clone failed:', error);
+      console.error('RadicleService: rad clone failed:', error);
       throw new Error(`Failed to clone from Radicle network: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -149,11 +161,16 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      await execAsync('rad push', {
+      console.log(`RadicleService: Running 'rad push' in ${dreamNodePath}`);
+      const result = await execAsync('rad push', {
         cwd: dreamNodePath,
       });
+      console.log('RadicleService: rad push output:', result.stdout);
+      if (result.stderr) {
+        console.warn('RadicleService: rad push stderr:', result.stderr);
+      }
     } catch (error) {
-      console.error('Radicle push failed:', error);
+      console.error('RadicleService: rad push failed:', error);
       throw new Error(`Failed to share to Radicle network: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
