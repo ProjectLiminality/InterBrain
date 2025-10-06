@@ -14,6 +14,81 @@ export function registerRadicleCommands(
   passphraseManager: PassphraseManager
 ): void {
 
+  // Initialize DreamNode with Radicle - One-time setup for peer-to-peer sharing
+  plugin.addCommand({
+    id: 'initialize-dreamnode-radicle',
+    name: 'Initialize DreamNode with Radicle',
+    callback: async () => {
+      try {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+
+        if (!selectedNode) {
+          console.log('RadicleCommands: No DreamNode selected for Radicle initialization');
+          uiService.showError('Please select a DreamNode first');
+          return;
+        }
+
+        console.log(`RadicleCommands: Attempting to initialize Radicle for DreamNode: ${selectedNode.name} at ${selectedNode.repoPath}`);
+        const radicleService = serviceManager.getRadicleService();
+
+        // Check if Radicle is available
+        const isAvailable = await radicleService.isAvailable();
+        console.log(`RadicleCommands: Radicle CLI availability check: ${isAvailable}`);
+        if (!isAvailable) {
+          uiService.showError('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+          return;
+        }
+
+        // Show status indicator
+        const notice = new Notice('Initializing Radicle for DreamNode...', 0);
+        console.log(`RadicleCommands: Starting rad init for ${selectedNode.name}...`);
+
+        try {
+          // Try without passphrase first (ssh-agent)
+          await radicleService.init(selectedNode.repoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`);
+
+          // Success notification
+          notice.hide();
+          console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
+          uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+        } catch (error: any) {
+          // If passphrase is needed, prompt and retry
+          if (error.message && error.message.includes('passphrase')) {
+            notice.hide();
+            console.log('RadicleCommands: Passphrase required, prompting user...');
+
+            const passphrase = await passphraseManager.getPassphrase();
+            if (!passphrase) {
+              console.log('RadicleCommands: User cancelled passphrase prompt');
+              return;
+            }
+
+            // Retry with passphrase
+            const retryNotice = new Notice('Initializing Radicle for DreamNode...', 0);
+            try {
+              await radicleService.init(selectedNode.repoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`, passphrase);
+              retryNotice.hide();
+              console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name} with passphrase`);
+              uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            } catch (retryError) {
+              retryNotice.hide();
+              console.error('RadicleCommands: Failed to initialize with passphrase:', retryError);
+              uiService.showError(`Failed to initialize: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+            }
+          } else {
+            notice.hide();
+            console.error('RadicleCommands: Failed to initialize DreamNode with Radicle:', error);
+            uiService.showError(`Failed to initialize: ${error.message || 'Unknown error'}`);
+          }
+        }
+      } catch (error) {
+        console.error('RadicleCommands: Initialize DreamNode with Radicle command failed:', error);
+        uiService.showError('Failed to initialize DreamNode with Radicle');
+      }
+    }
+  });
+
   // Share DreamNode - Push local commits to Radicle network
   plugin.addCommand({
     id: 'share-dreamnode',
