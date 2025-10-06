@@ -1,0 +1,200 @@
+/**
+ * RadicleService - Peer-to-peer networking via Radicle CLI
+ *
+ * Implements integration with Radicle network for decentralized DreamNode sharing.
+ * Provides "Save & Share" paradigm - hiding git/Radicle complexity behind familiar metaphors.
+ */
+
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as os from 'os';
+
+const execAsync = promisify(exec);
+
+export interface RadicleIdentity {
+  /** Radicle DID (Decentralized Identifier) */
+  did: string;
+  /** Human-readable alias/name */
+  alias?: string;
+}
+
+export interface RadicleService {
+  /**
+   * Check if Radicle CLI is available on this system
+   */
+  isAvailable(): Promise<boolean>;
+
+  /**
+   * Initialize a DreamNode repository with Radicle
+   */
+  init(dreamNodePath: string): Promise<void>;
+
+  /**
+   * Clone a DreamNode from the Radicle network
+   * @returns The name of the cloned DreamNode (derived from Radicle metadata)
+   */
+  clone(radicleId: string, destinationPath: string): Promise<string>;
+
+  /**
+   * Share DreamNode to Radicle network (push changes)
+   */
+  share(dreamNodePath: string): Promise<void>;
+
+  /**
+   * Check if there are local commits to share
+   */
+  hasChangesToShare(dreamNodePath: string): Promise<boolean>;
+
+  /**
+   * Get current user's Radicle identity
+   */
+  getIdentity(): Promise<RadicleIdentity>;
+}
+
+export class RadicleServiceImpl implements RadicleService {
+  private _isAvailable: boolean | null = null;
+  private _isPlatformSupported: boolean | null = null;
+
+  /**
+   * Check if current platform supports Radicle (macOS/Linux only)
+   */
+  private isPlatformSupported(): boolean {
+    if (this._isPlatformSupported !== null) {
+      return this._isPlatformSupported;
+    }
+
+    const platform = os.platform();
+    this._isPlatformSupported = platform === 'darwin' || platform === 'linux';
+    return this._isPlatformSupported;
+  }
+
+  async isAvailable(): Promise<boolean> {
+    // Cache the result - CLI availability doesn't change during runtime
+    if (this._isAvailable !== null) {
+      return this._isAvailable;
+    }
+
+    // Platform check first
+    if (!this.isPlatformSupported()) {
+      this._isAvailable = false;
+      return false;
+    }
+
+    try {
+      await execAsync('rad --version');
+      this._isAvailable = true;
+      return true;
+    } catch {
+      this._isAvailable = false;
+      return false;
+    }
+  }
+
+  async init(dreamNodePath: string): Promise<void> {
+    if (!await this.isAvailable()) {
+      throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    try {
+      await execAsync('rad init --default-branch main', {
+        cwd: dreamNodePath,
+      });
+    } catch (error) {
+      // Graceful error - log but don't break DreamNode creation
+      console.error('Radicle init failed:', error);
+      throw new Error(`Failed to initialize Radicle: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async clone(radicleId: string, destinationPath: string): Promise<string> {
+    if (!await this.isAvailable()) {
+      throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    try {
+      // Clone the repository
+      await execAsync(`rad clone ${radicleId}`, {
+        cwd: destinationPath,
+      });
+
+      // Extract the repository name from Radicle metadata
+      // The cloned directory name is typically the repo name
+      const { stdout } = await execAsync(`rad inspect ${radicleId} --field name`, {
+        cwd: destinationPath,
+      });
+
+      const repoName = stdout.trim();
+      if (!repoName) {
+        throw new Error('Could not determine repository name from Radicle metadata');
+      }
+
+      return repoName;
+    } catch (error) {
+      console.error('Radicle clone failed:', error);
+      throw new Error(`Failed to clone from Radicle network: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async share(dreamNodePath: string): Promise<void> {
+    if (!await this.isAvailable()) {
+      throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    try {
+      await execAsync('rad push', {
+        cwd: dreamNodePath,
+      });
+    } catch (error) {
+      console.error('Radicle push failed:', error);
+      throw new Error(`Failed to share to Radicle network: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async hasChangesToShare(dreamNodePath: string): Promise<boolean> {
+    try {
+      // Check if there are commits that haven't been pushed to Radicle
+      // Use git to check if there are unpushed commits
+      const { stdout } = await execAsync('git log @{u}.. --oneline', {
+        cwd: dreamNodePath,
+      });
+
+      return stdout.trim().length > 0;
+    } catch (error) {
+      // If there's no upstream configured yet, check if there are any commits
+      try {
+        const { stdout } = await execAsync('git log --oneline', {
+          cwd: dreamNodePath,
+        });
+        return stdout.trim().length > 0;
+      } catch {
+        // No commits at all
+        return false;
+      }
+    }
+  }
+
+  async getIdentity(): Promise<RadicleIdentity> {
+    if (!await this.isAvailable()) {
+      throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    try {
+      const { stdout } = await execAsync('rad self --did');
+      const did = stdout.trim();
+
+      // Try to get alias (optional)
+      let alias: string | undefined;
+      try {
+        const aliasResult = await execAsync('rad self --alias');
+        alias = aliasResult.stdout.trim();
+      } catch {
+        // Alias is optional, continue without it
+      }
+
+      return { did, alias };
+    } catch (error) {
+      console.error('Failed to get Radicle identity:', error);
+      throw new Error(`Failed to get Radicle identity: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+}
