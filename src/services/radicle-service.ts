@@ -152,10 +152,10 @@ export class RadicleServiceImpl implements RadicleService {
     // IMPORTANT: Pass the path as the first argument to rad init
     const args = ['init', `"${dreamNodePath}"`, '--public', '--default-branch', 'main', '--no-confirm'];
     if (name) {
-      args.push('--name', name);
+      args.push('--name', `"${name}"`);
     }
     if (description) {
-      args.push('--description', description);
+      args.push('--description', `"${description}"`);
     }
 
     const command = `"${radCmd}" ${args.join(' ')}`;
