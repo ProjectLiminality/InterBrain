@@ -149,7 +149,8 @@ export class RadicleServiceImpl implements RadicleService {
     const radCmd = this.getRadCommand();
 
     // Build command with proper flags to bypass TTY requirements
-    const args = ['init', '--public', '--default-branch', 'main', '--no-confirm'];
+    // IMPORTANT: Pass the path as the first argument to rad init
+    const args = ['init', `"${dreamNodePath}"`, '--public', '--default-branch', 'main', '--no-confirm'];
     if (name) {
       args.push('--name', name);
     }
@@ -158,7 +159,7 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     const command = `"${radCmd}" ${args.join(' ')}`;
-    console.log(`RadicleService: Running '${command}' in ${dreamNodePath}`);
+    console.log(`RadicleService: Running '${command}'`);
 
     // Prepare environment with passphrase if provided
     const env = { ...process.env };
@@ -169,9 +170,21 @@ export class RadicleServiceImpl implements RadicleService {
       console.log('RadicleService: No passphrase provided, relying on ssh-agent');
     }
 
+    // Debug: Check if directory exists and has .git
+    const fs = require('fs');
+    const gitPath = require('path').join(dreamNodePath, '.git');
+    console.log(`RadicleService: Checking if ${gitPath} exists:`, fs.existsSync(gitPath));
+
+    // Debug: Try running git status to verify the repo works
+    try {
+      const gitTest = await execAsync('git status', { cwd: dreamNodePath });
+      console.log(`RadicleService: git status works in ${dreamNodePath}`);
+    } catch (gitErr: any) {
+      console.error(`RadicleService: git status failed:`, gitErr.message);
+    }
+
     try {
       const result = await execAsync(command, {
-        cwd: dreamNodePath,
         env: env,
       });
 
