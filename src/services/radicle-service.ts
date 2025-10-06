@@ -154,9 +154,13 @@ export class RadicleServiceImpl implements RadicleService {
         command += ` --description "${description}"`;
       }
 
+      // Pipe empty input to avoid TTY requirement
+      command = `echo "" | ${command}`;
+
       console.log(`RadicleService: Running '${command}' in ${dreamNodePath}`);
       const result = await execAsync(command, {
         cwd: dreamNodePath,
+        shell: '/bin/bash', // Use bash to handle pipe
       });
       console.log('RadicleService: rad init output:', result.stdout);
       if (result.stderr) {
