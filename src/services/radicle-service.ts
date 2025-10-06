@@ -5,9 +5,10 @@
  * Provides "Save & Share" paradigm - hiding git/Radicle complexity behind familiar metaphors.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import * as os from 'os';
+// Access Node.js modules directly in Electron context
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const os = require('os');
 
 const execAsync = promisify(exec);
 
