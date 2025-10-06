@@ -57,6 +57,7 @@ export class RadicleServiceImpl implements RadicleService {
 
   /**
    * Check if current platform supports Radicle (macOS/Linux only)
+   * Windows users will use GitHub-based implementation (future)
    */
   private isPlatformSupported(): boolean {
     if (this._isPlatformSupported !== null) {
@@ -64,7 +65,13 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     const platform = os.platform();
-    this._isPlatformSupported = platform === 'darwin' || platform === 'linux';
+    const isSupported = platform === 'darwin' || platform === 'linux';
+
+    if (!isSupported && platform === 'win32') {
+      console.log('RadicleService: Windows detected - Radicle features disabled (GitHub implementation coming soon)');
+    }
+
+    this._isPlatformSupported = isSupported;
     return this._isPlatformSupported;
   }
 
