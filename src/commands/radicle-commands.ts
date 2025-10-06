@@ -80,8 +80,7 @@ export function registerRadicleCommands(
         // Prompt for Radicle ID
         const radicleId = await uiService.promptForText(
           'Enter Radicle ID to clone',
-          'rad:z...',
-          'Radicle ID (e.g., rad:z42hL2jL4XNk6K8oHQaSWfMgCL7ji)'
+          'rad:z42hL2jL4XNk6K8oHQaSWfMgCL7ji'
         );
 
         if (!radicleId || radicleId.trim() === '') {

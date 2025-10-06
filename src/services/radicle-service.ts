@@ -166,7 +166,7 @@ export class RadicleServiceImpl implements RadicleService {
       });
 
       return stdout.trim().length > 0;
-    } catch (error) {
+    } catch {
       // If there's no upstream configured yet, check if there are any commits
       try {
         const { stdout } = await execAsync('git log --oneline', {

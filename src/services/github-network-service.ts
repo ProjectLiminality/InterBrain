@@ -58,19 +58,19 @@ export class GitHubNetworkServiceImpl implements GitHubNetworkService {
     return false;
   }
 
-  async init(dreamNodePath: string): Promise<void> {
+  async init(_dreamNodePath: string): Promise<void> {
     throw new Error('GitHub network integration coming soon for Windows users');
   }
 
-  async clone(githubUrl: string, destinationPath: string): Promise<string> {
+  async clone(_githubUrl: string, _destinationPath: string): Promise<string> {
     throw new Error('GitHub network integration coming soon for Windows users');
   }
 
-  async share(dreamNodePath: string): Promise<void> {
+  async share(_dreamNodePath: string): Promise<void> {
     throw new Error('GitHub network integration coming soon for Windows users');
   }
 
-  async hasChangesToShare(dreamNodePath: string): Promise<boolean> {
+  async hasChangesToShare(_dreamNodePath: string): Promise<boolean> {
     return false;
   }
 }
