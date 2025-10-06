@@ -152,10 +152,12 @@ export class RadicleServiceImpl implements RadicleService {
       if (result.stderr) {
         console.warn('RadicleService: rad init stderr:', result.stderr);
       }
-    } catch (error) {
+    } catch (error: any) {
       // Graceful error - log but don't break DreamNode creation
       console.error('RadicleService: rad init failed:', error);
-      throw new Error(`Failed to initialize Radicle: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('RadicleService: rad init stderr:', error.stderr);
+      console.error('RadicleService: rad init stdout:', error.stdout);
+      throw new Error(`Failed to initialize Radicle: ${error.stderr || error.message || 'Unknown error'}`);
     }
   }
 
