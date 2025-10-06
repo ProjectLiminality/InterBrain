@@ -476,8 +476,7 @@ This project is designed for AI-first development:
 ```bash
 # Template stored in plugin directory (outside vault)
 DreamNode-template/
-├── .udd/
-│   └── metadata.json     # UUID, title, type, dreamTalk, relationships
+├── .udd                  # Single JSON file: UUID, title, type, dreamTalk, relationships
 ├── hooks/
 │   ├── pre-commit        # Coherence beacon updates
 │   ├── post-commit       # Relationship tracking
