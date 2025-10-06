@@ -12,6 +12,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Dream Song**: Elaborate explanations with references to other Dream Talks
 - **Liminal Web**: Self-organizing knowledge based on social relationships
 
+### ⚠️ CRITICAL: .udd File Structure
+**IMPORTANT**: The `.udd` file is a **SINGLE JSON FILE**, NOT a directory.
+- **Correct**: `DreamNode/.udd` (single file containing all metadata)
+- **Wrong**: `DreamNode/.udd/metadata.json` (directory structure - OBSOLETE)
+
+This file contains the complete UDD (Universal Dream Description) schema including:
+- `uuid`, `title`, `type`, `dreamTalk`
+- `liminalWebRelationships`, `submodules`, `supermodules`
+- `email`, `phone`, `radicleId` (contact fields for dreamer-type nodes)
+
 ## Current Development Status
 
 **Current Branch**: `main`
