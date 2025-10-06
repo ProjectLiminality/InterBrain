@@ -29,7 +29,19 @@ export function registerRadicleCommands(
           return;
         }
 
-        console.log(`RadicleCommands: Attempting to initialize Radicle for DreamNode: ${selectedNode.name} at ${selectedNode.repoPath}`);
+        // Get vault path and resolve full repo path
+        const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
+        let vaultPath = '';
+        if (typeof adapter.path === 'string') {
+          vaultPath = adapter.path;
+        } else if (typeof adapter.basePath === 'string') {
+          vaultPath = adapter.basePath;
+        }
+
+        const path = require('path');
+        const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+
+        console.log(`RadicleCommands: Attempting to initialize Radicle for DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
         const radicleService = serviceManager.getRadicleService();
 
         // Check if Radicle is available
@@ -46,7 +58,7 @@ export function registerRadicleCommands(
 
         try {
           // Try without passphrase first (ssh-agent)
-          await radicleService.init(selectedNode.repoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`);
+          await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`);
 
           // Success notification
           notice.hide();
@@ -67,7 +79,7 @@ export function registerRadicleCommands(
             // Retry with passphrase
             const retryNotice = new Notice('Initializing Radicle for DreamNode...', 0);
             try {
-              await radicleService.init(selectedNode.repoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`, passphrase);
+              await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`, passphrase);
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name} with passphrase`);
               uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
@@ -104,7 +116,19 @@ export function registerRadicleCommands(
           return;
         }
 
-        console.log(`RadicleCommands: Attempting to share DreamNode: ${selectedNode.name} at ${selectedNode.repoPath}`);
+        // Get vault path and resolve full repo path
+        const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
+        let vaultPath = '';
+        if (typeof adapter.path === 'string') {
+          vaultPath = adapter.path;
+        } else if (typeof adapter.basePath === 'string') {
+          vaultPath = adapter.basePath;
+        }
+
+        const path = require('path');
+        const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+
+        console.log(`RadicleCommands: Attempting to share DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
         const radicleService = serviceManager.getRadicleService();
 
         // Check if Radicle is available
@@ -116,7 +140,7 @@ export function registerRadicleCommands(
         }
 
         // Check if there are changes to share
-        const hasChanges = await radicleService.hasChangesToShare(selectedNode.repoPath);
+        const hasChanges = await radicleService.hasChangesToShare(fullRepoPath);
         console.log(`RadicleCommands: Has changes to share: ${hasChanges}`);
         if (!hasChanges) {
           uiService.showInfo('Nothing new to share');
@@ -129,7 +153,7 @@ export function registerRadicleCommands(
 
         try {
           // Try sharing without passphrase first (ssh-agent)
-          await radicleService.share(selectedNode.repoPath);
+          await radicleService.share(fullRepoPath);
 
           // Success notification
           notice.hide();
@@ -150,7 +174,7 @@ export function registerRadicleCommands(
             // Retry with passphrase
             const retryNotice = new Notice('Sharing to Radicle network...', 0);
             try {
-              await radicleService.share(selectedNode.repoPath, passphrase);
+              await radicleService.share(fullRepoPath, passphrase);
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully shared ${selectedNode.name} with passphrase`);
               uiService.showSuccess(`${selectedNode.name} shared successfully!`);
