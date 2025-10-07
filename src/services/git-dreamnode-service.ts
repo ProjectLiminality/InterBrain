@@ -540,9 +540,16 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // Check metadata changes
-    if (node.name !== udd.title || node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone) {
-      node.name = udd.title;
+    // CRITICAL: Sync display name with directory name (file system is source of truth)
+    // This ensures renaming directory in Finder/Obsidian updates the display name
+    if (node.name !== repoName) {
+      console.log(`✏️ [GitDreamNodeService] Syncing display name: "${node.name}" → "${repoName}"`);
+      node.name = repoName;
+      updated = true;
+    }
+
+    // Check metadata changes (type and contact fields only - name now synced from directory)
+    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
@@ -583,8 +590,12 @@ export class GitDreamNodeService {
         fileHash: existingData.fileHash,
         lastSynced: Date.now()
       });
+
+      // Write updated metadata back to .udd file (keeps file system in sync)
+      await this.updateUDDFile(node);
+      console.log(`💾 [GitDreamNodeService] Updated .udd file for ${node.name}`);
     }
-    
+
     return updated;
   }
   
