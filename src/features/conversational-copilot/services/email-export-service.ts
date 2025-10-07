@@ -137,15 +137,17 @@ export class EmailExportService {
 				body += `   → ${deepLink}\n\n`;
 			});
 
-			// Add batch clone link if multiple nodes with Radicle IDs
-			if (radicleIds.length > 1) {
-				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, radicleIds);
-				body += `📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
-			} else if (invocations.length > 1 && radicleIds.length === 0) {
-				// All nodes fell back to UUID - use UUID batch link
-				const uuids = invocations.map(inv => inv.dreamUUID);
-				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, uuids);
-				body += `📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
+			// Add batch clone link if multiple nodes shared
+			if (invocations.length > 1) {
+				// Build list of all identifiers (Radicle IDs where available, UUIDs as fallback)
+				const allIdentifiers: string[] = [];
+				invocations.forEach(inv => {
+					const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
+					allIdentifiers.push(radicleId || inv.dreamUUID);
+				});
+
+				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, allIdentifiers);
+				body += `\n📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
 			}
 		}
 
