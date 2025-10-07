@@ -70,18 +70,10 @@ export function createLinkFileContent(urlMetadata: UrlMetadata, title?: string):
  * Parse .link file content and return metadata
  */
 export function parseLinkFileContent(content: string): LinkFileMetadata | null {
-  console.log('🔗 [parseLinkFileContent] Parsing content:', {
-    contentType: typeof content,
-    contentLength: content?.length,
-    contentStart: content?.substring(0, 100),
-    isDataUrl: content?.startsWith('data:')
-  });
-
   let jsonContent = content;
 
   // Handle legacy .link files that were incorrectly stored as data URLs
   if (content.startsWith('data:')) {
-    console.log('🔗 [parseLinkFileContent] Detected legacy data URL format, decoding base64...');
     try {
       // Extract base64 content from data URL
       const base64Match = content.match(/^data:[^;]+;base64,(.+)$/);
@@ -89,10 +81,9 @@ export function parseLinkFileContent(content: string): LinkFileMetadata | null {
         const base64Content = base64Match[1];
         // Decode base64 to UTF-8 string
         jsonContent = atob(base64Content);
-        console.log('🔗 [parseLinkFileContent] Decoded JSON:', jsonContent.substring(0, 200));
       }
     } catch (decodeError) {
-      console.error('🔗 [parseLinkFileContent] Failed to decode base64 data URL:', decodeError);
+      console.error('Failed to decode base64 data URL:', decodeError);
       return null;
     }
   }
@@ -106,11 +97,9 @@ export function parseLinkFileContent(content: string): LinkFileMetadata | null {
       return null;
     }
 
-    console.log('🔗 [parseLinkFileContent] Successfully parsed metadata:', metadata);
     return metadata;
   } catch (error) {
-    console.error('🔗 [parseLinkFileContent] Failed to parse .link file content:', error);
-    console.error('🔗 [parseLinkFileContent] Content that failed to parse:', jsonContent);
+    console.error('Failed to parse .link file content:', error);
     return null;
   }
 }

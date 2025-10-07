@@ -726,14 +726,9 @@ export class GitDreamNodeService {
   private async fileToDataUrl(file: globalThis.File): Promise<string> {
     // .link files contain JSON metadata and should be read as text, not data URLs
     if (file.name.toLowerCase().endsWith('.link')) {
-      console.log('🔗 [fileToDataUrl] Reading .link file as text:', file.name);
       return new Promise((resolve, reject) => {
         const reader = new globalThis.FileReader();
-        reader.onload = () => {
-          const content = reader.result as string;
-          console.log('🔗 [fileToDataUrl] .link file content:', content.substring(0, 200));
-          resolve(content);
-        };
+        reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsText(file);
       });
@@ -751,10 +746,7 @@ export class GitDreamNodeService {
   private async filePathToDataUrl(filePath: string): Promise<string> {
     // .link files contain JSON metadata and should be read as text, not data URLs
     if (filePath.toLowerCase().endsWith('.link')) {
-      console.log('🔗 [filePathToDataUrl] Reading .link file as text:', filePath);
-      const content = await fsPromises.readFile(filePath, 'utf-8');
-      console.log('🔗 [filePathToDataUrl] .link file content:', content.substring(0, 200));
-      return content;
+      return await fsPromises.readFile(filePath, 'utf-8');
     }
 
     // Regular media files get converted to data URLs
