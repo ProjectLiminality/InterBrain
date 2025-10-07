@@ -312,7 +312,7 @@ export class GitDreamNodeService {
           stats.added++;
         } else {
           // Existing node - check for updates
-          const updated = await this.updateNodeFromVault(existingData, dirPath, udd);
+          const updated = await this.updateNodeFromVault(existingData, dirPath, udd, dir.name);
           if (updated) stats.updated++;
         }
       }
@@ -527,11 +527,19 @@ export class GitDreamNodeService {
   private async updateNodeFromVault(
     existingData: RealNodeData,
     dirPath: string,
-    udd: UDDFile
+    udd: UDDFile,
+    repoName: string
   ): Promise<boolean> {
     let updated = false;
     const node = { ...existingData.node };
-    
+
+    // CRITICAL: Sync repoPath with actual directory name (handles Radicle clone renames)
+    if (node.repoPath !== repoName) {
+      console.log(`📁 [GitDreamNodeService] Syncing repoPath: "${node.repoPath}" → "${repoName}"`);
+      node.repoPath = repoName;
+      updated = true;
+    }
+
     // Check metadata changes
     if (node.name !== udd.title || node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone) {
       node.name = udd.title;
