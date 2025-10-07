@@ -62,7 +62,7 @@ export const dreamNodeStyles = {
     git: {
       clean: {
         glowIntensity: 0,        // No glow for clean state
-        glowColor: 'transparent'
+        glowColor: '#000000'     // Black (invisible since intensity is 0)
       },
       uncommitted: {
         glowIntensity: 30,       // Strong glow
@@ -209,7 +209,7 @@ export function getGitStateStyle(gitState: GitStateType) {
     borderStyle: ('borderStyle' in gitStyles) ? gitStyles.borderStyle : 'solid',
     animation: ('pulseAnimation' in gitStyles) ? gitStyles.pulseAnimation : 'none',
     glowIntensity: gitStyles.glowIntensity,
-    glowColor: ('glowColor' in gitStyles) ? gitStyles.glowColor : 'transparent'
+    glowColor: ('glowColor' in gitStyles) ? gitStyles.glowColor : '#000000'
   };
 }
 
