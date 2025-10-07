@@ -724,6 +724,17 @@ export class GitDreamNodeService {
   }
   
   private async fileToDataUrl(file: globalThis.File): Promise<string> {
+    // .link files contain JSON metadata and should be read as text, not data URLs
+    if (file.name.toLowerCase().endsWith('.link')) {
+      return new Promise((resolve, reject) => {
+        const reader = new globalThis.FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    // Regular media files get converted to data URLs
     return new Promise((resolve, reject) => {
       const reader = new globalThis.FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -733,6 +744,12 @@ export class GitDreamNodeService {
   }
   
   private async filePathToDataUrl(filePath: string): Promise<string> {
+    // .link files contain JSON metadata and should be read as text, not data URLs
+    if (filePath.toLowerCase().endsWith('.link')) {
+      return await fsPromises.readFile(filePath, 'utf-8');
+    }
+
+    // Regular media files get converted to data URLs
     const buffer = await fsPromises.readFile(filePath);
     const mimeType = this.getMimeType(filePath);
     return `data:${mimeType};base64,${buffer.toString('base64')}`;
