@@ -329,105 +329,72 @@ export class RadicleServiceImpl implements RadicleService {
     const radBinDir = path.dirname(radCmd);
     env.PATH = `${radBinDir}:${env.PATH}`;
 
-    // Try clone, handle directory conflicts by renaming existing directory
-    let cloneAttempt = 0;
-    let cloneSuccess = false;
+    // Clone the repository
     let cloneResult: any;
 
-    while (!cloneSuccess && cloneAttempt < 10) {
-      try {
-        // Clone the repository
-        console.log(`RadicleService: Clone attempt ${cloneAttempt + 1}: Running 'rad clone ${radicleId}' in ${destinationPath}`);
-        cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
-          cwd: destinationPath,
-          env: env,
-        });
-        console.log('RadicleService: rad clone output:', cloneResult.stdout);
-        if (cloneResult.stderr) {
-          console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
-        }
-        cloneSuccess = true;
-      } catch (cloneError: any) {
-        const errorOutput = cloneError.stdout || cloneError.stderr || cloneError.message || '';
-        console.log(`RadicleService: Clone attempt ${cloneAttempt + 1} error:`, errorOutput);
-
-        // Check if error is due to directory already existing
-        // Error format: "the directory path "RepoName" already exists"
-        const existsMatch = errorOutput.match(/directory path "([^"]+)" already exists/);
-
-        if (existsMatch && existsMatch[1]) {
-          const conflictingName = existsMatch[1];
-          const conflictingPath = path.join(destinationPath, conflictingName);
-          const renamedPath = path.join(destinationPath, `${conflictingName}-conflict-${Date.now()}`);
-
-          console.log(`RadicleService: Directory "${conflictingName}" exists, renaming to "${path.basename(renamedPath)}"`);
-
-          try {
-            await fs.promises.rename(conflictingPath, renamedPath);
-            cloneAttempt++;
-            continue; // Retry clone
-          } catch (renameError) {
-            console.error('RadicleService: Failed to rename conflicting directory:', renameError);
-            throw new Error(`Directory "${conflictingName}" already exists and could not be renamed`);
-          }
-        }
-
-        // Other error - rethrow
-        throw cloneError;
+    try {
+      console.log(`RadicleService: Running 'rad clone ${radicleId}' in ${destinationPath}`);
+      cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
+        cwd: destinationPath,
+        env: env,
+      });
+      console.log('RadicleService: rad clone output:', cloneResult.stdout);
+      if (cloneResult.stderr) {
+        console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
       }
-    }
+    } catch (cloneError: any) {
+      const errorOutput = cloneError.stdout || cloneError.stderr || cloneError.message || '';
 
-    if (!cloneSuccess) {
-      throw new Error('Failed to clone: Too many naming conflicts');
+      // Check if error is due to directory already existing
+      // Error format: "the directory path "RepoName" already exists"
+      const existsMatch = errorOutput.match(/directory path "([^"]+)" already exists/);
+
+      if (existsMatch && existsMatch[1]) {
+        const existingName = existsMatch[1];
+        throw new Error(`Clone aborted: A directory named "${existingName}" already exists. Please rename the existing directory and try again.`);
+      }
+
+      // Check if error is due to missing passphrase
+      if (errorOutput.includes('RAD_PASSPHRASE') || errorOutput.includes('passphrase')) {
+        throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
+      }
+
+      // Other error
+      throw new Error(`Failed to clone from Radicle network: ${errorOutput || cloneError.message || 'Unknown error'}`);
     }
 
     // Parse repository name from clone output
     // Example output: "Creating checkout in ./TestRepo"
     const cloneOutput = cloneResult.stdout || cloneResult.stderr || '';
-    try {
-      const match = cloneOutput.match(/Creating checkout in \.\/([^.\/\s]+)/);
+    const match = cloneOutput.match(/Creating checkout in \.\/([^.\/\s]+)/);
 
-      let repoName: string;
-      if (match && match[1]) {
-        repoName = match[1];
-        console.log(`RadicleService: Parsed repository name from clone output: ${repoName}`);
-      } else {
-        // Fallback: Try to list directories and find the newest one
-        console.warn('RadicleService: Could not parse repo name from output, falling back to directory scan');
-        const fs = require('fs');
-        const entries = await fs.promises.readdir(destinationPath, { withFileTypes: true });
-        const dirs = entries.filter((e: any) => e.isDirectory() && !e.name.startsWith('.'));
+    let repoName: string;
+    if (match && match[1]) {
+      repoName = match[1];
+      console.log(`RadicleService: Parsed repository name from clone output: ${repoName}`);
+    } else {
+      // Fallback: Try to list directories and find the newest one
+      console.warn('RadicleService: Could not parse repo name from output, falling back to directory scan');
+      const entries = await fs.promises.readdir(destinationPath, { withFileTypes: true });
+      const dirs = entries.filter((e: any) => e.isDirectory() && !e.name.startsWith('.'));
 
-        if (dirs.length === 0) {
-          throw new Error('Clone succeeded but could not find cloned repository directory');
-        }
-
-        // Sort by modification time and take the newest
-        const dirsWithStats = await Promise.all(
-          dirs.map(async (d: any) => ({
-            name: d.name,
-            stats: await fs.promises.stat(path.join(destinationPath, d.name))
-          }))
-        );
-        dirsWithStats.sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs);
-        repoName = dirsWithStats[0].name;
-        console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
+      if (dirs.length === 0) {
+        throw new Error('Clone succeeded but could not find cloned repository directory');
       }
 
-      return repoName;
-    } catch (error: any) {
-      console.error('RadicleService: rad clone failed:', error);
-      console.error('RadicleService: rad clone stdout:', error.stdout);
-      console.error('RadicleService: rad clone stderr:', error.stderr);
-
-      // Check if error is due to missing passphrase
-      const errorOutput = error.stderr || error.stdout || error.message || '';
-      if (errorOutput.includes('RAD_PASSPHRASE') || errorOutput.includes('passphrase')) {
-        throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
-      }
-
-      throw new Error(`Failed to clone from Radicle network: ${errorOutput || error.message || 'Unknown error'}`);
+      // Sort by modification time and take the newest
+      const dirsWithStats = await Promise.all(
+        dirs.map(async (d: any) => ({
+          name: d.name,
+          stats: await fs.promises.stat(path.join(destinationPath, d.name))
+        }))
+      );
+      dirsWithStats.sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs);
+      repoName = dirsWithStats[0].name;
+      console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
     }
+
+    return repoName;
   }
 
   async share(dreamNodePath: string, passphrase?: string): Promise<void> {
