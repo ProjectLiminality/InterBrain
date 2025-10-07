@@ -43,33 +43,32 @@ export class URIHandlerService {
 
 	/**
 	 * Handle single DreamNode clone URI
-	 * Format: obsidian://interbrain-clone?vault=<vault>&uuid=<radicleId or uuid>
+	 * Format: obsidian://interbrain-clone?id=<radicleId or uuid>
 	 */
 	private async handleSingleNodeClone(params: Record<string, string>): Promise<void> {
 		try {
 			console.log(`🔗 [URIHandler] Single clone handler called with params:`, params);
-			const { uuid, vault } = params; // 'uuid' param actually contains Radicle ID now
+			const id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
 
-			if (!uuid) {
+			if (!id) {
 				new Notice('Invalid clone link: missing node identifier');
 				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
 				return;
 			}
 
 			console.log(`🔗 [URIHandler] Deep link triggered!`);
-			console.log(`🔗 [URIHandler] Vault: ${vault || 'not specified'}`);
-			console.log(`🔗 [URIHandler] Radicle ID: ${uuid}`);
+			console.log(`🔗 [URIHandler] Identifier: ${id}`);
 
 			// Determine if this is a Radicle ID or UUID
-			const isRadicleId = uuid.startsWith('rad:');
+			const isRadicleId = id.startsWith('rad:');
 
 			if (isRadicleId) {
 				// Clone from Radicle network
-				await this.cloneFromRadicle(uuid);
+				await this.cloneFromRadicle(id);
 			} else {
 				// Legacy UUID fallback (for Windows users)
 				new Notice(`UUID-based links not yet implemented. Please ask sender to share via Radicle.`);
-				console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${uuid}`);
+				console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${id}`);
 			}
 
 		} catch (error) {
@@ -80,20 +79,20 @@ export class URIHandlerService {
 
 	/**
 	 * Handle batch DreamNode clone URI
-	 * Format: obsidian://interbrain-clone-batch?vault=<vault>&uuids=<radicleId1,radicleId2,radicleId3>
+	 * Format: obsidian://interbrain-clone-batch?ids=<radicleId1,radicleId2,radicleId3>
 	 */
 	private async handleBatchNodeClone(params: Record<string, string>): Promise<void> {
 		try {
 			console.log(`🔗 [URIHandler] Batch clone handler called with params:`, params);
-			const { uuids, vault } = params; // 'uuids' param actually contains Radicle IDs now
+			const ids = params.ids || params.uuids; // Support both 'ids' (new) and 'uuids' (legacy)
 
-			if (!uuids) {
+			if (!ids) {
 				new Notice('Invalid batch clone link: missing node identifiers');
 				console.error(`❌ [URIHandler] Batch clone missing identifiers parameter`);
 				return;
 			}
 
-			const idList = uuids.split(',').map(u => u.trim()).filter(Boolean);
+			const idList = ids.split(',').map(u => u.trim()).filter(Boolean);
 
 			if (idList.length === 0) {
 				new Notice('Invalid batch clone link: no valid identifiers');
@@ -101,8 +100,7 @@ export class URIHandlerService {
 			}
 
 			console.log(`🔗 [URIHandler] Batch deep link triggered!`);
-			console.log(`🔗 [URIHandler] Vault: ${vault || 'not specified'}`);
-			console.log(`🔗 [URIHandler] Radicle IDs (${idList.length}):`, idList);
+			console.log(`🔗 [URIHandler] Identifiers (${idList.length}):`, idList);
 
 			// Clone all nodes from Radicle network
 			const notice = new Notice(`Cloning ${idList.length} DreamNodes...`, 0);
@@ -188,24 +186,22 @@ export class URIHandlerService {
 
 	/**
 	 * Generate deep link URL for single DreamNode
-	 * @param vaultName The Obsidian vault name
+	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
 	 * @param identifier Radicle ID (preferred) or UUID (fallback)
 	 */
 	static generateSingleNodeLink(vaultName: string, identifier: string): string {
-		const encodedVault = encodeURIComponent(vaultName);
 		const encodedIdentifier = encodeURIComponent(identifier);
-		return `obsidian://interbrain-clone?vault=${encodedVault}&uuid=${encodedIdentifier}`;
+		return `obsidian://interbrain-clone?id=${encodedIdentifier}`;
 	}
 
 	/**
 	 * Generate deep link URL for batch clone
-	 * @param vaultName The Obsidian vault name
+	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
 	 * @param identifiers Array of Radicle IDs (preferred) or UUIDs (fallback)
 	 */
 	static generateBatchNodeLink(vaultName: string, identifiers: string[]): string {
-		const encodedVault = encodeURIComponent(vaultName);
 		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
-		return `obsidian://interbrain-clone-batch?vault=${encodedVault}&uuids=${encodedIdentifiers}`;
+		return `obsidian://interbrain-clone-batch?ids=${encodedIdentifiers}`;
 	}
 }
 

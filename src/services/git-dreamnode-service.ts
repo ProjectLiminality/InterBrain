@@ -504,7 +504,8 @@ export class GitDreamNodeService {
       repoPath: repoName,
       hasUnsavedChanges: false,
       email: udd.email,
-      phone: udd.phone
+      phone: udd.phone,
+      radicleId: udd.radicleId
     };
     
     // Add to store
@@ -548,11 +549,12 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // Check metadata changes (type and contact fields only - name now synced from directory)
-    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone) {
+    // Check metadata changes (type, contact fields, and radicleId - name synced from directory)
+    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone || node.radicleId !== udd.radicleId) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
+      node.radicleId = udd.radicleId;
       updated = true;
     }
     
@@ -619,6 +621,11 @@ export class GitDreamNodeService {
     if (node.type === 'dreamer') {
       if (node.email) udd.email = node.email;
       if (node.phone) udd.phone = node.phone;
+    }
+
+    // CRITICAL: Preserve radicleId field if it exists
+    if (node.radicleId) {
+      udd.radicleId = node.radicleId;
     }
 
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
