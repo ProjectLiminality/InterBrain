@@ -257,9 +257,58 @@ export class RadicleServiceImpl implements RadicleService {
     }
   }
 
+  /**
+   * Find repositories by Radicle ID
+   * Scans directories for .udd files and checks radicleId field
+   */
+  private async findReposByRadicleId(vaultPath: string, radicleId: string): Promise<string[]> {
+    const path = require('path');
+    const fs = require('fs');
+    const matchingRepos: string[] = [];
+
+    try {
+      const entries = await fs.promises.readdir(vaultPath, { withFileTypes: true });
+      const directories = entries.filter((entry: any) => entry.isDirectory() && !entry.name.startsWith('.'));
+
+      for (const dir of directories) {
+        const uddPath = path.join(vaultPath, dir.name, '.udd');
+
+        try {
+          const uddContent = await fs.promises.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+
+          if (udd.radicleId === radicleId) {
+            matchingRepos.push(dir.name);
+            console.log(`RadicleService: Found matching Radicle ID in "${dir.name}"`);
+          }
+        } catch (error) {
+          // Directory doesn't have .udd or is not a DreamNode, skip
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error('RadicleService: Error scanning for Radicle IDs:', error);
+    }
+
+    return matchingRepos;
+  }
+
   async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<string> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    // Check if this Radicle ID is already cloned
+    const path = require('path');
+    const fs = require('fs');
+
+    console.log(`RadicleService: Checking if ${radicleId} already exists...`);
+    const existingRepos = await this.findReposByRadicleId(destinationPath, radicleId);
+
+    if (existingRepos.length > 0) {
+      const existingRepoName = existingRepos[0];
+      console.log(`RadicleService: Repository with Radicle ID ${radicleId} already exists as "${existingRepoName}"`);
+      throw new Error(`This DreamNode is already cloned as "${existingRepoName}"`);
     }
 
     // Ensure Radicle node is running before attempting to clone
@@ -277,25 +326,65 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     // CRITICAL: Add Radicle bin to PATH so rad can find radicle-node binary
-    const path = require('path');
     const radBinDir = path.dirname(radCmd);
     env.PATH = `${radBinDir}:${env.PATH}`;
 
-    try {
-      // Clone the repository
-      console.log(`RadicleService: Running '${radCmd} clone ${radicleId}' in ${destinationPath}`);
-      const cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
-        cwd: destinationPath,
-        env: env,
-      });
-      console.log('RadicleService: rad clone output:', cloneResult.stdout);
-      if (cloneResult.stderr) {
-        console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
-      }
+    // Try clone, handle directory conflicts by renaming existing directory
+    let cloneAttempt = 0;
+    let cloneSuccess = false;
+    let cloneResult: any;
 
-      // Parse repository name from clone output
-      // Example output: "Creating checkout in ./TestRepo"
-      const cloneOutput = cloneResult.stdout || cloneResult.stderr || '';
+    while (!cloneSuccess && cloneAttempt < 10) {
+      try {
+        // Clone the repository
+        console.log(`RadicleService: Clone attempt ${cloneAttempt + 1}: Running 'rad clone ${radicleId}' in ${destinationPath}`);
+        cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
+          cwd: destinationPath,
+          env: env,
+        });
+        console.log('RadicleService: rad clone output:', cloneResult.stdout);
+        if (cloneResult.stderr) {
+          console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
+        }
+        cloneSuccess = true;
+      } catch (cloneError: any) {
+        const errorOutput = cloneError.stdout || cloneError.stderr || cloneError.message || '';
+        console.log(`RadicleService: Clone attempt ${cloneAttempt + 1} error:`, errorOutput);
+
+        // Check if error is due to directory already existing
+        // Error format: "the directory path "RepoName" already exists"
+        const existsMatch = errorOutput.match(/directory path "([^"]+)" already exists/);
+
+        if (existsMatch && existsMatch[1]) {
+          const conflictingName = existsMatch[1];
+          const conflictingPath = path.join(destinationPath, conflictingName);
+          const renamedPath = path.join(destinationPath, `${conflictingName}-conflict-${Date.now()}`);
+
+          console.log(`RadicleService: Directory "${conflictingName}" exists, renaming to "${path.basename(renamedPath)}"`);
+
+          try {
+            await fs.promises.rename(conflictingPath, renamedPath);
+            cloneAttempt++;
+            continue; // Retry clone
+          } catch (renameError) {
+            console.error('RadicleService: Failed to rename conflicting directory:', renameError);
+            throw new Error(`Directory "${conflictingName}" already exists and could not be renamed`);
+          }
+        }
+
+        // Other error - rethrow
+        throw cloneError;
+      }
+    }
+
+    if (!cloneSuccess) {
+      throw new Error('Failed to clone: Too many naming conflicts');
+    }
+
+    // Parse repository name from clone output
+    // Example output: "Creating checkout in ./TestRepo"
+    const cloneOutput = cloneResult.stdout || cloneResult.stderr || '';
+    try {
       const match = cloneOutput.match(/Creating checkout in \.\/([^.\/\s]+)/);
 
       let repoName: string;
@@ -328,13 +417,16 @@ export class RadicleServiceImpl implements RadicleService {
       return repoName;
     } catch (error: any) {
       console.error('RadicleService: rad clone failed:', error);
+      console.error('RadicleService: rad clone stdout:', error.stdout);
+      console.error('RadicleService: rad clone stderr:', error.stderr);
 
       // Check if error is due to missing passphrase
-      if (error.message && error.message.includes('RAD_PASSPHRASE')) {
+      const errorOutput = error.stderr || error.stdout || error.message || '';
+      if (errorOutput.includes('RAD_PASSPHRASE') || errorOutput.includes('passphrase')) {
         throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
       }
 
-      throw new Error(`Failed to clone from Radicle network: ${error.message || 'Unknown error'}`);
+      throw new Error(`Failed to clone from Radicle network: ${errorOutput || error.message || 'Unknown error'}`);
     }
   }
 
