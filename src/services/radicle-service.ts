@@ -207,6 +207,56 @@ export class RadicleServiceImpl implements RadicleService {
     }
   }
 
+  /**
+   * Check if Radicle node is running
+   */
+  private async isNodeRunning(): Promise<boolean> {
+    try {
+      const radCmd = this.getRadCommand();
+      const { stdout } = await execAsync(`"${radCmd}" node status`);
+      const isRunning = stdout.includes('Running');
+      console.log(`RadicleService: Node status check: ${isRunning ? 'running' : 'not running'}`);
+      return isRunning;
+    } catch (error) {
+      console.log('RadicleService: Node status check failed, assuming not running');
+      return false;
+    }
+  }
+
+  /**
+   * Start Radicle node
+   */
+  private async startNode(passphrase?: string): Promise<void> {
+    const radCmd = this.getRadCommand();
+    const env = { ...process.env };
+
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+    }
+
+    // CRITICAL: Add Radicle bin to PATH so rad can find radicle-node binary
+    const path = require('path');
+    const radBinDir = path.dirname(radCmd);
+    env.PATH = `${radBinDir}:${env.PATH}`;
+
+    console.log('RadicleService: Starting Radicle node...');
+    await execAsync(`"${radCmd}" node start`, { env });
+    console.log('RadicleService: Radicle node started successfully');
+  }
+
+  /**
+   * Ensure Radicle node is running, start if needed
+   */
+  private async ensureNodeRunning(passphrase?: string): Promise<void> {
+    const isRunning = await this.isNodeRunning();
+    if (!isRunning) {
+      console.log('RadicleService: Node not running, starting it...');
+      await this.startNode(passphrase);
+    } else {
+      console.log('RadicleService: Node already running');
+    }
+  }
+
   async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<string> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
@@ -292,6 +342,9 @@ export class RadicleServiceImpl implements RadicleService {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
+
+    // Ensure Radicle node is running before attempting to share
+    await this.ensureNodeRunning(passphrase);
 
     const radCmd = this.getRadCommand();
 
