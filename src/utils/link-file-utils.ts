@@ -77,8 +77,28 @@ export function parseLinkFileContent(content: string): LinkFileMetadata | null {
     isDataUrl: content?.startsWith('data:')
   });
 
+  let jsonContent = content;
+
+  // Handle legacy .link files that were incorrectly stored as data URLs
+  if (content.startsWith('data:')) {
+    console.log('🔗 [parseLinkFileContent] Detected legacy data URL format, decoding base64...');
+    try {
+      // Extract base64 content from data URL
+      const base64Match = content.match(/^data:[^;]+;base64,(.+)$/);
+      if (base64Match && base64Match[1]) {
+        const base64Content = base64Match[1];
+        // Decode base64 to UTF-8 string
+        jsonContent = atob(base64Content);
+        console.log('🔗 [parseLinkFileContent] Decoded JSON:', jsonContent.substring(0, 200));
+      }
+    } catch (decodeError) {
+      console.error('🔗 [parseLinkFileContent] Failed to decode base64 data URL:', decodeError);
+      return null;
+    }
+  }
+
   try {
-    const metadata = JSON.parse(content) as LinkFileMetadata;
+    const metadata = JSON.parse(jsonContent) as LinkFileMetadata;
 
     // Validate required fields
     if (!metadata.url || !metadata.type) {
@@ -90,7 +110,7 @@ export function parseLinkFileContent(content: string): LinkFileMetadata | null {
     return metadata;
   } catch (error) {
     console.error('🔗 [parseLinkFileContent] Failed to parse .link file content:', error);
-    console.error('🔗 [parseLinkFileContent] Content that failed to parse:', content);
+    console.error('🔗 [parseLinkFileContent] Content that failed to parse:', jsonContent);
     return null;
   }
 }
