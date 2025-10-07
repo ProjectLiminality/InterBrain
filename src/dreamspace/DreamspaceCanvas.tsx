@@ -353,6 +353,14 @@ export default function DreamspaceCanvas() {
           return;
         }
         throw new Error('SpatialOrchestrator not available');
+      },
+      rotateToNode: async (nodeNameOrId: string) => {
+        // Rotate the sphere to center a specific node in camera view
+        if (spatialOrchestratorRef.current) {
+          await spatialOrchestratorRef.current.rotateToNode(nodeNameOrId);
+          return;
+        }
+        throw new Error('SpatialOrchestrator not available');
       }
     };
   }, []);
@@ -1304,6 +1312,7 @@ export default function DreamspaceCanvas() {
           near: 0.1,
           far: 20000  // Increased for better visibility of intersection point
         }}
+        gl={{ antialias: true }}
         style={{
           width: '100%',
           height: '100%',
