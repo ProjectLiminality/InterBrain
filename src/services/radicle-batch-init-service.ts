@@ -1,6 +1,6 @@
 import { Notice, Plugin } from 'obsidian';
-import { serviceManager } from './service-manager';
 import { DreamNode } from '../types/dreamnode';
+import { RadicleService } from './radicle-service';
 
 /**
  * Radicle Batch Initialization Service
@@ -10,9 +10,11 @@ import { DreamNode } from '../types/dreamnode';
  */
 export class RadicleBatchInitService {
 	private plugin: Plugin;
+	private radicleService: RadicleService;
 
-	constructor(plugin: Plugin) {
+	constructor(plugin: Plugin, radicleService: RadicleService) {
 		this.plugin = plugin;
+		this.radicleService = radicleService;
 	}
 
 	/**
@@ -30,6 +32,7 @@ export class RadicleBatchInitService {
 
 		try {
 			// Step 1: Load all nodes and check their Radicle status
+			const { serviceManager } = require('./service-manager');
 			const dreamNodeService = serviceManager.getActive();
 			const nodes: DreamNode[] = [];
 
@@ -137,11 +140,9 @@ export class RadicleBatchInitService {
 			}
 
 			// Fallback: Check git repository directly using rad .
-			const { serviceManager } = require('./service-manager');
-			const radicleService = serviceManager.getRadicleService();
 			const fullRepoPath = path.join(vaultPath, node.repoPath);
 
-			const radicleId = await radicleService.getRadicleId(fullRepoPath);
+			const radicleId = await this.radicleService.getRadicleId(fullRepoPath);
 			if (radicleId) {
 				console.log(`🔍 [RadicleBatchInit] Found Radicle ID in git for ${node.name}: ${radicleId}`);
 				return radicleId;
@@ -160,10 +161,9 @@ export class RadicleBatchInitService {
 	 */
 	private async batchInitializeNodes(nodes: DreamNode[]): Promise<Map<string, string>> {
 		const result = new Map<string, string>();
-		const radicleService = serviceManager.getRadicleService();
 
 		// Check if Radicle is available
-		const isAvailable = await radicleService.isAvailable();
+		const isAvailable = await this.radicleService.isAvailable();
 		if (!isAvailable) {
 			console.warn('⚠️ [RadicleBatchInit] Radicle CLI not available, skipping initialization');
 			return result;
@@ -183,14 +183,14 @@ export class RadicleBatchInitService {
 				const fullRepoPath = path.join(vaultPath, node.repoPath);
 
 				// Initialize with Radicle (will auto-save Radicle ID to .udd)
-				await radicleService.init(
+				await this.radicleService.init(
 					fullRepoPath,
 					node.name,
 					`DreamNode: ${node.name}`
 				);
 
 				// Get the Radicle ID
-				const radicleId = await radicleService.getRadicleId(fullRepoPath);
+				const radicleId = await this.radicleService.getRadicleId(fullRepoPath);
 
 				if (radicleId) {
 					result.set(node.id, radicleId);
@@ -200,8 +200,30 @@ export class RadicleBatchInitService {
 				}
 
 			} catch (error) {
-				console.error(`❌ [RadicleBatchInit] Failed to initialize ${node.name}:`, error);
-				// Continue with other nodes
+				// Check if error is "already initialized" - this is NOT an error!
+				const errorMsg = error instanceof Error ? error.message : String(error);
+
+				if (errorMsg.includes('already initialized')) {
+					console.log(`ℹ️ [RadicleBatchInit] ${node.name} already initialized, retrieving ID...`);
+
+					try {
+						const fullRepoPath = path.join(vaultPath, node.repoPath);
+						const radicleId = await this.radicleService.getRadicleId(fullRepoPath);
+
+						if (radicleId) {
+							result.set(node.id, radicleId);
+							console.log(`✅ [RadicleBatchInit] ${node.name} already initialized: ${radicleId}`);
+							continue; // Success! Move to next node
+						} else {
+							console.warn(`⚠️ [RadicleBatchInit] Could not retrieve Radicle ID for already-initialized ${node.name}`);
+						}
+					} catch (getIdError) {
+						console.error(`❌ [RadicleBatchInit] Could not retrieve Radicle ID for ${node.name}:`, getIdError);
+					}
+				} else {
+					// Different error - log and continue
+					console.error(`❌ [RadicleBatchInit] Failed to initialize ${node.name}:`, error);
+				}
 			}
 		}
 
@@ -212,8 +234,8 @@ export class RadicleBatchInitService {
 // Singleton instance
 let _radicleBatchInitService: RadicleBatchInitService | null = null;
 
-export function initializeRadicleBatchInitService(plugin: Plugin): void {
-	_radicleBatchInitService = new RadicleBatchInitService(plugin);
+export function initializeRadicleBatchInitService(plugin: Plugin, radicleService: RadicleService): void {
+	_radicleBatchInitService = new RadicleBatchInitService(plugin, radicleService);
 	console.log(`🔮 [RadicleBatchInit] Service initialized`);
 }
 

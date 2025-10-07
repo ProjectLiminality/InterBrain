@@ -1,4 +1,5 @@
 import { App, Notice, Plugin } from 'obsidian';
+import { RadicleService } from './radicle-service';
 
 /**
  * URI Handler Service
@@ -9,10 +10,12 @@ import { App, Notice, Plugin } from 'obsidian';
 export class URIHandlerService {
 	private app: App;
 	private plugin: Plugin;
+	private radicleService: RadicleService;
 
-	constructor(app: App, plugin: Plugin) {
+	constructor(app: App, plugin: Plugin, radicleService: RadicleService) {
 		this.app = app;
 		this.plugin = plugin;
+		this.radicleService = radicleService;
 	}
 
 	/**
@@ -145,13 +148,9 @@ export class URIHandlerService {
 		try {
 			console.log(`🔗 [URIHandler] Cloning from Radicle: ${radicleId}`);
 
-			// Get services
-			const { serviceManager } = require('./service-manager');
-			const radicleService = serviceManager.getRadicleService();
-
 			// Get vault path
 			const adapter = this.app.vault.adapter as any;
-			const vaultPath = adapter.path || adapter.basePath || '';
+			const vaultPath = adapter.basePath || '';
 
 			if (!vaultPath) {
 				throw new Error('Could not determine vault path');
@@ -162,7 +161,7 @@ export class URIHandlerService {
 				new Notice(`Cloning from Radicle network...`, 3000);
 			}
 
-			const repoName = await radicleService.clone(radicleId, vaultPath);
+			const repoName = await this.radicleService.clone(radicleId, vaultPath);
 
 			console.log(`✅ [URIHandler] Successfully cloned: ${repoName}`);
 
@@ -208,8 +207,8 @@ export class URIHandlerService {
 // Singleton instance
 let _uriHandlerService: URIHandlerService | null = null;
 
-export function initializeURIHandlerService(app: App, plugin: Plugin): void {
-	_uriHandlerService = new URIHandlerService(app, plugin);
+export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService): void {
+	_uriHandlerService = new URIHandlerService(app, plugin, radicleService);
 	_uriHandlerService.registerHandlers();
 	console.log(`🔗 [URIHandler] Service initialized`);
 }
