@@ -266,6 +266,13 @@ export function registerRadicleCommands(
             const udd = JSON.parse(uddContent);
             console.log(`RadicleCommands: Parsed .udd file:`, udd);
 
+            // CRITICAL: Add Radicle ID to .udd file for duplicate detection
+            if (!udd.radicleId) {
+              udd.radicleId = radicleId.trim();
+              await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+              console.log(`RadicleCommands: Added Radicle ID to .udd file`);
+            }
+
             // Calculate position at center of camera view accounting for sphere rotation
             const store = useInterBrainStore.getState();
             let position: [number, number, number] = [0, 0, -5000]; // Fallback
@@ -400,6 +407,13 @@ export function registerRadicleCommands(
               try {
                 const uddContent = await fs.readFile(uddPath, 'utf-8');
                 const udd = JSON.parse(uddContent);
+
+                // CRITICAL: Add Radicle ID to .udd file for duplicate detection
+                if (!udd.radicleId) {
+                  udd.radicleId = radicleId.trim();
+                  await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                  console.log(`RadicleCommands: Added Radicle ID to .udd file`);
+                }
 
                 // Calculate camera-facing position
                 const storeState = useInterBrainStore.getState();
