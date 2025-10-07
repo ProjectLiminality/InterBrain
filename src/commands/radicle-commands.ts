@@ -255,16 +255,122 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully cloned ${repoName} from Radicle network`);
           uiService.showSuccess(`${repoName} cloned successfully!`);
 
-          // Trigger vault scan to pick up the new DreamNode
-          console.log('RadicleCommands: Triggering vault scan to detect new DreamNode...');
-          const dreamNodeService = serviceManager.getActive();
-          if (dreamNodeService.refreshGitStatus) {
-            await dreamNodeService.refreshGitStatus();
-            console.log('RadicleCommands: Vault scan complete');
-          }
+          // Read .udd file directly instead of full vault scan
+          console.log('RadicleCommands: Reading .udd file from cloned repository...');
+          const path = require('path');
+          const fs = require('fs').promises;
+          const uddPath = path.join(vaultPath, repoName, '.udd');
 
-          // Notify user to look for the new node
-          uiService.showInfo(`Look for "${repoName}" in your DreamNodes`);
+          try {
+            const uddContent = await fs.readFile(uddPath, 'utf-8');
+            const udd = JSON.parse(uddContent);
+            console.log(`RadicleCommands: Parsed .udd file:`, udd);
+
+            // Calculate position at center of camera view accounting for sphere rotation
+            const store = useInterBrainStore.getState();
+            let position: [number, number, number] = [0, 0, -5000]; // Fallback
+
+            if (store.sphereRotation) {
+              const { Raycaster, Vector3, Sphere, Quaternion } = require('three');
+              const raycaster = new Raycaster();
+              const cameraPosition = new Vector3(0, 0, 0);
+              const cameraDirection = new Vector3(0, 0, -1);
+              raycaster.set(cameraPosition, cameraDirection);
+
+              const sphereRadius = 5000;
+              const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
+              const intersectionPoint = new Vector3();
+              const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
+
+              if (hasIntersection) {
+                const sphereQuaternion = new Quaternion(
+                  store.sphereRotation.x,
+                  store.sphereRotation.y,
+                  store.sphereRotation.z,
+                  store.sphereRotation.w
+                );
+                const inverseRotation = sphereQuaternion.clone().invert();
+                intersectionPoint.applyQuaternion(inverseRotation);
+                position = intersectionPoint.toArray() as [number, number, number];
+                console.log(`RadicleCommands: Calculated camera-facing position:`, position);
+              }
+            }
+
+            // Load dreamTalk media if specified
+            let dreamTalkMedia: Array<{
+              path: string;
+              absolutePath: string;
+              type: string;
+              data: string;
+              size: number;
+            }> = [];
+
+            if (udd.dreamTalk) {
+              const mediaPath = path.join(vaultPath, repoName, udd.dreamTalk);
+              try {
+                const stats = await fs.stat(mediaPath);
+                const buffer = await fs.readFile(mediaPath);
+                const base64 = buffer.toString('base64');
+                const mimeType = udd.dreamTalk.endsWith('.png') ? 'image/png' :
+                               udd.dreamTalk.endsWith('.jpg') || udd.dreamTalk.endsWith('.jpeg') ? 'image/jpeg' :
+                               udd.dreamTalk.endsWith('.gif') ? 'image/gif' :
+                               udd.dreamTalk.endsWith('.mp4') ? 'video/mp4' :
+                               udd.dreamTalk.endsWith('.webm') ? 'video/webm' :
+                               udd.dreamTalk.endsWith('.mp3') ? 'audio/mpeg' :
+                               udd.dreamTalk.endsWith('.wav') ? 'audio/wav' :
+                               'application/octet-stream';
+                const dataUrl = `data:${mimeType};base64,${base64}`;
+
+                dreamTalkMedia = [{
+                  path: udd.dreamTalk,
+                  absolutePath: mediaPath,
+                  type: mimeType,
+                  data: dataUrl,
+                  size: stats.size
+                }];
+                console.log(`RadicleCommands: Loaded dreamTalk media: ${udd.dreamTalk}`);
+              } catch (mediaError) {
+                console.error('RadicleCommands: Failed to load dreamTalk media:', mediaError);
+              }
+            }
+
+            // Create DreamNode with ALL required properties
+            const clonedNode: DreamNode = {
+              id: udd.uuid, // CRITICAL: id property
+              uuid: udd.uuid,
+              name: udd.title || repoName,
+              type: udd.type || 'dream',
+              repoPath: repoName,
+              dreamTalk: udd.dreamTalk || '',
+              dreamTalkMedia: dreamTalkMedia,
+              dreamSongContent: [],
+              liminalWebConnections: udd.liminalWebRelationships || [], // CRITICAL: defensive check
+              position: position,
+              uncommittedChanges: false,
+              stashedChanges: false,
+              unpushedCommits: false,
+              hasUnsavedChanges: false,
+              email: udd.email,
+              phone: udd.phone,
+              radicleId: udd.radicleId
+            };
+
+            console.log(`RadicleCommands: Created DreamNode object:`, clonedNode);
+
+            // Add to store (realNodes is a Map)
+            const currentNodes = new Map(store.realNodes);
+            currentNodes.set(clonedNode.uuid, {
+              node: clonedNode,
+              lastUpdated: Date.now()
+            });
+            store.setRealNodes(currentNodes);
+
+            console.log(`RadicleCommands: Added cloned node to store, total nodes: ${currentNodes.size}`);
+            uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
+          } catch (readError) {
+            console.error('RadicleCommands: Failed to read .udd file:', readError);
+            uiService.showError('Cloned successfully but failed to load node data. Try "Scan DreamVault for Notes"');
+          }
         } catch (error: any) {
           // If passphrase is needed, prompt and retry
           if (error.message && error.message.includes('passphrase')) {
@@ -285,13 +391,107 @@ export function registerRadicleCommands(
               console.log(`RadicleCommands: Successfully cloned ${repoName} with passphrase`);
               uiService.showSuccess(`${repoName} cloned successfully!`);
 
-              // Trigger vault scan
-              const dreamNodeService = serviceManager.getActive();
-              if (dreamNodeService.refreshGitStatus) {
-                await dreamNodeService.refreshGitStatus();
-              }
+              // Read .udd file directly (same logic as above)
+              console.log('RadicleCommands: Reading .udd file from cloned repository...');
+              const path = require('path');
+              const fs = require('fs').promises;
+              const uddPath = path.join(vaultPath, repoName, '.udd');
 
-              uiService.showInfo(`Look for "${repoName}" in your DreamNodes`);
+              try {
+                const uddContent = await fs.readFile(uddPath, 'utf-8');
+                const udd = JSON.parse(uddContent);
+
+                // Calculate camera-facing position
+                const storeState = useInterBrainStore.getState();
+                let position: [number, number, number] = [0, 0, -5000];
+
+                if (storeState.sphereRotation) {
+                  const { Raycaster, Vector3, Sphere, Quaternion } = require('three');
+                  const raycaster = new Raycaster();
+                  raycaster.set(new Vector3(0, 0, 0), new Vector3(0, 0, -1));
+                  const worldSphere = new Sphere(new Vector3(0, 0, 0), 5000);
+                  const intersectionPoint = new Vector3();
+                  if (raycaster.ray.intersectSphere(worldSphere, intersectionPoint)) {
+                    const sphereQuaternion = new Quaternion(
+                      storeState.sphereRotation.x,
+                      storeState.sphereRotation.y,
+                      storeState.sphereRotation.z,
+                      storeState.sphereRotation.w
+                    );
+                    intersectionPoint.applyQuaternion(sphereQuaternion.clone().invert());
+                    position = intersectionPoint.toArray() as [number, number, number];
+                  }
+                }
+
+                // Load dreamTalk media
+                let dreamTalkMedia: Array<{
+                  path: string;
+                  absolutePath: string;
+                  type: string;
+                  data: string;
+                  size: number;
+                }> = [];
+
+                if (udd.dreamTalk) {
+                  const mediaPath = path.join(vaultPath, repoName, udd.dreamTalk);
+                  try {
+                    const stats = await fs.stat(mediaPath);
+                    const buffer = await fs.readFile(mediaPath);
+                    const base64 = buffer.toString('base64');
+                    const mimeType = udd.dreamTalk.endsWith('.png') ? 'image/png' :
+                                   udd.dreamTalk.endsWith('.jpg') || udd.dreamTalk.endsWith('.jpeg') ? 'image/jpeg' :
+                                   udd.dreamTalk.endsWith('.gif') ? 'image/gif' :
+                                   udd.dreamTalk.endsWith('.mp4') ? 'video/mp4' :
+                                   udd.dreamTalk.endsWith('.webm') ? 'video/webm' :
+                                   udd.dreamTalk.endsWith('.mp3') ? 'audio/mpeg' :
+                                   udd.dreamTalk.endsWith('.wav') ? 'audio/wav' :
+                                   'application/octet-stream';
+                    dreamTalkMedia = [{
+                      path: udd.dreamTalk,
+                      absolutePath: mediaPath,
+                      type: mimeType,
+                      data: `data:${mimeType};base64,${base64}`,
+                      size: stats.size
+                    }];
+                  } catch (mediaError) {
+                    console.error('RadicleCommands: Failed to load dreamTalk media:', mediaError);
+                  }
+                }
+
+                // Create DreamNode with ALL required properties
+                const clonedNode: DreamNode = {
+                  id: udd.uuid,
+                  uuid: udd.uuid,
+                  name: udd.title || repoName,
+                  type: udd.type || 'dream',
+                  repoPath: repoName,
+                  dreamTalk: udd.dreamTalk || '',
+                  dreamTalkMedia: dreamTalkMedia,
+                  dreamSongContent: [],
+                  liminalWebConnections: udd.liminalWebRelationships || [],
+                  position: position,
+                  uncommittedChanges: false,
+                  stashedChanges: false,
+                  unpushedCommits: false,
+                  hasUnsavedChanges: false,
+                  email: udd.email,
+                  phone: udd.phone,
+                  radicleId: udd.radicleId
+                };
+
+                // Add to store
+                const currentNodes = new Map(storeState.realNodes);
+                currentNodes.set(clonedNode.uuid, {
+                  node: clonedNode,
+                  lastUpdated: Date.now()
+                });
+                storeState.setRealNodes(currentNodes);
+
+                uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
+              } catch (readError) {
+                console.error('RadicleCommands: Failed to read .udd file:', readError);
+                uiService.showError('Cloned successfully but failed to load node data. Try "Scan DreamVault for Notes"');
+              }
             } catch (retryError) {
               retryNotice.hide();
               console.error('RadicleCommands: Failed to clone with passphrase:', retryError);

@@ -42,7 +42,9 @@ export function buildRelationshipGraph(dreamNodes: DreamNode[]): RelationshipGra
   // Build edges, filtering out connections to non-existent nodes
   // This prevents "phantom nodes" in layout calculations
   dreamNodes.forEach(node => {
-    const validConnections = node.liminalWebConnections.filter(targetId => 
+    // Defensive: Handle nodes missing liminalWebConnections property
+    const connections = node.liminalWebConnections || [];
+    const validConnections = connections.filter(targetId =>
       nodes.has(targetId) // Only include connections to nodes that actually exist
     );
     edges.set(node.id, validConnections);
