@@ -60,6 +60,23 @@ export function registerRadicleCommands(
           // Try without passphrase first (ssh-agent)
           await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`);
 
+          // Get the Radicle ID and save to .udd file
+          const radicleId = await radicleService.getRadicleId(fullRepoPath);
+          if (radicleId) {
+            const path = require('path');
+            const fs = require('fs').promises;
+            const uddPath = path.join(fullRepoPath, '.udd');
+            try {
+              const uddContent = await fs.readFile(uddPath, 'utf-8');
+              const udd = JSON.parse(uddContent);
+              udd.radicleId = radicleId;
+              await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+              console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+            } catch (error) {
+              console.error('RadicleCommands: Failed to save Radicle ID to .udd:', error);
+            }
+          }
+
           // Success notification
           notice.hide();
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
@@ -80,6 +97,24 @@ export function registerRadicleCommands(
             const retryNotice = new Notice('Initializing Radicle for DreamNode...', 0);
             try {
               await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`, passphrase);
+
+              // Get the Radicle ID and save to .udd file
+              const radicleId = await radicleService.getRadicleId(fullRepoPath);
+              if (radicleId) {
+                const path = require('path');
+                const fs = require('fs').promises;
+                const uddPath = path.join(fullRepoPath, '.udd');
+                try {
+                  const uddContent = await fs.readFile(uddPath, 'utf-8');
+                  const udd = JSON.parse(uddContent);
+                  udd.radicleId = radicleId;
+                  await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                  console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+                } catch (error) {
+                  console.error('RadicleCommands: Failed to save Radicle ID to .udd:', error);
+                }
+              }
+
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name} with passphrase`);
               uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);

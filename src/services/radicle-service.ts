@@ -258,6 +258,28 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
+   * Get Radicle ID for a repository
+   */
+  async getRadicleId(repoPath: string): Promise<string | null> {
+    try {
+      const radCmd = this.getRadCommand();
+      const { stdout } = await execAsync(`"${radCmd}" .`, { cwd: repoPath });
+      const radicleId = stdout.trim();
+
+      if (radicleId && radicleId.startsWith('rad:')) {
+        console.log(`RadicleService: Got Radicle ID: ${radicleId}`);
+        return radicleId;
+      }
+
+      console.warn('RadicleService: Could not get valid Radicle ID');
+      return null;
+    } catch (error) {
+      console.error('RadicleService: Failed to get Radicle ID:', error);
+      return null;
+    }
+  }
+
+  /**
    * Find repositories by Radicle ID
    * Scans directories for .udd files and checks radicleId field
    */
