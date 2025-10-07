@@ -121,7 +121,7 @@ export class RadicleBatchInitService {
 			const path = require('path');
 			const fs = require('fs').promises;
 			const adapter = this.plugin.app.vault.adapter as any;
-			const vaultPath = adapter.path || adapter.basePath || '';
+			const vaultPath = adapter.basePath || '';
 			const uddPath = path.join(vaultPath, node.repoPath, '.udd');
 
 			const uddContent = await fs.readFile(uddPath, 'utf-8');
@@ -151,7 +151,7 @@ export class RadicleBatchInitService {
 
 		// Get vault path
 		const adapter = this.plugin.app.vault.adapter as any;
-		const vaultPath = adapter.path || adapter.basePath || '';
+		const vaultPath = adapter.basePath || '';
 		const path = require('path');
 
 		// CRITICAL: Serialize rad init to prevent race conditions
