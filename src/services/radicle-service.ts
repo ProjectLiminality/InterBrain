@@ -212,6 +212,9 @@ export class RadicleServiceImpl implements RadicleService {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
+    // Ensure Radicle node is running before attempting to clone
+    await this.ensureNodeRunning(passphrase);
+
     const radCmd = this.getRadCommand();
 
     // Prepare environment with passphrase if provided
@@ -222,6 +225,11 @@ export class RadicleServiceImpl implements RadicleService {
     } else {
       console.log('RadicleService: No passphrase provided, relying on ssh-agent');
     }
+
+    // CRITICAL: Add Radicle bin to PATH so rad can find radicle-node binary
+    const path = require('path');
+    const radBinDir = path.dirname(radCmd);
+    env.PATH = `${radBinDir}:${env.PATH}`;
 
     try {
       // Clone the repository
@@ -235,18 +243,36 @@ export class RadicleServiceImpl implements RadicleService {
         console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
       }
 
-      // Extract the repository name from Radicle metadata
-      // The cloned directory name is typically the repo name
-      console.log(`RadicleService: Inspecting ${radicleId} for repository name...`);
-      const { stdout } = await execAsync(`"${radCmd}" inspect ${radicleId} --field name`, {
-        cwd: destinationPath,
-        env: env,
-      });
+      // Parse repository name from clone output
+      // Example output: "Creating checkout in ./TestRepo"
+      const cloneOutput = cloneResult.stdout || cloneResult.stderr || '';
+      const match = cloneOutput.match(/Creating checkout in \.\/([^.\/\s]+)/);
 
-      const repoName = stdout.trim();
-      console.log(`RadicleService: Determined repository name: ${repoName}`);
-      if (!repoName) {
-        throw new Error('Could not determine repository name from Radicle metadata');
+      let repoName: string;
+      if (match && match[1]) {
+        repoName = match[1];
+        console.log(`RadicleService: Parsed repository name from clone output: ${repoName}`);
+      } else {
+        // Fallback: Try to list directories and find the newest one
+        console.warn('RadicleService: Could not parse repo name from output, falling back to directory scan');
+        const fs = require('fs');
+        const entries = await fs.promises.readdir(destinationPath, { withFileTypes: true });
+        const dirs = entries.filter((e: any) => e.isDirectory() && !e.name.startsWith('.'));
+
+        if (dirs.length === 0) {
+          throw new Error('Clone succeeded but could not find cloned repository directory');
+        }
+
+        // Sort by modification time and take the newest
+        const dirsWithStats = await Promise.all(
+          dirs.map(async (d: any) => ({
+            name: d.name,
+            stats: await fs.promises.stat(path.join(destinationPath, d.name))
+          }))
+        );
+        dirsWithStats.sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs);
+        repoName = dirsWithStats[0].name;
+        console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
       }
 
       return repoName;
