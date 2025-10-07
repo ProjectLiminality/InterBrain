@@ -275,9 +275,14 @@ export class MockDreamNodeService {
   private async fileToDataUrl(file: globalThis.File): Promise<string> {
     // .link files contain JSON metadata and should be read as text, not data URLs
     if (file.name.toLowerCase().endsWith('.link')) {
+      console.log('🔗 [MockService.fileToDataUrl] Reading .link file as text:', file.name);
       return new Promise((resolve, reject) => {
         const reader = new globalThis.FileReader();
-        reader.onload = () => resolve(reader.result as string);
+        reader.onload = () => {
+          const content = reader.result as string;
+          console.log('🔗 [MockService.fileToDataUrl] .link file content:', content.substring(0, 200));
+          resolve(content);
+        };
         reader.onerror = reject;
         reader.readAsText(file);
       });

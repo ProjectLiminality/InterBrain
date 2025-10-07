@@ -70,6 +70,13 @@ export function createLinkFileContent(urlMetadata: UrlMetadata, title?: string):
  * Parse .link file content and return metadata
  */
 export function parseLinkFileContent(content: string): LinkFileMetadata | null {
+  console.log('🔗 [parseLinkFileContent] Parsing content:', {
+    contentType: typeof content,
+    contentLength: content?.length,
+    contentStart: content?.substring(0, 100),
+    isDataUrl: content?.startsWith('data:')
+  });
+
   try {
     const metadata = JSON.parse(content) as LinkFileMetadata;
 
@@ -79,9 +86,11 @@ export function parseLinkFileContent(content: string): LinkFileMetadata | null {
       return null;
     }
 
+    console.log('🔗 [parseLinkFileContent] Successfully parsed metadata:', metadata);
     return metadata;
   } catch (error) {
-    console.error('Failed to parse .link file content:', error);
+    console.error('🔗 [parseLinkFileContent] Failed to parse .link file content:', error);
+    console.error('🔗 [parseLinkFileContent] Content that failed to parse:', content);
     return null;
   }
 }
