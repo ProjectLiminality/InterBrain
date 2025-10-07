@@ -2,6 +2,7 @@ import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
+import { getRadicleBatchInitService } from '../../../services/radicle-batch-init-service';
 
 /**
  * Email Export Service
@@ -32,7 +33,22 @@ export class EmailExportService {
 			// Get vault name for deep links
 			const vaultName = this.app.vault.getName();
 
-			// Build email components
+			// CRITICAL: Ensure all invoked nodes have Radicle IDs before generating links
+			const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
+			console.log(`🔮 [EmailExport] Ensuring ${nodeUUIDs.length} nodes have Radicle IDs...`);
+
+			let uuidToRadicleIdMap = new Map<string, string>();
+
+			try {
+				const batchInitService = getRadicleBatchInitService();
+				uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds(nodeUUIDs);
+				console.log(`✅ [EmailExport] ${uuidToRadicleIdMap.size}/${nodeUUIDs.length} nodes have Radicle IDs`);
+			} catch (error) {
+				console.error('❌ [EmailExport] Batch init failed, will use UUID fallback:', error);
+				// Continue with UUID fallback for all nodes
+			}
+
+			// Build email components (with Radicle IDs where available)
 			const subject = this.buildSubject(conversationPartner, conversationStartTime);
 			const body = this.buildEmailBody(
 				conversationPartner,
@@ -40,7 +56,8 @@ export class EmailExportService {
 				conversationEndTime,
 				invocations,
 				aiSummary,
-				vaultName
+				vaultName,
+				uuidToRadicleIdMap
 			);
 
 			// Get recipient email (from metadata or parameter)
@@ -75,7 +92,8 @@ export class EmailExportService {
 		endTime: Date,
 		invocations: InvocationEvent[],
 		aiSummary: string,
-		vaultName: string
+		vaultName: string,
+		uuidToRadicleIdMap: Map<string, string>
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -96,15 +114,35 @@ export class EmailExportService {
 			body += `## Shared DreamNodes\n\n`;
 			body += `During our conversation, I shared ${invocations.length} DreamNode${invocations.length > 1 ? 's' : ''}:\n\n`;
 
+			// Track nodes with Radicle IDs for batch link
+			const radicleIds: string[] = [];
+
 			invocations.forEach((inv, i) => {
 				const invTimeStr = inv.timestamp.toLocaleTimeString();
-				const deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);
+
+				// Use Radicle ID if available, fallback to UUID
+				const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
+
+				let deepLink: string;
+				if (radicleId) {
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId);
+					radicleIds.push(radicleId);
+				} else {
+					// Fallback to UUID (for Windows users without Radicle)
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);
+					console.warn(`⚠️ [EmailExport] Node "${inv.nodeName}" has no Radicle ID, using UUID fallback`);
+				}
+
 				body += `${i + 1}. **${inv.nodeName}** (${invTimeStr})\n`;
 				body += `   → ${deepLink}\n\n`;
 			});
 
-			// Add batch clone link if multiple nodes
-			if (invocations.length > 1) {
+			// Add batch clone link if multiple nodes with Radicle IDs
+			if (radicleIds.length > 1) {
+				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, radicleIds);
+				body += `📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
+			} else if (invocations.length > 1 && radicleIds.length === 0) {
+				// All nodes fell back to UUID - use UUID batch link
 				const uuids = invocations.map(inv => inv.dreamUUID);
 				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, uuids);
 				body += `📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;

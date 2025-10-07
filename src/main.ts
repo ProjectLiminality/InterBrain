@@ -39,6 +39,7 @@ import { initializeConversationRecordingService } from './features/conversationa
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
+import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -81,6 +82,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize URI handler service for deep links
     initializeURIHandlerService(this.app, this);
+
+    // Initialize Radicle batch init service for post-call processing
+    initializeRadicleBatchInitService(this);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
