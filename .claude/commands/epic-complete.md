@@ -109,11 +109,15 @@ Optional: `/epic-complete additional context or instructions`
 
 ## Phase 5: Main Branch Integration
 
+**⚠️ CRITICAL: MAIN BRANCH IS THE ONLY BRANCH EVER PUSHED TO REMOTE ⚠️**
+- **Epic and feature branches are LOCAL-ONLY**
+- **ONLY main branch gets pushed after epic completion**
+
 ### Merge to Main
 - **Switch to main**: Run `git checkout main`
 - **Pull latest main**: Run `git pull origin main`
 - **Merge epic branch**: Run `git merge CURRENT_EPIC_BRANCH --no-ff -m "Complete Epic DETECTED_EPIC_NUMBER: [EPIC_TITLE]"` (merge current epic branch)
-- **Push main**: Run `git push origin main`
+- **Push main to remote**: Run `git push origin main` (ONLY TIME remote push happens)
 
 ### Create Git Tag
 - **Create tag**: Run `git tag vX.Y.Z`
@@ -137,8 +141,8 @@ Optional: `/epic-complete additional context or instructions`
 ## Phase 7: Cleanup & Next Epic Preparation
 
 ### Branch Cleanup
-- **Delete epic branch**: Run `git branch -d CURRENT_EPIC_BRANCH` (delete current epic branch)
-- **Delete remote epic branch**: Run `git push origin --delete CURRENT_EPIC_BRANCH`
+- **Delete local epic branch**: Run `git branch -d CURRENT_EPIC_BRANCH` (delete current epic branch)
+- **NO remote cleanup needed**: Epic branches never pushed to remote (local-only workflow)
 
 ### Project Memory Updates
 - **Final CLAUDE.md update**: Reflect current project state post-epic
