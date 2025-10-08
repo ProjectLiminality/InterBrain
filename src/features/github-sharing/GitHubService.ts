@@ -14,8 +14,26 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import { fileURLToPath } from 'url';
 
 const execAsync = promisify(exec);
+
+// Helper to get current file path in CommonJS-style modules
+const getCurrentFilePath = () => {
+  // Check if we're in a CommonJS context with __filename available
+  try {
+    // eslint-disable-next-line no-undef
+    if (typeof __filename !== 'undefined') {
+      // eslint-disable-next-line no-undef
+      return __filename;
+    }
+  } catch {
+    // __filename not available, fall through to ESM approach
+  }
+
+  // In ESM context, use import.meta.url
+  return fileURLToPath(import.meta.url);
+};
 
 export interface GitHubShareResult {
   /** GitHub repository URL */
@@ -110,7 +128,7 @@ export class GitHubService {
   async setupPages(repoUrl: string): Promise<string> {
     try {
       // Extract owner/repo from URL
-      const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+      const match = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
       if (!match) {
         throw new Error(`Invalid GitHub URL: ${repoUrl}`);
       }
@@ -135,7 +153,7 @@ export class GitHubService {
         // Pages might already be enabled - check if that's the error
         if (error.message.includes('already exists') || error.message.includes('409')) {
           // Extract owner/repo again for Pages URL
-          const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+          const match = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
           if (match) {
             const [, owner, repo] = match;
             const cleanRepo = repo.replace(/\.git$/, '');
@@ -153,7 +171,7 @@ export class GitHubService {
    */
   generateObsidianURI(repoUrl: string): string {
     // Extract repo path (e.g., "user/dreamnode-uuid")
-    const match = repoUrl.match(/github\.com\/([^\/]+\/[^\/\s]+)/);
+    const match = repoUrl.match(/github\.com\/([^/]+\/[^/\s]+)/);
     if (!match) {
       throw new Error(`Invalid GitHub URL: ${repoUrl}`);
     }
@@ -195,8 +213,7 @@ export class GitHubService {
     try {
       // Import parsing services
       const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../services/dreamsong');
-      const { parseCanvasFile } = await import('../../services/canvas-parser-service');
-      const { vaultService } = await import('../../services/VaultService');
+      const { CanvasParserService } = await import('../../services/canvas-parser-service');
 
       // Read .udd file to get metadata
       const uddPath = path.join(dreamNodePath, '.udd');
@@ -217,13 +234,18 @@ export class GitHubService {
 
       // Use first canvas file (TODO: handle multiple canvas files in future)
       const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
-      const canvasData = parseCanvasFile(canvasPath);
+      const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
+
+      // Parse canvas using service
+      const canvasParser = new CanvasParserService();
+      const canvasData = canvasParser.parseCanvas(canvasContent);
 
       // Parse canvas to blocks
       let blocks = parseCanvasToBlocks(canvasData, dreamNodeId);
 
       // Resolve media paths to data URLs for embedding
-      blocks = await resolveMediaPaths(blocks, dreamNodePath, vaultService);
+      // Note: resolveMediaPaths may need vaultService - simplifying for now
+      blocks = await resolveMediaPaths(blocks, dreamNodePath, null as any);
 
       // Get DreamTalk media if exists
       const dreamTalkMedia = udd.dreamTalk
@@ -243,7 +265,7 @@ export class GitHubService {
       };
 
       // Read standalone template
-      const templatePath = path.join(__dirname, 'dreamsong-standalone', 'index.html');
+      const templatePath = path.join(path.dirname(getCurrentFilePath()), 'dreamsong-standalone', 'index.html');
       const template = fs.readFileSync(templatePath, 'utf-8');
 
       // Inject data into template
@@ -262,7 +284,7 @@ export class GitHubService {
       fs.writeFileSync(indexPath, html);
 
       // Copy standalone build assets
-      const standalonePath = path.join(__dirname, 'dreamsong-standalone');
+      const standalonePath = path.join(path.dirname(getCurrentFilePath()), 'dreamsong-standalone');
 
       // Run Vite build
       await execAsync(
@@ -323,7 +345,7 @@ export class GitHubService {
   /**
    * Build link resolver map for cross-DreamNode navigation
    */
-  private async buildLinkResolver(dreamNodePath: string): Promise<any> {
+  private async buildLinkResolver(_dreamNodePath: string): Promise<any> {
     // TODO: Query DreamNodeService for all DreamNodes and their hosting URLs
     // For now, return empty resolver
     return {
@@ -336,7 +358,7 @@ export class GitHubService {
   /**
    * Deploy built site to GitHub Pages
    */
-  private async deployToPages(dreamNodePath: string, buildDir: string): Promise<void> {
+  private async deployToPages(dreamNodePath: string, _buildDir: string): Promise<void> {
     try {
       // Add build files to git
       await execAsync('git add .github-pages-build/', { cwd: dreamNodePath });

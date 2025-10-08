@@ -302,7 +302,7 @@ export class URIHandlerService {
 			}
 
 			// Extract repo name from path (e.g., "github.com/user/dreamnode-uuid" → "dreamnode-uuid")
-			const match = repoPath.match(/github\.com\/[^\/]+\/([^\/\s]+)/);
+			const match = repoPath.match(/github\.com\/[^/]+\/([^/\s]+)/);
 			if (!match) {
 				throw new Error(`Invalid GitHub repository path: ${repoPath}`);
 			}

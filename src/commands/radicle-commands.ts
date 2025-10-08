@@ -3,6 +3,7 @@ import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { PassphraseManager } from '../services/passphrase-manager';
+import type { DreamNode } from '../types/dreamnode';
 
 /**
  * Radicle commands for peer-to-peer DreamNode sharing

@@ -177,7 +177,7 @@ export class RadicleServiceImpl implements RadicleService {
 
     // Debug: Try running git status to verify the repo works
     try {
-      const gitTest = await execAsync('git status', { cwd: dreamNodePath });
+      await execAsync('git status', { cwd: dreamNodePath });
       console.log(`RadicleService: git status works in ${dreamNodePath}`);
     } catch (gitErr: any) {
       console.error(`RadicleService: git status failed:`, gitErr.message);
@@ -225,7 +225,7 @@ export class RadicleServiceImpl implements RadicleService {
       const isRunning = stdout.includes('Running');
       console.log(`RadicleService: Node status check: ${isRunning ? 'running' : 'not running'}`);
       return isRunning;
-    } catch (error) {
+    } catch {
       console.log('RadicleService: Node status check failed, assuming not running');
       return false;
     }
@@ -285,7 +285,7 @@ export class RadicleServiceImpl implements RadicleService {
       }
 
       return null;
-    } catch (error) {
+    } catch {
       // Silent failure - repository may not be initialized yet
       return null;
     }
@@ -316,7 +316,7 @@ export class RadicleServiceImpl implements RadicleService {
             if (udd.radicleId === radicleId) {
               return { dirName: dir.name, found: true, method: '.udd file' };
             }
-          } catch (error) {
+          } catch {
             // .udd file doesn't exist or couldn't be read
           }
 
@@ -434,7 +434,7 @@ export class RadicleServiceImpl implements RadicleService {
     // Parse repository name from clone output
     // Example output: "Creating checkout in ./TestRepo"
     const cloneOutput = cloneResult.stdout || cloneResult.stderr || '';
-    const match = cloneOutput.match(/Creating checkout in \.\/([^.\/\s]+)/);
+    const match = cloneOutput.match(/Creating checkout in \.\/([^./\s]+)/);
 
     let repoName: string;
     if (match && match[1]) {

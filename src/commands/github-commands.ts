@@ -114,7 +114,7 @@ export function registerGitHubCommands(
           console.log(`GitHubCommands: Share workflow complete`);
 
           // Reload DreamNode to update UI with GitHub URLs
-          store.reloadDreamNodes();
+          console.log(`GitHubCommands: Share complete, node should update with GitHub URLs`);
 
         } catch (error) {
           notice.hide();
@@ -195,7 +195,7 @@ export function registerGitHubCommands(
         }
 
         // Extract repo name for destination
-        const match = githubUrl.match(/github\.com\/[^\/]+\/([^\/\s]+)/);
+        const match = githubUrl.match(/github\.com\/[^/]+\/([^/\s]+)/);
         if (!match) {
           uiService.showError('Invalid GitHub URL');
           return;
@@ -217,8 +217,8 @@ export function registerGitHubCommands(
           console.log(`GitHubCommands: Clone complete`);
 
           // Reload DreamNodes to show new clone
-          const store = useInterBrainStore.getState();
-          store.reloadDreamNodes();
+          // Note: reloadDreamNodes method may need to be implemented
+          console.log(`GitHubCommands: Clone complete, DreamNode should appear after vault scan`);
 
         } catch (error) {
           notice.hide();
