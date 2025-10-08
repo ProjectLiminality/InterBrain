@@ -1304,6 +1304,7 @@ export default function DreamspaceCanvas() {
           near: 0.1,
           far: 20000  // Increased for better visibility of intersection point
         }}
+        gl={{ antialias: true }}
         style={{
           width: '100%',
           height: '100%',

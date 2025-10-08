@@ -270,8 +270,20 @@ export class MockDreamNodeService {
 
   /**
    * Convert File to data URL for storage
+   * Note: .link files are read as text (JSON), not data URLs
    */
   private async fileToDataUrl(file: globalThis.File): Promise<string> {
+    // .link files contain JSON metadata and should be read as text, not data URLs
+    if (file.name.toLowerCase().endsWith('.link')) {
+      return new Promise((resolve, reject) => {
+        const reader = new globalThis.FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    // Regular media files get converted to data URLs
     return new Promise((resolve, reject) => {
       const reader = new globalThis.FileReader();
       reader.onload = () => resolve(reader.result as string);

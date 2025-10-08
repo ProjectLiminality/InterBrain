@@ -1,4 +1,8 @@
 import { App, Notice, Plugin } from 'obsidian';
+import { RadicleService } from './radicle-service';
+import { DreamNodeService } from './dreamnode-service';
+import { DreamSongRelationshipService } from './dreamsong-relationship-service';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 /**
  * URI Handler Service
@@ -9,10 +13,14 @@ import { App, Notice, Plugin } from 'obsidian';
 export class URIHandlerService {
 	private app: App;
 	private plugin: Plugin;
+	private radicleService: RadicleService;
+	private dreamNodeService: DreamNodeService;
 
-	constructor(app: App, plugin: Plugin) {
+	constructor(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService) {
 		this.app = app;
 		this.plugin = plugin;
+		this.radicleService = radicleService;
+		this.dreamNodeService = dreamNodeService;
 	}
 
 	/**
@@ -43,27 +51,34 @@ export class URIHandlerService {
 
 	/**
 	 * Handle single DreamNode clone URI
-	 * Format: obsidian://interbrain-clone?vault=<vault>&uuid=<dreamUUID>
+	 * Format: obsidian://interbrain-clone?id=<radicleId or uuid>
 	 */
 	private async handleSingleNodeClone(params: Record<string, string>): Promise<void> {
 		try {
 			console.log(`🔗 [URIHandler] Single clone handler called with params:`, params);
-			const { uuid, vault } = params;
+			const id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
 
-			if (!uuid) {
-				new Notice('Invalid clone link: missing DreamNode UUID');
-				console.error(`❌ [URIHandler] Single clone missing UUID parameter`);
+			if (!id) {
+				new Notice('Invalid clone link: missing node identifier');
+				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
 				return;
 			}
 
 			console.log(`🔗 [URIHandler] Deep link triggered!`);
-			console.log(`🔗 [URIHandler] Vault: ${vault || 'not specified'}`);
-			console.log(`🔗 [URIHandler] DreamNode UUID: ${uuid}`);
-			new Notice(`🔗 Deep link clicked! UUID: ${uuid}`);
+			console.log(`🔗 [URIHandler] Identifier: ${id}`);
 
-			// TODO: Implement actual clone logic via DreamNodeService in future epic
-			// For now, just show proof of concept
-			console.log(`✅ [URIHandler] Deep link proof of concept working - ready for clone implementation`);
+			// Determine if this is a Radicle ID or UUID
+			const isRadicleId = id.startsWith('rad:');
+
+			if (isRadicleId) {
+				// Clone from Radicle network
+				await this.cloneFromRadicle(id);
+			} else {
+				// Legacy UUID fallback (for Windows users)
+				new Notice(`UUID-based links not yet implemented. Please ask sender to share via Radicle.`);
+				console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${id}`);
+			}
+
 		} catch (error) {
 			console.error('Failed to handle clone link:', error);
 			new Notice(`Failed to handle clone link: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -72,34 +87,59 @@ export class URIHandlerService {
 
 	/**
 	 * Handle batch DreamNode clone URI
-	 * Format: obsidian://interbrain-clone-batch?vault=<vault>&uuids=<uuid1,uuid2,uuid3>
+	 * Format: obsidian://interbrain-clone-batch?ids=<radicleId1,radicleId2,radicleId3>
 	 */
 	private async handleBatchNodeClone(params: Record<string, string>): Promise<void> {
 		try {
 			console.log(`🔗 [URIHandler] Batch clone handler called with params:`, params);
-			const { uuids, vault } = params;
+			const ids = params.ids || params.uuids; // Support both 'ids' (new) and 'uuids' (legacy)
 
-			if (!uuids) {
-				new Notice('Invalid batch clone link: missing UUIDs');
-				console.error(`❌ [URIHandler] Batch clone missing uuids parameter`);
+			if (!ids) {
+				new Notice('Invalid batch clone link: missing node identifiers');
+				console.error(`❌ [URIHandler] Batch clone missing identifiers parameter`);
 				return;
 			}
 
-			const uuidList = uuids.split(',').map(u => u.trim()).filter(Boolean);
+			const idList = ids.split(',').map(u => u.trim()).filter(Boolean);
 
-			if (uuidList.length === 0) {
-				new Notice('Invalid batch clone link: no valid UUIDs');
+			if (idList.length === 0) {
+				new Notice('Invalid batch clone link: no valid identifiers');
 				return;
 			}
 
 			console.log(`🔗 [URIHandler] Batch deep link triggered!`);
-			console.log(`🔗 [URIHandler] Vault: ${vault || 'not specified'}`);
-			console.log(`🔗 [URIHandler] DreamNode UUIDs (${uuidList.length}):`, uuidList);
-			new Notice(`🔗 Batch deep link clicked! ${uuidList.length} nodes`);
+			console.log(`🔗 [URIHandler] Identifiers (${idList.length}):`, idList);
 
-			// TODO: Implement actual batch clone logic in future epic
-			// For now, just show proof of concept
-			console.log(`✅ [URIHandler] Batch deep link proof of concept working - ready for clone implementation`);
+			// Clone all nodes from Radicle network
+			const notice = new Notice(`Cloning ${idList.length} DreamNodes...`, 0);
+
+			let successCount = 0;
+			let failCount = 0;
+
+			for (const radicleId of idList) {
+				if (radicleId.startsWith('rad:')) {
+					const success = await this.cloneFromRadicle(radicleId, true); // silent mode
+					if (success) {
+						successCount++;
+					} else {
+						failCount++;
+					}
+				} else {
+					console.warn(`⚠️ [URIHandler] Skipping non-Radicle ID: ${radicleId}`);
+					failCount++;
+				}
+			}
+
+			notice.hide();
+
+			if (successCount > 0) {
+				new Notice(`✅ Cloned ${successCount} DreamNode${successCount > 1 ? 's' : ''}`);
+			}
+
+			if (failCount > 0) {
+				new Notice(`⚠️ ${failCount} node${failCount > 1 ? 's' : ''} failed to clone`);
+			}
+
 		} catch (error) {
 			console.error('Failed to handle batch clone link:', error);
 			new Notice(`Failed to handle batch clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -107,29 +147,161 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Generate deep link URL for single DreamNode
+	 * Auto-focus a node after clone or when clicking already-cloned link
+	 * Extracted helper to reuse for both new clones and existing nodes
 	 */
-	static generateSingleNodeLink(vaultName: string, dreamUUID: string): string {
-		const encodedVault = encodeURIComponent(vaultName);
-		const encodedUUID = encodeURIComponent(dreamUUID);
-		return `obsidian://interbrain-clone?vault=${encodedVault}&uuid=${encodedUUID}`;
+	private async autoFocusNode(repoName: string, silent: boolean = false): Promise<void> {
+		console.log(`🎯 [URIHandler] Auto-focusing "${repoName}"...`);
+
+		// Find the node by repo name
+		const allNodes = await this.dreamNodeService.list();
+		const targetNode = allNodes.find(node => node.repoPath === repoName);
+
+		if (!targetNode) {
+			console.warn(`⚠️ [URIHandler] Could not find node with repoPath: ${repoName}`);
+			return;
+		}
+
+		// Set selected node in store FIRST (prevents "no selectedNode available" warning)
+		const store = useInterBrainStore.getState();
+		store.setSelectedNode(targetNode);
+
+		// Check if DreamSpace is open and has focus API
+		const canvasAPI = (globalThis as any).__interbrainCanvas;
+		if (!canvasAPI?.focusOnNode) {
+			console.log(`ℹ️ [URIHandler] DreamSpace not open or focusOnNode not available`);
+			return;
+		}
+
+		// Focus on the node (triggers liminal-web layout transition)
+		const success = canvasAPI.focusOnNode(targetNode.id);
+		if (success) {
+			console.log(`✅ [URIHandler] Auto-focused "${repoName}" (${targetNode.id})`);
+
+			if (!silent) {
+				new Notice(`🎯 Node focused in DreamSpace!`);
+			}
+		} else {
+			console.warn(`⚠️ [URIHandler] Failed to focus on "${repoName}"`);
+		}
+	}
+
+	/**
+	 * Clone a DreamNode from Radicle network
+	 */
+	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<boolean> {
+		try {
+			console.log(`🔗 [URIHandler] Cloning from Radicle: ${radicleId}`);
+
+			// Get vault path
+			const adapter = this.app.vault.adapter as any;
+			const vaultPath = adapter.basePath || '';
+
+			if (!vaultPath) {
+				throw new Error('Could not determine vault path');
+			}
+
+			// Clone the repository (handles duplicate detection internally)
+			if (!silent) {
+				new Notice(`Cloning from Radicle network...`, 3000);
+			}
+
+			const cloneResult = await this.radicleService.clone(radicleId, vaultPath);
+
+			// Check if repo already existed - if so, skip refresh but still focus
+			if (cloneResult.alreadyExisted) {
+				console.log(`ℹ️ [URIHandler] DreamNode already exists: ${cloneResult.repoName}`);
+				if (!silent) {
+					new Notice(`📌 DreamNode "${cloneResult.repoName}" already cloned!`);
+				}
+
+				// Auto-focus the existing node (same as newly cloned)
+				await this.autoFocusNode(cloneResult.repoName, silent);
+
+				return true; // Success - already have it, no refresh needed
+			}
+
+			console.log(`✅ [URIHandler] Successfully cloned: ${cloneResult.repoName}`);
+
+			if (!silent) {
+				new Notice(`✅ Cloned "${cloneResult.repoName}" successfully!`);
+			}
+
+			// AUTO-REFRESH: Make the newly cloned node appear immediately
+			try {
+				console.log(`🔄 [URIHandler] Auto-refreshing vault after clone...`);
+
+				// Step 1: Rescan vault to detect the new DreamNode
+				const scanStats = await this.dreamNodeService.scanVault();
+				console.log(`📊 [URIHandler] Vault scan: +${scanStats.added} added, ~${scanStats.updated} updated`);
+
+				// Step 2: Rescan DreamSong relationships (now optimized with parallel I/O!)
+				const relationshipService = new DreamSongRelationshipService(this.plugin);
+				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
+
+				if (scanResult.success) {
+					console.log(`✅ [URIHandler] Relationships rescanned in ${scanResult.stats.scanTimeMs}ms`);
+
+					// Step 3: Apply constellation layout if DreamSpace is open
+					const canvasAPI = (globalThis as any).__interbrainCanvas;
+					if (canvasAPI?.applyConstellationLayout) {
+						console.log(`🌌 [URIHandler] Applying constellation layout...`);
+						await canvasAPI.applyConstellationLayout();
+
+						// Step 4: Auto-focus the newly cloned node (reuses same logic as already-cloned case)
+						await this.autoFocusNode(cloneResult.repoName, silent);
+					} else {
+						console.log(`ℹ️ [URIHandler] DreamSpace not open, skipping layout update`);
+					}
+				} else {
+					console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
+				}
+
+			} catch (refreshError) {
+				console.error(`❌ [URIHandler] Auto-refresh failed (non-critical):`, refreshError);
+				// Don't fail the clone operation if refresh fails
+			}
+
+			return true;
+
+		} catch (error) {
+			console.error(`❌ [URIHandler] Clone failed for ${radicleId}:`, error);
+
+			if (!silent) {
+				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+				new Notice(`Failed to clone: ${errorMsg}`);
+			}
+
+			return false;
+		}
+	}
+
+	/**
+	 * Generate deep link URL for single DreamNode
+	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
+	 * @param identifier Radicle ID (preferred) or UUID (fallback)
+	 */
+	static generateSingleNodeLink(vaultName: string, identifier: string): string {
+		const encodedIdentifier = encodeURIComponent(identifier);
+		return `obsidian://interbrain-clone?id=${encodedIdentifier}`;
 	}
 
 	/**
 	 * Generate deep link URL for batch clone
+	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
+	 * @param identifiers Array of Radicle IDs (preferred) or UUIDs (fallback)
 	 */
-	static generateBatchNodeLink(vaultName: string, dreamUUIDs: string[]): string {
-		const encodedVault = encodeURIComponent(vaultName);
-		const encodedUUIDs = encodeURIComponent(dreamUUIDs.join(','));
-		return `obsidian://interbrain-clone-batch?vault=${encodedVault}&uuids=${encodedUUIDs}`;
+	static generateBatchNodeLink(vaultName: string, identifiers: string[]): string {
+		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
+		return `obsidian://interbrain-clone-batch?ids=${encodedIdentifiers}`;
 	}
 }
 
 // Singleton instance
 let _uriHandlerService: URIHandlerService | null = null;
 
-export function initializeURIHandlerService(app: App, plugin: Plugin): void {
-	_uriHandlerService = new URIHandlerService(app, plugin);
+export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService): void {
+	_uriHandlerService = new URIHandlerService(app, plugin, radicleService, dreamNodeService);
 	_uriHandlerService.registerHandlers();
 	console.log(`🔗 [URIHandler] Service initialized`);
 }

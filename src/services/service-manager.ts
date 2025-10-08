@@ -8,6 +8,7 @@ import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../utils/url-utils';
+import { RadicleService, RadicleServiceImpl } from './radicle-service';
 
 /**
  * Service interface that both mock and real implementations will follow
@@ -57,6 +58,7 @@ export class ServiceManager {
   private mockService: MockDreamNodeService;
   private realService: GitDreamNodeService | null = null;
   private indexingService: IndexingService;
+  private radicleService: RadicleService;
   private plugin: Plugin | null = null;
   private vaultService: VaultService | null = null;
   private canvasParserService: CanvasParserService | null = null;
@@ -65,7 +67,8 @@ export class ServiceManager {
   constructor() {
     this.mockService = mockDreamNodeService;
     this.indexingService = indexingService;
-    
+    this.radicleService = new RadicleServiceImpl();
+
     // Wrap mock service methods to sync with store
     this.wrapMockServiceMethods();
   }
@@ -361,6 +364,13 @@ export class ServiceManager {
    */
   getIndexingService(): IndexingService {
     return this.indexingService;
+  }
+
+  /**
+   * Get the Radicle service
+   */
+  getRadicleService(): RadicleService {
+    return this.radicleService;
   }
   
   /**

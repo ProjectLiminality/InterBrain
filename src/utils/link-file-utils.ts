@@ -70,8 +70,26 @@ export function createLinkFileContent(urlMetadata: UrlMetadata, title?: string):
  * Parse .link file content and return metadata
  */
 export function parseLinkFileContent(content: string): LinkFileMetadata | null {
+  let jsonContent = content;
+
+  // Handle legacy .link files that were incorrectly stored as data URLs
+  if (content.startsWith('data:')) {
+    try {
+      // Extract base64 content from data URL
+      const base64Match = content.match(/^data:[^;]+;base64,(.+)$/);
+      if (base64Match && base64Match[1]) {
+        const base64Content = base64Match[1];
+        // Decode base64 to UTF-8 string
+        jsonContent = atob(base64Content);
+      }
+    } catch (decodeError) {
+      console.error('Failed to decode base64 data URL:', decodeError);
+      return null;
+    }
+  }
+
   try {
-    const metadata = JSON.parse(content) as LinkFileMetadata;
+    const metadata = JSON.parse(jsonContent) as LinkFileMetadata;
 
     // Validate required fields
     if (!metadata.url || !metadata.type) {

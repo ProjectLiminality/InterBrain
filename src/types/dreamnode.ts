@@ -37,6 +37,9 @@ export interface UDDFile {
 
   /** Optional contact phone number (for dreamer-type nodes) */
   phone?: string;
+
+  /** Optional Radicle DID for peer-to-peer networking (for dreamer-type nodes) */
+  radicleId?: string;
 }
 
 /**
@@ -79,6 +82,9 @@ export interface DreamNode {
 
   /** Optional contact phone number (for dreamer-type nodes) */
   phone?: string;
+
+  /** Optional Radicle DID for peer-to-peer networking (for dreamer-type nodes) */
+  radicleId?: string;
 }
 
 /**

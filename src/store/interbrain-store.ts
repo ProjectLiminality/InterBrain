@@ -180,6 +180,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   realNodes: Map<string, RealNodeData>;
   setRealNodes: (nodes: Map<string, RealNodeData>) => void;
   updateRealNode: (id: string, data: RealNodeData) => void;
+  batchUpdateNodePositions: (positions: Map<string, [number, number, number]>) => void;
   deleteRealNode: (id: string) => void;
   
   // Selected DreamNode state
@@ -467,6 +468,19 @@ export const useInterBrainStore = create<InterBrainState>()(
   updateRealNode: (id, data) => set(state => {
     const newMap = new Map(state.realNodes);
     newMap.set(id, data);
+    return { realNodes: newMap };
+  }),
+  batchUpdateNodePositions: (positions) => set(state => {
+    const newMap = new Map(state.realNodes);
+    for (const [nodeId, position] of positions) {
+      const nodeData = newMap.get(nodeId);
+      if (nodeData) {
+        newMap.set(nodeId, {
+          ...nodeData,
+          node: { ...nodeData.node, position }
+        });
+      }
+    }
     return { realNodes: newMap };
   }),
   deleteRealNode: (id) => set(state => {

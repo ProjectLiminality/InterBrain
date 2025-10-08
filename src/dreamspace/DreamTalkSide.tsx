@@ -268,7 +268,13 @@ function MediaRenderer({ media }: { media: MediaFile }) {
     width: '100%',
     height: '100%',
     objectFit: 'cover' as const,
-    borderRadius: '50%'
+    borderRadius: '50%',
+    // GPU acceleration and anti-aliasing for better distant rendering
+    transform: 'translateZ(0)',
+    willChange: 'transform',
+    imageRendering: 'auto' as const,
+    WebkitFontSmoothing: 'antialiased' as const,
+    backfaceVisibility: 'hidden' as const
   };
 
   // Handle .link files

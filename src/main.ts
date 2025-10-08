@@ -3,6 +3,7 @@ import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
 import { VaultService } from './services/vault-service';
 import { GitTemplateService } from './services/git-template-service';
+import { PassphraseManager } from './services/passphrase-manager';
 import { serviceManager } from './services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
@@ -19,6 +20,7 @@ import { registerSearchInterfaceCommands } from './commands/search-interface-com
 import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
+import { registerRadicleCommands } from './commands/radicle-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import {
 	registerTranscriptionCommands,
@@ -37,6 +39,7 @@ import { initializeConversationRecordingService } from './features/conversationa
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
+import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -47,6 +50,7 @@ export default class InterBrainPlugin extends Plugin {
   private gitService!: GitService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
+  private passphraseManager!: PassphraseManager;
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
@@ -76,8 +80,15 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize email export service for conversation summaries
     initializeEmailExportService(this.app);
 
+    // Get services for dependency injection
+    const radicleService = serviceManager.getRadicleService();
+    const dreamNodeService = serviceManager.getActive();
+
     // Initialize URI handler service for deep links
-    initializeURIHandlerService(this.app, this);
+    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService);
+
+    // Initialize Radicle batch init service for post-call processing
+    initializeRadicleBatchInitService(this, radicleService, dreamNodeService);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
@@ -111,6 +122,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
+    this.passphraseManager = new PassphraseManager(this.uiService);
     this.faceTimeService = new FaceTimeService();
 
     // Initialize dreamweaving services
@@ -160,6 +172,9 @@ export default class InterBrainPlugin extends Plugin {
       this.canvasParserService,
       this.submoduleManagerService
     );
+
+    // Register Radicle commands (peer-to-peer networking)
+    registerRadicleCommands(this, this.uiService, this.passphraseManager);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);
@@ -1529,6 +1544,11 @@ export default class InterBrainPlugin extends Plugin {
 
   onunload() {
     console.log('InterBrain plugin unloaded');
+
+    // Clear passphrase from memory for security
+    if (this.passphraseManager) {
+      this.passphraseManager.clearPassphrase();
+    }
 
     // Stop canvas observer
     if (this.canvasObserverService) {
