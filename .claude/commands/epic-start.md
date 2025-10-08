@@ -30,9 +30,13 @@ Optional: `/epic-start epic-6` or `/epic-start additional context or specific ep
 
 ## Phase 2: Epic Branch Creation
 
+**⚠️ CRITICAL: LOCAL-ONLY WORKFLOW ⚠️**
+- **Epic branches are NEVER pushed to remote**
+- **ONLY main branch gets pushed (during epic completion)**
+
 ### Branch Setup
 - **Create epic branch**: Run `git checkout main && git pull origin main && git checkout -b epic/DETECTED_EPIC_NUMBER-epic-name`
-- **Push epic branch**: Run `git push -u origin epic/DETECTED_EPIC_NUMBER-epic-name`
+- **NO PUSH**: Epic branch stays local, merges to main when epic complete
 
 ### GitHub Integration
 - **Update epic issue**: Move to "Active" status on project board

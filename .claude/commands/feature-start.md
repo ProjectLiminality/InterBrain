@@ -85,11 +85,14 @@ Based on the discussion, update the GitHub issue with:
 
 **Only proceed here AFTER completing Phase 1 above**
 
+**⚠️ CRITICAL: LOCAL-ONLY WORKFLOW ⚠️**
+- **Feature branches are NEVER pushed to remote**
+- **ONLY main branch gets pushed (during epic completion)**
+
 ### Branch Creation
 - **Ensure on epic branch**: Run `git checkout epic/EPIC_NUMBER-epic-name`
-- **Pull latest**: Run `git pull origin epic/EPIC_NUMBER-epic-name`
 - **Create feature branch**: Run `git checkout -b feature/FEATURE_NAME-from-issue`
-- **Push feature branch**: Run `git push -u origin feature/FEATURE_NAME-from-issue`
+- **NO PUSH**: Feature branch stays local, merges to epic branch when complete
 
 ### GitHub Integration
 - **Update feature issue**: Run `gh issue edit DETECTED_FEATURE_NUMBER --body "REFINED_ISSUE_BODY"`
