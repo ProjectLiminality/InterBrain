@@ -293,47 +293,70 @@ export class RadicleServiceImpl implements RadicleService {
 
   /**
    * Find repositories by Radicle ID
-   * Scans directories and checks both .udd files AND git repositories directly
+   * OPTIMIZED: Parallel checks with early exit
    */
   private async findReposByRadicleId(vaultPath: string, radicleId: string): Promise<string[]> {
     const path = require('path');
     const fs = require('fs');
-    const matchingRepos: string[] = [];
 
     try {
       const entries = await fs.promises.readdir(vaultPath, { withFileTypes: true });
       const directories = entries.filter((entry: any) => entry.isDirectory() && !entry.name.startsWith('.'));
 
-      for (const dir of directories) {
-        const dirPath = path.join(vaultPath, dir.name);
+      // OPTIMIZATION 1: Check all .udd files in parallel (fast path)
+      const uddChecks = await Promise.all(
+        directories.map(async (dir) => {
+          const dirPath = path.join(vaultPath, dir.name);
+          const uddPath = path.join(dirPath, '.udd');
 
-        // First check .udd file
-        const uddPath = path.join(dirPath, '.udd');
-        try {
-          const uddContent = await fs.promises.readFile(uddPath, 'utf-8');
-          const udd = JSON.parse(uddContent);
+          try {
+            const uddContent = await fs.promises.readFile(uddPath, 'utf-8');
+            const udd = JSON.parse(uddContent);
 
-          if (udd.radicleId === radicleId) {
-            matchingRepos.push(dir.name);
-            console.log(`RadicleService: Found matching Radicle ID in "${dir.name}" (.udd file)`);
-            continue;
+            if (udd.radicleId === radicleId) {
+              return { dirName: dir.name, found: true, method: '.udd file' };
+            }
+          } catch (error) {
+            // .udd file doesn't exist or couldn't be read
           }
-        } catch (error) {
-          // .udd file doesn't exist or couldn't be read, continue to git check
-        }
 
-        // Fallback: Check git repository directly using rad .
-        const repoRadicleId = await this.getRadicleId(dirPath);
-        if (repoRadicleId === radicleId) {
-          matchingRepos.push(dir.name);
-          console.log(`RadicleService: Found matching Radicle ID in "${dir.name}" (git repository)`);
-        }
+          return { dirName: dir.name, found: false, method: null };
+        })
+      );
+
+      // OPTIMIZATION 2: Early exit if found in .udd files
+      const uddMatch = uddChecks.find(check => check.found);
+      if (uddMatch) {
+        console.log(`RadicleService: Found matching Radicle ID in "${uddMatch.dirName}" (${uddMatch.method})`);
+        return [uddMatch.dirName];
       }
+
+      // OPTIMIZATION 3: Fallback to git checks in parallel (slow path, only if needed)
+      const gitChecks = await Promise.all(
+        directories.map(async (dir) => {
+          const dirPath = path.join(vaultPath, dir.name);
+          const repoRadicleId = await this.getRadicleId(dirPath);
+
+          if (repoRadicleId === radicleId) {
+            return { dirName: dir.name, found: true };
+          }
+
+          return { dirName: dir.name, found: false };
+        })
+      );
+
+      // OPTIMIZATION 4: Early exit after first git match
+      const gitMatch = gitChecks.find(check => check.found);
+      if (gitMatch) {
+        console.log(`RadicleService: Found matching Radicle ID in "${gitMatch.dirName}" (git repository)`);
+        return [gitMatch.dirName];
+      }
+
+      return [];
     } catch (error) {
       console.error('RadicleService: Error scanning for Radicle IDs:', error);
+      return [];
     }
-
-    return matchingRepos;
   }
 
   async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<{ repoName: string; alreadyExisted: boolean }> {
@@ -437,6 +460,26 @@ export class RadicleServiceImpl implements RadicleService {
       dirsWithStats.sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs);
       repoName = dirsWithStats[0].name;
       console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
+    }
+
+    // OPTIMIZATION: Save Radicle ID to .udd file for instant future lookups
+    try {
+      const repoPath = path.join(destinationPath, repoName);
+      const uddPath = path.join(repoPath, '.udd');
+
+      // Read existing .udd file
+      const uddContent = await fs.promises.readFile(uddPath, 'utf-8');
+      const udd = JSON.parse(uddContent);
+
+      // Add/update radicleId field
+      udd.radicleId = radicleId;
+
+      // Write back to .udd file
+      await fs.promises.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
+      console.log(`RadicleService: ✅ Saved Radicle ID to .udd file for instant future lookups`);
+    } catch (error) {
+      console.warn(`RadicleService: ⚠️ Could not save Radicle ID to .udd file (non-critical):`, error);
+      // Don't fail the clone if .udd update fails
     }
 
     return { repoName, alreadyExisted: false };

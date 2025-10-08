@@ -155,10 +155,6 @@ export class URIHandlerService {
 
 		// Find the node by repo name
 		const allNodes = await this.dreamNodeService.list();
-		console.log(`🔍 [URIHandler] Found ${allNodes.length} nodes`);
-		console.log(`🔍 [URIHandler] Looking for repoPath: "${repoName}"`);
-		console.log(`🔍 [URIHandler] Available repoPaths:`, allNodes.map(n => n.repoPath));
-
 		const targetNode = allNodes.find(node => node.repoPath === repoName);
 
 		if (!targetNode) {
