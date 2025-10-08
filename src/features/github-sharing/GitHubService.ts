@@ -186,17 +186,175 @@ export class GitHubService {
 
   /**
    * Build static DreamSong site for GitHub Pages
-   *
-   * This will be implemented in next phase - for now just a placeholder
    */
-  async buildStaticSite(dreamNodePath: string, outputDir: string): Promise<void> {
-    // TODO: Implement static site builder
-    // - Parse .canvas files
-    // - Create standalone HTML with React + DreamSong component
-    // - Bundle with Vite
-    // - Output to directory for Pages deployment
+  async buildStaticSite(
+    dreamNodePath: string,
+    dreamNodeId: string,
+    dreamNodeName: string
+  ): Promise<string> {
+    try {
+      // Import parsing services
+      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../services/dreamsong');
+      const { parseCanvasFile } = await import('../../services/canvas-parser-service');
+      const { vaultService } = await import('../../services/VaultService');
 
-    throw new Error('Static site builder not yet implemented');
+      // Read .udd file to get metadata
+      const uddPath = path.join(dreamNodePath, '.udd');
+      if (!fs.existsSync(uddPath)) {
+        throw new Error('.udd file not found');
+      }
+
+      const uddContent = fs.readFileSync(uddPath, 'utf-8');
+      const udd = JSON.parse(uddContent);
+
+      // Find .canvas files in DreamNode
+      const files = fs.readdirSync(dreamNodePath);
+      const canvasFiles = files.filter(f => f.endsWith('.canvas'));
+
+      if (canvasFiles.length === 0) {
+        throw new Error('No .canvas files found in DreamNode');
+      }
+
+      // Use first canvas file (TODO: handle multiple canvas files in future)
+      const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
+      const canvasData = parseCanvasFile(canvasPath);
+
+      // Parse canvas to blocks
+      let blocks = parseCanvasToBlocks(canvasData, dreamNodeId);
+
+      // Resolve media paths to data URLs for embedding
+      blocks = await resolveMediaPaths(blocks, dreamNodePath, vaultService);
+
+      // Get DreamTalk media if exists
+      const dreamTalkMedia = udd.dreamTalk
+        ? await this.loadDreamTalkMedia(path.join(dreamNodePath, udd.dreamTalk))
+        : undefined;
+
+      // Build link resolver map (will be populated when we integrate with DreamNodeService)
+      const linkResolver = await this.buildLinkResolver(dreamNodePath);
+
+      // Prepare data payload
+      const dreamsongData = {
+        dreamNodeName,
+        dreamNodeId,
+        dreamTalkMedia,
+        blocks,
+        linkResolver
+      };
+
+      // Read standalone template
+      const templatePath = path.join(__dirname, 'dreamsong-standalone', 'index.html');
+      const template = fs.readFileSync(templatePath, 'utf-8');
+
+      // Inject data into template
+      const html = template
+        .replace('{{DREAMNODE_NAME}}', dreamNodeName)
+        .replace('{{DREAMSONG_DATA}}', JSON.stringify(dreamsongData));
+
+      // Create output directory
+      const buildDir = path.join(dreamNodePath, '.github-pages-build');
+      if (!fs.existsSync(buildDir)) {
+        fs.mkdirSync(buildDir, { recursive: true });
+      }
+
+      // Write processed HTML
+      const indexPath = path.join(buildDir, 'index.html');
+      fs.writeFileSync(indexPath, html);
+
+      // Copy standalone build assets
+      const standalonePath = path.join(__dirname, 'dreamsong-standalone');
+
+      // Run Vite build
+      await execAsync(
+        `npx vite build --config "${path.join(standalonePath, 'vite.config.ts')}" --outDir "${buildDir}"`,
+        { cwd: standalonePath }
+      );
+
+      // Commit and push build to gh-pages branch (or main if GitHub Pages serves from main)
+      await this.deployToPages(dreamNodePath, buildDir);
+
+      return buildDir;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to build static site: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Load DreamTalk media file as data URL
+   */
+  private async loadDreamTalkMedia(mediaPath: string): Promise<any> {
+    if (!fs.existsSync(mediaPath)) {
+      return undefined;
+    }
+
+    // Read file and convert to data URL
+    const buffer = fs.readFileSync(mediaPath);
+    const base64 = buffer.toString('base64');
+
+    // Determine MIME type from extension
+    const ext = path.extname(mediaPath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.ogg': 'audio/ogg'
+    };
+
+    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
+    return [{
+      path: path.basename(mediaPath),
+      absolutePath: mediaPath,
+      type: mimeType,
+      data: `data:${mimeType};base64,${base64}`,
+      size: buffer.length
+    }];
+  }
+
+  /**
+   * Build link resolver map for cross-DreamNode navigation
+   */
+  private async buildLinkResolver(dreamNodePath: string): Promise<any> {
+    // TODO: Query DreamNodeService for all DreamNodes and their hosting URLs
+    // For now, return empty resolver
+    return {
+      githubPagesUrls: {},
+      githubRepoUrls: {},
+      radicleIds: {}
+    };
+  }
+
+  /**
+   * Deploy built site to GitHub Pages
+   */
+  private async deployToPages(dreamNodePath: string, buildDir: string): Promise<void> {
+    try {
+      // Add build files to git
+      await execAsync('git add .github-pages-build/', { cwd: dreamNodePath });
+
+      // Commit build
+      await execAsync(
+        'git commit -m "Deploy DreamSong to GitHub Pages" || true',
+        { cwd: dreamNodePath }
+      );
+
+      // Push to GitHub (GitHub Pages will auto-deploy from main branch)
+      await execAsync('git push github main', { cwd: dreamNodePath });
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to deploy to Pages: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   /**
