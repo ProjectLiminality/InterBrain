@@ -40,6 +40,12 @@ export interface UDDFile {
 
   /** Optional Radicle DID for peer-to-peer networking (for dreamer-type nodes) */
   radicleId?: string;
+
+  /** Optional GitHub repository URL for fallback sharing */
+  githubRepoUrl?: string;
+
+  /** Optional GitHub Pages URL for public DreamSong broadcast */
+  githubPagesUrl?: string;
 }
 
 /**
@@ -85,6 +91,12 @@ export interface DreamNode {
 
   /** Optional Radicle DID for peer-to-peer networking (for dreamer-type nodes) */
   radicleId?: string;
+
+  /** Optional GitHub repository URL for fallback sharing */
+  githubRepoUrl?: string;
+
+  /** Optional GitHub Pages URL for public DreamSong broadcast */
+  githubPagesUrl?: string;
 }
 
 /**
