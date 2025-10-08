@@ -21,6 +21,7 @@ import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerRadicleCommands } from './commands/radicle-commands';
+import { registerGitHubCommands } from './commands/github-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import {
 	registerTranscriptionCommands,
@@ -175,6 +176,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register Radicle commands (peer-to-peer networking)
     registerRadicleCommands(this, this.uiService, this.passphraseManager);
+
+    // Register GitHub commands (fallback sharing and broadcasting)
+    registerGitHubCommands(this, this.uiService);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);
