@@ -51,15 +51,25 @@ export class URIHandlerService {
 
 	/**
 	 * Handle single DreamNode clone URI
-	 * Format: obsidian://interbrain-clone?id=<radicleId or uuid>
+	 * Format: obsidian://interbrain-clone?id=<radicleId or uuid> OR ?repo=<github.com/user/repo>
 	 */
 	private async handleSingleNodeClone(params: Record<string, string>): Promise<void> {
 		try {
 			console.log(`🔗 [URIHandler] Single clone handler called with params:`, params);
 			const id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
+			const repo = params.repo; // GitHub repository path
 
+			// Check for GitHub repository
+			if (repo) {
+				console.log(`🔗 [URIHandler] GitHub clone link triggered!`);
+				console.log(`🔗 [URIHandler] Repository: ${repo}`);
+				await this.cloneFromGitHub(repo);
+				return;
+			}
+
+			// Check for Radicle/UUID identifier
 			if (!id) {
-				new Notice('Invalid clone link: missing node identifier');
+				new Notice('Invalid clone link: missing node identifier or repository');
 				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
 				return;
 			}
@@ -271,6 +281,99 @@ export class URIHandlerService {
 				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 				new Notice(`Failed to clone: ${errorMsg}`);
 			}
+
+			return false;
+		}
+	}
+
+	/**
+	 * Clone a DreamNode from GitHub
+	 */
+	private async cloneFromGitHub(repoPath: string): Promise<boolean> {
+		try {
+			console.log(`🔗 [URIHandler] Cloning from GitHub: ${repoPath}`);
+
+			// Get vault path
+			const adapter = this.app.vault.adapter as any;
+			const vaultPath = adapter.basePath || '';
+
+			if (!vaultPath) {
+				throw new Error('Could not determine vault path');
+			}
+
+			// Extract repo name from path (e.g., "github.com/user/dreamnode-uuid" → "dreamnode-uuid")
+			const match = repoPath.match(/github\.com\/[^\/]+\/([^\/\s]+)/);
+			if (!match) {
+				throw new Error(`Invalid GitHub repository path: ${repoPath}`);
+			}
+
+			const repoName = match[1].replace(/\.git$/, '');
+			const destinationPath = require('path').join(vaultPath, repoName);
+
+			// Check if already exists
+			const fs = require('fs');
+			if (fs.existsSync(destinationPath)) {
+				console.log(`ℹ️ [URIHandler] DreamNode already exists: ${repoName}`);
+				new Notice(`📌 DreamNode "${repoName}" already cloned!`);
+
+				// Auto-focus the existing node
+				await this.autoFocusNode(repoName, false);
+				return true;
+			}
+
+			// Show progress
+			new Notice(`Cloning from GitHub...`, 3000);
+
+			// Import GitHub service and clone
+			const { githubService } = await import('../features/github-sharing/GitHubService');
+			const githubUrl = `https://${repoPath}`;
+			await githubService.clone(githubUrl, destinationPath);
+
+			console.log(`✅ [URIHandler] Successfully cloned: ${repoName}`);
+			new Notice(`✅ Cloned "${repoName}" successfully!`);
+
+			// AUTO-REFRESH: Make the newly cloned node appear immediately
+			try {
+				console.log(`🔄 [URIHandler] Auto-refreshing vault after clone...`);
+
+				// Step 1: Rescan vault to detect the new DreamNode
+				const scanStats = await this.dreamNodeService.scanVault();
+				console.log(`📊 [URIHandler] Vault scan: +${scanStats.added} added, ~${scanStats.updated} updated`);
+
+				// Step 2: Rescan DreamSong relationships
+				const relationshipService = new DreamSongRelationshipService(this.plugin);
+				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
+
+				if (scanResult.success) {
+					console.log(`✅ [URIHandler] Relationships rescanned in ${scanResult.stats.scanTimeMs}ms`);
+
+					// Step 3: Apply constellation layout if DreamSpace is open
+					const canvasAPI = (globalThis as any).__interbrainCanvas;
+					if (canvasAPI?.applyConstellationLayout) {
+						console.log(`🌌 [URIHandler] Applying constellation layout...`);
+						await canvasAPI.applyConstellationLayout();
+
+						// Step 4: Auto-focus the newly cloned node
+						await this.autoFocusNode(repoName, false);
+					} else {
+						console.log(`ℹ️ [URIHandler] DreamSpace not open, skipping layout update`);
+					}
+				} else {
+					console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
+				}
+
+			} catch (refreshError) {
+				console.error(`❌ [URIHandler] Auto-refresh failed (non-critical):`, refreshError);
+				// Don't fail the clone operation if refresh fails
+			}
+
+			return true;
+
+		} catch (error) {
+			console.error(`❌ [URIHandler] GitHub clone failed for ${repoPath}:`, error);
+
+			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+			new Notice(`Failed to clone from GitHub: ${errorMsg}`);
 
 			return false;
 		}
