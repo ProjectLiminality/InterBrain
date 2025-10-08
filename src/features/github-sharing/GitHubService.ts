@@ -47,27 +47,43 @@ export interface GitHubShareResult {
 }
 
 export class GitHubService {
+  private ghPath: string | null = null;
+
+  /**
+   * Detect and cache the GitHub CLI path
+   */
+  private async detectGhPath(): Promise<string> {
+    if (this.ghPath) {
+      return this.ghPath;
+    }
+
+    // Try with full path first (Homebrew default on Apple Silicon)
+    const pathsToTry = [
+      '/opt/homebrew/bin/gh',
+      '/usr/local/bin/gh',
+      'gh'
+    ];
+
+    for (const path of pathsToTry) {
+      try {
+        await execAsync(`${path} --version`);
+        this.ghPath = path;
+        console.log(`GitHubService: Found gh at ${path}`);
+        return path;
+      } catch {
+        // Try next path
+      }
+    }
+
+    throw new Error('GitHub CLI not found in any standard location');
+  }
+
   /**
    * Check if GitHub CLI is available and authenticated
    */
   async isAvailable(): Promise<{ available: boolean; error?: string }> {
     try {
-      // Try with full path first (Homebrew default)
-      let ghPath = '/opt/homebrew/bin/gh';
-
-      try {
-        await execAsync(`${ghPath} --version`);
-      } catch {
-        // Try standard path
-        ghPath = '/usr/local/bin/gh';
-        try {
-          await execAsync(`${ghPath} --version`);
-        } catch {
-          // Fall back to PATH lookup
-          ghPath = 'gh';
-          await execAsync('gh --version');
-        }
-      }
+      const ghPath = await this.detectGhPath();
 
       // Check if authenticated (stderr goes to stdout for gh auth status)
       const { stdout, stderr } = await execAsync(`${ghPath} auth status 2>&1`);
@@ -87,7 +103,7 @@ export class GitHubService {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('GitHubService: isAvailable check failed:', errorMessage);
 
-      if (errorMessage.includes('command not found') || errorMessage.includes('ENOENT')) {
+      if (errorMessage.includes('command not found') || errorMessage.includes('ENOENT') || errorMessage.includes('not found in any standard location')) {
         return {
           available: false,
           error: 'GitHub CLI not found. Install from: https://cli.github.com or ensure /opt/homebrew/bin is in PATH'
@@ -120,9 +136,11 @@ export class GitHubService {
     const repoName = `dreamnode-${dreamNodeUuid}`;
 
     try {
+      const ghPath = await this.detectGhPath();
+
       // Create public GitHub repository
       const { stdout } = await execAsync(
-        `gh repo create ${repoName} --public --source="${dreamNodePath}" --remote=github --push`,
+        `"${ghPath}" repo create ${repoName} --public --source="${dreamNodePath}" --remote=github --push`,
         { cwd: dreamNodePath }
       );
 
@@ -147,6 +165,8 @@ export class GitHubService {
    */
   async setupPages(repoUrl: string): Promise<string> {
     try {
+      const ghPath = await this.detectGhPath();
+
       // Extract owner/repo from URL
       const match = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
       if (!match) {
@@ -161,7 +181,7 @@ export class GitHubService {
       // Enable GitHub Pages via API
       // Note: gh CLI doesn't have native pages command, so we use gh api
       await execAsync(
-        `gh api -X POST "repos/${owner}/${cleanRepo}/pages" -f source[branch]=main -f source[path]=/`
+        `"${ghPath}" api -X POST "repos/${owner}/${cleanRepo}/pages" -f source[branch]=main -f source[path]=/`
       );
 
       // Construct Pages URL
