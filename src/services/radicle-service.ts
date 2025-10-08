@@ -36,9 +36,9 @@ export interface RadicleService {
   /**
    * Clone a DreamNode from the Radicle network
    * @param passphrase Optional passphrase (uses ssh-agent if not provided)
-   * @returns The name of the cloned DreamNode (derived from Radicle metadata)
+   * @returns Object with repo name and whether it was already cloned
    */
-  clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<string>;
+  clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<{ repoName: string; alreadyExisted: boolean }>;
 
   /**
    * Share DreamNode to Radicle network (sync changes)
@@ -193,12 +193,20 @@ export class RadicleServiceImpl implements RadicleService {
         console.warn('RadicleService: rad init stderr:', result.stderr);
       }
     } catch (error: any) {
+      const errorOutput = error.stderr || error.stdout || error.message || '';
+
+      // Check if already initialized - this is expected and not an error
+      if (errorOutput.includes('already initialized')) {
+        console.log(`RadicleService: Repository already initialized (not an error)`);
+        throw new Error(errorOutput); // Throw with clean message for caller to handle
+      }
+
+      // Log unexpected errors
       console.error('RadicleService: rad init failed:', error);
       console.error('RadicleService: rad init stdout:', error.stdout);
       console.error('RadicleService: rad init stderr:', error.stderr);
 
       // Check if error is due to missing passphrase
-      const errorOutput = error.stderr || error.stdout || error.message || '';
       if (errorOutput.includes('RAD_PASSPHRASE') || errorOutput.includes('passphrase')) {
         throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
       }
@@ -261,6 +269,11 @@ export class RadicleServiceImpl implements RadicleService {
    * Get Radicle ID for a repository
    */
   async getRadicleId(repoPath: string): Promise<string | null> {
+    // Check availability first - return null silently if not available
+    if (!await this.isAvailable()) {
+      return null;
+    }
+
     try {
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" .`, { cwd: repoPath });
@@ -271,17 +284,16 @@ export class RadicleServiceImpl implements RadicleService {
         return radicleId;
       }
 
-      console.warn('RadicleService: Could not get valid Radicle ID');
       return null;
     } catch (error) {
-      console.error('RadicleService: Failed to get Radicle ID:', error);
+      // Silent failure - repository may not be initialized yet
       return null;
     }
   }
 
   /**
    * Find repositories by Radicle ID
-   * Scans directories for .udd files and checks radicleId field
+   * Scans directories and checks both .udd files AND git repositories directly
    */
   private async findReposByRadicleId(vaultPath: string, radicleId: string): Promise<string[]> {
     const path = require('path');
@@ -293,19 +305,28 @@ export class RadicleServiceImpl implements RadicleService {
       const directories = entries.filter((entry: any) => entry.isDirectory() && !entry.name.startsWith('.'));
 
       for (const dir of directories) {
-        const uddPath = path.join(vaultPath, dir.name, '.udd');
+        const dirPath = path.join(vaultPath, dir.name);
 
+        // First check .udd file
+        const uddPath = path.join(dirPath, '.udd');
         try {
           const uddContent = await fs.promises.readFile(uddPath, 'utf-8');
           const udd = JSON.parse(uddContent);
 
           if (udd.radicleId === radicleId) {
             matchingRepos.push(dir.name);
-            console.log(`RadicleService: Found matching Radicle ID in "${dir.name}"`);
+            console.log(`RadicleService: Found matching Radicle ID in "${dir.name}" (.udd file)`);
+            continue;
           }
         } catch (error) {
-          // Directory doesn't have .udd or is not a DreamNode, skip
-          continue;
+          // .udd file doesn't exist or couldn't be read, continue to git check
+        }
+
+        // Fallback: Check git repository directly using rad .
+        const repoRadicleId = await this.getRadicleId(dirPath);
+        if (repoRadicleId === radicleId) {
+          matchingRepos.push(dir.name);
+          console.log(`RadicleService: Found matching Radicle ID in "${dir.name}" (git repository)`);
         }
       }
     } catch (error) {
@@ -315,7 +336,7 @@ export class RadicleServiceImpl implements RadicleService {
     return matchingRepos;
   }
 
-  async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<string> {
+  async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<{ repoName: string; alreadyExisted: boolean }> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
@@ -329,8 +350,10 @@ export class RadicleServiceImpl implements RadicleService {
 
     if (existingRepos.length > 0) {
       const existingRepoName = existingRepos[0];
-      console.log(`RadicleService: Repository with Radicle ID ${radicleId} already exists as "${existingRepoName}"`);
-      throw new Error(`This DreamNode is already cloned as "${existingRepoName}"`);
+      console.log(`RadicleService: ✅ Repository already exists as "${existingRepoName}" - skipping clone`);
+
+      // Return existing repo name with alreadyExisted flag
+      return { repoName: existingRepoName, alreadyExisted: true };
     }
 
     // Ensure Radicle node is running before attempting to clone
@@ -416,7 +439,7 @@ export class RadicleServiceImpl implements RadicleService {
       console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
     }
 
-    return repoName;
+    return { repoName, alreadyExisted: false };
   }
 
   async share(dreamNodePath: string, passphrase?: string): Promise<void> {

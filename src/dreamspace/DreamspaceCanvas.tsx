@@ -353,14 +353,6 @@ export default function DreamspaceCanvas() {
           return;
         }
         throw new Error('SpatialOrchestrator not available');
-      },
-      rotateToNode: async (nodeNameOrId: string) => {
-        // Rotate the sphere to center a specific node in camera view
-        if (spatialOrchestratorRef.current) {
-          await spatialOrchestratorRef.current.rotateToNode(nodeNameOrId);
-          return;
-        }
-        throw new Error('SpatialOrchestrator not available');
       }
     };
   }, []);

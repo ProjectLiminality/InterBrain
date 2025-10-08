@@ -154,6 +154,7 @@ export class DreamSongRelationshipService {
 
   /**
    * Phase 2: Extract relationships from all DreamSongs
+   * OPTIMIZED: Uses parallel I/O operations for maximum performance
    */
   private async extractAllRelationships(
     dreamNodes: DreamNode[],
@@ -164,52 +165,72 @@ export class DreamSongRelationshipService {
     dreamSongsFound: number;
     dreamSongsParsed: number;
   }> {
+    console.log(`⚡ [DreamSong Relationships] Using parallel I/O for ${dreamNodes.length} nodes...`);
+
+    // OPTIMIZATION: Check all DreamSongs in parallel instead of sequentially
+    const dreamSongChecks = await Promise.all(
+      dreamNodes.map(async (node) => ({
+        node,
+        hasDreamSong: await this.dreamSongParser.hasDreamSong(node.repoPath)
+      }))
+    );
+
+    // Filter to only nodes with DreamSongs
+    const nodesWithDreamSongs = dreamSongChecks
+      .filter(check => check.hasDreamSong)
+      .map(check => check.node);
+
+    const dreamSongsFound = nodesWithDreamSongs.length;
+    console.log(`🎵 [DreamSong Relationships] Found ${dreamSongsFound} DreamSongs to process`);
+
+    // OPTIMIZATION: Parse all DreamSongs in parallel instead of sequentially
+    const parseResults = await Promise.all(
+      nodesWithDreamSongs.map(async (dreamNode) => {
+        const dreamSongPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+
+        try {
+          console.log(`🎵 [DreamSong Relationships] Processing: ${dreamNode.name} -> ${dreamSongPath}`);
+
+          const dreamSongResult = await this.dreamSongParser.parseDreamSong(
+            dreamSongPath,
+            dreamNode.repoPath
+          );
+
+          if (!dreamSongResult.success || !dreamSongResult.data) {
+            console.warn(`⚠️ [DreamSong Relationships] Failed to parse: ${dreamSongPath}`);
+            return { success: false, edges: [] };
+          }
+
+          // Extract relationships from this DreamSong
+          const edges = await this.extractRelationshipsFromDreamSong(
+            dreamSongResult.data,
+            dreamNode.id,
+            dreamSongPath,
+            uuidToPathMap,
+            config
+          );
+
+          return { success: true, edges };
+
+        } catch (error) {
+          console.error(`❌ [DreamSong Relationships] Error processing ${dreamSongPath}:`, error);
+          return { success: false, edges: [] };
+        }
+      })
+    );
+
+    // Aggregate results
     const allEdges: DreamSongEdge[] = [];
-    let dreamSongsFound = 0;
     let dreamSongsParsed = 0;
 
-    for (const dreamNode of dreamNodes) {
-      const dreamSongPath = `${dreamNode.repoPath}/DreamSong.canvas`;
-
-      // Check if this DreamNode has a DreamSong
-      const hasDreamSong = await this.dreamSongParser.hasDreamSong(dreamNode.repoPath);
-      if (!hasDreamSong) {
-        continue;
-      }
-
-      dreamSongsFound++;
-      console.log(`🎵 [DreamSong Relationships] Processing: ${dreamNode.name} -> ${dreamSongPath}`);
-
-      try {
-        // Parse the DreamSong to get structured blocks
-        const dreamSongResult = await this.dreamSongParser.parseDreamSong(
-          dreamSongPath,
-          dreamNode.repoPath
-        );
-
-        if (!dreamSongResult.success || !dreamSongResult.data) {
-          console.warn(`⚠️ [DreamSong Relationships] Failed to parse: ${dreamSongPath}`);
-          continue;
-        }
-
+    for (const result of parseResults) {
+      if (result.success) {
         dreamSongsParsed++;
-
-        // Extract relationships from this DreamSong
-        const edges = await this.extractRelationshipsFromDreamSong(
-          dreamSongResult.data,
-          dreamNode.id,
-          dreamSongPath,
-          uuidToPathMap,
-          config
-        );
-
-        allEdges.push(...edges);
-
-      } catch (error) {
-        console.error(`❌ [DreamSong Relationships] Error processing ${dreamSongPath}:`, error);
-        // Continue with other DreamSongs
+        allEdges.push(...result.edges);
       }
     }
+
+    console.log(`⚡ [DreamSong Relationships] Parallel processing complete: ${dreamSongsParsed}/${dreamSongsFound} parsed successfully`);
 
     return { edges: allEdges, dreamSongsFound, dreamSongsParsed };
   }

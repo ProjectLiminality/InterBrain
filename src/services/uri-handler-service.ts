@@ -1,5 +1,8 @@
 import { App, Notice, Plugin } from 'obsidian';
 import { RadicleService } from './radicle-service';
+import { DreamNodeService } from './dreamnode-service';
+import { DreamSongRelationshipService } from './dreamsong-relationship-service';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 /**
  * URI Handler Service
@@ -11,11 +14,13 @@ export class URIHandlerService {
 	private app: App;
 	private plugin: Plugin;
 	private radicleService: RadicleService;
+	private dreamNodeService: DreamNodeService;
 
-	constructor(app: App, plugin: Plugin, radicleService: RadicleService) {
+	constructor(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService) {
 		this.app = app;
 		this.plugin = plugin;
 		this.radicleService = radicleService;
+		this.dreamNodeService = dreamNodeService;
 	}
 
 	/**
@@ -142,6 +147,50 @@ export class URIHandlerService {
 	}
 
 	/**
+	 * Auto-focus a node after clone or when clicking already-cloned link
+	 * Extracted helper to reuse for both new clones and existing nodes
+	 */
+	private async autoFocusNode(repoName: string, silent: boolean = false): Promise<void> {
+		console.log(`🎯 [URIHandler] Auto-focusing "${repoName}"...`);
+
+		// Find the node by repo name
+		const allNodes = await this.dreamNodeService.list();
+		console.log(`🔍 [URIHandler] Found ${allNodes.length} nodes`);
+		console.log(`🔍 [URIHandler] Looking for repoPath: "${repoName}"`);
+		console.log(`🔍 [URIHandler] Available repoPaths:`, allNodes.map(n => n.repoPath));
+
+		const targetNode = allNodes.find(node => node.repoPath === repoName);
+
+		if (!targetNode) {
+			console.warn(`⚠️ [URIHandler] Could not find node with repoPath: ${repoName}`);
+			return;
+		}
+
+		// Set selected node in store FIRST (prevents "no selectedNode available" warning)
+		const store = useInterBrainStore.getState();
+		store.setSelectedNode(targetNode);
+
+		// Check if DreamSpace is open and has focus API
+		const canvasAPI = (globalThis as any).__interbrainCanvas;
+		if (!canvasAPI?.focusOnNode) {
+			console.log(`ℹ️ [URIHandler] DreamSpace not open or focusOnNode not available`);
+			return;
+		}
+
+		// Focus on the node (triggers liminal-web layout transition)
+		const success = canvasAPI.focusOnNode(targetNode.id);
+		if (success) {
+			console.log(`✅ [URIHandler] Auto-focused "${repoName}" (${targetNode.id})`);
+
+			if (!silent) {
+				new Notice(`🎯 Node focused in DreamSpace!`);
+			}
+		} else {
+			console.warn(`⚠️ [URIHandler] Failed to focus on "${repoName}"`);
+		}
+	}
+
+	/**
 	 * Clone a DreamNode from Radicle network
 	 */
 	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<boolean> {
@@ -156,17 +205,65 @@ export class URIHandlerService {
 				throw new Error('Could not determine vault path');
 			}
 
-			// Clone the repository
+			// Clone the repository (handles duplicate detection internally)
 			if (!silent) {
 				new Notice(`Cloning from Radicle network...`, 3000);
 			}
 
-			const repoName = await this.radicleService.clone(radicleId, vaultPath);
+			const cloneResult = await this.radicleService.clone(radicleId, vaultPath);
 
-			console.log(`✅ [URIHandler] Successfully cloned: ${repoName}`);
+			// Check if repo already existed - if so, skip refresh but still focus
+			if (cloneResult.alreadyExisted) {
+				console.log(`ℹ️ [URIHandler] DreamNode already exists: ${cloneResult.repoName}`);
+				if (!silent) {
+					new Notice(`📌 DreamNode "${cloneResult.repoName}" already cloned!`);
+				}
+
+				// Auto-focus the existing node (same as newly cloned)
+				await this.autoFocusNode(cloneResult.repoName, silent);
+
+				return true; // Success - already have it, no refresh needed
+			}
+
+			console.log(`✅ [URIHandler] Successfully cloned: ${cloneResult.repoName}`);
 
 			if (!silent) {
-				new Notice(`✅ Cloned "${repoName}" successfully!`);
+				new Notice(`✅ Cloned "${cloneResult.repoName}" successfully!`);
+			}
+
+			// AUTO-REFRESH: Make the newly cloned node appear immediately
+			try {
+				console.log(`🔄 [URIHandler] Auto-refreshing vault after clone...`);
+
+				// Step 1: Rescan vault to detect the new DreamNode
+				const scanStats = await this.dreamNodeService.scanVault();
+				console.log(`📊 [URIHandler] Vault scan: +${scanStats.added} added, ~${scanStats.updated} updated`);
+
+				// Step 2: Rescan DreamSong relationships (now optimized with parallel I/O!)
+				const relationshipService = new DreamSongRelationshipService(this.plugin);
+				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
+
+				if (scanResult.success) {
+					console.log(`✅ [URIHandler] Relationships rescanned in ${scanResult.stats.scanTimeMs}ms`);
+
+					// Step 3: Apply constellation layout if DreamSpace is open
+					const canvasAPI = (globalThis as any).__interbrainCanvas;
+					if (canvasAPI?.applyConstellationLayout) {
+						console.log(`🌌 [URIHandler] Applying constellation layout...`);
+						await canvasAPI.applyConstellationLayout();
+
+						// Step 4: Auto-focus the newly cloned node (reuses same logic as already-cloned case)
+						await this.autoFocusNode(cloneResult.repoName, silent);
+					} else {
+						console.log(`ℹ️ [URIHandler] DreamSpace not open, skipping layout update`);
+					}
+				} else {
+					console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
+				}
+
+			} catch (refreshError) {
+				console.error(`❌ [URIHandler] Auto-refresh failed (non-critical):`, refreshError);
+				// Don't fail the clone operation if refresh fails
 			}
 
 			return true;
@@ -207,8 +304,8 @@ export class URIHandlerService {
 // Singleton instance
 let _uriHandlerService: URIHandlerService | null = null;
 
-export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService): void {
-	_uriHandlerService = new URIHandlerService(app, plugin, radicleService);
+export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService): void {
+	_uriHandlerService = new URIHandlerService(app, plugin, radicleService, dreamNodeService);
 	_uriHandlerService.registerHandlers();
 	console.log(`🔗 [URIHandler] Service initialized`);
 }

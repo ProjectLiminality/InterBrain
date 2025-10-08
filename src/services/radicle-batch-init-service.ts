@@ -1,6 +1,7 @@
 import { Notice, Plugin } from 'obsidian';
 import { DreamNode } from '../types/dreamnode';
 import { RadicleService } from './radicle-service';
+import { DreamNodeService } from './dreamnode-service';
 
 /**
  * Radicle Batch Initialization Service
@@ -11,10 +12,12 @@ import { RadicleService } from './radicle-service';
 export class RadicleBatchInitService {
 	private plugin: Plugin;
 	private radicleService: RadicleService;
+	private dreamNodeService: DreamNodeService;
 
-	constructor(plugin: Plugin, radicleService: RadicleService) {
+	constructor(plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService) {
 		this.plugin = plugin;
 		this.radicleService = radicleService;
+		this.dreamNodeService = dreamNodeService;
 	}
 
 	/**
@@ -32,12 +35,10 @@ export class RadicleBatchInitService {
 
 		try {
 			// Step 1: Load all nodes and check their Radicle status
-			const { serviceManager } = require('./service-manager');
-			const dreamNodeService = serviceManager.getActive();
 			const nodes: DreamNode[] = [];
 
 			for (const uuid of nodeUUIDs) {
-				const node = await dreamNodeService.get(uuid);
+				const node = await this.dreamNodeService.get(uuid);
 				if (node) {
 					nodes.push(node);
 				} else {
@@ -234,8 +235,8 @@ export class RadicleBatchInitService {
 // Singleton instance
 let _radicleBatchInitService: RadicleBatchInitService | null = null;
 
-export function initializeRadicleBatchInitService(plugin: Plugin, radicleService: RadicleService): void {
-	_radicleBatchInitService = new RadicleBatchInitService(plugin, radicleService);
+export function initializeRadicleBatchInitService(plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService): void {
+	_radicleBatchInitService = new RadicleBatchInitService(plugin, radicleService, dreamNodeService);
 	console.log(`🔮 [RadicleBatchInit] Service initialized`);
 }
 

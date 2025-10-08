@@ -80,14 +80,15 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize email export service for conversation summaries
     initializeEmailExportService(this.app);
 
-    // Get RadicleService for dependency injection
+    // Get services for dependency injection
     const radicleService = serviceManager.getRadicleService();
+    const dreamNodeService = serviceManager.getActive();
 
     // Initialize URI handler service for deep links
-    initializeURIHandlerService(this.app, this, radicleService);
+    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService);
 
     // Initialize Radicle batch init service for post-call processing
-    initializeRadicleBatchInitService(this, radicleService);
+    initializeRadicleBatchInitService(this, radicleService, dreamNodeService);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
