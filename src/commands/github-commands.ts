@@ -76,30 +76,28 @@ export function registerGitHubCommands(
             await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
             console.log(`GitHubCommands: Updated .udd file with GitHub URLs`);
 
-            // Commit .udd update
-            const { execAsync } = require('../features/github-sharing/GitHubService');
-            await execAsync('git add .udd && git commit -m "Update .udd with GitHub URLs" && git push github main', {
-              cwd: fullRepoPath
-            });
+            // Commit .udd update using child_process directly
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+
+            try {
+              await execAsync('git add .udd && git commit -m "Update .udd with GitHub URLs" && git push github main', {
+                cwd: fullRepoPath
+              });
+              console.log(`GitHubCommands: Pushed .udd update to GitHub`);
+            } catch (gitError) {
+              console.error('GitHubCommands: Failed to push .udd update:', gitError);
+              // Non-critical - repo already created
+            }
           } catch (error) {
             console.error('GitHubCommands: Failed to update .udd file:', error);
           }
 
-          // Build and deploy static DreamSong site
-          notice.setMessage('Building DreamSong site for GitHub Pages...');
-          console.log(`GitHubCommands: Building static site...`);
-
-          try {
-            await githubService.buildStaticSite(
-              fullRepoPath,
-              selectedNode.id,
-              selectedNode.name
-            );
-            console.log(`GitHubCommands: Successfully built and deployed static site`);
-          } catch (error) {
-            console.error('GitHubCommands: Failed to build static site:', error);
-            // Continue even if site build fails - repo is already created
-          }
+          // TODO: Build and deploy static DreamSong site
+          // This requires a different approach - cannot run Vite inside Obsidian
+          // For now, we'll skip this and implement it in a future iteration
+          console.log(`GitHubCommands: Static site building deferred - requires separate build process`);
 
           // Copy Obsidian URI to clipboard
           await navigator.clipboard.writeText(result.obsidianUri);
