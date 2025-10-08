@@ -52,13 +52,30 @@ export class GitHubService {
    */
   async isAvailable(): Promise<{ available: boolean; error?: string }> {
     try {
-      // Check if gh CLI is installed
-      await execAsync('gh --version');
+      // Try with full path first (Homebrew default)
+      let ghPath = '/opt/homebrew/bin/gh';
 
-      // Check if authenticated
-      const { stdout } = await execAsync('gh auth status');
+      try {
+        await execAsync(`${ghPath} --version`);
+      } catch {
+        // Try standard path
+        ghPath = '/usr/local/bin/gh';
+        try {
+          await execAsync(`${ghPath} --version`);
+        } catch {
+          // Fall back to PATH lookup
+          ghPath = 'gh';
+          await execAsync('gh --version');
+        }
+      }
 
-      if (stdout.includes('Logged in to github.com')) {
+      // Check if authenticated (stderr goes to stdout for gh auth status)
+      const { stdout, stderr } = await execAsync(`${ghPath} auth status 2>&1`);
+      const output = stdout + stderr;
+
+      console.log('GitHubService: gh auth status output:', output);
+
+      if (output.includes('Logged in to github.com')) {
         return { available: true };
       }
 
@@ -67,16 +84,19 @@ export class GitHubService {
         error: 'GitHub CLI not authenticated. Run: gh auth login'
       };
     } catch (error) {
-      if (error instanceof Error && error.message.includes('command not found')) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('GitHubService: isAvailable check failed:', errorMessage);
+
+      if (errorMessage.includes('command not found') || errorMessage.includes('ENOENT')) {
         return {
           available: false,
-          error: 'GitHub CLI not installed. Install from: https://cli.github.com'
+          error: 'GitHub CLI not found. Install from: https://cli.github.com or ensure /opt/homebrew/bin is in PATH'
         };
       }
 
       return {
         available: false,
-        error: 'GitHub CLI not authenticated. Run: gh auth login'
+        error: `GitHub CLI error: ${errorMessage}`
       };
     }
   }
