@@ -1,7 +1,66 @@
-import { Plugin, Notice } from 'obsidian';
+import { Plugin, Notice, Modal } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { githubService } from '../features/github-sharing/GitHubService';
+
+/**
+ * Show confirmation modal before sharing to GitHub
+ */
+async function confirmRecursiveShare(
+  plugin: Plugin,
+  nodeName: string,
+  submoduleCount: number
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const modal = new Modal(plugin.app);
+    modal.titleEl.setText('Confirm GitHub Share');
+
+    const content = modal.contentEl;
+
+    if (submoduleCount === 0) {
+      content.createEl('p', {
+        text: `Share "${nodeName}" as a public GitHub repository?`
+      });
+    } else {
+      content.createEl('p', {
+        text: `Sharing "${nodeName}" will publish:`
+      });
+
+      const list = content.createEl('ul');
+      list.createEl('li', { text: `1 DreamNode: ${nodeName}` });
+      list.createEl('li', {
+        text: `${submoduleCount} related DreamNode${submoduleCount > 1 ? 's' : ''} (submodules)`
+      });
+
+      content.createEl('p', {
+        text: 'All will be published as public GitHub repositories.',
+        attr: { style: 'margin-top: 16px; font-weight: 500;' }
+      });
+    }
+
+    const buttonContainer = content.createEl('div', {
+      attr: { style: 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;' }
+    });
+
+    const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
+    cancelBtn.addEventListener('click', () => {
+      modal.close();
+      resolve(false);
+    });
+
+    const confirmBtn = buttonContainer.createEl('button', {
+      text: 'Share to GitHub',
+      cls: 'mod-cta'
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      modal.close();
+      resolve(true);
+    });
+
+    modal.open();
+  });
+}
 
 /**
  * GitHub commands for fallback sharing and public broadcasting
@@ -47,6 +106,21 @@ export function registerGitHubCommands(
 
         if (!availabilityCheck.available) {
           uiService.showError(availabilityCheck.error || 'GitHub CLI not available');
+          return;
+        }
+
+        // Discover submodules and show confirmation
+        const submodules = await githubService.getSubmodules(fullRepoPath);
+        console.log(`GitHubCommands: Discovered ${submodules.length} submodule(s)`);
+
+        const confirmed = await confirmRecursiveShare(
+          plugin,
+          selectedNode.name,
+          submodules.length
+        );
+
+        if (!confirmed) {
+          console.log('GitHubCommands: User cancelled share operation');
           return;
         }
 

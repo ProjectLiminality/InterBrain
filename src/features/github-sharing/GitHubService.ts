@@ -46,6 +46,13 @@ export interface GitHubShareResult {
   obsidianUri: string;
 }
 
+interface SubmoduleInfo {
+  name: string;
+  path: string;
+  relativePath: string;
+  url: string;
+}
+
 export class GitHubService {
   private ghPath: string | null = null;
 
@@ -76,6 +83,125 @@ export class GitHubService {
     }
 
     throw new Error('GitHub CLI not found in any standard location');
+  }
+
+  /**
+   * Sanitize DreamNode title for GitHub repository name
+   */
+  private sanitizeRepoName(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')  // Replace non-alphanumeric with hyphens
+      .replace(/-+/g, '-')           // Collapse multiple hyphens
+      .replace(/^-|-$/g, '')         // Remove leading/trailing hyphens
+      .substring(0, 90);             // Truncate to 90 chars (leave room for -N suffix)
+  }
+
+  /**
+   * Check if a GitHub repository exists
+   */
+  private async repoExists(repoName: string): Promise<boolean> {
+    try {
+      const ghPath = await this.detectGhPath();
+      // Try to view repo (fails if doesn't exist)
+      // Note: cwd doesn't matter for GitHub API calls
+      await execAsync(`"${ghPath}" repo view ${repoName}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Find an available repository name, adding -2, -3, etc. if needed
+   */
+  private async findAvailableRepoName(title: string): Promise<string> {
+    let repoName = this.sanitizeRepoName(title);
+
+    // Handle edge case: sanitized name is empty
+    if (!repoName) {
+      repoName = 'dreamnode';
+    }
+
+    // Check if base name is available
+    if (!(await this.repoExists(repoName))) {
+      return repoName;
+    }
+
+    // Try numbered variants (-2, -3, etc.)
+    let attempt = 2;
+    while (attempt < 100) {  // Safety limit
+      const numberedName = `${repoName}-${attempt}`;
+      if (!(await this.repoExists(numberedName))) {
+        return numberedName;
+      }
+      attempt++;
+    }
+
+    throw new Error(`Could not find available name for "${title}" after 100 attempts`);
+  }
+
+  /**
+   * Read .udd file from DreamNode
+   */
+  private async readUDD(dreamNodePath: string): Promise<any> {
+    const uddPath = path.join(dreamNodePath, '.udd');
+    const content = fs.readFileSync(uddPath, 'utf-8');
+    return JSON.parse(content);
+  }
+
+  /**
+   * Write .udd file to DreamNode
+   */
+  private async writeUDD(dreamNodePath: string, udd: any): Promise<void> {
+    const uddPath = path.join(dreamNodePath, '.udd');
+    fs.writeFileSync(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
+  }
+
+  /**
+   * Get list of submodules from .gitmodules file
+   */
+  async getSubmodules(dreamNodePath: string): Promise<SubmoduleInfo[]> {
+    const gitmodulesPath = path.join(dreamNodePath, '.gitmodules');
+
+    if (!fs.existsSync(gitmodulesPath)) {
+      return [];
+    }
+
+    const content = fs.readFileSync(gitmodulesPath, 'utf-8');
+    const submodules: SubmoduleInfo[] = [];
+
+    // Parse .gitmodules format
+    const lines = content.split('\n');
+    let currentSubmodule: Partial<SubmoduleInfo> = {};
+
+    for (const line of lines) {
+      const submoduleMatch = line.match(/\[submodule "([^"]+)"\]/);
+      if (submoduleMatch) {
+        if (currentSubmodule.name) {
+          submodules.push(currentSubmodule as SubmoduleInfo);
+        }
+        currentSubmodule = { name: submoduleMatch[1] };
+        continue;
+      }
+
+      const pathMatch = line.match(/path = (.+)/);
+      if (pathMatch && currentSubmodule.name) {
+        currentSubmodule.relativePath = pathMatch[1].trim();
+        currentSubmodule.path = path.join(dreamNodePath, pathMatch[1].trim());
+      }
+
+      const urlMatch = line.match(/url = (.+)/);
+      if (urlMatch && currentSubmodule.name) {
+        currentSubmodule.url = urlMatch[1].trim();
+      }
+    }
+
+    if (currentSubmodule.name) {
+      submodules.push(currentSubmodule as SubmoduleInfo);
+    }
+
+    return submodules;
   }
 
   /**
@@ -120,7 +246,7 @@ export class GitHubService {
   /**
    * Create public GitHub repository and push DreamNode content
    */
-  async createRepo(dreamNodePath: string, dreamNodeUuid: string): Promise<string> {
+  async createRepo(dreamNodePath: string, repoName: string): Promise<string> {
     // Verify directory exists
     if (!fs.existsSync(dreamNodePath)) {
       throw new Error(`DreamNode path does not exist: ${dreamNodePath}`);
@@ -132,13 +258,10 @@ export class GitHubService {
       throw new Error('DreamNode is not a git repository. Cannot share to GitHub.');
     }
 
-    // Repository name based on UUID
-    const repoName = `dreamnode-${dreamNodeUuid}`;
-
     try {
       const ghPath = await this.detectGhPath();
 
-      // Create public GitHub repository
+      // Create public GitHub repository with provided name
       const { stdout } = await execAsync(
         `"${ghPath}" repo create ${repoName} --public --source="${dreamNodePath}" --remote=github --push`,
         { cwd: dreamNodePath }
@@ -420,25 +543,170 @@ export class GitHubService {
   }
 
   /**
+   * Update .gitmodules file to replace local paths with GitHub URLs
+   */
+  private async updateGitmodulesUrls(
+    dreamNodePath: string,
+    sharedSubmodules: Array<{ uuid: string; githubUrl: string; title: string; relativePath: string }>
+  ): Promise<void> {
+    const gitmodulesPath = path.join(dreamNodePath, '.gitmodules');
+    let content = fs.readFileSync(gitmodulesPath, 'utf-8');
+
+    for (const submodule of sharedSubmodules) {
+      // Ensure .git suffix
+      const gitUrl = submodule.githubUrl.replace(/\.git$/, '') + '.git';
+
+      // Build regex to find this specific submodule's URL line
+      const escapedPath = submodule.relativePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const urlRegex = new RegExp(
+        `(\\[submodule "[^"]*"\\]\\s*path = ${escapedPath}\\s*url = )([^\\n]+)`,
+        'gi'
+      );
+
+      // Replace URL only if it's not already a GitHub URL
+      content = content.replace(urlRegex, (match, prefix, url) => {
+        if (url.trim().startsWith('http') || url.trim().startsWith('git@')) {
+          return match; // Already a remote URL
+        }
+        return `${prefix}${gitUrl}`;
+      });
+    }
+
+    fs.writeFileSync(gitmodulesPath, content);
+  }
+
+  /**
+   * Share a single submodule recursively
+   */
+  private async shareSubmodule(
+    submodulePath: string,
+    visitedUUIDs: Set<string>
+  ): Promise<{ uuid: string; githubUrl: string; title: string; relativePath: string }> {
+
+    // Read submodule's .udd
+    const udd = await this.readUDD(submodulePath);
+
+    // Check for circular dependencies
+    if (visitedUUIDs.has(udd.uuid)) {
+      console.log(`GitHubService: Skipping circular dependency: ${udd.title}`);
+      if (!udd.githubRepoUrl) {
+        throw new Error(`Circular dependency detected but node not yet shared: ${udd.title}`);
+      }
+      return {
+        uuid: udd.uuid,
+        githubUrl: udd.githubRepoUrl,
+        title: udd.title,
+        relativePath: path.basename(submodulePath)
+      };
+    }
+
+    // Check if already shared
+    if (udd.githubRepoUrl) {
+      console.log(`GitHubService: Submodule already shared: ${udd.title}`);
+      return {
+        uuid: udd.uuid,
+        githubUrl: udd.githubRepoUrl,
+        title: udd.title,
+        relativePath: path.basename(submodulePath)
+      };
+    }
+
+    // Mark as visited
+    visitedUUIDs.add(udd.uuid);
+
+    // Recursively share this submodule
+    console.log(`GitHubService: Sharing submodule: ${udd.title}`);
+    const result = await this.shareDreamNode(submodulePath, udd.uuid, visitedUUIDs);
+
+    // Update submodule's .udd with GitHub URLs
+    udd.githubRepoUrl = result.repoUrl;
+    if (result.pagesUrl) {
+      udd.githubPagesUrl = result.pagesUrl;
+    }
+    await this.writeUDD(submodulePath, udd);
+
+    // Commit .udd update in submodule
+    try {
+      await execAsync(
+        'git add .udd && git commit -m "Add GitHub URLs to .udd" && git push github main || true',
+        { cwd: submodulePath }
+      );
+    } catch (error) {
+      console.warn('GitHubService: Failed to commit .udd update in submodule:', error);
+    }
+
+    return {
+      uuid: udd.uuid,
+      githubUrl: result.repoUrl,
+      title: udd.title,
+      relativePath: path.basename(submodulePath)
+    };
+  }
+
+  /**
    * Complete share workflow: create repo, enable Pages, update UDD
    */
   async shareDreamNode(
     dreamNodePath: string,
-    dreamNodeUuid: string
+    dreamNodeUuid: string,
+    visitedUUIDs: Set<string> = new Set()
   ): Promise<GitHubShareResult> {
-    // Step 1: Create GitHub repository
-    const repoUrl = await this.createRepo(dreamNodePath, dreamNodeUuid);
+    // Read .udd to get title
+    const udd = await this.readUDD(dreamNodePath);
 
-    // Step 2: Enable GitHub Pages
+    // Mark this node as visited (prevent circular deps)
+    visitedUUIDs.add(dreamNodeUuid);
+
+    // Step 1: Discover and share all submodules recursively (depth-first)
+    const submodules = await this.getSubmodules(dreamNodePath);
+    const sharedSubmodules: Array<{ uuid: string; githubUrl: string; title: string; relativePath: string }> = [];
+
+    console.log(`GitHubService: Found ${submodules.length} submodule(s) for ${udd.title}`);
+
+    for (const submodule of submodules) {
+      try {
+        console.log(`GitHubService: Processing submodule at ${submodule.path}`);
+        const result = await this.shareSubmodule(submodule.path, visitedUUIDs);
+        sharedSubmodules.push(result);
+      } catch (error) {
+        console.error(`GitHubService: Failed to share submodule ${submodule.name}:`, error);
+        // Continue with other submodules
+      }
+    }
+
+    // Step 2: Update .gitmodules with GitHub URLs
+    if (sharedSubmodules.length > 0) {
+      console.log(`GitHubService: Updating .gitmodules with GitHub URLs`);
+      await this.updateGitmodulesUrls(dreamNodePath, sharedSubmodules);
+
+      // Commit .gitmodules changes
+      try {
+        await execAsync(
+          'git add .gitmodules && git commit -m "Update submodule URLs for GitHub" || true',
+          { cwd: dreamNodePath }
+        );
+      } catch (error) {
+        console.warn('GitHubService: Failed to commit .gitmodules update:', error);
+      }
+    }
+
+    // Step 3: Find available repo name based on title
+    const repoName = await this.findAvailableRepoName(udd.title);
+    console.log(`GitHubService: Using repository name: ${repoName}`);
+
+    // Step 4: Create GitHub repository
+    const repoUrl = await this.createRepo(dreamNodePath, repoName);
+
+    // Step 5: Setup GitHub Pages
     let pagesUrl: string | undefined;
     try {
       pagesUrl = await this.setupPages(repoUrl);
     } catch (error) {
-      console.warn('Failed to enable GitHub Pages:', error);
+      console.warn('GitHubService: Failed to enable GitHub Pages:', error);
       // Continue without Pages URL - repo is still created
     }
 
-    // Step 3: Generate Obsidian URI
+    // Step 6: Generate Obsidian URI
     const obsidianUri = this.generateObsidianURI(repoUrl);
 
     return {
