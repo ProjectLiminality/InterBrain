@@ -650,18 +650,23 @@ export class DreamNodeMigrationService {
           let canvas = JSON.parse(canvasContent);
           let pathsUpdatedInCanvas = 0;
 
+          console.log(`  CanvasAudit: Found ${canvas.nodes?.length || 0} nodes in canvas`);
+
           // Process each file node
           if (canvas.nodes && Array.isArray(canvas.nodes)) {
             for (const node of canvas.nodes) {
               if (node.type === 'file' && node.file) {
                 const originalPath = node.file;
+                console.log(`  CanvasAudit: Checking path: ${originalPath}`);
                 const fixedPath = await this.fixCanvasPath(originalPath);
 
                 if (fixedPath !== originalPath) {
-                  console.log(`  CanvasAudit: Fixed path: ${originalPath} → ${fixedPath}`);
+                  console.log(`  CanvasAudit: ✅ Fixed path: ${originalPath} → ${fixedPath}`);
                   node.file = fixedPath;
                   pathsUpdatedInCanvas++;
                   totalPathsUpdated++;
+                } else {
+                  console.log(`  CanvasAudit: ✓ Path already correct: ${originalPath}`);
                 }
               }
             }
@@ -720,32 +725,40 @@ export class DreamNodeMigrationService {
     const pathParts = originalPath.split('/');
     const fixedParts: string[] = [];
 
+    console.log(`    CanvasAudit: Analyzing path parts:`, pathParts);
+
     for (let i = 0; i < pathParts.length; i++) {
       const part = pathParts[i];
 
       // Last part is filename - keep as-is
       if (i === pathParts.length - 1) {
+        console.log(`      Part[${i}]: "${part}" (filename - keeping as-is)`);
         fixedParts.push(part);
         continue;
       }
 
       // Check if this part exists as a valid folder
       const potentialNodePath = path.join(this.vaultPath, part);
+      console.log(`      Part[${i}]: "${part}" - checking if exists at: ${potentialNodePath}`);
 
       if (fs.existsSync(potentialNodePath)) {
         // Folder exists with this name - keep it as-is
+        console.log(`      ✓ Folder exists as-is: ${part}`);
         fixedParts.push(part);
         continue;
       }
 
       // Folder doesn't exist - try to find the actual folder name
+      console.log(`      ✗ Folder "${part}" doesn't exist, trying alternatives...`);
+
       // Try removing hyphens/underscores (9-11 → 911, my-node → mynode)
       const withoutSeparators = part.replace(/[-_]/g, '');
       const withoutSeparatorsPath = path.join(this.vaultPath, withoutSeparators);
+      console.log(`      Trying without separators: "${withoutSeparators}" at ${withoutSeparatorsPath}`);
 
       if (fs.existsSync(withoutSeparatorsPath)) {
         // Found it without separators!
-        console.log(`    CanvasAudit: Fixed folder name: ${part} → ${withoutSeparators}`);
+        console.log(`      ✅ Found folder without separators: ${part} → ${withoutSeparators}`);
         fixedParts.push(withoutSeparators);
         continue;
       }
@@ -753,19 +766,22 @@ export class DreamNodeMigrationService {
       // Try PascalCase conversion
       const pascalCasePart = sanitizeTitleToPascalCase(part);
       const pascalCasePath = path.join(this.vaultPath, pascalCasePart);
+      console.log(`      Trying PascalCase: "${pascalCasePart}" at ${pascalCasePath}`);
 
       if (fs.existsSync(pascalCasePath)) {
         // Found it with PascalCase conversion!
-        console.log(`    CanvasAudit: Fixed folder name: ${part} → ${pascalCasePart}`);
+        console.log(`      ✅ Found folder with PascalCase: ${part} → ${pascalCasePart}`);
         fixedParts.push(pascalCasePart);
         continue;
       }
 
       // Couldn't find matching folder - keep original
-      console.log(`    CanvasAudit: Warning - Could not find folder for: ${part}`);
+      console.log(`      ⚠️ Could not find matching folder for: ${part} - keeping original`);
       fixedParts.push(part);
     }
 
-    return fixedParts.join('/');
+    const result = fixedParts.join('/');
+    console.log(`    CanvasAudit: Result: ${originalPath} → ${result}`);
+    return result;
   }
 }
