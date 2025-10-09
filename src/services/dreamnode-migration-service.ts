@@ -475,26 +475,20 @@ export class DreamNodeMigrationService {
   }
 
   /**
-   * Migrate all DreamNodes in vault
+   * Migrate all DreamNodes in vault (parallelized for speed)
    */
   async migrateAllNodes(): Promise<{ total: number; succeeded: number; failed: number; results: MigrationResult[] }> {
     const store = useInterBrainStore.getState();
     const allNodes = Array.from(store.realNodes.keys());
 
-    const results: MigrationResult[] = [];
-    let succeeded = 0;
-    let failed = 0;
+    // Execute all migrations in parallel using Promise.all()
+    const results = await Promise.all(
+      allNodes.map(nodeId => this.migrateSingleNode(nodeId))
+    );
 
-    for (const nodeId of allNodes) {
-      const result = await this.migrateSingleNode(nodeId);
-      results.push(result);
-
-      if (result.success) {
-        succeeded++;
-      } else {
-        failed++;
-      }
-    }
+    // Count successes and failures
+    const succeeded = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
 
     return {
       total: allNodes.length,
