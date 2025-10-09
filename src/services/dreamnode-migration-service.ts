@@ -306,14 +306,15 @@ export class DreamNodeMigrationService {
         }
       }
 
-      // Step 6: Update store
+      // Step 6: Update store with new folder path AND human-readable title
       node.repoPath = newFolderName;
+      node.name = udd.title;  // Use human-readable title, not PascalCase folder name
       store.updateRealNode(nodeId, {
         ...nodeData,
         node,
         lastSynced: Date.now()
       });
-      changes.push('Updated Zustand store repoPath');
+      changes.push('Updated Zustand store repoPath and name');
 
       return {
         success: errors.length === 0,
