@@ -395,9 +395,9 @@ export function registerDreamweavingCommands(
           return;
         }
         
-        // Commit with a generic message
+        // Commit with a generic message (skip hooks with --no-verify)
         const commitMessage = `Save all changes in ${selectedNode.name}`;
-        await execAsyncPromise(`git commit -m "${commitMessage}"`, { cwd: fullPath });
+        await execAsyncPromise(`git commit --no-verify -m "${commitMessage}"`, { cwd: fullPath });
         
         uiService.showSuccess(`Committed all changes in ${selectedNode.name}`);
         console.log(`Successfully committed changes with message: "${commitMessage}"`);
@@ -455,9 +455,9 @@ export function registerDreamweavingCommands(
               console.log(`  ✓ ${node.name}: Already clean`);
               cleanCount++;
             } else {
-              // Commit with a generic message
+              // Commit with a generic message (skip hooks with --no-verify)
               const commitMessage = `Save all changes in ${node.name}`;
-              await execAsyncPromise(`git commit -m "${commitMessage}"`, { cwd: fullPath });
+              await execAsyncPromise(`git commit --no-verify -m "${commitMessage}"`, { cwd: fullPath });
               console.log(`  ✓ ${node.name}: Committed changes`);
               committedCount++;
             }

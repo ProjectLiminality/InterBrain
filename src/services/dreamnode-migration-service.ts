@@ -159,7 +159,7 @@ export class DreamNodeMigrationService {
           // Commit the .udd update
           try {
             await execAsync(
-              'git add .udd && git commit -m "Convert title to human-readable format" || true',
+              'git add .udd && git commit --no-verify -m "Convert title to human-readable format" || true',
               { cwd: oldFullPath }
             );
             changes.push('Committed .udd title update');
@@ -278,7 +278,7 @@ export class DreamNodeMigrationService {
         // Commit the .udd update
         try {
           await execAsync(
-            'git add .udd && git commit -m "Convert title to human-readable format" || true',
+            'git add .udd && git commit --no-verify -m "Convert title to human-readable format" || true',
             { cwd: newFullPath }
           );
           changes.push('Committed .udd title update');
@@ -368,7 +368,7 @@ export class DreamNodeMigrationService {
             // Auto-commit the change
             try {
               await execAsync(
-                `git add .gitmodules && git commit -m "Update submodule path: ${oldPath} → ${newPath}" || true`,
+                `git add .gitmodules && git commit --no-verify -m "Update submodule path: ${oldPath} → ${newPath}" || true`,
                 { cwd: path.join(this.vaultPath, dir.name) }
               );
               changes.push(`Committed .gitmodules change in ${dir.name}`);
@@ -460,7 +460,7 @@ export class DreamNodeMigrationService {
 
         // Commit .udd update
         await execAsync(
-          'git add .udd && git commit -m "Update GitHub URLs after repo rename" || true',
+          'git add .udd && git commit --no-verify -m "Update GitHub URLs after repo rename" || true',
           { cwd: localPath }
         );
         changes.push('Committed .udd update');
