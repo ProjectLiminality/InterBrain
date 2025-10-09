@@ -160,8 +160,9 @@ export class GitHubService {
 
   /**
    * Get list of submodules from .gitmodules file
+   * Resolves GitHub URLs to local vault paths automatically
    */
-  async getSubmodules(dreamNodePath: string): Promise<SubmoduleInfo[]> {
+  async getSubmodules(dreamNodePath: string, vaultPath?: string): Promise<SubmoduleInfo[]> {
     const gitmodulesPath = path.join(dreamNodePath, '.gitmodules');
 
     if (!fs.existsSync(gitmodulesPath)) {
@@ -170,6 +171,11 @@ export class GitHubService {
 
     const content = fs.readFileSync(gitmodulesPath, 'utf-8');
     const submodules: SubmoduleInfo[] = [];
+
+    // If vaultPath not provided, derive it from dreamNodePath
+    if (!vaultPath) {
+      vaultPath = path.dirname(dreamNodePath);
+    }
 
     // Parse .gitmodules format
     const lines = content.split('\n');
@@ -194,8 +200,28 @@ export class GitHubService {
       if (urlMatch && currentSubmodule.name) {
         const url = urlMatch[1].trim();
         currentSubmodule.url = url;
-        // Use URL as the actual path (this is where the real git repo is)
-        currentSubmodule.path = url;
+
+        // Resolve URL to local path
+        if (url.startsWith('http') || url.startsWith('git@')) {
+          // GitHub/remote URL - extract repo name and search vault
+          const repoMatch = url.match(/\/([^/]+?)(?:\.git)?$/);
+          if (repoMatch) {
+            const repoName = repoMatch[1];
+            const localPath = path.join(vaultPath, repoName);
+
+            if (fs.existsSync(localPath)) {
+              currentSubmodule.path = localPath;
+            } else {
+              console.warn(`GitHubService: Local repo not found for ${url}: ${localPath}`);
+              currentSubmodule.path = url; // Fallback to URL
+            }
+          } else {
+            currentSubmodule.path = url; // Fallback to URL
+          }
+        } else {
+          // Local path - use directly
+          currentSubmodule.path = url;
+        }
       }
     }
 
@@ -646,50 +672,6 @@ export class GitHubService {
   }
 
   /**
-   * Get list of submodules for unpublishing (resolves GitHub URLs to local paths)
-   */
-  private async getSubmodulesForUnpublish(
-    dreamNodePath: string,
-    vaultPath: string
-  ): Promise<SubmoduleInfo[]> {
-    const submodules = await this.getSubmodules(dreamNodePath);
-    const resolvedSubmodules: SubmoduleInfo[] = [];
-
-    for (const submodule of submodules) {
-      // Check if URL is a GitHub URL (already shared)
-      if (submodule.url.startsWith('http') || submodule.url.startsWith('git@')) {
-        // Extract repo name from GitHub URL
-        const repoMatch = submodule.url.match(/\/([^/]+?)(?:\.git)?$/);
-        if (!repoMatch) {
-          console.warn(`GitHubService: Could not parse repo name from URL: ${submodule.url}`);
-          continue;
-        }
-
-        const repoName = repoMatch[1];
-
-        // Search for standalone repo in vault
-        const localPath = path.join(vaultPath, repoName);
-
-        if (!fs.existsSync(localPath)) {
-          console.warn(`GitHubService: Local repo not found: ${localPath}`);
-          continue;
-        }
-
-        // Update path to point to local standalone repo
-        resolvedSubmodules.push({
-          ...submodule,
-          path: localPath
-        });
-      } else {
-        // URL is already a local path
-        resolvedSubmodules.push(submodule);
-      }
-    }
-
-    return resolvedSubmodules;
-  }
-
-  /**
    * Unpublish a single submodule recursively
    */
   private async unpublishSubmodule(
@@ -743,7 +725,7 @@ export class GitHubService {
     }
 
     // Step 1: Unpublish all submodules recursively (depth-first)
-    const submodules = await this.getSubmodulesForUnpublish(dreamNodePath, vaultPath);
+    const submodules = await this.getSubmodules(dreamNodePath, vaultPath);
     console.log(`GitHubService: Found ${submodules.length} submodule(s) for ${udd.title}`);
 
     for (const submodule of submodules) {
