@@ -387,11 +387,14 @@ export function registerDreamweavingCommands(
         // Step 1: Initialize any uninitialized submodules first
         try {
           console.log('  Initializing submodules (if any)...');
-          await execAsyncPromise('git submodule update --init --recursive', { cwd: fullPath });
+          const { stdout: initOutput, stderr: initStderr } = await execAsyncPromise('git submodule update --init --recursive', { cwd: fullPath });
           console.log('  ✓ Submodules initialized');
+          if (initOutput) console.log('    Output:', initOutput);
+          if (initStderr) console.log('    Stderr:', initStderr);
         } catch (initError) {
           // Non-fatal - submodules may not exist
-          console.log('  ℹ️ No submodules present');
+          const errorMsg = initError instanceof Error ? initError.message : String(initError);
+          console.log('  ℹ️ Submodule init status:', errorMsg);
         }
 
         // Step 2: Recursively commit all dirty submodules
@@ -404,10 +407,18 @@ export function registerDreamweavingCommands(
           console.log('  ℹ️ No submodule changes');
         }
 
-        // Step 2: Add all files in parent (including updated submodule references)
-        await execAsyncPromise('git add -A', { cwd: fullPath });
+        // Step 3: Add all files in parent (including updated submodule references)
+        console.log('  Adding all files...');
+        try {
+          await execAsyncPromise('git add -A', { cwd: fullPath });
+          console.log('  ✓ Files added');
+        } catch (addError) {
+          const errorMsg = addError instanceof Error ? addError.message : String(addError);
+          console.error('  ✗ git add failed:', errorMsg);
+          throw addError; // Re-throw to trigger outer catch
+        }
 
-        // Step 3: Check if there are any changes to commit
+        // Step 4: Check if there are any changes to commit
         const { stdout: statusOutput } = await execAsyncPromise('git status --porcelain', { cwd: fullPath });
 
         if (!statusOutput.trim()) {
@@ -415,7 +426,7 @@ export function registerDreamweavingCommands(
           return;
         }
 
-        // Step 4: Commit parent with all changes (skip hooks with --no-verify)
+        // Step 5: Commit parent with all changes (skip hooks with --no-verify)
         const commitMessage = `Save all changes in ${selectedNode.name}`;
         await execAsyncPromise(`git commit --no-verify -m "${commitMessage}"`, { cwd: fullPath });
 
@@ -467,9 +478,13 @@ export function registerDreamweavingCommands(
 
             // Step 1: Initialize any uninitialized submodules first
             try {
-              await execAsyncPromise('git submodule update --init --recursive', { cwd: fullPath });
+              const { stdout: initOutput, stderr: initStderr } = await execAsyncPromise('git submodule update --init --recursive', { cwd: fullPath });
+              if (initOutput) console.log(`    Init output:`, initOutput);
+              if (initStderr) console.log(`    Init stderr:`, initStderr);
             } catch (initError) {
               // Non-fatal - submodules may not exist
+              const errorMsg = initError instanceof Error ? initError.message : String(initError);
+              console.log(`    Submodule init: ${errorMsg}`);
             }
 
             // Step 2: Recursively commit all dirty submodules
@@ -479,17 +494,23 @@ export function registerDreamweavingCommands(
               // Non-fatal - continue with parent commit
             }
 
-            // Step 2: Add all files in parent (including updated submodule references)
-            await execAsyncPromise('git add -A', { cwd: fullPath });
+            // Step 3: Add all files in parent (including updated submodule references)
+            try {
+              await execAsyncPromise('git add -A', { cwd: fullPath });
+            } catch (addError) {
+              const errorMsg = addError instanceof Error ? addError.message : String(addError);
+              console.error(`  ✗ git add failed for ${node.name}:`, errorMsg);
+              throw addError;
+            }
 
-            // Step 3: Check if there are any changes to commit
+            // Step 4: Check if there are any changes to commit
             const { stdout: statusOutput } = await execAsyncPromise('git status --porcelain', { cwd: fullPath });
 
             if (!statusOutput.trim()) {
               console.log(`  ✓ ${node.name}: Already clean`);
               cleanCount++;
             } else {
-              // Step 4: Commit with a generic message (skip hooks with --no-verify)
+              // Step 5: Commit with a generic message (skip hooks with --no-verify)
               const commitMessage = `Save all changes in ${node.name}`;
               await execAsyncPromise(`git commit --no-verify -m "${commitMessage}"`, { cwd: fullPath });
               console.log(`  ✓ ${node.name}: Committed changes`);
