@@ -542,15 +542,16 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // CRITICAL: Sync display name with directory name (file system is source of truth)
-    // This ensures renaming directory in Finder/Obsidian updates the display name
-    if (node.name !== repoName) {
-      console.log(`✏️ [GitDreamNodeService] Syncing display name: "${node.name}" → "${repoName}"`);
-      node.name = repoName;
+    // CRITICAL: Sync display name with .udd title (human-readable)
+    // .udd file is source of truth for display names, NOT the folder name
+    // Folder names are PascalCase for compatibility, but display uses human-readable titles
+    if (node.name !== udd.title) {
+      console.log(`✏️ [GitDreamNodeService] Syncing display name from .udd: "${node.name}" → "${udd.title}"`);
+      node.name = udd.title;
       updated = true;
     }
 
-    // Check metadata changes (type, contact fields, and radicleId - name synced from directory)
+    // Check metadata changes (type, contact fields, and radicleId - name synced from .udd)
     if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone || node.radicleId !== udd.radicleId) {
       node.type = udd.type;
       node.email = udd.email;
