@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { sanitizeTitleToPascalCase } from '../../utils/title-sanitization';
 
 const execAsync = promisify(exec);
 
@@ -87,14 +88,10 @@ export class GitHubService {
 
   /**
    * Sanitize DreamNode title for GitHub repository name
+   * Uses unified PascalCase sanitization for consistency with file system
    */
   private sanitizeRepoName(title: string): string {
-    return title
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')  // Replace non-alphanumeric with hyphens
-      .replace(/-+/g, '-')           // Collapse multiple hyphens
-      .replace(/^-|-$/g, '')         // Remove leading/trailing hyphens
-      .substring(0, 90);             // Truncate to 90 chars (leave room for -N suffix)
+    return sanitizeTitleToPascalCase(title);
   }
 
   /**

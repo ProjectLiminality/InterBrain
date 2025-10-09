@@ -4,6 +4,7 @@ import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
+import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 
 // Access Node.js modules directly in Electron context
  
@@ -643,13 +644,12 @@ export class GitDreamNodeService {
     }
   }
   
+  /**
+   * Sanitize title to PascalCase for folder names
+   * Uses unified sanitization utility for consistency across all layers
+   */
   private sanitizeRepoName(title: string): string {
-    return title
-      .replace(/[^a-zA-Z0-9-_\s]/g, '-') // Allow letters, numbers, hyphens, underscores, and spaces
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
-      .substring(0, 50); // Limit length
+    return sanitizeTitleToPascalCase(title);
   }
   
   private generateRepoName(title: string, _type: string, _nodeId: string): string {

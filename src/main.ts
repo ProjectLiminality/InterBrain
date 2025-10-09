@@ -23,6 +23,7 @@ import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerRadicleCommands } from './commands/radicle-commands';
 import { registerGitHubCommands } from './commands/github-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
+import { registerMigrationCommands } from './commands/migration-commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
@@ -179,6 +180,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register GitHub commands (fallback sharing and broadcasting)
     registerGitHubCommands(this, this.uiService);
+
+    // Register migration commands (PascalCase naming migration)
+    registerMigrationCommands(this);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);
