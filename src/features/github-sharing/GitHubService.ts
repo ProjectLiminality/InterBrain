@@ -646,10 +646,55 @@ export class GitHubService {
   }
 
   /**
+   * Get list of submodules for unpublishing (resolves GitHub URLs to local paths)
+   */
+  private async getSubmodulesForUnpublish(
+    dreamNodePath: string,
+    vaultPath: string
+  ): Promise<SubmoduleInfo[]> {
+    const submodules = await this.getSubmodules(dreamNodePath);
+    const resolvedSubmodules: SubmoduleInfo[] = [];
+
+    for (const submodule of submodules) {
+      // Check if URL is a GitHub URL (already shared)
+      if (submodule.url.startsWith('http') || submodule.url.startsWith('git@')) {
+        // Extract repo name from GitHub URL
+        const repoMatch = submodule.url.match(/\/([^/]+?)(?:\.git)?$/);
+        if (!repoMatch) {
+          console.warn(`GitHubService: Could not parse repo name from URL: ${submodule.url}`);
+          continue;
+        }
+
+        const repoName = repoMatch[1];
+
+        // Search for standalone repo in vault
+        const localPath = path.join(vaultPath, repoName);
+
+        if (!fs.existsSync(localPath)) {
+          console.warn(`GitHubService: Local repo not found: ${localPath}`);
+          continue;
+        }
+
+        // Update path to point to local standalone repo
+        resolvedSubmodules.push({
+          ...submodule,
+          path: localPath
+        });
+      } else {
+        // URL is already a local path
+        resolvedSubmodules.push(submodule);
+      }
+    }
+
+    return resolvedSubmodules;
+  }
+
+  /**
    * Unpublish a single submodule recursively
    */
   private async unpublishSubmodule(
     submodulePath: string,
+    vaultPath: string,
     visitedUUIDs: Set<string>
   ): Promise<{ uuid: string; title: string }> {
     // Read submodule's .udd
@@ -672,7 +717,7 @@ export class GitHubService {
 
     // Recursively unpublish this submodule
     console.log(`GitHubService: Unpublishing submodule: ${udd.title}`);
-    await this.unpublishDreamNode(submodulePath, udd.uuid, visitedUUIDs);
+    await this.unpublishDreamNode(submodulePath, udd.uuid, vaultPath, visitedUUIDs);
 
     return { uuid: udd.uuid, title: udd.title };
   }
@@ -683,6 +728,7 @@ export class GitHubService {
   async unpublishDreamNode(
     dreamNodePath: string,
     dreamNodeUuid: string,
+    vaultPath: string,
     visitedUUIDs: Set<string> = new Set()
   ): Promise<void> {
     // Read .udd to get GitHub info
@@ -697,13 +743,13 @@ export class GitHubService {
     }
 
     // Step 1: Unpublish all submodules recursively (depth-first)
-    const submodules = await this.getSubmodules(dreamNodePath);
+    const submodules = await this.getSubmodulesForUnpublish(dreamNodePath, vaultPath);
     console.log(`GitHubService: Found ${submodules.length} submodule(s) for ${udd.title}`);
 
     for (const submodule of submodules) {
       try {
         console.log(`GitHubService: Processing submodule at ${submodule.path}`);
-        await this.unpublishSubmodule(submodule.path, visitedUUIDs);
+        await this.unpublishSubmodule(submodule.path, vaultPath, visitedUUIDs);
       } catch (error) {
         console.error(`GitHubService: Failed to unpublish submodule ${submodule.name}:`, error);
         // Continue with other submodules
@@ -721,8 +767,25 @@ export class GitHubService {
         console.log(`GitHubService: Deleting GitHub repository: ${owner}/${cleanRepo}`);
         await execAsync(`"${ghPath}" repo delete ${owner}/${cleanRepo} --yes`);
       } catch (error) {
-        console.warn(`GitHubService: Failed to delete GitHub repo (may already be deleted):`, error);
-        // Continue - repo might already be deleted
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // Check for missing delete_repo scope
+        if (errorMessage.includes('delete_repo')) {
+          throw new Error(
+            'GitHub CLI needs "delete_repo" permission.\n\n' +
+            'Run this command in your terminal:\n' +
+            'gh auth refresh -h github.com -s delete_repo'
+          );
+        }
+
+        // Check for already deleted
+        if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+          console.log(`GitHubService: Repository already deleted: ${owner}/${cleanRepo}`);
+          // Continue - repo already deleted
+        } else {
+          console.warn(`GitHubService: Failed to delete GitHub repo:`, error);
+          throw new Error(`Failed to delete repository: ${errorMessage}`);
+        }
       }
     }
 

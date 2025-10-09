@@ -357,7 +357,7 @@ export function registerGitHubCommands(
 
         try {
           // Complete unpublish workflow
-          await githubService.unpublishDreamNode(fullRepoPath, selectedNode.id);
+          await githubService.unpublishDreamNode(fullRepoPath, selectedNode.id, vaultPath);
 
           console.log(`GitHubCommands: Successfully unpublished from GitHub`);
 
