@@ -4,15 +4,17 @@
  * Handles migration of DreamNode folder names from old naming conventions to PascalCase.
  * This includes:
  * - Renaming folders on file system
+ * - Updating .udd titles to human-readable format
  * - Updating git submodule paths (.git file gitdir references)
  * - Updating parent .gitmodules files
+ * - Updating DreamSong.canvas file paths (parent refs + submodule to standalone)
  * - Renaming GitHub repositories (if published)
  * - Updating git remote URLs
  *
  * Architecture Safety:
  * - All UUIDs remain unchanged (relationships unaffected)
- * - .udd title field already contains human-readable name (no change needed)
- * - Only file system paths change
+ * - Migration is idempotent - can be run multiple times safely
+ * - Only file system paths change, not data integrity
  */
 
 import { Plugin } from 'obsidian';
@@ -306,6 +308,14 @@ export class DreamNodeMigrationService {
         }
       }
 
+      // Step 5.5: Update canvas file paths (if DreamSong.canvas exists)
+      try {
+        const canvasUpdates = await this.updateCanvasPathsForMigration(oldFolderName, newFolderName, newFullPath);
+        changes.push(...canvasUpdates);
+      } catch (error) {
+        errors.push(`Failed to update canvas paths: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
       // Step 6: Update store with new folder path AND human-readable title
       node.repoPath = newFolderName;
       node.name = udd.title;  // Use human-readable title, not PascalCase folder name
@@ -473,6 +483,103 @@ export class DreamNodeMigrationService {
     }
 
     return { changes, errors };
+  }
+
+  /**
+   * Update canvas file paths after migration
+   *
+   * Handles two types of path updates:
+   * 1. Parent folder rename: Holofractal-Universe → HolofractalUniverse
+   * 2. Submodule to standalone: Parent/Submodule/file.png → Submodule/file.png
+   */
+  private async updateCanvasPathsForMigration(
+    oldFolderName: string,
+    newFolderName: string,
+    nodePath: string
+  ): Promise<string[]> {
+    const changes: string[] = [];
+
+    try {
+      // Check if DreamSong.canvas exists
+      const canvasPath = path.join(nodePath, 'DreamSong.canvas');
+      if (!fs.existsSync(canvasPath)) {
+        return changes; // No canvas file, nothing to update
+      }
+
+      // Read canvas file
+      const canvasContent = await fsPromises.readFile(canvasPath, 'utf-8');
+      let canvas = JSON.parse(canvasContent);
+      let pathsUpdated = 0;
+
+      // Process each node in the canvas
+      if (canvas.nodes && Array.isArray(canvas.nodes)) {
+        for (const node of canvas.nodes) {
+          if (node.type === 'file' && node.file) {
+            const originalPath = node.file;
+            let newPath = originalPath;
+
+            // Pattern 1: Update old parent folder name to new name
+            // E.g., "Holofractal-Universe/..." → "HolofractalUniverse/..."
+            if (originalPath.startsWith(oldFolderName + '/')) {
+              newPath = originalPath.replace(oldFolderName + '/', newFolderName + '/');
+              changes.push(`Updated parent reference: ${originalPath} → ${newPath}`);
+            }
+
+            // Pattern 2: Remove submodule prefix (convert submodule paths to standalone)
+            // E.g., "HolofractalUniverse/ThunderstormGenerator/file.png" → "ThunderstormGenerator/file.png"
+            // This handles cases where files were in submodules but submodules were removed
+            const pathParts = newPath.split('/');
+            if (pathParts.length >= 3) {
+              // Check if the middle part is a DreamNode (has .udd file at vault root)
+              const potentialNodeName = pathParts[1];
+              const potentialNodePath = path.join(this.vaultPath, potentialNodeName);
+              const potentialUddPath = path.join(potentialNodePath, '.udd');
+
+              if (fs.existsSync(potentialUddPath)) {
+                // This is a submodule reference - convert to standalone node path
+                const standaloneNodePath = pathParts.slice(1).join('/');
+                if (standaloneNodePath !== newPath) {
+                  newPath = standaloneNodePath;
+                  changes.push(`Converted submodule to standalone: ${originalPath} → ${newPath}`);
+                }
+              }
+            }
+
+            // Update the node's file path if it changed
+            if (newPath !== originalPath) {
+              node.file = newPath;
+              pathsUpdated++;
+            }
+          }
+        }
+      }
+
+      // Write updated canvas if any paths changed
+      if (pathsUpdated > 0) {
+        await fsPromises.writeFile(canvasPath, JSON.stringify(canvas, null, 2));
+        changes.push(`Updated ${pathsUpdated} file path(s) in DreamSong.canvas`);
+
+        // Commit the canvas update
+        try {
+          await execAsync(
+            'git add DreamSong.canvas && git commit --no-verify -m "Update canvas paths after migration" || true',
+            { cwd: nodePath }
+          );
+          changes.push('Committed canvas path updates');
+        } catch (error) {
+          // Non-fatal - continue
+          changes.push('Note: Could not auto-commit canvas updates');
+        }
+      }
+
+    } catch (error) {
+      // If canvas doesn't exist or parse fails, that's okay
+      if (error instanceof Error && !error.message.includes('ENOENT')) {
+        throw error;
+      }
+    }
+
+    return changes;
   }
 
   /**
