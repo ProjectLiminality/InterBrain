@@ -63,6 +63,70 @@ async function confirmRecursiveShare(
 }
 
 /**
+ * Show confirmation modal before unpublishing from GitHub
+ */
+async function confirmRecursiveUnpublish(
+  plugin: Plugin,
+  nodeName: string,
+  submoduleCount: number
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const modal = new Modal(plugin.app);
+    modal.titleEl.setText('Confirm GitHub Unpublish');
+
+    const content = modal.contentEl;
+
+    content.createEl('p', {
+      text: '⚠️ This will permanently delete repositories from GitHub.',
+      attr: { style: 'color: #ff6b6b; font-weight: 500; margin-bottom: 12px;' }
+    });
+
+    if (submoduleCount === 0) {
+      content.createEl('p', {
+        text: `Unpublish "${nodeName}" from GitHub?`
+      });
+    } else {
+      content.createEl('p', {
+        text: `Unpublishing "${nodeName}" will delete:`
+      });
+
+      const list = content.createEl('ul');
+      list.createEl('li', { text: `1 DreamNode: ${nodeName}` });
+      list.createEl('li', {
+        text: `${submoduleCount} related DreamNode${submoduleCount > 1 ? 's' : ''} (submodules)`
+      });
+    }
+
+    content.createEl('p', {
+      text: 'This will delete the GitHub repositories and clean local metadata.',
+      attr: { style: 'margin-top: 16px; font-size: 12px; opacity: 0.8;' }
+    });
+
+    const buttonContainer = content.createEl('div', {
+      attr: { style: 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;' }
+    });
+
+    const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel', cls: 'mod-cta' });
+    cancelBtn.addEventListener('click', () => {
+      modal.close();
+      resolve(false);
+    });
+
+    const confirmBtn = buttonContainer.createEl('button', {
+      text: 'Delete from GitHub',
+      attr: { style: 'background-color: #ff6b6b;' }
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      modal.close();
+      resolve(true);
+    });
+
+    modal.open();
+  });
+}
+
+/**
  * GitHub commands for fallback sharing and public broadcasting
  * Philosophy: "GitHub for sharing, Radicle for collaboration"
  */
@@ -193,6 +257,120 @@ export function registerGitHubCommands(
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`GitHubCommands: Share workflow failed:`, error);
           uiService.showError(`Failed to share DreamNode: ${errorMessage}`);
+        }
+
+      } catch (error) {
+        console.error('GitHubCommands: Unexpected error:', error);
+        uiService.showError('An unexpected error occurred');
+      }
+    }
+  });
+
+  // Unpublish DreamNode from GitHub - Deletes repo and cleans metadata
+  plugin.addCommand({
+    id: 'unpublish-dreamnode-github',
+    name: 'Unpublish DreamNode from GitHub',
+    callback: async () => {
+      try {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+
+        if (!selectedNode) {
+          console.log('GitHubCommands: No DreamNode selected for unpublishing');
+          uiService.showError('Please select a DreamNode first');
+          return;
+        }
+
+        // Get vault path and resolve full repo path
+        const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
+        let vaultPath = '';
+        if (typeof adapter.path === 'string') {
+          vaultPath = adapter.path;
+        } else if (typeof adapter.basePath === 'string') {
+          vaultPath = adapter.basePath;
+        }
+
+        const path = require('path');
+        const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+
+        console.log(`GitHubCommands: Unpublishing DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
+
+        // Check if GitHub CLI is available
+        const availabilityCheck = await githubService.isAvailable();
+        console.log(`GitHubCommands: GitHub CLI availability: ${availabilityCheck.available}`);
+
+        if (!availabilityCheck.available) {
+          uiService.showError(availabilityCheck.error || 'GitHub CLI not available');
+          return;
+        }
+
+        // Check if DreamNode is published
+        const fs = require('fs').promises;
+        const uddPath = path.join(fullRepoPath, '.udd');
+
+        let isPublished = false;
+        let publishedSubmoduleCount = 0;
+
+        try {
+          const uddContent = await fs.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+          isPublished = !!udd.githubRepoUrl;
+
+          // Count published submodules
+          const submodules = await githubService.getSubmodules(fullRepoPath);
+          for (const submodule of submodules) {
+            try {
+              const subUddPath = path.join(submodule.path, '.udd');
+              const subUddContent = await fs.readFile(subUddPath, 'utf-8');
+              const subUdd = JSON.parse(subUddContent);
+              if (subUdd.githubRepoUrl) {
+                publishedSubmoduleCount++;
+              }
+            } catch {
+              // Submodule doesn't have .udd or isn't published
+            }
+          }
+        } catch (error) {
+          console.error('GitHubCommands: Failed to read .udd file:', error);
+        }
+
+        if (!isPublished) {
+          uiService.showError('This DreamNode is not published to GitHub');
+          return;
+        }
+
+        // Show confirmation modal
+        const confirmed = await confirmRecursiveUnpublish(
+          plugin,
+          selectedNode.name,
+          publishedSubmoduleCount
+        );
+
+        if (!confirmed) {
+          console.log('GitHubCommands: User cancelled unpublish operation');
+          return;
+        }
+
+        // Show progress indicator
+        const notice = new Notice('Unpublishing DreamNode from GitHub...', 0);
+        console.log(`GitHubCommands: Starting GitHub unpublish workflow for ${selectedNode.name}...`);
+
+        try {
+          // Complete unpublish workflow
+          await githubService.unpublishDreamNode(fullRepoPath, selectedNode.id);
+
+          console.log(`GitHubCommands: Successfully unpublished from GitHub`);
+
+          // Success notification
+          notice.hide();
+          new Notice(`DreamNode unpublished from GitHub successfully!`, 5000);
+          console.log(`GitHubCommands: Unpublish workflow complete`);
+
+        } catch (error) {
+          notice.hide();
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`GitHubCommands: Unpublish workflow failed:`, error);
+          uiService.showError(`Failed to unpublish DreamNode: ${errorMessage}`);
         }
 
       } catch (error) {

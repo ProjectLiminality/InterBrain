@@ -646,6 +646,113 @@ export class GitHubService {
   }
 
   /**
+   * Unpublish a single submodule recursively
+   */
+  private async unpublishSubmodule(
+    submodulePath: string,
+    visitedUUIDs: Set<string>
+  ): Promise<{ uuid: string; title: string }> {
+    // Read submodule's .udd
+    const udd = await this.readUDD(submodulePath);
+
+    // Check for circular dependencies
+    if (visitedUUIDs.has(udd.uuid)) {
+      console.log(`GitHubService: Skipping circular dependency: ${udd.title}`);
+      return { uuid: udd.uuid, title: udd.title };
+    }
+
+    // Mark as visited
+    visitedUUIDs.add(udd.uuid);
+
+    // Check if this submodule is even published
+    if (!udd.githubRepoUrl) {
+      console.log(`GitHubService: Submodule not published, skipping: ${udd.title}`);
+      return { uuid: udd.uuid, title: udd.title };
+    }
+
+    // Recursively unpublish this submodule
+    console.log(`GitHubService: Unpublishing submodule: ${udd.title}`);
+    await this.unpublishDreamNode(submodulePath, udd.uuid, visitedUUIDs);
+
+    return { uuid: udd.uuid, title: udd.title };
+  }
+
+  /**
+   * Unpublish DreamNode from GitHub (delete remote repo, clean metadata)
+   */
+  async unpublishDreamNode(
+    dreamNodePath: string,
+    dreamNodeUuid: string,
+    visitedUUIDs: Set<string> = new Set()
+  ): Promise<void> {
+    // Read .udd to get GitHub info
+    const udd = await this.readUDD(dreamNodePath);
+
+    // Mark as visited
+    visitedUUIDs.add(dreamNodeUuid);
+
+    // Check if published
+    if (!udd.githubRepoUrl) {
+      throw new Error(`DreamNode "${udd.title}" is not published to GitHub`);
+    }
+
+    // Step 1: Unpublish all submodules recursively (depth-first)
+    const submodules = await this.getSubmodules(dreamNodePath);
+    console.log(`GitHubService: Found ${submodules.length} submodule(s) for ${udd.title}`);
+
+    for (const submodule of submodules) {
+      try {
+        console.log(`GitHubService: Processing submodule at ${submodule.path}`);
+        await this.unpublishSubmodule(submodule.path, visitedUUIDs);
+      } catch (error) {
+        console.error(`GitHubService: Failed to unpublish submodule ${submodule.name}:`, error);
+        // Continue with other submodules
+      }
+    }
+
+    // Step 2: Delete GitHub repository
+    const repoMatch = udd.githubRepoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+    if (repoMatch) {
+      const [, owner, repo] = repoMatch;
+      const cleanRepo = repo.replace(/\.git$/, '');
+
+      try {
+        const ghPath = await this.detectGhPath();
+        console.log(`GitHubService: Deleting GitHub repository: ${owner}/${cleanRepo}`);
+        await execAsync(`"${ghPath}" repo delete ${owner}/${cleanRepo} --yes`);
+      } catch (error) {
+        console.warn(`GitHubService: Failed to delete GitHub repo (may already be deleted):`, error);
+        // Continue - repo might already be deleted
+      }
+    }
+
+    // Step 3: Remove github remote from local repo
+    try {
+      await execAsync('git remote remove github', { cwd: dreamNodePath });
+      console.log(`GitHubService: Removed 'github' remote from local repo`);
+    } catch (error) {
+      console.warn(`GitHubService: Failed to remove github remote (may not exist):`, error);
+      // Continue - remote might not exist
+    }
+
+    // Step 4: Clean .udd file
+    delete udd.githubRepoUrl;
+    delete udd.githubPagesUrl;
+    await this.writeUDD(dreamNodePath, udd);
+    console.log(`GitHubService: Cleaned GitHub URLs from .udd`);
+
+    // Step 5: Commit .udd changes
+    try {
+      await execAsync(
+        'git add .udd && git commit -m "Remove GitHub URLs from .udd" || true',
+        { cwd: dreamNodePath }
+      );
+    } catch (error) {
+      console.warn(`GitHubService: Failed to commit .udd cleanup:`, error);
+    }
+  }
+
+  /**
    * Complete share workflow: create repo, enable Pages, update UDD
    */
   async shareDreamNode(
