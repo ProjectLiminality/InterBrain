@@ -197,25 +197,21 @@ export class GitHubService {
       }
 
       const urlMatch = line.match(/url = (.+)/);
-      if (urlMatch && currentSubmodule.name) {
+      if (urlMatch && currentSubmodule.name && currentSubmodule.relativePath) {
         const url = urlMatch[1].trim();
         currentSubmodule.url = url;
 
         // Resolve URL to local path
         if (url.startsWith('http') || url.startsWith('git@')) {
-          // GitHub/remote URL - extract repo name and search vault
-          const repoMatch = url.match(/\/([^/]+?)(?:\.git)?$/);
-          if (repoMatch) {
-            const repoName = repoMatch[1];
-            const localPath = path.join(vaultPath, repoName);
+          // GitHub/remote URL - use relativePath to find standalone repo
+          // The relativePath tells us the submodule directory name (e.g., "Thunderstorm-Generator-UPDATED-...")
+          // The standalone repo should have the same name in the vault root
+          const localPath = path.join(vaultPath, currentSubmodule.relativePath);
 
-            if (fs.existsSync(localPath)) {
-              currentSubmodule.path = localPath;
-            } else {
-              console.warn(`GitHubService: Local repo not found for ${url}: ${localPath}`);
-              currentSubmodule.path = url; // Fallback to URL
-            }
+          if (fs.existsSync(localPath)) {
+            currentSubmodule.path = localPath;
           } else {
+            console.warn(`GitHubService: Local repo not found for ${url}: ${localPath}`);
             currentSubmodule.path = url; // Fallback to URL
           }
         } else {
