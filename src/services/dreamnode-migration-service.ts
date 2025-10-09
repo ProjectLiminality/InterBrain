@@ -59,6 +59,42 @@ export class DreamNodeMigrationService {
   }
 
   /**
+   * Normalize title to human-readable format with spaces
+   *
+   * Handles:
+   * - PascalCase: "ThunderstormGenerator" → "Thunderstorm Generator"
+   * - kebab-case: "thunderstorm-generator" → "Thunderstorm Generator"
+   * - snake_case: "thunderstorm_generator" → "Thunderstorm Generator"
+   * - Mixed: "Thunderstorm-Generator-UPDATED" → "Thunderstorm Generator Updated"
+   * - Already human: "Thunderstorm Generator" → "Thunderstorm Generator" (no change)
+   */
+  private normalizeToHumanReadable(title: string): string {
+    // If title contains hyphens, underscores, or periods as separators
+    if (/[-_.]+/.test(title)) {
+      // Replace separators with spaces and normalize
+      return title
+        .split(/[-_.]+/)                    // Split on hyphens, underscores, periods
+        .filter(word => word.length > 0)
+        .map(word => {
+          // Capitalize first letter, lowercase rest (proper title case)
+          const cleaned = word.trim();
+          if (cleaned.length === 0) return '';
+          return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+        })
+        .join(' ')
+        .trim();
+    }
+
+    // If title is pure PascalCase (no separators), convert to spaced format
+    if (isPascalCase(title)) {
+      return pascalCaseToTitle(title);
+    }
+
+    // Already human-readable with spaces, return as-is
+    return title;
+  }
+
+  /**
    * Migrate a single DreamNode to PascalCase naming
    */
   async migrateSingleNode(nodeId: string): Promise<MigrationResult> {
@@ -99,11 +135,11 @@ export class DreamNodeMigrationService {
       const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
       const udd = JSON.parse(uddContent);
 
-      // Step 1: Fix .udd title if it's in PascalCase (should be human-readable)
+      // Step 1: Normalize .udd title to human-readable format if needed
       let titleUpdated = false;
-      if (isPascalCase(udd.title)) {
-        const humanTitle = pascalCaseToTitle(udd.title);
-        console.log(`DreamNodeMigration: Converting PascalCase title to human-readable: "${udd.title}" → "${humanTitle}"`);
+      const humanTitle = this.normalizeToHumanReadable(udd.title);
+      if (humanTitle !== udd.title) {
+        console.log(`DreamNodeMigration: Converting title to human-readable: "${udd.title}" → "${humanTitle}"`);
         udd.title = humanTitle;
         titleUpdated = true;
       }
