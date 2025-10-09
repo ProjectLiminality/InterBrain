@@ -414,8 +414,26 @@ export function registerDreamweavingCommands(
           console.log('  ✓ Files added');
         } catch (addError) {
           const errorMsg = addError instanceof Error ? addError.message : String(addError);
-          console.error('  ✗ git add failed:', errorMsg);
-          throw addError; // Re-throw to trigger outer catch
+
+          // Check if error is due to broken submodule (no commit checked out)
+          if (errorMsg.includes('does not have a commit checked out')) {
+            console.log('  ⚠️ Broken submodule detected, attempting to remove from index...');
+
+            // Try to reset submodules and add files without them
+            try {
+              // Remove all gitlink entries (submodules) from the index
+              await execAsyncPromise('git rm --cached -r . 2>/dev/null || true', { cwd: fullPath });
+              // Re-add all files (this time without broken submodules)
+              await execAsyncPromise('git add -A', { cwd: fullPath });
+              console.log('  ✓ Files added (broken submodules skipped)');
+            } catch (recoveryError) {
+              console.error('  ✗ Recovery failed:', recoveryError);
+              throw addError; // Re-throw original error
+            }
+          } else {
+            console.error('  ✗ git add failed:', errorMsg);
+            throw addError; // Re-throw to trigger outer catch
+          }
         }
 
         // Step 4: Check if there are any changes to commit
@@ -499,8 +517,26 @@ export function registerDreamweavingCommands(
               await execAsyncPromise('git add -A', { cwd: fullPath });
             } catch (addError) {
               const errorMsg = addError instanceof Error ? addError.message : String(addError);
-              console.error(`  ✗ git add failed for ${node.name}:`, errorMsg);
-              throw addError;
+
+              // Check if error is due to broken submodule (no commit checked out)
+              if (errorMsg.includes('does not have a commit checked out')) {
+                console.log(`  ⚠️ ${node.name}: Broken submodule detected, removing from index...`);
+
+                // Try to reset submodules and add files without them
+                try {
+                  // Remove all gitlink entries (submodules) from the index
+                  await execAsyncPromise('git rm --cached -r . 2>/dev/null || true', { cwd: fullPath });
+                  // Re-add all files (this time without broken submodules)
+                  await execAsyncPromise('git add -A', { cwd: fullPath });
+                  console.log(`  ✓ ${node.name}: Files added (broken submodules skipped)`);
+                } catch (recoveryError) {
+                  console.error(`  ✗ ${node.name}: Recovery failed:`, recoveryError);
+                  throw addError; // Re-throw original error
+                }
+              } else {
+                console.error(`  ✗ git add failed for ${node.name}:`, errorMsg);
+                throw addError;
+              }
             }
 
             // Step 4: Check if there are any changes to commit
