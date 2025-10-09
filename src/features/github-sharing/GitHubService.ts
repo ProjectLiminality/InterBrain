@@ -48,9 +48,9 @@ export interface GitHubShareResult {
 
 interface SubmoduleInfo {
   name: string;
-  path: string;
-  relativePath: string;
-  url: string;
+  path: string;           // Full path to actual git repo (from url field)
+  relativePath: string;   // Relative path within parent (from path field)
+  url: string;            // URL from .gitmodules
 }
 
 export class GitHubService {
@@ -178,7 +178,7 @@ export class GitHubService {
     for (const line of lines) {
       const submoduleMatch = line.match(/\[submodule "([^"]+)"\]/);
       if (submoduleMatch) {
-        if (currentSubmodule.name) {
+        if (currentSubmodule.name && currentSubmodule.url) {
           submodules.push(currentSubmodule as SubmoduleInfo);
         }
         currentSubmodule = { name: submoduleMatch[1] };
@@ -188,16 +188,18 @@ export class GitHubService {
       const pathMatch = line.match(/path = (.+)/);
       if (pathMatch && currentSubmodule.name) {
         currentSubmodule.relativePath = pathMatch[1].trim();
-        currentSubmodule.path = path.join(dreamNodePath, pathMatch[1].trim());
       }
 
       const urlMatch = line.match(/url = (.+)/);
       if (urlMatch && currentSubmodule.name) {
-        currentSubmodule.url = urlMatch[1].trim();
+        const url = urlMatch[1].trim();
+        currentSubmodule.url = url;
+        // Use URL as the actual path (this is where the real git repo is)
+        currentSubmodule.path = url;
       }
     }
 
-    if (currentSubmodule.name) {
+    if (currentSubmodule.name && currentSubmodule.url) {
       submodules.push(currentSubmodule as SubmoduleInfo);
     }
 
