@@ -16,7 +16,7 @@
  */
 
 import { Plugin } from 'obsidian';
-import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
+import { sanitizeTitleToPascalCase, isPascalCase, pascalCaseToTitle } from '../utils/title-sanitization';
 import { useInterBrainStore } from '../store/interbrain-store';
 
 const { exec } = require('child_process');
@@ -99,12 +99,58 @@ export class DreamNodeMigrationService {
       const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
       const udd = JSON.parse(uddContent);
 
-      // Generate new PascalCase name
+      // Step 1: Fix .udd title if it's in PascalCase (should be human-readable)
+      let titleUpdated = false;
+      if (isPascalCase(udd.title)) {
+        const humanTitle = pascalCaseToTitle(udd.title);
+        console.log(`DreamNodeMigration: Converting PascalCase title to human-readable: "${udd.title}" → "${humanTitle}"`);
+        udd.title = humanTitle;
+        titleUpdated = true;
+      }
+
+      // Step 2: Generate new PascalCase folder name from (now human-readable) title
       const newFolderName = sanitizeTitleToPascalCase(udd.title);
       const newFullPath = path.join(this.vaultPath, newFolderName);
 
-      // Check if already PascalCase (no migration needed)
+      // Check if already PascalCase (no folder rename needed)
       if (oldFolderName === newFolderName) {
+        // Folder is correct, but we may have updated the title
+        if (titleUpdated) {
+          // Write updated .udd with human-readable title
+          await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
+          changes.push(`Updated .udd title: "${pascalCaseToTitle(oldFolderName)}" (human-readable)`);
+
+          // Commit the .udd update
+          try {
+            await execAsync(
+              'git add .udd && git commit -m "Convert title to human-readable format" || true',
+              { cwd: oldFullPath }
+            );
+            changes.push('Committed .udd title update');
+          } catch (error) {
+            errors.push(`Failed to commit .udd update: ${error instanceof Error ? error.message : String(error)}`);
+          }
+
+          // Update store with new title
+          node.name = udd.title;
+          const store = useInterBrainStore.getState();
+          store.updateRealNode(nodeId, {
+            ...nodeData,
+            node,
+            lastSynced: Date.now()
+          });
+          changes.push('Updated node name in store');
+
+          return {
+            success: errors.length === 0,
+            oldPath: oldFullPath,
+            newPath: newFullPath,
+            changes,
+            errors
+          };
+        }
+
+        // Nothing to do
         return {
           success: true,
           oldPath: oldFullPath,
@@ -184,6 +230,24 @@ export class DreamNodeMigrationService {
           const newGitFileContent = gitFile.replace(oldGitdir, newGitdir);
           await fsPromises.writeFile(newGitPath, newGitFileContent);
           changes.push(`Updated .git file with new gitdir path`);
+        }
+      }
+
+      // Step 3.5: Write updated .udd file (with human-readable title if it was fixed)
+      if (titleUpdated) {
+        const newUddPath = path.join(newFullPath, '.udd');
+        await fsPromises.writeFile(newUddPath, JSON.stringify(udd, null, 2));
+        changes.push(`Updated .udd title: "${udd.title}" (human-readable)`);
+
+        // Commit the .udd update
+        try {
+          await execAsync(
+            'git add .udd && git commit -m "Convert title to human-readable format" || true',
+            { cwd: newFullPath }
+          );
+          changes.push('Committed .udd title update');
+        } catch (error) {
+          errors.push(`Failed to commit .udd update: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 
