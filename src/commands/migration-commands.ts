@@ -240,6 +240,63 @@ export function registerMigrationCommands(plugin: Plugin) {
     }
   });
 
+  // Command: Audit and Fix Canvas Paths
+  plugin.addCommand({
+    id: 'audit-canvas-paths',
+    name: 'Audit and Fix Canvas Paths',
+    callback: async () => {
+      try {
+        console.log('MigrationCommands: Starting canvas path audit...');
+
+        // Show progress notice
+        const notice = new Notice('Auditing canvas file paths...', 0);
+
+        try {
+          // Perform audit
+          const summary = await migrationService.auditAllCanvasPaths();
+
+          notice.hide();
+
+          // Show summary
+          if (summary.errors.length === 0) {
+            if (summary.fixed === 0) {
+              new Notice(
+                `✅ All canvas paths are correct! Scanned ${summary.total} canvas files.`,
+                5000
+              );
+            } else {
+              new Notice(
+                `✅ Fixed ${summary.pathsUpdated} paths in ${summary.fixed} canvas files! (Scanned ${summary.total} total)`,
+                5000
+              );
+            }
+          } else {
+            new Notice(
+              `⚠️ Fixed ${summary.pathsUpdated} paths, but ${summary.errors.length} errors occurred. Check console for details.`,
+              8000
+            );
+          }
+
+          // Log detailed results
+          console.log('MigrationCommands: Canvas audit complete:', summary);
+          if (summary.errors.length > 0) {
+            console.error('Canvas audit errors:', summary.errors);
+          }
+
+        } catch (error) {
+          notice.hide();
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error('MigrationCommands: Canvas audit error:', error);
+          new Notice(`Canvas audit failed: ${errorMessage}`, 5000);
+        }
+
+      } catch (error) {
+        console.error('MigrationCommands: Unexpected error:', error);
+        new Notice('An unexpected error occurred');
+      }
+    }
+  });
+
   // Command: Migrate All DreamNodes
   plugin.addCommand({
     id: 'migrate-all-dreamnodes',

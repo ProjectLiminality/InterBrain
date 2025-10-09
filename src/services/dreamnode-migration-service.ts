@@ -605,4 +605,169 @@ export class DreamNodeMigrationService {
       results
     };
   }
+
+  /**
+   * Audit and fix ALL canvas file paths in the entire vault
+   *
+   * Scans every DreamSong.canvas file and fixes paths that don't follow PascalCase conventions:
+   * - Converts kebab-case folder names to PascalCase
+   * - Removes submodule prefixes (converts to standalone paths)
+   * - Ensures all path components match actual folder names
+   *
+   * This is idempotent - safe to run multiple times.
+   */
+  async auditAllCanvasPaths(): Promise<{
+    total: number;
+    fixed: number;
+    pathsUpdated: number;
+    errors: string[];
+  }> {
+    const errors: string[] = [];
+    let totalCanvas = 0;
+    let fixedCanvas = 0;
+    let totalPathsUpdated = 0;
+
+    try {
+      // Get all directories in vault
+      const entries = await fsPromises.readdir(this.vaultPath, { withFileTypes: true });
+      const directories = entries.filter((e: any) => e.isDirectory());
+
+      console.log(`CanvasAudit: Scanning ${directories.length} directories for DreamSong.canvas files...`);
+
+      for (const dir of directories) {
+        const canvasPath = path.join(this.vaultPath, dir.name, 'DreamSong.canvas');
+
+        if (!fs.existsSync(canvasPath)) {
+          continue; // No canvas file in this directory
+        }
+
+        totalCanvas++;
+        console.log(`CanvasAudit: Processing ${dir.name}/DreamSong.canvas...`);
+
+        try {
+          // Read and parse canvas
+          const canvasContent = await fsPromises.readFile(canvasPath, 'utf-8');
+          let canvas = JSON.parse(canvasContent);
+          let pathsUpdatedInCanvas = 0;
+
+          // Process each file node
+          if (canvas.nodes && Array.isArray(canvas.nodes)) {
+            for (const node of canvas.nodes) {
+              if (node.type === 'file' && node.file) {
+                const originalPath = node.file;
+                const fixedPath = await this.fixCanvasPath(originalPath);
+
+                if (fixedPath !== originalPath) {
+                  console.log(`  CanvasAudit: Fixed path: ${originalPath} → ${fixedPath}`);
+                  node.file = fixedPath;
+                  pathsUpdatedInCanvas++;
+                  totalPathsUpdated++;
+                }
+              }
+            }
+          }
+
+          // Write back if any paths changed
+          if (pathsUpdatedInCanvas > 0) {
+            await fsPromises.writeFile(canvasPath, JSON.stringify(canvas, null, 2));
+            fixedCanvas++;
+            console.log(`  CanvasAudit: Updated ${pathsUpdatedInCanvas} path(s) in ${dir.name}/DreamSong.canvas`);
+
+            // Auto-commit changes
+            try {
+              await execAsync(
+                'git add DreamSong.canvas && git commit --no-verify -m "Fix canvas paths to match PascalCase naming" || true',
+                { cwd: path.join(this.vaultPath, dir.name) }
+              );
+              console.log(`  CanvasAudit: Committed changes to ${dir.name}`);
+            } catch (commitError) {
+              console.log(`  CanvasAudit: Note - Could not auto-commit in ${dir.name}`);
+            }
+          }
+
+        } catch (error) {
+          const errorMsg = `Failed to process canvas in ${dir.name}: ${error instanceof Error ? error.message : String(error)}`;
+          errors.push(errorMsg);
+          console.error(`  CanvasAudit: ${errorMsg}`);
+        }
+      }
+
+      console.log(`CanvasAudit: Complete. Scanned ${totalCanvas} canvas files, fixed ${fixedCanvas}, updated ${totalPathsUpdated} paths.`);
+
+    } catch (error) {
+      const errorMsg = `Canvas audit failed: ${error instanceof Error ? error.message : String(error)}`;
+      errors.push(errorMsg);
+      console.error(errorMsg);
+    }
+
+    return {
+      total: totalCanvas,
+      fixed: fixedCanvas,
+      pathsUpdated: totalPathsUpdated,
+      errors
+    };
+  }
+
+  /**
+   * Fix a single canvas file path to match current naming conventions
+   *
+   * Handles:
+   * 1. Kebab-case to PascalCase conversion (9-11 → Nine11)
+   * 2. Submodule to standalone conversion (Parent/Child/file → Child/file)
+   * 3. Partial kebab-case in paths (Parent/child-folder/file → Parent/ChildFolder/file)
+   */
+  private async fixCanvasPath(originalPath: string): Promise<string> {
+    const pathParts = originalPath.split('/');
+    const fixedParts: string[] = [];
+
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i];
+
+      // Last part is filename - keep as-is
+      if (i === pathParts.length - 1) {
+        fixedParts.push(part);
+        continue;
+      }
+
+      // Check if this part is a DreamNode folder (has .udd file at vault root)
+      const potentialNodePath = path.join(this.vaultPath, part);
+      const potentialUddPath = path.join(potentialNodePath, '.udd');
+
+      if (fs.existsSync(potentialUddPath)) {
+        // This is a valid DreamNode folder - keep it
+        fixedParts.push(part);
+        continue;
+      }
+
+      // Not a valid folder - try converting to PascalCase
+      const pascalCasePart = sanitizeTitleToPascalCase(part);
+      const pascalCasePath = path.join(this.vaultPath, pascalCasePart);
+      const pascalCaseUddPath = path.join(pascalCasePath, '.udd');
+
+      if (fs.existsSync(pascalCaseUddPath)) {
+        // Found it with PascalCase conversion!
+        console.log(`    CanvasAudit: Converted path component: ${part} → ${pascalCasePart}`);
+        fixedParts.push(pascalCasePart);
+        continue;
+      }
+
+      // Check if this is a submodule reference (next part is also a folder)
+      if (i < pathParts.length - 2) {
+        const nextPart = pathParts[i + 1];
+        const nextNodePath = path.join(this.vaultPath, nextPart);
+        const nextUddPath = path.join(nextNodePath, '.udd');
+
+        if (fs.existsSync(nextUddPath)) {
+          // Next part is a standalone node - skip current part (remove submodule prefix)
+          console.log(`    CanvasAudit: Removed submodule prefix: ${part}/`);
+          continue;
+        }
+      }
+
+      // Couldn't resolve - keep original
+      fixedParts.push(part);
+    }
+
+    return fixedParts.join('/');
+  }
 }
