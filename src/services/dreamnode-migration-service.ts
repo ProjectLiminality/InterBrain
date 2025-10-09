@@ -711,10 +711,10 @@ export class DreamNodeMigrationService {
   /**
    * Fix a single canvas file path to match current naming conventions
    *
-   * Handles:
-   * 1. Kebab-case to PascalCase conversion (9-11 → Nine11)
-   * 2. Submodule to standalone conversion (Parent/Child/file → Child/file)
-   * 3. Partial kebab-case in paths (Parent/child-folder/file → Parent/ChildFolder/file)
+   * Simply checks each path component and converts kebab-case to actual folder name.
+   * Does NOT remove path components - preserves the full path structure.
+   *
+   * Example: "9-11/JellifiedSteel/file.jpg" → "911/JellifiedSteel/file.jpg"
    */
   private async fixCanvasPath(originalPath: string): Promise<string> {
     const pathParts = originalPath.split('/');
@@ -729,42 +729,40 @@ export class DreamNodeMigrationService {
         continue;
       }
 
-      // Check if this part is a DreamNode folder (has .udd file at vault root)
+      // Check if this part exists as a valid folder
       const potentialNodePath = path.join(this.vaultPath, part);
-      const potentialUddPath = path.join(potentialNodePath, '.udd');
 
-      if (fs.existsSync(potentialUddPath)) {
-        // This is a valid DreamNode folder - keep it
+      if (fs.existsSync(potentialNodePath)) {
+        // Folder exists with this name - keep it as-is
         fixedParts.push(part);
         continue;
       }
 
-      // Not a valid folder - try converting to PascalCase
+      // Folder doesn't exist - try to find the actual folder name
+      // Try removing hyphens/underscores (9-11 → 911, my-node → mynode)
+      const withoutSeparators = part.replace(/[-_]/g, '');
+      const withoutSeparatorsPath = path.join(this.vaultPath, withoutSeparators);
+
+      if (fs.existsSync(withoutSeparatorsPath)) {
+        // Found it without separators!
+        console.log(`    CanvasAudit: Fixed folder name: ${part} → ${withoutSeparators}`);
+        fixedParts.push(withoutSeparators);
+        continue;
+      }
+
+      // Try PascalCase conversion
       const pascalCasePart = sanitizeTitleToPascalCase(part);
       const pascalCasePath = path.join(this.vaultPath, pascalCasePart);
-      const pascalCaseUddPath = path.join(pascalCasePath, '.udd');
 
-      if (fs.existsSync(pascalCaseUddPath)) {
+      if (fs.existsSync(pascalCasePath)) {
         // Found it with PascalCase conversion!
-        console.log(`    CanvasAudit: Converted path component: ${part} → ${pascalCasePart}`);
+        console.log(`    CanvasAudit: Fixed folder name: ${part} → ${pascalCasePart}`);
         fixedParts.push(pascalCasePart);
         continue;
       }
 
-      // Check if this is a submodule reference (next part is also a folder)
-      if (i < pathParts.length - 2) {
-        const nextPart = pathParts[i + 1];
-        const nextNodePath = path.join(this.vaultPath, nextPart);
-        const nextUddPath = path.join(nextNodePath, '.udd');
-
-        if (fs.existsSync(nextUddPath)) {
-          // Next part is a standalone node - skip current part (remove submodule prefix)
-          console.log(`    CanvasAudit: Removed submodule prefix: ${part}/`);
-          continue;
-        }
-      }
-
-      // Couldn't resolve - keep original
+      // Couldn't find matching folder - keep original
+      console.log(`    CanvasAudit: Warning - Could not find folder for: ${part}`);
       fixedParts.push(part);
     }
 
