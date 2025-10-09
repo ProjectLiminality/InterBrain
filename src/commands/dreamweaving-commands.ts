@@ -377,28 +377,38 @@ export function registerDreamweavingCommands(
         
         console.log(`Committing all changes in DreamNode: ${selectedNode.name}`);
         uiService.showInfo('Committing all changes...');
-        
+
         // Use the SubmoduleManager's git operations (it has execAsync)
         const fullPath = submoduleManager['getFullPath'](selectedNode.repoPath);
         const execAsync = require('child_process').exec;
         const { promisify } = require('util');
         const execAsyncPromise = promisify(execAsync);
-        
-        // Add all files
+
+        // Step 1: Recursively commit all dirty submodules first
+        try {
+          console.log('  Checking for dirty submodules...');
+          await execAsyncPromise('git submodule foreach --recursive "git add -A && git diff-index --quiet HEAD || git commit --no-verify -m \'Save submodule changes\'"', { cwd: fullPath });
+          console.log('  ✓ Submodules committed (if any)');
+        } catch (submoduleError) {
+          // Non-fatal - continue with parent commit
+          console.log('  ℹ️ No submodule changes or submodules not present');
+        }
+
+        // Step 2: Add all files in parent (including updated submodule references)
         await execAsyncPromise('git add -A', { cwd: fullPath });
-        
-        // Check if there are any changes to commit
+
+        // Step 3: Check if there are any changes to commit
         const { stdout: statusOutput } = await execAsyncPromise('git status --porcelain', { cwd: fullPath });
-        
+
         if (!statusOutput.trim()) {
           uiService.showSuccess('No changes to commit - repository is clean');
           return;
         }
-        
-        // Commit with a generic message (skip hooks with --no-verify)
+
+        // Step 4: Commit parent with all changes (skip hooks with --no-verify)
         const commitMessage = `Save all changes in ${selectedNode.name}`;
         await execAsyncPromise(`git commit --no-verify -m "${commitMessage}"`, { cwd: fullPath });
-        
+
         uiService.showSuccess(`Committed all changes in ${selectedNode.name}`);
         console.log(`Successfully committed changes with message: "${commitMessage}"`);
         
@@ -442,26 +452,33 @@ export function registerDreamweavingCommands(
         for (const node of allNodes) {
           try {
             console.log(`Processing DreamNode: ${node.name} (${node.repoPath})`);
-            
+
             const fullPath = submoduleManager['getFullPath'](node.repoPath);
-            
-            // Add all files
+
+            // Step 1: Recursively commit all dirty submodules first
+            try {
+              await execAsyncPromise('git submodule foreach --recursive "git add -A && git diff-index --quiet HEAD || git commit --no-verify -m \'Save submodule changes\'"', { cwd: fullPath });
+            } catch (submoduleError) {
+              // Non-fatal - continue with parent commit
+            }
+
+            // Step 2: Add all files in parent (including updated submodule references)
             await execAsyncPromise('git add -A', { cwd: fullPath });
-            
-            // Check if there are any changes to commit
+
+            // Step 3: Check if there are any changes to commit
             const { stdout: statusOutput } = await execAsyncPromise('git status --porcelain', { cwd: fullPath });
-            
+
             if (!statusOutput.trim()) {
               console.log(`  ✓ ${node.name}: Already clean`);
               cleanCount++;
             } else {
-              // Commit with a generic message (skip hooks with --no-verify)
+              // Step 4: Commit with a generic message (skip hooks with --no-verify)
               const commitMessage = `Save all changes in ${node.name}`;
               await execAsyncPromise(`git commit --no-verify -m "${commitMessage}"`, { cwd: fullPath });
               console.log(`  ✓ ${node.name}: Committed changes`);
               committedCount++;
             }
-            
+
             processedCount++;
             
           } catch (error) {
