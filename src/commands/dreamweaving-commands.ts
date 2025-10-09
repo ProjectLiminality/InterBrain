@@ -384,14 +384,24 @@ export function registerDreamweavingCommands(
         const { promisify } = require('util');
         const execAsyncPromise = promisify(execAsync);
 
-        // Step 1: Recursively commit all dirty submodules first
+        // Step 1: Initialize any uninitialized submodules first
+        try {
+          console.log('  Initializing submodules (if any)...');
+          await execAsyncPromise('git submodule update --init --recursive', { cwd: fullPath });
+          console.log('  ✓ Submodules initialized');
+        } catch (initError) {
+          // Non-fatal - submodules may not exist
+          console.log('  ℹ️ No submodules present');
+        }
+
+        // Step 2: Recursively commit all dirty submodules
         try {
           console.log('  Checking for dirty submodules...');
           await execAsyncPromise('git submodule foreach --recursive "git add -A && git diff-index --quiet HEAD || git commit --no-verify -m \'Save submodule changes\'"', { cwd: fullPath });
           console.log('  ✓ Submodules committed (if any)');
         } catch (submoduleError) {
           // Non-fatal - continue with parent commit
-          console.log('  ℹ️ No submodule changes or submodules not present');
+          console.log('  ℹ️ No submodule changes');
         }
 
         // Step 2: Add all files in parent (including updated submodule references)
@@ -455,7 +465,14 @@ export function registerDreamweavingCommands(
 
             const fullPath = submoduleManager['getFullPath'](node.repoPath);
 
-            // Step 1: Recursively commit all dirty submodules first
+            // Step 1: Initialize any uninitialized submodules first
+            try {
+              await execAsyncPromise('git submodule update --init --recursive', { cwd: fullPath });
+            } catch (initError) {
+              // Non-fatal - submodules may not exist
+            }
+
+            // Step 2: Recursively commit all dirty submodules
             try {
               await execAsyncPromise('git submodule foreach --recursive "git add -A && git diff-index --quiet HEAD || git commit --no-verify -m \'Save submodule changes\'"', { cwd: fullPath });
             } catch (submoduleError) {
