@@ -145,6 +145,7 @@ export default class InterBrainPlugin extends Plugin {
     (this as any).vaultService = this.vaultService;
     (this as any).canvasParserService = this.canvasParserService;
     (this as any).leafManagerService = this.leafManagerService;
+    (this as any).submoduleManagerService = this.submoduleManagerService;
 
     // Initialize service manager with plugin instance and services
     serviceManager.initialize(this);

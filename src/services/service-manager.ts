@@ -63,6 +63,7 @@ export class ServiceManager {
   private vaultService: VaultService | null = null;
   private canvasParserService: CanvasParserService | null = null;
   private leafManagerService: LeafManagerService | null = null;
+  private submoduleManagerService: any = null; // SubmoduleManagerService
 
   constructor() {
     this.mockService = mockDreamNodeService;
@@ -177,6 +178,7 @@ export class ServiceManager {
     this.vaultService = pluginWithServices.vaultService;
     this.canvasParserService = pluginWithServices.canvasParserService;
     this.leafManagerService = pluginWithServices.leafManagerService;
+    this.submoduleManagerService = (pluginWithServices as any).submoduleManagerService;
     
     
     // Sync with store's data mode
@@ -224,6 +226,13 @@ export class ServiceManager {
    */
   getLeafManagerService() {
     return this.leafManagerService;
+  }
+
+  /**
+   * Get SubmoduleManagerService instance (only available when plugin is initialized)
+   */
+  getSubmoduleManagerService() {
+    return this.submoduleManagerService;
   }
 
   /**

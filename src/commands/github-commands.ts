@@ -196,19 +196,17 @@ export function registerGitHubCommands(
 
         if (canvasFile instanceof TFile) {
           console.log(`GitHubCommands: Syncing canvas submodules before confirmation...`);
-          const notice = new Notice('Syncing canvas submodules...', 0);
 
           try {
-            const canvasParser = serviceManager.getCanvasParserService();
             const submoduleManager = serviceManager.getSubmoduleManagerService();
 
-            if (!canvasParser || !submoduleManager) {
-              console.warn('GitHubCommands: Canvas parser or submodule manager not available, skipping sync');
+            if (!submoduleManager) {
+              console.warn('GitHubCommands: Submodule manager not available, skipping sync');
             } else {
               const syncResult = await submoduleManager.syncCanvasSubmodules(canvasPath);
 
               if (syncResult.success) {
-                const newImports = syncResult.submodulesImported.filter(r => r.success && !r.alreadyExisted);
+                const newImports = syncResult.submodulesImported.filter((r: any) => r.success && !r.alreadyExisted);
                 if (newImports.length > 0) {
                   console.log(`GitHubCommands: Synced ${newImports.length} new submodule(s)`);
                 } else {
@@ -223,8 +221,6 @@ export function registerGitHubCommands(
             console.error('GitHubCommands: Submodule sync error:', syncError);
             // Continue with share even if sync fails
           }
-
-          notice.hide();
         } else {
           console.log(`GitHubCommands: No DreamSong.canvas found, skipping submodule sync`);
         }
