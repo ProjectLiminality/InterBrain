@@ -446,9 +446,16 @@ export class GitHubService {
         linkResolver
       };
 
-      // Read standalone template
-      const templatePath = path.join(path.dirname(getCurrentFilePath()), 'dreamsong-standalone', 'index.html');
-      const template = fs.readFileSync(templatePath, 'utf-8');
+      // Read pre-built viewer bundle
+      const viewerBundlePath = path.join(path.dirname(getCurrentFilePath()), 'viewer-bundle', 'index.html');
+
+      if (!fs.existsSync(viewerBundlePath)) {
+        throw new Error(
+          'Viewer bundle not found. Run "npm run plugin-build" to build the GitHub viewer bundle.'
+        );
+      }
+
+      const template = fs.readFileSync(viewerBundlePath, 'utf-8');
 
       // Inject data into template
       const html = template
@@ -462,23 +469,13 @@ export class GitHubService {
         fs.mkdirSync(buildDir, { recursive: true });
       }
 
-      console.log(`GitHubService: Building static site to ${buildDir}`);
+      console.log(`GitHubService: Preparing static site at ${buildDir}`);
 
       // Write processed HTML
       const indexPath = path.join(buildDir, 'index.html');
       fs.writeFileSync(indexPath, html);
 
-      // Copy standalone build assets
-      const standalonePath = path.join(path.dirname(getCurrentFilePath()), 'dreamsong-standalone');
-
-      // Run Vite build
-      console.log(`GitHubService: Running Vite build from ${standalonePath}`);
-      await execAsync(
-        `npx vite build --config "${path.join(standalonePath, 'vite.config.ts')}" --outDir "${buildDir}"`,
-        { cwd: standalonePath }
-      );
-
-      console.log(`GitHubService: Vite build complete`);
+      console.log(`GitHubService: Static site ready for deployment`);
 
       // Deploy to gh-pages branch
       await this.deployToPages(dreamNodePath, buildDir);
@@ -891,22 +888,25 @@ export class GitHubService {
     const repoUrl = await this.createRepo(dreamNodePath, repoName);
 
     // Step 5: Build and deploy static DreamSong site
+    let pagesUrl: string | undefined;
     console.log(`GitHubService: Building static site for ${udd.title}...`);
     try {
       await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title);
-      console.log(`GitHubService: Static site built and deployed successfully`);
+      console.log(`GitHubService: Static site built and deployed to gh-pages branch`);
+
+      // Step 6: Setup GitHub Pages (configure to serve from gh-pages branch)
+      // IMPORTANT: This must happen AFTER buildStaticSite pushes the gh-pages branch
+      try {
+        pagesUrl = await this.setupPages(repoUrl);
+        console.log(`GitHubService: GitHub Pages configured: ${pagesUrl}`);
+      } catch (error) {
+        console.warn('GitHubService: Failed to enable GitHub Pages:', error);
+        // Continue without Pages URL - site is deployed but Pages config might fail
+      }
+
     } catch (error) {
       console.warn(`GitHubService: Failed to build static site (will continue without Pages):`, error);
       // Non-fatal - repo is created, just no Pages hosting
-    }
-
-    // Step 6: Setup GitHub Pages (configure to serve from gh-pages branch)
-    let pagesUrl: string | undefined;
-    try {
-      pagesUrl = await this.setupPages(repoUrl);
-    } catch (error) {
-      console.warn('GitHubService: Failed to enable GitHub Pages:', error);
-      // Continue without Pages URL - repo is still created
     }
 
     // Step 7: Generate Obsidian URI

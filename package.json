@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --config vite.dev.config.ts",
     "build": "vite build",
-    "plugin-build": "vite build && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
+    "build-github-viewer": "cd src/features/github-sharing/dreamsong-standalone && vite build --config vite.config.ts --outDir ../viewer-bundle",
+    "plugin-build": "vite build && npm run build-github-viewer && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "check-all": "npm run lint && npm run typecheck && npm run test",
