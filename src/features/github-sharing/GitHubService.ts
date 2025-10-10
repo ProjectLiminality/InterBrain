@@ -446,12 +446,17 @@ export class GitHubService {
         linkResolver
       };
 
-      // Read pre-built viewer bundle
-      const viewerBundlePath = path.join(path.dirname(getCurrentFilePath()), 'viewer-bundle', 'index.html');
+      // Read pre-built viewer bundle from plugin root directory
+      // When running in Obsidian, the plugin is installed in the vault's .obsidian/plugins/interbrain/ directory
+      // We need to look for viewer-bundle relative to where main.js is located
+      const pluginDir = path.dirname(path.dirname(path.dirname(path.dirname(getCurrentFilePath()))));
+      const viewerBundlePath = path.join(pluginDir, 'viewer-bundle', 'index.html');
+
+      console.log(`GitHubService: Looking for viewer bundle at ${viewerBundlePath}`);
 
       if (!fs.existsSync(viewerBundlePath)) {
         throw new Error(
-          'Viewer bundle not found. Run "npm run plugin-build" to build the GitHub viewer bundle.'
+          `Viewer bundle not found at ${viewerBundlePath}. Run "npm run plugin-build" to build the GitHub viewer bundle.`
         );
       }
 
