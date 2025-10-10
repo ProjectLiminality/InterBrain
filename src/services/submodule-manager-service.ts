@@ -100,8 +100,8 @@ export class SubmoduleManagerService {
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
       
-      // Import the submodule
-      const submoduleCommand = `git submodule add "${sourceFullPath}" "${actualSubmoduleName}"`;
+      // Import the submodule (use --force to handle previously-removed submodules)
+      const submoduleCommand = `git submodule add --force "${sourceFullPath}" "${actualSubmoduleName}"`;
       await execAsync(submoduleCommand, { cwd: parentFullPath });
       
       console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName}`);
