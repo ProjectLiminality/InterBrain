@@ -190,7 +190,46 @@ export function registerGitHubCommands(
           return;
         }
 
-        // Discover submodules and show confirmation
+        // Step 1: Sync canvas submodules BEFORE showing confirmation (if DreamSong.canvas exists)
+        const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
+        const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
+
+        if (canvasFile instanceof TFile) {
+          console.log(`GitHubCommands: Syncing canvas submodules before confirmation...`);
+          const notice = new Notice('Syncing canvas submodules...', 0);
+
+          try {
+            const canvasParser = serviceManager.getCanvasParserService();
+            const submoduleManager = serviceManager.getSubmoduleManagerService();
+
+            if (!canvasParser || !submoduleManager) {
+              console.warn('GitHubCommands: Canvas parser or submodule manager not available, skipping sync');
+            } else {
+              const syncResult = await submoduleManager.syncCanvasSubmodules(canvasPath);
+
+              if (syncResult.success) {
+                const newImports = syncResult.submodulesImported.filter(r => r.success && !r.alreadyExisted);
+                if (newImports.length > 0) {
+                  console.log(`GitHubCommands: Synced ${newImports.length} new submodule(s)`);
+                } else {
+                  console.log(`GitHubCommands: All submodules already synced`);
+                }
+              } else {
+                console.warn(`GitHubCommands: Submodule sync failed: ${syncResult.error}`);
+                // Continue with share even if sync fails
+              }
+            }
+          } catch (syncError) {
+            console.error('GitHubCommands: Submodule sync error:', syncError);
+            // Continue with share even if sync fails
+          }
+
+          notice.hide();
+        } else {
+          console.log(`GitHubCommands: No DreamSong.canvas found, skipping submodule sync`);
+        }
+
+        // Step 2: Discover submodules and show confirmation (now with updated submodules)
         const submodules = await githubService.getSubmodules(fullRepoPath);
         console.log(`GitHubCommands: Discovered ${submodules.length} submodule(s)`);
 
@@ -206,44 +245,11 @@ export function registerGitHubCommands(
         }
 
         // Show progress indicator
-        const notice = new Notice('Preparing DreamNode for GitHub...', 0);
+        const notice = new Notice('Sharing DreamNode to GitHub...', 0);
         console.log(`GitHubCommands: Starting GitHub share workflow for ${selectedNode.name}...`);
 
         try {
-          // Step 1: Sync canvas submodules before sharing (if DreamSong.canvas exists)
-          const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
-          const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
-
-          if (canvasFile instanceof TFile) {
-            console.log(`GitHubCommands: Syncing canvas submodules before GitHub share...`);
-            notice.setMessage('Syncing canvas submodules...');
-
-            try {
-              const canvasParser = serviceManager.getCanvasParserService();
-              const submoduleManager = serviceManager.getSubmoduleManagerService();
-
-              if (!canvasParser || !submoduleManager) {
-                console.warn('GitHubCommands: Canvas parser or submodule manager not available, skipping sync');
-              } else {
-                const syncResult = await submoduleManager.syncCanvasSubmodules(canvasPath);
-
-                if (syncResult.success) {
-                  console.log(`GitHubCommands: Synced ${syncResult.submodulesImported.length} submodule(s)`);
-                } else {
-                  console.warn(`GitHubCommands: Submodule sync failed: ${syncResult.error}`);
-                  // Continue with share even if sync fails
-                }
-              }
-            } catch (syncError) {
-              console.error('GitHubCommands: Submodule sync error:', syncError);
-              // Continue with share even if sync fails
-            }
-          } else {
-            console.log(`GitHubCommands: No DreamSong.canvas found, skipping submodule sync`);
-          }
-
-          // Step 2: Complete share workflow
-          notice.setMessage('Sharing DreamNode to GitHub...');
+          // Step 3: Complete share workflow
           const result = await githubService.shareDreamNode(fullRepoPath, selectedNode.id);
 
           console.log(`GitHubCommands: Successfully shared to GitHub:`, result);

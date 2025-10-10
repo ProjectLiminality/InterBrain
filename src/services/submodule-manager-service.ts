@@ -23,6 +23,7 @@ export interface SubmoduleImportResult {
   originalPath: string;
   newPath: string;
   error?: string;
+  alreadyExisted?: boolean; // Track if submodule was already present
 }
 
 export interface SyncResult {
@@ -237,19 +238,25 @@ export class SubmoduleManagerService {
       
       // Import external dependencies as submodules
       const importResults = await this.importExternalDependencies(analysis);
-      
+
       // Update canvas file paths using the same logic as the working command
       const pathUpdates = this.buildCanvasPathUpdates(analysis, importResults);
       if (pathUpdates.size > 0) {
         await this.canvasParser.updateCanvasFilePaths(canvasPath, pathUpdates);
       }
-      
-      // Commit changes
-      const commitHash = await this.commitSubmoduleChanges(
-        analysis.dreamNodeBoundary,
-        canvasPath,
-        importResults
-      );
+
+      // Commit changes only if there are NEW successful imports (not already-existing ones)
+      let commitHash: string | undefined;
+      const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
+      if (newImports.length > 0) {
+        commitHash = await this.commitSubmoduleChanges(
+          analysis.dreamNodeBoundary,
+          canvasPath,
+          importResults
+        );
+      } else {
+        console.log(`SubmoduleManagerService: No new submodules to commit (all already exist)`);
+      }
       
       console.log(`SubmoduleManagerService: Successfully synced canvas ${canvasPath}`);
       
@@ -294,10 +301,10 @@ export class SubmoduleManagerService {
    */
   private async importExternalDependencies(analysis: CanvasAnalysis): Promise<SubmoduleImportResult[]> {
     const results: SubmoduleImportResult[] = [];
-    
+
     // Group dependencies by DreamNode to avoid duplicate submodules
     const dreamNodeGroups = new Map<string, DependencyInfo[]>();
-    
+
     for (const dep of analysis.externalDependencies) {
       if (dep.dreamNodePath) {
         const existing = dreamNodeGroups.get(dep.dreamNodePath) || [];
@@ -305,19 +312,37 @@ export class SubmoduleManagerService {
         dreamNodeGroups.set(dep.dreamNodePath, existing);
       }
     }
-    
-    // Import each unique external DreamNode as a submodule
+
+    // Get existing submodules to avoid conflicts
+    const existingSubmodules = await this.listSubmodules(analysis.dreamNodeBoundary);
+    const existingSubmoduleNames = new Set(existingSubmodules.map(s => s.name));
+
+    // Import each unique external DreamNode as a submodule (only if not already present)
     for (const [dreamNodePath, dependencies] of dreamNodeGroups) {
-      console.log(`SubmoduleManagerService: Importing ${dreamNodePath} for ${dependencies.length} dependencies`);
-      
-      const result = await this.importSubmodule(
-        analysis.dreamNodeBoundary,
-        dreamNodePath
-      );
-      
-      results.push(result);
+      const submoduleName = path.basename(dreamNodePath);
+
+      if (existingSubmoduleNames.has(submoduleName)) {
+        console.log(`SubmoduleManagerService: Submodule ${submoduleName} already exists, skipping import`);
+        // Create a success result for already-existing submodule
+        results.push({
+          success: true,
+          submoduleName,
+          originalPath: dreamNodePath,
+          newPath: submoduleName,
+          alreadyExisted: true
+        });
+      } else {
+        console.log(`SubmoduleManagerService: Importing ${dreamNodePath} for ${dependencies.length} dependencies`);
+
+        const result = await this.importSubmodule(
+          analysis.dreamNodeBoundary,
+          dreamNodePath
+        );
+
+        results.push(result);
+      }
     }
-    
+
     return results;
   }
 
