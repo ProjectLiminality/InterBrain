@@ -23,9 +23,7 @@ const execAsync = promisify(exec);
 const getCurrentFilePath = () => {
   // Check if we're in a CommonJS context with __filename available
   try {
-    // eslint-disable-next-line no-undef
     if (typeof __filename !== 'undefined') {
-      // eslint-disable-next-line no-undef
       return __filename;
     }
   } catch {
@@ -305,7 +303,7 @@ export class GitHubService {
   }
 
   /**
-   * Enable GitHub Pages for repository
+   * Enable GitHub Pages for repository (serves from gh-pages branch)
    */
   async setupPages(repoUrl: string): Promise<string> {
     try {
@@ -322,10 +320,10 @@ export class GitHubService {
       // Remove .git suffix if present
       const cleanRepo = repo.replace(/\.git$/, '');
 
-      // Enable GitHub Pages via API
+      // Enable GitHub Pages via API - serve from gh-pages branch
       // Note: gh CLI doesn't have native pages command, so we use gh api
       await execAsync(
-        `"${ghPath}" api -X POST "repos/${owner}/${cleanRepo}/pages" -f source[branch]=main -f source[path]=/`
+        `"${ghPath}" api -X POST "repos/${owner}/${cleanRepo}/pages" -f source[branch]=gh-pages -f source[path]=/`
       );
 
       // Construct Pages URL
@@ -457,11 +455,14 @@ export class GitHubService {
         .replace('{{DREAMNODE_NAME}}', dreamNodeName)
         .replace('{{DREAMSONG_DATA}}', JSON.stringify(dreamsongData));
 
-      // Create output directory
-      const buildDir = path.join(dreamNodePath, '.github-pages-build');
+      // Create output directory in system temp (outside the repo)
+      const tmpOs = require('os');
+      const buildDir = path.join(tmpOs.tmpdir(), `dreamsong-build-${dreamNodeId}-${Date.now()}`);
       if (!fs.existsSync(buildDir)) {
         fs.mkdirSync(buildDir, { recursive: true });
       }
+
+      console.log(`GitHubService: Building static site to ${buildDir}`);
 
       // Write processed HTML
       const indexPath = path.join(buildDir, 'index.html');
@@ -471,13 +472,24 @@ export class GitHubService {
       const standalonePath = path.join(path.dirname(getCurrentFilePath()), 'dreamsong-standalone');
 
       // Run Vite build
+      console.log(`GitHubService: Running Vite build from ${standalonePath}`);
       await execAsync(
         `npx vite build --config "${path.join(standalonePath, 'vite.config.ts')}" --outDir "${buildDir}"`,
         { cwd: standalonePath }
       );
 
-      // Commit and push build to gh-pages branch (or main if GitHub Pages serves from main)
+      console.log(`GitHubService: Vite build complete`);
+
+      // Deploy to gh-pages branch
       await this.deployToPages(dreamNodePath, buildDir);
+
+      // Cleanup temp directory
+      try {
+        fs.rmSync(buildDir, { recursive: true, force: true });
+        console.log(`GitHubService: Cleaned up temp build directory`);
+      } catch (error) {
+        console.warn(`GitHubService: Failed to cleanup temp directory:`, error);
+      }
 
       return buildDir;
     } catch (error) {
@@ -540,21 +552,43 @@ export class GitHubService {
   }
 
   /**
-   * Deploy built site to GitHub Pages
+   * Deploy built site to GitHub Pages using gh-pages branch strategy
+   * Creates an orphan branch with only the built HTML (no source files)
    */
-  private async deployToPages(dreamNodePath: string, _buildDir: string): Promise<void> {
+  private async deployToPages(dreamNodePath: string, buildDir: string): Promise<void> {
     try {
-      // Add build files to git
-      await execAsync('git add .github-pages-build/', { cwd: dreamNodePath });
+      // Step 1: Initialize a fresh git repo in temp directory
+      await execAsync(`git init`, { cwd: buildDir });
 
-      // Commit build
+      // Step 2: Add all built files
+      await execAsync(`git add .`, { cwd: buildDir });
+
+      // Step 3: Commit built site
       await execAsync(
-        'git commit -m "Deploy DreamSong to GitHub Pages" || true',
+        `git commit -m "Deploy DreamSong to GitHub Pages"`,
+        { cwd: buildDir }
+      );
+
+      // Step 4: Get the remote URL from main repo
+      const { stdout: remoteUrl } = await execAsync(
+        `git remote get-url github`,
         { cwd: dreamNodePath }
       );
 
-      // Push to GitHub (GitHub Pages will auto-deploy from main branch)
-      await execAsync('git push github main', { cwd: dreamNodePath });
+      // Step 5: Add remote to build repo
+      await execAsync(
+        `git remote add origin ${remoteUrl.trim()}`,
+        { cwd: buildDir }
+      );
+
+      // Step 6: Force push to gh-pages branch (orphan branch)
+      await execAsync(
+        `git push -f origin HEAD:gh-pages`,
+        { cwd: buildDir }
+      );
+
+      console.log('GitHubService: Successfully deployed to gh-pages branch');
+
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Failed to deploy to Pages: ${error.message}`);
@@ -731,7 +765,7 @@ export class GitHubService {
       }
     }
 
-    // Step 2: Delete GitHub repository
+    // Step 2: Delete gh-pages branch first (if exists)
     const repoMatch = udd.githubRepoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
     if (repoMatch) {
       const [, owner, repo] = repoMatch;
@@ -739,6 +773,18 @@ export class GitHubService {
 
       try {
         const ghPath = await this.detectGhPath();
+
+        // Try to delete gh-pages branch
+        console.log(`GitHubService: Deleting gh-pages branch from ${owner}/${cleanRepo}`);
+        try {
+          await execAsync(`"${ghPath}" api -X DELETE "repos/${owner}/${cleanRepo}/git/refs/heads/gh-pages"`);
+          console.log(`GitHubService: gh-pages branch deleted`);
+        } catch {
+          // Branch might not exist - that's okay
+          console.log(`GitHubService: gh-pages branch not found (may not exist)`);
+        }
+
+        // Delete GitHub repository
         console.log(`GitHubService: Deleting GitHub repository: ${owner}/${cleanRepo}`);
         await execAsync(`"${ghPath}" repo delete ${owner}/${cleanRepo} --yes`);
       } catch (error) {
@@ -844,7 +890,17 @@ export class GitHubService {
     // Step 4: Create GitHub repository
     const repoUrl = await this.createRepo(dreamNodePath, repoName);
 
-    // Step 5: Setup GitHub Pages
+    // Step 5: Build and deploy static DreamSong site
+    console.log(`GitHubService: Building static site for ${udd.title}...`);
+    try {
+      await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title);
+      console.log(`GitHubService: Static site built and deployed successfully`);
+    } catch (error) {
+      console.warn(`GitHubService: Failed to build static site (will continue without Pages):`, error);
+      // Non-fatal - repo is created, just no Pages hosting
+    }
+
+    // Step 6: Setup GitHub Pages (configure to serve from gh-pages branch)
     let pagesUrl: string | undefined;
     try {
       pagesUrl = await this.setupPages(repoUrl);
@@ -853,7 +909,7 @@ export class GitHubService {
       // Continue without Pages URL - repo is still created
     }
 
-    // Step 6: Generate Obsidian URI
+    // Step 7: Generate Obsidian URI
     const obsidianUri = this.generateObsidianURI(repoUrl);
 
     return {
