@@ -286,21 +286,41 @@ export function registerDreamweavingCommands(
     callback: async () => {
       try {
         const activeFile = plugin.app.workspace.getActiveFile();
-        
-        if (!activeFile || !activeFile.path.endsWith('.canvas')) {
-          uiService.showError('Please open a canvas file first');
-          return;
+        let canvasPath: string | null = null;
+
+        // Try to get canvas from active file first
+        if (activeFile && activeFile.path.endsWith('.canvas')) {
+          canvasPath = activeFile.path;
+          console.log(`Syncing submodules for canvas: ${canvasPath}`);
+        } else {
+          // Fallback: Use selected DreamNode's DreamSong.canvas
+          const store = useInterBrainStore.getState();
+          const selectedNode = store.selectedNode;
+
+          if (!selectedNode) {
+            uiService.showError('Please open a canvas file or select a DreamNode first');
+            return;
+          }
+
+          canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
+          const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
+
+          if (!(canvasFile instanceof TFile)) {
+            uiService.showError(`No DreamSong.canvas found in ${selectedNode.name}`);
+            return;
+          }
+
+          console.log(`Syncing submodules for selected DreamNode canvas: ${canvasPath}`);
         }
-        
-        console.log(`Syncing submodules for canvas: ${activeFile.path}`);
+
         uiService.showInfo('Syncing canvas submodules...');
-        
+
         // Step 1: Commit any current canvas changes before sync
         try {
           const { exec } = require('child_process');
           const { promisify } = require('util');
           const execAsync = promisify(exec);
-          
+
           // Get vault path for git operations
           const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
           let vaultPath = '';
@@ -312,16 +332,16 @@ export function registerDreamweavingCommands(
             const pathObj = adapter.path as Record<string, string>;
             vaultPath = pathObj.path || pathObj.basePath || '';
           }
-          
+
           // Parse canvas to find the DreamNode boundary
-          const analysis = await canvasParser.analyzeCanvasDependencies(activeFile.path);
+          const analysis = await canvasParser.analyzeCanvasDependencies(canvasPath);
           const fullRepoPath = require('path').join(vaultPath, analysis.dreamNodeBoundary);
-          const canvasFileName = require('path').basename(activeFile.path);
-          
+          const canvasFileName = require('path').basename(canvasPath);
+
           // Check if there are uncommitted changes to the canvas
           const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullRepoPath });
           const canvasHasChanges = statusOutput.includes(canvasFileName);
-          
+
           if (canvasHasChanges) {
             await execAsync(`git add "${canvasFileName}"`, { cwd: fullRepoPath });
             await execAsync(`git commit -m "Save canvas before submodule sync"`, { cwd: fullRepoPath });
@@ -333,16 +353,16 @@ export function registerDreamweavingCommands(
           console.error('Failed to commit canvas before sync:', commitError);
           // Continue with sync even if pre-commit fails
         }
-        
+
         // Step 2: Run the sync operation
-        const result = await submoduleManager.syncCanvasSubmodules(activeFile.path);
-        
+        const result = await submoduleManager.syncCanvasSubmodules(canvasPath);
+
         if (result.success) {
           const report = submoduleManager.generateSyncReport(result);
           console.log('Sync Report:\n', report);
-          
+
           // Note: SubmoduleManagerService already commits all changes including updated canvas paths
-          
+
           if (result.submodulesImported.length === 0) {
             uiService.showSuccess('Canvas already synchronized (no external dependencies)');
           } else {
@@ -352,7 +372,7 @@ export function registerDreamweavingCommands(
           console.error('Sync failed:', result.error);
           uiService.showError(`Sync failed: ${result.error}`);
         }
-        
+
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Canvas submodule sync failed:', errorMessage);

@@ -1,7 +1,8 @@
-import { Plugin, Notice, Modal } from 'obsidian';
+import { Plugin, Notice, Modal, TFile } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { githubService } from '../features/github-sharing/GitHubService';
+import { serviceManager } from '../services/service-manager';
 
 /**
  * Show confirmation modal before sharing to GitHub
@@ -134,6 +135,22 @@ export function registerGitHubCommands(
   plugin: Plugin,
   uiService: UIService
 ): void {
+  // Set plugin directory for GitHubService (needed for viewer bundle path)
+  const path = require('path');
+  const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
+  let vaultPath = '';
+  if (typeof adapter.path === 'string') {
+    vaultPath = adapter.path;
+  } else if (typeof adapter.basePath === 'string') {
+    vaultPath = adapter.basePath;
+  }
+
+  if (vaultPath) {
+    const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', plugin.manifest.id);
+    githubService.setPluginDir(pluginDir);
+  } else {
+    console.warn('GitHubCommands: Could not determine vault path for plugin directory');
+  }
 
   // Share DreamNode via GitHub - Creates public repo + GitHub Pages
   plugin.addCommand({
@@ -189,11 +206,44 @@ export function registerGitHubCommands(
         }
 
         // Show progress indicator
-        const notice = new Notice('Sharing DreamNode to GitHub...', 0);
+        const notice = new Notice('Preparing DreamNode for GitHub...', 0);
         console.log(`GitHubCommands: Starting GitHub share workflow for ${selectedNode.name}...`);
 
         try {
-          // Complete share workflow
+          // Step 1: Sync canvas submodules before sharing (if DreamSong.canvas exists)
+          const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
+          const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
+
+          if (canvasFile instanceof TFile) {
+            console.log(`GitHubCommands: Syncing canvas submodules before GitHub share...`);
+            notice.setMessage('Syncing canvas submodules...');
+
+            try {
+              const canvasParser = serviceManager.getCanvasParserService();
+              const submoduleManager = serviceManager.getSubmoduleManagerService();
+
+              if (!canvasParser || !submoduleManager) {
+                console.warn('GitHubCommands: Canvas parser or submodule manager not available, skipping sync');
+              } else {
+                const syncResult = await submoduleManager.syncCanvasSubmodules(canvasPath);
+
+                if (syncResult.success) {
+                  console.log(`GitHubCommands: Synced ${syncResult.submodulesImported.length} submodule(s)`);
+                } else {
+                  console.warn(`GitHubCommands: Submodule sync failed: ${syncResult.error}`);
+                  // Continue with share even if sync fails
+                }
+              }
+            } catch (syncError) {
+              console.error('GitHubCommands: Submodule sync error:', syncError);
+              // Continue with share even if sync fails
+            }
+          } else {
+            console.log(`GitHubCommands: No DreamSong.canvas found, skipping submodule sync`);
+          }
+
+          // Step 2: Complete share workflow
+          notice.setMessage('Sharing DreamNode to GitHub...');
           const result = await githubService.shareDreamNode(fullRepoPath, selectedNode.id);
 
           console.log(`GitHubCommands: Successfully shared to GitHub:`, result);

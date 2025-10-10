@@ -54,6 +54,15 @@ interface SubmoduleInfo {
 
 export class GitHubService {
   private ghPath: string | null = null;
+  private pluginDir: string | null = null;
+
+  /**
+   * Set the plugin directory path (must be called during plugin initialization)
+   */
+  setPluginDir(dir: string): void {
+    this.pluginDir = dir;
+    console.log(`GitHubService: Plugin directory set to ${dir}`);
+  }
 
   /**
    * Detect and cache the GitHub CLI path
@@ -306,19 +315,18 @@ export class GitHubService {
    * Enable GitHub Pages for repository (serves from gh-pages branch)
    */
   async setupPages(repoUrl: string): Promise<string> {
+    // Extract owner/repo from URL
+    const match = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+    if (!match) {
+      throw new Error(`Invalid GitHub URL: ${repoUrl}`);
+    }
+
+    const [, owner, repo] = match;
+    const cleanRepo = repo.replace(/\.git$/, '');
+    const pagesUrl = `https://${owner}.github.io/${cleanRepo}`;
+
     try {
       const ghPath = await this.detectGhPath();
-
-      // Extract owner/repo from URL
-      const match = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
-      if (!match) {
-        throw new Error(`Invalid GitHub URL: ${repoUrl}`);
-      }
-
-      const [, owner, repo] = match;
-
-      // Remove .git suffix if present
-      const cleanRepo = repo.replace(/\.git$/, '');
 
       // Enable GitHub Pages via API - serve from gh-pages branch
       // Note: gh CLI doesn't have native pages command, so we use gh api
@@ -326,23 +334,23 @@ export class GitHubService {
         `"${ghPath}" api -X POST "repos/${owner}/${cleanRepo}/pages" -f source[branch]=gh-pages -f source[path]=/`
       );
 
-      // Construct Pages URL
-      const pagesUrl = `https://${owner}.github.io/${cleanRepo}`;
-
+      console.log(`GitHubService: GitHub Pages enabled successfully`);
       return pagesUrl;
     } catch (error) {
       if (error instanceof Error) {
-        // Pages might already be enabled - check if that's the error
-        if (error.message.includes('already exists') || error.message.includes('409')) {
-          // Extract owner/repo again for Pages URL
-          const match = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
-          if (match) {
-            const [, owner, repo] = match;
-            const cleanRepo = repo.replace(/\.git$/, '');
-            return `https://${owner}.github.io/${cleanRepo}`;
-          }
+        const errorMsg = error.message.toLowerCase();
+
+        // Pages already exists - this is fine, return the URL
+        if (errorMsg.includes('already exists') ||
+            errorMsg.includes('409') ||
+            errorMsg.includes('unexpected end of json')) {
+          console.log(`GitHubService: GitHub Pages already configured (this is expected)`);
+          return pagesUrl;
         }
-        throw new Error(`Failed to setup GitHub Pages: ${error.message}`);
+
+        // Other error - log but don't throw (non-fatal)
+        console.warn(`GitHubService: Could not configure Pages API (site will still work):`, error.message);
+        return pagesUrl;
       }
       throw error;
     }
@@ -386,17 +394,15 @@ export class GitHubService {
 
   /**
    * Build static DreamSong site for GitHub Pages
+   * @param blocks - Pre-computed DreamSongBlocks from local rendering (already has media resolved)
    */
   async buildStaticSite(
     dreamNodePath: string,
     dreamNodeId: string,
-    dreamNodeName: string
+    dreamNodeName: string,
+    blocks: any[] // DreamSongBlock[] from local cache
   ): Promise<string> {
     try {
-      // Import parsing services
-      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../services/dreamsong');
-      const { CanvasParserService } = await import('../../services/canvas-parser-service');
-
       // Read .udd file to get metadata
       const uddPath = path.join(dreamNodePath, '.udd');
       if (!fs.existsSync(uddPath)) {
@@ -405,29 +411,6 @@ export class GitHubService {
 
       const uddContent = fs.readFileSync(uddPath, 'utf-8');
       const udd = JSON.parse(uddContent);
-
-      // Find .canvas files in DreamNode
-      const files = fs.readdirSync(dreamNodePath);
-      const canvasFiles = files.filter(f => f.endsWith('.canvas'));
-
-      if (canvasFiles.length === 0) {
-        throw new Error('No .canvas files found in DreamNode');
-      }
-
-      // Use first canvas file (TODO: handle multiple canvas files in future)
-      const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
-      const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
-
-      // Parse canvas using service
-      const canvasParser = new CanvasParserService();
-      const canvasData = canvasParser.parseCanvas(canvasContent);
-
-      // Parse canvas to blocks
-      let blocks = parseCanvasToBlocks(canvasData, dreamNodeId);
-
-      // Resolve media paths to data URLs for embedding
-      // Note: resolveMediaPaths may need vaultService - simplifying for now
-      blocks = await resolveMediaPaths(blocks, dreamNodePath, null as any);
 
       // Get DreamTalk media if exists
       const dreamTalkMedia = udd.dreamTalk
@@ -447,10 +430,11 @@ export class GitHubService {
       };
 
       // Read pre-built viewer bundle from plugin root directory
-      // When running in Obsidian, the plugin is installed in the vault's .obsidian/plugins/interbrain/ directory
-      // We need to look for viewer-bundle relative to where main.js is located
-      const pluginDir = path.dirname(path.dirname(path.dirname(path.dirname(getCurrentFilePath()))));
-      const viewerBundlePath = path.join(pluginDir, 'viewer-bundle', 'index.html');
+      if (!this.pluginDir) {
+        throw new Error('Plugin directory not set. GitHubService.setPluginDir() must be called during plugin initialization.');
+      }
+
+      const viewerBundlePath = path.join(this.pluginDir, 'viewer-bundle', 'index.html');
 
       console.log(`GitHubService: Looking for viewer bundle at ${viewerBundlePath}`);
 
@@ -479,6 +463,26 @@ export class GitHubService {
       // Write processed HTML
       const indexPath = path.join(buildDir, 'index.html');
       fs.writeFileSync(indexPath, html);
+
+      // Copy assets directory (JS, CSS, images)
+      const viewerAssetsDir = path.join(this.pluginDir, 'viewer-bundle', 'assets');
+      const buildAssetsDir = path.join(buildDir, 'assets');
+
+      if (fs.existsSync(viewerAssetsDir)) {
+        // Create assets directory in build
+        fs.mkdirSync(buildAssetsDir, { recursive: true });
+
+        // Copy all files from viewer assets to build assets
+        const assetFiles = fs.readdirSync(viewerAssetsDir);
+        for (const file of assetFiles) {
+          const srcPath = path.join(viewerAssetsDir, file);
+          const destPath = path.join(buildAssetsDir, file);
+          fs.copyFileSync(srcPath, destPath);
+        }
+        console.log(`GitHubService: Copied ${assetFiles.length} asset files`);
+      } else {
+        console.warn(`GitHubService: Assets directory not found at ${viewerAssetsDir}`);
+      }
 
       console.log(`GitHubService: Static site ready for deployment`);
 
@@ -896,7 +900,118 @@ export class GitHubService {
     let pagesUrl: string | undefined;
     console.log(`GitHubService: Building static site for ${udd.title}...`);
     try {
-      await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title);
+      // Use the same parsing pipeline as local rendering
+      // This ensures GitHub Pages displays exactly what you see locally
+      const { parseCanvasToBlocks, getMimeType } = await import('../../services/dreamsong');
+
+      // Find and parse canvas file
+      const files = fs.readdirSync(dreamNodePath);
+      const canvasFiles = files.filter(f => f.endsWith('.canvas'));
+
+      let blocks: any[] = [];
+
+      // Fallback hierarchy: DreamSong → DreamTalk → README
+      if (canvasFiles.length > 0) {
+        // PRIMARY: DreamSong (canvas file) - Full rich content
+        console.log(`GitHubService: Using DreamSong (.canvas) for GitHub Pages`);
+        const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
+        const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
+        const canvasData = JSON.parse(canvasContent);
+
+        // Parse canvas to blocks (same as local rendering)
+        blocks = parseCanvasToBlocks(canvasData, dreamNodeUuid);
+
+        // Derive vault path from DreamNode path
+        // Canvas media paths are vault-relative, not DreamNode-relative
+        const vaultPath = path.dirname(dreamNodePath);
+
+        // Resolve media paths to data URLs using Node.js fs (no VaultService needed)
+        for (const block of blocks) {
+          if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
+            try {
+              // Canvas paths are vault-relative (e.g., "ArkCrystal/ARK Crystal.jpeg")
+              // Resolve relative to vault path, not DreamNode path
+              const mediaPath = path.join(vaultPath, block.media.src);
+              console.log(`GitHubService: Resolving media ${block.media.src} at ${mediaPath}`);
+
+              if (fs.existsSync(mediaPath)) {
+                const buffer = fs.readFileSync(mediaPath);
+                const base64 = buffer.toString('base64');
+                const mimeType = getMimeType(block.media.src);
+                block.media.src = `data:${mimeType};base64,${base64}`;
+                console.log(`GitHubService: Successfully loaded media ${block.media.src.slice(0, 50)}...`);
+              } else {
+                console.warn(`GitHubService: Media file not found: ${mediaPath}`);
+              }
+            } catch (error) {
+              console.warn(`GitHubService: Could not load media ${block.media.src}:`, error);
+            }
+          }
+        }
+      } else if (udd.dreamTalk) {
+        // FALLBACK 1: DreamTalk media file - Single image/video
+        console.log(`GitHubService: No DreamSong found, using DreamTalk media fallback`);
+        const dreamTalkPath = path.join(dreamNodePath, udd.dreamTalk);
+        if (fs.existsSync(dreamTalkPath)) {
+          const buffer = fs.readFileSync(dreamTalkPath);
+          const base64 = buffer.toString('base64');
+          const mimeType = getMimeType(udd.dreamTalk);
+          const dataUrl = `data:${mimeType};base64,${base64}`;
+
+          // Create a single media block with proper type field
+          blocks = [{
+            id: 'dreamtalk-fallback',
+            type: 'media', // IMPORTANT: Must set type for DreamSong component
+            media: {
+              src: dataUrl,
+              type: mimeType.startsWith('video/') ? 'video' : 'image',
+              alt: udd.title
+            },
+            text: '',
+            edges: []
+          }];
+          console.log(`GitHubService: Created DreamTalk fallback block`);
+        } else {
+          console.warn(`GitHubService: DreamTalk file not found: ${dreamTalkPath}`);
+        }
+      } else {
+        // FALLBACK 2: README.md - Text content
+        console.log(`GitHubService: No DreamSong or DreamTalk found, checking for README.md`);
+        const readmePath = path.join(dreamNodePath, 'README.md');
+        if (fs.existsSync(readmePath)) {
+          const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+
+          // Simple markdown to HTML conversion (basic support)
+          let htmlContent = readmeContent
+            // Headers
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            // Bold
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            // Italic
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Links
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+            // Line breaks to paragraphs
+            .split('\n\n')
+            .map(para => para.trim() ? `<p>${para.replace(/\n/g, '<br>')}</p>` : '')
+            .join('');
+
+          // Create a single text block with proper type field
+          blocks = [{
+            id: 'readme-fallback',
+            type: 'text', // IMPORTANT: Must set type for DreamSong component
+            text: htmlContent,
+            edges: []
+          }];
+          console.log(`GitHubService: Created README.md fallback block with HTML conversion`);
+        } else {
+          console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
+        }
+      }
+
+      await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title, blocks);
       console.log(`GitHubService: Static site built and deployed to gh-pages branch`);
 
       // Step 6: Setup GitHub Pages (configure to serve from gh-pages branch)
