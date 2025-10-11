@@ -623,6 +623,58 @@ export class GitHubService {
   }
 
   /**
+   * Resolve source DreamNode UUID from submodule .udd file
+   * Mirrors the logic from media-resolver.ts but uses Node.js fs directly
+   */
+  private async resolveSourceDreamNodeUuid(
+    filename: string,
+    vaultPath: string
+  ): Promise<string | null> {
+    try {
+      // Extract submodule directory from canvas path
+      // Canvas paths look like: "ArkCrystal/VectorEquilibrium/Vector Equilibrium.jpeg"
+      // We want the second segment: "VectorEquilibrium"
+      const submoduleMatch = filename.match(/^([^/]+)\/([^/]+)\//);
+
+      if (!submoduleMatch) {
+        // Local file (no submodule path) - not clickable
+        console.log(`[GitHubService] Local file (non-clickable): ${filename}`);
+        return null;
+      }
+
+      const submoduleDirName = submoduleMatch[2]; // "VectorEquilibrium"
+      console.log(`[GitHubService] Detected submodule media: ${filename} → directory: ${submoduleDirName}`);
+
+      // Read .udd file from submodule directory
+      const uddPath = path.join(vaultPath, submoduleDirName, '.udd');
+
+      if (!fs.existsSync(uddPath)) {
+        // CRITICAL ERROR: Missing .udd file
+        console.error(`❌ [GitHubService] CORRUPTED DREAMNODE: ${submoduleDirName} is missing .udd metadata file`);
+        console.error(`   Expected .udd at: ${uddPath}`);
+        console.error(`   Media will be non-clickable until .udd is restored`);
+        return null;
+      }
+
+      // Parse .udd file to extract UUID
+      const uddContent = fs.readFileSync(uddPath, 'utf-8');
+      const udd = JSON.parse(uddContent);
+
+      if (!udd.uuid) {
+        console.error(`❌ [GitHubService] CORRUPTED DREAMNODE: ${submoduleDirName} .udd file is missing UUID field`);
+        return null;
+      }
+
+      console.log(`✅ [GitHubService] Resolved UUID for ${submoduleDirName}: ${udd.uuid}`);
+      return udd.uuid;
+
+    } catch (error) {
+      console.error(`❌ [GitHubService] FAILED to resolve UUID from .udd file for ${filename}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Deploy built site to GitHub Pages using gh-pages branch strategy
    * Creates an orphan branch with only the built HTML (no source files)
    */
@@ -990,10 +1042,18 @@ export class GitHubService {
         // Canvas media paths are vault-relative, not DreamNode-relative
         const vaultPath = path.dirname(dreamNodePath);
 
-        // Resolve media paths to data URLs using Node.js fs (no VaultService needed)
+        // Resolve media paths to data URLs AND extract UUIDs from submodule .udd files
         for (const block of blocks) {
           if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
             try {
+              // Step 1: Resolve UUID from submodule .udd file (if this is submodule media)
+              const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
+              if (resolvedUuid) {
+                block.media.sourceDreamNodeId = resolvedUuid;
+                console.log(`GitHubService: Resolved UUID for ${block.media.src} → ${resolvedUuid}`);
+              }
+
+              // Step 2: Resolve file path to data URL
               // Canvas paths are vault-relative (e.g., "ArkCrystal/ARK Crystal.jpeg")
               // Resolve relative to vault path, not DreamNode path
               const mediaPath = path.join(vaultPath, block.media.src);
