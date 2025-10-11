@@ -546,15 +546,80 @@ export class GitHubService {
 
   /**
    * Build link resolver map for cross-DreamNode navigation
+   *
+   * Queries all submodules and extracts their hosting URLs from .udd files.
+   * This enables UUID-based navigation on GitHub Pages (click media → open source DreamNode).
    */
-  private async buildLinkResolver(_dreamNodePath: string): Promise<any> {
-    // TODO: Query DreamNodeService for all DreamNodes and their hosting URLs
-    // For now, return empty resolver
-    return {
-      githubPagesUrls: {},
-      githubRepoUrls: {},
-      radicleIds: {}
-    };
+  private async buildLinkResolver(dreamNodePath: string): Promise<any> {
+    const githubPagesUrls: Record<string, string> = {};
+    const githubRepoUrls: Record<string, string> = {};
+    const radicleIds: Record<string, string> = {};
+
+    try {
+      // Get vault path (parent of dreamNodePath)
+      const vaultPath = path.dirname(dreamNodePath);
+
+      // Get all submodules for this DreamNode
+      const submodules = await this.getSubmodules(dreamNodePath, vaultPath);
+      console.log(`GitHubService: Building link resolver for ${submodules.length} submodule(s)`);
+
+      for (const submodule of submodules) {
+        try {
+          // Read .udd file from submodule
+          const uddPath = path.join(submodule.path, '.udd');
+
+          if (!fs.existsSync(uddPath)) {
+            console.warn(`GitHubService: .udd not found for submodule ${submodule.name} at ${uddPath}`);
+            continue;
+          }
+
+          const uddContent = fs.readFileSync(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+
+          if (!udd.uuid) {
+            console.warn(`GitHubService: UUID missing in .udd for submodule ${submodule.name}`);
+            continue;
+          }
+
+          // Map UUID to hosting URLs
+          if (udd.githubPagesUrl) {
+            githubPagesUrls[udd.uuid] = udd.githubPagesUrl;
+            console.log(`GitHubService: Mapped ${submodule.name} (${udd.uuid}) → Pages: ${udd.githubPagesUrl}`);
+          }
+
+          if (udd.githubRepoUrl) {
+            githubRepoUrls[udd.uuid] = udd.githubRepoUrl;
+            console.log(`GitHubService: Mapped ${submodule.name} (${udd.uuid}) → Repo: ${udd.githubRepoUrl}`);
+          }
+
+          if (udd.radicleId) {
+            radicleIds[udd.uuid] = udd.radicleId;
+            console.log(`GitHubService: Mapped ${submodule.name} (${udd.uuid}) → Radicle: ${udd.radicleId}`);
+          }
+
+        } catch (error) {
+          console.error(`GitHubService: Failed to read .udd for submodule ${submodule.name}:`, error);
+          // Continue with other submodules
+        }
+      }
+
+      console.log(`GitHubService: Link resolver built - ${Object.keys(githubPagesUrls).length} Pages URLs, ${Object.keys(githubRepoUrls).length} Repo URLs, ${Object.keys(radicleIds).length} Radicle IDs`);
+
+      return {
+        githubPagesUrls,
+        githubRepoUrls,
+        radicleIds
+      };
+
+    } catch (error) {
+      console.error('GitHubService: Failed to build link resolver:', error);
+      // Return empty resolver on error (media will be non-clickable)
+      return {
+        githubPagesUrls: {},
+        githubRepoUrls: {},
+        radicleIds: {}
+      };
+    }
   }
 
   /**
