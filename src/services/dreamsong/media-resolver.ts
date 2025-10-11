@@ -42,7 +42,7 @@ export async function resolveMediaPaths(
 }
 
 /**
- * Resolve a single media info, converting file path to data URL
+ * Resolve a single media info, converting file path to data URL and extracting UUID
  */
 export async function resolveMediaInfo(
   mediaInfo: MediaInfo,
@@ -58,6 +58,15 @@ export async function resolveMediaInfo(
     // Handle .link files specially
     if (mediaInfo.isLinkFile || isLinkFile(mediaInfo.src)) {
       return await resolveLinkFileInfo(mediaInfo, dreamNodePath, vaultService);
+    }
+
+    // Resolve UUID from submodule .udd file if this is submodule media
+    const resolvedUuid = await resolveSourceDreamNodeUuid(mediaInfo.src, vaultService);
+    if (resolvedUuid) {
+      mediaInfo = {
+        ...mediaInfo,
+        sourceDreamNodeId: resolvedUuid
+      };
     }
 
     // Resolve file path to data URL
@@ -286,4 +295,70 @@ export function getMediaTypeFromFilename(filename: string): 'video' | 'image' | 
   }
 
   return null;
+}
+
+/**
+ * Resolve source DreamNode UUID from submodule .udd file
+ *
+ * Given a canvas path like "ArkCrystal/VectorEquilibrium/media.jpg",
+ * extracts the submodule directory name and reads its .udd file to get the UUID.
+ *
+ * Philosophy: .udd files are foundational to DreamNode integrity.
+ * Missing or corrupt .udd = fundamental system failure that deserves clear error communication.
+ *
+ * @param filename - Canvas file path (e.g., "ArkCrystal/VectorEquilibrium/media.jpg")
+ * @param vaultService - Vault service for file system access
+ * @returns UUID string if found, null if local file or .udd corruption
+ */
+async function resolveSourceDreamNodeUuid(
+  filename: string,
+  vaultService: VaultService
+): Promise<string | null> {
+  try {
+    // Extract submodule directory from path (same logic as extractSourceDreamNodeId)
+    // Pattern: "ParentDreamNode/SubmoduleDreamNode/media.jpg"
+    const submoduleMatch = filename.match(/^([^/]+)\/([^/]+)\//);
+
+    if (!submoduleMatch) {
+      // Local file (no submodule path) - not clickable
+      console.log(`[Media Resolver] Local file (non-clickable): ${filename}`);
+      return null;
+    }
+
+    const submoduleDirName = submoduleMatch[2]; // "VectorEquilibrium"
+    console.log(`[Media Resolver] Detected submodule media: ${filename} → directory: ${submoduleDirName}`);
+
+    // Read .udd file from submodule directory
+    const vaultPath = vaultService.getVaultPath();
+    const uddPath = path.join(vaultPath, submoduleDirName, '.udd');
+
+    if (!fs.existsSync(uddPath)) {
+      // CRITICAL ERROR: Missing .udd file
+      console.error(`❌ [Media Resolver] CORRUPTED DREAMNODE: ${submoduleDirName} is missing .udd metadata file`);
+      console.error(`   Expected .udd at: ${uddPath}`);
+      console.error(`   Media will be non-clickable until .udd is restored`);
+      return null; // Media will be non-clickable
+    }
+
+    // Parse .udd file to extract UUID
+    const uddContent = fs.readFileSync(uddPath, 'utf-8');
+    const udd = JSON.parse(uddContent);
+
+    if (!udd.uuid) {
+      // CRITICAL ERROR: Missing UUID field in .udd
+      console.error(`❌ [Media Resolver] CORRUPTED DREAMNODE: ${submoduleDirName} .udd file is missing UUID field`);
+      console.error(`   .udd path: ${uddPath}`);
+      console.error(`   Media will be non-clickable until UUID is restored`);
+      return null; // Media will be non-clickable
+    }
+
+    console.log(`✅ [Media Resolver] Resolved UUID for ${submoduleDirName}: ${udd.uuid}`);
+    return udd.uuid;
+
+  } catch (error) {
+    // CRITICAL ERROR: .udd file read/parse failure
+    console.error(`❌ [Media Resolver] FAILED to resolve UUID from .udd file for ${filename}:`, error);
+    console.error(`   Media will be non-clickable until .udd corruption is fixed`);
+    return null; // Media will be non-clickable on error
+  }
 }
