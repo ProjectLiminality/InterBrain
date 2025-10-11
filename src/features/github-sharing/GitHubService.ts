@@ -778,9 +778,64 @@ export class GitHubService {
       };
     }
 
-    // Check if already shared
+    // Mark as visited
+    visitedUUIDs.add(udd.uuid);
+
+    // Check if already shared - if so, skip repo creation but still rebuild Pages
     if (udd.githubRepoUrl) {
-      console.log(`GitHubService: Submodule already shared: ${udd.title}`);
+      console.log(`GitHubService: Submodule already shared, rebuilding GitHub Pages: ${udd.title}`);
+
+      // Rebuild GitHub Pages with latest code (includes UUID resolution)
+      try {
+        const { parseCanvasToBlocks, getMimeType } = await import('../../services/dreamsong');
+        const files = fs.readdirSync(submodulePath);
+        const canvasFiles = files.filter(f => f.endsWith('.canvas'));
+        let blocks: any[] = [];
+
+        if (canvasFiles.length > 0) {
+          const canvasPath = path.join(submodulePath, canvasFiles[0]);
+          const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
+          const canvasData = JSON.parse(canvasContent);
+          blocks = parseCanvasToBlocks(canvasData, udd.uuid);
+
+          const vaultPath = path.dirname(submodulePath);
+          for (const block of blocks) {
+            if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
+              const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
+              if (resolvedUuid) {
+                block.media.sourceDreamNodeId = resolvedUuid;
+              }
+              const mediaPath = path.join(vaultPath, block.media.src);
+              if (fs.existsSync(mediaPath)) {
+                const buffer = fs.readFileSync(mediaPath);
+                const base64 = buffer.toString('base64');
+                const mimeType = getMimeType(block.media.src);
+                block.media.src = `data:${mimeType};base64,${base64}`;
+              }
+            }
+          }
+        } else if (udd.dreamTalk) {
+          const dreamTalkPath = path.join(submodulePath, udd.dreamTalk);
+          if (fs.existsSync(dreamTalkPath)) {
+            const buffer = fs.readFileSync(dreamTalkPath);
+            const base64 = buffer.toString('base64');
+            const mimeType = getMimeType(udd.dreamTalk);
+            blocks = [{
+              id: 'dreamtalk-fallback',
+              type: 'media',
+              media: { src: `data:${mimeType};base64,${base64}`, type: mimeType.startsWith('video/') ? 'video' : 'image', alt: udd.title },
+              text: '',
+              edges: []
+            }];
+          }
+        }
+
+        await this.buildStaticSite(submodulePath, udd.uuid, udd.title, blocks);
+        console.log(`GitHubService: Rebuilt GitHub Pages for ${udd.title}`);
+      } catch (error) {
+        console.warn(`GitHubService: Failed to rebuild Pages for ${udd.title}:`, error);
+      }
+
       return {
         uuid: udd.uuid,
         githubUrl: udd.githubRepoUrl,
@@ -789,10 +844,7 @@ export class GitHubService {
       };
     }
 
-    // Mark as visited
-    visitedUUIDs.add(udd.uuid);
-
-    // Recursively share this submodule
+    // Recursively share this submodule (creates repo + builds Pages)
     console.log(`GitHubService: Sharing submodule: ${udd.title}`);
     const result = await this.shareDreamNode(submodulePath, udd.uuid, visitedUUIDs);
 
