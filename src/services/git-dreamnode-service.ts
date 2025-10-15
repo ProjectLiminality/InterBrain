@@ -506,7 +506,9 @@ export class GitDreamNodeService {
       hasUnsavedChanges: false,
       email: udd.email,
       phone: udd.phone,
-      radicleId: udd.radicleId
+      radicleId: udd.radicleId,
+      githubRepoUrl: udd.githubRepoUrl,
+      githubPagesUrl: udd.githubPagesUrl
     };
     
     // Add to store
@@ -551,12 +553,16 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // Check metadata changes (type, contact fields, and radicleId - name synced from .udd)
-    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone || node.radicleId !== udd.radicleId) {
+    // Check metadata changes (type, contact fields, radicleId, and GitHub URLs - name synced from .udd)
+    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone ||
+        node.radicleId !== udd.radicleId || node.githubRepoUrl !== udd.githubRepoUrl ||
+        node.githubPagesUrl !== udd.githubPagesUrl) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
       node.radicleId = udd.radicleId;
+      node.githubRepoUrl = udd.githubRepoUrl;
+      node.githubPagesUrl = udd.githubPagesUrl;
       updated = true;
     }
     
@@ -628,6 +634,14 @@ export class GitDreamNodeService {
     // CRITICAL: Preserve radicleId field if it exists
     if (node.radicleId) {
       udd.radicleId = node.radicleId;
+    }
+
+    // CRITICAL: Preserve GitHub URLs if they exist
+    if (node.githubRepoUrl) {
+      udd.githubRepoUrl = node.githubRepoUrl;
+    }
+    if (node.githubPagesUrl) {
+      udd.githubPagesUrl = node.githubPagesUrl;
     }
 
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
