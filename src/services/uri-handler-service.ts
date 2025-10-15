@@ -208,6 +208,31 @@ export class URIHandlerService {
 	}
 
 	/**
+	 * Index a newly cloned node for semantic search
+	 * Extracted helper to reuse for both Radicle and GitHub clones
+	 */
+	private async indexNewNode(repoName: string): Promise<void> {
+		try {
+			// Find the node by repo name
+			const allNodes = await this.dreamNodeService.list();
+			const targetNode = allNodes.find(node => node.repoPath === repoName);
+
+			if (!targetNode) {
+				console.warn(`⚠️ [URIHandler] Could not find node for indexing: ${repoName}`);
+				return;
+			}
+
+			// Index the node using semantic search service
+			const { indexingService } = await import('../features/semantic-search/services/indexing-service');
+			await indexingService.indexNode(targetNode);
+
+		} catch (error) {
+			console.error(`❌ [URIHandler] Failed to index node (non-critical):`, error);
+			// Don't fail the clone operation if indexing fails
+		}
+	}
+
+	/**
 	 * Clone a DreamNode from Radicle network
 	 */
 	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
@@ -248,17 +273,20 @@ export class URIHandlerService {
 				// Step 1: Rescan vault to detect the new DreamNode
 				await this.dreamNodeService.scanVault();
 
-				// Step 2: Rescan DreamSong relationships
+				// Step 2: Index the newly cloned node for semantic search
+				await this.indexNewNode(cloneResult.repoName);
+
+				// Step 3: Rescan DreamSong relationships
 				const relationshipService = new DreamSongRelationshipService(this.plugin);
 				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 				if (scanResult.success) {
-					// Step 3: Apply constellation layout if DreamSpace is open
+					// Step 4: Apply constellation layout if DreamSpace is open
 					const canvasAPI = (globalThis as any).__interbrainCanvas;
 					if (canvasAPI?.applyConstellationLayout) {
 						await canvasAPI.applyConstellationLayout();
 
-						// Step 4: Auto-focus the newly cloned node
+						// Step 5: Auto-focus the newly cloned node
 						await this.autoFocusNode(cloneResult.repoName, silent);
 					}
 				} else {
@@ -374,17 +402,20 @@ export class URIHandlerService {
 				// Step 1: Rescan vault to detect the new DreamNode
 				await this.dreamNodeService.scanVault();
 
-				// Step 2: Rescan DreamSong relationships
+				// Step 2: Index the newly cloned node for semantic search
+				await this.indexNewNode(repoName);
+
+				// Step 3: Rescan DreamSong relationships
 				const relationshipService = new DreamSongRelationshipService(this.plugin);
 				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 				if (scanResult.success) {
-					// Step 3: Apply constellation layout if DreamSpace is open
+					// Step 4: Apply constellation layout if DreamSpace is open
 					const canvasAPI = (globalThis as any).__interbrainCanvas;
 					if (canvasAPI?.applyConstellationLayout) {
 						await canvasAPI.applyConstellationLayout();
 
-						// Step 4: Auto-focus the newly cloned node
+						// Step 5: Auto-focus the newly cloned node
 						await this.autoFocusNode(repoName, silent);
 					}
 				} else {
