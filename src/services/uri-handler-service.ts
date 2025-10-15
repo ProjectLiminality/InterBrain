@@ -53,7 +53,7 @@ export class URIHandlerService {
 	 * Handle single DreamNode clone URI
 	 * Format: obsidian://interbrain-clone?id=<radicleId or uuid> OR ?repo=<github.com/user/repo>
 	 */
-	private async handleSingleNodeClone(params: Record<string, string>): Promise<void> {
+	private async handleSingleNodeClone(params: Record<string, string>): Promise<'success' | 'skipped' | 'error'> {
 		try {
 			console.log(`🔗 [URIHandler] Single clone handler called with params:`, params);
 			const id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
@@ -63,15 +63,14 @@ export class URIHandlerService {
 			if (repo) {
 				console.log(`🔗 [URIHandler] GitHub clone link triggered!`);
 				console.log(`🔗 [URIHandler] Repository: ${repo}`);
-				await this.cloneFromGitHub(repo);
-				return;
+				return await this.cloneFromGitHub(repo);
 			}
 
 			// Check for Radicle/UUID identifier
 			if (!id) {
 				new Notice('Invalid clone link: missing node identifier or repository');
 				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
-				return;
+				return 'error';
 			}
 
 			console.log(`🔗 [URIHandler] Deep link triggered!`);
@@ -82,22 +81,28 @@ export class URIHandlerService {
 
 			if (isRadicleId) {
 				// Clone from Radicle network
-				await this.cloneFromRadicle(id);
+				return await this.cloneFromRadicle(id);
 			} else {
 				// Legacy UUID fallback (for Windows users)
 				new Notice(`UUID-based links not yet implemented. Please ask sender to share via Radicle.`);
 				console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${id}`);
+				return 'error';
 			}
 
 		} catch (error) {
 			console.error('Failed to handle clone link:', error);
 			new Notice(`Failed to handle clone link: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			return 'error';
 		}
 	}
 
 	/**
-	 * Handle batch DreamNode clone URI
-	 * Format: obsidian://interbrain-clone-batch?ids=<radicleId1,radicleId2,radicleId3>
+	 * Handle batch DreamNode clone URI (Universal: supports mixed Radicle/GitHub/UUID identifiers)
+	 * Format: obsidian://interbrain-clone-batch?ids=<id1,id2,id3>
+	 * Examples:
+	 *   - Pure Radicle: ids=rad:z1234,rad:z5678
+	 *   - Pure GitHub: ids=github.com/user/repo1,github.com/user/repo2
+	 *   - Mixed: ids=rad:z1234,github.com/user/repo,uuid-fallback
 	 */
 	private async handleBatchNodeClone(params: Record<string, string>): Promise<void> {
 		try {
@@ -110,50 +115,77 @@ export class URIHandlerService {
 				return;
 			}
 
-			const idList = ids.split(',').map(u => u.trim()).filter(Boolean);
+			const identifiers = ids.split(',').map(u => u.trim()).filter(Boolean);
 
-			if (idList.length === 0) {
+			if (identifiers.length === 0) {
 				new Notice('Invalid batch clone link: no valid identifiers');
 				return;
 			}
 
 			console.log(`🔗 [URIHandler] Batch deep link triggered!`);
-			console.log(`🔗 [URIHandler] Identifiers (${idList.length}):`, idList);
+			console.log(`🔗 [URIHandler] Identifiers (${identifiers.length}):`, identifiers);
 
-			// Clone all nodes from Radicle network
-			const notice = new Notice(`Cloning ${idList.length} DreamNodes...`, 0);
+			// Classify each identifier
+			const classified = identifiers.map(id => ({
+				raw: id,
+				type: this.classifyIdentifier(id)
+			}));
 
+			console.log('🔗 [URIHandler] Classified identifiers:', classified);
+
+			// Show progress notification
+			const notice = new Notice(`Cloning ${identifiers.length} DreamNodes...`, 0);
+
+			// Process each identifier using single-node handler
 			let successCount = 0;
-			let failCount = 0;
+			let skipCount = 0;
+			let errorCount = 0;
 
-			for (const radicleId of idList) {
-				if (radicleId.startsWith('rad:')) {
-					const success = await this.cloneFromRadicle(radicleId, true); // silent mode
-					if (success) {
-						successCount++;
-					} else {
-						failCount++;
-					}
-				} else {
-					console.warn(`⚠️ [URIHandler] Skipping non-Radicle ID: ${radicleId}`);
-					failCount++;
+			for (const { raw, type } of classified) {
+				try {
+					// Build params for single-node handler based on type
+					const paramsForSingle: Record<string, string> = type === 'github'
+						? { repo: raw }
+						: { id: raw };
+
+					const result = await this.handleSingleNodeClone(paramsForSingle);
+
+					if (result === 'success') successCount++;
+					else if (result === 'skipped') skipCount++;
+					else errorCount++;
+
+				} catch (error) {
+					console.error(`❌ [URIHandler] Failed to clone ${type} identifier "${raw}":`, error);
+					errorCount++;
 				}
 			}
 
 			notice.hide();
 
-			if (successCount > 0) {
-				new Notice(`✅ Cloned ${successCount} DreamNode${successCount > 1 ? 's' : ''}`);
-			}
+			// Show comprehensive summary
+			const parts: string[] = [];
+			if (successCount > 0) parts.push(`${successCount} cloned`);
+			if (skipCount > 0) parts.push(`${skipCount} already existed`);
+			if (errorCount > 0) parts.push(`${errorCount} failed`);
 
-			if (failCount > 0) {
-				new Notice(`⚠️ ${failCount} node${failCount > 1 ? 's' : ''} failed to clone`);
-			}
+			const summary = parts.join(', ');
+			new Notice(`✅ Batch clone complete: ${summary}`);
+
+			console.log(`🔗 [URIHandler] Batch clone summary: ${summary}`);
 
 		} catch (error) {
 			console.error('Failed to handle batch clone link:', error);
 			new Notice(`Failed to handle batch clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
+	}
+
+	/**
+	 * Classify identifier type for universal batch clone support
+	 */
+	private classifyIdentifier(id: string): 'radicle' | 'github' | 'uuid' {
+		if (id.startsWith('rad:')) return 'radicle';
+		if (id.includes('github.com/')) return 'github';
+		return 'uuid';
 	}
 
 	/**
@@ -199,7 +231,7 @@ export class URIHandlerService {
 	/**
 	 * Clone a DreamNode from Radicle network
 	 */
-	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<boolean> {
+	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
 			console.log(`🔗 [URIHandler] Cloning from Radicle: ${radicleId}`);
 
@@ -228,7 +260,7 @@ export class URIHandlerService {
 				// Auto-focus the existing node (same as newly cloned)
 				await this.autoFocusNode(cloneResult.repoName, silent);
 
-				return true; // Success - already have it, no refresh needed
+				return 'skipped'; // Already have it, no refresh needed
 			}
 
 			console.log(`✅ [URIHandler] Successfully cloned: ${cloneResult.repoName}`);
@@ -272,7 +304,7 @@ export class URIHandlerService {
 				// Don't fail the clone operation if refresh fails
 			}
 
-			return true;
+			return 'success';
 
 		} catch (error) {
 			console.error(`❌ [URIHandler] Clone failed for ${radicleId}:`, error);
@@ -282,14 +314,14 @@ export class URIHandlerService {
 				new Notice(`Failed to clone: ${errorMsg}`);
 			}
 
-			return false;
+			return 'error';
 		}
 	}
 
 	/**
 	 * Clone a DreamNode from GitHub
 	 */
-	private async cloneFromGitHub(repoPath: string): Promise<boolean> {
+	private async cloneFromGitHub(repoPath: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
 			console.log(`🔗 [URIHandler] Cloning from GitHub: ${repoPath}`);
 
@@ -314,15 +346,19 @@ export class URIHandlerService {
 			const fs = require('fs');
 			if (fs.existsSync(destinationPath)) {
 				console.log(`ℹ️ [URIHandler] DreamNode already exists: ${repoName}`);
-				new Notice(`📌 DreamNode "${repoName}" already cloned!`);
+				if (!silent) {
+					new Notice(`📌 DreamNode "${repoName}" already cloned!`);
+				}
 
 				// Auto-focus the existing node
-				await this.autoFocusNode(repoName, false);
-				return true;
+				await this.autoFocusNode(repoName, silent);
+				return 'skipped';
 			}
 
 			// Show progress
-			new Notice(`Cloning from GitHub...`, 3000);
+			if (!silent) {
+				new Notice(`Cloning from GitHub...`, 3000);
+			}
 
 			// Import GitHub service and clone
 			const { githubService } = await import('../features/github-sharing/GitHubService');
@@ -330,7 +366,9 @@ export class URIHandlerService {
 			await githubService.clone(githubUrl, destinationPath);
 
 			console.log(`✅ [URIHandler] Successfully cloned: ${repoName}`);
-			new Notice(`✅ Cloned "${repoName}" successfully!`);
+			if (!silent) {
+				new Notice(`✅ Cloned "${repoName}" successfully!`);
+			}
 
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
 			try {
@@ -354,7 +392,7 @@ export class URIHandlerService {
 						await canvasAPI.applyConstellationLayout();
 
 						// Step 4: Auto-focus the newly cloned node
-						await this.autoFocusNode(repoName, false);
+						await this.autoFocusNode(repoName, silent);
 					} else {
 						console.log(`ℹ️ [URIHandler] DreamSpace not open, skipping layout update`);
 					}
@@ -367,15 +405,17 @@ export class URIHandlerService {
 				// Don't fail the clone operation if refresh fails
 			}
 
-			return true;
+			return 'success';
 
 		} catch (error) {
 			console.error(`❌ [URIHandler] GitHub clone failed for ${repoPath}:`, error);
 
-			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-			new Notice(`Failed to clone from GitHub: ${errorMsg}`);
+			if (!silent) {
+				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+				new Notice(`Failed to clone from GitHub: ${errorMsg}`);
+			}
 
-			return false;
+			return 'error';
 		}
 	}
 
@@ -390,9 +430,21 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Generate deep link URL for batch clone
+	 * Generate deep link URL for GitHub clone
 	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
-	 * @param identifiers Array of Radicle IDs (preferred) or UUIDs (fallback)
+	 * @param githubRepoUrl GitHub repository URL (e.g., "https://github.com/user/repo" or "github.com/user/repo")
+	 */
+	static generateGitHubCloneLink(vaultName: string, githubRepoUrl: string): string {
+		// Strip protocol if present
+		const repoPath = githubRepoUrl.replace(/^https?:\/\//, '');
+		const encodedRepo = encodeURIComponent(repoPath);
+		return `obsidian://interbrain-clone?repo=${encodedRepo}`;
+	}
+
+	/**
+	 * Generate deep link URL for batch clone (Universal: supports mixed Radicle/GitHub/UUID identifiers)
+	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
+	 * @param identifiers Array of identifiers (can be Radicle IDs, GitHub URLs, or UUIDs)
 	 */
 	static generateBatchNodeLink(vaultName: string, identifiers: string[]): string {
 		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
