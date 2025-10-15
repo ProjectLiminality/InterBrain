@@ -150,8 +150,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
         {!embedded && githubPagesUrl && (
           <svg
             viewBox="0 0 16 16"
-            width="30"
-            height="30"
+            width="40"
+            height="40"
             fill="currentColor"
             className={styles.viewOnWebButton}
             onClick={() => window.open(githubPagesUrl, '_blank', 'noopener,noreferrer')}
