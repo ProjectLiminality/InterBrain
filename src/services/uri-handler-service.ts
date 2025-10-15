@@ -366,6 +366,48 @@ export class URIHandlerService {
 			await githubService.clone(githubUrl, destinationPath);
 
 			console.log(`✅ [URIHandler] Successfully cloned: ${repoName}`);
+
+			// AUTO-INITIALIZE: Create .udd file for InterBrain compatibility
+			try {
+				console.log(`📝 [URIHandler] Initializing .udd file for GitHub clone...`);
+
+				const path = require('path');
+				const uddPath = path.join(destinationPath, '.udd');
+
+				// Check if .udd already exists (shouldn't happen, but be safe)
+				if (!fs.existsSync(uddPath)) {
+					// Generate UUID for this DreamNode
+					const { v4: uuidv4 } = require('uuid');
+					const uuid = uuidv4();
+
+					// Derive title from repo name (convert hyphens/underscores to spaces, title case)
+					const title = repoName
+						.replace(/[-_]/g, ' ')
+						.replace(/\b\w/g, (char: string) => char.toUpperCase());
+
+					// Create minimal .udd structure
+					const udd = {
+						uuid,
+						title,
+						type: 'dream',
+						dreamTalk: '',
+						liminalWebRelationships: [],
+						submodules: [],
+						supermodules: [],
+						githubRepoUrl: githubUrl // Preserve GitHub URL for fallback broadcasts
+					};
+
+					// Write .udd file
+					fs.writeFileSync(uddPath, JSON.stringify(udd, null, 2), 'utf8');
+					console.log(`✅ [URIHandler] Created .udd file with UUID: ${uuid}`);
+				} else {
+					console.log(`ℹ️ [URIHandler] .udd file already exists, skipping initialization`);
+				}
+			} catch (uddError) {
+				console.error(`❌ [URIHandler] Failed to create .udd file (non-critical):`, uddError);
+				// Don't fail the clone operation if .udd creation fails
+			}
+
 			if (!silent) {
 				new Notice(`✅ Cloned "${repoName}" successfully!`);
 			}
