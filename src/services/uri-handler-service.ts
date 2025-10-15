@@ -376,9 +376,9 @@ export class URIHandlerService {
 
 				// Check if .udd already exists (shouldn't happen, but be safe)
 				if (!fs.existsSync(uddPath)) {
-					// Generate UUID for this DreamNode
-					const { v4: uuidv4 } = require('uuid');
-					const uuid = uuidv4();
+					// Generate UUID for this DreamNode (using Node.js built-in)
+					const crypto = require('crypto');
+					const uuid = crypto.randomUUID();
 
 					// Derive title from repo name (convert hyphens/underscores to spaces, title case)
 					const title = repoName
