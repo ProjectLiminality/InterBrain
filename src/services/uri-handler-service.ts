@@ -55,14 +55,11 @@ export class URIHandlerService {
 	 */
 	private async handleSingleNodeClone(params: Record<string, string>): Promise<'success' | 'skipped' | 'error'> {
 		try {
-			console.log(`🔗 [URIHandler] Single clone handler called with params:`, params);
 			const id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
 			const repo = params.repo; // GitHub repository path
 
 			// Check for GitHub repository
 			if (repo) {
-				console.log(`🔗 [URIHandler] GitHub clone link triggered!`);
-				console.log(`🔗 [URIHandler] Repository: ${repo}`);
 				return await this.cloneFromGitHub(repo);
 			}
 
@@ -72,9 +69,6 @@ export class URIHandlerService {
 				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
 				return 'error';
 			}
-
-			console.log(`🔗 [URIHandler] Deep link triggered!`);
-			console.log(`🔗 [URIHandler] Identifier: ${id}`);
 
 			// Determine if this is a Radicle ID or UUID
 			const isRadicleId = id.startsWith('rad:');
@@ -106,7 +100,6 @@ export class URIHandlerService {
 	 */
 	private async handleBatchNodeClone(params: Record<string, string>): Promise<void> {
 		try {
-			console.log(`🔗 [URIHandler] Batch clone handler called with params:`, params);
 			const ids = params.ids || params.uuids; // Support both 'ids' (new) and 'uuids' (legacy)
 
 			if (!ids) {
@@ -122,16 +115,11 @@ export class URIHandlerService {
 				return;
 			}
 
-			console.log(`🔗 [URIHandler] Batch deep link triggered!`);
-			console.log(`🔗 [URIHandler] Identifiers (${identifiers.length}):`, identifiers);
-
 			// Classify each identifier
 			const classified = identifiers.map(id => ({
 				raw: id,
 				type: this.classifyIdentifier(id)
 			}));
-
-			console.log('🔗 [URIHandler] Classified identifiers:', classified);
 
 			// Show progress notification
 			const notice = new Notice(`Cloning ${identifiers.length} DreamNodes...`, 0);
@@ -171,8 +159,6 @@ export class URIHandlerService {
 			const summary = parts.join(', ');
 			new Notice(`✅ Batch clone complete: ${summary}`);
 
-			console.log(`🔗 [URIHandler] Batch clone summary: ${summary}`);
-
 		} catch (error) {
 			console.error('Failed to handle batch clone link:', error);
 			new Notice(`Failed to handle batch clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -193,8 +179,6 @@ export class URIHandlerService {
 	 * Extracted helper to reuse for both new clones and existing nodes
 	 */
 	private async autoFocusNode(repoName: string, silent: boolean = false): Promise<void> {
-		console.log(`🎯 [URIHandler] Auto-focusing "${repoName}"...`);
-
 		// Find the node by repo name
 		const allNodes = await this.dreamNodeService.list();
 		const targetNode = allNodes.find(node => node.repoPath === repoName);
@@ -211,19 +195,14 @@ export class URIHandlerService {
 		// Check if DreamSpace is open and has focus API
 		const canvasAPI = (globalThis as any).__interbrainCanvas;
 		if (!canvasAPI?.focusOnNode) {
-			console.log(`ℹ️ [URIHandler] DreamSpace not open or focusOnNode not available`);
 			return;
 		}
 
 		// Focus on the node (triggers liminal-web layout transition)
 		const success = canvasAPI.focusOnNode(targetNode.id);
-		if (success) {
-			console.log(`✅ [URIHandler] Auto-focused "${repoName}" (${targetNode.id})`);
-
-			if (!silent) {
-				new Notice(`🎯 Node focused in DreamSpace!`);
-			}
-		} else {
+		if (success && !silent) {
+			new Notice(`🎯 Node focused in DreamSpace!`);
+		} else if (!success) {
 			console.warn(`⚠️ [URIHandler] Failed to focus on "${repoName}"`);
 		}
 	}
@@ -233,8 +212,6 @@ export class URIHandlerService {
 	 */
 	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
-			console.log(`🔗 [URIHandler] Cloning from Radicle: ${radicleId}`);
-
 			// Get vault path
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
@@ -252,7 +229,6 @@ export class URIHandlerService {
 
 			// Check if repo already existed - if so, skip refresh but still focus
 			if (cloneResult.alreadyExisted) {
-				console.log(`ℹ️ [URIHandler] DreamNode already exists: ${cloneResult.repoName}`);
 				if (!silent) {
 					new Notice(`📌 DreamNode "${cloneResult.repoName}" already cloned!`);
 				}
@@ -263,37 +239,27 @@ export class URIHandlerService {
 				return 'skipped'; // Already have it, no refresh needed
 			}
 
-			console.log(`✅ [URIHandler] Successfully cloned: ${cloneResult.repoName}`);
-
 			if (!silent) {
 				new Notice(`✅ Cloned "${cloneResult.repoName}" successfully!`);
 			}
 
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
 			try {
-				console.log(`🔄 [URIHandler] Auto-refreshing vault after clone...`);
-
 				// Step 1: Rescan vault to detect the new DreamNode
-				const scanStats = await this.dreamNodeService.scanVault();
-				console.log(`📊 [URIHandler] Vault scan: +${scanStats.added} added, ~${scanStats.updated} updated`);
+				await this.dreamNodeService.scanVault();
 
-				// Step 2: Rescan DreamSong relationships (now optimized with parallel I/O!)
+				// Step 2: Rescan DreamSong relationships
 				const relationshipService = new DreamSongRelationshipService(this.plugin);
 				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 				if (scanResult.success) {
-					console.log(`✅ [URIHandler] Relationships rescanned in ${scanResult.stats.scanTimeMs}ms`);
-
 					// Step 3: Apply constellation layout if DreamSpace is open
 					const canvasAPI = (globalThis as any).__interbrainCanvas;
 					if (canvasAPI?.applyConstellationLayout) {
-						console.log(`🌌 [URIHandler] Applying constellation layout...`);
 						await canvasAPI.applyConstellationLayout();
 
-						// Step 4: Auto-focus the newly cloned node (reuses same logic as already-cloned case)
+						// Step 4: Auto-focus the newly cloned node
 						await this.autoFocusNode(cloneResult.repoName, silent);
-					} else {
-						console.log(`ℹ️ [URIHandler] DreamSpace not open, skipping layout update`);
 					}
 				} else {
 					console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
@@ -323,8 +289,6 @@ export class URIHandlerService {
 	 */
 	private async cloneFromGitHub(repoPath: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
-			console.log(`🔗 [URIHandler] Cloning from GitHub: ${repoPath}`);
-
 			// Get vault path
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
@@ -345,7 +309,6 @@ export class URIHandlerService {
 			// Check if already exists
 			const fs = require('fs');
 			if (fs.existsSync(destinationPath)) {
-				console.log(`ℹ️ [URIHandler] DreamNode already exists: ${repoName}`);
 				if (!silent) {
 					new Notice(`📌 DreamNode "${repoName}" already cloned!`);
 				}
@@ -365,11 +328,8 @@ export class URIHandlerService {
 			const githubUrl = `https://${repoPath}`;
 			await githubService.clone(githubUrl, destinationPath);
 
-			console.log(`✅ [URIHandler] Successfully cloned: ${repoName}`);
-
 			// AUTO-INITIALIZE: Create .udd file for InterBrain compatibility
 			try {
-				console.log(`📝 [URIHandler] Initializing .udd file for GitHub clone...`);
 
 				const path = require('path');
 				const uddPath = path.join(destinationPath, '.udd');
@@ -399,9 +359,6 @@ export class URIHandlerService {
 
 					// Write .udd file
 					fs.writeFileSync(uddPath, JSON.stringify(udd, null, 2), 'utf8');
-					console.log(`✅ [URIHandler] Created .udd file with UUID: ${uuid}`);
-				} else {
-					console.log(`ℹ️ [URIHandler] .udd file already exists, skipping initialization`);
 				}
 			} catch (uddError) {
 				console.error(`❌ [URIHandler] Failed to create .udd file (non-critical):`, uddError);
@@ -414,29 +371,21 @@ export class URIHandlerService {
 
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
 			try {
-				console.log(`🔄 [URIHandler] Auto-refreshing vault after clone...`);
-
 				// Step 1: Rescan vault to detect the new DreamNode
-				const scanStats = await this.dreamNodeService.scanVault();
-				console.log(`📊 [URIHandler] Vault scan: +${scanStats.added} added, ~${scanStats.updated} updated`);
+				await this.dreamNodeService.scanVault();
 
 				// Step 2: Rescan DreamSong relationships
 				const relationshipService = new DreamSongRelationshipService(this.plugin);
 				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 				if (scanResult.success) {
-					console.log(`✅ [URIHandler] Relationships rescanned in ${scanResult.stats.scanTimeMs}ms`);
-
 					// Step 3: Apply constellation layout if DreamSpace is open
 					const canvasAPI = (globalThis as any).__interbrainCanvas;
 					if (canvasAPI?.applyConstellationLayout) {
-						console.log(`🌌 [URIHandler] Applying constellation layout...`);
 						await canvasAPI.applyConstellationLayout();
 
 						// Step 4: Auto-focus the newly cloned node
 						await this.autoFocusNode(repoName, silent);
-					} else {
-						console.log(`ℹ️ [URIHandler] DreamSpace not open, skipping layout update`);
 					}
 				} else {
 					console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);

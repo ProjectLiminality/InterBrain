@@ -197,14 +197,6 @@ export class DreamSongFullScreenView extends ItemView {
       return;
     }
 
-    console.log('Rendering DreamSong component with blocks:', this.blocks);
-    console.log('🌐 [ViewOnWeb] DreamNode githubPagesUrl:', this.dreamNode?.githubPagesUrl);
-    console.log('🌐 [ViewOnWeb] DreamNode full data:', {
-      id: this.dreamNode?.id,
-      name: this.dreamNode?.name,
-      githubPagesUrl: this.dreamNode?.githubPagesUrl,
-      githubRepoUrl: this.dreamNode?.githubRepoUrl
-    });
     // Render the DreamSong component directly - CSS modules handle all styling
     this.root.render(
       createElement(StrictMode, null,

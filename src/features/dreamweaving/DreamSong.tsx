@@ -33,12 +33,6 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   embedded = false,
   githubPagesUrl
 }) => {
-  console.log('🌐 [DreamSong] Received props:', {
-    embedded,
-    githubPagesUrl,
-    shouldShowButton: !embedded && !!githubPagesUrl
-  });
-
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
 
   // Check if we have content to display
