@@ -12,6 +12,7 @@ interface DreamSongProps {
   dreamTalkMedia?: MediaFile[]; // DreamTalk media files to display above header
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
   embedded?: boolean; // Whether this is being rendered in embedded context (e.g., 3D sphere back)
+  githubPagesUrl?: string; // GitHub Pages URL for "View on Web" button
 }
 
 /**
@@ -29,7 +30,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   dreamNodeName,
   dreamTalkMedia,
   onMediaClick,
-  embedded = false
+  embedded = false,
+  githubPagesUrl
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
 
@@ -138,6 +140,18 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       )}
 
       <div className={styles.dreamSongHeader}>
+        {/* "View on Web" button - top right corner (only in fullscreen with GitHub Pages URL) */}
+        {!embedded && githubPagesUrl && (
+          <button
+            className={styles.viewOnWebButton}
+            onClick={() => window.open(githubPagesUrl, '_blank', 'noopener,noreferrer')}
+            aria-label="View DreamSong on GitHub Pages"
+            title="View on GitHub Pages"
+          >
+            🌐
+          </button>
+        )}
+
         <div className={styles.dreamSongTitle}>
           {dreamNodeName || 'DreamSong'}
         </div>

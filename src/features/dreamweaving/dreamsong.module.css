@@ -45,6 +45,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
 }
 
 .dreamSongTitle {
@@ -61,6 +62,36 @@
   display: block;
   max-width: 2600px;
   margin: 0 auto;
+}
+
+/* View on Web button - top right corner (fullscreen only) */
+.viewOnWebButton {
+  position: absolute;
+  top: 20px;
+  right: 40px;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.viewOnWebButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+.viewOnWebButton:active {
+  transform: scale(0.95);
 }
 
 /* DreamTalk section above header */
