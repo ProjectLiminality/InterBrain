@@ -233,6 +233,44 @@ export class URIHandlerService {
 	}
 
 	/**
+	 * Normalize repository name to human-readable title
+	 * Uses the same logic as DreamNodeMigrationService.normalizeToHumanReadable()
+	 *
+	 * Handles:
+	 * - PascalCase: "ThunderstormGenerator" → "Thunderstorm Generator"
+	 * - kebab-case: "thunderstorm-generator" → "Thunderstorm Generator"
+	 * - snake_case: "thunderstorm_generator" → "Thunderstorm Generator"
+	 * - Mixed: "Thunderstorm-Generator-UPDATED" → "Thunderstorm Generator Updated"
+	 */
+	private normalizeRepoNameToTitle(repoName: string): string {
+		const { isPascalCase, pascalCaseToTitle } = require('../utils/title-sanitization');
+
+		// If repo name contains hyphens, underscores, or periods as separators
+		if (/[-_.]+/.test(repoName)) {
+			// Replace separators with spaces and normalize
+			return repoName
+				.split(/[-_.]+/)                    // Split on hyphens, underscores, periods
+				.filter(word => word.length > 0)
+				.map(word => {
+					// Capitalize first letter, lowercase rest (proper title case)
+					const cleaned = word.trim();
+					if (cleaned.length === 0) return '';
+					return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+				})
+				.join(' ')
+				.trim();
+		}
+
+		// If repo name is pure PascalCase (no separators), convert to spaced format
+		if (isPascalCase(repoName)) {
+			return pascalCaseToTitle(repoName);
+		}
+
+		// Already human-readable with spaces, return as-is
+		return repoName;
+	}
+
+	/**
 	 * Clone a DreamNode from Radicle network
 	 */
 	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
@@ -368,10 +406,10 @@ export class URIHandlerService {
 					const crypto = require('crypto');
 					const uuid = crypto.randomUUID();
 
-					// Derive title from repo name (convert hyphens/underscores to spaces, title case)
-					const title = repoName
-						.replace(/[-_]/g, ' ')
-						.replace(/\b\w/g, (char: string) => char.toUpperCase());
+					// Derive human-readable title from repo name using established naming schema
+					// Uses the same normalization logic as DreamNodeMigrationService
+					// Handles kebab-case, snake_case, PascalCase → "Human Readable Title"
+					const title = this.normalizeRepoNameToTitle(repoName);
 
 					// Create minimal .udd structure
 					const udd = {
