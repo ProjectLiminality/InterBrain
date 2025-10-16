@@ -242,8 +242,8 @@ export class URIHandlerService {
 	 * - snake_case: "thunderstorm_generator" → "Thunderstorm Generator"
 	 * - Mixed: "Thunderstorm-Generator-UPDATED" → "Thunderstorm Generator Updated"
 	 */
-	private normalizeRepoNameToTitle(repoName: string): string {
-		const { isPascalCase, pascalCaseToTitle } = require('../utils/title-sanitization');
+	private async normalizeRepoNameToTitle(repoName: string): Promise<string> {
+		const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
 
 		// If repo name contains hyphens, underscores, or periods as separators
 		if (/[-_.]+/.test(repoName)) {
@@ -409,7 +409,7 @@ export class URIHandlerService {
 					// Derive human-readable title from repo name using established naming schema
 					// Uses the same normalization logic as DreamNodeMigrationService
 					// Handles kebab-case, snake_case, PascalCase → "Human Readable Title"
-					const title = this.normalizeRepoNameToTitle(repoName);
+					const title = await this.normalizeRepoNameToTitle(repoName);
 
 					// Create minimal .udd structure
 					const udd = {
