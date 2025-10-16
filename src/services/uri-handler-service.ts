@@ -325,6 +325,8 @@ export class URIHandlerService {
 						await canvasAPI.applyConstellationLayout();
 
 						// Step 5: Auto-focus the newly cloned node
+						// Note: No timing delay needed - DreamNode3D reads constellation positions
+						// directly from store.constellationData.positions (not from props)
 						await this.autoFocusNode(cloneResult.repoName, silent);
 					}
 				} else {
@@ -454,6 +456,8 @@ export class URIHandlerService {
 						await canvasAPI.applyConstellationLayout();
 
 						// Step 5: Auto-focus the newly cloned node
+						// Note: No timing delay needed - DreamNode3D reads constellation positions
+						// directly from store.constellationData.positions (not from props)
 						await this.autoFocusNode(repoName, silent);
 					}
 				} else {

@@ -297,15 +297,15 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
-      
+
       let actualCurrentPosition: [number, number, number];
-      
+
       if (positionMode === 'constellation') {
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
         const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-        
+
         actualCurrentPosition = [
           anchorPos[0] - normalizedDir[0] * radialOffset,
           anchorPos[1] - normalizedDir[1] * radialOffset,
@@ -314,11 +314,15 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
+
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();
-      
-      const constellationPosition = dreamNode.position;
+
+      // ROBUST: Read constellation position from store's constellation data instead of props
+      // This avoids timing issues with React prop propagation after layout updates
+      const store = useInterBrainStore.getState();
+      const constellationPosition = store.constellationData.positions?.get(dreamNode.id) || dreamNode.position;
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(constellationPosition);
@@ -410,13 +414,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     },
     interruptAndReturnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
       let actualCurrentPosition: [number, number, number];
-      
+
       if (positionMode === 'constellation') {
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
         const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-        
+
         actualCurrentPosition = [
           anchorPos[0] - normalizedDir[0] * radialOffset,
           anchorPos[1] - normalizedDir[1] * radialOffset,
@@ -425,8 +429,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
-      const constellationPosition = dreamNode.position;
+
+      // ROBUST: Read constellation position from store's constellation data instead of props
+      // This avoids timing issues with React prop propagation after layout updates
+      const store = useInterBrainStore.getState();
+      const constellationPosition = store.constellationData.positions?.get(dreamNode.id) || dreamNode.position;
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(constellationPosition);
