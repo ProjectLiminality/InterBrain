@@ -463,6 +463,7 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     // OPTIMIZATION: Save Radicle ID to .udd file for instant future lookups
+    // Also normalize title to human-readable format if needed
     try {
       const repoPath = path.join(destinationPath, repoName);
       const uddPath = path.join(repoPath, '.udd');
@@ -474,9 +475,42 @@ export class RadicleServiceImpl implements RadicleService {
       // Add/update radicleId field
       udd.radicleId = radicleId;
 
+      // Normalize title to human-readable format using established naming schema
+      // Import title normalization utilities
+      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+
+      // Check if title needs normalization (kebab-case, snake_case, or PascalCase)
+      let titleNormalized = false;
+      if (udd.title) {
+        const originalTitle = udd.title;
+
+        // If title contains hyphens, underscores, or periods as separators
+        if (/[-_.]+/.test(udd.title)) {
+          udd.title = udd.title
+            .split(/[-_.]+/)
+            .filter((word: string) => word.length > 0)
+            .map((word: string) => {
+              const cleaned = word.trim();
+              if (cleaned.length === 0) return '';
+              return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+            })
+            .join(' ')
+            .trim();
+          titleNormalized = udd.title !== originalTitle;
+        }
+        // If title is pure PascalCase (no separators), convert to spaced format
+        else if (isPascalCase(udd.title)) {
+          udd.title = pascalCaseToTitle(udd.title);
+          titleNormalized = udd.title !== originalTitle;
+        }
+      }
+
       // Write back to .udd file
       await fs.promises.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
       console.log(`RadicleService: ✅ Saved Radicle ID to .udd file for instant future lookups`);
+      if (titleNormalized) {
+        console.log(`RadicleService: ✅ Normalized title to human-readable format: "${udd.title}"`);
+      }
     } catch (error) {
       console.warn(`RadicleService: ⚠️ Could not save Radicle ID to .udd file (non-critical):`, error);
       // Don't fail the clone if .udd update fails
