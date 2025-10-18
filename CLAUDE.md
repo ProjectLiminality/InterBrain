@@ -133,6 +133,25 @@ The key insight is to use **disk as single source of truth** rather than coordin
 - Test placeholder appearance and clone completion behavior
 - Document what automatic behavior occurs vs custom logic needed
 
+### Incomplete DreamNode Metadata
+**Status**: Known Limitation - Not a Bug (October 18, 2025)
+**Issue**: DreamNodes cloned from repositories not fully initialized for InterBrain may exhibit constellation positioning issues:
+- **Symptom**: Node may not return to proper constellation position when deselected after auto-focus
+- **Root Cause**: Repository missing `.udd` file or has incomplete InterBrain metadata
+- **Occurs**: When cloning external/legacy repositories not created through InterBrain
+- **Both Radicle and GitHub**: Not specific to one clone method
+
+**Workaround**: Run "Scan vault for dream song relationships" command to refresh constellation layout
+
+**Fixes Applied**:
+- ✅ File system timing issue for GitHub clones (async `.udd` write - commit 34658da)
+- ✅ Branch selection optimization (clone only `main`, not `gh-pages` - commit 7a7fa2f)
+
+**Resolution**: Acceptable for MVP
+- InterBrain-created DreamNodes work correctly out of the box
+- Legacy/external repos have simple manual workaround
+- Future: Consider auto-detection and repair of incomplete DreamNode metadata
+
 ### Proto Node Fly-In Animation Issues
 **Status**: Deferred - Animation system complexity (August 26, 2025)
 **Issue**: Proto node creation animation system needs refinement:
