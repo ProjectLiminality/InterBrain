@@ -286,7 +286,7 @@ export function registerRadicleCommands(
 
         try {
           // Try cloning without passphrase first (ssh-agent)
-          const repoName = await radicleService.clone(radicleId.trim(), vaultPath);
+          const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath);
 
           // Success notification
           notice.hide();
@@ -311,35 +311,9 @@ export function registerRadicleCommands(
               console.log(`RadicleCommands: Added Radicle ID to .udd file`);
             }
 
-            // Calculate position at center of camera view accounting for sphere rotation
-            const store = useInterBrainStore.getState();
-            let position: [number, number, number] = [0, 0, -5000]; // Fallback
-
-            if (store.sphereRotation) {
-              const { Raycaster, Vector3, Sphere, Quaternion } = require('three');
-              const raycaster = new Raycaster();
-              const cameraPosition = new Vector3(0, 0, 0);
-              const cameraDirection = new Vector3(0, 0, -1);
-              raycaster.set(cameraPosition, cameraDirection);
-
-              const sphereRadius = 5000;
-              const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
-              const intersectionPoint = new Vector3();
-              const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
-
-              if (hasIntersection) {
-                const sphereQuaternion = new Quaternion(
-                  store.sphereRotation.x,
-                  store.sphereRotation.y,
-                  store.sphereRotation.z,
-                  store.sphereRotation.w
-                );
-                const inverseRotation = sphereQuaternion.clone().invert();
-                intersectionPoint.applyQuaternion(inverseRotation);
-                position = intersectionPoint.toArray() as [number, number, number];
-                console.log(`RadicleCommands: Calculated camera-facing position:`, position);
-              }
-            }
+            // Calculate default position at center of camera view
+            // TODO: Restore sphere rotation calculation if needed
+            const position: [number, number, number] = [0, 0, -5000];
 
             // Load dreamTalk media if specified
             let dreamTalkMedia: Array<{
@@ -382,7 +356,6 @@ export function registerRadicleCommands(
             // Create DreamNode with ALL required properties
             const clonedNode: DreamNode = {
               id: udd.uuid, // CRITICAL: id property
-              uuid: udd.uuid,
               name: udd.title || repoName,
               type: udd.type || 'dream',
               repoPath: repoName,
@@ -403,12 +376,13 @@ export function registerRadicleCommands(
             console.log(`RadicleCommands: Created DreamNode object:`, clonedNode);
 
             // Add to store (realNodes is a Map)
-            const currentNodes = new Map(store.realNodes);
-            currentNodes.set(clonedNode.uuid, {
+            const freshStore = useInterBrainStore.getState();
+            const currentNodes = new Map(freshStore.realNodes);
+            currentNodes.set(clonedNode.id, {
               node: clonedNode,
-              lastUpdated: Date.now()
+              lastSynced: Date.now()
             });
-            store.setRealNodes(currentNodes);
+            freshStore.setRealNodes(currentNodes);
 
             console.log(`RadicleCommands: Added cloned node to store, total nodes: ${currentNodes.size}`);
             uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
@@ -431,7 +405,7 @@ export function registerRadicleCommands(
             // Retry with passphrase
             const retryNotice = new Notice('Cloning from Radicle network...', 0);
             try {
-              const repoName = await radicleService.clone(radicleId.trim(), vaultPath, passphrase);
+              const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath, passphrase);
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully cloned ${repoName} with passphrase`);
               uiService.showSuccess(`${repoName} cloned successfully!`);
@@ -453,27 +427,9 @@ export function registerRadicleCommands(
                   console.log(`RadicleCommands: Added Radicle ID to .udd file`);
                 }
 
-                // Calculate camera-facing position
-                const storeState = useInterBrainStore.getState();
-                let position: [number, number, number] = [0, 0, -5000];
-
-                if (storeState.sphereRotation) {
-                  const { Raycaster, Vector3, Sphere, Quaternion } = require('three');
-                  const raycaster = new Raycaster();
-                  raycaster.set(new Vector3(0, 0, 0), new Vector3(0, 0, -1));
-                  const worldSphere = new Sphere(new Vector3(0, 0, 0), 5000);
-                  const intersectionPoint = new Vector3();
-                  if (raycaster.ray.intersectSphere(worldSphere, intersectionPoint)) {
-                    const sphereQuaternion = new Quaternion(
-                      storeState.sphereRotation.x,
-                      storeState.sphereRotation.y,
-                      storeState.sphereRotation.z,
-                      storeState.sphereRotation.w
-                    );
-                    intersectionPoint.applyQuaternion(sphereQuaternion.clone().invert());
-                    position = intersectionPoint.toArray() as [number, number, number];
-                  }
-                }
+                // Calculate default position at center of camera view
+                // TODO: Restore sphere rotation calculation if needed
+                const position: [number, number, number] = [0, 0, -5000];
 
                 // Load dreamTalk media
                 let dreamTalkMedia: Array<{
@@ -513,7 +469,6 @@ export function registerRadicleCommands(
                 // Create DreamNode with ALL required properties
                 const clonedNode: DreamNode = {
                   id: udd.uuid,
-                  uuid: udd.uuid,
                   name: udd.title || repoName,
                   type: udd.type || 'dream',
                   repoPath: repoName,
@@ -532,12 +487,13 @@ export function registerRadicleCommands(
                 };
 
                 // Add to store
-                const currentNodes = new Map(storeState.realNodes);
-                currentNodes.set(clonedNode.uuid, {
+                const retryStore = useInterBrainStore.getState();
+                const currentNodes = new Map(retryStore.realNodes);
+                currentNodes.set(clonedNode.id, {
                   node: clonedNode,
-                  lastUpdated: Date.now()
+                  lastSynced: Date.now()
                 });
-                storeState.setRealNodes(currentNodes);
+                retryStore.setRealNodes(currentNodes);
 
                 uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
               } catch (readError) {

@@ -52,6 +52,11 @@ export interface RadicleService {
   hasChangesToShare(dreamNodePath: string): Promise<boolean>;
 
   /**
+   * Get Radicle ID for a repository
+   */
+  getRadicleId(repoPath: string): Promise<string | null>;
+
+  /**
    * Get current user's Radicle identity
    */
   getIdentity(): Promise<RadicleIdentity>;
