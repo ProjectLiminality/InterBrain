@@ -267,6 +267,10 @@ export class RadicleServiceImpl implements RadicleService {
     console.log('RadicleService: Starting Radicle node...');
     await execAsync(`"${radCmd}" node start`, { env });
     console.log('RadicleService: Radicle node started successfully');
+
+    // Wait for node to be fully ready
+    console.log('RadicleService: Waiting for node to be fully ready...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   /**
@@ -307,8 +311,9 @@ export class RadicleServiceImpl implements RadicleService {
       console.log(`RadicleService: rad . returned output but not a valid Radicle ID: "${radicleId}"`);
       return null;
     } catch (error: any) {
-      // Log the error for debugging
-      console.log(`RadicleService: rad . failed for ${repoPath}:`, error.message);
+      // Log the error for debugging with full details
+      const errorOutput = error.stderr || error.stdout || error.message || 'Unknown error';
+      console.log(`RadicleService: rad . failed for ${repoPath}:`, errorOutput);
       // Silent failure - repository may not be initialized yet
       return null;
     }
