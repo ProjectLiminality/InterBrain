@@ -85,7 +85,8 @@ export function registerRadicleCommands(
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
           // Check if already initialized - this is success, not an error!
-          if (error.message && error.message.includes('already initialized')) {
+          // Radicle error contains "reinitialize" or "already initialized"
+          if (error.message && (error.message.includes('already initialized') || error.message.includes('reinitialize'))) {
             notice.hide();
             console.log(`RadicleCommands: ${selectedNode.name} already initialized with Radicle`);
 

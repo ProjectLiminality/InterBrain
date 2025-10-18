@@ -212,7 +212,8 @@ export class RadicleServiceImpl implements RadicleService {
       const errorOutput = error.stderr || error.stdout || error.message || '';
 
       // Check if already initialized - this is expected and not an error
-      if (errorOutput.includes('already initialized')) {
+      // Radicle error contains "reinitialize" or "already initialized"
+      if (errorOutput.includes('already initialized') || errorOutput.includes('reinitialize')) {
         console.log(`RadicleService: Repository already initialized (not an error)`);
         throw new Error(errorOutput); // Throw with clean message for caller to handle
       }
