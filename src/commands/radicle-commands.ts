@@ -122,6 +122,29 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
+          // Check if already initialized - race condition where it was initialized between Step 2 and Step 3
+          if (error.message && (error.message.includes('already initialized') || error.message.includes('reinitialize'))) {
+            notice.hide();
+            console.log(`RadicleCommands: ${selectedNode.name} was initialized during gap check, retrieving ID...`);
+
+            // Get and save the Radicle ID to .udd file
+            const radicleId = await radicleService.getRadicleId(fullRepoPath);
+            if (radicleId) {
+              try {
+                const uddContent = await fs.readFile(uddPath, 'utf-8');
+                const udd = JSON.parse(uddContent);
+                udd.radicleId = radicleId;
+                await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+              } catch (writeError) {
+                console.warn('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
+              }
+            }
+
+            uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            return;
+          }
+
           // If passphrase is needed, prompt and retry
           if (error.message && error.message.includes('passphrase')) {
             notice.hide();
@@ -156,7 +179,29 @@ export function registerRadicleCommands(
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name} with passphrase`);
               uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
-            } catch (retryError) {
+            } catch (retryError: any) {
+              // Check if already initialized in retry path too
+              if (retryError.message && (retryError.message.includes('already initialized') || retryError.message.includes('reinitialize'))) {
+                retryNotice.hide();
+                console.log(`RadicleCommands: ${selectedNode.name} already initialized, retrieving ID...`);
+
+                const radicleId = await radicleService.getRadicleId(fullRepoPath);
+                if (radicleId) {
+                  try {
+                    const uddContent = await fs.readFile(uddPath, 'utf-8');
+                    const udd = JSON.parse(uddContent);
+                    udd.radicleId = radicleId;
+                    await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                    console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+                  } catch (writeError) {
+                    console.warn('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
+                  }
+                }
+
+                uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+                return;
+              }
+
               retryNotice.hide();
               console.error('RadicleCommands: Failed to initialize with passphrase:', retryError);
               uiService.showError(`Failed to initialize: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
