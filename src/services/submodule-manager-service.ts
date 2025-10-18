@@ -374,7 +374,7 @@ export class SubmoduleManagerService {
    */
   private async removeUnusedSubmodules(
     analysis: CanvasAnalysis,
-    importResults: SubmoduleImportResult[]
+    _importResults: SubmoduleImportResult[]
   ): Promise<string[]> {
     const removedSubmodules: string[] = [];
 

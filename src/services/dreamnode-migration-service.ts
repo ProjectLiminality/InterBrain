@@ -382,7 +382,7 @@ export class DreamNodeMigrationService {
                 { cwd: path.join(this.vaultPath, dir.name) }
               );
               changes.push(`Committed .gitmodules change in ${dir.name}`);
-            } catch (error) {
+            } catch {
               // Non-fatal - continue
               changes.push(`Note: Could not auto-commit in ${dir.name}`);
             }
@@ -431,7 +431,7 @@ export class DreamNodeMigrationService {
             continue;
           }
         }
-      } catch (error) {
+      } catch {
         errors.push('GitHub CLI not found - cannot rename repository');
         return { changes, errors };
       }
@@ -566,7 +566,7 @@ export class DreamNodeMigrationService {
             { cwd: nodePath }
           );
           changes.push('Committed canvas path updates');
-        } catch (error) {
+        } catch {
           // Non-fatal - continue
           changes.push('Note: Could not auto-commit canvas updates');
         }
@@ -685,7 +685,7 @@ export class DreamNodeMigrationService {
                 { cwd: path.join(this.vaultPath, dir.name) }
               );
               console.log(`  CanvasAudit: Committed changes to ${dir.name}`);
-            } catch (commitError) {
+            } catch {
               console.log(`  CanvasAudit: Note - Could not auto-commit in ${dir.name}`);
             }
           }

@@ -422,7 +422,7 @@ export function registerDreamweavingCommands(
           console.log('  Checking for dirty submodules...');
           await execAsyncPromise('git submodule foreach --recursive "git add -A && git diff-index --quiet HEAD || git commit --no-verify -m \'Save submodule changes\'"', { cwd: fullPath });
           console.log('  ✓ Submodules committed (if any)');
-        } catch (submoduleError) {
+        } catch {
           // Non-fatal - continue with parent commit
           console.log('  ℹ️ No submodule changes');
         }
@@ -528,7 +528,7 @@ export function registerDreamweavingCommands(
             // Step 2: Recursively commit all dirty submodules
             try {
               await execAsyncPromise('git submodule foreach --recursive "git add -A && git diff-index --quiet HEAD || git commit --no-verify -m \'Save submodule changes\'"', { cwd: fullPath });
-            } catch (submoduleError) {
+            } catch {
               // Non-fatal - continue with parent commit
             }
 
