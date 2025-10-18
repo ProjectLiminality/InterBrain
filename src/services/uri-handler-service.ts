@@ -309,7 +309,10 @@ export class URIHandlerService {
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
 			try {
 				// Step 1: Rescan vault to detect the new DreamNode
+				console.log(`🔄 [URIHandler-Radicle] Step 1: Scanning vault for new node "${cloneResult.repoName}"`);
 				await this.dreamNodeService.scanVault();
+				const allNodes = await this.dreamNodeService.list();
+				console.log(`✅ [URIHandler-Radicle] scanVault complete - Total nodes: ${allNodes.length}`);
 
 				// Step 2: Index the newly cloned node for semantic search
 				await this.indexNewNode(cloneResult.repoName);
@@ -322,11 +325,17 @@ export class URIHandlerService {
 					// Step 4: Apply constellation layout if DreamSpace is open
 					const canvasAPI = (globalThis as any).__interbrainCanvas;
 					if (canvasAPI?.applyConstellationLayout) {
+						console.log(`🌌 [URIHandler-Radicle] Step 4: Calling applyConstellationLayout`);
 						await canvasAPI.applyConstellationLayout();
 
+						// CRITICAL: Wait for React to mount new DreamNode3D component and register in SpatialOrchestrator
+						// Without this delay, the newly cloned node isn't in nodeRefs registry yet,
+						// so it won't receive returnToConstellation() command when user clicks away
+						console.log(`⏳ [URIHandler-Radicle] Waiting 200ms for React to mount new component...`);
+						await new Promise(resolve => globalThis.setTimeout(resolve, 200));
+
 						// Step 5: Auto-focus the newly cloned node
-						// Note: No timing delay needed - DreamNode3D reads constellation positions
-						// directly from store.constellationData.positions (not from props)
+						console.log(`🎯 [URIHandler-Radicle] Step 5: Auto-focusing node "${cloneResult.repoName}"`);
 						await this.autoFocusNode(cloneResult.repoName, silent);
 					}
 				} else {
@@ -440,7 +449,10 @@ export class URIHandlerService {
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
 			try {
 				// Step 1: Rescan vault to detect the new DreamNode
+				console.log(`🔄 [URIHandler-GitHub] Step 1: Scanning vault for new node "${repoName}"`);
 				await this.dreamNodeService.scanVault();
+				const allNodes = await this.dreamNodeService.list();
+				console.log(`✅ [URIHandler-GitHub] scanVault complete - Total nodes: ${allNodes.length}`);
 
 				// Step 2: Index the newly cloned node for semantic search
 				await this.indexNewNode(repoName);
@@ -453,11 +465,17 @@ export class URIHandlerService {
 					// Step 4: Apply constellation layout if DreamSpace is open
 					const canvasAPI = (globalThis as any).__interbrainCanvas;
 					if (canvasAPI?.applyConstellationLayout) {
+						console.log(`🌌 [URIHandler-GitHub] Step 4: Calling applyConstellationLayout`);
 						await canvasAPI.applyConstellationLayout();
 
+						// CRITICAL: Wait for React to mount new DreamNode3D component and register in SpatialOrchestrator
+						// Without this delay, the newly cloned node isn't in nodeRefs registry yet,
+						// so it won't receive returnToConstellation() command when user clicks away
+						console.log(`⏳ [URIHandler-GitHub] Waiting 200ms for React to mount new component...`);
+						await new Promise(resolve => globalThis.setTimeout(resolve, 200));
+
 						// Step 5: Auto-focus the newly cloned node
-						// Note: No timing delay needed - DreamNode3D reads constellation positions
-						// directly from store.constellationData.positions (not from props)
+						console.log(`🎯 [URIHandler-GitHub] Step 5: Auto-focusing node "${repoName}"`);
 						await this.autoFocusNode(repoName, silent);
 					}
 				} else {

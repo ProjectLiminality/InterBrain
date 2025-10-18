@@ -297,7 +297,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
-
       let actualCurrentPosition: [number, number, number];
 
       if (positionMode === 'constellation') {
@@ -322,6 +321,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       // This avoids timing issues with React prop propagation after layout updates
       const store = useInterBrainStore.getState();
       const constellationPosition = store.constellationData.positions?.get(dreamNode.id) || dreamNode.position;
+
+      // Log whether we found a constellation position or are using fallback
+      if (store.constellationData.positions?.has(dreamNode.id)) {
+        console.log(`🌟 [DreamNode-${dreamNode.name}] returnToConstellation - Found position in store`);
+      } else {
+        console.warn(`⚠️ [DreamNode-${dreamNode.name}] returnToConstellation - NO POSITION IN STORE! Using fallback: [${dreamNode.position.join(', ')}]`);
+      }
 
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);

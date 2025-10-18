@@ -51,19 +51,14 @@ export function computeConstellationLayout(
 ): ConstellationLayoutResult {
   const startTime = performance.now();
 
-  console.log('🌌 [ConstellationLayout] Starting constellation layout computation...');
-
   try {
     // Phase 1: Detect clusters using connected components
-    console.log('🔍 [ConstellationLayout] Phase 1: Detecting connected components...');
     const clusteringResult = detectConnectedComponents(relationshipGraph);
 
     if (clusteringResult.clusters.length === 0) {
       console.warn('⚠️ [ConstellationLayout] No clusters found, returning empty layout');
       return createEmptyLayout(startTime);
     }
-
-    console.log(`✅ [ConstellationLayout] Found ${clusteringResult.clusters.length} clusters`);
 
     // Convert clustering result to constellation clusters
     const clusters: ConstellationCluster[] = clusteringResult.clusters.map(cluster => ({
@@ -76,11 +71,9 @@ export function computeConstellationLayout(
     }));
 
     // Phase 2: Global positioning - place clusters on sphere
-    console.log('🌍 [ConstellationLayout] Phase 2: Computing global cluster positioning...');
     const clustersWithPositions = computeGlobalPositioning(clusters, config);
 
     // Phase 3: Local layouts - force-directed within each cluster
-    console.log('⚡ [ConstellationLayout] Phase 3: Computing local force-directed layouts...');
     const nodePositions = new Map<string, [number, number, number]>();
 
     for (const cluster of clustersWithPositions) {
@@ -109,13 +102,11 @@ export function computeConstellationLayout(
     }
 
     // Phase 4: Handle standalone nodes (not in any cluster)
-    console.log('🎯 [ConstellationLayout] Phase 4: Positioning standalone nodes...');
     const allNodeIds = new Set(Array.from(relationshipGraph.nodes.keys()));
     const clusteredNodeIds = new Set(clusters.flatMap(c => c.nodeIds));
     const standaloneNodeIds = Array.from(allNodeIds).filter(id => !clusteredNodeIds.has(id));
 
     if (standaloneNodeIds.length > 0) {
-      console.log(`📍 [ConstellationLayout] Positioning ${standaloneNodeIds.length} standalone nodes...`);
 
       // Use fibonacci distribution for standalone nodes
       const standalonePoints = fibonacciSphere(standaloneNodeIds.length);
@@ -127,7 +118,6 @@ export function computeConstellationLayout(
     }
 
     // Phase 5: Cluster refinement to eliminate overlaps
-    console.log('🔧 [ConstellationLayout] Phase 5: Refining cluster positions...');
     const refinementResult = refineClusterPositions(clustersWithPositions, config);
 
     if (!refinementResult.success && refinementResult.remainingOverlaps > 0) {
@@ -136,8 +126,6 @@ export function computeConstellationLayout(
 
     // Update node positions after cluster refinement
     if (refinementResult.totalDisplacement > 0) {
-      console.log(`🔄 [ConstellationLayout] Updating node positions after refinement (displacement: ${refinementResult.totalDisplacement.toFixed(4)})`);
-
       for (const cluster of refinementResult.clusters) {
         // Re-project nodes in moved clusters
         const clusterEdges = relationshipGraph.edges.filter(edge =>
@@ -178,16 +166,6 @@ export function computeConstellationLayout(
       refinementSuccessful: refinementResult.success
     };
 
-    console.log(`✅ [ConstellationLayout] Layout computation complete in ${computationTime.toFixed(1)}ms`);
-    console.log(`📊 [ConstellationLayout] Stats:`, {
-      clusters: stats.totalClusters,
-      nodes: stats.totalNodes,
-      edges: stats.totalEdges,
-      standalone: stats.standaloneNodes,
-      largestCluster: stats.largestClusterSize,
-      refinementSuccess: stats.refinementSuccessful
-    });
-
     return {
       nodePositions,
       clusters: refinementResult.clusters,
@@ -217,8 +195,6 @@ function computeGlobalPositioning(
   const totalSphereArea = 4 * Math.PI;
   const totalNodes = clusters.reduce((sum, cluster) => sum + cluster.size, 0);
 
-  console.log(`🌍 [ConstellationLayout] Global positioning: ${clusters.length} clusters, ${totalNodes} total nodes`);
-
   // Calculate cluster radii based on proportional area
   const updatedClusters = clusters.map(cluster => {
     const proportionalArea = config.coverageFactor * totalSphereArea * (cluster.size / totalNodes);
@@ -242,9 +218,6 @@ function computeGlobalPositioning(
   sortedClusters.forEach((cluster, index) => {
     cluster.center = fibonacciPoints[index];
   });
-
-  console.log(`📐 [ConstellationLayout] Cluster radii:`,
-    sortedClusters.map(c => `C${c.id}: ${c.radius.toFixed(3)} (${c.size} nodes)`).join(', '));
 
   return sortedClusters;
 }
@@ -310,8 +283,6 @@ export function createFallbackLayout(
   const missingNodes = dreamNodes.filter(node => !finalPositions.has(node.id));
 
   if (missingNodes.length > 0) {
-    console.log(`🔄 [ConstellationLayout] Creating fallback positions for ${missingNodes.length} nodes`);
-
     const fallbackPoints = fibonacciSphere(missingNodes.length);
     missingNodes.forEach((node, index) => {
       const scaledPos = scaleToSphere(fallbackPoints[index], config.sphereRadius);

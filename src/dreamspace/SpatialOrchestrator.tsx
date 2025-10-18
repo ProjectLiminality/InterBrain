@@ -342,27 +342,32 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     },
     
     returnToConstellation: () => {
+      console.log(`🏠 [SpatialOrchestrator-Return] Returning to constellation - nodeRefs count: ${nodeRefs.current.size}`);
+
       // Start transition
       isTransitioning.current = true;
       focusedNodeId.current = null;
-      
+
       // Note: Flip states now reset smoothly via Universal Movement API flip-back animation
       // resetAllFlips(); // Removed - handled by individual nodes during movement
-      
+
       // Update store to constellation layout mode
       setSpatialLayout('constellation');
-      
+
       // Get current sphere rotation for accurate scaled position calculation
       let worldRotation = undefined;
       if (dreamWorldRef.current) {
         worldRotation = dreamWorldRef.current.quaternion.clone();
       }
-      
+
       // Return ALL nodes to their dynamically scaled constellation positions
       // This handles both active (center+rings) and inactive (sphere) nodes correctly
       const { centerNodeId, ring1NodeIds, ring2NodeIds, ring3NodeIds, sphereNodeIds } = liminalWebRoles.current;
-      
+
+      console.log(`📋 [SpatialOrchestrator-Return] Liminal roles - center: ${centerNodeId ? 1 : 0}, ring1: ${ring1NodeIds.size}, ring2: ${ring2NodeIds.size}, ring3: ${ring3NodeIds.size}, sphere: ${sphereNodeIds.size}`);
+
       // Return ALL nodes to scaled positions with role-based easing
+      let commandsSent = 0;
       nodeRefs.current.forEach((nodeRef, nodeId) => {
         if (nodeRef.current) {
           // Determine appropriate easing based on node's role in liminal web
@@ -377,8 +382,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           
           // Pass world rotation for accurate scaling + role-based easing
           nodeRef.current.returnToScaledPosition(transitionDuration, worldRotation, easing);
+          commandsSent++;
         }
       });
+
+      console.log(`✅ [SpatialOrchestrator-Return] Sent returnToScaledPosition commands to ${commandsSent} nodes`);
       
       // Clear role tracking after initiating return
       liminalWebRoles.current = {
@@ -1120,16 +1128,26 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
 
       try {
+        // CRITICAL FIX: Read dreamNodes from store, not from prop
+        // The prop can be stale if React hasn't re-rendered yet (e.g., during URI clone auto-refresh)
+        // This ensures we always use the latest node list
+        const dreamNodesFromStore = Array.from(store.realNodes.values()).map(data => data.node);
+
+        console.log(`📊 [SpatialOrchestrator-Layout] Node count - Prop: ${dreamNodes.length}, Store: ${dreamNodesFromStore.length}`);
+        if (dreamNodes.length !== dreamNodesFromStore.length) {
+          console.warn(`⚠️ [SpatialOrchestrator-Layout] STALE PROP DETECTED! Using store value.`);
+        }
+
         // Compute constellation layout
-        const layoutResult = computeConstellationLayout(relationshipGraph, dreamNodes);
+        const layoutResult = computeConstellationLayout(relationshipGraph, dreamNodesFromStore);
 
         if (layoutResult.nodePositions.size === 0) {
           console.warn('⚠️ [SpatialOrchestrator] Constellation layout returned no positions');
           return;
         }
 
-        // Create fallback positions for any missing nodes
-        const completePositions = createFallbackLayout(dreamNodes, layoutResult.nodePositions);
+        // Create fallback positions for any missing nodes (use store nodes)
+        const completePositions = createFallbackLayout(dreamNodesFromStore, layoutResult.nodePositions);
 
         // Store the positions in the store for persistence
         store.setConstellationPositions(completePositions);
