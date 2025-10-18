@@ -65,10 +65,20 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Check if current platform supports Radicle (macOS/Linux only)
    * Windows users will use GitHub-based implementation (future)
+   *
+   * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test GitHub fallback on macOS
    */
   private isPlatformSupported(): boolean {
     if (this._isPlatformSupported !== null) {
       return this._isPlatformSupported;
+    }
+
+    // 🧪 TESTING MODE: Simulate Windows to test GitHub fallback
+    const simulateWindows = process.env.SIMULATE_WINDOWS === 'true';
+    if (simulateWindows) {
+      console.log('🧪 [TEST MODE] Simulating Windows - Radicle disabled, GitHub fallback active');
+      this._isPlatformSupported = false;
+      return false;
     }
 
     const platform = os.platform();

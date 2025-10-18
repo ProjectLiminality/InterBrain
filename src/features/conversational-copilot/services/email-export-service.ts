@@ -33,19 +33,28 @@ export class EmailExportService {
 			// Get vault name for deep links
 			const vaultName = this.app.vault.getName();
 
-			// CRITICAL: Ensure all invoked nodes have Radicle IDs before generating links
-			const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
-			console.log(`🔮 [EmailExport] Ensuring ${nodeUUIDs.length} nodes have Radicle IDs...`);
+			// Check if Radicle is available on this machine FIRST
+			const { getRadicleService } = require('../../../services/radicle-service');
+			const radicleService = getRadicleService();
+			const radicleAvailable = await radicleService.isAvailable();
 
 			let uuidToRadicleIdMap = new Map<string, string>();
 
-			try {
-				const batchInitService = getRadicleBatchInitService();
-				uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds(nodeUUIDs);
-				console.log(`✅ [EmailExport] ${uuidToRadicleIdMap.size}/${nodeUUIDs.length} nodes have Radicle IDs`);
-			} catch (error) {
-				console.error('❌ [EmailExport] Batch init failed, will use UUID fallback:', error);
-				// Continue with UUID fallback for all nodes
+			if (radicleAvailable) {
+				// CRITICAL: Ensure all invoked nodes have Radicle IDs before generating links
+				const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
+				console.log(`🔮 [EmailExport] Radicle available - ensuring ${nodeUUIDs.length} nodes have Radicle IDs...`);
+
+				try {
+					const batchInitService = getRadicleBatchInitService();
+					uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds(nodeUUIDs);
+					console.log(`✅ [EmailExport] ${uuidToRadicleIdMap.size}/${nodeUUIDs.length} nodes have Radicle IDs`);
+				} catch (error) {
+					console.error('❌ [EmailExport] Batch init failed, will use fallback:', error);
+					// Continue with fallback for all nodes
+				}
+			} else {
+				console.log(`🧪 [EmailExport] Radicle not available - using GitHub/UUID fallback for all nodes`);
 			}
 
 			// Build email components (with Radicle IDs where available)
