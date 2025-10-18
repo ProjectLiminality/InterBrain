@@ -341,12 +341,10 @@ export function extractSourceDreamNodeId(filename: string): string | undefined {
   const submoduleMatch = filename.match(/^([^/]+)\/([^/]+)\//);
   if (submoduleMatch) {
     const submoduleName = submoduleMatch[2]; // "OtherDreamNode"
-    console.log(`extractSourceDreamNodeId: "${filename}" → "${submoduleName}"`);
     return submoduleName; // Use submodule name as DreamNode ID
   }
 
   // If it's a local file (no submodule path), return undefined (not clickable)
-  console.log(`extractSourceDreamNodeId: "${filename}" → undefined (local file)`);
   return undefined;
 }
 

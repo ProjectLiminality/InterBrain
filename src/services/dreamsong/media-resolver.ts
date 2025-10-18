@@ -321,12 +321,10 @@ async function resolveSourceDreamNodeUuid(
 
     if (!submoduleMatch) {
       // Local file (no submodule path) - not clickable
-      console.log(`[Media Resolver] Local file (non-clickable): ${filename}`);
       return null;
     }
 
     const submoduleDirName = submoduleMatch[2]; // "VectorEquilibrium"
-    console.log(`[Media Resolver] Detected submodule media: ${filename} → directory: ${submoduleDirName}`);
 
     // Read .udd file from submodule directory
     const vaultPath = vaultService.getVaultPath();
@@ -352,7 +350,6 @@ async function resolveSourceDreamNodeUuid(
       return null; // Media will be non-clickable
     }
 
-    console.log(`✅ [Media Resolver] Resolved UUID for ${submoduleDirName}: ${udd.uuid}`);
     return udd.uuid;
 
   } catch (error) {
