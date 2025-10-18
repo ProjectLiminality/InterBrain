@@ -50,10 +50,12 @@ export class DreamSongRelationshipService {
     config: DreamSongRelationshipConfig = DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
   ): Promise<DreamSongScanResult> {
     const startTime = Date.now();
+    console.log('🔍 [DreamSong Relationships] Starting vault scan...');
 
     try {
       // Phase 1: Discover all DreamNodes and build UUID mapping
       const { dreamNodes, uuidToPathMap } = await this.discoverAllDreamNodes();
+      console.log(`📊 [DreamSong Relationships] Found ${dreamNodes.length} DreamNodes`);
 
       // Phase 2: Scan for DreamSongs and extract relationships
       const { edges, dreamSongsFound, dreamSongsParsed } = await this.extractAllRelationships(
@@ -66,6 +68,8 @@ export class DreamSongRelationshipService {
       const graph = this.buildRelationshipGraph(dreamNodes, edges);
 
       const scanTimeMs = Date.now() - startTime;
+      console.log(`✅ [DreamSong Relationships] Scan complete in ${scanTimeMs}ms`);
+      console.log(`📈 [DreamSong Relationships] Created ${edges.length} edges from ${dreamSongsParsed} DreamSongs`);
 
       return {
         success: true,
@@ -118,6 +122,7 @@ export class DreamSongRelationshipService {
 
       // Write to file
       fs.writeFileSync(fullPath, jsonString, 'utf-8');
+      console.log(`📤 [DreamSong Relationships] Exported graph to: ${fullPath}`);
 
     } catch (error) {
       console.error('❌ [DreamSong Relationships] Export failed:', error);
@@ -160,6 +165,8 @@ export class DreamSongRelationshipService {
     dreamSongsFound: number;
     dreamSongsParsed: number;
   }> {
+    console.log(`⚡ [DreamSong Relationships] Using parallel I/O for ${dreamNodes.length} nodes...`);
+
     // OPTIMIZATION: Check all DreamSongs in parallel instead of sequentially
     const dreamSongChecks = await Promise.all(
       dreamNodes.map(async (node) => ({
@@ -174,6 +181,7 @@ export class DreamSongRelationshipService {
       .map(check => check.node);
 
     const dreamSongsFound = nodesWithDreamSongs.length;
+    console.log(`🎵 [DreamSong Relationships] Found ${dreamSongsFound} DreamSongs to process`);
 
     // OPTIMIZATION: Parse all DreamSongs in parallel instead of sequentially
     const parseResults = await Promise.all(
@@ -181,6 +189,8 @@ export class DreamSongRelationshipService {
         const dreamSongPath = `${dreamNode.repoPath}/DreamSong.canvas`;
 
         try {
+          console.log(`🎵 [DreamSong Relationships] Processing: ${dreamNode.name} -> ${dreamSongPath}`);
+
           const dreamSongResult = await this.dreamSongParser.parseDreamSong(
             dreamSongPath,
             dreamNode.repoPath
@@ -220,6 +230,8 @@ export class DreamSongRelationshipService {
       }
     }
 
+    console.log(`⚡ [DreamSong Relationships] Parallel processing complete: ${dreamSongsParsed}/${dreamSongsFound} parsed successfully`);
+
     return { edges: allEdges, dreamSongsFound, dreamSongsParsed };
   }
 
@@ -246,8 +258,11 @@ export class DreamSongRelationshipService {
       }));
 
     if (mediaBlocks.length < config.minSequenceLength) {
+      console.log(`📏 [DreamSong Relationships] Skipping ${dreamSongPath}: sequence too short (${mediaBlocks.length})`);
       return edges;
     }
+
+    console.log(`🔗 [DreamSong Relationships] Processing sequence of ${mediaBlocks.length} media blocks`);
 
     // Create edges from sequential pairs
     for (let i = 0; i < mediaBlocks.length - 1; i++) {
@@ -302,6 +317,7 @@ export class DreamSongRelationshipService {
       }
     }
 
+    console.log(`✨ [DreamSong Relationships] Created ${edges.length} edges from ${dreamSongPath}`);
     return edges;
   }
 
