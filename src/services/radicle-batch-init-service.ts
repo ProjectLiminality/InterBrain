@@ -118,7 +118,8 @@ export class RadicleBatchInitService {
 	}
 
 	/**
-	 * Read Radicle ID from .udd file OR directly from git repository
+	 * Intelligently check and sync Radicle ID between .udd file and git repository
+	 * Returns Radicle ID if present OR can be synced, null if not initialized
 	 */
 	private async getRadicleIdFromUdd(node: DreamNode): Promise<string | null> {
 		try {
@@ -127,28 +128,39 @@ export class RadicleBatchInitService {
 			const adapter = this.plugin.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
 			const uddPath = path.join(vaultPath, node.repoPath, '.udd');
+			const fullRepoPath = path.join(vaultPath, node.repoPath);
 
-			// Try reading from .udd file first
+			// STEP 1: Try reading Radicle ID from .udd file first
 			try {
 				const uddContent = await fs.readFile(uddPath, 'utf-8');
 				const udd = JSON.parse(uddContent);
 
 				if (udd.radicleId) {
+					// SUCCESS: Radicle ID already in .udd
 					return udd.radicleId;
 				}
 			} catch (error) {
 				console.warn(`⚠️ [RadicleBatchInit] Could not read .udd for ${node.name}:`, error);
 			}
 
-			// Fallback: Check git repository directly using rad .
-			const fullRepoPath = path.join(vaultPath, node.repoPath);
-
+			// STEP 2: No Radicle ID in .udd - check if repository is initialized anyway
 			const radicleId = await this.radicleService.getRadicleId(fullRepoPath);
 			if (radicleId) {
-				console.log(`🔍 [RadicleBatchInit] Found Radicle ID in git for ${node.name}: ${radicleId}`);
+				// GAP DETECTED: Repository initialized but .udd doesn't have the ID - write it
+				console.log(`🔍 [RadicleBatchInit] Found Radicle ID in git for ${node.name}: ${radicleId}, writing to .udd...`);
+				try {
+					const uddContent = await fs.readFile(uddPath, 'utf-8');
+					const udd = JSON.parse(uddContent);
+					udd.radicleId = radicleId;
+					await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+					console.log(`✅ [RadicleBatchInit] Successfully wrote Radicle ID to .udd for ${node.name}`);
+				} catch (writeError) {
+					console.warn(`⚠️ [RadicleBatchInit] Could not write Radicle ID to .udd for ${node.name}:`, writeError);
+				}
 				return radicleId;
 			}
 
+			// STEP 3: Not initialized at all
 			return null;
 		} catch (error) {
 			console.warn(`⚠️ [RadicleBatchInit] Could not get Radicle ID for ${node.name}:`, error);
@@ -202,17 +214,32 @@ export class RadicleBatchInitService {
 				}
 
 			} catch (error) {
-				// Check if error is "already initialized" - this is NOT an error!
+				// Check if error is "already initialized" or "reinitialize" - this is NOT an error!
 				const errorMsg = error instanceof Error ? error.message : String(error);
 
-				if (errorMsg.includes('already initialized')) {
+				if (errorMsg.includes('already initialized') || errorMsg.includes('reinitialize')) {
 					console.log(`ℹ️ [RadicleBatchInit] ${node.name} already initialized, retrieving ID...`);
 
 					try {
 						const fullRepoPath = path.join(vaultPath, node.repoPath);
+						const fs = require('fs').promises;
+						const uddPath = path.join(fullRepoPath, '.udd');
 						const radicleId = await this.radicleService.getRadicleId(fullRepoPath);
 
 						if (radicleId) {
+							// GAP CLOSING: Write Radicle ID to .udd file if not already there
+							try {
+								const uddContent = await fs.readFile(uddPath, 'utf-8');
+								const udd = JSON.parse(uddContent);
+								if (!udd.radicleId) {
+									udd.radicleId = radicleId;
+									await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+									console.log(`✅ [RadicleBatchInit] Wrote Radicle ID to .udd for ${node.name}`);
+								}
+							} catch (writeError) {
+								console.warn(`⚠️ [RadicleBatchInit] Could not write Radicle ID to .udd for ${node.name}:`, writeError);
+							}
+
 							result.set(node.id, radicleId);
 							console.log(`✅ [RadicleBatchInit] ${node.name} already initialized: ${radicleId}`);
 							continue; // Success! Move to next node

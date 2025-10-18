@@ -40,9 +40,11 @@ export function registerRadicleCommands(
         }
 
         const path = require('path');
+        const fs = require('fs').promises;
         const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+        const uddPath = path.join(fullRepoPath, '.udd');
 
-        console.log(`RadicleCommands: Attempting to initialize Radicle for DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
+        console.log(`RadicleCommands: Ensuring Radicle initialization for DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
         const radicleService = serviceManager.getRadicleService();
 
         // Check if Radicle is available
@@ -53,9 +55,48 @@ export function registerRadicleCommands(
           return;
         }
 
-        // Show status indicator
+        // STEP 1: Check if Radicle ID exists in .udd file
+        let radicleIdFromUdd: string | null = null;
+        try {
+          const uddContent = await fs.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+          radicleIdFromUdd = udd.radicleId || null;
+        } catch (error) {
+          console.warn(`RadicleCommands: Could not read .udd file:`, error);
+        }
+
+        if (radicleIdFromUdd) {
+          // SUCCESS: Radicle ID already in .udd file
+          console.log(`RadicleCommands: Radicle ID already present in .udd: ${radicleIdFromUdd}`);
+          uiService.showSuccess(`${selectedNode.name} already ready for peer-to-peer sharing!`);
+          return;
+        }
+
+        // STEP 2: Radicle ID not in .udd - check if repository is initialized with Radicle anyway
+        console.log(`RadicleCommands: No Radicle ID in .udd, checking repository initialization status...`);
+        const radicleIdFromRepo = await radicleService.getRadicleId(fullRepoPath);
+
+        if (radicleIdFromRepo) {
+          // GAP DETECTED: Repository is initialized but .udd doesn't have the ID - write it
+          console.log(`RadicleCommands: Repository initialized with Radicle ID ${radicleIdFromRepo}, writing to .udd...`);
+          try {
+            const uddContent = await fs.readFile(uddPath, 'utf-8');
+            const udd = JSON.parse(uddContent);
+            udd.radicleId = radicleIdFromRepo;
+            await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+            console.log(`RadicleCommands: Successfully wrote Radicle ID to .udd file`);
+            uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            return;
+          } catch (error) {
+            console.error('RadicleCommands: Failed to write Radicle ID to .udd:', error);
+            uiService.showError('Repository initialized but failed to update .udd file');
+            return;
+          }
+        }
+
+        // STEP 3: Not initialized at all - initialize with Radicle and write to .udd
+        console.log(`RadicleCommands: Repository not initialized with Radicle, initializing...`);
         const notice = new Notice('Initializing Radicle for DreamNode...', 0);
-        console.log(`RadicleCommands: Starting rad init for ${selectedNode.name}...`);
 
         try {
           // Try without passphrase first (ssh-agent)
@@ -65,9 +106,6 @@ export function registerRadicleCommands(
           // Get the Radicle ID and save to .udd file
           const radicleId = await radicleService.getRadicleId(fullRepoPath);
           if (radicleId) {
-            const path = require('path');
-            const fs = require('fs').promises;
-            const uddPath = path.join(fullRepoPath, '.udd');
             try {
               const uddContent = await fs.readFile(uddPath, 'utf-8');
               const udd = JSON.parse(uddContent);
@@ -84,33 +122,6 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
-          // Check if already initialized - this is success, not an error!
-          // Radicle error contains "reinitialize" or "already initialized"
-          if (error.message && (error.message.includes('already initialized') || error.message.includes('reinitialize'))) {
-            notice.hide();
-            console.log(`RadicleCommands: ${selectedNode.name} already initialized with Radicle`);
-
-            // Get and save the Radicle ID to .udd file
-            const radicleId = await radicleService.getRadicleId(fullRepoPath);
-            if (radicleId) {
-              const path = require('path');
-              const fs = require('fs').promises;
-              const uddPath = path.join(fullRepoPath, '.udd');
-              try {
-                const uddContent = await fs.readFile(uddPath, 'utf-8');
-                const udd = JSON.parse(uddContent);
-                udd.radicleId = radicleId;
-                await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-                console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
-              } catch {
-                // Non-critical error
-              }
-            }
-
-            uiService.showSuccess(`${selectedNode.name} already ready for peer-to-peer sharing!`);
-            return;
-          }
-
           // If passphrase is needed, prompt and retry
           if (error.message && error.message.includes('passphrase')) {
             notice.hide();
@@ -131,9 +142,6 @@ export function registerRadicleCommands(
               // Get the Radicle ID and save to .udd file
               const radicleId = await radicleService.getRadicleId(fullRepoPath);
               if (radicleId) {
-                const path = require('path');
-                const fs = require('fs').promises;
-                const uddPath = path.join(fullRepoPath, '.udd');
                 try {
                   const uddContent = await fs.readFile(uddPath, 'utf-8');
                   const udd = JSON.parse(uddContent);
