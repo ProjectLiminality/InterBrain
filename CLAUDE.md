@@ -545,14 +545,49 @@ This project is designed for AI-first development:
 DreamNode-template/
 ├── .udd                  # Single JSON file: UUID, title, type, dreamTalk, relationships
 ├── hooks/
-│   ├── pre-commit        # Coherence beacon updates
-│   ├── post-commit       # Relationship tracking
-│   └── post-merge        # Submodule sync for DreamSong integration
+│   ├── pre-commit        # Template initialization + canvas validation
+│   ├── post-commit       # Bidirectional supermodule tracking
+│   └── hook-helper.js    # Node.js utilities for hook operations
 └── README.md            # DreamNode documentation
 
 # DreamNode creation:
 git init --template=${pluginPath}/DreamNode-template
 ```
+
+### Git Hooks System (Coherence Beacon Foundation)
+
+**Pre-Commit Hook** - Initialization & Validation:
+- **First commit only**: Moves template files (.udd, README.md, LICENSE) from `.git/` to working directory
+- **Canvas validation**: Warns when committing `.canvas` files, reminds user to run "Sync Canvas Submodules"
+- **Non-blocking**: Always allows commit to proceed (just provides helpful reminders)
+
+**Post-Commit Hook** - Bidirectional Relationship Tracking:
+- **Detects submodule changes**: Compares `.gitmodules` between HEAD and HEAD~1
+- **Added submodules**:
+  - Initializes submodule to ensure `.udd` is readable
+  - Adds child UUID to parent's `submodules` array
+  - Adds parent UUID to child's `supermodules` array
+  - Commits relationship in child repo
+- **Removed submodules**:
+  - Removes child UUID from parent's `submodules` array
+  - Child's `supermodules` becomes stale (acceptable - will sync on next use)
+- **Automatic commits**: Creates "Update submodule relationships" commit in parent repo
+
+**Hook Helper Script** (`hook-helper.js`):
+- **UDD operations**: Read, write, add/remove supermodule/submodule relationships
+- **Git operations**: Parse `.gitmodules`, compare commits, execute git commands
+- **Callable from shell**: Provides CLI interface for hook scripts
+- **Reusable logic**: Shared utilities for both pre-commit and post-commit hooks
+
+**Key Design Decisions**:
+- Git natively tracks submodules via `.gitmodules`, BUT `.udd` also tracks them for:
+  - UUID-based relationships (git uses paths, we use UUIDs)
+  - Coherence Beacon discovery (who uses this DreamNode?)
+  - Symmetry with `supermodules` array
+- Bidirectional tracking: Parent tracks children (`submodules`), children track parents (`supermodules`)
+- Hooks use Node.js for complex logic (JSON parsing, file I/O)
+- All hook output goes to stderr (keeps stdout clean for git)
+- Hooks never fail - log errors but allow operations to complete
 
 ### Creator Mode Workflow (Feature #310 Complete)
 ```bash

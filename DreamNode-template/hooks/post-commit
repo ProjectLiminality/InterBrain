@@ -1,11 +1,11 @@
 #!/bin/sh
 #
-# DreamNode Post-Commit Hook  
+# DreamNode Post-Commit Hook
 # Part of InterBrain DreamNode Template System
 #
 # PURPOSE: Coherence Beacon Relationship Tracking
 #
-# FUTURE FUNCTIONALITY (Placeholder Implementation):
+# FUNCTIONALITY:
 # - Detects when a commit includes submodule changes
 # - Updates bidirectional relationship tracking in UDD files
 # - When DreamNode A imports DreamNode B as submodule:
@@ -16,25 +16,26 @@
 #
 # This hook fires AFTER each commit to update relationship metadata
 # based on what was actually committed.
-#
-# CURRENT STATUS: Placeholder - no-op to prevent git operation failures  
-# IMPLEMENTATION: Deferred until coherence beacon features
 
-echo "DreamNode Post-Commit Hook: Coherence beacon relationship tracking (placeholder)"
+echo "DreamNode Post-Commit Hook: Checking for submodule relationship changes..." >&2
 
-# Get current commit hash
+# Get current commit hash for logging
 COMMIT_HASH=$(git rev-parse HEAD)
-echo "Processing commit: $COMMIT_HASH"
+echo "Processing commit: $COMMIT_HASH" >&2
 
-# Future implementation will:
-# 1. Check if commit includes .gitmodules changes
-# 2. Identify newly added submodules
-# 3. For each new submodule:
-#    - Get submodule's UUID from its .udd file
-#    - Update this node's .udd submodules array
-#    - Update submodule's .udd supermodules array  
-#    - Create commit in submodule repo with relationship update
-# 4. Propagate changes via Radicle network
+# Find the hook-helper.js script (in .git/hooks/ directory)
+HOOK_DIR="$(dirname "$0")"
+HOOK_HELPER="$HOOK_DIR/hook-helper.js"
 
-# For now, allow commit to complete normally
+# Check if hook helper exists
+if [ ! -f "$HOOK_HELPER" ]; then
+    echo "Warning: hook-helper.js not found at $HOOK_HELPER" >&2
+    echo "Skipping supermodule tracking" >&2
+    exit 0
+fi
+
+# Call the Node.js helper script to update supermodule relationships
+node "$HOOK_HELPER" update-supermodules
+
+# Always exit successfully - we don't want to break git operations if hook fails
 exit 0
