@@ -84,6 +84,32 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
+          // Check if already initialized - this is success, not an error!
+          if (error.message && error.message.includes('already initialized')) {
+            notice.hide();
+            console.log(`RadicleCommands: ${selectedNode.name} already initialized with Radicle`);
+
+            // Get and save the Radicle ID to .udd file
+            const radicleId = await radicleService.getRadicleId(fullRepoPath);
+            if (radicleId) {
+              const path = require('path');
+              const fs = require('fs').promises;
+              const uddPath = path.join(fullRepoPath, '.udd');
+              try {
+                const uddContent = await fs.readFile(uddPath, 'utf-8');
+                const udd = JSON.parse(uddContent);
+                udd.radicleId = radicleId;
+                await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+              } catch {
+                // Non-critical error
+              }
+            }
+
+            uiService.showSuccess(`${selectedNode.name} already ready for peer-to-peer sharing!`);
+            return;
+          }
+
           // If passphrase is needed, prompt and retry
           if (error.message && error.message.includes('passphrase')) {
             notice.hide();
