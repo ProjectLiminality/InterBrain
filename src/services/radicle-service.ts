@@ -301,8 +301,11 @@ export class RadicleServiceImpl implements RadicleService {
         return radicleId;
       }
 
+      console.log(`RadicleService: rad . returned output but not a valid Radicle ID: "${radicleId}"`);
       return null;
-    } catch {
+    } catch (error: any) {
+      // Log the error for debugging
+      console.log(`RadicleService: rad . failed for ${repoPath}:`, error.message);
       // Silent failure - repository may not be initialized yet
       return null;
     }
