@@ -382,8 +382,10 @@ export class GitHubService {
         fs.mkdirSync(parentDir, { recursive: true });
       }
 
-      // Standard git clone
-      await execAsync(`git clone "${githubUrl}" "${destinationPath}"`);
+      // Clone only the main branch (avoid gh-pages branch used for GitHub Pages)
+      // --single-branch ensures we only get main, not all branches
+      // -b main explicitly checks out main branch
+      await execAsync(`git clone --single-branch -b main "${githubUrl}" "${destinationPath}"`);
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Failed to clone from GitHub: ${error.message}`);
