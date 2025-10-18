@@ -1,7 +1,7 @@
 import { Notice, Plugin } from 'obsidian';
 import { DreamNode } from '../types/dreamnode';
 import { githubService } from '../features/github-sharing/GitHubService';
-import { DreamNodeService } from './dreamnode-service';
+import { GitDreamNodeService } from './git-dreamnode-service';
 
 /**
  * GitHub Batch Share Service
@@ -11,9 +11,9 @@ import { DreamNodeService } from './dreamnode-service';
  */
 export class GitHubBatchShareService {
 	private plugin: Plugin;
-	private dreamNodeService: DreamNodeService;
+	private dreamNodeService: GitDreamNodeService;
 
-	constructor(plugin: Plugin, dreamNodeService: DreamNodeService) {
+	constructor(plugin: Plugin, dreamNodeService: GitDreamNodeService) {
 		this.plugin = plugin;
 		this.dreamNodeService = dreamNodeService;
 	}
@@ -225,7 +225,7 @@ export class GitHubBatchShareService {
 // Singleton instance
 let _githubBatchShareService: GitHubBatchShareService | null = null;
 
-export function initializeGitHubBatchShareService(plugin: Plugin, dreamNodeService: DreamNodeService): void {
+export function initializeGitHubBatchShareService(plugin: Plugin, dreamNodeService: GitDreamNodeService): void {
 	_githubBatchShareService = new GitHubBatchShareService(plugin, dreamNodeService);
 	console.log(`🔮 [GitHubBatchShare] Service initialized`);
 }

@@ -180,7 +180,7 @@ export class SubmoduleManagerService {
       }
 
       // Don't trim before splitting - each line needs its leading space for the regex
-      const lines = stdout.split('\n').filter(line => line.trim());
+      const lines = stdout.split('\n').filter((line: string) => line.trim());
       console.log(`SubmoduleManagerService: Processing ${lines.length} lines`);
       for (const line of lines) {
         console.log(`SubmoduleManagerService: Processing line: "${line}"`);

@@ -88,13 +88,14 @@ export default class InterBrainPlugin extends Plugin {
     const dreamNodeService = serviceManager.getActive();
 
     // Initialize URI handler service for deep links
-    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService);
+    // Cast to GitDreamNodeService since we know it's the concrete implementation at runtime
+    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
 
     // Initialize Radicle batch init service for post-call processing
-    initializeRadicleBatchInitService(this, radicleService, dreamNodeService);
+    initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
 
     // Initialize GitHub batch share service for Windows/GitHub fallback mode
-    initializeGitHubBatchShareService(this, dreamNodeService);
+    initializeGitHubBatchShareService(this, dreamNodeService as any);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();

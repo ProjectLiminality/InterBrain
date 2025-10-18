@@ -321,7 +321,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // OPTIMIZATION 1: Check all .udd files in parallel (fast path)
       const uddChecks = await Promise.all(
-        directories.map(async (dir) => {
+        directories.map(async (dir: any) => {
           const dirPath = path.join(vaultPath, dir.name);
           const uddPath = path.join(dirPath, '.udd');
 
@@ -349,7 +349,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // OPTIMIZATION 3: Fallback to git checks in parallel (slow path, only if needed)
       const gitChecks = await Promise.all(
-        directories.map(async (dir) => {
+        directories.map(async (dir: any) => {
           const dirPath = path.join(vaultPath, dir.name);
           const repoRadicleId = await this.getRadicleId(dirPath);
 

@@ -1,6 +1,6 @@
 import { App, Notice, Plugin } from 'obsidian';
 import { RadicleService } from './radicle-service';
-import { DreamNodeService } from './dreamnode-service';
+import { GitDreamNodeService } from './git-dreamnode-service';
 import { DreamSongRelationshipService } from './dreamsong-relationship-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 
@@ -14,9 +14,9 @@ export class URIHandlerService {
 	private app: App;
 	private plugin: Plugin;
 	private radicleService: RadicleService;
-	private dreamNodeService: DreamNodeService;
+	private dreamNodeService: GitDreamNodeService;
 
-	constructor(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService) {
+	constructor(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: GitDreamNodeService) {
 		this.app = app;
 		this.plugin = plugin;
 		this.radicleService = radicleService;
@@ -181,7 +181,7 @@ export class URIHandlerService {
 	private async autoFocusNode(repoName: string, silent: boolean = false): Promise<void> {
 		// Find the node by repo name
 		const allNodes = await this.dreamNodeService.list();
-		const targetNode = allNodes.find(node => node.repoPath === repoName);
+		const targetNode = allNodes.find((node: any) => node.repoPath === repoName);
 
 		if (!targetNode) {
 			console.warn(`⚠️ [URIHandler] Could not find node with repoPath: ${repoName}`);
@@ -215,7 +215,7 @@ export class URIHandlerService {
 		try {
 			// Find the node by repo name
 			const allNodes = await this.dreamNodeService.list();
-			const targetNode = allNodes.find(node => node.repoPath === repoName);
+			const targetNode = allNodes.find((node: any) => node.repoPath === repoName);
 
 			if (!targetNode) {
 				console.warn(`⚠️ [URIHandler] Could not find node for indexing: ${repoName}`);
@@ -518,7 +518,7 @@ export class URIHandlerService {
 // Singleton instance
 let _uriHandlerService: URIHandlerService | null = null;
 
-export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: DreamNodeService): void {
+export function initializeURIHandlerService(app: App, plugin: Plugin, radicleService: RadicleService, dreamNodeService: GitDreamNodeService): void {
 	_uriHandlerService = new URIHandlerService(app, plugin, radicleService, dreamNodeService);
 	_uriHandlerService.registerHandlers();
 	console.log(`🔗 [URIHandler] Service initialized`);
