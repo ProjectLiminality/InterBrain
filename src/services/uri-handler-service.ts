@@ -396,8 +396,8 @@ export class URIHandlerService {
 
 			// AUTO-INITIALIZE: Create .udd file for InterBrain compatibility
 			try {
-
 				const path = require('path');
+				const fsPromises = require('fs').promises;
 				const uddPath = path.join(destinationPath, '.udd');
 
 				// Check if .udd already exists (shouldn't happen, but be safe)
@@ -423,8 +423,8 @@ export class URIHandlerService {
 						githubRepoUrl: githubUrl // Preserve GitHub URL for fallback broadcasts
 					};
 
-					// Write .udd file
-					fs.writeFileSync(uddPath, JSON.stringify(udd, null, 2), 'utf8');
+					// Write .udd file asynchronously to ensure completion before scanVault()
+					await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf8');
 				}
 			} catch (uddError) {
 				console.error(`❌ [URIHandler] Failed to create .udd file (non-critical):`, uddError);
