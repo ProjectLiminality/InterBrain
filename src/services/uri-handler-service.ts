@@ -495,10 +495,13 @@ export class URIHandlerService {
 	 * @param githubRepoUrl GitHub repository URL (e.g., "https://github.com/user/repo" or "github.com/user/repo")
 	 */
 	static generateGitHubCloneLink(vaultName: string, githubRepoUrl: string): string {
-		// Strip protocol if present
-		const repoPath = githubRepoUrl.replace(/^https?:\/\//, '');
-		const encodedRepo = encodeURIComponent(repoPath);
-		return `obsidian://interbrain-clone?repo=${encodedRepo}`;
+		// Extract clean repo path: github.com/user/repo
+		const repoPath = githubRepoUrl
+			.replace(/^https?:\/\//, '')  // Remove protocol
+			.replace(/\.git$/, '');       // Remove .git suffix
+
+		// Return clean URI without encoding (slashes must remain unencoded)
+		return `obsidian://interbrain-clone?repo=${repoPath}`;
 	}
 
 	/**

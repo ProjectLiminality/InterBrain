@@ -14,25 +14,9 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
-import { fileURLToPath } from 'url';
 import { sanitizeTitleToPascalCase } from '../../utils/title-sanitization';
 
 const execAsync = promisify(exec);
-
-// Helper to get current file path in CommonJS-style modules
-const getCurrentFilePath = () => {
-  // Check if we're in a CommonJS context with __filename available
-  try {
-    if (typeof __filename !== 'undefined') {
-      return __filename;
-    }
-  } catch {
-    // __filename not available, fall through to ESM approach
-  }
-
-  // In ESM context, use import.meta.url
-  return fileURLToPath(import.meta.url);
-};
 
 export interface GitHubShareResult {
   /** GitHub repository URL */
@@ -1026,6 +1010,56 @@ export class GitHubService {
 
     // Mark this node as visited (prevent circular deps)
     visitedUUIDs.add(dreamNodeUuid);
+
+    // Check if already shared - .udd file has githubRepoUrl
+    if (udd.githubRepoUrl) {
+      console.log(`GitHubService: ${udd.title} already shared to GitHub: ${udd.githubRepoUrl}`);
+
+      // Generate Obsidian URI
+      const obsidianUri = this.generateObsidianURI(udd.githubRepoUrl);
+
+      return {
+        repoUrl: udd.githubRepoUrl,
+        pagesUrl: udd.githubPagesUrl,
+        obsidianUri
+      };
+    }
+
+    // Check if 'github' remote exists (edge case: previously shared but .udd not updated)
+    try {
+      const { stdout } = await execAsync('git remote get-url github', { cwd: dreamNodePath });
+      const existingGitHubUrl = stdout.trim();
+
+      if (existingGitHubUrl) {
+        console.log(`GitHubService: Found existing 'github' remote for ${udd.title}: ${existingGitHubUrl}`);
+        console.log(`GitHubService: Updating .udd file with missing GitHub URL`);
+
+        // Update .udd with missing GitHub URL
+        udd.githubRepoUrl = existingGitHubUrl;
+        await this.writeUDD(dreamNodePath, udd);
+
+        // Try to get GitHub Pages URL
+        const match = existingGitHubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+        if (match) {
+          const [, owner, repo] = match;
+          const cleanRepo = repo.replace(/\.git$/, '');
+          udd.githubPagesUrl = `https://${owner}.github.io/${cleanRepo}`;
+          await this.writeUDD(dreamNodePath, udd);
+        }
+
+        // Generate Obsidian URI
+        const obsidianUri = this.generateObsidianURI(existingGitHubUrl);
+
+        return {
+          repoUrl: existingGitHubUrl,
+          pagesUrl: udd.githubPagesUrl,
+          obsidianUri
+        };
+      }
+    } catch {
+      // No 'github' remote exists - this is fine, continue with normal sharing
+      console.log(`GitHubService: No existing 'github' remote found for ${udd.title}`);
+    }
 
     // Step 1: Discover and share all submodules recursively (depth-first)
     const submodules = await this.getSubmodules(dreamNodePath);

@@ -3,7 +3,9 @@ import { DreamNode } from '../../../types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
 import { getRadicleBatchInitService } from '../../../services/radicle-batch-init-service';
+import { getGitHubBatchShareService } from '../../../services/github-batch-share-service';
 import { serviceManager } from '../../../services/service-manager';
+import { useInterBrainStore } from '../../../store/interbrain-store';
 
 /**
  * Email Export Service
@@ -39,6 +41,7 @@ export class EmailExportService {
 			const radicleAvailable = await radicleService.isAvailable();
 
 			let uuidToRadicleIdMap = new Map<string, string>();
+			let uuidToGitHubUrlMap = new Map<string, string>();
 
 			if (radicleAvailable) {
 				// CRITICAL: Ensure all invoked nodes have Radicle IDs before generating links
@@ -54,10 +57,21 @@ export class EmailExportService {
 					// Continue with fallback for all nodes
 				}
 			} else {
-				console.log(`🧪 [EmailExport] Radicle not available - using GitHub/UUID fallback for all nodes`);
+				// FALLBACK: Ensure all invoked nodes have GitHub URLs before generating links
+				const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
+				console.log(`🧪 [EmailExport] Radicle not available - ensuring ${nodeUUIDs.length} nodes have GitHub URLs...`);
+
+				try {
+					const batchShareService = getGitHubBatchShareService();
+					uuidToGitHubUrlMap = await batchShareService.ensureNodesHaveGitHubUrls(nodeUUIDs);
+					console.log(`✅ [EmailExport] ${uuidToGitHubUrlMap.size}/${nodeUUIDs.length} nodes have GitHub URLs`);
+				} catch (error) {
+					console.error('❌ [EmailExport] Batch GitHub share failed, will use UUID fallback:', error);
+					// Continue with UUID fallback for all nodes
+				}
 			}
 
-			// Build email components (with Radicle IDs where available)
+			// Build email components (with Radicle IDs or GitHub URLs where available)
 			const subject = this.buildSubject(conversationPartner, conversationStartTime);
 			const body = this.buildEmailBody(
 				conversationPartner,
@@ -66,7 +80,8 @@ export class EmailExportService {
 				invocations,
 				aiSummary,
 				vaultName,
-				uuidToRadicleIdMap
+				uuidToRadicleIdMap,
+				uuidToGitHubUrlMap
 			);
 
 			// Get recipient email (from metadata or parameter)
@@ -102,7 +117,8 @@ export class EmailExportService {
 		invocations: InvocationEvent[],
 		aiSummary: string,
 		vaultName: string,
-		uuidToRadicleIdMap: Map<string, string>
+		uuidToRadicleIdMap: Map<string, string>,
+		uuidToGitHubUrlMap: Map<string, string>
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -124,7 +140,6 @@ export class EmailExportService {
 			body += `During our conversation, I shared ${invocations.length} DreamNode${invocations.length > 1 ? 's' : ''}:\n\n`;
 
 			// Get store to access node metadata (for GitHub URLs)
-			const { useInterBrainStore } = require('../../../store/interbrain-store');
 			const store = useInterBrainStore.getState();
 
 			// Track all identifiers for batch link (mixed Radicle/GitHub/UUID)
@@ -133,9 +148,11 @@ export class EmailExportService {
 			invocations.forEach((inv, i) => {
 				const invTimeStr = inv.timestamp.toLocaleTimeString();
 
-				// Three-tier fallback: Radicle ID → GitHub URL → UUID
+				// Four-tier fallback: Radicle ID → Batch GitHub URL → Store GitHub URL → UUID
 				const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
-				const node = store.dreamNodes.get(inv.dreamUUID);
+				const githubUrlFromBatch = uuidToGitHubUrlMap.get(inv.dreamUUID);
+				const nodeData = store.realNodes.get(inv.dreamUUID);
+				const node = nodeData?.node;
 
 				let deepLink: string;
 				let identifier: string;
@@ -144,12 +161,18 @@ export class EmailExportService {
 					// Primary: Radicle ID (peer-to-peer)
 					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId);
 					identifier = radicleId;
+				} else if (githubUrlFromBatch) {
+					// Fallback 1: GitHub URL from batch share (just pushed!)
+					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, githubUrlFromBatch);
+					// For batch link, store the repo path without protocol
+					identifier = githubUrlFromBatch.replace(/^https?:\/\//, '');
+					console.log(`📧 [EmailExport] Using batch GitHub URL for "${inv.nodeName}": ${githubUrlFromBatch}`);
 				} else if (node?.githubRepoUrl) {
-					// Fallback: GitHub URL (centralized but reliable)
+					// Fallback 2: GitHub URL from store (already existed)
 					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, node.githubRepoUrl);
 					// For batch link, store the repo path without protocol
 					identifier = node.githubRepoUrl.replace(/^https?:\/\//, '');
-					console.log(`📧 [EmailExport] Using GitHub fallback for "${inv.nodeName}"`);
+					console.log(`📧 [EmailExport] Using stored GitHub URL for "${inv.nodeName}"`);
 				} else {
 					// Last resort: UUID (legacy, requires network broadcast)
 					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);

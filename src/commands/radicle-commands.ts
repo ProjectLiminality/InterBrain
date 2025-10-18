@@ -59,7 +59,8 @@ export function registerRadicleCommands(
 
         try {
           // Try without passphrase first (ssh-agent)
-          await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`);
+          // Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
+          await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`);
 
           // Get the Radicle ID and save to .udd file
           const radicleId = await radicleService.getRadicleId(fullRepoPath);
@@ -97,7 +98,8 @@ export function registerRadicleCommands(
             // Retry with passphrase
             const retryNotice = new Notice('Initializing Radicle for DreamNode...', 0);
             try {
-              await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`, passphrase);
+              // Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
+              await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`, passphrase);
 
               // Get the Radicle ID and save to .udd file
               const radicleId = await radicleService.getRadicleId(fullRepoPath);

@@ -42,6 +42,7 @@ import { initializeConversationSummaryService } from './features/conversational-
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
+import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -91,6 +92,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize Radicle batch init service for post-call processing
     initializeRadicleBatchInitService(this, radicleService, dreamNodeService);
+
+    // Initialize GitHub batch share service for Windows/GitHub fallback mode
+    initializeGitHubBatchShareService(this, dreamNodeService);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();

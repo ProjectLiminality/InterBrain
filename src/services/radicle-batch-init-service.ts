@@ -184,9 +184,10 @@ export class RadicleBatchInitService {
 				const fullRepoPath = path.join(vaultPath, node.repoPath);
 
 				// Initialize with Radicle (will auto-save Radicle ID to .udd)
+				// Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
 				await this.radicleService.init(
 					fullRepoPath,
-					node.name,
+					node.repoPath,
 					`DreamNode: ${node.name}`
 				);
 

@@ -160,6 +160,7 @@ export class RadicleServiceImpl implements RadicleService {
 
     // Build command with proper flags to bypass TTY requirements
     // IMPORTANT: Pass the path as the first argument to rad init
+    // NOTE: name parameter should be pre-sanitized (e.g., directory name in PascalCase)
     const args = ['init', `"${dreamNodePath}"`, '--public', '--default-branch', 'main', '--no-confirm'];
     if (name) {
       args.push('--name', `"${name}"`);
