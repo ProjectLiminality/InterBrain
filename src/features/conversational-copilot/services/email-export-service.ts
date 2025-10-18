@@ -3,6 +3,7 @@ import { DreamNode } from '../../../types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
 import { getRadicleBatchInitService } from '../../../services/radicle-batch-init-service';
+import { serviceManager } from '../../../services/service-manager';
 
 /**
  * Email Export Service
@@ -34,8 +35,7 @@ export class EmailExportService {
 			const vaultName = this.app.vault.getName();
 
 			// Check if Radicle is available on this machine FIRST
-			const { getRadicleService } = require('../../../services/radicle-service');
-			const radicleService = getRadicleService();
+			const radicleService = serviceManager.getRadicleService();
 			const radicleAvailable = await radicleService.isAvailable();
 
 			let uuidToRadicleIdMap = new Map<string, string>();
