@@ -7,6 +7,7 @@
  */
 
 import { UrlMetadata, getYouTubeEmbedUrl } from './url-utils';
+import { Buffer } from 'buffer';
 
 export interface LinkFileMetadata {
   /** Original URL */
@@ -80,7 +81,7 @@ export function parseLinkFileContent(content: string): LinkFileMetadata | null {
       if (base64Match && base64Match[1]) {
         const base64Content = base64Match[1];
         // Decode base64 to UTF-8 string
-        jsonContent = atob(base64Content);
+        jsonContent = Buffer.from(base64Content, 'base64').toString('utf-8');
       }
     } catch (decodeError) {
       console.error('Failed to decode base64 data URL:', decodeError);

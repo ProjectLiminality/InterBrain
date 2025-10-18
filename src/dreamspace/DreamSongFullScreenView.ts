@@ -197,7 +197,6 @@ export class DreamSongFullScreenView extends ItemView {
       return;
     }
 
-    console.log('Rendering DreamSong component with blocks:', this.blocks);
     // Render the DreamSong component directly - CSS modules handle all styling
     this.root.render(
       createElement(StrictMode, null,
@@ -207,7 +206,8 @@ export class DreamSongFullScreenView extends ItemView {
           dreamNodeName: this.dreamNode?.name,
           dreamTalkMedia: this.dreamNode?.dreamTalkMedia,
           onMediaClick: this.handleMediaClick.bind(this),
-          embedded: false
+          embedded: false,
+          githubPagesUrl: this.dreamNode?.githubPagesUrl
         })
       )
     );
@@ -217,19 +217,25 @@ export class DreamSongFullScreenView extends ItemView {
    * Handle media click navigation
    */
   private handleMediaClick(sourceDreamNodeId: string): void {
+    console.log(`DreamSongFullScreenView: handleMediaClick called with sourceDreamNodeId="${sourceDreamNodeId}"`);
+
     const store = useInterBrainStore.getState();
     const { realNodes, setSelectedNode } = store;
-    
+
     // Convert realNodes Map to dreamNodes array (same pattern as DreamspaceCanvas)
     const dreamNodes = Array.from(realNodes.values()).map(data => data.node);
-    
+    console.log(`DreamSongFullScreenView: Available dreamNodes:`, dreamNodes.map(n => ({ id: n.id, name: n.name })));
+
     // Find the DreamNode by ID or name
-    const targetNode = dreamNodes.find(node => 
+    const targetNode = dreamNodes.find(node =>
       node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
     );
-    
+
     if (targetNode) {
+      console.log(`DreamSongFullScreenView: Found target node:`, { id: targetNode.id, name: targetNode.name });
       setSelectedNode(targetNode);
+    } else {
+      console.warn(`DreamSongFullScreenView: No matching DreamNode found for "${sourceDreamNodeId}"`);
     }
   }
 

@@ -19,7 +19,18 @@ export default defineConfig({
       formats: ['cjs']
     },
     rollupOptions: {
-      external: ['obsidian'],
+      external: [
+        'obsidian',
+        'child_process',
+        'util',
+        'path',
+        'fs',
+        'url',
+        'buffer',
+        'crypto',
+        'stream',
+        'os'
+      ],
       output: {
         globals: {
           obsidian: 'obsidian'

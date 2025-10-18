@@ -95,6 +95,63 @@ This file contains the complete UDD (Universal Dream Description) schema includi
 - Or: Investigate macOS accessibility APIs for input state activation
 - Current workaround is acceptable for MVP
 
+### Progressive Loading for URI Clones
+**Status**: Deferred - Future enhancement (October 17, 2025)
+**Issue**: GitHub/Radicle clone links block UI during clone operation instead of showing immediate placeholder
+
+**Conceptual Design - Disk-Based Placeholder Approach**:
+The key insight is to use **disk as single source of truth** rather than coordinating store-only placeholders:
+
+1. **Immediate Placeholder Creation**:
+   - Create directory + minimal `.udd` file BEFORE clone operation
+   - Trigger `scanVault()` immediately → shows placeholder in DreamSpace
+   - `.udd` contains: uuid, title (normalized from repo name), type, source URL/ID, empty relationships
+
+2. **Background Clone**:
+   - Use `git init + remote + fetch + reset --hard` instead of `git clone` (merge-friendly)
+   - Allows existing `.udd` file to persist during git operations
+   - Clone completes in background without blocking UI
+
+3. **Observation-First Approach**:
+   - Test what happens automatically when clone completes (existing code may handle it)
+   - Only add custom refresh logic if needed based on observation
+   - Simpler than coordinating complex state updates
+
+**Benefits**:
+- Single source of truth (disk) eliminates state coordination complexity
+- Leverages existing `scanVault()` infrastructure
+- Git-native workflow with merge-friendly operations
+- No React state synchronization issues
+
+**Implementation Notes**:
+- `createMinimalUDD(destinationPath, repoName, sourceUrl, sourceType)` helper method
+- Apply to both GitHub and Radicle clone flows
+- Revert all store-only placeholder attempts (too complex)
+
+**Next Steps** (when prioritized):
+- Implement for GitHub first, then map to Radicle
+- Test placeholder appearance and clone completion behavior
+- Document what automatic behavior occurs vs custom logic needed
+
+### Incomplete DreamNode Metadata
+**Status**: Known Limitation - Not a Bug (October 18, 2025)
+**Issue**: DreamNodes cloned from repositories not fully initialized for InterBrain may exhibit constellation positioning issues:
+- **Symptom**: Node may not return to proper constellation position when deselected after auto-focus
+- **Root Cause**: Repository missing `.udd` file or has incomplete InterBrain metadata
+- **Occurs**: When cloning external/legacy repositories not created through InterBrain
+- **Both Radicle and GitHub**: Not specific to one clone method
+
+**Workaround**: Run "Scan vault for dream song relationships" command to refresh constellation layout
+
+**Fixes Applied**:
+- ✅ File system timing issue for GitHub clones (async `.udd` write - commit 34658da)
+- ✅ Branch selection optimization (clone only `main`, not `gh-pages` - commit 7a7fa2f)
+
+**Resolution**: Acceptable for MVP
+- InterBrain-created DreamNodes work correctly out of the box
+- Legacy/external repos have simple manual workaround
+- Future: Consider auto-detection and repair of incomplete DreamNode metadata
+
 ### Proto Node Fly-In Animation Issues
 **Status**: Deferred - Animation system complexity (August 26, 2025)
 **Issue**: Proto node creation animation system needs refinement:
@@ -109,8 +166,8 @@ This file contains the complete UDD (Universal Dream Description) schema includi
 
 **Root Cause**: Complex interaction between component lifecycle, animation state management, and useFrame timing. Animation states conflict and create unwanted side effects.
 
-**Next Steps**: 
-- Consider simpler animation approach focusing only on essential transitions  
+**Next Steps**:
+- Consider simpler animation approach focusing only on essential transitions
 - May require rethinking animation architecture for creation components
 - Alternative: Accept current immediate appearance/disappearance as sufficient for MVP
 - **Current Status**: Reverted to stable state (commit 3402622) with working core functionality

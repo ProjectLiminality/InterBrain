@@ -4,6 +4,7 @@ import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
+import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 
 // Access Node.js modules directly in Electron context
  
@@ -505,7 +506,9 @@ export class GitDreamNodeService {
       hasUnsavedChanges: false,
       email: udd.email,
       phone: udd.phone,
-      radicleId: udd.radicleId
+      radicleId: udd.radicleId,
+      githubRepoUrl: udd.githubRepoUrl,
+      githubPagesUrl: udd.githubPagesUrl
     };
     
     // Add to store
@@ -541,20 +544,25 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // CRITICAL: Sync display name with directory name (file system is source of truth)
-    // This ensures renaming directory in Finder/Obsidian updates the display name
-    if (node.name !== repoName) {
-      console.log(`✏️ [GitDreamNodeService] Syncing display name: "${node.name}" → "${repoName}"`);
-      node.name = repoName;
+    // CRITICAL: Sync display name with .udd title (human-readable)
+    // .udd file is source of truth for display names, NOT the folder name
+    // Folder names are PascalCase for compatibility, but display uses human-readable titles
+    if (node.name !== udd.title) {
+      console.log(`✏️ [GitDreamNodeService] Syncing display name from .udd: "${node.name}" → "${udd.title}"`);
+      node.name = udd.title;
       updated = true;
     }
 
-    // Check metadata changes (type, contact fields, and radicleId - name synced from directory)
-    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone || node.radicleId !== udd.radicleId) {
+    // Check metadata changes (type, contact fields, radicleId, and GitHub URLs - name synced from .udd)
+    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone ||
+        node.radicleId !== udd.radicleId || node.githubRepoUrl !== udd.githubRepoUrl ||
+        node.githubPagesUrl !== udd.githubPagesUrl) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
       node.radicleId = udd.radicleId;
+      node.githubRepoUrl = udd.githubRepoUrl;
+      node.githubPagesUrl = udd.githubPagesUrl;
       updated = true;
     }
     
@@ -628,6 +636,14 @@ export class GitDreamNodeService {
       udd.radicleId = node.radicleId;
     }
 
+    // CRITICAL: Preserve GitHub URLs if they exist
+    if (node.githubRepoUrl) {
+      udd.githubRepoUrl = node.githubRepoUrl;
+    }
+    if (node.githubPagesUrl) {
+      udd.githubPagesUrl = node.githubPagesUrl;
+    }
+
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
   }
   
@@ -643,13 +659,12 @@ export class GitDreamNodeService {
     }
   }
   
+  /**
+   * Sanitize title to PascalCase for folder names
+   * Uses unified sanitization utility for consistency across all layers
+   */
   private sanitizeRepoName(title: string): string {
-    return title
-      .replace(/[^a-zA-Z0-9-_\s]/g, '-') // Allow letters, numbers, hyphens, underscores, and spaces
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
-      .substring(0, 50); // Limit length
+    return sanitizeTitleToPascalCase(title);
   }
   
   private generateRepoName(title: string, _type: string, _nodeId: string): string {

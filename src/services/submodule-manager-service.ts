@@ -23,6 +23,7 @@ export interface SubmoduleImportResult {
   originalPath: string;
   newPath: string;
   error?: string;
+  alreadyExisted?: boolean; // Track if submodule was already present
 }
 
 export interface SyncResult {
@@ -99,8 +100,8 @@ export class SubmoduleManagerService {
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
       
-      // Import the submodule
-      const submoduleCommand = `git submodule add "${sourceFullPath}" "${actualSubmoduleName}"`;
+      // Import the submodule (use --force to handle previously-removed submodules)
+      const submoduleCommand = `git submodule add --force "${sourceFullPath}" "${actualSubmoduleName}"`;
       await execAsync(submoduleCommand, { cwd: parentFullPath });
       
       console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName}`);
@@ -166,21 +167,30 @@ export class SubmoduleManagerService {
   async listSubmodules(dreamNodePath: string): Promise<SubmoduleInfo[]> {
     const fullPath = this.getFullPath(dreamNodePath);
     const submodules: SubmoduleInfo[] = [];
-    
+
     try {
+      console.log(`SubmoduleManagerService: Listing submodules in ${dreamNodePath} (${fullPath})`);
       const { stdout } = await execAsync('git submodule status', { cwd: fullPath });
-      
+
+      console.log(`SubmoduleManagerService: git submodule status output:`, stdout);
+
       if (!stdout.trim()) {
+        console.log(`SubmoduleManagerService: No submodules found (empty output)`);
         return submodules;
       }
-      
-      const lines = stdout.trim().split('\n');
+
+      // Don't trim before splitting - each line needs its leading space for the regex
+      const lines = stdout.split('\n').filter((line: string) => line.trim());
+      console.log(`SubmoduleManagerService: Processing ${lines.length} lines`);
       for (const line of lines) {
+        console.log(`SubmoduleManagerService: Processing line: "${line}"`);
         // Git submodule status format: " hash path (branch)" or "+hash path (branch)"
         const match = line.match(/^[\s+-]\w+\s+(.+?)(?:\s+\(.+\))?$/);
+        console.log(`SubmoduleManagerService: Regex match result:`, match);
         if (match) {
           const submodulePath = match[1];
           const submoduleName = path.basename(submodulePath);
+          console.log(`SubmoduleManagerService: Parsed submodule: path="${submodulePath}", name="${submoduleName}"`);
           
           // Get submodule URL
           try {
@@ -237,18 +247,36 @@ export class SubmoduleManagerService {
       
       // Import external dependencies as submodules
       const importResults = await this.importExternalDependencies(analysis);
-      
-      // Update canvas file paths using the same logic as the working command
+
+      // Check for unused submodules (bidirectional sync)
+      const removedSubmodules = await this.removeUnusedSubmodules(analysis, importResults);
+
+      // Early exit: If all submodules already existed AND none removed, nothing to update or commit
+      const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
+      if (newImports.length === 0 && removedSubmodules.length === 0) {
+        console.log(`SubmoduleManagerService: All submodules already synced - no changes needed`);
+        return {
+          canvasPath,
+          dreamNodePath: analysis.dreamNodeBoundary,
+          submodulesImported: importResults,
+          pathsUpdated: new Map(),
+          success: true
+        };
+      }
+
+      // Update canvas file paths (only if there are new imports)
       const pathUpdates = this.buildCanvasPathUpdates(analysis, importResults);
       if (pathUpdates.size > 0) {
         await this.canvasParser.updateCanvasFilePaths(canvasPath, pathUpdates);
       }
-      
-      // Commit changes
-      const commitHash = await this.commitSubmoduleChanges(
+
+      // Commit changes (including removals)
+      let commitHash: string | undefined;
+      commitHash = await this.commitSubmoduleChanges(
         analysis.dreamNodeBoundary,
         canvasPath,
-        importResults
+        importResults,
+        removedSubmodules
       );
       
       console.log(`SubmoduleManagerService: Successfully synced canvas ${canvasPath}`);
@@ -294,10 +322,10 @@ export class SubmoduleManagerService {
    */
   private async importExternalDependencies(analysis: CanvasAnalysis): Promise<SubmoduleImportResult[]> {
     const results: SubmoduleImportResult[] = [];
-    
+
     // Group dependencies by DreamNode to avoid duplicate submodules
     const dreamNodeGroups = new Map<string, DependencyInfo[]>();
-    
+
     for (const dep of analysis.externalDependencies) {
       if (dep.dreamNodePath) {
         const existing = dreamNodeGroups.get(dep.dreamNodePath) || [];
@@ -305,20 +333,115 @@ export class SubmoduleManagerService {
         dreamNodeGroups.set(dep.dreamNodePath, existing);
       }
     }
-    
-    // Import each unique external DreamNode as a submodule
+
+    // Get existing submodules to avoid conflicts
+    const existingSubmodules = await this.listSubmodules(analysis.dreamNodeBoundary);
+    const existingSubmoduleNames = new Set(existingSubmodules.map(s => s.name));
+
+    console.log(`SubmoduleManagerService: Found ${existingSubmodules.length} existing submodules:`, Array.from(existingSubmoduleNames));
+
+    // Import each unique external DreamNode as a submodule (only if not already present)
     for (const [dreamNodePath, dependencies] of dreamNodeGroups) {
-      console.log(`SubmoduleManagerService: Importing ${dreamNodePath} for ${dependencies.length} dependencies`);
-      
-      const result = await this.importSubmodule(
-        analysis.dreamNodeBoundary,
-        dreamNodePath
-      );
-      
-      results.push(result);
+      const submoduleName = path.basename(dreamNodePath);
+
+      if (existingSubmoduleNames.has(submoduleName)) {
+        console.log(`SubmoduleManagerService: Submodule ${submoduleName} already exists, skipping import`);
+        // Create a success result for already-existing submodule
+        results.push({
+          success: true,
+          submoduleName,
+          originalPath: dreamNodePath,
+          newPath: submoduleName,
+          alreadyExisted: true
+        });
+      } else {
+        console.log(`SubmoduleManagerService: Importing ${dreamNodePath} for ${dependencies.length} dependencies`);
+
+        const result = await this.importSubmodule(
+          analysis.dreamNodeBoundary,
+          dreamNodePath
+        );
+
+        results.push(result);
+      }
     }
-    
+
     return results;
+  }
+
+  /**
+   * Remove submodules that are no longer referenced in the canvas (bidirectional sync)
+   */
+  private async removeUnusedSubmodules(
+    analysis: CanvasAnalysis,
+    _importResults: SubmoduleImportResult[]
+  ): Promise<string[]> {
+    const removedSubmodules: string[] = [];
+
+    try {
+      // Get all existing submodules
+      const existingSubmodules = await this.listSubmodules(analysis.dreamNodeBoundary);
+
+      // Build set of required submodule names from analysis
+      const requiredSubmoduleNames = new Set<string>();
+      for (const dep of analysis.externalDependencies) {
+        if (dep.dreamNodePath) {
+          const submoduleName = path.basename(dep.dreamNodePath);
+          requiredSubmoduleNames.add(submoduleName);
+        }
+      }
+
+      console.log(`SubmoduleManagerService: Required submodules:`, Array.from(requiredSubmoduleNames));
+      console.log(`SubmoduleManagerService: Existing submodules:`, existingSubmodules.map(s => s.name));
+
+      // Find submodules that are no longer needed
+      for (const existingSubmodule of existingSubmodules) {
+        if (!requiredSubmoduleNames.has(existingSubmodule.name)) {
+          console.log(`SubmoduleManagerService: Removing unused submodule: ${existingSubmodule.name}`);
+
+          try {
+            const fullPath = this.getFullPath(analysis.dreamNodeBoundary);
+
+            // Step 1: Deinitialize submodule
+            await execAsync(`git submodule deinit -f "${existingSubmodule.path}"`, { cwd: fullPath });
+
+            // Step 2: Remove from git index and .gitmodules
+            await execAsync(`git rm -f "${existingSubmodule.path}"`, { cwd: fullPath });
+
+            // Step 3: Remove directory if it still exists
+            try {
+              const fs = require('fs');
+              const submoduleFullPath = path.join(fullPath, existingSubmodule.path);
+              if (fs.existsSync(submoduleFullPath)) {
+                fs.rmSync(submoduleFullPath, { recursive: true, force: true });
+                console.log(`SubmoduleManagerService: Removed directory: ${existingSubmodule.path}`);
+              }
+            } catch (dirError) {
+              console.warn(`SubmoduleManagerService: Could not remove directory ${existingSubmodule.path}:`, dirError);
+            }
+
+            removedSubmodules.push(existingSubmodule.name);
+            console.log(`SubmoduleManagerService: Successfully removed submodule: ${existingSubmodule.name}`);
+
+          } catch (error) {
+            console.error(`SubmoduleManagerService: Failed to remove submodule ${existingSubmodule.name}:`, error);
+            // Continue with other submodules even if one fails
+          }
+        }
+      }
+
+      if (removedSubmodules.length > 0) {
+        console.log(`SubmoduleManagerService: Removed ${removedSubmodules.length} unused submodule(s)`);
+      } else {
+        console.log(`SubmoduleManagerService: No unused submodules to remove`);
+      }
+
+      return removedSubmodules;
+
+    } catch (error) {
+      console.error('SubmoduleManagerService: Failed to check for unused submodules:', error);
+      return [];
+    }
   }
 
   /**
@@ -342,57 +465,73 @@ export class SubmoduleManagerService {
    */
   private buildCanvasPathUpdates(analysis: CanvasAnalysis, importResults: SubmoduleImportResult[]): Map<string, string> {
     const pathUpdates = new Map<string, string>();
-    
+
     // Build path updates from successful imports (same logic as working command)
     for (const dep of analysis.externalDependencies) {
       if (dep.dreamNodePath) {
         // Find the import result for this dependency's DreamNode
-        const matchingImport = importResults.find(result => 
+        const matchingImport = importResults.find(result =>
           result.success && result.originalPath === dep.dreamNodePath
         );
-        
+
         if (matchingImport) {
           // Build new path: dreamNodeBoundary/submoduleName + file path within that DreamNode
           const relativePath = dep.filePath.replace(dep.dreamNodePath + '/', '');
           const newPath = `${analysis.dreamNodeBoundary}/${matchingImport.submoduleName}/${relativePath}`;
-          pathUpdates.set(dep.filePath, newPath);
-          console.log(`SubmoduleManager path mapping: ${dep.filePath} → ${newPath}`);
+
+          // Only add to pathUpdates if the path actually changes
+          if (dep.filePath !== newPath) {
+            pathUpdates.set(dep.filePath, newPath);
+            console.log(`SubmoduleManager path mapping: ${dep.filePath} → ${newPath}`);
+          } else {
+            console.log(`SubmoduleManager path already correct: ${dep.filePath}`);
+          }
         }
       }
     }
-    
+
     return pathUpdates;
   }
 
   /**
-   * Commit submodule additions and canvas changes
+   * Commit submodule additions/removals and canvas changes
    */
   private async commitSubmoduleChanges(
     dreamNodePath: string,
     canvasPath: string,
-    importResults: SubmoduleImportResult[]
+    importResults: SubmoduleImportResult[],
+    removedSubmodules: string[] = []
   ): Promise<string> {
     const fullPath = this.getFullPath(dreamNodePath);
-    
+
     try {
       // Add all changes (submodules and updated canvas)
       await execAsync('git add -A', { cwd: fullPath });
-      
+
       // Create commit message
-      const successCount = importResults.filter(r => r.success).length;
+      const addedCount = importResults.filter(r => r.success && !r.alreadyExisted).length;
+      const removedCount = removedSubmodules.length;
       const canvasName = path.basename(canvasPath, '.canvas');
-      const commitMessage = `Add ${successCount} submodule(s) for canvas ${canvasName}`;
-      
+
+      let commitMessage = `Sync submodules for canvas ${canvasName}`;
+      if (addedCount > 0 && removedCount > 0) {
+        commitMessage = `Sync submodules for ${canvasName}: +${addedCount}, -${removedCount}`;
+      } else if (addedCount > 0) {
+        commitMessage = `Add ${addedCount} submodule(s) for ${canvasName}`;
+      } else if (removedCount > 0) {
+        commitMessage = `Remove ${removedCount} unused submodule(s) from ${canvasName}`;
+      }
+
       // Commit changes
       const { stdout } = await execAsync(`git commit -m "${commitMessage}"`, { cwd: fullPath });
-      
+
       // Extract commit hash from output
       const hashMatch = stdout.match(/\[.+\s+(\w+)\]/);
       const commitHash = hashMatch ? hashMatch[1] : 'unknown';
-      
+
       console.log(`SubmoduleManagerService: Committed changes with hash ${commitHash}`);
       return commitHash;
-      
+
     } catch (error) {
       console.error('SubmoduleManagerService: Failed to commit changes:', error);
       throw new Error(`Failed to commit submodule changes: ${error instanceof Error ? error.message : 'Unknown error'}`);

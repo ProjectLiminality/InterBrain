@@ -19,7 +19,6 @@ import { buildRelationshipGraph } from '../utils/relationship-graph';
 import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from './layouts/RingLayout';
 import { computeConstellationLayout, createFallbackLayout } from './constellation/ConstellationLayout';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */

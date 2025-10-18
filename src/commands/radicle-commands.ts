@@ -3,6 +3,7 @@ import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { PassphraseManager } from '../services/passphrase-manager';
+import type { DreamNode } from '../types/dreamnode';
 
 /**
  * Radicle commands for peer-to-peer DreamNode sharing
@@ -39,9 +40,11 @@ export function registerRadicleCommands(
         }
 
         const path = require('path');
+        const fs = require('fs').promises;
         const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+        const uddPath = path.join(fullRepoPath, '.udd');
 
-        console.log(`RadicleCommands: Attempting to initialize Radicle for DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
+        console.log(`RadicleCommands: Ensuring Radicle initialization for DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
         const radicleService = serviceManager.getRadicleService();
 
         // Check if Radicle is available
@@ -52,20 +55,57 @@ export function registerRadicleCommands(
           return;
         }
 
-        // Show status indicator
+        // STEP 1: Check if Radicle ID exists in .udd file
+        let radicleIdFromUdd: string | null = null;
+        try {
+          const uddContent = await fs.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+          radicleIdFromUdd = udd.radicleId || null;
+        } catch (error) {
+          console.warn(`RadicleCommands: Could not read .udd file:`, error);
+        }
+
+        if (radicleIdFromUdd) {
+          // SUCCESS: Radicle ID already in .udd file
+          console.log(`RadicleCommands: Radicle ID already present in .udd: ${radicleIdFromUdd}`);
+          uiService.showSuccess(`${selectedNode.name} already ready for peer-to-peer sharing!`);
+          return;
+        }
+
+        // STEP 2: Radicle ID not in .udd - check if repository is initialized with Radicle anyway
+        console.log(`RadicleCommands: No Radicle ID in .udd, checking repository initialization status...`);
+        const radicleIdFromRepo = await radicleService.getRadicleId(fullRepoPath);
+
+        if (radicleIdFromRepo) {
+          // GAP DETECTED: Repository is initialized but .udd doesn't have the ID - write it
+          console.log(`RadicleCommands: Repository initialized with Radicle ID ${radicleIdFromRepo}, writing to .udd...`);
+          try {
+            const uddContent = await fs.readFile(uddPath, 'utf-8');
+            const udd = JSON.parse(uddContent);
+            udd.radicleId = radicleIdFromRepo;
+            await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+            console.log(`RadicleCommands: Successfully wrote Radicle ID to .udd file`);
+            uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            return;
+          } catch (error) {
+            console.error('RadicleCommands: Failed to write Radicle ID to .udd:', error);
+            uiService.showError('Repository initialized but failed to update .udd file');
+            return;
+          }
+        }
+
+        // STEP 3: Not initialized at all - initialize with Radicle and write to .udd
+        console.log(`RadicleCommands: Repository not initialized with Radicle, initializing...`);
         const notice = new Notice('Initializing Radicle for DreamNode...', 0);
-        console.log(`RadicleCommands: Starting rad init for ${selectedNode.name}...`);
 
         try {
           // Try without passphrase first (ssh-agent)
-          await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`);
+          // Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
+          await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`);
 
           // Get the Radicle ID and save to .udd file
           const radicleId = await radicleService.getRadicleId(fullRepoPath);
           if (radicleId) {
-            const path = require('path');
-            const fs = require('fs').promises;
-            const uddPath = path.join(fullRepoPath, '.udd');
             try {
               const uddContent = await fs.readFile(uddPath, 'utf-8');
               const udd = JSON.parse(uddContent);
@@ -82,6 +122,50 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
+          // Check if repository exists in Radicle storage but working directory not linked
+          if (error.message && error.message.startsWith('RADICLE_STORAGE_EXISTS:')) {
+            notice.hide();
+            const radicleId = error.message.replace('RADICLE_STORAGE_EXISTS:', ''); // Extract rad:z... from error
+            console.log(`RadicleCommands: ${selectedNode.name} exists in storage with ID ${radicleId}, linking to .udd...`);
+
+            // Save the Radicle ID to .udd file
+            try {
+              const uddContent = await fs.readFile(uddPath, 'utf-8');
+              const udd = JSON.parse(uddContent);
+              udd.radicleId = radicleId;
+              await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+              console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+              uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            } catch (writeError) {
+              console.error('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
+              uiService.showError('Repository exists but failed to update .udd file');
+            }
+            return;
+          }
+
+          // Check if already initialized - race condition where it was initialized between Step 2 and Step 3
+          if (error.message && (error.message.includes('already initialized') || error.message.includes('reinitialize'))) {
+            notice.hide();
+            console.log(`RadicleCommands: ${selectedNode.name} was initialized during gap check, retrieving ID...`);
+
+            // Get and save the Radicle ID to .udd file
+            const radicleId = await radicleService.getRadicleId(fullRepoPath);
+            if (radicleId) {
+              try {
+                const uddContent = await fs.readFile(uddPath, 'utf-8');
+                const udd = JSON.parse(uddContent);
+                udd.radicleId = radicleId;
+                await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+              } catch (writeError) {
+                console.warn('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
+              }
+            }
+
+            uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            return;
+          }
+
           // If passphrase is needed, prompt and retry
           if (error.message && error.message.includes('passphrase')) {
             notice.hide();
@@ -96,14 +180,12 @@ export function registerRadicleCommands(
             // Retry with passphrase
             const retryNotice = new Notice('Initializing Radicle for DreamNode...', 0);
             try {
-              await radicleService.init(fullRepoPath, selectedNode.name, `DreamNode: ${selectedNode.name}`, passphrase);
+              // Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
+              await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`, passphrase);
 
               // Get the Radicle ID and save to .udd file
               const radicleId = await radicleService.getRadicleId(fullRepoPath);
               if (radicleId) {
-                const path = require('path');
-                const fs = require('fs').promises;
-                const uddPath = path.join(fullRepoPath, '.udd');
                 try {
                   const uddContent = await fs.readFile(uddPath, 'utf-8');
                   const udd = JSON.parse(uddContent);
@@ -118,7 +200,29 @@ export function registerRadicleCommands(
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name} with passphrase`);
               uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
-            } catch (retryError) {
+            } catch (retryError: any) {
+              // Check if already initialized in retry path too
+              if (retryError.message && (retryError.message.includes('already initialized') || retryError.message.includes('reinitialize'))) {
+                retryNotice.hide();
+                console.log(`RadicleCommands: ${selectedNode.name} already initialized, retrieving ID...`);
+
+                const radicleId = await radicleService.getRadicleId(fullRepoPath);
+                if (radicleId) {
+                  try {
+                    const uddContent = await fs.readFile(uddPath, 'utf-8');
+                    const udd = JSON.parse(uddContent);
+                    udd.radicleId = radicleId;
+                    await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+                    console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+                  } catch (writeError) {
+                    console.warn('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
+                  }
+                }
+
+                uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+                return;
+              }
+
               retryNotice.hide();
               console.error('RadicleCommands: Failed to initialize with passphrase:', retryError);
               uiService.showError(`Failed to initialize: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
@@ -283,7 +387,7 @@ export function registerRadicleCommands(
 
         try {
           // Try cloning without passphrase first (ssh-agent)
-          const repoName = await radicleService.clone(radicleId.trim(), vaultPath);
+          const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath);
 
           // Success notification
           notice.hide();
@@ -308,35 +412,9 @@ export function registerRadicleCommands(
               console.log(`RadicleCommands: Added Radicle ID to .udd file`);
             }
 
-            // Calculate position at center of camera view accounting for sphere rotation
-            const store = useInterBrainStore.getState();
-            let position: [number, number, number] = [0, 0, -5000]; // Fallback
-
-            if (store.sphereRotation) {
-              const { Raycaster, Vector3, Sphere, Quaternion } = require('three');
-              const raycaster = new Raycaster();
-              const cameraPosition = new Vector3(0, 0, 0);
-              const cameraDirection = new Vector3(0, 0, -1);
-              raycaster.set(cameraPosition, cameraDirection);
-
-              const sphereRadius = 5000;
-              const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
-              const intersectionPoint = new Vector3();
-              const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
-
-              if (hasIntersection) {
-                const sphereQuaternion = new Quaternion(
-                  store.sphereRotation.x,
-                  store.sphereRotation.y,
-                  store.sphereRotation.z,
-                  store.sphereRotation.w
-                );
-                const inverseRotation = sphereQuaternion.clone().invert();
-                intersectionPoint.applyQuaternion(inverseRotation);
-                position = intersectionPoint.toArray() as [number, number, number];
-                console.log(`RadicleCommands: Calculated camera-facing position:`, position);
-              }
-            }
+            // Calculate default position at center of camera view
+            // TODO: Restore sphere rotation calculation if needed
+            const position: [number, number, number] = [0, 0, -5000];
 
             // Load dreamTalk media if specified
             let dreamTalkMedia: Array<{
@@ -379,18 +457,13 @@ export function registerRadicleCommands(
             // Create DreamNode with ALL required properties
             const clonedNode: DreamNode = {
               id: udd.uuid, // CRITICAL: id property
-              uuid: udd.uuid,
               name: udd.title || repoName,
               type: udd.type || 'dream',
               repoPath: repoName,
-              dreamTalk: udd.dreamTalk || '',
               dreamTalkMedia: dreamTalkMedia,
               dreamSongContent: [],
               liminalWebConnections: udd.liminalWebRelationships || [], // CRITICAL: defensive check
               position: position,
-              uncommittedChanges: false,
-              stashedChanges: false,
-              unpushedCommits: false,
               hasUnsavedChanges: false,
               email: udd.email,
               phone: udd.phone,
@@ -400,12 +473,13 @@ export function registerRadicleCommands(
             console.log(`RadicleCommands: Created DreamNode object:`, clonedNode);
 
             // Add to store (realNodes is a Map)
-            const currentNodes = new Map(store.realNodes);
-            currentNodes.set(clonedNode.uuid, {
+            const freshStore = useInterBrainStore.getState();
+            const currentNodes = new Map(freshStore.realNodes);
+            currentNodes.set(clonedNode.id, {
               node: clonedNode,
-              lastUpdated: Date.now()
+              lastSynced: Date.now()
             });
-            store.setRealNodes(currentNodes);
+            freshStore.setRealNodes(currentNodes);
 
             console.log(`RadicleCommands: Added cloned node to store, total nodes: ${currentNodes.size}`);
             uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
@@ -428,7 +502,7 @@ export function registerRadicleCommands(
             // Retry with passphrase
             const retryNotice = new Notice('Cloning from Radicle network...', 0);
             try {
-              const repoName = await radicleService.clone(radicleId.trim(), vaultPath, passphrase);
+              const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath, passphrase);
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully cloned ${repoName} with passphrase`);
               uiService.showSuccess(`${repoName} cloned successfully!`);
@@ -450,27 +524,9 @@ export function registerRadicleCommands(
                   console.log(`RadicleCommands: Added Radicle ID to .udd file`);
                 }
 
-                // Calculate camera-facing position
-                const storeState = useInterBrainStore.getState();
-                let position: [number, number, number] = [0, 0, -5000];
-
-                if (storeState.sphereRotation) {
-                  const { Raycaster, Vector3, Sphere, Quaternion } = require('three');
-                  const raycaster = new Raycaster();
-                  raycaster.set(new Vector3(0, 0, 0), new Vector3(0, 0, -1));
-                  const worldSphere = new Sphere(new Vector3(0, 0, 0), 5000);
-                  const intersectionPoint = new Vector3();
-                  if (raycaster.ray.intersectSphere(worldSphere, intersectionPoint)) {
-                    const sphereQuaternion = new Quaternion(
-                      storeState.sphereRotation.x,
-                      storeState.sphereRotation.y,
-                      storeState.sphereRotation.z,
-                      storeState.sphereRotation.w
-                    );
-                    intersectionPoint.applyQuaternion(sphereQuaternion.clone().invert());
-                    position = intersectionPoint.toArray() as [number, number, number];
-                  }
-                }
+                // Calculate default position at center of camera view
+                // TODO: Restore sphere rotation calculation if needed
+                const position: [number, number, number] = [0, 0, -5000];
 
                 // Load dreamTalk media
                 let dreamTalkMedia: Array<{
@@ -510,18 +566,13 @@ export function registerRadicleCommands(
                 // Create DreamNode with ALL required properties
                 const clonedNode: DreamNode = {
                   id: udd.uuid,
-                  uuid: udd.uuid,
                   name: udd.title || repoName,
                   type: udd.type || 'dream',
                   repoPath: repoName,
-                  dreamTalk: udd.dreamTalk || '',
                   dreamTalkMedia: dreamTalkMedia,
                   dreamSongContent: [],
                   liminalWebConnections: udd.liminalWebRelationships || [],
                   position: position,
-                  uncommittedChanges: false,
-                  stashedChanges: false,
-                  unpushedCommits: false,
                   hasUnsavedChanges: false,
                   email: udd.email,
                   phone: udd.phone,
@@ -529,12 +580,13 @@ export function registerRadicleCommands(
                 };
 
                 // Add to store
-                const currentNodes = new Map(storeState.realNodes);
-                currentNodes.set(clonedNode.uuid, {
+                const retryStore = useInterBrainStore.getState();
+                const currentNodes = new Map(retryStore.realNodes);
+                currentNodes.set(clonedNode.id, {
                   node: clonedNode,
-                  lastUpdated: Date.now()
+                  lastSynced: Date.now()
                 });
-                storeState.setRealNodes(currentNodes);
+                retryStore.setRealNodes(currentNodes);
 
                 uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
               } catch (readError) {

@@ -52,6 +52,11 @@ export interface RadicleService {
   hasChangesToShare(dreamNodePath: string): Promise<boolean>;
 
   /**
+   * Get Radicle ID for a repository
+   */
+  getRadicleId(repoPath: string): Promise<string | null>;
+
+  /**
    * Get current user's Radicle identity
    */
   getIdentity(): Promise<RadicleIdentity>;
@@ -65,10 +70,20 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Check if current platform supports Radicle (macOS/Linux only)
    * Windows users will use GitHub-based implementation (future)
+   *
+   * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test GitHub fallback on macOS
    */
   private isPlatformSupported(): boolean {
     if (this._isPlatformSupported !== null) {
       return this._isPlatformSupported;
+    }
+
+    // 🧪 TESTING MODE: Simulate Windows to test GitHub fallback
+    const simulateWindows = process.env.SIMULATE_WINDOWS === 'true';
+    if (simulateWindows) {
+      console.log('🧪 [TEST MODE] Simulating Windows - Radicle disabled, GitHub fallback active');
+      this._isPlatformSupported = false;
+      return false;
     }
 
     const platform = os.platform();
@@ -150,6 +165,7 @@ export class RadicleServiceImpl implements RadicleService {
 
     // Build command with proper flags to bypass TTY requirements
     // IMPORTANT: Pass the path as the first argument to rad init
+    // NOTE: name parameter should be pre-sanitized (e.g., directory name in PascalCase)
     const args = ['init', `"${dreamNodePath}"`, '--public', '--default-branch', 'main', '--no-confirm'];
     if (name) {
       args.push('--name', `"${name}"`);
@@ -177,7 +193,7 @@ export class RadicleServiceImpl implements RadicleService {
 
     // Debug: Try running git status to verify the repo works
     try {
-      const gitTest = await execAsync('git status', { cwd: dreamNodePath });
+      await execAsync('git status', { cwd: dreamNodePath });
       console.log(`RadicleService: git status works in ${dreamNodePath}`);
     } catch (gitErr: any) {
       console.error(`RadicleService: git status failed:`, gitErr.message);
@@ -195,7 +211,27 @@ export class RadicleServiceImpl implements RadicleService {
     } catch (error: any) {
       const errorOutput = error.stderr || error.stdout || error.message || '';
 
-      // Check if already initialized - this is expected and not an error
+      // Check if already initialized in storage - this means we need to use rad checkout
+      // Error format: "attempt to reinitialize '/Users/.../storage/z2KWk...'"
+      if (errorOutput.includes('reinitialize') && errorOutput.includes('/storage/')) {
+        console.log(`RadicleService: Repository exists in Radicle storage but working directory not linked`);
+
+        // Extract Radicle ID from storage path
+        // Path format: /Users/username/.radicle/storage/z2KWkLyACv7ycuZva8C5NFo1m9EGC (no rad: prefix in path)
+        const storageMatch = errorOutput.match(/\/storage\/(z[A-Za-z0-9]+)/);
+        if (storageMatch && storageMatch[1]) {
+          const radicleId = `rad:${storageMatch[1]}`; // Add rad: prefix
+          console.log(`RadicleService: Found Radicle ID in storage: ${radicleId}`);
+
+          // Return a special error that includes the Radicle ID
+          throw new Error(`RADICLE_STORAGE_EXISTS:${radicleId}`);
+        }
+
+        // Fallback if we can't extract ID
+        throw new Error('Repository exists in Radicle storage but working directory not linked. Run "rad ." to check status.');
+      }
+
+      // Check if already initialized normally - this is expected and not an error
       if (errorOutput.includes('already initialized')) {
         console.log(`RadicleService: Repository already initialized (not an error)`);
         throw new Error(errorOutput); // Throw with clean message for caller to handle
@@ -225,7 +261,7 @@ export class RadicleServiceImpl implements RadicleService {
       const isRunning = stdout.includes('Running');
       console.log(`RadicleService: Node status check: ${isRunning ? 'running' : 'not running'}`);
       return isRunning;
-    } catch (error) {
+    } catch {
       console.log('RadicleService: Node status check failed, assuming not running');
       return false;
     }
@@ -250,6 +286,10 @@ export class RadicleServiceImpl implements RadicleService {
     console.log('RadicleService: Starting Radicle node...');
     await execAsync(`"${radCmd}" node start`, { env });
     console.log('RadicleService: Radicle node started successfully');
+
+    // Wait for node to be fully ready
+    console.log('RadicleService: Waiting for node to be fully ready...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   /**
@@ -275,6 +315,9 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
+      // Ensure Radicle node is running before querying repository
+      await this.ensureNodeRunning();
+
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" .`, { cwd: repoPath });
       const radicleId = stdout.trim();
@@ -284,8 +327,12 @@ export class RadicleServiceImpl implements RadicleService {
         return radicleId;
       }
 
+      console.log(`RadicleService: rad . returned output but not a valid Radicle ID: "${radicleId}"`);
       return null;
-    } catch (error) {
+    } catch (error: any) {
+      // Log the error for debugging with full details
+      const errorOutput = error.stderr || error.stdout || error.message || 'Unknown error';
+      console.log(`RadicleService: rad . failed for ${repoPath}:`, errorOutput);
       // Silent failure - repository may not be initialized yet
       return null;
     }
@@ -305,7 +352,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // OPTIMIZATION 1: Check all .udd files in parallel (fast path)
       const uddChecks = await Promise.all(
-        directories.map(async (dir) => {
+        directories.map(async (dir: any) => {
           const dirPath = path.join(vaultPath, dir.name);
           const uddPath = path.join(dirPath, '.udd');
 
@@ -316,7 +363,7 @@ export class RadicleServiceImpl implements RadicleService {
             if (udd.radicleId === radicleId) {
               return { dirName: dir.name, found: true, method: '.udd file' };
             }
-          } catch (error) {
+          } catch {
             // .udd file doesn't exist or couldn't be read
           }
 
@@ -333,7 +380,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // OPTIMIZATION 3: Fallback to git checks in parallel (slow path, only if needed)
       const gitChecks = await Promise.all(
-        directories.map(async (dir) => {
+        directories.map(async (dir: any) => {
           const dirPath = path.join(vaultPath, dir.name);
           const repoRadicleId = await this.getRadicleId(dirPath);
 
@@ -434,7 +481,7 @@ export class RadicleServiceImpl implements RadicleService {
     // Parse repository name from clone output
     // Example output: "Creating checkout in ./TestRepo"
     const cloneOutput = cloneResult.stdout || cloneResult.stderr || '';
-    const match = cloneOutput.match(/Creating checkout in \.\/([^.\/\s]+)/);
+    const match = cloneOutput.match(/Creating checkout in \.\/([^./\s]+)/);
 
     let repoName: string;
     if (match && match[1]) {
@@ -463,6 +510,7 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     // OPTIMIZATION: Save Radicle ID to .udd file for instant future lookups
+    // Also normalize title to human-readable format if needed
     try {
       const repoPath = path.join(destinationPath, repoName);
       const uddPath = path.join(repoPath, '.udd');
@@ -474,9 +522,42 @@ export class RadicleServiceImpl implements RadicleService {
       // Add/update radicleId field
       udd.radicleId = radicleId;
 
+      // Normalize title to human-readable format using established naming schema
+      // Import title normalization utilities
+      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+
+      // Check if title needs normalization (kebab-case, snake_case, or PascalCase)
+      let titleNormalized = false;
+      if (udd.title) {
+        const originalTitle = udd.title;
+
+        // If title contains hyphens, underscores, or periods as separators
+        if (/[-_.]+/.test(udd.title)) {
+          udd.title = udd.title
+            .split(/[-_.]+/)
+            .filter((word: string) => word.length > 0)
+            .map((word: string) => {
+              const cleaned = word.trim();
+              if (cleaned.length === 0) return '';
+              return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+            })
+            .join(' ')
+            .trim();
+          titleNormalized = udd.title !== originalTitle;
+        }
+        // If title is pure PascalCase (no separators), convert to spaced format
+        else if (isPascalCase(udd.title)) {
+          udd.title = pascalCaseToTitle(udd.title);
+          titleNormalized = udd.title !== originalTitle;
+        }
+      }
+
       // Write back to .udd file
       await fs.promises.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
       console.log(`RadicleService: ✅ Saved Radicle ID to .udd file for instant future lookups`);
+      if (titleNormalized) {
+        console.log(`RadicleService: ✅ Normalized title to human-readable format: "${udd.title}"`);
+      }
     } catch (error) {
       console.warn(`RadicleService: ⚠️ Could not save Radicle ID to .udd file (non-critical):`, error);
       // Don't fail the clone if .udd update fails

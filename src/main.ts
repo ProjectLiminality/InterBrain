@@ -21,7 +21,9 @@ import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerRadicleCommands } from './commands/radicle-commands';
+import { registerGitHubCommands } from './commands/github-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
+import { registerMigrationCommands } from './commands/migration-commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
@@ -40,6 +42,7 @@ import { initializeConversationSummaryService } from './features/conversational-
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
+import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -85,10 +88,14 @@ export default class InterBrainPlugin extends Plugin {
     const dreamNodeService = serviceManager.getActive();
 
     // Initialize URI handler service for deep links
-    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService);
+    // Cast to GitDreamNodeService since we know it's the concrete implementation at runtime
+    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
 
     // Initialize Radicle batch init service for post-call processing
-    initializeRadicleBatchInitService(this, radicleService, dreamNodeService);
+    initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
+
+    // Initialize GitHub batch share service for Windows/GitHub fallback mode
+    initializeGitHubBatchShareService(this, dreamNodeService as any);
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
@@ -143,6 +150,7 @@ export default class InterBrainPlugin extends Plugin {
     (this as any).vaultService = this.vaultService;
     (this as any).canvasParserService = this.canvasParserService;
     (this as any).leafManagerService = this.leafManagerService;
+    (this as any).submoduleManagerService = this.submoduleManagerService;
 
     // Initialize service manager with plugin instance and services
     serviceManager.initialize(this);
@@ -175,6 +183,12 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register Radicle commands (peer-to-peer networking)
     registerRadicleCommands(this, this.uiService, this.passphraseManager);
+
+    // Register GitHub commands (fallback sharing and broadcasting)
+    registerGitHubCommands(this, this.uiService);
+
+    // Register migration commands (PascalCase naming migration)
+    registerMigrationCommands(this);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);

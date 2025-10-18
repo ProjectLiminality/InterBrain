@@ -66,7 +66,9 @@ export default [
       'main.js',
       'node_modules/',
       '*.d.ts',
-      'src/features/realtime-transcription/scripts/venv/**'
+      'src/features/realtime-transcription/scripts/venv/**',
+      'src/features/github-sharing/viewer-bundle/**',
+      'dist/**'
     ]
   }
 ];
