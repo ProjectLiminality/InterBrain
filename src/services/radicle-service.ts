@@ -292,6 +292,9 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
+      // Ensure Radicle node is running before querying repository
+      await this.ensureNodeRunning();
+
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" .`, { cwd: repoPath });
       const radicleId = stdout.trim();
