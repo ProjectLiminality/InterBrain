@@ -122,6 +122,27 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
+          // Check if repository exists in Radicle storage but working directory not linked
+          if (error.message && error.message.startsWith('RADICLE_STORAGE_EXISTS:')) {
+            notice.hide();
+            const radicleId = error.message.replace('RADICLE_STORAGE_EXISTS:', ''); // Extract rad:z... from error
+            console.log(`RadicleCommands: ${selectedNode.name} exists in storage with ID ${radicleId}, linking to .udd...`);
+
+            // Save the Radicle ID to .udd file
+            try {
+              const uddContent = await fs.readFile(uddPath, 'utf-8');
+              const udd = JSON.parse(uddContent);
+              udd.radicleId = radicleId;
+              await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+              console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
+              uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
+            } catch (writeError) {
+              console.error('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
+              uiService.showError('Repository exists but failed to update .udd file');
+            }
+            return;
+          }
+
           // Check if already initialized - race condition where it was initialized between Step 2 and Step 3
           if (error.message && (error.message.includes('already initialized') || error.message.includes('reinitialize'))) {
             notice.hide();

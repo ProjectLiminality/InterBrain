@@ -211,9 +211,28 @@ export class RadicleServiceImpl implements RadicleService {
     } catch (error: any) {
       const errorOutput = error.stderr || error.stdout || error.message || '';
 
-      // Check if already initialized - this is expected and not an error
-      // Radicle error contains "reinitialize" or "already initialized"
-      if (errorOutput.includes('already initialized') || errorOutput.includes('reinitialize')) {
+      // Check if already initialized in storage - this means we need to use rad checkout
+      // Error format: "attempt to reinitialize '/Users/.../storage/z2KWk...'"
+      if (errorOutput.includes('reinitialize') && errorOutput.includes('/storage/')) {
+        console.log(`RadicleService: Repository exists in Radicle storage but working directory not linked`);
+
+        // Extract Radicle ID from storage path
+        // Path format: /Users/username/.radicle/storage/z2KWkLyACv7ycuZva8C5NFo1m9EGC (no rad: prefix in path)
+        const storageMatch = errorOutput.match(/\/storage\/(z[A-Za-z0-9]+)/);
+        if (storageMatch && storageMatch[1]) {
+          const radicleId = `rad:${storageMatch[1]}`; // Add rad: prefix
+          console.log(`RadicleService: Found Radicle ID in storage: ${radicleId}`);
+
+          // Return a special error that includes the Radicle ID
+          throw new Error(`RADICLE_STORAGE_EXISTS:${radicleId}`);
+        }
+
+        // Fallback if we can't extract ID
+        throw new Error('Repository exists in Radicle storage but working directory not linked. Run "rad ." to check status.');
+      }
+
+      // Check if already initialized normally - this is expected and not an error
+      if (errorOutput.includes('already initialized')) {
         console.log(`RadicleService: Repository already initialized (not an error)`);
         throw new Error(errorOutput); // Throw with clean message for caller to handle
       }

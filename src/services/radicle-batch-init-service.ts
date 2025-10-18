@@ -214,10 +214,33 @@ export class RadicleBatchInitService {
 				}
 
 			} catch (error) {
-				// Check if error is "already initialized" or "reinitialize" - this is NOT an error!
 				const errorMsg = error instanceof Error ? error.message : String(error);
 
-				if (errorMsg.includes('already initialized') || errorMsg.includes('reinitialize')) {
+				// Check if repository exists in Radicle storage but working directory not linked
+				if (errorMsg.startsWith('RADICLE_STORAGE_EXISTS:')) {
+					const radicleId = errorMsg.replace('RADICLE_STORAGE_EXISTS:', '');
+					console.log(`ℹ️ [RadicleBatchInit] ${node.name} exists in storage with ID ${radicleId}, linking to .udd...`);
+
+					try {
+						const fullRepoPath = path.join(vaultPath, node.repoPath);
+						const fs = require('fs').promises;
+						const uddPath = path.join(fullRepoPath, '.udd');
+
+						// Save the Radicle ID to .udd file
+						const uddContent = await fs.readFile(uddPath, 'utf-8');
+						const udd = JSON.parse(uddContent);
+						udd.radicleId = radicleId;
+						await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+
+						result.set(node.id, radicleId);
+						console.log(`✅ [RadicleBatchInit] ${node.name} linked with storage: ${radicleId}`);
+						continue; // Success! Move to next node
+					} catch (writeError) {
+						console.error(`❌ [RadicleBatchInit] Could not write Radicle ID to .udd for ${node.name}:`, writeError);
+					}
+				}
+				// Check if error is "already initialized" or "reinitialize" - this is NOT an error!
+				else if (errorMsg.includes('already initialized') || errorMsg.includes('reinitialize')) {
 					console.log(`ℹ️ [RadicleBatchInit] ${node.name} already initialized, retrieving ID...`);
 
 					try {
