@@ -231,24 +231,17 @@ export class SubmoduleManagerService {
     try {
       // Analyze canvas dependencies
       const analysis = await this.canvasParser.analyzeCanvasDependencies(canvasPath);
-      
-      if (!analysis.hasExternalDependencies) {
-        return {
-          canvasPath,
-          dreamNodePath: analysis.dreamNodeBoundary,
-          submodulesImported: [],
-          pathsUpdated: new Map(),
-          success: true
-        };
-      }
-      
+
       // Check git state safety
       await this.ensureCleanGitState(analysis.dreamNodeBoundary);
-      
-      // Import external dependencies as submodules
-      const importResults = await this.importExternalDependencies(analysis);
+
+      // Import external dependencies as submodules (only if there are any)
+      const importResults = analysis.hasExternalDependencies
+        ? await this.importExternalDependencies(analysis)
+        : [];
 
       // Check for unused submodules (bidirectional sync)
+      // This runs EVEN if there are no external dependencies, to clean up orphaned submodules
       const removedSubmodules = await this.removeUnusedSubmodules(analysis, importResults);
 
       // Early exit: If all submodules already existed AND none removed, nothing to update or commit
