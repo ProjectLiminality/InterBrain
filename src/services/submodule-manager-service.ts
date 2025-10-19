@@ -646,21 +646,49 @@ export class SubmoduleManagerService {
         console.log(`SubmoduleManagerService: Processing removed submodule: ${submoduleName}`);
 
         try {
-          // For removed submodules, we need to get the UUID from the previous commit
-          // This is a best-effort operation - if it fails, we just skip it
-          const uddContent = await execAsync(`git show HEAD~1:${submoduleName}/.udd`, { cwd: fullParentPath });
-          const childUDD = JSON.parse(uddContent.stdout);
-          const childUUID = childUDD.uuid;
+          // Try to get UUID from previous commit (best-effort)
+          let childUUID: string | null = null;
 
-          // Update parent's .udd (remove child from submodules array)
-          if (await UDDService.removeSubmodule(fullParentPath, childUUID)) {
-            console.log(`SubmoduleManagerService: Removed ${submoduleName} (${childUUID}) from parent's submodules`);
-            parentModified = true;
+          try {
+            const uddContent = await execAsync(`git show HEAD~1:${submoduleName}/.udd`, { cwd: fullParentPath });
+            const childUDD = JSON.parse(uddContent.stdout);
+            childUUID = childUDD.uuid;
+          } catch {
+            // This can fail if:
+            // 1. Submodule was just added in this session (no HEAD~1)
+            // 2. .udd didn't exist in previous commit
+            // 3. Git history is shallow
+            console.log(`SubmoduleManagerService: Could not read ${submoduleName} UUID from git history (this is normal for recently added submodules)`);
+
+            // Try to get UUID from sovereign repo as fallback
+            const sovereignPath = path.join(this.vaultPath, submoduleName);
+            const sovereignExists = require('fs').existsSync(path.join(sovereignPath, '.udd'));
+
+            if (sovereignExists) {
+              try {
+                const sovereignUDD = await UDDService.readUDD(sovereignPath);
+                childUUID = sovereignUDD.uuid;
+                console.log(`SubmoduleManagerService: Retrieved UUID from sovereign repo instead`);
+              } catch {
+                console.log(`SubmoduleManagerService: Could not read sovereign .udd either - skipping relationship cleanup`);
+              }
+            }
           }
 
-          // Note: We can't update the child's supermodules array since it's been removed
-          // The relationship will be stale in the child until it's used again elsewhere
-          console.log(`SubmoduleManagerService: Note - ${submoduleName}'s supermodules not updated (submodule removed)`);
+          if (childUUID) {
+            // Update parent's .udd (remove child from submodules array)
+            if (await UDDService.removeSubmodule(fullParentPath, childUUID)) {
+              console.log(`SubmoduleManagerService: Removed ${submoduleName} (${childUUID}) from parent's submodules`);
+              parentModified = true;
+            }
+
+            // Note: We don't update sovereign's supermodules on removal
+            // The relationship remains in sovereign as historical record
+            // This allows re-adding the submodule without losing relationship history
+            console.log(`SubmoduleManagerService: Note - Sovereign ${submoduleName}'s supermodules unchanged (relationship preserved)`);
+          } else {
+            console.log(`SubmoduleManagerService: Skipping .udd cleanup for ${submoduleName} (UUID not available)`);
+          }
 
         } catch (error) {
           console.error(`SubmoduleManagerService: Error processing removed ${submoduleName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
