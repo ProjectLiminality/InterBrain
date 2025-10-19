@@ -573,12 +573,14 @@ export class SubmoduleManagerService {
 
       let parentModified = false;
 
-      // Process added submodules
-      const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
-      for (const result of newImports) {
+      // Process ALL successful submodules (both new and existing)
+      // This ensures bidirectional relationships are always in sync, even for pre-existing submodules
+      const allSuccessfulImports = importResults.filter(r => r.success);
+      for (const result of allSuccessfulImports) {
         const submodulePath = path.join(fullParentPath, result.submoduleName);
+        const isNew = !result.alreadyExisted;
 
-        console.log(`SubmoduleManagerService: Processing added submodule: ${result.submoduleName}`);
+        console.log(`SubmoduleManagerService: Checking ${isNew ? 'new' : 'existing'} submodule: ${result.submoduleName}`);
 
         try {
           // Initialize submodule to ensure .udd is accessible
@@ -589,13 +591,13 @@ export class SubmoduleManagerService {
           const childUUID = childUDD.uuid;
           const childTitle = childUDD.title;
 
-          // Update parent's .udd (add child to submodules array)
+          // Update parent's .udd (add child to submodules array if missing)
           if (await UDDService.addSubmodule(fullParentPath, childUUID)) {
             console.log(`SubmoduleManagerService: Added ${childTitle} (${childUUID}) to parent's submodules`);
             parentModified = true;
           }
 
-          // Update child's .udd (add parent to supermodules array)
+          // Update child's .udd (add parent to supermodules array if missing)
           if (await UDDService.addSupermodule(submodulePath, parentUUID)) {
             console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentUUID}) to ${childTitle}'s supermodules`);
 
@@ -607,6 +609,9 @@ export class SubmoduleManagerService {
             } catch (error) {
               console.error(`SubmoduleManagerService: Failed to commit child .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
+          } else {
+            // Relationship already exists - this is good!
+            console.log(`SubmoduleManagerService: Bidirectional relationship already correct for ${childTitle}`);
           }
 
         } catch (error) {
