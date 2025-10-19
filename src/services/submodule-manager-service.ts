@@ -587,7 +587,7 @@ export class SubmoduleManagerService {
           // Initialize submodule to ensure .udd is accessible
           await execAsync(`git submodule update --init "${result.submoduleName}"`, { cwd: fullParentPath });
 
-          // Read child's UUID
+          // Read child's UUID from submodule copy
           const childUDD = await UDDService.readUDD(submodulePath);
           const childUUID = childUDD.uuid;
           const childTitle = childUDD.title;
@@ -598,21 +598,42 @@ export class SubmoduleManagerService {
             parentModified = true;
           }
 
-          // Update child's .udd (add parent to supermodules array if missing)
-          if (await UDDService.addSupermodule(submodulePath, parentUUID)) {
-            console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentUUID}) to ${childTitle}'s supermodules`);
+          // Detect sovereign repo path (e.g., Cseti/Hawkinsscale -> ../Hawkinsscale at vault root)
+          const sovereignPath = path.join(this.vaultPath, result.submoduleName);
+          const sovereignExists = require('fs').existsSync(path.join(sovereignPath, '.git'));
 
-            // Commit the change in the child repository
-            try {
-              await execAsync('git add .udd', { cwd: submodulePath });
-              await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: submodulePath });
-              console.log(`SubmoduleManagerService: Committed supermodule relationship in ${childTitle}`);
-            } catch (error) {
-              console.error(`SubmoduleManagerService: Failed to commit child .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          if (sovereignExists) {
+            console.log(`SubmoduleManagerService: Found sovereign repo at vault root: ${result.submoduleName}`);
+
+            // Update SOVEREIGN's .udd (this is the source of truth)
+            if (await UDDService.addSupermodule(sovereignPath, parentUUID)) {
+              console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentUUID}) to sovereign ${childTitle}'s supermodules`);
+
+              // Commit the change in the sovereign repository
+              try {
+                await execAsync('git add .udd', { cwd: sovereignPath });
+                await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
+                console.log(`SubmoduleManagerService: Committed supermodule relationship in sovereign ${childTitle}`);
+
+                // Update submodule to pull the changes from sovereign
+                try {
+                  await execAsync(`cd "${result.submoduleName}" && git pull origin main`, { cwd: fullParentPath });
+                  console.log(`SubmoduleManagerService: Submodule synced with sovereign ${childTitle}`);
+                } catch (pullError) {
+                  console.error(`SubmoduleManagerService: Failed to sync submodule with sovereign: ${pullError instanceof Error ? pullError.message : 'Unknown error'}`);
+                  console.log(`SubmoduleManagerService: Note - Submodule will sync on next 'git submodule update'`);
+                }
+
+              } catch (error) {
+                console.error(`SubmoduleManagerService: Failed to commit sovereign .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              }
+            } else {
+              // Relationship already exists in sovereign - this is good!
+              console.log(`SubmoduleManagerService: Bidirectional relationship already correct in sovereign ${childTitle}`);
             }
           } else {
-            // Relationship already exists - this is good!
-            console.log(`SubmoduleManagerService: Bidirectional relationship already correct for ${childTitle}`);
+            console.log(`SubmoduleManagerService: No sovereign repo found for ${result.submoduleName} - skipping supermodule tracking`);
+            console.log(`SubmoduleManagerService: (This is normal for DreamNodes cloned from GitHub/Radicle)`);
           }
 
         } catch (error) {
