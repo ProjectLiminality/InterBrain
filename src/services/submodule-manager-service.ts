@@ -246,10 +246,18 @@ export class SubmoduleManagerService {
       // This runs EVEN if there are no external dependencies, to clean up orphaned submodules
       const removedSubmodules = await this.removeUnusedSubmodules(analysis, importResults);
 
-      // Early exit: If all submodules already existed AND none removed, nothing to update or commit
+      // Update bidirectional .udd relationships (submodules <-> supermodules)
+      // This ALWAYS runs to ensure existing submodules have correct relationships
+      await this.updateBidirectionalRelationships(
+        analysis.dreamNodeBoundary,
+        importResults,
+        removedSubmodules
+      );
+
+      // Early exit: If all submodules already existed AND none removed, no git commit needed
       const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
       if (newImports.length === 0 && removedSubmodules.length === 0) {
-        console.log(`SubmoduleManagerService: All submodules already synced - no changes needed`);
+        console.log(`SubmoduleManagerService: All submodules already synced - no git changes needed`);
         return {
           canvasPath,
           dreamNodePath: analysis.dreamNodeBoundary,
@@ -260,8 +268,8 @@ export class SubmoduleManagerService {
         };
       }
 
-      // Log sync summary
-      console.log(`SubmoduleManagerService: Sync summary - Added: ${newImports.length}, Removed: ${removedSubmodules.length}`);
+      // Log sync summary for git changes
+      console.log(`SubmoduleManagerService: Git sync summary - Added: ${newImports.length}, Removed: ${removedSubmodules.length}`);
       if (newImports.length > 0) {
         console.log(`  Added submodules: ${newImports.map(r => r.submoduleName).join(', ')}`);
       }
@@ -280,13 +288,6 @@ export class SubmoduleManagerService {
       commitHash = await this.commitSubmoduleChanges(
         analysis.dreamNodeBoundary,
         canvasPath,
-        importResults,
-        removedSubmodules
-      );
-
-      // Update bidirectional .udd relationships (submodules <-> supermodules)
-      await this.updateBidirectionalRelationships(
-        analysis.dreamNodeBoundary,
         importResults,
         removedSubmodules
       );
