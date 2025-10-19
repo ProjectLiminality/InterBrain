@@ -30,6 +30,7 @@ export interface SyncResult {
   canvasPath: string;
   dreamNodePath: string;
   submodulesImported: SubmoduleImportResult[];
+  submodulesRemoved: string[];  // Names of submodules that were removed
   pathsUpdated: Map<string, string>;
   commitHash?: string;
   error?: string;
@@ -252,9 +253,19 @@ export class SubmoduleManagerService {
           canvasPath,
           dreamNodePath: analysis.dreamNodeBoundary,
           submodulesImported: importResults,
+          submodulesRemoved: [],
           pathsUpdated: new Map(),
           success: true
         };
+      }
+
+      // Log sync summary
+      console.log(`SubmoduleManagerService: Sync summary - Added: ${newImports.length}, Removed: ${removedSubmodules.length}`);
+      if (newImports.length > 0) {
+        console.log(`  Added submodules: ${newImports.map(r => r.submoduleName).join(', ')}`);
+      }
+      if (removedSubmodules.length > 0) {
+        console.log(`  Removed submodules: ${removedSubmodules.join(', ')}`);
       }
 
       // Update canvas file paths (only if there are new imports)
@@ -271,13 +282,14 @@ export class SubmoduleManagerService {
         importResults,
         removedSubmodules
       );
-      
+
       console.log(`SubmoduleManagerService: Successfully synced canvas ${canvasPath}`);
-      
+
       return {
         canvasPath,
         dreamNodePath: analysis.dreamNodeBoundary,
         submodulesImported: importResults,
+        submodulesRemoved: removedSubmodules,
         pathsUpdated: pathUpdates,
         commitHash,
         success: true
@@ -286,11 +298,12 @@ export class SubmoduleManagerService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('SubmoduleManagerService: Sync failed:', errorMessage);
-      
+
       return {
         canvasPath,
         dreamNodePath: '',
         submodulesImported: [],
+        submodulesRemoved: [],
         pathsUpdated: new Map(),
         error: errorMessage,
         success: false
@@ -538,31 +551,42 @@ export class SubmoduleManagerService {
     let report = `Submodule Sync Report: ${result.canvasPath}\n`;
     report += `DreamNode: ${result.dreamNodePath}\n`;
     report += `Status: ${result.success ? 'SUCCESS' : 'FAILED'}\n`;
-    
+
     if (result.error) {
       report += `Error: ${result.error}\n`;
     }
-    
+
     if (result.commitHash) {
       report += `Commit: ${result.commitHash}\n`;
     }
-    
-    report += `\nSubmodules Imported: ${result.submodulesImported.length}\n`;
-    
-    for (const imported of result.submodulesImported) {
-      const status = imported.success ? 'SUCCESS' : 'FAILED';
-      report += `  - ${imported.submoduleName}: ${status}`;
-      if (imported.error) {
-        report += ` (${imported.error})`;
-      }
-      report += '\n';
+
+    // Show added submodules (filter out already-existed ones)
+    const newImports = result.submodulesImported.filter(r => r.success && !r.alreadyExisted);
+    report += `\nSubmodules Added: ${newImports.length}\n`;
+    for (const imported of newImports) {
+      report += `  + ${imported.submoduleName}\n`;
     }
-    
+
+    // Show removed submodules
+    report += `\nSubmodules Removed: ${result.submodulesRemoved.length}\n`;
+    for (const removed of result.submodulesRemoved) {
+      report += `  - ${removed}\n`;
+    }
+
+    // Show unchanged submodules (already existed)
+    const unchanged = result.submodulesImported.filter(r => r.alreadyExisted);
+    if (unchanged.length > 0) {
+      report += `\nSubmodules Unchanged: ${unchanged.length}\n`;
+      for (const existing of unchanged) {
+        report += `  = ${existing.submoduleName}\n`;
+      }
+    }
+
     report += `\nPaths Updated: ${result.pathsUpdated.size}\n`;
     for (const [original, updated] of result.pathsUpdated) {
       report += `  - ${original} → ${updated}\n`;
     }
-    
+
     return report;
   }
 }

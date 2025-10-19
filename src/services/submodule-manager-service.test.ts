@@ -171,6 +171,7 @@ describe('SubmoduleManagerService', () => {
         canvasPath: 'test/canvas.canvas',
         dreamNodePath: 'test',
         submodulesImported: [],
+        submodulesRemoved: [],
         pathsUpdated: new Map(),
         success: true
       };
@@ -180,6 +181,8 @@ describe('SubmoduleManagerService', () => {
       expect(report).toContain('Submodule Sync Report: test/canvas.canvas');
       expect(report).toContain('DreamNode: test');
       expect(report).toContain('Status: SUCCESS');
+      expect(report).toContain('Submodules Added: 0');
+      expect(report).toContain('Submodules Removed: 0');
     });
 
     it('should generate failure report', () => {
@@ -187,6 +190,7 @@ describe('SubmoduleManagerService', () => {
         canvasPath: 'test/canvas.canvas',
         dreamNodePath: 'test',
         submodulesImported: [],
+        submodulesRemoved: [],
         pathsUpdated: new Map(),
         error: 'Canvas analysis failed',
         success: false
