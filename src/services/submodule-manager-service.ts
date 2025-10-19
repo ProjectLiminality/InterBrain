@@ -650,14 +650,12 @@ export class SubmoduleManagerService {
           let childUUID: string | null = null;
 
           try {
-            const uddContent = await execAsync(`git show HEAD~1:${submoduleName}/.udd`, { cwd: fullParentPath });
-            const childUDD = JSON.parse(uddContent.stdout);
+            const result = await execAsync(`git show HEAD~1:${submoduleName}/.udd`, { cwd: fullParentPath });
+            const childUDD = JSON.parse(result.stdout || result);
             childUUID = childUDD.uuid;
           } catch {
-            // This can fail if:
-            // 1. Submodule was just added in this session (no HEAD~1)
-            // 2. .udd didn't exist in previous commit
-            // 3. Git history is shallow
+            // Silently handle git history errors - this is expected for recently added submodules
+            // Don't log the error itself, just explain what we're doing
             console.log(`SubmoduleManagerService: Could not read ${submoduleName} UUID from git history (this is normal for recently added submodules)`);
 
             // Try to get UUID from sovereign repo as fallback
@@ -670,6 +668,7 @@ export class SubmoduleManagerService {
                 childUUID = sovereignUDD.uuid;
                 console.log(`SubmoduleManagerService: Retrieved UUID from sovereign repo instead`);
               } catch {
+                // Also silently handle sovereign read errors
                 console.log(`SubmoduleManagerService: Could not read sovereign .udd either - skipping relationship cleanup`);
               }
             }
