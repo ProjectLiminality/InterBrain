@@ -3,39 +3,24 @@
 # DreamNode Post-Commit Hook
 # Part of InterBrain DreamNode Template System
 #
-# PURPOSE: Coherence Beacon Relationship Tracking
+# STATUS: Placeholder - Currently Unused
 #
-# FUNCTIONALITY:
-# - Detects when a commit includes submodule changes
-# - Updates bidirectional relationship tracking in UDD files
-# - When DreamNode A imports DreamNode B as submodule:
-#   * DreamNode A knows about the submodule (git handles this)
-#   * DreamNode B gets updated to know it's used as submodule in A
-# - Enables peer-to-peer discovery via Radicle network
-# - Maintains coherent relationship graph across distributed network
+# FUTURE PURPOSE: Generic Coherence Beacon Relationship Tracking
+# This hook could be activated in the future to handle relationship tracking
+# for commits that happen OUTSIDE of the "Sync Canvas Submodules" command.
 #
-# This hook fires AFTER each commit to update relationship metadata
-# based on what was actually committed.
+# CURRENT IMPLEMENTATION:
+# Bidirectional supermodule/submodule tracking is handled directly in the
+# SubmoduleManagerService.syncCanvasSubmodules() method. This provides:
+# - Immediate feedback during sync operations
+# - Simpler debugging (all logic in one place)
+# - Better error handling and logging
+#
+# POTENTIAL FUTURE USE:
+# If we need to track relationships from manual git operations or
+# other workflows, the logic from hook-helper.js can be reactivated here.
+#
+# For now, this hook is a no-op placeholder.
 
-echo "DreamNode Post-Commit Hook: Checking for submodule relationship changes..." >&2
-
-# Get current commit hash for logging
-COMMIT_HASH=$(git rev-parse HEAD)
-echo "Processing commit: $COMMIT_HASH" >&2
-
-# Find the hook-helper.js script (in .git/hooks/ directory)
-HOOK_DIR="$(dirname "$0")"
-HOOK_HELPER="$HOOK_DIR/hook-helper.js"
-
-# Check if hook helper exists
-if [ ! -f "$HOOK_HELPER" ]; then
-    echo "Warning: hook-helper.js not found at $HOOK_HELPER" >&2
-    echo "Skipping supermodule tracking" >&2
-    exit 0
-fi
-
-# Call the Node.js helper script to update supermodule relationships
-node "$HOOK_HELPER" update-supermodules
-
-# Always exit successfully - we don't want to break git operations if hook fails
+# Silently exit - no logging needed for placeholder
 exit 0

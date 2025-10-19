@@ -9,6 +9,7 @@ import { App } from 'obsidian';
 import { GitService } from './git-service';
 import { VaultService } from './vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
+import { UDDService } from './udd-service';
 
 export interface SubmoduleInfo {
   name: string;
@@ -283,6 +284,13 @@ export class SubmoduleManagerService {
         removedSubmodules
       );
 
+      // Update bidirectional .udd relationships (submodules <-> supermodules)
+      await this.updateBidirectionalRelationships(
+        analysis.dreamNodeBoundary,
+        importResults,
+        removedSubmodules
+      );
+
       console.log(`SubmoduleManagerService: Successfully synced canvas ${canvasPath}`);
 
       return {
@@ -541,6 +549,113 @@ export class SubmoduleManagerService {
     } catch (error) {
       console.error('SubmoduleManagerService: Failed to commit changes:', error);
       throw new Error(`Failed to commit submodule changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update bidirectional .udd relationships after submodule sync
+   * This implements the Coherence Beacon foundation: parent tracks children, children track parents
+   */
+  private async updateBidirectionalRelationships(
+    parentPath: string,
+    importResults: SubmoduleImportResult[],
+    removedSubmodules: string[]
+  ): Promise<void> {
+    console.log('SubmoduleManagerService: Updating bidirectional .udd relationships...');
+
+    const fullParentPath = this.getFullPath(parentPath);
+
+    try {
+      // Get parent's UUID and title
+      const parentUDD = await UDDService.readUDD(fullParentPath);
+      const parentUUID = parentUDD.uuid;
+      const parentTitle = parentUDD.title;
+
+      let parentModified = false;
+
+      // Process added submodules
+      const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
+      for (const result of newImports) {
+        const submodulePath = path.join(fullParentPath, result.submoduleName);
+
+        console.log(`SubmoduleManagerService: Processing added submodule: ${result.submoduleName}`);
+
+        try {
+          // Initialize submodule to ensure .udd is accessible
+          await execAsync(`git submodule update --init "${result.submoduleName}"`, { cwd: fullParentPath });
+
+          // Read child's UUID
+          const childUDD = await UDDService.readUDD(submodulePath);
+          const childUUID = childUDD.uuid;
+          const childTitle = childUDD.title;
+
+          // Update parent's .udd (add child to submodules array)
+          if (await UDDService.addSubmodule(fullParentPath, childUUID)) {
+            console.log(`SubmoduleManagerService: Added ${childTitle} (${childUUID}) to parent's submodules`);
+            parentModified = true;
+          }
+
+          // Update child's .udd (add parent to supermodules array)
+          if (await UDDService.addSupermodule(submodulePath, parentUUID)) {
+            console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentUUID}) to ${childTitle}'s supermodules`);
+
+            // Commit the change in the child repository
+            try {
+              await execAsync('git add .udd', { cwd: submodulePath });
+              await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: submodulePath });
+              console.log(`SubmoduleManagerService: Committed supermodule relationship in ${childTitle}`);
+            } catch (error) {
+              console.error(`SubmoduleManagerService: Failed to commit child .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+
+        } catch (error) {
+          console.error(`SubmoduleManagerService: Error processing ${result.submoduleName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Process removed submodules
+      for (const submoduleName of removedSubmodules) {
+        console.log(`SubmoduleManagerService: Processing removed submodule: ${submoduleName}`);
+
+        try {
+          // For removed submodules, we need to get the UUID from the previous commit
+          // This is a best-effort operation - if it fails, we just skip it
+          const uddContent = await execAsync(`git show HEAD~1:${submoduleName}/.udd`, { cwd: fullParentPath });
+          const childUDD = JSON.parse(uddContent.stdout);
+          const childUUID = childUDD.uuid;
+
+          // Update parent's .udd (remove child from submodules array)
+          if (await UDDService.removeSubmodule(fullParentPath, childUUID)) {
+            console.log(`SubmoduleManagerService: Removed ${submoduleName} (${childUUID}) from parent's submodules`);
+            parentModified = true;
+          }
+
+          // Note: We can't update the child's supermodules array since it's been removed
+          // The relationship will be stale in the child until it's used again elsewhere
+          console.log(`SubmoduleManagerService: Note - ${submoduleName}'s supermodules not updated (submodule removed)`);
+
+        } catch (error) {
+          console.error(`SubmoduleManagerService: Error processing removed ${submoduleName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Commit parent's .udd changes if needed
+      if (parentModified) {
+        try {
+          await execAsync('git add .udd', { cwd: fullParentPath });
+          await execAsync('git commit -m "Update submodule relationships in .udd"', { cwd: fullParentPath });
+          console.log('SubmoduleManagerService: Committed parent .udd relationship changes');
+        } catch (error) {
+          console.error(`SubmoduleManagerService: Failed to commit parent .udd: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      console.log('SubmoduleManagerService: Bidirectional relationship tracking complete');
+
+    } catch (error) {
+      console.error(`SubmoduleManagerService: Fatal error in bidirectional tracking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Don't throw - this is a non-critical enhancement
     }
   }
 
