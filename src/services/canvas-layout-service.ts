@@ -22,7 +22,7 @@ export interface LayoutConfig {
 
 const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   centerX: 400,
-  textCardWidth: 600,
+  textCardWidth: 360,  // 600 * 0.6 = 360 (reduced by 40%)
   verticalSpacing: 150,
   horizontalOffset: 50,
   startY: 0,
@@ -66,6 +66,11 @@ export class CanvasLayoutService {
         const textNode = nodesMap.get(textNodeId);
 
         if (mediaNode && textNode) {
+          // Normalize media width and calculate height preserving aspect ratio
+          const originalAspectRatio = mediaNode.width / mediaNode.height;
+          mediaNode.width = layoutConfig.textCardWidth;
+          mediaNode.height = layoutConfig.textCardWidth / originalAspectRatio;
+
           // Position media in center column
           mediaNode.x = layoutConfig.centerX;
           mediaNode.y = currentY;
@@ -87,6 +92,11 @@ export class CanvasLayoutService {
         // Standalone media node
         const mediaNode = nodesMap.get(block.id);
         if (mediaNode) {
+          // Normalize media width and calculate height preserving aspect ratio
+          const originalAspectRatio = mediaNode.width / mediaNode.height;
+          mediaNode.width = layoutConfig.textCardWidth;
+          mediaNode.height = layoutConfig.textCardWidth / originalAspectRatio;
+
           mediaNode.x = layoutConfig.centerX;
           mediaNode.y = currentY;
           currentY += mediaNode.height + layoutConfig.verticalSpacing;
