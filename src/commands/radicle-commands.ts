@@ -294,6 +294,16 @@ export function registerRadicleCommands(
           // Try sharing without passphrase first (ssh-agent)
           await radicleService.share(fullRepoPath);
 
+          // Get Radicle ID and write to .udd
+          const radicleId = await radicleService.getRadicleId(fullRepoPath);
+          if (radicleId) {
+            console.log(`RadicleCommands: Writing Radicle ID to .udd: ${radicleId}`);
+            const UDDService = (await import('../services/udd-service')).UDDService;
+            const udd = await UDDService.readUDD(fullRepoPath);
+            udd.radicleId = radicleId;
+            await UDDService.writeUDD(fullRepoPath, udd);
+          }
+
           // Success notification
           notice.hide();
           console.log(`RadicleCommands: Successfully shared ${selectedNode.name} to Radicle network`);
@@ -314,6 +324,17 @@ export function registerRadicleCommands(
             const retryNotice = new Notice('Sharing to Radicle network...', 0);
             try {
               await radicleService.share(fullRepoPath, passphrase);
+
+              // Get Radicle ID and write to .udd
+              const radicleId = await radicleService.getRadicleId(fullRepoPath);
+              if (radicleId) {
+                console.log(`RadicleCommands: Writing Radicle ID to .udd: ${radicleId}`);
+                const UDDService = (await import('../services/udd-service')).UDDService;
+                const udd = await UDDService.readUDD(fullRepoPath);
+                udd.radicleId = radicleId;
+                await UDDService.writeUDD(fullRepoPath, udd);
+              }
+
               retryNotice.hide();
               console.log(`RadicleCommands: Successfully shared ${selectedNode.name} with passphrase`);
               uiService.showSuccess(`${selectedNode.name} shared successfully!`);

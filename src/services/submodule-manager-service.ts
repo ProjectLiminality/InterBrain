@@ -10,6 +10,7 @@ import { GitService } from './git-service';
 import { VaultService } from './vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
 import { UDDService } from './udd-service';
+import { RadicleService } from './radicle-service';
 
 export interface SubmoduleInfo {
   name: string;
@@ -45,7 +46,8 @@ export class SubmoduleManagerService {
   constructor(
     private app: App,
     private vaultService: VaultService,
-    private canvasParser: CanvasParserService
+    private canvasParser: CanvasParserService,
+    private radicleService: RadicleService
   ) {
     this.gitService = new GitService(app);
     this.initializeVaultPath(app);
@@ -74,6 +76,103 @@ export class SubmoduleManagerService {
       return repoPath;
     }
     return path.join(this.vaultPath, repoPath);
+  }
+
+  /**
+   * Get or initialize Radicle ID for a DreamNode repository
+   * Pattern from RadicleBatchInitService: Check .udd first, then git, then initialize if needed
+   */
+  private async getOrInitializeRadicleId(repoPath: string): Promise<string | null> {
+    const fs = require('fs').promises;
+    const uddPath = path.join(repoPath, '.udd');
+
+    try {
+      // STEP 1: Try reading Radicle ID from .udd file first
+      try {
+        const uddContent = await fs.readFile(uddPath, 'utf-8');
+        const udd = JSON.parse(uddContent);
+
+        if (udd.radicleId) {
+          console.log(`SubmoduleManagerService: Found existing Radicle ID in .udd: ${udd.radicleId}`);
+          return udd.radicleId;
+        }
+      } catch (error) {
+        console.warn(`SubmoduleManagerService: Could not read .udd at ${uddPath}:`, error);
+      }
+
+      // STEP 2: No Radicle ID in .udd - check if repository is initialized anyway
+      const radicleId = await this.radicleService.getRadicleId(repoPath);
+      if (radicleId) {
+        // GAP DETECTED: Repository initialized but .udd doesn't have the ID - sync it
+        console.log(`SubmoduleManagerService: Found Radicle ID in git: ${radicleId}, writing to .udd...`);
+        try {
+          const uddContent = await fs.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+          udd.radicleId = radicleId;
+          await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+          console.log(`SubmoduleManagerService: Successfully synced Radicle ID to .udd`);
+          return radicleId;
+        } catch (writeError) {
+          console.warn(`SubmoduleManagerService: Could not write Radicle ID to .udd:`, writeError);
+          return radicleId; // Still return the ID even if write failed
+        }
+      }
+
+      // STEP 3: Repository not initialized - initialize it now
+      console.log(`SubmoduleManagerService: No Radicle ID found, initializing repository...`);
+
+      try {
+        // Get DreamNode directory name (PascalCase, no spaces) and UUID
+        const uddContent = await fs.readFile(uddPath, 'utf-8');
+        const udd = JSON.parse(uddContent);
+        const directoryName = path.basename(repoPath); // Already PascalCase from existing system
+        const uuid = udd.uuid;
+
+        // Use UUID suffix to ensure uniqueness (avoids collision with deleted repos)
+        // Format: "DirectoryName-abc123" (first 7 chars of UUID)
+        const uniqueName = uuid ? `${directoryName}-${uuid.substring(0, 7)}` : directoryName;
+
+        console.log(`SubmoduleManagerService: Initializing with unique name: ${uniqueName}`);
+
+        // Initialize with rad init
+        await this.radicleService.init(
+          repoPath,
+          uniqueName, // name with UUID suffix for uniqueness
+          'DreamNode repository' // description
+        );
+
+        // Get the newly created Radicle ID
+        const newRadicleId = await this.radicleService.getRadicleId(repoPath);
+
+        if (newRadicleId) {
+          console.log(`SubmoduleManagerService: Successfully initialized Radicle ID: ${newRadicleId}`);
+
+          // Write to .udd immediately
+          udd.radicleId = newRadicleId;
+          await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
+          console.log(`SubmoduleManagerService: Wrote Radicle ID to .udd`);
+
+          return newRadicleId;
+        }
+
+        console.warn(`SubmoduleManagerService: Radicle init succeeded but could not retrieve ID`);
+        return null;
+      } catch (initError) {
+        // With unique names (Title-UUID), storage collisions should not occur
+        // If they do, it indicates a bug or external modification
+        if (initError instanceof Error && initError.message.startsWith('RADICLE_STORAGE_EXISTS:')) {
+          console.error(`SubmoduleManagerService: Unexpected storage collision despite unique naming!`);
+          console.error(`SubmoduleManagerService: This may indicate external Radicle modifications or a bug.`);
+        }
+
+        console.warn(`SubmoduleManagerService: Failed to initialize Radicle repository:`, initError);
+        return null;
+      }
+
+    } catch (error) {
+      console.error(`SubmoduleManagerService: Error getting/initializing Radicle ID:`, error);
+      return null;
+    }
   }
 
   /**
@@ -523,6 +622,14 @@ export class SubmoduleManagerService {
       // Add all changes (submodules and updated canvas)
       await execAsync('git add -A', { cwd: fullPath });
 
+      // Check if there are actually changes to commit
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+
+      if (!statusOutput.trim()) {
+        console.log('SubmoduleManagerService: No changes to commit (already committed by submodule operations)');
+        return 'no-changes';
+      }
+
       // Create commit message
       const addedCount = importResults.filter(r => r.success && !r.alreadyExisted).length;
       const removedCount = removedSubmodules.length;
@@ -567,10 +674,17 @@ export class SubmoduleManagerService {
     const fullParentPath = this.getFullPath(parentPath);
 
     try {
-      // Get parent's UUID and title
+      // Get parent's Radicle ID (initialize if needed) and title
       const parentUDD = await UDDService.readUDD(fullParentPath);
-      const parentUUID = parentUDD.uuid;
+      const parentRadicleId = await this.getOrInitializeRadicleId(fullParentPath);
       const parentTitle = parentUDD.title;
+
+      if (!parentRadicleId) {
+        console.error('SubmoduleManagerService: Could not get/initialize parent Radicle ID - skipping relationship tracking');
+        return;
+      }
+
+      console.log(`SubmoduleManagerService: Parent Radicle ID: ${parentRadicleId}`);
 
       let parentModified = false;
 
@@ -584,56 +698,102 @@ export class SubmoduleManagerService {
         console.log(`SubmoduleManagerService: Checking ${isNew ? 'new' : 'existing'} submodule: ${result.submoduleName}`);
 
         try {
-          // Initialize submodule to ensure .udd is accessible
-          await execAsync(`git submodule update --init "${result.submoduleName}"`, { cwd: fullParentPath });
-
-          // Read child's UUID from submodule copy
-          const childUDD = await UDDService.readUDD(submodulePath);
-          const childUUID = childUDD.uuid;
-          const childTitle = childUDD.title;
-
-          // Update parent's .udd (add child to submodules array if missing)
-          if (await UDDService.addSubmodule(fullParentPath, childUUID)) {
-            console.log(`SubmoduleManagerService: Added ${childTitle} (${childUUID}) to parent's submodules`);
-            parentModified = true;
-          }
-
-          // Detect sovereign repo path (e.g., Cseti/Hawkinsscale -> ../Hawkinsscale at vault root)
+          // Detect sovereign repo path FIRST (e.g., Cseti/Hawkinsscale -> ../Hawkinsscale at vault root)
           const sovereignPath = path.join(this.vaultPath, result.submoduleName);
           const sovereignExists = require('fs').existsSync(path.join(sovereignPath, '.git'));
 
-          if (sovereignExists) {
-            console.log(`SubmoduleManagerService: Found sovereign repo at vault root: ${result.submoduleName}`);
-
-            // Update SOVEREIGN's .udd (this is the source of truth)
-            if (await UDDService.addSupermodule(sovereignPath, parentUUID)) {
-              console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentUUID}) to sovereign ${childTitle}'s supermodules`);
-
-              // Commit the change in the sovereign repository
-              try {
-                await execAsync('git add .udd', { cwd: sovereignPath });
-                await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
-                console.log(`SubmoduleManagerService: Committed supermodule relationship in sovereign ${childTitle}`);
-
-                // Update submodule to pull the changes from sovereign
-                try {
-                  await execAsync(`cd "${result.submoduleName}" && git pull origin main`, { cwd: fullParentPath });
-                  console.log(`SubmoduleManagerService: Submodule synced with sovereign ${childTitle}`);
-                } catch (pullError) {
-                  console.error(`SubmoduleManagerService: Failed to sync submodule with sovereign: ${pullError instanceof Error ? pullError.message : 'Unknown error'}`);
-                  console.log(`SubmoduleManagerService: Note - Submodule will sync on next 'git submodule update'`);
-                }
-
-              } catch (error) {
-                console.error(`SubmoduleManagerService: Failed to commit sovereign .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
-              }
-            } else {
-              // Relationship already exists in sovereign - this is good!
-              console.log(`SubmoduleManagerService: Bidirectional relationship already correct in sovereign ${childTitle}`);
-            }
-          } else {
-            console.log(`SubmoduleManagerService: No sovereign repo found for ${result.submoduleName} - skipping supermodule tracking`);
+          if (!sovereignExists) {
+            console.log(`SubmoduleManagerService: No sovereign repo found for ${result.submoduleName} - skipping relationship tracking`);
             console.log(`SubmoduleManagerService: (This is normal for DreamNodes cloned from GitHub/Radicle)`);
+            continue;
+          }
+
+          console.log(`SubmoduleManagerService: Found sovereign repo at vault root: ${result.submoduleName}`);
+
+          // STEP 1: Work in sovereign repo ONLY - update all metadata before importing submodule
+
+          // Get child's Radicle ID (initialize if needed)
+          const childRadicleId = await this.getOrInitializeRadicleId(sovereignPath);
+          let childUDD = await UDDService.readUDD(sovereignPath);
+          const childTitle = childUDD.title;
+
+          if (!childRadicleId) {
+            console.warn(`SubmoduleManagerService: Could not get/initialize Radicle ID for ${result.submoduleName} - skipping`);
+            continue;
+          }
+
+          console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
+
+          let sovereignModified = false;
+
+          // Ensure sovereign's .udd has its own Radicle ID (may have been just initialized)
+          if (!childUDD.radicleId || childUDD.radicleId !== childRadicleId) {
+            console.log(`SubmoduleManagerService: Adding Radicle ID to sovereign ${childTitle}'s .udd...`);
+            childUDD.radicleId = childRadicleId;
+            await UDDService.writeUDD(sovereignPath, childUDD);
+            sovereignModified = true;
+          }
+
+          // Add parent's Radicle ID to sovereign's supermodules array (source of truth)
+          if (await UDDService.addSupermodule(sovereignPath, parentRadicleId)) {
+            console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentRadicleId}) to sovereign ${childTitle}'s supermodules`);
+            sovereignModified = true;
+          }
+
+          // Commit all sovereign changes at once (only if there are actual changes)
+          if (sovereignModified) {
+            try {
+              await execAsync('git add .udd', { cwd: sovereignPath });
+
+              // Check if there are actually staged changes before committing
+              const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: sovereignPath });
+
+              if (statusOutput.trim()) {
+                // Commit with COHERENCE_BEACON metadata for network discovery
+                const beaconData = JSON.stringify({
+                  type: 'supermodule',
+                  radicleId: parentRadicleId,
+                  title: parentTitle
+                });
+
+                const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
+
+                console.log(`SubmoduleManagerService: 🎯 Creating COHERENCE_BEACON commit in sovereign ${childTitle}`);
+                console.log(`SubmoduleManagerService: Beacon metadata:`, beaconData);
+                console.log(`SubmoduleManagerService: Full commit message:\n${commitMessage}`);
+
+                const { stdout: commitOutput } = await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
+                console.log(`SubmoduleManagerService: Commit output:`, commitOutput);
+
+                // Get the commit hash
+                const { stdout: commitHash } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+                console.log(`SubmoduleManagerService: ✓ COHERENCE_BEACON commit created: ${commitHash.trim()}`);
+                console.log(`SubmoduleManagerService: This commit will be detected when other vaults run "Check for Updates"`)
+              } else {
+                console.log(`SubmoduleManagerService: No changes to commit in sovereign ${childTitle} (metadata already up to date)`);
+              }
+            } catch (error) {
+              console.warn(`SubmoduleManagerService: Failed to commit sovereign .udd changes:`, error);
+            }
+          }
+
+          // STEP 2: NOW update submodule to point to latest sovereign commit with all metadata
+          console.log(`SubmoduleManagerService: Updating submodule to latest sovereign state...`);
+
+          // Initialize submodule first (if not already)
+          await execAsync(`git submodule update --init "${result.submoduleName}"`, { cwd: fullParentPath });
+
+          // Update submodule to point to latest commit from sovereign (remote origin/main)
+          const submodulePath = path.join(fullParentPath, result.submoduleName);
+          await execAsync(`git fetch origin`, { cwd: submodulePath });
+          await execAsync(`git checkout origin/main`, { cwd: submodulePath });
+
+          console.log(`SubmoduleManagerService: Submodule ${childTitle} updated to latest with complete metadata`);
+
+          // Update parent's .udd (add child's Radicle ID to submodules array if missing)
+          if (await UDDService.addSubmodule(fullParentPath, childRadicleId)) {
+            console.log(`SubmoduleManagerService: Added ${childTitle} (${childRadicleId}) to parent's submodules`);
+            parentModified = true;
           }
 
         } catch (error) {
@@ -646,47 +806,48 @@ export class SubmoduleManagerService {
         console.log(`SubmoduleManagerService: Processing removed submodule: ${submoduleName}`);
 
         try {
-          // Try to get UUID from previous commit (best-effort)
-          let childUUID: string | null = null;
+          // Try to get child's Radicle ID from sovereign repo (preferred source)
+          const sovereignPath = path.join(this.vaultPath, submoduleName);
+          const sovereignExists = require('fs').existsSync(path.join(sovereignPath, '.git'));
 
-          try {
-            const result = await execAsync(`git show HEAD~1:${submoduleName}/.udd`, { cwd: fullParentPath });
-            const childUDD = JSON.parse(result.stdout || result);
-            childUUID = childUDD.uuid;
-          } catch {
-            // Silently handle git history errors - this is expected for recently added submodules
-            // Don't log the error itself, just explain what we're doing
-            console.log(`SubmoduleManagerService: Could not read ${submoduleName} UUID from git history (this is normal for recently added submodules)`);
-
-            // Try to get UUID from sovereign repo as fallback
-            const sovereignPath = path.join(this.vaultPath, submoduleName);
-            const sovereignExists = require('fs').existsSync(path.join(sovereignPath, '.udd'));
-
-            if (sovereignExists) {
-              try {
-                const sovereignUDD = await UDDService.readUDD(sovereignPath);
-                childUUID = sovereignUDD.uuid;
-                console.log(`SubmoduleManagerService: Retrieved UUID from sovereign repo instead`);
-              } catch {
-                // Also silently handle sovereign read errors
-                console.log(`SubmoduleManagerService: Could not read sovereign .udd either - skipping relationship cleanup`);
-              }
-            }
+          if (!sovereignExists) {
+            console.log(`SubmoduleManagerService: No sovereign repo found for ${submoduleName} - skipping relationship cleanup`);
+            console.log(`SubmoduleManagerService: (This is expected for DreamNodes cloned from GitHub/Radicle)`);
+            continue;
           }
 
-          if (childUUID) {
-            // Update parent's .udd (remove child from submodules array)
-            if (await UDDService.removeSubmodule(fullParentPath, childUUID)) {
-              console.log(`SubmoduleManagerService: Removed ${submoduleName} (${childUUID}) from parent's submodules`);
-              parentModified = true;
-            }
+          // Get child's Radicle ID from sovereign repo
+          const childRadicleId = await this.getOrInitializeRadicleId(sovereignPath);
 
-            // Note: We don't update sovereign's supermodules on removal
-            // The relationship remains in sovereign as historical record
-            // This allows re-adding the submodule without losing relationship history
-            console.log(`SubmoduleManagerService: Note - Sovereign ${submoduleName}'s supermodules unchanged (relationship preserved)`);
+          if (!childRadicleId) {
+            console.warn(`SubmoduleManagerService: Could not get Radicle ID for removed submodule ${submoduleName} - skipping cleanup`);
+            continue;
+          }
+
+          console.log(`SubmoduleManagerService: Removed submodule Radicle ID: ${childRadicleId}`);
+
+          // Update parent's .udd (remove child's Radicle ID from submodules array)
+          if (await UDDService.removeSubmodule(fullParentPath, childRadicleId)) {
+            console.log(`SubmoduleManagerService: Removed ${submoduleName} (${childRadicleId}) from parent's submodules`);
+            parentModified = true;
+          }
+
+          // Update sovereign's supermodules on removal (bidirectional cleanup)
+          console.log(`SubmoduleManagerService: Removing supermodule relationship from sovereign ${submoduleName}`);
+
+          if (await UDDService.removeSupermodule(sovereignPath, parentRadicleId)) {
+            console.log(`SubmoduleManagerService: Removed ${parentTitle} (${parentRadicleId}) from sovereign ${submoduleName}'s supermodules`);
+
+            // Commit the change in the sovereign repository
+            try {
+              await execAsync('git add .udd', { cwd: sovereignPath });
+              await execAsync(`git commit -m "Remove supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
+              console.log(`SubmoduleManagerService: Committed supermodule removal in sovereign ${submoduleName}`);
+            } catch (error) {
+              console.error(`SubmoduleManagerService: Failed to commit sovereign .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
           } else {
-            console.log(`SubmoduleManagerService: Skipping .udd cleanup for ${submoduleName} (UUID not available)`);
+            console.log(`SubmoduleManagerService: Supermodule relationship already removed from sovereign ${submoduleName}`);
           }
 
         } catch (error) {

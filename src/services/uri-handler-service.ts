@@ -55,7 +55,7 @@ export class URIHandlerService {
 	 */
 	private async handleSingleNodeClone(params: Record<string, string>): Promise<'success' | 'skipped' | 'error'> {
 		try {
-			const id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
+			let id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
 			const repo = params.repo; // GitHub repository path
 
 			// Check for GitHub repository
@@ -69,6 +69,10 @@ export class URIHandlerService {
 				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
 				return 'error';
 			}
+
+			// URL decode the ID (handles %3A -> : conversion)
+			id = decodeURIComponent(id);
+			console.log(`🔗 [URIHandler] Decoded ID: ${id}`);
 
 			// Determine if this is a Radicle ID or UUID
 			const isRadicleId = id.startsWith('rad:');
@@ -485,7 +489,12 @@ export class URIHandlerService {
 	 * @param identifier Radicle ID (preferred) or UUID (fallback)
 	 */
 	static generateSingleNodeLink(vaultName: string, identifier: string): string {
-		const encodedIdentifier = encodeURIComponent(identifier);
+		// Don't encode colons in Radicle IDs - they're part of the protocol
+		// rad:z... should stay as rad:z..., not rad%3Az...
+		const encodedIdentifier = identifier.startsWith('rad:')
+			? identifier // Keep Radicle ID as-is
+			: encodeURIComponent(identifier); // Encode other identifiers (UUIDs)
+
 		return `obsidian://interbrain-clone?id=${encodedIdentifier}`;
 	}
 

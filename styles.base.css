@@ -48,3 +48,65 @@
   color: rgba(255, 255, 255, 0.5) !important;
   opacity: 1 !important;
 }
+
+/* Coherence Beacon Modal */
+.coherence-beacon-modal {
+  padding: 20px;
+}
+
+.coherence-beacon-modal h2 {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.beacon-description {
+  margin-bottom: 20px;
+}
+
+.beacon-info {
+  background: var(--background-secondary);
+  padding: 15px;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.beacon-title {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.beacon-radicle-id {
+  font-family: monospace;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.beacon-question {
+  font-weight: bold;
+  margin: 15px 0;
+}
+
+.beacon-explanation {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  margin-top: 15px;
+}
+
+.beacon-explanation .explanation-header {
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.beacon-explanation ul {
+  margin-left: 20px;
+  margin-bottom: 10px;
+}
+
+.beacon-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}

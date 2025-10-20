@@ -2,6 +2,7 @@ import { Plugin, TFile } from 'obsidian';
 import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../services/canvas-parser-service';
+import { CanvasLayoutService } from '../services/canvas-layout-service';
 import { SubmoduleManagerService } from '../services/submodule-manager-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -10,12 +11,14 @@ import { serviceManager } from '../services/service-manager';
  * Dreamweaving commands for canvas analysis and submodule management
  */
 export function registerDreamweavingCommands(
-  plugin: Plugin, 
+  plugin: Plugin,
   uiService: UIService,
   vaultService: VaultService,
   canvasParser: CanvasParserService,
   submoduleManager: SubmoduleManagerService
 ): void {
+  // Initialize canvas layout service
+  const canvasLayoutService = new CanvasLayoutService(vaultService, canvasParser);
 
   // Create DreamSong Canvas - Creates new canvas file in selected DreamNode
   plugin.addCommand({
@@ -731,35 +734,64 @@ export function registerDreamweavingCommands(
     callback: async () => {
       try {
         const activeFile = plugin.app.workspace.getActiveFile();
-        
+
         if (!activeFile || !activeFile.path.endsWith('.canvas')) {
           uiService.showError('Please open a canvas file first');
           return;
         }
-        
+
         const dreamNodeBoundary = await canvasParser.findDreamNodeBoundary(activeFile.path);
-        
+
         if (!dreamNodeBoundary) {
           uiService.showError('Canvas is not inside a DreamNode');
           return;
         }
-        
+
         const submodules = await submoduleManager.listSubmodules(dreamNodeBoundary);
-        
+
         if (submodules.length === 0) {
           uiService.showSuccess('No submodules found in this DreamNode');
           return;
         }
-        
+
         console.log(`Submodules in ${dreamNodeBoundary}:`, submodules);
         uiService.showSuccess(`Found ${submodules.length} submodules (see console)`);
-        
+
         // TODO: Could show this in a modal or side panel
-        
+
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Failed to list submodules:', errorMessage);
         uiService.showError(`Failed to list submodules: ${errorMessage}`);
+      }
+    }
+  });
+
+  // Auto-Layout Canvas - Linear top-to-bottom flow
+  plugin.addCommand({
+    id: 'auto-layout-canvas',
+    name: 'Auto-layout Canvas',
+    callback: async () => {
+      try {
+        const activeFile = plugin.app.workspace.getActiveFile();
+
+        if (!activeFile || !activeFile.path.endsWith('.canvas')) {
+          uiService.showError('Please open a canvas file first');
+          return;
+        }
+
+        console.log(`Auto-layouting canvas: ${activeFile.path}`);
+        uiService.showInfo('Auto-layouting canvas elements...');
+
+        await canvasLayoutService.autoLayoutCanvas(activeFile.path);
+
+        uiService.showSuccess('Canvas auto-layout complete!');
+        console.log('Canvas elements arranged in linear top-to-bottom flow');
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Auto-layout failed:', errorMessage);
+        uiService.showError(`Auto-layout failed: ${errorMessage}`);
       }
     }
   });

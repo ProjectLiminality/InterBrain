@@ -22,6 +22,7 @@ import { registerConversationalCopilotCommands } from './features/conversational
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerRadicleCommands } from './commands/radicle-commands';
 import { registerGitHubCommands } from './commands/github-commands';
+import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { registerMigrationCommands } from './commands/migration-commands';
 import {
@@ -36,6 +37,7 @@ import { FaceTimeService } from './services/facetime-service';
 import { CanvasParserService } from './services/canvas-parser-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { CanvasObserverService } from './services/canvas-observer-service';
+import { CoherenceBeaconService } from './services/coherence-beacon-service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
@@ -57,6 +59,7 @@ export default class InterBrainPlugin extends Plugin {
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
+  private coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
   private constellationCommands!: ConstellationCommands;
   private canvasObserverService!: CanvasObserverService;
@@ -137,7 +140,13 @@ export default class InterBrainPlugin extends Plugin {
     this.submoduleManagerService = new SubmoduleManagerService(
       this.app,
       this.vaultService,
-      this.canvasParserService
+      this.canvasParserService,
+      serviceManager.getRadicleService()
+    );
+    this.coherenceBeaconService = new CoherenceBeaconService(
+      this.app,
+      this.vaultService,
+      serviceManager.getRadicleService()
     );
     this.leafManagerService = new LeafManagerService(this.app);
     this.canvasObserverService = new CanvasObserverService(this.app);
@@ -186,6 +195,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register GitHub commands (fallback sharing and broadcasting)
     registerGitHubCommands(this, this.uiService);
+
+    // Register Coherence Beacon commands (network discovery)
+    registerCoherenceBeaconCommands(this);
 
     // Register migration commands (PascalCase naming migration)
     registerMigrationCommands(this);
