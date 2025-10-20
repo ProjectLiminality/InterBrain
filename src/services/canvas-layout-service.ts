@@ -23,7 +23,7 @@ export interface LayoutConfig {
 const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   centerX: 400,
   textCardWidth: 360,  // 600 * 0.6 = 360 (reduced by 40%)
-  verticalSpacing: 150,
+  verticalSpacing: 75,  // 150 * 0.5 = 75 (reduced by 50%)
   horizontalOffset: 50,
   startY: 0,
   charHeightRatio: 0.15  // Rough estimate: 150px per 1000 chars
