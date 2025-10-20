@@ -71,18 +71,30 @@ export class CanvasLayoutService {
           mediaNode.width = layoutConfig.textCardWidth;
           mediaNode.height = layoutConfig.textCardWidth / originalAspectRatio;
 
-          // Position media in center column
-          mediaNode.x = layoutConfig.centerX;
-          mediaNode.y = currentY;
-
           // Calculate text height based on content length
           const textHeight = this.calculateTextHeight(textNode.text || '', layoutConfig);
           textNode.width = layoutConfig.textCardWidth;
           textNode.height = textHeight;
 
+          // Calculate vertical centering offset
+          const mediaHeight = mediaNode.height;
+          const heightDiff = Math.abs(mediaHeight - textHeight);
+          const verticalOffset = heightDiff / 2;
+
+          // Position media in center column
+          mediaNode.x = layoutConfig.centerX;
+          if (mediaHeight > textHeight) {
+            // Media is taller - media at currentY, text offset down
+            mediaNode.y = currentY;
+            textNode.y = currentY + verticalOffset;
+          } else {
+            // Text is taller - text at currentY, media offset down
+            textNode.y = currentY;
+            mediaNode.y = currentY + verticalOffset;
+          }
+
           // Position text horizontally adjacent to media
           textNode.x = layoutConfig.centerX + mediaNode.width + layoutConfig.horizontalOffset;
-          textNode.y = currentY;
 
           // Advance Y by the taller of the two elements
           const maxHeight = Math.max(mediaNode.height, textNode.height);
