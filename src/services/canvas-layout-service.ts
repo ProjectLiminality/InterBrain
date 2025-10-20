@@ -110,16 +110,43 @@ export class CanvasLayoutService {
   }
 
   /**
-   * Calculate text card height based on content length
+   * Calculate text card height based on content length and wrapping
+   *
+   * Uses realistic text metrics:
+   * - Average character width: ~8px (Obsidian's default font)
+   * - Line height: ~24px (typical 1.5x line spacing)
+   * - Card padding: ~40px (20px top + 20px bottom)
    */
   private calculateTextHeight(text: string, config: LayoutConfig): number {
-    const minHeight = 200;  // Minimum card height
-    const maxHeight = 1000; // Maximum card height
+    const minHeight = 100;   // Minimum card height
+    const maxHeight = 2000;  // Maximum card height
 
-    // Estimate height based on character count
-    const estimatedHeight = Math.max(minHeight, text.length * config.charHeightRatio);
+    const avgCharWidth = 8;  // Average character width in pixels
+    const lineHeight = 24;   // Line height in pixels
+    const cardPadding = 40;  // Vertical padding (top + bottom)
 
-    return Math.min(estimatedHeight, maxHeight);
+    // Calculate how many characters fit per line
+    const availableWidth = config.textCardWidth - 40; // Subtract horizontal padding
+    const charsPerLine = Math.floor(availableWidth / avgCharWidth);
+
+    // Estimate number of lines (account for newlines in text)
+    const textLines = text.split('\n');
+    let totalLines = 0;
+
+    for (const line of textLines) {
+      if (line.trim() === '') {
+        totalLines += 1; // Empty line still takes up space
+      } else {
+        // Calculate wrapped lines for this paragraph
+        const wrappedLines = Math.ceil(line.length / charsPerLine);
+        totalLines += Math.max(1, wrappedLines);
+      }
+    }
+
+    // Calculate total height: lines * lineHeight + padding
+    const estimatedHeight = (totalLines * lineHeight) + cardPadding;
+
+    return Math.max(minHeight, Math.min(estimatedHeight, maxHeight));
   }
 
   /**
