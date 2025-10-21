@@ -335,6 +335,14 @@ export interface InterBrainState extends OllamaConfigSlice {
   setConstellationScanning: (scanning: boolean) => void;
   setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
   clearConstellationData: () => void;
+
+  // Radial button UI state (option-key triggered)
+  radialButtonUI: {
+    isActive: boolean;
+    buttonCount: number;
+  };
+  setRadialButtonUIActive: (active: boolean) => void;
+  setRadialButtonCount: (count: number) => void;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -460,6 +468,11 @@ export const useInterBrainStore = create<InterBrainState>()(
     isScanning: false,
     positions: null,
     lastLayoutTimestamp: null
+  },
+
+  radialButtonUI: {
+    isActive: false,
+    buttonCount: 6
   },
 
   // Actions
@@ -1394,6 +1407,20 @@ export const useInterBrainStore = create<InterBrainState>()(
       isScanning: false,
       positions: null,
       lastLayoutTimestamp: null
+    }
+  })),
+
+  setRadialButtonUIActive: (active) => set((state) => ({
+    radialButtonUI: {
+      ...state.radialButtonUI,
+      isActive: active
+    }
+  })),
+
+  setRadialButtonCount: (count) => set((state) => ({
+    radialButtonUI: {
+      ...state.radialButtonUI,
+      buttonCount: count
     }
   })),
     }),

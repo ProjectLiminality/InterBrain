@@ -13,6 +13,7 @@ import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../features/edit-mode';
 import CopilotModeOverlay from '../features/conversational-copilot/CopilotModeOverlay';
 import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
+import { RadialButtonRing3D } from '../features/radial-buttons/RadialButtonRing3D';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -208,6 +209,9 @@ export default function DreamspaceCanvas() {
   // Search interface state
   const searchInterface = useInterBrainStore(state => state.searchInterface);
 
+  // Radial button UI state
+  const radialButtonUI = useInterBrainStore(state => state.radialButtonUI);
+
   // Option key handler for copilot mode show/hide
   useEffect(() => {
     if (spatialLayout !== 'copilot') return;
@@ -262,6 +266,37 @@ export default function DreamspaceCanvas() {
     };
   }, [spatialLayout, copilotMode.showSearchResults]);
 
+  // Option key handler for radial button UI in liminal-web mode
+  useEffect(() => {
+    if (spatialLayout !== 'liminal-web' || !selectedNode) return;
+
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Option key on Mac, Alt key on Windows/Linux
+      if (e.altKey) {
+        e.preventDefault();
+        console.log('🎯 [RadialUI] Option key pressed - showing radial buttons');
+        const store = useInterBrainStore.getState();
+        store.setRadialButtonUIActive(true);
+      }
+    };
+
+    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
+      // Detect when Option/Alt key is released
+      if (!e.altKey) {
+        console.log('🎯 [RadialUI] Option key released - hiding radial buttons');
+        const store = useInterBrainStore.getState();
+        store.setRadialButtonUIActive(false);
+      }
+    };
+
+    globalThis.document.addEventListener('keydown', handleKeyDown);
+    globalThis.document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      globalThis.document.removeEventListener('keydown', handleKeyDown);
+      globalThis.document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [spatialLayout, selectedNode]);
 
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
@@ -1422,6 +1457,17 @@ export default function DreamspaceCanvas() {
               dreamWorldRef={dreamWorldRef}
               showEdges={true}
               opacity={0.6}
+            />
+          )}
+
+          {/* Radial button UI - option-key triggered in liminal-web mode */}
+          {radialButtonUI.isActive && selectedNode && spatialLayout === 'liminal-web' && (
+            <RadialButtonRing3D
+              centerNodePosition={selectedNode.position}
+              buttonCount={radialButtonUI.buttonCount}
+              onButtonClick={(buttonIndex) => {
+                console.log(`🎯 [RadialUI] Button ${buttonIndex} clicked`);
+              }}
             />
           )}
         </group>
