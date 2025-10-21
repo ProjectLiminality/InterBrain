@@ -138,8 +138,11 @@ export class CoherenceBeaconService {
       // Parse commits for COHERENCE_BEACON
       const beacons = this.parseCommitsForBeacons(logOutput);
 
-      console.log(`CoherenceBeaconService: Found ${beacons.length} beacon(s)`);
-      return beacons;
+      // Filter out previously rejected beacons (local tracking)
+      const unrejectedBeacons = await this.filterRejectedBeacons(beacons, fullPath);
+
+      console.log(`CoherenceBeaconService: Found ${beacons.length} beacon(s), ${unrejectedBeacons.length} not previously rejected`);
+      return unrejectedBeacons;
 
     } catch (error) {
       console.error(`CoherenceBeaconService: Error checking for beacons:`, error);
@@ -244,11 +247,67 @@ export class CoherenceBeaconService {
   }
 
   /**
-   * Reject a beacon: do nothing (don't cherry-pick the commit)
+   * Reject a beacon: record rejection to prevent it from reappearing
    */
   async rejectBeacon(dreamNodePath: string, beacon: CoherenceBeacon): Promise<void> {
-    console.log(`CoherenceBeaconService: Rejected beacon for ${beacon.title} - no action taken`);
-    // Intentionally do nothing - commit stays in FETCH_HEAD, not merged into HEAD
-    // User maintains their own perspective without this supermodule relationship
+    const path = require('path');
+    const fullPath = path.join(this.vaultPath, dreamNodePath);
+
+    console.log(`CoherenceBeaconService: Rejecting beacon for ${beacon.title}...`);
+
+    // Record rejection in local git config (per-repository)
+    const rejectionFile = path.join(fullPath, '.git', 'interbrain-rejected-beacons.json');
+
+    try {
+      const fs = require('fs').promises;
+
+      // Load existing rejections
+      let rejections: Record<string, string> = {};
+      try {
+        const content = await fs.readFile(rejectionFile, 'utf-8');
+        rejections = JSON.parse(content);
+      } catch {
+        // File doesn't exist yet - start fresh
+      }
+
+      // Add this rejection with timestamp
+      rejections[beacon.commitHash] = new Date().toISOString();
+
+      // Save back to file
+      await fs.writeFile(rejectionFile, JSON.stringify(rejections, null, 2), 'utf-8');
+
+      console.log(`CoherenceBeaconService: Recorded rejection for ${beacon.title} (commit ${beacon.commitHash})`);
+
+    } catch (error) {
+      console.error(`CoherenceBeaconService: Failed to record rejection (non-critical):`, error);
+      // Don't fail the rejection if we can't write the file
+    }
+  }
+
+  /**
+   * Filter out previously rejected beacons
+   */
+  private async filterRejectedBeacons(beacons: CoherenceBeacon[], dreamNodePath: string): Promise<CoherenceBeacon[]> {
+    const path = require('path');
+    const rejectionFile = path.join(dreamNodePath, '.git', 'interbrain-rejected-beacons.json');
+
+    try {
+      const fs = require('fs').promises;
+      const content = await fs.readFile(rejectionFile, 'utf-8');
+      const rejections: Record<string, string> = JSON.parse(content);
+
+      // Filter out beacons whose commit hashes are in the rejection list
+      const filtered = beacons.filter(beacon => !(beacon.commitHash in rejections));
+
+      if (beacons.length !== filtered.length) {
+        console.log(`CoherenceBeaconService: Filtered out ${beacons.length - filtered.length} previously rejected beacon(s)`);
+      }
+
+      return filtered;
+
+    } catch {
+      // No rejection file or parse error - return all beacons
+      return beacons;
+    }
   }
 }
