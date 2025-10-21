@@ -199,21 +199,6 @@ export class CoherenceBeaconService {
     console.log(`CoherenceBeaconService: Accepting beacon for ${beacon.title}...`);
 
     try {
-      // Check for uncommitted changes and stash if needed
-      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
-      const hasUncommittedChanges = statusOutput.trim().length > 0;
-
-      let stashCreated = false;
-      if (hasUncommittedChanges) {
-        console.log(`CoherenceBeaconService: Uncommitted changes detected, stashing...`);
-        try {
-          await execAsync('git stash push -m "CoherenceBeacon: Temporary stash before accepting beacon"', { cwd: fullPath });
-          stashCreated = true;
-        } catch (stashError) {
-          console.warn(`CoherenceBeaconService: Failed to stash changes (continuing anyway):`, stashError);
-        }
-      }
-
       // Check if the commit is already applied (look for the beacon metadata in current HEAD)
       const { stdout: currentCommitMsg } = await execAsync('git log -1 --format="%b"', { cwd: fullPath });
       const alreadyApplied = currentCommitMsg.includes(`COHERENCE_BEACON: {"type":"supermodule","radicleId":"${beacon.radicleId}"`);
@@ -222,6 +207,7 @@ export class CoherenceBeaconService {
         console.log(`CoherenceBeaconService: Beacon already applied to this branch - skipping cherry-pick`);
       } else {
         // Cherry-pick the commit with the beacon
+        // Git will automatically handle conflicts if they occur (rare for .udd/.gitmodules changes)
         console.log(`CoherenceBeaconService: Cherry-picking commit ${beacon.commitHash}...`);
         try {
           await execAsync(`git cherry-pick ${beacon.commitHash}`, { cwd: fullPath });
@@ -231,19 +217,9 @@ export class CoherenceBeaconService {
             console.log(`CoherenceBeaconService: Cherry-pick is empty (changes already applied) - skipping`);
             await execAsync('git cherry-pick --skip', { cwd: fullPath });
           } else {
+            console.error(`CoherenceBeaconService: Cherry-pick failed - user may need to resolve conflicts manually`);
             throw cherryPickError;
           }
-        }
-      }
-
-      // Restore stashed changes only if we successfully created a stash
-      if (stashCreated) {
-        console.log(`CoherenceBeaconService: Restoring stashed changes...`);
-        try {
-          await execAsync('git stash pop', { cwd: fullPath });
-        } catch (error) {
-          console.warn(`CoherenceBeaconService: Could not auto-restore stashed changes (may have conflicts):`, error);
-          console.log(`CoherenceBeaconService: Changes are saved in stash - use 'git stash pop' manually if needed`);
         }
       }
 
