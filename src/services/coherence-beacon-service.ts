@@ -207,9 +207,27 @@ export class CoherenceBeaconService {
         await execAsync('git stash push -m "CoherenceBeacon: Temporary stash before accepting beacon"', { cwd: fullPath });
       }
 
-      // Cherry-pick the commit with the beacon
-      console.log(`CoherenceBeaconService: Cherry-picking commit ${beacon.commitHash}...`);
-      await execAsync(`git cherry-pick ${beacon.commitHash}`, { cwd: fullPath });
+      // Check if the commit is already applied (look for the beacon metadata in current HEAD)
+      const { stdout: currentCommitMsg } = await execAsync('git log -1 --format="%b"', { cwd: fullPath });
+      const alreadyApplied = currentCommitMsg.includes(`COHERENCE_BEACON: {"type":"supermodule","radicleId":"${beacon.radicleId}"`);
+
+      if (alreadyApplied) {
+        console.log(`CoherenceBeaconService: Beacon already applied to this branch - skipping cherry-pick`);
+      } else {
+        // Cherry-pick the commit with the beacon
+        console.log(`CoherenceBeaconService: Cherry-picking commit ${beacon.commitHash}...`);
+        try {
+          await execAsync(`git cherry-pick ${beacon.commitHash}`, { cwd: fullPath });
+        } catch (cherryPickError: any) {
+          // Check if error is "now empty" (commit already applied)
+          if (cherryPickError.message && cherryPickError.message.includes('now empty')) {
+            console.log(`CoherenceBeaconService: Cherry-pick is empty (changes already applied) - skipping`);
+            await execAsync('git cherry-pick --skip', { cwd: fullPath });
+          } else {
+            throw cherryPickError;
+          }
+        }
+      }
 
       // Restore stashed changes if we stashed them
       if (hasUncommittedChanges) {
@@ -224,9 +242,34 @@ export class CoherenceBeaconService {
 
       // Clone the supermodule repository
       console.log(`CoherenceBeaconService: Cloning supermodule ${beacon.title}...`);
-      const destinationPath = path.join(this.vaultPath, beacon.title);
 
-      await this.radicleService.clone(beacon.radicleId, destinationPath);
+      // Clone directly to vault - RadicleService returns the cloned directory name
+      const cloneResult = await this.radicleService.clone(beacon.radicleId, this.vaultPath);
+      const clonedDirName = cloneResult.repoName;
+      let finalPath = path.join(this.vaultPath, clonedDirName);
+
+      console.log(`CoherenceBeaconService: Cloned as directory: ${clonedDirName}`);
+
+      // Strip UUID suffix if present (format: "Name-abc1234")
+      const cleanName = clonedDirName.replace(/-[a-f0-9]{7}$/i, '');
+      if (cleanName !== clonedDirName) {
+        const cleanPath = path.join(this.vaultPath, cleanName);
+        console.log(`CoherenceBeaconService: Renaming ${clonedDirName} → ${cleanName}...`);
+
+        const fs = require('fs').promises;
+        await fs.rename(finalPath, cleanPath);
+        finalPath = cleanPath;
+        console.log(`CoherenceBeaconService: ✓ Renamed to clean PascalCase name`);
+      }
+
+      // Initialize submodules recursively
+      console.log(`CoherenceBeaconService: Initializing submodules in ${path.basename(finalPath)}...`);
+      try {
+        await execAsync('git submodule update --init --recursive', { cwd: finalPath });
+        console.log(`CoherenceBeaconService: ✓ Submodules initialized`);
+      } catch (submoduleError) {
+        console.warn(`CoherenceBeaconService: No submodules to initialize or error:`, submoduleError);
+      }
 
       console.log(`CoherenceBeaconService: Successfully accepted beacon and cloned ${beacon.title}`);
 

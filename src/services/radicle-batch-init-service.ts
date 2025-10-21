@@ -196,10 +196,13 @@ export class RadicleBatchInitService {
 				const fullRepoPath = path.join(vaultPath, node.repoPath);
 
 				// Initialize with Radicle (will auto-save Radicle ID to .udd)
-				// Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
+				// IMPORTANT: Use UUID suffix for uniqueness in Radicle storage (prevents collisions)
+				// Directory stays clean PascalCase, but Radicle repo name gets UUID for backend uniqueness
+				const uniqueRadicleName = node.id ? `${node.repoPath}-${node.id.substring(0, 7)}` : node.repoPath;
+
 				await this.radicleService.init(
 					fullRepoPath,
-					node.repoPath,
+					uniqueRadicleName, // Backend name with UUID for uniqueness
 					`DreamNode: ${node.name}`
 				);
 

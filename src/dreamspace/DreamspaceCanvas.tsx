@@ -1073,7 +1073,14 @@ export default function DreamspaceCanvas() {
     try {
       const primaryFile = files[0]; // Use first file for node naming and primary dreamTalk
       const fileNameWithoutExt = primaryFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
-      
+
+      // Convert PascalCase file names to human-readable titles with spaces
+      // Example: "HawkinsScale" → "Hawkins Scale"
+      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+      const humanReadableTitle = isPascalCase(fileNameWithoutExt)
+        ? pascalCaseToTitle(fileNameWithoutExt)
+        : fileNameWithoutExt;
+
       const store = useInterBrainStore.getState();
       const service = serviceManager.getActive();
       
@@ -1100,7 +1107,7 @@ export default function DreamspaceCanvas() {
       
       // Create node with determined type
       const newNode = await service.create(
-        fileNameWithoutExt,
+        humanReadableTitle,
         nodeType,
         dreamTalkFile,
         position,
@@ -1146,6 +1153,13 @@ export default function DreamspaceCanvas() {
       const file = files[0]; // Use first file for title
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
 
+      // Convert PascalCase file names to human-readable titles with spaces
+      // Example: "HawkinsScale" → "Hawkins Scale"
+      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+      const humanReadableTitle = isPascalCase(fileNameWithoutExt)
+        ? pascalCaseToTitle(fileNameWithoutExt)
+        : fileNameWithoutExt;
+
       // Use the EXACT same position as the Create DreamNode command
       const spawnPosition: [number, number, number] = [0, 0, -25];
 
@@ -1162,7 +1176,7 @@ export default function DreamspaceCanvas() {
 
       // Start creation with pre-filled data including all files
       startCreationWithData(spawnPosition, {
-        title: fileNameWithoutExt,
+        title: humanReadableTitle,
         type: 'dream',
         dreamTalkFile: dreamTalkFile,
         additionalFiles: additionalFiles.length > 0 ? additionalFiles : undefined
