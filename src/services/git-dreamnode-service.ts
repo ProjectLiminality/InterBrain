@@ -291,30 +291,45 @@ export class GitDreamNodeService {
       // Check each directory
       for (const dir of directories) {
         const dirPath = path.join(this.vaultPath, dir.name);
-        
-        // Check if it's a valid DreamNode (has .git and .udd)
-        const isValid = await this.isValidDreamNode(dirPath);
-        if (!isValid) continue;
-        
-        // Read UDD file
-        const uddPath = path.join(dirPath, '.udd');
-        const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
-        const udd: UDDFile = JSON.parse(uddContent);
-        
-        foundNodeIds.add(udd.uuid);
-        
-        // Check if node exists in store
-        const store = useInterBrainStore.getState();
-        const existingData = store.realNodes.get(udd.uuid);
-        
-        if (!existingData) {
-          // New node - add to store
-          await this.addNodeFromVault(dirPath, udd, dir.name);
-          stats.added++;
-        } else {
-          // Existing node - check for updates
-          const updated = await this.updateNodeFromVault(existingData, dirPath, udd, dir.name);
-          if (updated) stats.updated++;
+
+        try {
+          // Check if it's a valid DreamNode (has .git and .udd)
+          const isValid = await this.isValidDreamNode(dirPath);
+          if (!isValid) continue;
+
+          // Read UDD file
+          const uddPath = path.join(dirPath, '.udd');
+          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+
+          let udd: UDDFile;
+          try {
+            udd = JSON.parse(uddContent);
+          } catch (parseError) {
+            console.error(`⚠️ [VaultScan] Invalid JSON in ${dir.name}/.udd:`, parseError);
+            console.error(`⚠️ [VaultScan] File content preview:\n${uddContent.substring(0, 500)}`);
+            // Skip this node but continue scanning others
+            continue;
+          }
+
+          foundNodeIds.add(udd.uuid);
+
+          // Check if node exists in store
+          const store = useInterBrainStore.getState();
+          const existingData = store.realNodes.get(udd.uuid);
+
+          if (!existingData) {
+            // New node - add to store
+            await this.addNodeFromVault(dirPath, udd, dir.name);
+            stats.added++;
+          } else {
+            // Existing node - check for updates
+            const updated = await this.updateNodeFromVault(existingData, dirPath, udd, dir.name);
+            if (updated) stats.updated++;
+          }
+        } catch (error) {
+          // Log error for this specific node but continue scanning others
+          console.error(`⚠️ [VaultScan] Error processing ${dir.name}:`, error);
+          continue;
         }
       }
       
