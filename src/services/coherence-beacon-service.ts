@@ -7,6 +7,7 @@ const execAsync = promisify(exec);
 import { App } from 'obsidian';
 import { RadicleService } from './radicle-service';
 import { VaultService } from './vault-service';
+import { getURIHandlerService } from './uri-handler-service';
 
 export interface CoherenceBeacon {
   type: 'supermodule';
@@ -202,9 +203,15 @@ export class CoherenceBeaconService {
       const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
       const hasUncommittedChanges = statusOutput.trim().length > 0;
 
+      let stashCreated = false;
       if (hasUncommittedChanges) {
         console.log(`CoherenceBeaconService: Uncommitted changes detected, stashing...`);
-        await execAsync('git stash push -m "CoherenceBeacon: Temporary stash before accepting beacon"', { cwd: fullPath });
+        try {
+          await execAsync('git stash push -m "CoherenceBeacon: Temporary stash before accepting beacon"', { cwd: fullPath });
+          stashCreated = true;
+        } catch (stashError) {
+          console.warn(`CoherenceBeaconService: Failed to stash changes (continuing anyway):`, stashError);
+        }
       }
 
       // Check if the commit is already applied (look for the beacon metadata in current HEAD)
@@ -229,8 +236,8 @@ export class CoherenceBeaconService {
         }
       }
 
-      // Restore stashed changes if we stashed them
-      if (hasUncommittedChanges) {
+      // Restore stashed changes only if we successfully created a stash
+      if (stashCreated) {
         console.log(`CoherenceBeaconService: Restoring stashed changes...`);
         try {
           await execAsync('git stash pop', { cwd: fullPath });
@@ -240,38 +247,19 @@ export class CoherenceBeaconService {
         }
       }
 
-      // Clone the supermodule repository
+      // Clone the supermodule using URIHandler's infrastructure
+      // This reuses the complete clone workflow: clone → rename → init submodules → scan vault → index → constellation → auto-focus
       console.log(`CoherenceBeaconService: Cloning supermodule ${beacon.title}...`);
+      const uriHandler = getURIHandlerService();
+      const cloneResult = await uriHandler.cloneFromRadicle(beacon.radicleId, false);
 
-      // Clone directly to vault - RadicleService returns the cloned directory name
-      const cloneResult = await this.radicleService.clone(beacon.radicleId, this.vaultPath);
-      const clonedDirName = cloneResult.repoName;
-      let finalPath = path.join(this.vaultPath, clonedDirName);
-
-      console.log(`CoherenceBeaconService: Cloned as directory: ${clonedDirName}`);
-
-      // Strip UUID suffix if present (format: "Name-abc1234")
-      const cleanName = clonedDirName.replace(/-[a-f0-9]{7}$/i, '');
-      if (cleanName !== clonedDirName) {
-        const cleanPath = path.join(this.vaultPath, cleanName);
-        console.log(`CoherenceBeaconService: Renaming ${clonedDirName} → ${cleanName}...`);
-
-        const fs = require('fs').promises;
-        await fs.rename(finalPath, cleanPath);
-        finalPath = cleanPath;
-        console.log(`CoherenceBeaconService: ✓ Renamed to clean PascalCase name`);
+      if (cloneResult === 'success') {
+        console.log(`CoherenceBeaconService: Successfully accepted beacon and cloned ${beacon.title}`);
+      } else if (cloneResult === 'skipped') {
+        console.log(`CoherenceBeaconService: Supermodule ${beacon.title} already existed - beacon accepted`);
+      } else {
+        console.error(`CoherenceBeaconService: Failed to clone supermodule ${beacon.title}`);
       }
-
-      // Initialize submodules recursively
-      console.log(`CoherenceBeaconService: Initializing submodules in ${path.basename(finalPath)}...`);
-      try {
-        await execAsync('git submodule update --init --recursive', { cwd: finalPath });
-        console.log(`CoherenceBeaconService: ✓ Submodules initialized`);
-      } catch (submoduleError) {
-        console.warn(`CoherenceBeaconService: No submodules to initialize or error:`, submoduleError);
-      }
-
-      console.log(`CoherenceBeaconService: Successfully accepted beacon and cloned ${beacon.title}`);
 
     } catch (error) {
       console.error(`CoherenceBeaconService: Error accepting beacon:`, error);

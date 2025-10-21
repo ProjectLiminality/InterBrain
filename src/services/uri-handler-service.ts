@@ -276,8 +276,9 @@ export class URIHandlerService {
 
 	/**
 	 * Clone a DreamNode from Radicle network
+	 * Public method to allow reuse by CoherenceBeaconService and other features
 	 */
-	private async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
+	public async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
 			// Get vault path
 			const adapter = this.app.vault.adapter as any;
@@ -293,21 +294,48 @@ export class URIHandlerService {
 			}
 
 			const cloneResult = await this.radicleService.clone(radicleId, vaultPath);
+			let finalRepoName = cloneResult.repoName;
+
+			// Strip UUID suffix from directory name if present (backend uses it for uniqueness)
+			// Format: "Name-abc1234" → "Name"
+			if (!cloneResult.alreadyExisted) {
+				const cleanName = cloneResult.repoName.replace(/-[a-f0-9]{7}$/i, '');
+				if (cleanName !== cloneResult.repoName) {
+					const path = require('path');
+					const fs = require('fs').promises;
+					const oldPath = path.join(vaultPath, cloneResult.repoName);
+					const newPath = path.join(vaultPath, cleanName);
+
+					console.log(`URIHandler: Renaming ${cloneResult.repoName} → ${cleanName}...`);
+					await fs.rename(oldPath, newPath);
+					finalRepoName = cleanName;
+					console.log(`URIHandler: ✓ Renamed to clean PascalCase name`);
+
+					// Initialize submodules if any
+					const execAsync = require('util').promisify(require('child_process').exec);
+					try {
+						await execAsync('git submodule update --init --recursive', { cwd: newPath });
+						console.log(`URIHandler: ✓ Submodules initialized`);
+					} catch (subErr) {
+						console.warn(`URIHandler: No submodules or init failed:`, subErr);
+					}
+				}
+			}
 
 			// Check if repo already existed - if so, skip refresh but still focus
 			if (cloneResult.alreadyExisted) {
 				if (!silent) {
-					new Notice(`📌 DreamNode "${cloneResult.repoName}" already cloned!`);
+					new Notice(`📌 DreamNode "${finalRepoName}" already cloned!`);
 				}
 
 				// Auto-focus the existing node (same as newly cloned)
-				await this.autoFocusNode(cloneResult.repoName, silent);
+				await this.autoFocusNode(finalRepoName, silent);
 
 				return 'skipped'; // Already have it, no refresh needed
 			}
 
 			if (!silent) {
-				new Notice(`✅ Cloned "${cloneResult.repoName}" successfully!`);
+				new Notice(`✅ Cloned "${finalRepoName}" successfully!`);
 			}
 
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
@@ -316,7 +344,7 @@ export class URIHandlerService {
 				await this.dreamNodeService.scanVault();
 
 				// Step 2: Index the newly cloned node for semantic search
-				await this.indexNewNode(cloneResult.repoName);
+				await this.indexNewNode(finalRepoName);
 
 				// Step 3: Rescan DreamSong relationships
 				const relationshipService = new DreamSongRelationshipService(this.plugin);
@@ -329,7 +357,7 @@ export class URIHandlerService {
 						await canvasAPI.applyConstellationLayout();
 
 						// Step 5: Auto-focus the newly cloned node
-						await this.autoFocusNode(cloneResult.repoName, silent);
+						await this.autoFocusNode(finalRepoName, silent);
 					}
 				} else {
 					console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
