@@ -1,23 +1,30 @@
 import React from 'react';
+import { setIcon } from 'obsidian';
 
 /**
  * Radial Button Configuration
  *
  * Defines the buttons that appear around the selected DreamNode in liminal-web mode.
- * Each button has an icon (SVG) and maps to an Obsidian command.
+ * Each button has an icon (via Obsidian's setIcon API) and maps to an Obsidian command.
  *
- * Professional approach:
- * - SVG icons defined as React components (inline) for simplicity and type safety
+ * Architecture:
+ * - Uses Obsidian's built-in icon system (same as EditNode3D pattern)
+ * - Icons referenced by Lucide name (e.g., 'lucide-settings')
  * - Command IDs reference existing Obsidian commands
  * - Easy to add/remove buttons by modifying this array
+ *
+ * To add a new button:
+ * 1. Browse icons at https://lucide.dev/icons
+ * 2. Find the icon you want (e.g., "Search" → "search")
+ * 3. Add entry with icon name as 'lucide-{icon-name}'
  */
 
 export interface RadialButtonConfig {
   /** Unique identifier for this button */
   id: string;
 
-  /** SVG icon component */
-  icon: React.ReactNode;
+  /** Lucide icon name with 'lucide-' prefix (e.g., 'lucide-settings') */
+  iconName: string;
 
   /** Obsidian command ID to execute when clicked */
   commandId: string;
@@ -27,34 +34,28 @@ export interface RadialButtonConfig {
 }
 
 /**
- * Gear Icon - Settings/Edit
- * Simple, clean gear SVG for edit mode
+ * Helper function to create icon React element using Obsidian's setIcon API
+ * Pattern from EditNode3D.tsx - uses ref callback to inject SVG
  */
-const GearIcon: React.FC = () => (
-  <svg
-    width="100%"
-    height="100%"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    {/* Outer gear circle */}
-    <circle cx="12" cy="12" r="3" />
-
-    {/* Gear teeth (8 teeth in circle pattern) */}
-    <path d="M12 1v3" />
-    <path d="M12 20v3" />
-    <path d="M4.22 4.22l2.12 2.12" />
-    <path d="M17.66 17.66l2.12 2.12" />
-    <path d="M1 12h3" />
-    <path d="M20 12h3" />
-    <path d="M4.22 19.78l2.12-2.12" />
-    <path d="M17.66 6.34l2.12-2.12" />
-  </svg>
-);
+export function createIconElement(iconName: string): React.ReactNode {
+  return (
+    <div
+      ref={(el) => {
+        if (el) {
+          el.innerHTML = '';
+          setIcon(el, iconName);
+        }
+      }}
+      style={{
+        width: '162px',
+        height: '162px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    />
+  );
+}
 
 /**
  * Radial Button Configuration Array
@@ -65,15 +66,21 @@ const GearIcon: React.FC = () => (
 export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'edit-mode',
-    icon: <GearIcon />,
+    iconName: 'lucide-settings',
     commandId: 'interbrain:enter-edit-mode',
     label: 'Edit Mode'
   }
-  // Add more buttons here as needed:
+  // Add more buttons here - examples:
   // {
   //   id: 'search',
-  //   icon: <SearchIcon />,
+  //   iconName: 'lucide-search',
   //   commandId: 'interbrain:enter-search-mode',
   //   label: 'Search'
+  // },
+  // {
+  //   id: 'create',
+  //   iconName: 'lucide-plus-circle',
+  //   commandId: 'interbrain:enter-creation-mode',
+  //   label: 'Create'
   // }
 ];

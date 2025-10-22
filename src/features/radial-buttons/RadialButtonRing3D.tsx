@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html, Billboard } from '@react-three/drei';
 import { Group } from 'three';
-import { RADIAL_BUTTON_CONFIGS, RadialButtonConfig } from './radial-button-config';
+import { RADIAL_BUTTON_CONFIGS, RadialButtonConfig, createIconElement } from './radial-button-config';
 import { serviceManager } from '../../services/service-manager';
 
 interface RadialButtonRing3DProps {
@@ -267,10 +267,8 @@ const RadialButton: React.FC<RadialButtonProps> = ({
               color: '#ffffff'  // Icon color
             }}
           >
-            {/* Icon from configuration */}
-            <div style={{ width: '162px', height: '162px' }}>
-              {config.icon}
-            </div>
+            {/* Icon from configuration using Obsidian's setIcon API */}
+            {createIconElement(config.iconName)}
           </div>
         </Html>
       </Billboard>
