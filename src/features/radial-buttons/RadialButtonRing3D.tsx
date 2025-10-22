@@ -242,33 +242,63 @@ const RadialButton: React.FC<RadialButtonProps> = ({
           }}
         >
           <div
-            onMouseEnter={() => {
-              console.log(`🎯 [RadialButton] Button "${config.label}" hovered`);
-              setIsHovered(true);
-            }}
-            onMouseLeave={() => setIsHovered(false)}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClick();
-            }}
             style={{
-              width: '270px',  // 50% increase (180px * 1.5)
-              height: '270px',
-              borderRadius: '50%',
-              border: `6px solid ${isHovered ? '#ffffff' : '#4FC3F7'}`,
-              background: '#000000',  // Black fill
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-              boxShadow: isHovered ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',  // Hover glow
-              cursor: 'pointer',
-              color: '#ffffff'  // Icon color
+              gap: '10px'
             }}
           >
-            {/* Icon from configuration using Obsidian's setIcon API */}
-            {createIconElement(config.iconName)}
+            {/* Circular button */}
+            <div
+              onMouseEnter={() => {
+                console.log(`🎯 [RadialButton] Button "${config.label}" hovered`);
+                setIsHovered(true);
+              }}
+              onMouseLeave={() => setIsHovered(false)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClick();
+              }}
+              style={{
+                width: '270px',  // 50% increase (180px * 1.5)
+                height: '270px',
+                borderRadius: '50%',
+                border: `6px solid ${isHovered ? '#ffffff' : '#4FC3F7'}`,
+                background: '#000000',  // Black fill
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                boxShadow: isHovered ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',  // Hover glow
+                cursor: 'pointer',
+                color: '#ffffff'  // Icon color
+              }}
+            >
+              {/* Icon from configuration using Obsidian's setIcon API */}
+              {createIconElement(config.iconName)}
+            </div>
+
+            {/* Label underneath - only visible on hover */}
+            {isHovered && config.label && (
+              <div
+                style={{
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  background: 'rgba(0, 0, 0, 0.8)',
+                  padding: '4px 12px',
+                  borderRadius: '4px',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                  pointerEvents: 'none'  // Don't interfere with hover detection
+                }}
+              >
+                {config.label}
+              </div>
+            )}
           </div>
         </Html>
       </Billboard>
