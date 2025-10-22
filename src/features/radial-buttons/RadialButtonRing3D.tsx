@@ -243,10 +243,9 @@ const RadialButton: React.FC<RadialButtonProps> = ({
         >
           <div
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '10px'
+              position: 'relative',
+              width: '270px',
+              height: '270px'
             }}
           >
             {/* Circular button */}
@@ -261,7 +260,7 @@ const RadialButton: React.FC<RadialButtonProps> = ({
                 handleClick();
               }}
               style={{
-                width: '270px',  // 50% increase (180px * 1.5)
+                width: '270px',
                 height: '270px',
                 borderRadius: '50%',
                 border: `6px solid ${isHovered ? '#ffffff' : '#4FC3F7'}`,
@@ -284,6 +283,10 @@ const RadialButton: React.FC<RadialButtonProps> = ({
             {isHovered && config.label && (
               <div
                 style={{
+                  position: 'absolute',
+                  top: '280px',  // Just below the button
+                  left: '50%',
+                  transform: 'translateX(-50%)',
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '500',
