@@ -68,6 +68,12 @@ export interface SpatialOrchestratorRef {
 
   /** Apply constellation layout based on relationship graph */
   applyConstellationLayout: () => Promise<void>;
+
+  /** Hide related nodes in liminal-web mode (move to constellation) */
+  hideRelatedNodesInLiminalWeb: () => void;
+
+  /** Show related nodes in liminal-web mode (move back to ring positions) */
+  showRelatedNodesInLiminalWeb: () => void;
 }
 
 interface SpatialOrchestratorProps {
@@ -1147,6 +1153,87 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
       } catch (error) {
         console.error('❌ [SpatialOrchestrator] Failed to apply constellation layout:', error);
+      }
+    },
+
+    hideRelatedNodesInLiminalWeb: () => {
+      try {
+        console.log('🎯 [Orchestrator-LiminalWeb] Hiding related nodes (moving to constellation)');
+
+        // Get all ring nodes from stored roles
+        const allRingNodeIds = [
+          ...liminalWebRoles.current.ring1NodeIds,
+          ...liminalWebRoles.current.ring2NodeIds,
+          ...liminalWebRoles.current.ring3NodeIds
+        ];
+
+        console.log(`🌐 [Orchestrator-LiminalWeb] Moving ${allRingNodeIds.length} ring nodes to constellation`);
+
+        // Match button animation duration (500ms) for parallel motion
+        const buttonAnimationDuration = 500;
+
+        // Move all ring nodes to constellation surface
+        allRingNodeIds.forEach(nodeId => {
+          const nodeRef = nodeRefs.current.get(nodeId);
+          if (nodeRef?.current) {
+            // Use easeInQuart for quick departure, but match button timing
+            nodeRef.current.returnToConstellation(buttonAnimationDuration, 'easeInQuart');
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ [Orchestrator-LiminalWeb] Error hiding related nodes:', error);
+      }
+    },
+
+    showRelatedNodesInLiminalWeb: () => {
+      try {
+        console.log('🎯 [Orchestrator-LiminalWeb] Showing related nodes (moving back to ring positions)');
+
+        // Need to recalculate positions to get them back to their ring spots
+        if (!liminalWebRoles.current.centerNodeId) {
+          console.warn('⚠️ [Orchestrator-LiminalWeb] No center node found in roles');
+          return;
+        }
+
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const positions = calculateRingLayoutPositions(
+          liminalWebRoles.current.centerNodeId,
+          relationshipGraph,
+          DEFAULT_RING_CONFIG
+        );
+
+        // Apply world-space position correction
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+
+          // Transform all ring node positions to world space
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+
+        // Match button animation duration (500ms) for parallel motion
+        const buttonAnimationDuration = 500;
+
+        // Move ring nodes back to their positions
+        const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+        console.log(`🎪 [Orchestrator-LiminalWeb] Moving ${allRingNodes.length} nodes back to ring positions`);
+
+        allRingNodes.forEach(({ nodeId, position }) => {
+          const nodeRef = nodeRefs.current.get(nodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            // Use easeOutQuart for smooth arrival, but match button timing
+            nodeRef.current.moveToPosition(position, buttonAnimationDuration, 'easeOutQuart');
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ [Orchestrator-LiminalWeb] Error showing related nodes:', error);
       }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);

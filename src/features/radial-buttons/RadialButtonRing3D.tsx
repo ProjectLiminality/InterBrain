@@ -1,197 +1,279 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import { Html, Billboard } from '@react-three/drei';
 import { Group } from 'three';
+import { RADIAL_BUTTON_CONFIGS, RadialButtonConfig } from './radial-button-config';
+import { serviceManager } from '../../services/service-manager';
 
 interface RadialButtonRing3DProps {
   /** Position of the center node around which buttons appear */
   centerNodePosition: [number, number, number];
 
-  /** Number of buttons to display (default: 6) */
-  buttonCount?: number;
+  /** Whether the radial UI should be active (visible at ring) or hidden (at center) */
+  isActive: boolean;
 
-  /** Callback when a button is clicked */
-  onButtonClick?: (buttonIndex: number) => void;
+  /** Callback when exit animation completes (so parent can unmount) */
+  onExitComplete?: () => void;
 }
 
 /**
  * RadialButtonRing3D - Option-key triggered radial button UI
  *
  * Displays circular buttons in an elegant ring pattern around the selected DreamNode.
- * Uses the same positioning algorithm as Ring 1 in liminal-web mode, scaled down.
+ * Uses simple equidistant spacing on a ring in the XY plane.
  *
  * Design:
- * - Button radius: ~10 units (vs DreamNode ~20 units)
- * - Ring distance: 60 units from center (Ring 1 distance 100 * 0.6)
- * - Ring positioning radius: 24 units (Ring 1 radius 40 * 0.6)
+ * - Button radius: 3 units
+ * - Ring radius: 18 units from center
+ * - Positioned at Z = -50 (between camera and selected node)
  * - Slide animation: 500ms with easeOutCubic
  */
+
+/**
+ * Calculate button positions using equidistant spacing on a ring
+ */
+function calculateButtonPositions(count: number, radius: number, centerZ: number): [number, number, number][] {
+  const positions: [number, number, number][] = [];
+
+  // Equidistant angle calculation (works for any count)
+  let startAngle = -Math.PI / 2; // Start at top
+  if (count === 6) {
+    startAngle = -Math.PI / 2 + Math.PI / 6; // Rotate by 30° for flat edge at top
+  }
+
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * 2 * Math.PI + startAngle;
+    const x = radius * Math.cos(angle);
+    const y = radius * Math.sin(angle);
+    positions.push([x, y, centerZ]);
+  }
+
+  return positions;
+}
+
 export const RadialButtonRing3D: React.FC<RadialButtonRing3DProps> = ({
-  centerNodePosition,
-  buttonCount = 6,
-  onButtonClick
+  centerNodePosition: _centerNodePosition,
+  isActive,
+  onExitComplete
 }) => {
-  // Constants for ring layout (scaled from Ring 1 values)
-  const SCALE_FACTOR = 0.6;
-  const RING_DISTANCE = 100 * SCALE_FACTOR; // 60 units from camera
-  const RING_RADIUS = 40 * SCALE_FACTOR; // 24 units radius
-  const BUTTON_RADIUS = 10; // Visual size of button
+  // Simple absolute coordinates - outside rotatable group!
+  const CENTER_Z = -51; // Moved 1 unit back to prevent Z-fighting with DreamNode at -50
+  const RING_RADIUS = 18;
+  const BUTTON_RADIUS = 3;
 
-  // Animation constants
-  const SLIDE_DURATION = 500; // 0.5 seconds
-  const [isAnimating, setIsAnimating] = useState(true);
-  const [animationStartTime, setAnimationStartTime] = useState(Date.now());
+  // Get button configurations dynamically
+  const buttonConfigs = RADIAL_BUTTON_CONFIGS;
+  const buttonCount = buttonConfigs.length;
 
-  // Button positions state
-  const [buttonPositions, setButtonPositions] = useState<[number, number, number][]>([]);
-  const [currentPositions, setCurrentPositions] = useState<[number, number, number][]>([]);
+  // Calculate button positions using equidistant spacing
+  const buttonPositions = calculateButtonPositions(buttonCount, RING_RADIUS, CENTER_Z);
 
-  // Calculate target positions using Ring 1 equidistant angle algorithm
+  // Center position for animation start point
+  const centerPosition: [number, number, number] = [0, 0, CENTER_Z];
+
+  // Track how many buttons have completed exit animation
+  const [exitedCount, setExitedCount] = useState(0);
+
+  // Reset exit count when re-entering (interruption case)
   useEffect(() => {
-    const positions: [number, number, number][] = [];
-
-    // Start position (behind center node)
-    const startZ = centerNodePosition[2]; // Same Z as center node
-
-    // Ring 1 logic with proper rotation (from RingLayout.ts lines 137-155)
-    let startAngle = -Math.PI / 2; // Default: start at top (point up)
-    if (buttonCount === 6) {
-      startAngle = -Math.PI / 2 + Math.PI / 6; // Rotate by 30° (flat edge at top)
+    if (isActive) {
+      setExitedCount(0);
     }
+  }, [isActive]);
 
-    for (let i = 0; i < buttonCount; i++) {
-      const angle = (i / buttonCount) * 2 * Math.PI + startAngle;
-      const x = centerNodePosition[0] + RING_RADIUS * Math.cos(angle);
-      const y = centerNodePosition[1] - RING_RADIUS * Math.sin(angle); // Negate Y for 3D coords
-      const z = centerNodePosition[2] - RING_DISTANCE;
-
-      positions.push([x, y, z]);
+  // When all buttons have exited, notify parent
+  useEffect(() => {
+    if (!isActive && exitedCount === buttonCount) {
+      console.log(`🎯 [RadialButtonRing3D] All ${buttonCount} buttons exited - notifying parent`);
+      onExitComplete?.();
     }
+  }, [exitedCount, buttonCount, isActive, onExitComplete]);
 
-    setButtonPositions(positions);
-
-    // Initialize current positions at start (behind center node)
-    const startPositions: [number, number, number][] = [];
-    for (let i = 0; i < buttonCount; i++) {
-      startPositions.push([
-        centerNodePosition[0],
-        centerNodePosition[1],
-        startZ
-      ]);
-    }
-    setCurrentPositions(startPositions);
-
-    // Start animation
-    setAnimationStartTime(Date.now());
-    setIsAnimating(true);
-  }, [centerNodePosition, buttonCount]);
-
-  // Easing function (easeOutCubic)
-  const easeOutCubic = (t: number): number => {
-    return 1 - Math.pow(1 - t, 3);
-  };
-
-  // Animation frame loop
-  useFrame(() => {
-    if (!isAnimating || buttonPositions.length === 0) return;
-
-    const elapsed = Date.now() - animationStartTime;
-    const progress = Math.min(elapsed / SLIDE_DURATION, 1.0);
-    const easedProgress = easeOutCubic(progress);
-
-    // Interpolate positions
-    const newPositions: [number, number, number][] = [];
-    for (let i = 0; i < buttonCount; i++) {
-      const start = [centerNodePosition[0], centerNodePosition[1], centerNodePosition[2]];
-      const target = buttonPositions[i];
-
-      const x = start[0] + (target[0] - start[0]) * easedProgress;
-      const y = start[1] + (target[1] - start[1]) * easedProgress;
-      const z = start[2] + (target[2] - start[2]) * easedProgress;
-
-      newPositions.push([x, y, z]);
-    }
-
-    setCurrentPositions(newPositions);
-
-    if (progress >= 1.0) {
-      setIsAnimating(false);
-    }
-  });
-
-  // Render buttons
+  // Render buttons in a ring
   return (
     <group>
-      {currentPositions.map((position, index) => (
-        <RadialButton
-          key={index}
-          position={position}
-          radius={BUTTON_RADIUS}
-          label={String(index + 1)}
-          onClick={() => onButtonClick?.(index + 1)}
-        />
-      ))}
+      {buttonPositions.map((position, index) => {
+        const config = buttonConfigs[index];
+        return (
+          <RadialButton
+            key={config.id}
+            centerPosition={centerPosition}
+            ringPosition={position}
+            radius={BUTTON_RADIUS}
+            config={config}
+            isActive={isActive}
+            onExitComplete={() => {
+              setExitedCount(prev => prev + 1);
+            }}
+          />
+        );
+      })}
     </group>
   );
 };
 
 interface RadialButtonProps {
-  position: [number, number, number];
+  centerPosition: [number, number, number];
+  ringPosition: [number, number, number];
   radius: number;
-  label: string;
-  onClick?: () => void;
+  config: RadialButtonConfig;
+  isActive: boolean;
+  onExitComplete?: () => void;
 }
 
 /**
- * Individual radial button component
+ * Individual radial button component with bidirectional slide animation
+ *
+ * Architecture:
+ * - Pure HTML element with circular blue border, black fill, white SVG icon
+ * - HTML handles all hover/click detection (no THREE.js sphere needed)
+ * - Enter animation: centerPosition → ringPosition (500ms, easeOutCubic)
+ * - Exit animation: ringPosition → centerPosition (500ms, easeOutCubic)
  */
 const RadialButton: React.FC<RadialButtonProps> = ({
-  position,
-  radius,
-  label,
-  onClick
+  centerPosition,
+  ringPosition,
+  radius: _radius,
+  config,
+  isActive,
+  onExitComplete
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const groupRef = useRef<Group>(null);
 
-  // Hover scale effect
-  const scale = isHovered ? 1.2 : 1.0;
+  // Handle button click - execute the mapped command
+  const handleClick = () => {
+    console.log(`🎯 [RadialButton] Button "${config.label}" clicked - executing command: ${config.commandId}`);
+    const app = serviceManager.getApp();
+    if (app) {
+      (app as any).commands.executeCommandById(config.commandId);
+    } else {
+      console.error('🎯 [RadialButton] App not available, cannot execute command');
+    }
+  };
+
+  // Animation state (pattern from DreamNode3D.tsx)
+  const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(centerPosition);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const transitionStartTime = useRef<number | null>(null);
+  const animationStartPos = useRef<[number, number, number]>(centerPosition);
+  const animationTargetPos = useRef<[number, number, number]>(ringPosition);
+  const ANIMATION_DURATION = 500; // 0.5 seconds
+  const hasInitialized = useRef(false);
+
+  // Start enter animation when component mounts
+  useEffect(() => {
+    animationStartPos.current = centerPosition;
+    animationTargetPos.current = ringPosition;
+    transitionStartTime.current = globalThis.performance.now();
+    setIsTransitioning(true);
+    hasInitialized.current = true;
+  }, []);
+
+  // Handle isActive changes - supports mid-flight interruption (after mount)
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+
+    if (!isActive) {
+      // Exit animation: interrupt current animation and move to center
+      console.log(`🎯 [RadialButton ${label}] Interrupting - moving to center from:`, animatedPosition);
+      animationStartPos.current = animatedPosition;
+      animationTargetPos.current = centerPosition;
+      transitionStartTime.current = globalThis.performance.now();
+      setIsTransitioning(true);
+    } else {
+      // Enter animation: interrupt current animation and move to ring
+      console.log(`🎯 [RadialButton ${label}] Interrupting - moving to ring from:`, animatedPosition);
+      animationStartPos.current = animatedPosition;
+      animationTargetPos.current = ringPosition;
+      transitionStartTime.current = globalThis.performance.now();
+      setIsTransitioning(true);
+    }
+  }, [isActive]);
+
+  // Animation frame update (pattern from DreamNode3D.tsx lines 502-563)
+  useFrame(() => {
+    if (!isTransitioning || transitionStartTime.current === null) return;
+
+    const elapsed = globalThis.performance.now() - transitionStartTime.current;
+    const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+
+    if (progress >= 1) {
+      // Animation complete
+      setAnimatedPosition(animationTargetPos.current);
+      setIsTransitioning(false);
+
+      // If this was an exit animation, notify parent
+      if (!isActive) {
+        onExitComplete?.();
+      }
+      return;
+    }
+
+    // easeOutCubic: 1 - (1-x)^3 (smooth deceleration)
+    const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+    // Linear interpolation from start to target position
+    const startPos = animationStartPos.current;
+    const targetPos = animationTargetPos.current;
+    const newPosition: [number, number, number] = [
+      startPos[0] + (targetPos[0] - startPos[0]) * easedProgress,
+      startPos[1] + (targetPos[1] - startPos[1]) * easedProgress,
+      startPos[2] + (targetPos[2] - startPos[2]) * easedProgress
+    ];
+
+    setAnimatedPosition(newPosition);
+  });
 
   return (
-    <group ref={groupRef} position={position}>
-      <mesh
-        onPointerEnter={() => setIsHovered(true)}
-        onPointerLeave={() => setIsHovered(false)}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick?.();
-        }}
-        scale={scale}
-      >
-        <circleGeometry args={[radius, 32]} />
-        <meshBasicMaterial
-          color={isHovered ? '#ffffff' : '#4a9eff'}
-          opacity={0.9}
-          transparent
-          depthTest={false}
-        />
-      </mesh>
-
-      {/* Number label */}
-      <Html
-        center
-        distanceFactor={10}
-        style={{
-          pointerEvents: 'none',
-          userSelect: 'none',
-          color: '#000000',
-          fontSize: '14px',
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}
-      >
-        {label}
-      </Html>
+    <group ref={groupRef} position={animatedPosition}>
+      {/* Billboard - always faces camera (DreamNode pattern) */}
+      <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+        {/* HTML button - handles all interactions */}
+        <Html
+          center
+          transform
+          distanceFactor={10}
+          position={[0, 0, 0]}
+          style={{
+            pointerEvents: 'auto',  // Enable HTML interactions
+            userSelect: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          <div
+            onMouseEnter={() => {
+              console.log(`🎯 [RadialButton] Button "${config.label}" hovered`);
+              setIsHovered(true);
+            }}
+            onMouseLeave={() => setIsHovered(false)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClick();
+            }}
+            style={{
+              width: '270px',  // 50% increase (180px * 1.5)
+              height: '270px',
+              borderRadius: '50%',
+              border: `6px solid ${isHovered ? '#ffffff' : '#4FC3F7'}`,
+              background: '#000000',  // Black fill
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+              boxShadow: isHovered ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',  // Hover glow
+              cursor: 'pointer',
+              color: '#ffffff'  // Icon color
+            }}
+          >
+            {/* Icon from configuration */}
+            <div style={{ width: '162px', height: '162px' }}>
+              {config.icon}
+            </div>
+          </div>
+        </Html>
+      </Billboard>
     </group>
   );
 };

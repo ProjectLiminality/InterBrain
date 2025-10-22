@@ -31,6 +31,7 @@ import {
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
 import { ConstellationCommands } from './commands/constellation-commands';
+import { RadialButtonCommands } from './commands/radial-button-commands';
 import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
 import { registerFaceTimeCommands } from './commands/facetime-commands';
 import { FaceTimeService } from './services/facetime-service';
@@ -62,6 +63,7 @@ export default class InterBrainPlugin extends Plugin {
   private coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
   private constellationCommands!: ConstellationCommands;
+  private radialButtonCommands!: RadialButtonCommands;
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
@@ -154,6 +156,9 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize constellation commands
     this.constellationCommands = new ConstellationCommands(this);
 
+    // Initialize radial button commands
+    this.radialButtonCommands = new RadialButtonCommands(this);
+
     // Make services accessible to ServiceManager BEFORE initialization
     // Note: Using 'any' here is legitimate - we're extending the plugin with dynamic properties
     (this as any).vaultService = this.vaultService;
@@ -207,6 +212,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register constellation commands (DreamSong relationship analysis)
     this.constellationCommands.registerCommands(this);
+
+    // Register radial button debug commands
+    this.radialButtonCommands.registerCommands(this);
 
     // Register link file commands (.link file support)
     registerLinkFileCommands(this, this.uiService);

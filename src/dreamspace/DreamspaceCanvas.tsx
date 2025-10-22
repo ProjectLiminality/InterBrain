@@ -212,6 +212,17 @@ export default function DreamspaceCanvas() {
   // Radial button UI state
   const radialButtonUI = useInterBrainStore(state => state.radialButtonUI);
 
+  // Track whether radial button component should be mounted (for exit animation)
+  const [shouldMountRadialButtons, setShouldMountRadialButtons] = useState(false);
+
+  // Mount/unmount radial button component based on isActive and animation completion
+  useEffect(() => {
+    if (radialButtonUI.isActive) {
+      setShouldMountRadialButtons(true);
+    }
+    // Unmount happens via onExitComplete callback
+  }, [radialButtonUI.isActive]);
+
   // Option key handler for copilot mode show/hide
   useEffect(() => {
     if (spatialLayout !== 'copilot') return;
@@ -267,25 +278,40 @@ export default function DreamspaceCanvas() {
   }, [spatialLayout, copilotMode.showSearchResults]);
 
   // Option key handler for radial button UI in liminal-web mode
+  // Coordinated animation: buttons appear + related nodes hide (and vice versa)
   useEffect(() => {
     if (spatialLayout !== 'liminal-web' || !selectedNode) return;
 
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
       // Option key on Mac, Alt key on Windows/Linux
-      if (e.altKey) {
+      if (e.altKey && !radialButtonUI.isActive) {
         e.preventDefault();
-        console.log('🎯 [RadialUI] Option key pressed - showing radial buttons');
+        console.log('🎯 [RadialUI] Option key pressed - showing buttons & hiding related nodes');
         const store = useInterBrainStore.getState();
+
+        // Show radial buttons
         store.setRadialButtonUIActive(true);
+
+        // Hide related nodes by moving them to constellation
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.hideRelatedNodesInLiminalWeb();
+        }
       }
     };
 
     const handleKeyUp = (e: globalThis.KeyboardEvent) => {
       // Detect when Option/Alt key is released
-      if (!e.altKey) {
-        console.log('🎯 [RadialUI] Option key released - hiding radial buttons');
+      if (!e.altKey && radialButtonUI.isActive) {
+        console.log('🎯 [RadialUI] Option key released - hiding buttons & showing related nodes');
         const store = useInterBrainStore.getState();
+
+        // Hide radial buttons
         store.setRadialButtonUIActive(false);
+
+        // Show related nodes by moving them back to ring positions
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.showRelatedNodesInLiminalWeb();
+        }
       }
     };
 
@@ -296,7 +322,7 @@ export default function DreamspaceCanvas() {
       globalThis.document.removeEventListener('keydown', handleKeyDown);
       globalThis.document.removeEventListener('keyup', handleKeyUp);
     };
-  }, [spatialLayout, selectedNode]);
+  }, [spatialLayout, selectedNode, radialButtonUI.isActive]);
 
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
@@ -1409,6 +1435,18 @@ export default function DreamspaceCanvas() {
           </mesh>
         )}
 
+        {/* Radial button UI - STATIONARY relative to camera (outside rotatable group) */}
+        {shouldMountRadialButtons && selectedNode && spatialLayout === 'liminal-web' && (
+          <RadialButtonRing3D
+            centerNodePosition={[0, 0, -50]}
+            isActive={radialButtonUI.isActive}
+            onExitComplete={() => {
+              console.log('🎯 [RadialUI] Exit animation complete - unmounting');
+              setShouldMountRadialButtons(false);
+            }}
+          />
+        )}
+
         {/* Rotatable group containing all DreamNodes */}
         <group ref={dreamWorldRef}>
           {/* Debug wireframe sphere - toggleable via Obsidian commands */}
@@ -1457,17 +1495,6 @@ export default function DreamspaceCanvas() {
               dreamWorldRef={dreamWorldRef}
               showEdges={true}
               opacity={0.6}
-            />
-          )}
-
-          {/* Radial button UI - option-key triggered in liminal-web mode */}
-          {radialButtonUI.isActive && selectedNode && spatialLayout === 'liminal-web' && (
-            <RadialButtonRing3D
-              centerNodePosition={selectedNode.position}
-              buttonCount={radialButtonUI.buttonCount}
-              onButtonClick={(buttonIndex) => {
-                console.log(`🎯 [RadialUI] Button ${buttonIndex} clicked`);
-              }}
             />
           )}
         </group>
