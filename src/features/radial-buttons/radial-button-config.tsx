@@ -67,26 +67,71 @@ export function createIconElement(iconName: string): React.ReactNode {
  * Radial Button Configuration Array
  *
  * Add/remove buttons by modifying this array.
- * Order determines position (starts at top, goes clockwise for 6+ buttons).
+ * Order determines position (starts at top, goes clockwise).
  */
 export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'edit-mode',
-    iconName: 'lucide-settings',
+    iconName: 'lucide-edit',
     commandId: 'interbrain:enter-edit-mode',
-    label: 'Edit Mode'
+    label: 'Edit Relationships'
+  },
+  {
+    id: 'video-call',
+    iconName: 'lucide-video',
+    commandId: 'interbrain:start-video-call',
+    label: 'Start Video Call'
+    // Only shown when selectedNode.type === 'dreamer'
+  },
+  {
+    id: 'create-canvas',
+    iconName: 'lucide-layout-grid',
+    commandId: 'interbrain:create-dreamsong-canvas',
+    label: 'Create DreamSong Canvas'
+  },
+  {
+    id: 'github-share',
+    iconName: 'lucide-github',
+    commandId: 'interbrain:share-dreamnode-github',
+    label: 'Share to GitHub'
+    // TODO: Toggle to 'unpublish-dreamnode-github' when already published
+  },
+  {
+    id: 'save-changes',
+    iconName: 'lucide-save',
+    commandId: 'interbrain:save-dreamnode',
+    label: 'Save Changes'
+    // TODO: Refine what "save" means in different contexts
+  },
+  {
+    id: 'share-changes',
+    iconName: 'lucide-upload-cloud',
+    commandId: 'interbrain:push-to-network',
+    label: 'Share Changes'
+    // TODO: Combine push-to-network + initialize/share radicle
+  },
+  {
+    id: 'check-updates',
+    iconName: 'lucide-refresh-cw',
+    commandId: 'interbrain:check-coherence-beacons',
+    label: 'Check for Updates'
+  },
+  {
+    id: 'open-finder',
+    iconName: 'lucide-folder-open',
+    commandId: 'interbrain:open-dreamnode-in-finder',
+    label: 'Open in Finder'
+  },
+  {
+    id: 'coding-agent',
+    iconName: 'lucide-terminal',
+    commandId: 'interbrain:open-dreamnode-in-terminal',
+    label: 'Open Coding Agent'
+  },
+  {
+    id: 'delete-node',
+    iconName: 'lucide-trash-2',
+    commandId: 'interbrain:delete-dreamnode',
+    label: 'Delete DreamNode'
   }
-  // Add more buttons here - examples:
-  // {
-  //   id: 'search',
-  //   iconName: 'lucide-search',
-  //   commandId: 'interbrain:enter-search-mode',
-  //   label: 'Search'
-  // },
-  // {
-  //   id: 'create',
-  //   iconName: 'lucide-plus-circle',
-  //   commandId: 'interbrain:enter-creation-mode',
-  //   label: 'Create'
-  // }
 ];
