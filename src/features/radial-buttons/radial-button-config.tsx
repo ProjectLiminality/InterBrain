@@ -81,9 +81,9 @@ export function createIconElement(iconName: string): React.ReactNode {
 export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'edit-mode',
-    iconName: 'lucide-settings',  // Changed from lucide-edit to gear icon
+    iconName: 'lucide-settings',  // Gear icon
     commandId: 'interbrain:enter-edit-mode',
-    label: 'Edit Relationships'
+    label: 'Edit Mode'
   },
   {
     id: 'video-call',
@@ -104,6 +104,8 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     iconName: 'lucide-github',
     commandId: 'interbrain:share-dreamnode-github',
     label: 'Share to GitHub',
+    // Only show for dream-type nodes
+    shouldShow: (node) => node?.type === 'dream',
     // Dynamic label and command based on publish state
     getDynamicLabel: (node) => {
       return node?.githubRepoUrl ? 'Unpublish from GitHub' : 'Share to GitHub';
