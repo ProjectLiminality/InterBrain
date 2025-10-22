@@ -44,12 +44,11 @@ export function createIconElement(iconName: string): React.ReactNode {
         if (el) {
           el.innerHTML = '';
           setIcon(el, iconName);
-          // Scale the SVG 5x larger
+          // Make SVG fill the container
           const svg = el.querySelector('svg');
           if (svg) {
             svg.style.width = '100%';
             svg.style.height = '100%';
-            svg.style.transform = 'scale(5)';
           }
         }
       }}
