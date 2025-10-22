@@ -284,16 +284,16 @@ const RadialButton: React.FC<RadialButtonProps> = ({
               <div
                 style={{
                   position: 'absolute',
-                  top: '280px',  // Just below the button
+                  top: '300px',  // Moved down from 280px
                   left: '50%',
                   transform: 'translateX(-50%)',
                   color: '#ffffff',
-                  fontSize: '14px',
+                  fontSize: '18px',  // Increased from 14px
                   fontWeight: '500',
                   textAlign: 'center',
                   whiteSpace: 'nowrap',
                   background: 'rgba(0, 0, 0, 0.8)',
-                  padding: '4px 12px',
+                  padding: '6px 16px',  // Increased padding
                   borderRadius: '4px',
                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                   pointerEvents: 'none'  // Don't interfere with hover detection
