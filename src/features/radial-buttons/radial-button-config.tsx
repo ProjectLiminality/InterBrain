@@ -31,6 +31,15 @@ export interface RadialButtonConfig {
 
   /** Optional label for accessibility/debugging */
   label?: string;
+
+  /** Optional function to determine if button should be shown (receives selectedNode) */
+  shouldShow?: (node: any) => boolean;
+
+  /** Optional function to get dynamic label based on node state */
+  getDynamicLabel?: (node: any) => string;
+
+  /** Optional function to get dynamic command based on node state */
+  getDynamicCommand?: (node: any) => string;
 }
 
 /**
@@ -72,7 +81,7 @@ export function createIconElement(iconName: string): React.ReactNode {
 export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'edit-mode',
-    iconName: 'lucide-edit',
+    iconName: 'lucide-settings',  // Changed from lucide-edit to gear icon
     commandId: 'interbrain:enter-edit-mode',
     label: 'Edit Relationships'
   },
@@ -80,8 +89,9 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'video-call',
     iconName: 'lucide-video',
     commandId: 'interbrain:start-video-call',
-    label: 'Start Video Call'
-    // Only shown when selectedNode.type === 'dreamer'
+    label: 'Start Video Call',
+    // Only show for dreamer-type nodes
+    shouldShow: (node) => node?.type === 'dreamer'
   },
   {
     id: 'create-canvas',
@@ -93,8 +103,16 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'github-share',
     iconName: 'lucide-github',
     commandId: 'interbrain:share-dreamnode-github',
-    label: 'Share to GitHub'
-    // TODO: Toggle to 'unpublish-dreamnode-github' when already published
+    label: 'Share to GitHub',
+    // Dynamic label and command based on publish state
+    getDynamicLabel: (node) => {
+      return node?.githubRepoUrl ? 'Unpublish from GitHub' : 'Share to GitHub';
+    },
+    getDynamicCommand: (node) => {
+      return node?.githubRepoUrl
+        ? 'interbrain:unpublish-dreamnode-github'
+        : 'interbrain:share-dreamnode-github';
+    }
   },
   {
     id: 'save-changes',

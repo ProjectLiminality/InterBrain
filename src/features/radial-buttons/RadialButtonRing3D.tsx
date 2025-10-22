@@ -4,6 +4,7 @@ import { Html, Billboard } from '@react-three/drei';
 import { Group } from 'three';
 import { RADIAL_BUTTON_CONFIGS, RadialButtonConfig, createIconElement } from './radial-button-config';
 import { serviceManager } from '../../services/service-manager';
+import { useInterBrainStore } from '../../store/interbrain-store';
 
 interface RadialButtonRing3DProps {
   /** Position of the center node around which buttons appear */
@@ -61,8 +62,16 @@ export const RadialButtonRing3D: React.FC<RadialButtonRing3DProps> = ({
   const RING_RADIUS = 18;
   const BUTTON_RADIUS = 3;
 
-  // Get button configurations dynamically
-  const buttonConfigs = RADIAL_BUTTON_CONFIGS;
+  // Get selected node for conditional button rendering
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+
+  // Filter button configurations based on shouldShow conditions
+  const buttonConfigs = RADIAL_BUTTON_CONFIGS.filter(config => {
+    if (config.shouldShow) {
+      return config.shouldShow(selectedNode);
+    }
+    return true; // Show by default if no condition
+  });
   const buttonCount = buttonConfigs.length;
 
   // Calculate button positions using equidistant spacing
@@ -141,12 +150,25 @@ const RadialButton: React.FC<RadialButtonProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const groupRef = useRef<Group>(null);
 
+  // Get selected node for dynamic properties
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+
+  // Determine actual command to execute (dynamic or static)
+  const actualCommand = config.getDynamicCommand
+    ? config.getDynamicCommand(selectedNode)
+    : config.commandId;
+
+  // Determine actual label to display (dynamic or static)
+  const actualLabel = config.getDynamicLabel
+    ? config.getDynamicLabel(selectedNode)
+    : config.label;
+
   // Handle button click - execute the mapped command
   const handleClick = () => {
-    console.log(`🎯 [RadialButton] Button "${config.label}" clicked - executing command: ${config.commandId}`);
+    console.log(`🎯 [RadialButton] Button "${actualLabel}" clicked - executing command: ${actualCommand}`);
     const app = serviceManager.getApp();
     if (app) {
-      (app as any).commands.executeCommandById(config.commandId);
+      (app as any).commands.executeCommandById(actualCommand);
     } else {
       console.error('🎯 [RadialButton] App not available, cannot execute command');
     }
@@ -176,14 +198,14 @@ const RadialButton: React.FC<RadialButtonProps> = ({
 
     if (!isActive) {
       // Exit animation: interrupt current animation and move to center
-      console.log(`🎯 [RadialButton ${config.label}] Interrupting - moving to center from:`, animatedPosition);
+      console.log(`🎯 [RadialButton ${actualLabel}] Interrupting - moving to center from:`, animatedPosition);
       animationStartPos.current = animatedPosition;
       animationTargetPos.current = centerPosition;
       transitionStartTime.current = globalThis.performance.now();
       setIsTransitioning(true);
     } else {
       // Enter animation: interrupt current animation and move to ring
-      console.log(`🎯 [RadialButton ${config.label}] Interrupting - moving to ring from:`, animatedPosition);
+      console.log(`🎯 [RadialButton ${actualLabel}] Interrupting - moving to ring from:`, animatedPosition);
       animationStartPos.current = animatedPosition;
       animationTargetPos.current = ringPosition;
       transitionStartTime.current = globalThis.performance.now();
@@ -251,7 +273,7 @@ const RadialButton: React.FC<RadialButtonProps> = ({
             {/* Circular button */}
             <div
               onMouseEnter={() => {
-                console.log(`🎯 [RadialButton] Button "${config.label}" hovered`);
+                console.log(`🎯 [RadialButton] Button "${actualLabel}" hovered`);
                 setIsHovered(true);
               }}
               onMouseLeave={() => setIsHovered(false)}
@@ -280,7 +302,7 @@ const RadialButton: React.FC<RadialButtonProps> = ({
             </div>
 
             {/* Label underneath - only visible on hover */}
-            {isHovered && config.label && (
+            {isHovered && actualLabel && (
               <div
                 style={{
                   position: 'absolute',
@@ -299,7 +321,7 @@ const RadialButton: React.FC<RadialButtonProps> = ({
                   pointerEvents: 'none'  // Don't interfere with hover detection
                 }}
               >
-                {config.label}
+                {actualLabel}
               </div>
             )}
           </div>
