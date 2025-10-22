@@ -176,14 +176,14 @@ const RadialButton: React.FC<RadialButtonProps> = ({
 
     if (!isActive) {
       // Exit animation: interrupt current animation and move to center
-      console.log(`🎯 [RadialButton ${label}] Interrupting - moving to center from:`, animatedPosition);
+      console.log(`🎯 [RadialButton ${config.label}] Interrupting - moving to center from:`, animatedPosition);
       animationStartPos.current = animatedPosition;
       animationTargetPos.current = centerPosition;
       transitionStartTime.current = globalThis.performance.now();
       setIsTransitioning(true);
     } else {
       // Enter animation: interrupt current animation and move to ring
-      console.log(`🎯 [RadialButton ${label}] Interrupting - moving to ring from:`, animatedPosition);
+      console.log(`🎯 [RadialButton ${config.label}] Interrupting - moving to ring from:`, animatedPosition);
       animationStartPos.current = animatedPosition;
       animationTargetPos.current = ringPosition;
       transitionStartTime.current = globalThis.performance.now();
