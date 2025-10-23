@@ -340,9 +340,11 @@ export interface InterBrainState extends OllamaConfigSlice {
   radialButtonUI: {
     isActive: boolean;
     buttonCount: number;
+    optionKeyPressed: boolean; // Track actual hardware key state
   };
   setRadialButtonUIActive: (active: boolean) => void;
   setRadialButtonCount: (count: number) => void;
+  setOptionKeyPressed: (pressed: boolean) => void;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -472,7 +474,8 @@ export const useInterBrainStore = create<InterBrainState>()(
 
   radialButtonUI: {
     isActive: false,
-    buttonCount: 6
+    buttonCount: 6,
+    optionKeyPressed: false
   },
 
   // Actions
@@ -1421,6 +1424,13 @@ export const useInterBrainStore = create<InterBrainState>()(
     radialButtonUI: {
       ...state.radialButtonUI,
       buttonCount: count
+    }
+  })),
+
+  setOptionKeyPressed: (pressed) => set((state) => ({
+    radialButtonUI: {
+      ...state.radialButtonUI,
+      optionKeyPressed: pressed
     }
   })),
     }),
