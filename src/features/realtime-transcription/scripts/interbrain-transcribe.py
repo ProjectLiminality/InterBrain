@@ -133,8 +133,9 @@ class TranscriptionSession:
         self.recorder = None
         self.audio_recorder = None
 
-        # Use provided start time or current time for relative timestamps
-        self.start_time = start_time if start_time is not None else time.time()
+        # Start time will be set when audio recording actually starts (for perfect sync)
+        # This ensures transcript timestamps match audio position exactly
+        self.start_time = start_time if start_time is not None else None
 
         # Initialize audio recorder if output path provided
         if audio_output:
@@ -186,9 +187,17 @@ class TranscriptionSession:
         print(f"💬 Speak into your microphone (Ctrl+C to stop)\n")
 
         try:
-            # Start audio recording first
+            # Start audio recording first and capture the exact start time
             if self.audio_recorder:
                 self.audio_recorder.start()
+                # Set start_time NOW for perfect timestamp synchronization
+                if self.start_time is None:
+                    self.start_time = time.time()
+                    print(f"⏱️  Session start time: {self.start_time}")
+            else:
+                # No audio recording - use current time as fallback
+                if self.start_time is None:
+                    self.start_time = time.time()
 
             # Initialize recorder with faster-whisper model
             print("⏳ Initializing recorder (may take time on first run to download model)...")

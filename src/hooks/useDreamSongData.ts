@@ -8,6 +8,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TFile } from 'obsidian';
 import { DreamSongBlock } from '../types/dreamsong';
+import { DreamNode } from '../types/dreamnode';
 import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
 import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../services/dreamsong';
@@ -17,6 +18,7 @@ import { ReadmeParserService } from '../services/readme-parser-service';
 interface UseDreamSongDataOptions {
   canvasParser: CanvasParserService;
   vaultService: VaultService;
+  dreamNode?: DreamNode; // Optional: for checking Songline features (perspectives/conversations)
 }
 
 interface DreamSongDataResult {
@@ -40,7 +42,7 @@ export function useDreamSongData(
   options: UseDreamSongDataOptions,
   sourceDreamNodeId?: string
 ): DreamSongDataResult {
-  const { canvasParser, vaultService } = options;
+  const { canvasParser, vaultService, dreamNode } = options;
 
   // Create README parser service
   const readmeParser = useMemo(() => {
@@ -53,6 +55,10 @@ export function useDreamSongData(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReadmeFallback, setIsReadmeFallback] = useState(false);
+
+  // Songline feature detection
+  const [hasPerspectives, setHasPerspectives] = useState(false);
+  const [hasConversations, setHasConversations] = useState(false);
 
   // Memoized parsing function to prevent unnecessary re-runs
   const parseCanvas = useMemo(() => {
@@ -120,6 +126,63 @@ export function useDreamSongData(
     parseCanvas();
   }, [parseCanvas]);
 
+  // Effect for checking Songline features (perspectives/conversations)
+  useEffect(() => {
+    if (!dreamNode || !vaultService) {
+      setHasPerspectives(false);
+      setHasConversations(false);
+      return;
+    }
+
+    const checkSonglineFeatures = async () => {
+      const fs = require('fs').promises;
+      const path = require('path');
+
+      try {
+        // Get vault base path
+        const vaultBasePath = await vaultService.getBasePath();
+        const absoluteRepoPath = path.join(vaultBasePath, dreamNode.repoPath);
+
+        // Check for perspectives (DreamNodes only)
+        if (dreamNode.type !== 'dreamer') {
+          try {
+            const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
+            const content = await fs.readFile(perspectivesPath, 'utf-8');
+            const perspectivesFile = JSON.parse(content);
+            const hasPerspectivesContent = perspectivesFile.perspectives?.length > 0;
+            setHasPerspectives(hasPerspectivesContent);
+          } catch {
+            setHasPerspectives(false);
+          }
+        } else {
+          setHasPerspectives(false);
+        }
+
+        // Check for conversations (DreamerNodes only)
+        if (dreamNode.type === 'dreamer') {
+          try {
+            const conversationsDir = path.join(absoluteRepoPath, 'conversations');
+            await fs.access(conversationsDir);
+            const files = await fs.readdir(conversationsDir);
+            const audioFiles = files.filter((f: string) => f.endsWith('.mp3') || f.endsWith('.wav'));
+            const hasConversationsContent = audioFiles.length > 0;
+            setHasConversations(hasConversationsContent);
+          } catch {
+            setHasConversations(false);
+          }
+        } else {
+          setHasConversations(false);
+        }
+      } catch (error) {
+        console.error('Error checking Songline features:', error);
+        setHasPerspectives(false);
+        setHasConversations(false);
+      }
+    };
+
+    checkSonglineFeatures();
+  }, [dreamNode, vaultService]);
+
   // Effect for real-time file change detection
   useEffect(() => {
     // Get Obsidian app instance for file watching
@@ -158,8 +221,11 @@ export function useDreamSongData(
     };
   }, [canvasPath, parseCanvas]);
 
-  // Derived state
-  const hasContent = blocks.length > 0;
+  // Derived state - DreamSong should show if ANY of these conditions are met:
+  // 1. Canvas/README has content (blocks.length > 0)
+  // 2. DreamNode has perspectives
+  // 3. DreamerNode has conversations
+  const hasContent = blocks.length > 0 || hasPerspectives || hasConversations;
 
   return {
     blocks,
