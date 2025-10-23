@@ -6,6 +6,7 @@ import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
 import { PerspectivesSection } from './PerspectivesSection';
 import { ConversationsSection } from './ConversationsSection';
+import { ReadmeSection } from './ReadmeSection';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -256,6 +257,14 @@ export const DreamSong: React.FC<DreamSongProps> = ({
             />
           )}
         </>
+      )}
+
+      {/* README Section - Always at bottom, collapsed by default (if present) */}
+      {dreamNode && vaultPath && (
+        <ReadmeSection
+          dreamNode={dreamNode}
+          vaultPath={vaultPath}
+        />
       )}
     </div>
   );

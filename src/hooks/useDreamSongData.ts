@@ -13,7 +13,6 @@ import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
 import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../services/dreamsong';
 import { serviceManager } from '../services/service-manager';
-import { ReadmeParserService } from '../services/readme-parser-service';
 
 interface UseDreamSongDataOptions {
   canvasParser: CanvasParserService;
@@ -27,7 +26,6 @@ interface DreamSongDataResult {
   isLoading: boolean;
   error: string | null;
   hash: string | null;
-  isReadmeFallback: boolean; // True when displaying README instead of canvas
 }
 
 /**
@@ -44,17 +42,11 @@ export function useDreamSongData(
 ): DreamSongDataResult {
   const { canvasParser, vaultService, dreamNode } = options;
 
-  // Create README parser service
-  const readmeParser = useMemo(() => {
-    return new ReadmeParserService(vaultService);
-  }, [vaultService]);
-
   // Minimal state - only what's necessary for the UI
   const [hash, setHash] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<DreamSongBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isReadmeFallback, setIsReadmeFallback] = useState(false);
 
   // Songline feature detection
   const [hasPerspectives, setHasPerspectives] = useState(false);
@@ -80,7 +72,7 @@ export function useDreamSongData(
           const newHash = generateCanvasStructureHash(canvasData);
 
           // Compare with current hash - only update if changed
-          if (hashesEqual(hash, newHash) && !isReadmeFallback) {
+          if (hashesEqual(hash, newHash)) {
             console.log(`⚡ DreamSong hash unchanged: ${newHash}`);
             setIsLoading(false);
             return;
@@ -91,22 +83,11 @@ export function useDreamSongData(
 
           setBlocks(result.blocks);
           setHash(result.hash);
-          setIsReadmeFallback(false);
 
         } else {
-          // No canvas - try README fallback
-          const readmeBlocks = await readmeParser.parseReadmeToBlocks(dreamNodePath, sourceDreamNodeId);
-
-          if (readmeBlocks.length > 0) {
-            setBlocks(readmeBlocks);
-            setHash(`readme-${dreamNodePath}`); // Simple hash for README
-            setIsReadmeFallback(true);
-          } else {
-            // No canvas and no README
-            setBlocks([]);
-            setHash(null);
-            setIsReadmeFallback(false);
-          }
+          // No canvas - empty blocks (README now handled as separate section in UI)
+          setBlocks([]);
+          setHash(null);
         }
 
       } catch (err) {
@@ -114,12 +95,11 @@ export function useDreamSongData(
         setError(err instanceof Error ? err.message : 'Unknown parsing error');
         setBlocks([]);
         setHash(null);
-        setIsReadmeFallback(false);
       } finally {
         setIsLoading(false);
       }
     };
-  }, [canvasPath, dreamNodePath, canvasParser, vaultService, readmeParser, hash, isReadmeFallback]);
+  }, [canvasPath, dreamNodePath, canvasParser, vaultService, hash]);
 
   // Effect for parsing when dependencies change
   useEffect(() => {
@@ -195,10 +175,8 @@ export function useDreamSongData(
 
     // Handler for file modification events
     const handleFileChange = (file: TFile) => {
-      // Check if the changed file is our canvas or README
-      const readmePath = `${dreamNodePath}/README.md`;
-
-      if (file.path === canvasPath || file.path === readmePath) {
+      // Check if the changed file is our canvas
+      if (file.path === canvasPath) {
         // Use a small delay to ensure file write is complete
         globalThis.setTimeout(() => {
           parseCanvas();
