@@ -138,15 +138,17 @@ export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 				</span>
 			</div>
 
-			{/* Hidden audio element */}
-			<audio
-				ref={audioRef}
-				src={audioUrl}
-				onTimeUpdate={handleTimeUpdate}
-				onPlay={handlePlay}
-				onPause={handlePause}
-				onEnded={handlePause}
-			/>
+			{/* Hidden audio element - only render when URL is loaded */}
+			{audioUrl && (
+				<audio
+					ref={audioRef}
+					src={audioUrl}
+					onTimeUpdate={handleTimeUpdate}
+					onPlay={handlePlay}
+					onPause={handlePause}
+					onEnded={handlePause}
+				/>
+			)}
 
 			{/* Expandable transcript */}
 			<div className="transcript-toggle">

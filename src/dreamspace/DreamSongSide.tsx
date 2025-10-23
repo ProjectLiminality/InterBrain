@@ -153,12 +153,46 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             pointerEvents: 'auto' // Enable scrolling interaction
           }}
         >
-          {hasContent ? (
+          {/* Always render DreamSong - it handles empty states internally */}
+          {isLoadingDreamSong ? (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: dreamNodeStyles.colors.text.primary,
+                pointerEvents: 'auto'
+              }}
+            >
+              Loading DreamSong...
+            </div>
+          ) : error ? (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: dreamNodeStyles.colors.text.primary,
+                pointerEvents: 'auto',
+                flexDirection: 'column',
+                fontSize: '12px',
+                textAlign: 'center',
+                padding: '20px'
+              }}
+            >
+              <div>DreamSong Error</div>
+              <div style={{ marginTop: '8px', opacity: 0.7 }}>{error}</div>
+            </div>
+          ) : (
             <div style={{
               height: 'auto',
               minHeight: '100%',
               position: 'relative',
-              paddingBottom: '20px' // Extra space to ensure scrollable area
+              paddingBottom: '20px'
             }}>
               <DreamSong
                 blocks={blocks}
@@ -173,60 +207,11 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 onDreamerNodeClick={handleMediaClick}
               />
             </div>
-          ) : isLoadingDreamSong ? (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              pointerEvents: 'auto' // Allow content interaction
-            }}
-          >
-            Loading DreamSong...
-          </div>
-        ) : error ? (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              pointerEvents: 'auto',
-              flexDirection: 'column',
-              fontSize: '12px',
-              textAlign: 'center',
-              padding: '20px'
-            }}
-          >
-            <div>DreamSong Error</div>
-            <div style={{ marginTop: '8px', opacity: 0.7 }}>{error}</div>
-          </div>
-        ) : (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              pointerEvents: 'auto' // Allow content interaction
-            }}
-          >
-            No DreamSong available
-          </div>
-        )}
+          )}
         </div>
 
-        {/* Fade-to-black overlay - positioned outside scrolling container but inside circular mask */}
-        {hasContent && (
-          <div style={getMediaOverlayStyle()} />
-        )}
+        {/* Fade-to-black overlay - always show for visual consistency */}
+        <div style={getMediaOverlayStyle()} />
       </div>
 
       {/* Full-screen button (top-center, on back side) - Stable Click Wrapper */}

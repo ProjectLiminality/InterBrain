@@ -1,6 +1,8 @@
 import React from 'react';
 import { Perspective } from '../conversational-copilot/services/perspective-service';
 import { AudioClipPlayer } from './AudioClipPlayer';
+import separatorImage from '../../assets/images/Separator.png';
+import styles from './dreamsong.module.css';
 
 interface PerspectivesSectionProps {
 	perspectives: Perspective[];
@@ -24,26 +26,19 @@ export const PerspectivesSection: React.FC<PerspectivesSectionProps> = ({
 	}
 
 	return (
-		<div className="perspectives-section" style={{ marginTop: '2rem' }}>
-			{/* Header with separator (same style as DreamSong header) */}
-			<div className="perspectives-header" style={{ marginBottom: '1.5rem' }}>
-				<h2 style={{
-					fontSize: '1.5em',
-					fontWeight: 600,
-					marginBottom: '0.5rem',
-					color: 'var(--text-normal)'
-				}}>
-					Perspectives
-				</h2>
-				<div style={{
-					height: '1px',
-					background: 'var(--background-modifier-border)',
-					marginBottom: '1rem'
-				}} />
+		<div className="perspectives-section" style={{ marginTop: '3rem' }}>
+			{/* Header matching DreamSong header style */}
+			<div className={styles.dreamSongHeader}>
+				<div className={styles.dreamSongTitle}>Perspectives</div>
+				<img
+					src={separatorImage}
+					alt="Separator"
+					className={styles.dreamSongSeparator}
+				/>
 			</div>
 
 			{/* Perspectives list */}
-			<div className="perspectives-list">
+			<div className="perspectives-list" style={{ padding: '0 2rem' }}>
 				{perspectives.map((perspective) => (
 					<AudioClipPlayer
 						key={perspective.uuid}

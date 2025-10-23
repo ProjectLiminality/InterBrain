@@ -80,9 +80,14 @@ export const DreamSong: React.FC<DreamSongProps> = ({
           const perspectivesFile = JSON.parse(content);
           console.log(`✅ [Perspectives] Loaded ${perspectivesFile.perspectives?.length || 0} perspectives`);
           setPerspectives(perspectivesFile.perspectives || []);
-        } catch (error) {
-          // No perspectives file or parse error
-          console.warn(`⚠️ [Perspectives] File not found or parse error:`, error);
+        } catch (error: any) {
+          // Perspectives file not present yet - this is normal for DreamNodes without conversations
+          if (error?.code === 'ENOENT') {
+            console.log(`[Perspectives] No perspectives file yet for ${dreamNode.name}`);
+          } else {
+            // Actual error (parse error, permissions, etc.)
+            console.warn(`⚠️ [Perspectives] Error loading perspectives:`, error);
+          }
           setPerspectives([]);
         }
       } catch (error) {
@@ -166,22 +171,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
     return null;
   };
 
-  if (!hasContent) {
-    return (
-      <div className={containerClass} style={{ pointerEvents: 'auto' }}>
-        <div className={styles.dreamSongEmptyState}>
-          <div className={styles.emptyStateIcon}>📖</div>
-          <div className={styles.emptyStateText}>
-            No DreamSong content yet
-          </div>
-          <div className={styles.emptyStateSubtitle}>
-            Add content to your canvas to create a story flow
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Always render UI - header with title and conditional sections
   return (
     <div
       className={containerClass}
@@ -251,8 +241,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
                     position: 'absolute',
                     top: '1rem',
                     right: '1rem',
-                    padding: '0.4rem 0.8rem',
-                    fontSize: '0.8em',
+                    padding: '0.5rem',
                     cursor: 'pointer',
                     border: '1px solid var(--background-modifier-border)',
                     borderRadius: '4px',
@@ -260,13 +249,18 @@ export const DreamSong: React.FC<DreamSongProps> = ({
                     color: 'var(--text-muted)',
                     opacity: 0.6,
                     transition: 'opacity 0.2s',
-                    zIndex: 10
+                    zIndex: 10,
+                    display: 'flex',
+                    alignItems: 'center'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                   onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
                   title="Edit DreamSong canvas"
                 >
-                  ✏️ Edit Canvas
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
                 </button>
               )}
               <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>

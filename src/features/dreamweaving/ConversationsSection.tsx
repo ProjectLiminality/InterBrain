@@ -210,15 +210,21 @@ export const ConversationsSection: React.FC<ConversationsSectionProps> = ({
 							{convo.title}
 						</div>
 
-						{/* Audio player */}
-						<audio
-							controls
-							src={convo.audioDataUrl}
-							style={{
-								width: '100%',
-								marginBottom: '0.5rem'
-							}}
-						/>
+						{/* Audio player - only render if audio data is loaded */}
+						{convo.audioDataUrl ? (
+							<audio
+								controls
+								src={convo.audioDataUrl}
+								style={{
+									width: '100%',
+									marginBottom: '0.5rem'
+								}}
+							/>
+						) : (
+							<div style={{ padding: '0.5rem', fontSize: '0.85em', color: 'var(--text-muted)' }}>
+								Loading audio...
+							</div>
+						)}
 
 						{/* Transcript toggle */}
 						{convo.transcriptPath && (
