@@ -53,12 +53,16 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 				// Clear existing content
 				contentRef.current.innerHTML = '';
 
-				// Access Obsidian's MarkdownRenderer from global window
+				// Access Obsidian's MarkdownRenderer from globalThis (not window)
 				const app = (window as any).app;
-				const MarkdownRenderer = (window as any).MarkdownRenderer;
+				const MarkdownRenderer = (globalThis as any).MarkdownRenderer;
+
+				console.log('[README] MarkdownRenderer available?', !!MarkdownRenderer);
+				console.log('[README] renderMarkdown function?', !!MarkdownRenderer?.renderMarkdown);
 
 				if (MarkdownRenderer && MarkdownRenderer.renderMarkdown) {
 					try {
+						console.log('[README] Attempting to render markdown...');
 						// Render markdown using Obsidian's API (async)
 						const sourcePath = `${dreamNode.repoPath}/README.md`;
 						await MarkdownRenderer.renderMarkdown(
@@ -67,12 +71,14 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 							sourcePath,
 							app
 						);
+						console.log('[README] Markdown rendered successfully');
 					} catch (error) {
-						console.error('Failed to render markdown:', error);
+						console.error('[README] Failed to render markdown:', error);
 						// Fallback: simple formatting
 						contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
 					}
 				} else {
+					console.log('[README] MarkdownRenderer not available, using fallback');
 					// Fallback: simple formatting with line breaks preserved
 					contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
 				}
