@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DreamNode } from '../../types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
+import { serviceManager } from '../../services/service-manager';
 
 interface ReadmeSectionProps {
 	dreamNode: DreamNode;
@@ -53,33 +54,48 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 				// Clear existing content
 				contentRef.current.innerHTML = '';
 
-				// Access Obsidian's MarkdownRenderer from globalThis (not window)
-				const app = (window as any).app;
-				const MarkdownRenderer = (globalThis as any).MarkdownRenderer;
+				try {
+					// Get app instance from service manager
+					const app = serviceManager.getApp();
 
-				console.log('[README] MarkdownRenderer available?', !!MarkdownRenderer);
-				console.log('[README] renderMarkdown function?', !!MarkdownRenderer?.renderMarkdown);
-
-				if (MarkdownRenderer && MarkdownRenderer.renderMarkdown) {
-					try {
-						console.log('[README] Attempting to render markdown...');
-						// Render markdown using Obsidian's API (async)
-						const sourcePath = `${dreamNode.repoPath}/README.md`;
-						await MarkdownRenderer.renderMarkdown(
-							readmeContent,
-							contentRef.current,
-							sourcePath,
-							app
-						);
-						console.log('[README] Markdown rendered successfully');
-					} catch (error) {
-						console.error('[README] Failed to render markdown:', error);
-						// Fallback: simple formatting
+					if (!app) {
+						console.warn('[README] App not available, using fallback');
 						contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
+						return;
 					}
-				} else {
-					console.log('[README] MarkdownRenderer not available, using fallback');
-					// Fallback: simple formatting with line breaks preserved
+
+					// Access MarkdownRenderer from window.require (Electron environment)
+					const obsidian = (window as any).require('obsidian');
+					const MarkdownRenderer = obsidian?.MarkdownRenderer;
+
+					if (!MarkdownRenderer || !MarkdownRenderer.render) {
+						console.warn('[README] MarkdownRenderer not available via require, using fallback');
+						contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
+						return;
+					}
+
+					console.log('[README] MarkdownRenderer loaded successfully');
+
+					// Create temporary container for rendering
+					const tempContainer = document.createElement('div');
+
+					// Render markdown using Obsidian's API
+					const sourcePath = `${dreamNode.repoPath}/README.md`;
+					await MarkdownRenderer.render(
+						app,
+						readmeContent,
+						tempContainer,
+						sourcePath,
+						null as any
+					);
+
+					// Copy rendered HTML to actual container
+					contentRef.current.innerHTML = tempContainer.innerHTML;
+					console.log('[README] Markdown rendered successfully');
+
+				} catch (error) {
+					console.error('[README] Failed to render markdown:', error);
+					// Fallback: simple formatting
 					contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
 				}
 			}
