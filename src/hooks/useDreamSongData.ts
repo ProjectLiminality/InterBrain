@@ -120,7 +120,13 @@ export function useDreamSongData(
 
       try {
         // Get vault base path
-        const vaultBasePath = await vaultService.getBasePath();
+        const vaultBasePath = vaultService.getVaultPath();
+        if (!vaultBasePath) {
+          console.warn('[Songline] Vault path not available');
+          setHasPerspectives(false);
+          setHasConversations(false);
+          return;
+        }
         const absoluteRepoPath = path.join(vaultBasePath, dreamNode.repoPath);
 
         // Check for perspectives (DreamNodes only)
