@@ -4,6 +4,7 @@ import { DreamNode } from '../../types/dreamnode';
 interface ReadmeSectionProps {
 	dreamNode: DreamNode;
 	vaultPath: string;
+	onEdit?: () => void; // Optional callback for editing README
 }
 
 /**
@@ -14,7 +15,8 @@ interface ReadmeSectionProps {
  */
 export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 	dreamNode,
-	vaultPath
+	vaultPath,
+	onEdit
 }) => {
 	const [readmeContent, setReadmeContent] = useState<string>('');
 	const [isExpanded, setIsExpanded] = useState(false);
@@ -47,7 +49,34 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 	}
 
 	return (
-		<div className="readme-section" style={{ padding: '2rem', borderTop: '1px solid var(--background-modifier-border)' }}>
+		<div className="readme-section" style={{ padding: '2rem', borderTop: '1px solid var(--background-modifier-border)', position: 'relative' }}>
+			{/* Edit button (top right) */}
+			{onEdit && (
+				<button
+					onClick={onEdit}
+					style={{
+						position: 'absolute',
+						top: '1rem',
+						right: '1rem',
+						padding: '0.4rem 0.8rem',
+						fontSize: '0.8em',
+						cursor: 'pointer',
+						border: '1px solid var(--background-modifier-border)',
+						borderRadius: '4px',
+						background: 'var(--background-secondary)',
+						color: 'var(--text-muted)',
+						opacity: 0.6,
+						transition: 'opacity 0.2s',
+						zIndex: 10
+					}}
+					onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+					onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+					title="Edit README"
+				>
+					✏️ Edit
+				</button>
+			)}
+
 			{/* Header with toggle button */}
 			<div className="readme-header" style={{ marginBottom: '1rem' }}>
 				<button

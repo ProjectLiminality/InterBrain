@@ -210,8 +210,7 @@ export function useDreamSongData(
     hasContent,
     isLoading,
     error,
-    hash,
-    isReadmeFallback
+    hash
   };
 }
 

@@ -213,7 +213,9 @@ export class DreamSongFullScreenView extends ItemView {
           githubPagesUrl: this.dreamNode?.githubPagesUrl,
           dreamNode: this.dreamNode || undefined,
           vaultPath: vaultPath,
-          onDreamerNodeClick: this.handleMediaClick.bind(this)
+          onDreamerNodeClick: this.handleMediaClick.bind(this),
+          onEditCanvas: this.handleEditCanvas.bind(this),
+          onEditReadme: this.handleEditReadme.bind(this)
         })
       )
     );
@@ -242,6 +244,42 @@ export class DreamSongFullScreenView extends ItemView {
       setSelectedNode(targetNode);
     } else {
       console.warn(`DreamSongFullScreenView: No matching DreamNode found for "${sourceDreamNodeId}"`);
+    }
+  }
+
+  /**
+   * Handle edit canvas button click
+   */
+  private async handleEditCanvas(): Promise<void> {
+    if (!this.dreamNode) return;
+
+    const canvasPath = `${this.dreamNode.repoPath}/DreamSong.canvas`;
+    const file = this.app.vault.getAbstractFileByPath(canvasPath);
+
+    if (file) {
+      // Open the canvas file in a new leaf
+      const leaf = this.app.workspace.getLeaf('tab');
+      await leaf.openFile(file as any);
+    } else {
+      console.warn('Canvas file not found:', canvasPath);
+    }
+  }
+
+  /**
+   * Handle edit README button click
+   */
+  private async handleEditReadme(): Promise<void> {
+    if (!this.dreamNode) return;
+
+    const readmePath = `${this.dreamNode.repoPath}/README.md`;
+    const file = this.app.vault.getAbstractFileByPath(readmePath);
+
+    if (file) {
+      // Open the README file in a new leaf
+      const leaf = this.app.workspace.getLeaf('tab');
+      await leaf.openFile(file as any);
+    } else {
+      console.warn('README file not found:', readmePath);
     }
   }
 

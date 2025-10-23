@@ -20,6 +20,8 @@ interface DreamSongProps {
   dreamNode?: DreamNode; // Full DreamNode object for Songline features
   vaultPath?: string; // Vault path for audio file resolution
   onDreamerNodeClick?: (dreamerNodeId: string) => void; // Callback for navigating to DreamerNode
+  onEditCanvas?: () => void; // Callback for editing canvas file
+  onEditReadme?: () => void; // Callback for editing README file
 }
 
 /**
@@ -43,7 +45,9 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   githubPagesUrl,
   dreamNode,
   vaultPath,
-  onDreamerNodeClick
+  onDreamerNodeClick,
+  onEditCanvas,
+  onEditReadme
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
   const [perspectives, setPerspectives] = useState<Perspective[]>([]);
@@ -237,16 +241,46 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       ) : (
         /* Regular DreamNode: Show DreamSong content + Perspectives */
         <>
-          <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
-            {blocks.map((block, index) => (
-              <DreamSongBlockComponent
-                key={block.id}
-                block={block}
-                blockIndex={index}
-                onMediaClick={onMediaClick}
-              />
-            ))}
-          </div>
+          {/* Canvas content section with optional edit button */}
+          {blocks.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              {onEditCanvas && !embedded && (
+                <button
+                  onClick={onEditCanvas}
+                  style={{
+                    position: 'absolute',
+                    top: '1rem',
+                    right: '1rem',
+                    padding: '0.4rem 0.8rem',
+                    fontSize: '0.8em',
+                    cursor: 'pointer',
+                    border: '1px solid var(--background-modifier-border)',
+                    borderRadius: '4px',
+                    background: 'var(--background-secondary)',
+                    color: 'var(--text-muted)',
+                    opacity: 0.6,
+                    transition: 'opacity 0.2s',
+                    zIndex: 10
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                  title="Edit DreamSong canvas"
+                >
+                  ✏️ Edit Canvas
+                </button>
+              )}
+              <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
+                {blocks.map((block, index) => (
+                  <DreamSongBlockComponent
+                    key={block.id}
+                    block={block}
+                    blockIndex={index}
+                    onMediaClick={onMediaClick}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Perspectives Section for dream nodes */}
           {perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
@@ -264,6 +298,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
         <ReadmeSection
           dreamNode={dreamNode}
           vaultPath={vaultPath}
+          onEdit={!embedded ? onEditReadme : undefined}
         />
       )}
     </div>
