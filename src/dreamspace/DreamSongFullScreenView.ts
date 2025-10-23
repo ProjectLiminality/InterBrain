@@ -176,35 +176,15 @@ export class DreamSongFullScreenView extends ItemView {
       this.root = createRoot(container);
     }
 
-    if (!this.blocks || this.blocks.length === 0) {
-      console.log('Rendering loading state (no blocks data)');
-      // Show loading or empty state
-      this.root.render(
-        createElement(StrictMode, null,
-          createElement('div', {
-            style: {
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              height: '100%',
-              color: '#ffffff',
-              fontSize: '18px'
-            }
-          }, this.dreamNode ? `Loading DreamSong for ${this.dreamNode.name}...` : 'Loading DreamSong...')
-        )
-      );
-      return;
-    }
-
-    // Render the DreamSong component directly - CSS modules handle all styling
+    // Always render the DreamSong component - it handles empty states internally
+    // This matches the new DreamSongSide architecture where UI is always visible
     const vaultService = serviceManager.getVaultService();
     const vaultPath = vaultService?.getVaultPath();
 
     this.root.render(
       createElement(StrictMode, null,
         createElement(DreamSong, {
-          blocks: this.blocks,
+          blocks: this.blocks || [],
           sourceDreamNodeId: this.dreamNode?.id,
           dreamNodeName: this.dreamNode?.name,
           dreamTalkMedia: this.dreamNode?.dreamTalkMedia,
