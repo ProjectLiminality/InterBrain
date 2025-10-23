@@ -91,7 +91,23 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     commandId: 'interbrain:start-video-call',
     label: 'Start Video Call',
     // Only show for dreamer-type nodes
-    shouldShow: (node) => node?.type === 'dreamer'
+    shouldShow: (node) => node?.type === 'dreamer',
+    // Dynamic label based on copilot mode (active call state)
+    getDynamicLabel: (node) => {
+      // Import here to avoid circular dependency
+      const { useInterBrainStore } = require('../../store/interbrain-store');
+      const store = useInterBrainStore.getState();
+      return store.copilotMode.isActive ? 'End Video Call' : 'Start Video Call';
+    },
+    // Dynamic command based on copilot mode (active call state)
+    getDynamicCommand: (node) => {
+      // Import here to avoid circular dependency
+      const { useInterBrainStore } = require('../../store/interbrain-store');
+      const store = useInterBrainStore.getState();
+      return store.copilotMode.isActive
+        ? 'interbrain:end-video-call'
+        : 'interbrain:start-video-call';
+    }
   },
   {
     id: 'create-canvas',

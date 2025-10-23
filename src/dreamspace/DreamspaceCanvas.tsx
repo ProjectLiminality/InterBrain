@@ -14,6 +14,7 @@ import { EditModeOverlay } from '../features/edit-mode';
 import CopilotModeOverlay from '../features/conversational-copilot/CopilotModeOverlay';
 import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
 import { RadialButtonRing3D } from '../features/radial-buttons/RadialButtonRing3D';
+import { ActiveVideoCallButton } from '../features/radial-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -1511,6 +1512,11 @@ export default function DreamspaceCanvas() {
               setShouldMountRadialButtons(false);
             }}
           />
+        )}
+
+        {/* Active video call button - visible during copilot mode (outside rotatable group) */}
+        {copilotMode.isActive && copilotMode.conversationPartner && (
+          <ActiveVideoCallButton />
         )}
 
         {/* Rotatable group containing all DreamNodes */}
