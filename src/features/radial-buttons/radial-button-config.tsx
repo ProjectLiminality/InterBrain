@@ -1,5 +1,6 @@
 import React from 'react';
 import { setIcon } from 'obsidian';
+import { useInterBrainStore } from '../../store/interbrain-store';
 
 /**
  * Radial Button Configuration
@@ -94,15 +95,11 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     shouldShow: (node) => node?.type === 'dreamer',
     // Dynamic label based on copilot mode (active call state)
     getDynamicLabel: (node) => {
-      // Import here to avoid circular dependency
-      const { useInterBrainStore } = require('../../store/interbrain-store');
       const store = useInterBrainStore.getState();
       return store.copilotMode.isActive ? 'End Video Call' : 'Start Video Call';
     },
     // Dynamic command based on copilot mode (active call state)
     getDynamicCommand: (node) => {
-      // Import here to avoid circular dependency
-      const { useInterBrainStore } = require('../../store/interbrain-store');
       const store = useInterBrainStore.getState();
       return store.copilotMode.isActive
         ? 'interbrain:end-video-call'
