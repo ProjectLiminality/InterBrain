@@ -48,28 +48,38 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 
 	// Render markdown when content or expanded state changes
 	useEffect(() => {
-		if (isExpanded && readmeContent && contentRef.current) {
-			// Clear existing content
-			contentRef.current.innerHTML = '';
+		const renderMarkdown = async () => {
+			if (isExpanded && readmeContent && contentRef.current) {
+				// Clear existing content
+				contentRef.current.innerHTML = '';
 
-			// Access Obsidian's MarkdownRenderer from global window
-			const app = (window as any).app;
-			const MarkdownRenderer = (window as any).MarkdownRenderer;
+				// Access Obsidian's MarkdownRenderer from global window
+				const app = (window as any).app;
+				const MarkdownRenderer = (window as any).MarkdownRenderer;
 
-			if (MarkdownRenderer && MarkdownRenderer.renderMarkdown) {
-				// Render markdown using Obsidian's API
-				const sourcePath = `${dreamNode.repoPath}/README.md`;
-				MarkdownRenderer.renderMarkdown(
-					readmeContent,
-					contentRef.current,
-					sourcePath,
-					app
-				);
-			} else {
-				// Fallback: show plain text if MarkdownRenderer not available
-				contentRef.current.textContent = readmeContent;
+				if (MarkdownRenderer && MarkdownRenderer.renderMarkdown) {
+					try {
+						// Render markdown using Obsidian's API (async)
+						const sourcePath = `${dreamNode.repoPath}/README.md`;
+						await MarkdownRenderer.renderMarkdown(
+							readmeContent,
+							contentRef.current,
+							sourcePath,
+							app
+						);
+					} catch (error) {
+						console.error('Failed to render markdown:', error);
+						// Fallback: simple formatting
+						contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
+					}
+				} else {
+					// Fallback: simple formatting with line breaks preserved
+					contentRef.current.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${readmeContent}</pre>`;
+				}
 			}
-		}
+		};
+
+		renderMarkdown();
 	}, [isExpanded, readmeContent, dreamNode.repoPath]);
 
 	// Don't render if no README content
