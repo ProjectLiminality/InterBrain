@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DreamNode } from '../../types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
@@ -22,6 +22,7 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 }) => {
 	const [readmeContent, setReadmeContent] = useState<string>('');
 	const [isExpanded, setIsExpanded] = useState(false);
+	const contentRef = useRef<HTMLDivElement>(null);
 
 	// Load README content
 	useEffect(() => {
@@ -44,6 +45,32 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 
 		loadReadme();
 	}, [dreamNode.id, vaultPath]);
+
+	// Render markdown when content or expanded state changes
+	useEffect(() => {
+		if (isExpanded && readmeContent && contentRef.current) {
+			// Clear existing content
+			contentRef.current.innerHTML = '';
+
+			// Access Obsidian's MarkdownRenderer from global window
+			const app = (window as any).app;
+			const MarkdownRenderer = (window as any).MarkdownRenderer;
+
+			if (MarkdownRenderer && MarkdownRenderer.renderMarkdown) {
+				// Render markdown using Obsidian's API
+				const sourcePath = `${dreamNode.repoPath}/README.md`;
+				MarkdownRenderer.renderMarkdown(
+					readmeContent,
+					contentRef.current,
+					sourcePath,
+					app
+				);
+			} else {
+				// Fallback: show plain text if MarkdownRenderer not available
+				contentRef.current.textContent = readmeContent;
+			}
+		}
+	}, [isExpanded, readmeContent, dreamNode.repoPath]);
 
 	// Don't render if no README content
 	if (!readmeContent) {
@@ -95,23 +122,20 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 				/>
 			</div>
 
-			{/* Expandable README content */}
+			{/* Expandable README content - rendered as Obsidian markdown */}
 			{isExpanded && (
 				<div
-					className="readme-content"
+					ref={contentRef}
+					className="readme-content markdown-preview-view"
 					style={{
 						padding: '1rem 2rem 2rem 2rem',
 						fontSize: '0.9em',
-						color: 'var(--text-muted)',
+						color: 'var(--text-normal)',
 						lineHeight: '1.6',
-						whiteSpace: 'pre-wrap',
 						maxHeight: '600px',
-						overflowY: 'auto',
-						fontFamily: 'var(--font-monospace)'
+						overflowY: 'auto'
 					}}
-				>
-					{readmeContent}
-				</div>
+				/>
 			)}
 		</div>
 	);
