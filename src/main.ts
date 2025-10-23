@@ -43,6 +43,9 @@ import { initializeTranscriptionService } from './features/conversational-copilo
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
+import { initializeAudioRecordingService } from './features/conversational-copilot/services/audio-recording-service';
+import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
+import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
 import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
@@ -87,6 +90,15 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize email export service for conversation summaries
     initializeEmailExportService(this.app);
+
+    // Initialize audio recording service for Songline feature
+    initializeAudioRecordingService(this);
+
+    // Initialize perspective service for Songline feature
+    initializePerspectiveService(this);
+
+    // Initialize audio streaming service for Songline feature
+    initializeAudioStreamingService(this);
 
     // Get services for dependency injection
     const radicleService = serviceManager.getRadicleService();

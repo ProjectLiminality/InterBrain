@@ -181,6 +181,13 @@ export class TranscriptionService implements ITranscriptionService {
 			args.push('--language', config.language);
 		}
 
+		// Add audio recording parameters if configured
+		if (config.audioOutput) {
+			args.push('--record-audio');
+			args.push('--audio-output', config.audioOutput);
+			console.log(`[Transcription] Audio recording enabled: ${config.audioOutput}`);
+		}
+
 		console.log(`[Transcription] Starting: ${pythonCommand} ${args.join(' ')}`);
 
 		// Spawn Python process

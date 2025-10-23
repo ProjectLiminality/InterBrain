@@ -4,9 +4,7 @@ import { CoherenceBeaconModal } from '../ui/coherence-beacon-modal';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
+// Removed unused execAsync
 
 export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
   // Command: Push current DreamNode to network

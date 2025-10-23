@@ -198,6 +198,9 @@ export class DreamSongFullScreenView extends ItemView {
     }
 
     // Render the DreamSong component directly - CSS modules handle all styling
+    const vaultService = serviceManager.getVaultService();
+    const vaultPath = vaultService?.getVaultPath();
+
     this.root.render(
       createElement(StrictMode, null,
         createElement(DreamSong, {
@@ -207,7 +210,10 @@ export class DreamSongFullScreenView extends ItemView {
           dreamTalkMedia: this.dreamNode?.dreamTalkMedia,
           onMediaClick: this.handleMediaClick.bind(this),
           embedded: false,
-          githubPagesUrl: this.dreamNode?.githubPagesUrl
+          githubPagesUrl: this.dreamNode?.githubPagesUrl,
+          dreamNode: this.dreamNode || undefined,
+          vaultPath: vaultPath,
+          onDreamerNodeClick: this.handleMediaClick.bind(this)
         })
       )
     );

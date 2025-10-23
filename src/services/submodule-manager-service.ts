@@ -692,7 +692,6 @@ export class SubmoduleManagerService {
       // This ensures bidirectional relationships are always in sync, even for pre-existing submodules
       const allSuccessfulImports = importResults.filter(r => r.success);
       for (const result of allSuccessfulImports) {
-        const submodulePath = path.join(fullParentPath, result.submoduleName);
         const isNew = !result.alreadyExisted;
 
         console.log(`SubmoduleManagerService: Checking ${isNew ? 'new' : 'existing'} submodule: ${result.submoduleName}`);

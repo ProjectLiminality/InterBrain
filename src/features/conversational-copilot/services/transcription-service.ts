@@ -60,8 +60,9 @@ export class TranscriptionService {
       const timeStr = now.toTimeString().slice(0, 5).replace(':', '-'); // HH-mm
 
       // Always include time to allow multiple transcripts per day
+      // Store transcripts in conversations/ directory alongside audio
       const fileName = `transcript-${dateStr}-${timeStr}.md`;
-      const filePath = `${conversationPartner.repoPath}/${fileName}`;
+      const filePath = `${conversationPartner.repoPath}/conversations/${fileName}`;
 
       console.log(`📝 [TranscriptionService] Creating transcription file: ${filePath}`);
 

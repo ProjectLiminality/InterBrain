@@ -24,6 +24,8 @@ export interface TranscriptionConfig {
 	device?: string;
 	/** Optional language code */
 	language?: string;
+	/** Optional audio output path for recording (Songline feature) */
+	audioOutput?: string;
 }
 
 /**

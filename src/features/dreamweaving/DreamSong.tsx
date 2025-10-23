@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
-import { MediaFile } from '../../types/dreamnode';
+import { MediaFile, DreamNode } from '../../types/dreamnode';
+import { Perspective } from '../conversational-copilot/services/perspective-service';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
+import { PerspectivesSection } from './PerspectivesSection';
+import { ConversationsSection } from './ConversationsSection';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -13,6 +16,9 @@ interface DreamSongProps {
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
   embedded?: boolean; // Whether this is being rendered in embedded context (e.g., 3D sphere back)
   githubPagesUrl?: string; // GitHub Pages URL for "View on Web" button
+  dreamNode?: DreamNode; // Full DreamNode object for Songline features
+  vaultPath?: string; // Vault path for audio file resolution
+  onDreamerNodeClick?: (dreamerNodeId: string) => void; // Callback for navigating to DreamerNode
 }
 
 /**
@@ -22,6 +28,8 @@ interface DreamSongProps {
  * Purely presentational - renders blocks without any state management.
  * All data transformation happens in Layer 1 (parser).
  * All state management happens in Layer 2 (hook).
+ *
+ * Extended for Songline feature to display Perspectives and Conversations.
  */
 export const DreamSong: React.FC<DreamSongProps> = ({
   blocks,
@@ -31,12 +39,55 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   dreamTalkMedia,
   onMediaClick,
   embedded = false,
-  githubPagesUrl
+  githubPagesUrl,
+  dreamNode,
+  vaultPath,
+  onDreamerNodeClick
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
+  const [perspectives, setPerspectives] = useState<Perspective[]>([]);
 
   // Check if we have content to display
   const hasContent = blocks.length > 0;
+  const isDreamerNode = dreamNode?.type === 'dreamer';
+
+  // Load perspectives for dream nodes
+  useEffect(() => {
+    const loadPerspectives = async () => {
+      console.log(`🎵 [Perspectives] Loading for node:`, dreamNode?.name);
+      console.log(`🎵 [Perspectives] isDreamerNode: ${isDreamerNode}, vaultPath: ${vaultPath}`);
+
+      if (!dreamNode || isDreamerNode || !vaultPath) {
+        console.log(`⚠️ [Perspectives] Skipping - missing requirements`);
+        return;
+      }
+
+      try {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const absoluteRepoPath = path.join(vaultPath, dreamNode.repoPath);
+        const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
+
+        console.log(`🎵 [Perspectives] Looking for: ${perspectivesPath}`);
+
+        try {
+          const content = await fs.readFile(perspectivesPath, 'utf-8');
+          const perspectivesFile = JSON.parse(content);
+          console.log(`✅ [Perspectives] Loaded ${perspectivesFile.perspectives?.length || 0} perspectives`);
+          setPerspectives(perspectivesFile.perspectives || []);
+        } catch (error) {
+          // No perspectives file or parse error
+          console.warn(`⚠️ [Perspectives] File not found or parse error:`, error);
+          setPerspectives([]);
+        }
+      } catch (error) {
+        console.error('❌ [Perspectives] Failed to load:', error);
+        setPerspectives([]);
+      }
+    };
+
+    loadPerspectives();
+  }, [dreamNode?.id, isDreamerNode, vaultPath]);
 
   // Helper function to render DreamTalk media
   const renderDreamTalkMedia = (): React.ReactNode => {
@@ -173,16 +224,39 @@ export const DreamSong: React.FC<DreamSongProps> = ({
         />
       </div>
 
-      <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
-        {blocks.map((block, index) => (
-          <DreamSongBlockComponent
-            key={block.id}
-            block={block}
-            blockIndex={index}
-            onMediaClick={onMediaClick}
+      {/* Conditional rendering based on node type */}
+      {isDreamerNode ? (
+        /* DreamerNode: Show Conversations Section */
+        vaultPath && dreamNode && (
+          <ConversationsSection
+            dreamerNode={dreamNode}
+            vaultPath={vaultPath}
           />
-        ))}
-      </div>
+        )
+      ) : (
+        /* Regular DreamNode: Show DreamSong content + Perspectives */
+        <>
+          <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
+            {blocks.map((block, index) => (
+              <DreamSongBlockComponent
+                key={block.id}
+                block={block}
+                blockIndex={index}
+                onMediaClick={onMediaClick}
+              />
+            ))}
+          </div>
+
+          {/* Perspectives Section for dream nodes */}
+          {perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
+            <PerspectivesSection
+              perspectives={perspectives}
+              vaultPath={vaultPath}
+              onDreamerNodeClick={onDreamerNodeClick}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 };
