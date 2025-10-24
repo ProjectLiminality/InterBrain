@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
 import { Html, Billboard } from '@react-three/drei';
 import { Group } from 'three';
 import { createIconElement } from './radial-button-config';
@@ -36,8 +35,8 @@ export const ActiveVideoCallButton: React.FC = () => {
 
   // Fade in on mount
   useEffect(() => {
-    const timer = setTimeout(() => setOpacity(1), 50);
-    return () => clearTimeout(timer);
+    const timer = window.setTimeout(() => setOpacity(1), 50);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Fade out when copilot mode ends

@@ -52,8 +52,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
   const [perspectives, setPerspectives] = useState<Perspective[]>([]);
 
-  // Check if we have content to display
-  const hasContent = blocks.length > 0;
+  // Check node type
   const isDreamerNode = dreamNode?.type === 'dreamer';
 
   // Load perspectives for dream nodes

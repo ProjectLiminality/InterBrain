@@ -63,7 +63,7 @@ export default class InterBrainPlugin extends Plugin {
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
-  private coherenceBeaconService!: CoherenceBeaconService;
+  public coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
   private constellationCommands!: ConstellationCommands;
   private radialButtonCommands!: RadialButtonCommands;

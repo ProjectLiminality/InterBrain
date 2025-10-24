@@ -64,7 +64,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
 
   // Use the new hook for DreamSong data (with dreamNode for Songline feature detection)
   const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
-  const { blocks, hasContent, isLoading: isLoadingDreamSong, error } = useDreamSongData(
+  const { blocks, isLoading: isLoadingDreamSong, error } = useDreamSongData(
     canvasPath,
     dreamNode.repoPath,
     { canvasParser, vaultService, dreamNode },

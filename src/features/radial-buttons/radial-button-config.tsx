@@ -94,12 +94,12 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     // Only show for dreamer-type nodes
     shouldShow: (node) => node?.type === 'dreamer',
     // Dynamic label based on copilot mode (active call state)
-    getDynamicLabel: (node) => {
+    getDynamicLabel: (_node) => {
       const store = useInterBrainStore.getState();
       return store.copilotMode.isActive ? 'Extinguish Digital Campfire' : 'Initiate Digital Campfire';
     },
     // Dynamic command based on copilot mode (active call state)
-    getDynamicCommand: (node) => {
+    getDynamicCommand: (_node) => {
       const store = useInterBrainStore.getState();
       return store.copilotMode.isActive
         ? 'interbrain:end-video-call'

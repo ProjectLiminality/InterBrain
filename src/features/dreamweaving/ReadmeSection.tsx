@@ -34,7 +34,7 @@ export const ReadmeSection: React.FC<ReadmeSectionProps> = ({
 
 				await fs.access(readmePath);
 				setReadmeExists(true);
-			} catch (error) {
+			} catch {
 				// README not found
 				setReadmeExists(false);
 			}
