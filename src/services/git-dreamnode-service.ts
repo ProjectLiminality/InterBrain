@@ -496,13 +496,13 @@ export class GitDreamNodeService {
       if (await this.fileExists(mediaPath)) {
         const stats = await fsPromises.stat(mediaPath);
         const mimeType = this.getMimeType(udd.dreamTalk);
-        const dataUrl = await this.filePathToDataUrl(mediaPath);
-        
+        // Skip loading media data during vault scan - will lazy load via MediaLoadingService
+
         dreamTalkMedia = [{
           path: udd.dreamTalk,
           absolutePath: mediaPath,
           type: mimeType,
-          data: dataUrl,
+          data: '', // Empty - lazy load on demand
           size: stats.size
         }];
       }
@@ -588,19 +588,19 @@ export class GitDreamNodeService {
         const newHash = await this.calculateFileHashFromPath(mediaPath);
         
         if (newHash !== existingData.fileHash) {
-          // File changed - reload
+          // File changed - reload metadata only (data will lazy load)
           const stats = await fsPromises.stat(mediaPath);
           const mimeType = this.getMimeType(udd.dreamTalk);
-          const dataUrl = await this.filePathToDataUrl(mediaPath);
-          
+          // Skip loading media data - will lazy load via MediaLoadingService
+
           node.dreamTalkMedia = [{
             path: udd.dreamTalk,
             absolutePath: mediaPath,
             type: mimeType,
-            data: dataUrl,
+            data: '', // Empty - lazy load on demand
             size: stats.size
           }];
-          
+
           existingData.fileHash = newHash;
           updated = true;
         }

@@ -47,6 +47,7 @@ import { initializeAudioRecordingService } from './features/conversational-copil
 import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
 import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
+import { initializeMediaLoadingService } from './services/media-loading-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
 import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
@@ -103,6 +104,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize audio streaming service for Songline feature
     initializeAudioStreamingService(this);
+
+    // Initialize media loading service for lazy media loading
+    initializeMediaLoadingService();
 
     // Get services for dependency injection
     const radicleService = serviceManager.getRadicleService();

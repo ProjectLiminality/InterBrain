@@ -510,16 +510,31 @@ export const useInterBrainStore = create<InterBrainState>()(
   setSelectedNode: (node) => set(state => {
     const previousNode = state.selectedNode;
     const currentLayout = state.spatialLayout;
-    
+
+    // Trigger lazy media loading for node and 2-degree neighborhood
+    if (node) {
+      // Import and trigger media loading asynchronously (non-blocking)
+      import('../services/media-loading-service').then(({ getMediaLoadingService }) => {
+        try {
+          const mediaLoadingService = getMediaLoadingService();
+          mediaLoadingService.loadNodeWithNeighborhood(node.id);
+        } catch (error) {
+          console.warn('[Store] MediaLoadingService not initialized:', error);
+        }
+      }).catch(error => {
+        console.error('[Store] Failed to load media service:', error);
+      });
+    }
+
     // Detect meaningful node selection changes for history tracking
     const isMeaningfulChange = (
       // Within Liminal Web: different node selected
-      currentLayout === 'liminal-web' && 
-      previousNode && 
-      node && 
+      currentLayout === 'liminal-web' &&
+      previousNode &&
+      node &&
       previousNode.id !== node.id
     );
-    
+
     // Record history entry for meaningful changes (but not during undo/redo operations)
     if (isMeaningfulChange && !state.isRestoringFromHistory) {
       // Create new entry
@@ -1439,7 +1454,31 @@ export const useInterBrainStore = create<InterBrainState>()(
       // Only persist real nodes data, data mode, vector data, mock relationships, constellation data, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
-        realNodes: mapToArray(state.realNodes),
+        realNodes: mapToArray(state.realNodes).map(([id, data]) => [
+          id,
+          {
+            // Strip large media data to avoid localStorage quota
+            node: {
+              ...data.node,
+              // Keep metadata, remove base64 data
+              dreamTalkMedia: data.node.dreamTalkMedia.map(media => ({
+                path: media.path,
+                absolutePath: media.absolutePath,
+                type: media.type,
+                size: media.size,
+                data: '' // Empty - will lazy load
+              })),
+              // Keep canvas file references, remove parsed content
+              dreamSongContent: data.node.dreamSongContent.map(canvas => ({
+                path: canvas.path,
+                absolutePath: canvas.absolutePath,
+                content: null // Empty - will lazy load
+              }))
+            },
+            fileHash: data.fileHash,
+            lastSynced: data.lastSynced
+          }
+        ]),
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
         constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions) ? {
           ...state.constellationData,
