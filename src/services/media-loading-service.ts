@@ -58,9 +58,9 @@ export class MediaLoadingService {
 
         if (node) {
           const neighbors = [
-            ...node.liminalWebConnections,
-            ...node.submodules,
-            ...node.supermodules
+            ...(node.liminalWebConnections || []),
+            ...(node.submodules || []),
+            ...(node.supermodules || [])
           ];
 
           // Add neighbors with incremented degree and priority
@@ -206,11 +206,17 @@ export class MediaLoadingService {
     this.mediaCache.set(nodeId, { dreamTalkMedia, dreamSongContent });
 
     // Update node in store with loaded media
-    store.updateRealNode(nodeId, {
-      ...node,
-      dreamTalkMedia,
-      dreamSongContent
-    });
+    const existingData = store.realNodes.get(nodeId);
+    if (existingData) {
+      store.updateRealNode(nodeId, {
+        ...existingData,
+        node: {
+          ...existingData.node,
+          dreamTalkMedia,
+          dreamSongContent
+        }
+      });
+    }
 
     console.log(`[MediaLoading] Loaded media for ${node.name}`);
   }
