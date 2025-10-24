@@ -5,6 +5,190 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-10-24 - Epic 8: Coherence Beacon System (Complete)
+
+### Added
+
+**Coherence Beacon Discovery System (Feature #336)**
+- Automatic detection of new supermodule references in DreamNodes
+- Modal-based acceptance/rejection workflow for proposed relationships
+- Persistent rejection tracking to prevent re-prompting declined beacons
+- Intelligent clone and submodule linking for accepted beacons
+- Check for updates command for manual beacon discovery
+
+**Bidirectional Relationship Tracking (Feature #337)**
+- Git hooks system for automatic supermodule/submodule synchronization
+- Post-commit hook detecting `.gitmodules` changes and updating `.udd` files
+- Sovereign repository pattern - child repos track their own `supermodules` array
+- Repair logic in sync command to fix existing submodule relationships
+- Bidirectional UUID-based relationship tracking across entire DreamNode graph
+
+**Radicle Network Integration (Feature #338)**
+- Complete Radicle CLI integration with passphrase management
+- Batch initialization and sharing commands for Radicle DreamNodes
+- Automatic Radicle node management with startup/shutdown lifecycle
+- Smart clone conflict handling with Radicle ID detection
+- Radicle ID persistence in `.udd` files for duplicate prevention
+- Email export integration with Radicle fallback URIs
+- Cross-platform Radicle support with path resolution
+
+**GitHub Pages Publishing System (Feature #337)**
+- Static DreamSong site builder with standalone HTML viewer
+- Automated gh-pages branch deployment for public sharing
+- UUID-based link resolver for rename-proof navigation
+- "View on Web" button in fullscreen DreamSong view
+- Recursive submodule sharing with title-based repository naming
+- Unpublish command with recursive cleanup of shared submodules
+- Bidirectional submodule sync (add AND remove orphaned references)
+
+**Universal DreamNode Cloning (Feature #337)**
+- Mixed Radicle/GitHub/UUID batch clone support in single command
+- Automatic `.udd` file initialization for GitHub clones
+- GitHub clone optimization (main branch only, faster initialization)
+- Automatic semantic search indexing for newly cloned nodes
+- Smart constellation positioning with proper metadata handling
+
+**Radial Action Button System (Feature #339)**
+- Option-key triggered radial menu with 10 context-aware buttons
+- Dynamic command mapping based on node state (published/unpublished, active call, etc.)
+- Conditional button visibility (GitHub share for dreams, video call for dreamers)
+- Hover labels with clean UX positioning around selected node
+- Special positioning for active video call button during copilot mode
+- Obsidian icon integration using `setIcon` API
+
+**Songline Feature System**
+- Audio recording integration for conversation capture
+- LLM-powered clip generation and summarization
+- Perspectives UI for displaying multiple DreamerNode viewpoints
+- Conversations section for DreamerNodes showing recorded dialogues
+- Timestamp synchronization with audio playback
+- Vault-path-based audio file resolution
+
+**DreamSong Enhancements**
+- Unified README section as collapsible element at bottom
+- Edit buttons for Canvas and README files in fullscreen view
+- Markdown rendering of README content with Obsidian native API
+- Improved DreamerNode vs Dream node conditional rendering
+- Fullscreen button reliability improvements
+
+**Canvas Auto-Layout Command**
+- Automatic positioning of canvas nodes for linear DreamSong flow
+- Intelligent media-text pair layout with proper spacing
+- Text height calculation for optimal card sizing
+- Vertical spacing normalization for tighter layouts
+
+**PascalCase Naming System (Feature #337)**
+- Unified PascalCase conversion for all DreamNode titles
+- Migration tools for converting existing kebab-case/snake_case repos
+- Bidirectional title conversion preserving human readability
+- Title sanitization with robust kebab/snake case normalization
+- Batch migration command for updating entire vaults
+
+**Digital Campfire Metaphor**
+- Rebranded video calls as "Digital Campfire" with flame-kindling icon
+- Poetic language: "Initiate" and "Extinguish" instead of start/end
+- Enhanced active call button positioning at -45° (lower-right quadrant)
+- Robust error handling for early video call termination
+
+### Technical Achievements
+
+**Git Hooks Architecture**
+- Node.js-based hook-helper script for complex git operations
+- Pre-commit hook for template initialization and canvas validation
+- Post-commit hook for automatic bidirectional relationship updates
+- Non-blocking hook execution with comprehensive error logging
+- Reusable hook utilities shared across multiple hook types
+
+**GitHub Integration Infrastructure**
+- GitHub CLI detection with explicit path resolution
+- Vite bundle configuration for Node.js built-ins
+- Static site viewer with standalone asset management
+- Canvas path auditing and repair for migration scenarios
+- Robust submodule path resolution for sharing workflows
+
+**Radicle Service Layer**
+- Passphrase prompt integration with macOS Keychain fallback
+- TTY-less rad init using stdin piping
+- Radicle ID extraction from git config
+- Duplicate detection using persisted Radicle IDs
+- Cross-platform CLI detection (macOS, Linux, Windows placeholders)
+
+**Universal Clone Architecture**
+- URI protocol handler supporting rad:// and https:// schemes
+- Mixed source batch processing with parallel cloning
+- Constellation positioning optimization (100x faster)
+- Duplicate detection across Radicle and GitHub sources
+- Smart conflict resolution with safe existing file handling
+
+**Canvas Submodule Synchronization**
+- Detection of orphaned submodules removed from canvas
+- Automatic git submodule removal with history suppression
+- Bidirectional tracking updates in both parent and child repos
+- Repair logic for fixing existing incomplete relationships
+- Canvas path validation and warning system
+
+**Radial Button Architecture**
+- Dynamic command resolution based on runtime state
+- Conditional visibility system with shouldShow predicates
+- Icon system using Obsidian's Lucide integration
+- Billboard-based 3D positioning with HTML overlay
+- Fade-in/fade-out animations with opacity transitions
+
+**Option Key Tracking System**
+- Robust cross-platform key state detection
+- Multiple event listeners for redundancy (keydown, keyup, blur)
+- State reset on window blur to prevent stuck keys
+- Integration with both radial buttons and search mode
+
+**Development Workflow Enhancements**
+- Local-only branch workflow (epic and feature branches never pushed)
+- Main branch as single source of truth for remote
+- Comprehensive documentation updates in CLAUDE.md
+- Known issues tracking for deferred technical debt
+
+### Enhanced
+
+**Constellation Positioning**
+- Batch position updates for dramatic speed improvements
+- Optimized duplicate detection (10x faster for Radicle nodes)
+- Anti-aliasing improvements for 3D rendering quality
+- Smart repositioning after cloning with metadata awareness
+
+**Error Handling & Resilience**
+- Graceful handling of malformed `.udd` files during vault scan
+- Early video call termination without scary error messages
+- EOFError detection and filtering in transcription pipeline
+- Process lifecycle management with force-kill fallbacks
+- Reduced force-kill timeout (5s → 2s) for faster cleanup
+
+**Debug Logging & Observability**
+- Comprehensive logging across all Radicle operations
+- Canvas path audit trails for migration debugging
+- Submodule sync operation transparency
+- Video call lifecycle event tracking
+- README markdown rendering diagnostics
+
+**Code Quality**
+- 238 tests passing with zero TypeScript errors
+- Clean lint output across entire codebase
+- Public API exposure for CoherenceBeaconService
+- Unused variable cleanup and error handling improvements
+
+### Fixed
+
+- Coherence Beacon clone handling with PascalCase conversion
+- GitHub clone constellation return bug (read positions from store)
+- Submodule path resolution for git submodule add operations
+- Canvas path updating during PascalCase migration
+- Broken submodule recovery (chicken-egg initialization problem)
+- Module import errors in radial button configuration
+- VaultService method name in Songline feature detection
+- Timestamp synchronization in DreamSong perspectives
+- README markdown rendering async API handling
+- Fullscreen button reliability across all scenarios
+- Button conditions and dynamic label generation
+- Radial button position calculation (label no longer shifts button)
+
 ## [0.7.0] - 2025-10-05 - Epic 7: Conversational Copilot System (Complete)
 
 ### Added
