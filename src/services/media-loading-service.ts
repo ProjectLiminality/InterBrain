@@ -48,12 +48,19 @@ export class MediaLoadingService {
     const FOV_CENTER = { x: 0, y: 0, z: 1500 }; // DEFAULT_SCALING_CONFIG.intersectionPoint
     const FOV_OUTER_RADIUS = 3000; // DEFAULT_SCALING_CONFIG.outerRadius
 
-    const nodesWithDistance = allNodeIds.map(nodeId => {
+    // Process nodes in chunks to avoid blocking
+    const CHUNK_SIZE = 10;
+    const fovTasks: MediaLoadTask[] = [];
+    const backgroundTasks: MediaLoadTask[] = [];
+
+    // Process first chunk immediately to start FOV loading ASAP
+    for (let i = 0; i < Math.min(CHUNK_SIZE, allNodeIds.length); i++) {
+      const nodeId = allNodeIds[i];
       const nodeData = store.realNodes.get(nodeId);
-      if (!nodeData) return null;
+      if (!nodeData) continue;
 
       const pos = nodeData.node.position;
-      if (!pos) return null; // Skip nodes without positions
+      if (!pos) continue;
 
       const distance = Math.sqrt(
         Math.pow(pos[0] - FOV_CENTER.x, 2) +
@@ -61,43 +68,74 @@ export class MediaLoadingService {
         Math.pow(pos[2] - FOV_CENTER.z, 2)
       );
 
-      return { nodeId, distance, inFOV: distance < FOV_OUTER_RADIUS };
-    }).filter(Boolean) as { nodeId: string; distance: number; inFOV: boolean }[];
+      const task: MediaLoadTask = {
+        nodeId,
+        degree: distance < FOV_OUTER_RADIUS ? 0 : 10,
+        priority: distance < FOV_OUTER_RADIUS ? distance : 10000 + distance,
+        distance
+      };
 
-    // Sort by distance (closest first)
-    nodesWithDistance.sort((a, b) => a.distance - b.distance);
+      this.requestedNodes.add(nodeId);
 
-    // Phase 1: Immediate FOV nodes (priority 0-2)
-    const fovNodes = nodesWithDistance.filter(n => n.inFOV);
-    const backgroundNodes = nodesWithDistance.filter(n => !n.inFOV);
+      if (distance < FOV_OUTER_RADIUS) {
+        fovTasks.push(task);
+      } else {
+        backgroundTasks.push(task);
+      }
+    }
 
-    console.log(`[MediaLoading] Phase 1: ${fovNodes.length} FOV nodes`);
-    console.log(`[MediaLoading] Phase 2: ${backgroundNodes.length} background nodes`);
-
-    // Queue FOV nodes with high priority
-    const fovTasks: MediaLoadTask[] = fovNodes.map(({ nodeId, distance }) => ({
-      nodeId,
-      degree: 0, // Highest priority
-      priority: distance, // Closest first within FOV
-      distance
-    }));
-
-    // Queue background nodes with low priority
-    const backgroundTasks: MediaLoadTask[] = backgroundNodes.map(({ nodeId, distance }) => ({
-      nodeId,
-      degree: 10, // Low priority
-      priority: 10000 + distance, // Much lower priority than FOV
-      distance
-    }));
-
-    // Add all to loading queue
+    // Add first batch and start processing immediately
     this.loadingQueue.push(...fovTasks, ...backgroundTasks);
+    console.log(`[MediaLoading] Phase 1 batch: ${fovTasks.length} FOV nodes, ${backgroundTasks.length} background`);
 
-    // Mark all as requested
-    nodesWithDistance.forEach(({ nodeId }) => this.requestedNodes.add(nodeId));
+    // Start processing first batch (non-blocking)
+    if (!this.isProcessingQueue) {
+      this.processQueue();
+    }
 
-    // Start processing
-    this.processQueue();
+    // Process remaining nodes in background (async, non-blocking)
+    setTimeout(() => {
+      const remainingFovTasks: MediaLoadTask[] = [];
+      const remainingBackgroundTasks: MediaLoadTask[] = [];
+
+      for (let i = CHUNK_SIZE; i < allNodeIds.length; i++) {
+        const nodeId = allNodeIds[i];
+        const nodeData = store.realNodes.get(nodeId);
+        if (!nodeData) continue;
+
+        const pos = nodeData.node.position;
+        if (!pos) continue;
+
+        const distance = Math.sqrt(
+          Math.pow(pos[0] - FOV_CENTER.x, 2) +
+          Math.pow(pos[1] - FOV_CENTER.y, 2) +
+          Math.pow(pos[2] - FOV_CENTER.z, 2)
+        );
+
+        const task: MediaLoadTask = {
+          nodeId,
+          degree: distance < FOV_OUTER_RADIUS ? 0 : 10,
+          priority: distance < FOV_OUTER_RADIUS ? distance : 10000 + distance,
+          distance
+        };
+
+        this.requestedNodes.add(nodeId);
+
+        if (distance < FOV_OUTER_RADIUS) {
+          remainingFovTasks.push(task);
+        } else {
+          remainingBackgroundTasks.push(task);
+        }
+      }
+
+      // Sort by priority
+      remainingFovTasks.sort((a, b) => a.priority - b.priority);
+      remainingBackgroundTasks.sort((a, b) => a.priority - b.priority);
+
+      // Add to queue
+      this.loadingQueue.push(...remainingFovTasks, ...remainingBackgroundTasks);
+      console.log(`[MediaLoading] Phase 2 batch: ${remainingFovTasks.length} FOV nodes, ${remainingBackgroundTasks.length} background`);
+    }, 0);
   }
 
   /**
