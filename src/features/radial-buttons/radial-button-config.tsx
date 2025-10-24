@@ -88,15 +88,15 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   },
   {
     id: 'video-call',
-    iconName: 'lucide-video',
+    iconName: 'lucide-flame-kindling',
     commandId: 'interbrain:start-video-call',
-    label: 'Start Video Call',
+    label: 'Initiate Digital Campfire',
     // Only show for dreamer-type nodes
     shouldShow: (node) => node?.type === 'dreamer',
     // Dynamic label based on copilot mode (active call state)
     getDynamicLabel: (node) => {
       const store = useInterBrainStore.getState();
-      return store.copilotMode.isActive ? 'End Video Call' : 'Start Video Call';
+      return store.copilotMode.isActive ? 'Extinguish Flames' : 'Initiate Digital Campfire';
     },
     // Dynamic command based on copilot mode (active call state)
     getDynamicCommand: (node) => {
