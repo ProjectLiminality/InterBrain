@@ -213,13 +213,26 @@ export class MediaLoadingService {
     // Update node in store with loaded media
     const existingData = store.realNodes.get(nodeId);
     if (existingData) {
-      store.updateRealNode(nodeId, {
+      const updatedData = {
         ...existingData,
         node: {
           ...existingData.node,
           dreamTalkMedia,
           dreamSongContent
         }
+      };
+
+      console.log(`[MediaLoading] Updating store for ${node.name}`, {
+        before: existingData.node.dreamTalkMedia[0]?.data?.substring(0, 50),
+        after: dreamTalkMedia[0]?.data?.substring(0, 50)
+      });
+
+      store.updateRealNode(nodeId, updatedData);
+
+      // Verify update
+      const verifyData = store.realNodes.get(nodeId);
+      console.log(`[MediaLoading] Verified store update:`, {
+        updated: verifyData?.node.dreamTalkMedia[0]?.data?.substring(0, 50)
       });
     }
 

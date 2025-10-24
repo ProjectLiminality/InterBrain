@@ -10,6 +10,7 @@ import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
+import { getMediaLoadingService } from '../services/media-loading-service';
 import './dreamNodeAnimations.css';
 
 // Universal Movement API interface
@@ -524,16 +525,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       const distance3D = anchorVector.distanceTo(DEFAULT_SCALING_CONFIG.intersectionPoint);
       if (distance3D < DEFAULT_SCALING_CONFIG.outerRadius) {
         // Node is in visible scaling zone - request lazy load
-        import('../services/media-loading-service').then(({ getMediaLoadingService }) => {
-          try {
-            const mediaLoadingService = getMediaLoadingService();
-            mediaLoadingService.requestViewportLoad(dreamNode.id);
-          } catch (error) {
-            // Service not initialized yet - skip
-          }
-        }).catch(() => {
-          // Failed to import - skip
-        });
+        try {
+          const mediaLoadingService = getMediaLoadingService();
+          mediaLoadingService.requestViewportLoad(dreamNode.id);
+        } catch (error) {
+          // Service not initialized yet - skip silently
+        }
       }
     } 
     // Active mode transitions
