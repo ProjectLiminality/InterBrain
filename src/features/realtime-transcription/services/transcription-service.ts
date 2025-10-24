@@ -127,8 +127,16 @@ export class TranscriptionService implements ITranscriptionService {
 	): Promise<void> {
 		// Check if already running
 		if (this.isRunning()) {
+			console.warn('[Transcription] Already running - ignoring start request');
 			this.uiService.showWarning('Transcription already running');
 			return;
+		}
+
+		// Clear any stale process references
+		if (this.currentProcess !== null) {
+			console.warn('[Transcription] Clearing stale process reference');
+			this.currentProcess = null;
+			this.currentOutputPath = null;
 		}
 
 		// Check Python availability
@@ -222,6 +230,17 @@ export class TranscriptionService implements ITranscriptionService {
 			// eslint-disable-next-line no-undef
 			this.currentProcess?.stderr?.on('data', (data: Buffer) => {
 				const error = data.toString().trim();
+
+				// Filter out harmless connection errors from early termination
+				if (error.includes('EOFError') ||
+				    error.includes('Error receiving data from connection') ||
+				    error.includes('poll_connection')) {
+					// These errors occur when process is terminated before fully initialized
+					// This is expected behavior when user ends call quickly
+					console.log(`[Transcription] Connection closed during startup (expected on early termination)`);
+					return;
+				}
+
 				console.error(`[Transcription STDERR] ${error}`);
 
 				// Handle specific error cases
@@ -270,23 +289,55 @@ export class TranscriptionService implements ITranscriptionService {
 	 */
 	async stopTranscription(): Promise<void> {
 		if (!this.currentProcess) {
-			this.uiService.showWarning('No active transcription');
+			console.log('[Transcription] No active process to stop');
 			return;
 		}
 
 		console.log('[Transcription] Stopping process...');
-		this.uiService.showInfo('Stopping transcription...');
+
+		// Check if process is still initializing (no exitCode but also might not be fully started)
+		const isInitializing = this.currentProcess.exitCode === null && !this.currentProcess.pid;
+
+		if (isInitializing) {
+			console.log('[Transcription] Process still initializing - forcing immediate termination');
+			try {
+				this.currentProcess.kill('SIGKILL');
+			} catch (error) {
+				console.warn('[Transcription] Error killing initializing process:', error);
+			}
+			this.currentProcess = null;
+			this.currentOutputPath = null;
+			this.sessionStartTime = null;
+			return;
+		}
 
 		// Send SIGTERM for graceful shutdown
-		this.currentProcess.kill('SIGTERM');
+		try {
+			this.currentProcess.kill('SIGTERM');
+			console.log('[Transcription] SIGTERM sent for graceful shutdown');
+		} catch (error) {
+			console.warn('[Transcription] Error sending SIGTERM:', error);
+			// Force immediate cleanup if SIGTERM fails
+			this.currentProcess = null;
+			this.currentOutputPath = null;
+			this.sessionStartTime = null;
+			return;
+		}
 
-		// Force kill after 5 seconds if still running
+		// Force kill after 2 seconds if still running (reduced from 5s for faster early termination)
 		setTimeout(() => {
 			if (this.currentProcess && this.currentProcess.exitCode === null) {
-				console.warn('[Transcription] Force killing process');
-				this.currentProcess.kill('SIGKILL');
+				console.warn('[Transcription] Force killing process after timeout');
+				try {
+					this.currentProcess.kill('SIGKILL');
+				} catch (error) {
+					console.warn('[Transcription] Error force killing:', error);
+				}
+				this.currentProcess = null;
+				this.currentOutputPath = null;
+				this.sessionStartTime = null;
 			}
-		}, 5000);
+		}, 2000);
 	}
 
 	/**
