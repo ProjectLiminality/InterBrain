@@ -1454,31 +1454,9 @@ export const useInterBrainStore = create<InterBrainState>()(
       // Only persist real nodes data, data mode, vector data, mock relationships, constellation data, and Ollama config
       partialize: (state) => ({
         dataMode: state.dataMode,
-        realNodes: mapToArray(state.realNodes).map(([id, data]) => [
-          id,
-          {
-            // Strip large media data to avoid localStorage quota
-            node: {
-              ...data.node,
-              // Keep metadata, remove base64 data
-              dreamTalkMedia: data.node.dreamTalkMedia.map(media => ({
-                path: media.path,
-                absolutePath: media.absolutePath,
-                type: media.type,
-                size: media.size,
-                data: '' // Empty - will lazy load
-              })),
-              // Keep canvas file references, remove parsed content
-              dreamSongContent: data.node.dreamSongContent.map(canvas => ({
-                path: canvas.path,
-                absolutePath: canvas.absolutePath,
-                content: null // Empty - will lazy load
-              }))
-            },
-            fileHash: data.fileHash,
-            lastSynced: data.lastSynced
-          }
-        ]),
+        // Don't persist realNodes at all - they reload from vault on app start
+        // This avoids localStorage quota issues entirely
+        realNodes: [],
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
         constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions) ? {
           ...state.constellationData,

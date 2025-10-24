@@ -527,9 +527,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         // Node is in visible scaling zone - request lazy load
         try {
           const mediaLoadingService = getMediaLoadingService();
+          console.log(`[Viewport] Requesting load for ${dreamNode.name}`);
           mediaLoadingService.requestViewportLoad(dreamNode.id);
         } catch (error) {
-          // Service not initialized yet - skip silently
+          console.error(`[Viewport] Service error for ${dreamNode.name}:`, error);
         }
       }
     } 
