@@ -384,17 +384,20 @@ export class GitDreamNodeService {
       }
 
       // Single store update - triggers only ONE React re-render
-      console.log(`[VaultScan] Applying batched update to store...`);
+      console.log(`[VaultScan] ⏰ ${Date.now()} - Applying batched update to store...`);
       store.setRealNodes(newRealNodes);
       store.setNodeMetadata(nodeMetadata);
-      console.log(`[VaultScan] Batch scan complete - persisted metadata for ${nodeMetadata.size} nodes`);
+      console.log(`[VaultScan] ⏰ ${Date.now()} - Batch scan complete - persisted metadata for ${nodeMetadata.size} nodes`);
+      console.log(`[VaultScan] 🚀 NODES SHOULD BE VISIBLE NOW - Store updated with ${newRealNodes.size} nodes`);
 
       // Trigger two-phase media loading in background (non-blocking)
+      console.log(`[VaultScan] ⏰ ${Date.now()} - Starting dynamic import of media loading service...`);
       import('./media-loading-service').then(({ getMediaLoadingService }) => {
+        console.log(`[VaultScan] ⏰ ${Date.now()} - Media loading service imported, calling loadAllNodesByDistance()...`);
         try {
           const mediaLoadingService = getMediaLoadingService();
           mediaLoadingService.loadAllNodesByDistance();
-          console.log(`[VaultScan] Two-phase media loading started in background`);
+          console.log(`[VaultScan] ⏰ ${Date.now()} - loadAllNodesByDistance() called (non-blocking)`);
         } catch (error) {
           console.warn('[VaultScan] Failed to start media loading:', error);
         }

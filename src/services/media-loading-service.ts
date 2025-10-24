@@ -34,7 +34,7 @@ export class MediaLoadingService {
    * Phase 2: Remaining nodes by distance (background streaming)
    */
   async loadAllNodesByDistance(): Promise<void> {
-    console.log('[MediaLoading] Starting two-phase loading...');
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - 🎬 START loadAllNodesByDistance()`);
 
     const store = useInterBrainStore.getState();
     const allNodeIds = Array.from(store.realNodes.keys());
@@ -43,6 +43,8 @@ export class MediaLoadingService {
       console.log('[MediaLoading] No nodes to load');
       return;
     }
+
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - Found ${allNodeIds.length} nodes to process`);
 
     // Calculate distance for each node from FOV center (0, 0, 1500)
     const FOV_CENTER = { x: 0, y: 0, z: 1500 }; // DEFAULT_SCALING_CONFIG.intersectionPoint
@@ -53,6 +55,7 @@ export class MediaLoadingService {
     const fovTasks: MediaLoadTask[] = [];
     const backgroundTasks: MediaLoadTask[] = [];
 
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - Processing first chunk of ${CHUNK_SIZE} nodes synchronously...`);
     // Process first chunk immediately to start FOV loading ASAP
     for (let i = 0; i < Math.min(CHUNK_SIZE, allNodeIds.length); i++) {
       const nodeId = allNodeIds[i];
@@ -86,15 +89,19 @@ export class MediaLoadingService {
 
     // Add first batch and start processing immediately
     this.loadingQueue.push(...fovTasks, ...backgroundTasks);
-    console.log(`[MediaLoading] Phase 1 batch: ${fovTasks.length} FOV nodes, ${backgroundTasks.length} background`);
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - Phase 1 batch: ${fovTasks.length} FOV nodes, ${backgroundTasks.length} background`);
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - 🚀 Starting processQueue() for first batch (NON-BLOCKING)`);
 
     // Start processing first batch (non-blocking)
     if (!this.isProcessingQueue) {
       this.processQueue();
     }
 
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ END loadAllNodesByDistance() - processQueue() running in background`);
+
     // Process remaining nodes in background (async, non-blocking)
     setTimeout(() => {
+      console.log(`[MediaLoading] ⏰ ${Date.now()} - Processing remaining ${allNodeIds.length - CHUNK_SIZE} nodes in setTimeout...`);
       const remainingFovTasks: MediaLoadTask[] = [];
       const remainingBackgroundTasks: MediaLoadTask[] = [];
 
@@ -134,7 +141,7 @@ export class MediaLoadingService {
 
       // Add to queue
       this.loadingQueue.push(...remainingFovTasks, ...remainingBackgroundTasks);
-      console.log(`[MediaLoading] Phase 2 batch: ${remainingFovTasks.length} FOV nodes, ${remainingBackgroundTasks.length} background`);
+      console.log(`[MediaLoading] ⏰ ${Date.now()} - Phase 2 batch: ${remainingFovTasks.length} FOV nodes, ${remainingBackgroundTasks.length} background`);
     }, 0);
   }
 
@@ -217,8 +224,12 @@ export class MediaLoadingService {
    * Process loading queue with concurrency control
    */
   private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue) return;
+    if (this.isProcessingQueue) {
+      console.log(`[MediaLoading] ⏰ ${Date.now()} - ⚠️ processQueue() already running, skipping`);
+      return;
+    }
     this.isProcessingQueue = true;
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - 🔄 processQueue() STARTED - queue size: ${this.loadingQueue.length}`);
 
     const activeLoads: Promise<void>[] = [];
 
@@ -253,16 +264,18 @@ export class MediaLoadingService {
     }
 
     // Wait for remaining loads to complete
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - Waiting for ${activeLoads.length} remaining loads to complete...`);
     await Promise.all(activeLoads);
 
     this.isProcessingQueue = false;
-    console.log(`[MediaLoading] Queue processing complete`);
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ processQueue() COMPLETE`);
   }
 
   /**
    * Load media for a single node
    */
   private async loadNodeMedia(nodeId: string): Promise<void> {
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - 📥 START loading media for ${nodeId.slice(0, 8)}...`);
     const store = useInterBrainStore.getState();
     const node = this.getNode(nodeId, store);
 
@@ -270,8 +283,6 @@ export class MediaLoadingService {
       console.warn(`[MediaLoading] Node not found: ${nodeId}`);
       return;
     }
-
-    console.log(`[MediaLoading] Loading media for ${node.name}`);
 
     const fs = require('fs').promises;
 
@@ -327,6 +338,7 @@ export class MediaLoadingService {
     // Update node in store with loaded media
     // Use setTimeout to ensure each update gets its own render cycle (avoid React batching)
     setTimeout(() => {
+      console.log(`[MediaLoading] ⏰ ${Date.now()} - 💾 Updating store for ${node.name}`);
       const existingData = store.realNodes.get(nodeId);
       if (existingData) {
         const updatedData = {
@@ -339,7 +351,7 @@ export class MediaLoadingService {
         };
 
         store.updateRealNode(nodeId, updatedData);
-        console.log(`[MediaLoading] Loaded media for ${node.name}`);
+        console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ Media loaded and stored for ${node.name}`);
       }
     }, 0);
   }
