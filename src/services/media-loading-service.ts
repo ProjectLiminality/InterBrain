@@ -287,21 +287,23 @@ export class MediaLoadingService {
     this.mediaCache.set(nodeId, { dreamTalkMedia, dreamSongContent });
 
     // Update node in store with loaded media
-    const existingData = store.realNodes.get(nodeId);
-    if (existingData) {
-      const updatedData = {
-        ...existingData,
-        node: {
-          ...existingData.node,
-          dreamTalkMedia,
-          dreamSongContent
-        }
-      };
+    // Use setTimeout to ensure each update gets its own render cycle (avoid React batching)
+    setTimeout(() => {
+      const existingData = store.realNodes.get(nodeId);
+      if (existingData) {
+        const updatedData = {
+          ...existingData,
+          node: {
+            ...existingData.node,
+            dreamTalkMedia,
+            dreamSongContent
+          }
+        };
 
-      store.updateRealNode(nodeId, updatedData);
-    }
-
-    console.log(`[MediaLoading] Loaded media for ${node.name}`);
+        store.updateRealNode(nodeId, updatedData);
+        console.log(`[MediaLoading] Loaded media for ${node.name}`);
+      }
+    }, 0);
   }
 
   /**
