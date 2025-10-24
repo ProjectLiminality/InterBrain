@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DreamNode } from '../../types/dreamnode';
-import { getAudioStreamingService } from './services/audio-streaming-service';
-
-interface Conversation {
-	audioPath: string;
-	audioDataUrl: string; // Base64 data URL for playback
-	transcriptPath: string;
-	date: Date;
-	title: string;
-}
+import { getConversationsService, type Conversation } from '../conversational-copilot/services/conversations-service';
+import { useInterBrainStore } from '../../store/interbrain-store';
 
 interface ConversationsSectionProps {
 	dreamerNode: DreamNode;
@@ -26,112 +19,48 @@ export const ConversationsSection: React.FC<ConversationsSectionProps> = ({
 	vaultPath: _vaultPath
 }) => {
 	const [conversations, setConversations] = useState<Conversation[]>([]);
+	const [isLoadingConversations, setIsLoadingConversations] = useState(false);
 	const [expandedTranscripts, setExpandedTranscripts] = useState<Set<string>>(new Set());
 	const [transcriptContents, setTranscriptContents] = useState<Map<string, string>>(new Map());
 
-	// Load conversations on mount
+	// Subscribe to store for lazy loading trigger
+	const spatialLayout = useInterBrainStore(state => state.spatialLayout);
+	const selectedNode = useInterBrainStore(state => state.selectedNode);
+
+	// Lazy-load conversations only when node is selected in liminal-web mode
 	useEffect(() => {
-		loadConversations();
-	}, [dreamerNode.id]);
+		const loadConversations = async () => {
+			// Only load if:
+			// 1. In liminal-web layout
+			// 2. This node is selected
+			// 3. Haven't loaded yet
+			const isNodeSelected = spatialLayout === 'liminal-web' && selectedNode?.id === dreamerNode?.id;
 
-	const loadConversations = async () => {
-		const fs = require('fs').promises;
-		const path = require('path');
-
-		console.log(`🎵 [Conversations] Loading conversations for ${dreamerNode.name}`);
-		console.log(`🎵 [Conversations] repoPath: ${dreamerNode.repoPath}`);
-
-		// Get vault path from DreamSong props (passed from parent)
-		// If not available, try to get it from the global window object
-		const vaultBasePath = (window as any).app?.vault?.adapter?.basePath;
-		if (!vaultBasePath) {
-			console.error(`❌ [Conversations] Cannot get vault base path`);
-			return;
-		}
-
-		try {
-			// Use absolute path
-			const absoluteRepoPath = path.join(vaultBasePath, dreamerNode.repoPath);
-			const conversationsDir = path.join(absoluteRepoPath, 'conversations');
-			console.log(`🎵 [Conversations] Looking for directory: ${conversationsDir}`);
-
-			try {
-				await fs.access(conversationsDir);
-				console.log(`✅ [Conversations] Directory exists`);
-			} catch (error) {
-				// No conversations directory
-				console.warn(`⚠️ [Conversations] Directory not found:`, error);
+			if (!isNodeSelected) {
 				return;
 			}
 
-			// Read all files in conversations directory
-			const files = await fs.readdir(conversationsDir);
-			console.log(`📁 [Conversations] Found ${files.length} files:`, files);
-
-			// Find audio files
-			const audioFiles = files.filter((f: string) => f.endsWith('.mp3') || f.endsWith('.wav'));
-			console.log(`🎵 [Conversations] Found ${audioFiles.length} audio files:`, audioFiles);
-
-			// Build conversation objects
-			const convos: Conversation[] = [];
-			const audioStreamingService = getAudioStreamingService();
-
-			for (const audioFile of audioFiles) {
-				// Extract date from filename: conversation-2025-10-23-14-30.mp3
-				const match = audioFile.match(/conversation-(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})/);
-				if (match) {
-					const [, year, month, day, hour, minute] = match;
-					const date = new Date(
-						parseInt(year),
-						parseInt(month) - 1,
-						parseInt(day),
-						parseInt(hour),
-						parseInt(minute)
-					);
-
-					// Find matching transcript in conversations/ directory
-					const transcriptName = `transcript-${year}-${month}-${day}-${hour}-${minute}.md`;
-					const transcriptPath = path.join(conversationsDir, transcriptName);
-
-					// Check if transcript exists
-					let hasTranscript = false;
-					try {
-						await fs.access(transcriptPath);
-						hasTranscript = true;
-					} catch {
-						// Transcript not found
-					}
-
-					// Load audio file as base64 data URL via service
-					const audioFilePath = path.join(conversationsDir, audioFile);
-					let audioDataUrl = '';
-					try {
-						audioDataUrl = await audioStreamingService.loadAudioAsDataUrl(audioFilePath);
-					} catch (error) {
-						console.error(`Failed to load audio file ${audioFile}:`, error);
-					}
-
-					convos.push({
-						audioPath: audioFilePath,
-						audioDataUrl,
-						transcriptPath: hasTranscript ? transcriptPath : '',
-						date,
-						title: date.toLocaleString('en-US', {
-							dateStyle: 'medium',
-							timeStyle: 'short'
-						})
-					});
-				}
+			// Skip if already loaded or loading
+			if (conversations.length > 0 || isLoadingConversations) {
+				return;
 			}
 
-			// Sort by date (newest first)
-			convos.sort((a, b) => b.date.getTime() - a.date.getTime());
+			setIsLoadingConversations(true);
 
-			setConversations(convos);
-		} catch (error) {
-			console.error('Failed to load conversations:', error);
-		}
-	};
+			try {
+				const conversationsService = getConversationsService();
+				const loadedConversations = await conversationsService.loadConversations(dreamerNode);
+				setConversations(loadedConversations);
+			} catch (error) {
+				console.error('❌ [Conversations] Failed to load:', error);
+				setConversations([]);
+			} finally {
+				setIsLoadingConversations(false);
+			}
+		};
+
+		loadConversations();
+	}, [dreamerNode.id, spatialLayout, selectedNode?.id, conversations.length, isLoadingConversations]);
 
 	const toggleTranscript = async (audioPath: string, transcriptPath: string) => {
 		const newExpanded = new Set(expandedTranscripts);
@@ -145,18 +74,9 @@ export const ConversationsSection: React.FC<ConversationsSectionProps> = ({
 
 			if (!transcriptContents.has(audioPath) && transcriptPath) {
 				try {
-					const fs = require('fs').promises;
-					const content = await fs.readFile(transcriptPath, 'utf-8');
-
-					// Extract conversation text (skip metadata header)
-					const lines = content.split('\n');
-					const separatorIndex = lines.findIndex((line: string) => line === '---');
-					const conversationText = lines
-						.slice(separatorIndex + 1)
-						.join('\n')
-						.trim();
-
-					setTranscriptContents(new Map(transcriptContents).set(audioPath, conversationText));
+					const conversationsService = getConversationsService();
+					const content = await conversationsService.loadTranscript(transcriptPath);
+					setTranscriptContents(new Map(transcriptContents).set(audioPath, content));
 				} catch (error) {
 					console.error('Failed to load transcript:', error);
 					setTranscriptContents(new Map(transcriptContents).set(audioPath, 'Failed to load transcript'));
@@ -166,6 +86,16 @@ export const ConversationsSection: React.FC<ConversationsSectionProps> = ({
 
 		setExpandedTranscripts(newExpanded);
 	};
+
+	if (isLoadingConversations) {
+		return (
+			<div className="conversations-section" style={{ padding: '2rem', textAlign: 'center' }}>
+				<p style={{ color: 'var(--text-muted)', fontSize: '0.9em' }}>
+					Loading conversations...
+				</p>
+			</div>
+		);
+	}
 
 	if (conversations.length === 0) {
 		return (

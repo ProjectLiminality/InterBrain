@@ -61,10 +61,24 @@ export interface PerspectiveService {
 export class PerspectiveServiceImpl implements PerspectiveService {
 	private plugin: InterBrainPlugin;
 	private vaultService: VaultService;
+	private cache: Map<string, Perspective[]> = new Map();
 
 	constructor(plugin: InterBrainPlugin) {
 		this.plugin = plugin;
 		this.vaultService = new VaultService(plugin.app.vault, plugin.app);
+	}
+
+	/**
+	 * Clear cache for a specific node or all nodes
+	 */
+	clearCache(nodeId?: string): void {
+		if (nodeId) {
+			this.cache.delete(nodeId);
+			console.log(`[Perspective] Cleared cache for node: ${nodeId}`);
+		} else {
+			this.cache.clear();
+			console.log('[Perspective] Cleared entire cache');
+		}
 	}
 
 	async addPerspective(
@@ -106,6 +120,9 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 				'utf-8'
 			);
 
+			// Invalidate cache for this node
+			this.clearCache(dreamNode.id);
+
 			console.log(`✅ [Perspective] Added perspective to ${dreamNode.name}: ${newPerspective.uuid}`);
 
 		} catch (error) {
@@ -115,6 +132,12 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 	}
 
 	async loadPerspectives(dreamNode: DreamNode): Promise<Perspective[]> {
+		// Check cache first
+		if (this.cache.has(dreamNode.id)) {
+			console.log(`[Perspective] Cache hit for ${dreamNode.name}`);
+			return this.cache.get(dreamNode.id)!;
+		}
+
 		const path = require('path');
 		const fs = require('fs').promises;
 
@@ -126,9 +149,21 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 		try {
 			const content = await fs.readFile(perspectivesPath, 'utf-8');
 			const perspectivesFile: PerspectivesFile = JSON.parse(content);
-			return perspectivesFile.perspectives || [];
-		} catch {
-			// File doesn't exist or is invalid
+			const perspectives = perspectivesFile.perspectives || [];
+
+			// Cache the result
+			this.cache.set(dreamNode.id, perspectives);
+			console.log(`[Perspective] Loaded and cached ${perspectives.length} perspectives for ${dreamNode.name}`);
+
+			return perspectives;
+		} catch (error: any) {
+			// Only log if it's not a simple "file doesn't exist" case
+			if (error?.code !== 'ENOENT') {
+				console.warn(`[Perspective] Error loading perspectives for ${dreamNode.name}:`, error);
+			}
+
+			// Cache empty result to avoid repeated file checks
+			this.cache.set(dreamNode.id, []);
 			return [];
 		}
 	}

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
 import { MediaFile, DreamNode } from '../../types/dreamnode';
-import { Perspective } from '../conversational-copilot/services/perspective-service';
+import { Perspective, getPerspectiveService } from '../conversational-copilot/services/perspective-service';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
 import { PerspectivesSection } from './PerspectivesSection';
 import { ConversationsSection } from './ConversationsSection';
 import { ReadmeSection } from './ReadmeSection';
+import { useInterBrainStore } from '../../store/interbrain-store';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -51,52 +52,50 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
   const [perspectives, setPerspectives] = useState<Perspective[]>([]);
+  const [isLoadingPerspectives, setIsLoadingPerspectives] = useState(false);
 
   // Check node type
   const isDreamerNode = dreamNode?.type === 'dreamer';
 
-  // Load perspectives for dream nodes
+  // Subscribe to store for lazy loading trigger
+  const spatialLayout = useInterBrainStore(state => state.spatialLayout);
+  const selectedNode = useInterBrainStore(state => state.selectedNode);
+
+  // Lazy-load perspectives only when node is selected in liminal-web mode
   useEffect(() => {
     const loadPerspectives = async () => {
-      console.log(`🎵 [Perspectives] Loading for node:`, dreamNode?.name);
-      console.log(`🎵 [Perspectives] isDreamerNode: ${isDreamerNode}, vaultPath: ${vaultPath}`);
+      // Only load if:
+      // 1. Not a dreamer node
+      // 2. In liminal-web layout
+      // 3. This node is selected
+      // 4. Haven't loaded yet
+      const isNodeSelected = spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode?.id;
 
-      if (!dreamNode || isDreamerNode || !vaultPath) {
-        console.log(`⚠️ [Perspectives] Skipping - missing requirements`);
+      if (!dreamNode || isDreamerNode || !isNodeSelected) {
         return;
       }
 
+      // Skip if already loaded or loading
+      if (perspectives.length > 0 || isLoadingPerspectives) {
+        return;
+      }
+
+      setIsLoadingPerspectives(true);
+
       try {
-        const fs = require('fs').promises;
-        const path = require('path');
-        const absoluteRepoPath = path.join(vaultPath, dreamNode.repoPath);
-        const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
-
-        console.log(`🎵 [Perspectives] Looking for: ${perspectivesPath}`);
-
-        try {
-          const content = await fs.readFile(perspectivesPath, 'utf-8');
-          const perspectivesFile = JSON.parse(content);
-          console.log(`✅ [Perspectives] Loaded ${perspectivesFile.perspectives?.length || 0} perspectives`);
-          setPerspectives(perspectivesFile.perspectives || []);
-        } catch (error: any) {
-          // Perspectives file not present yet - this is normal for DreamNodes without conversations
-          if (error?.code === 'ENOENT') {
-            console.log(`[Perspectives] No perspectives file yet for ${dreamNode.name}`);
-          } else {
-            // Actual error (parse error, permissions, etc.)
-            console.warn(`⚠️ [Perspectives] Error loading perspectives:`, error);
-          }
-          setPerspectives([]);
-        }
+        const perspectiveService = getPerspectiveService();
+        const loadedPerspectives = await perspectiveService.loadPerspectives(dreamNode);
+        setPerspectives(loadedPerspectives);
       } catch (error) {
         console.error('❌ [Perspectives] Failed to load:', error);
         setPerspectives([]);
+      } finally {
+        setIsLoadingPerspectives(false);
       }
     };
 
     loadPerspectives();
-  }, [dreamNode?.id, isDreamerNode, vaultPath]);
+  }, [dreamNode?.id, isDreamerNode, spatialLayout, selectedNode?.id, perspectives.length, isLoadingPerspectives]);
 
   // Helper function to render DreamTalk media
   const renderDreamTalkMedia = (): React.ReactNode => {
@@ -276,7 +275,14 @@ export const DreamSong: React.FC<DreamSongProps> = ({
           )}
 
           {/* Perspectives Section for dream nodes */}
-          {perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
+          {isLoadingPerspectives && (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9em' }}>
+                Loading perspectives...
+              </p>
+            </div>
+          )}
+          {!isLoadingPerspectives && perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
             <PerspectivesSection
               perspectives={perspectives}
               vaultPath={vaultPath}

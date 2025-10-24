@@ -45,6 +45,7 @@ import { initializeConversationSummaryService } from './features/conversational-
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializeAudioRecordingService } from './features/conversational-copilot/services/audio-recording-service';
 import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
+import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
@@ -96,6 +97,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize perspective service for Songline feature
     initializePerspectiveService(this);
+
+    // Initialize conversations service for Songline feature
+    initializeConversationsService(this);
 
     // Initialize audio streaming service for Songline feature
     initializeAudioStreamingService(this);
