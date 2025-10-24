@@ -63,7 +63,7 @@ export const ActiveVideoCallButton: React.FC = () => {
   // x = 11 × cos(-45°) ≈ 7.78, y = 11 × sin(-45°) ≈ -7.78
   const BUTTON_POSITION: [number, number, number] = [7.78, -7.78, -45];
   const ICON_NAME = 'lucide-flame-kindling';
-  const LABEL = 'Extinguish Flames';
+  const LABEL = 'Extinguish Digital Campfire';
 
   return (
     <group ref={groupRef} position={BUTTON_POSITION}>

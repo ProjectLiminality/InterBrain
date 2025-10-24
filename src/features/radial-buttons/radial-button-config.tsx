@@ -96,7 +96,7 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     // Dynamic label based on copilot mode (active call state)
     getDynamicLabel: (node) => {
       const store = useInterBrainStore.getState();
-      return store.copilotMode.isActive ? 'Extinguish Flames' : 'Initiate Digital Campfire';
+      return store.copilotMode.isActive ? 'Extinguish Digital Campfire' : 'Initiate Digital Campfire';
     },
     // Dynamic command based on copilot mode (active call state)
     getDynamicCommand: (node) => {
