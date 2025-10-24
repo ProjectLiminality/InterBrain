@@ -22,6 +22,11 @@ export class MediaLoadingService {
   private maxConcurrentLoads = 3;
   private maxSecondDegreeNodes = 50; // Cap 2nd degree to prevent loading entire graph
 
+  // Viewport-based loading (constellation mode)
+  private viewportQueue: Set<string> = new Set();
+  private viewportBatchTimer: ReturnType<typeof setTimeout> | null = null;
+  private viewportBatchDelay = 2000; // 2 seconds debounce
+
   /**
    * Load media for a node and its 2-degree neighborhood
    */
@@ -237,12 +242,67 @@ export class MediaLoadingService {
   }
 
   /**
+   * Request viewport-based media loading (constellation mode)
+   * Debounced batch processing - called from DreamNode3D useFrame
+   */
+  requestViewportLoad(nodeId: string): void {
+    // Skip if already loaded or in queue
+    if (this.mediaCache.has(nodeId)) {
+      return;
+    }
+
+    // Add to viewport queue
+    this.viewportQueue.add(nodeId);
+
+    // Debounce batch processing
+    if (this.viewportBatchTimer) {
+      clearTimeout(this.viewportBatchTimer);
+    }
+
+    this.viewportBatchTimer = setTimeout(() => {
+      this.processViewportQueue();
+    }, this.viewportBatchDelay);
+  }
+
+  /**
+   * Process queued viewport loads as low-priority background tasks
+   */
+  private async processViewportQueue(): Promise<void> {
+    if (this.viewportQueue.size === 0) return;
+
+    const nodesToLoad = Array.from(this.viewportQueue);
+    this.viewportQueue.clear();
+
+    console.log(`[MediaLoading] Processing ${nodesToLoad.length} viewport nodes`);
+
+    // Add to loading queue with low priority (priority 10)
+    const viewportTasks: MediaLoadTask[] = nodesToLoad.map(nodeId => ({
+      nodeId,
+      degree: 10, // Very low priority (after 2nd degree)
+      priority: 10
+    }));
+
+    // Append to existing queue (after relationship-based loads)
+    this.loadingQueue.push(...viewportTasks);
+
+    // Trigger queue processing if not already running
+    if (!this.isProcessingQueue) {
+      this.processQueue();
+    }
+  }
+
+  /**
    * Clear media cache (call on vault rescan)
    */
   clearCache(): void {
     console.log('[MediaLoading] Clearing cache');
     this.mediaCache.clear();
     this.loadingQueue = [];
+    this.viewportQueue.clear();
+    if (this.viewportBatchTimer) {
+      clearTimeout(this.viewportBatchTimer);
+      this.viewportBatchTimer = null;
+    }
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;

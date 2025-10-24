@@ -504,20 +504,36 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (positionMode === 'constellation' && enableDynamicScaling && groupRef.current) {
       const worldPosition = new Vector3();
       groupRef.current.getWorldPosition(worldPosition);
-      
+
       const anchorGroup = groupRef.current.parent;
       const anchorVector = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (anchorGroup) {
         anchorGroup.localToWorld(anchorVector);
       }
-      
+
       const { radialOffset: newRadialOffset } = calculateDynamicScaling(
         anchorVector,
         DEFAULT_SCALING_CONFIG
       );
-      
+
       if (radialOffset !== newRadialOffset) {
         setRadialOffset(newRadialOffset);
+      }
+
+      // Viewport-based lazy loading: Request media for nodes in scaling zone
+      const distance3D = anchorVector.distanceTo(DEFAULT_SCALING_CONFIG.intersectionPoint);
+      if (distance3D < DEFAULT_SCALING_CONFIG.outerRadius) {
+        // Node is in visible scaling zone - request lazy load
+        import('../services/media-loading-service').then(({ getMediaLoadingService }) => {
+          try {
+            const mediaLoadingService = getMediaLoadingService();
+            mediaLoadingService.requestViewportLoad(dreamNode.id);
+          } catch (error) {
+            // Service not initialized yet - skip
+          }
+        }).catch(() => {
+          // Failed to import - skip
+        });
       }
     } 
     // Active mode transitions
