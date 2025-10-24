@@ -72,6 +72,7 @@ export default function EditModeOverlay() {
       if (editMode.editingNode.type === 'dreamer') {
         updates.email = editMode.editingNode.email;
         updates.phone = editMode.editingNode.phone;
+        updates.radicleId = editMode.editingNode.radicleId;
       }
 
       await dreamNodeService.update(editMode.editingNode.id, updates);

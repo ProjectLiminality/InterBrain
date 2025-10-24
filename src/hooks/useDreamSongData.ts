@@ -8,15 +8,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TFile } from 'obsidian';
 import { DreamSongBlock } from '../types/dreamsong';
+import { DreamNode } from '../types/dreamnode';
 import { CanvasParserService } from '../services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
 import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../services/dreamsong';
 import { serviceManager } from '../services/service-manager';
-import { ReadmeParserService } from '../services/readme-parser-service';
 
 interface UseDreamSongDataOptions {
   canvasParser: CanvasParserService;
   vaultService: VaultService;
+  dreamNode?: DreamNode; // Optional: for checking Songline features (perspectives/conversations)
 }
 
 interface DreamSongDataResult {
@@ -25,7 +26,6 @@ interface DreamSongDataResult {
   isLoading: boolean;
   error: string | null;
   hash: string | null;
-  isReadmeFallback: boolean; // True when displaying README instead of canvas
 }
 
 /**
@@ -40,19 +40,17 @@ export function useDreamSongData(
   options: UseDreamSongDataOptions,
   sourceDreamNodeId?: string
 ): DreamSongDataResult {
-  const { canvasParser, vaultService } = options;
-
-  // Create README parser service
-  const readmeParser = useMemo(() => {
-    return new ReadmeParserService(vaultService);
-  }, [vaultService]);
+  const { canvasParser, vaultService, dreamNode } = options;
 
   // Minimal state - only what's necessary for the UI
   const [hash, setHash] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<DreamSongBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isReadmeFallback, setIsReadmeFallback] = useState(false);
+
+  // Songline feature detection
+  const [hasPerspectives, setHasPerspectives] = useState(false);
+  const [hasConversations, setHasConversations] = useState(false);
 
   // Memoized parsing function to prevent unnecessary re-runs
   const parseCanvas = useMemo(() => {
@@ -74,7 +72,7 @@ export function useDreamSongData(
           const newHash = generateCanvasStructureHash(canvasData);
 
           // Compare with current hash - only update if changed
-          if (hashesEqual(hash, newHash) && !isReadmeFallback) {
+          if (hashesEqual(hash, newHash)) {
             console.log(`⚡ DreamSong hash unchanged: ${newHash}`);
             setIsLoading(false);
             return;
@@ -85,22 +83,11 @@ export function useDreamSongData(
 
           setBlocks(result.blocks);
           setHash(result.hash);
-          setIsReadmeFallback(false);
 
         } else {
-          // No canvas - try README fallback
-          const readmeBlocks = await readmeParser.parseReadmeToBlocks(dreamNodePath, sourceDreamNodeId);
-
-          if (readmeBlocks.length > 0) {
-            setBlocks(readmeBlocks);
-            setHash(`readme-${dreamNodePath}`); // Simple hash for README
-            setIsReadmeFallback(true);
-          } else {
-            // No canvas and no README
-            setBlocks([]);
-            setHash(null);
-            setIsReadmeFallback(false);
-          }
+          // No canvas - empty blocks (README now handled as separate section in UI)
+          setBlocks([]);
+          setHash(null);
         }
 
       } catch (err) {
@@ -108,17 +95,79 @@ export function useDreamSongData(
         setError(err instanceof Error ? err.message : 'Unknown parsing error');
         setBlocks([]);
         setHash(null);
-        setIsReadmeFallback(false);
       } finally {
         setIsLoading(false);
       }
     };
-  }, [canvasPath, dreamNodePath, canvasParser, vaultService, readmeParser, hash, isReadmeFallback]);
+  }, [canvasPath, dreamNodePath, canvasParser, vaultService, hash]);
 
   // Effect for parsing when dependencies change
   useEffect(() => {
     parseCanvas();
   }, [parseCanvas]);
+
+  // Effect for checking Songline features (perspectives/conversations)
+  useEffect(() => {
+    if (!dreamNode || !vaultService) {
+      setHasPerspectives(false);
+      setHasConversations(false);
+      return;
+    }
+
+    const checkSonglineFeatures = async () => {
+      const fs = require('fs').promises;
+      const path = require('path');
+
+      try {
+        // Get vault base path
+        const vaultBasePath = vaultService.getVaultPath();
+        if (!vaultBasePath) {
+          console.warn('[Songline] Vault path not available');
+          setHasPerspectives(false);
+          setHasConversations(false);
+          return;
+        }
+        const absoluteRepoPath = path.join(vaultBasePath, dreamNode.repoPath);
+
+        // Check for perspectives (DreamNodes only)
+        if (dreamNode.type !== 'dreamer') {
+          try {
+            const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
+            const content = await fs.readFile(perspectivesPath, 'utf-8');
+            const perspectivesFile = JSON.parse(content);
+            const hasPerspectivesContent = perspectivesFile.perspectives?.length > 0;
+            setHasPerspectives(hasPerspectivesContent);
+          } catch {
+            setHasPerspectives(false);
+          }
+        } else {
+          setHasPerspectives(false);
+        }
+
+        // Check for conversations (DreamerNodes only)
+        if (dreamNode.type === 'dreamer') {
+          try {
+            const conversationsDir = path.join(absoluteRepoPath, 'conversations');
+            await fs.access(conversationsDir);
+            const files = await fs.readdir(conversationsDir);
+            const audioFiles = files.filter((f: string) => f.endsWith('.mp3') || f.endsWith('.wav'));
+            const hasConversationsContent = audioFiles.length > 0;
+            setHasConversations(hasConversationsContent);
+          } catch {
+            setHasConversations(false);
+          }
+        } else {
+          setHasConversations(false);
+        }
+      } catch (error) {
+        console.error('Error checking Songline features:', error);
+        setHasPerspectives(false);
+        setHasConversations(false);
+      }
+    };
+
+    checkSonglineFeatures();
+  }, [dreamNode, vaultService]);
 
   // Effect for real-time file change detection
   useEffect(() => {
@@ -132,10 +181,8 @@ export function useDreamSongData(
 
     // Handler for file modification events
     const handleFileChange = (file: TFile) => {
-      // Check if the changed file is our canvas or README
-      const readmePath = `${dreamNodePath}/README.md`;
-
-      if (file.path === canvasPath || file.path === readmePath) {
+      // Check if the changed file is our canvas
+      if (file.path === canvasPath) {
         // Use a small delay to ensure file write is complete
         globalThis.setTimeout(() => {
           parseCanvas();
@@ -158,16 +205,18 @@ export function useDreamSongData(
     };
   }, [canvasPath, parseCanvas]);
 
-  // Derived state
-  const hasContent = blocks.length > 0;
+  // Derived state - DreamSong should show if ANY of these conditions are met:
+  // 1. Canvas/README has content (blocks.length > 0)
+  // 2. DreamNode has perspectives
+  // 3. DreamerNode has conversations
+  const hasContent = blocks.length > 0 || hasPerspectives || hasConversations;
 
   return {
     blocks,
     hasContent,
     isLoading,
     error,
-    hash,
-    isReadmeFallback
+    hash
   };
 }
 

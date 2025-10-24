@@ -1,40 +1,26 @@
 #!/bin/sh
 #
-# DreamNode Post-Commit Hook  
+# DreamNode Post-Commit Hook
 # Part of InterBrain DreamNode Template System
 #
-# PURPOSE: Coherence Beacon Relationship Tracking
+# STATUS: Placeholder - Currently Unused
 #
-# FUTURE FUNCTIONALITY (Placeholder Implementation):
-# - Detects when a commit includes submodule changes
-# - Updates bidirectional relationship tracking in UDD files
-# - When DreamNode A imports DreamNode B as submodule:
-#   * DreamNode A knows about the submodule (git handles this)
-#   * DreamNode B gets updated to know it's used as submodule in A
-# - Enables peer-to-peer discovery via Radicle network
-# - Maintains coherent relationship graph across distributed network
+# FUTURE PURPOSE: Generic Coherence Beacon Relationship Tracking
+# This hook could be activated in the future to handle relationship tracking
+# for commits that happen OUTSIDE of the "Sync Canvas Submodules" command.
 #
-# This hook fires AFTER each commit to update relationship metadata
-# based on what was actually committed.
+# CURRENT IMPLEMENTATION:
+# Bidirectional supermodule/submodule tracking is handled directly in the
+# SubmoduleManagerService.syncCanvasSubmodules() method. This provides:
+# - Immediate feedback during sync operations
+# - Simpler debugging (all logic in one place)
+# - Better error handling and logging
 #
-# CURRENT STATUS: Placeholder - no-op to prevent git operation failures  
-# IMPLEMENTATION: Deferred until coherence beacon features
+# POTENTIAL FUTURE USE:
+# If we need to track relationships from manual git operations or
+# other workflows, the logic from hook-helper.js can be reactivated here.
+#
+# For now, this hook is a no-op placeholder.
 
-echo "DreamNode Post-Commit Hook: Coherence beacon relationship tracking (placeholder)"
-
-# Get current commit hash
-COMMIT_HASH=$(git rev-parse HEAD)
-echo "Processing commit: $COMMIT_HASH"
-
-# Future implementation will:
-# 1. Check if commit includes .gitmodules changes
-# 2. Identify newly added submodules
-# 3. For each new submodule:
-#    - Get submodule's UUID from its .udd file
-#    - Update this node's .udd submodules array
-#    - Update submodule's .udd supermodules array  
-#    - Create commit in submodule repo with relationship update
-# 4. Propagate changes via Radicle network
-
-# For now, allow commit to complete normally
+# Silently exit - no logging needed for placeholder
 exit 0

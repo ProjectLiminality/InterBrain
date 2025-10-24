@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { VaultService } from './vault-service';
 import { CanvasParserService, CanvasAnalysis } from './canvas-parser-service';
+import { RadicleService } from './radicle-service';
 import { App } from 'obsidian';
 
 // Mock the global require for Node.js modules used by SubmoduleManagerService
@@ -37,6 +38,7 @@ describe('SubmoduleManagerService', () => {
   let mockApp: App;
   let mockVaultService: VaultService;
   let mockCanvasParser: CanvasParserService;
+  let mockRadicleService: RadicleService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -71,10 +73,20 @@ describe('SubmoduleManagerService', () => {
       generateAnalysisReport: vi.fn()
     } as unknown as CanvasParserService;
 
+    // Mock RadicleService
+    mockRadicleService = {
+      getRadicleId: vi.fn().mockResolvedValue(null),
+      init: vi.fn().mockResolvedValue(undefined),
+      isRadicleNodeRunning: vi.fn().mockResolvedValue(false),
+      startRadicleNode: vi.fn().mockResolvedValue(undefined),
+      stopRadicleNode: vi.fn().mockResolvedValue(undefined)
+    } as unknown as RadicleService;
+
     submoduleManager = new SubmoduleManagerService(
       mockApp,
       mockVaultService,
-      mockCanvasParser
+      mockCanvasParser,
+      mockRadicleService
     );
   });
 
@@ -171,6 +183,7 @@ describe('SubmoduleManagerService', () => {
         canvasPath: 'test/canvas.canvas',
         dreamNodePath: 'test',
         submodulesImported: [],
+        submodulesRemoved: [],
         pathsUpdated: new Map(),
         success: true
       };
@@ -180,6 +193,8 @@ describe('SubmoduleManagerService', () => {
       expect(report).toContain('Submodule Sync Report: test/canvas.canvas');
       expect(report).toContain('DreamNode: test');
       expect(report).toContain('Status: SUCCESS');
+      expect(report).toContain('Submodules Added: 0');
+      expect(report).toContain('Submodules Removed: 0');
     });
 
     it('should generate failure report', () => {
@@ -187,6 +202,7 @@ describe('SubmoduleManagerService', () => {
         canvasPath: 'test/canvas.canvas',
         dreamNodePath: 'test',
         submodulesImported: [],
+        submodulesRemoved: [],
         pathsUpdated: new Map(),
         error: 'Canvas analysis failed',
         success: false

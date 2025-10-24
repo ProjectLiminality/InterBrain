@@ -19,7 +19,6 @@ import { buildRelationshipGraph } from '../utils/relationship-graph';
 import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from './layouts/RingLayout';
 import { computeConstellationLayout, createFallbackLayout } from './constellation/ConstellationLayout';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
@@ -69,6 +68,12 @@ export interface SpatialOrchestratorRef {
 
   /** Apply constellation layout based on relationship graph */
   applyConstellationLayout: () => Promise<void>;
+
+  /** Hide related nodes in liminal-web mode (move to constellation) */
+  hideRelatedNodesInLiminalWeb: () => void;
+
+  /** Show related nodes in liminal-web mode (move back to ring positions) */
+  showRelatedNodesInLiminalWeb: () => void;
 }
 
 interface SpatialOrchestratorProps {
@@ -145,34 +150,40 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       try {
         // Build relationship graph from current nodes
         const relationshipGraph = buildRelationshipGraph(dreamNodes);
-        
+
         // Calculate ring layout positions (in local sphere space)
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
-        
+
+        // Defensive check - ensure all arrays exist
+        if (!positions || !positions.ring1Nodes || !positions.ring2Nodes || !positions.ring3Nodes) {
+          console.error('SpatialOrchestrator: Invalid positions returned from calculateRingLayoutPositions', positions);
+          throw new Error('Failed to calculate ring layout positions');
+        }
+
         // Track node roles for proper constellation return
         liminalWebRoles.current = {
           centerNodeId: positions.centerNode?.nodeId || null,
           ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
           ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
           ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes)
+          sphereNodeIds: new Set(positions.sphereNodes || [])
         };
-        
+
         // Apply world-space position correction based on current sphere rotation
         if (dreamWorldRef.current) {
           const sphereRotation = dreamWorldRef.current.quaternion.clone();
-          
+
           // We need to apply the INVERSE rotation to counteract the sphere's rotation
           // This makes the liminal web appear in camera-relative positions regardless of sphere rotation
           const inverseRotation = sphereRotation.invert();
-          
+
           // Transform center node position to world space (if exists)
           if (positions.centerNode) {
             const centerPos = new Vector3(...positions.centerNode.position);
             centerPos.applyQuaternion(inverseRotation);
             positions.centerNode.position = [centerPos.x, centerPos.y, centerPos.z];
           }
-          
+
           // Transform all ring node positions to world space
           [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
             const originalPos = new Vector3(...node.position);
@@ -1129,21 +1140,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Store the positions in the store for persistence
         store.setConstellationPositions(completePositions);
 
-        // Update positions via service layer (like redistribute command)
-        const service = serviceManager.getActive();
-        let updatedCount = 0;
+        // Update node positions in single batch transaction (100x faster than sequential updates)
+        store.batchUpdateNodePositions(completePositions);
 
-        for (const [nodeId, position] of completePositions) {
-          try {
-            await service.update(nodeId, { position });
-            updatedCount++;
-            console.log(`Updated position for node ${nodeId}: [${position.join(', ')}]`);
-          } catch (error) {
-            console.warn(`Failed to update position for node ${nodeId}:`, error);
-          }
-        }
-
-        console.log(`✅ [SpatialOrchestrator] Constellation layout applied to ${updatedCount} nodes via service layer`);
+        console.log(`✅ [SpatialOrchestrator] Constellation layout applied to ${completePositions.size} nodes via batch update`);
         console.log(`📊 [SpatialOrchestrator] Layout stats:`, {
           clusters: layoutResult.stats.totalClusters,
           nodes: layoutResult.stats.totalNodes,
@@ -1153,6 +1153,87 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
       } catch (error) {
         console.error('❌ [SpatialOrchestrator] Failed to apply constellation layout:', error);
+      }
+    },
+
+    hideRelatedNodesInLiminalWeb: () => {
+      try {
+        console.log('🎯 [Orchestrator-LiminalWeb] Hiding related nodes (moving to constellation)');
+
+        // Get all ring nodes from stored roles
+        const allRingNodeIds = [
+          ...liminalWebRoles.current.ring1NodeIds,
+          ...liminalWebRoles.current.ring2NodeIds,
+          ...liminalWebRoles.current.ring3NodeIds
+        ];
+
+        console.log(`🌐 [Orchestrator-LiminalWeb] Moving ${allRingNodeIds.length} ring nodes to constellation`);
+
+        // Match button animation duration (500ms) for parallel motion
+        const buttonAnimationDuration = 500;
+
+        // Move all ring nodes to constellation surface
+        allRingNodeIds.forEach(nodeId => {
+          const nodeRef = nodeRefs.current.get(nodeId);
+          if (nodeRef?.current) {
+            // Use easeInQuart for quick departure, but match button timing
+            nodeRef.current.returnToConstellation(buttonAnimationDuration, 'easeInQuart');
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ [Orchestrator-LiminalWeb] Error hiding related nodes:', error);
+      }
+    },
+
+    showRelatedNodesInLiminalWeb: () => {
+      try {
+        console.log('🎯 [Orchestrator-LiminalWeb] Showing related nodes (moving back to ring positions)');
+
+        // Need to recalculate positions to get them back to their ring spots
+        if (!liminalWebRoles.current.centerNodeId) {
+          console.warn('⚠️ [Orchestrator-LiminalWeb] No center node found in roles');
+          return;
+        }
+
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const positions = calculateRingLayoutPositions(
+          liminalWebRoles.current.centerNodeId,
+          relationshipGraph,
+          DEFAULT_RING_CONFIG
+        );
+
+        // Apply world-space position correction
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+
+          // Transform all ring node positions to world space
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+
+        // Match button animation duration (500ms) for parallel motion
+        const buttonAnimationDuration = 500;
+
+        // Move ring nodes back to their positions
+        const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+        console.log(`🎪 [Orchestrator-LiminalWeb] Moving ${allRingNodes.length} nodes back to ring positions`);
+
+        allRingNodes.forEach(({ nodeId, position }) => {
+          const nodeRef = nodeRefs.current.get(nodeId);
+          if (nodeRef?.current) {
+            nodeRef.current.setActiveState(true);
+            // Use easeOutQuart for smooth arrival, but match button timing
+            nodeRef.current.moveToPosition(position, buttonAnimationDuration, 'easeOutQuart');
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ [Orchestrator-LiminalWeb] Error showing related nodes:', error);
       }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);

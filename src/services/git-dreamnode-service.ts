@@ -4,6 +4,7 @@ import { Plugin } from 'obsidian';
 import { indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
+import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 
 // Access Node.js modules directly in Electron context
  
@@ -290,30 +291,45 @@ export class GitDreamNodeService {
       // Check each directory
       for (const dir of directories) {
         const dirPath = path.join(this.vaultPath, dir.name);
-        
-        // Check if it's a valid DreamNode (has .git and .udd)
-        const isValid = await this.isValidDreamNode(dirPath);
-        if (!isValid) continue;
-        
-        // Read UDD file
-        const uddPath = path.join(dirPath, '.udd');
-        const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
-        const udd: UDDFile = JSON.parse(uddContent);
-        
-        foundNodeIds.add(udd.uuid);
-        
-        // Check if node exists in store
-        const store = useInterBrainStore.getState();
-        const existingData = store.realNodes.get(udd.uuid);
-        
-        if (!existingData) {
-          // New node - add to store
-          await this.addNodeFromVault(dirPath, udd, dir.name);
-          stats.added++;
-        } else {
-          // Existing node - check for updates
-          const updated = await this.updateNodeFromVault(existingData, dirPath, udd);
-          if (updated) stats.updated++;
+
+        try {
+          // Check if it's a valid DreamNode (has .git and .udd)
+          const isValid = await this.isValidDreamNode(dirPath);
+          if (!isValid) continue;
+
+          // Read UDD file
+          const uddPath = path.join(dirPath, '.udd');
+          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+
+          let udd: UDDFile;
+          try {
+            udd = JSON.parse(uddContent);
+          } catch (parseError) {
+            console.error(`⚠️ [VaultScan] Invalid JSON in ${dir.name}/.udd:`, parseError);
+            console.error(`⚠️ [VaultScan] File content preview:\n${uddContent.substring(0, 500)}`);
+            // Skip this node but continue scanning others
+            continue;
+          }
+
+          foundNodeIds.add(udd.uuid);
+
+          // Check if node exists in store
+          const store = useInterBrainStore.getState();
+          const existingData = store.realNodes.get(udd.uuid);
+
+          if (!existingData) {
+            // New node - add to store
+            await this.addNodeFromVault(dirPath, udd, dir.name);
+            stats.added++;
+          } else {
+            // Existing node - check for updates
+            const updated = await this.updateNodeFromVault(existingData, dirPath, udd, dir.name);
+            if (updated) stats.updated++;
+          }
+        } catch (error) {
+          // Log error for this specific node but continue scanning others
+          console.error(`⚠️ [VaultScan] Error processing ${dir.name}:`, error);
+          continue;
         }
       }
       
@@ -397,7 +413,7 @@ export class GitDreamNodeService {
       const escapedTitle = title.replace(/"/g, '\\"');
       const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
       console.log(`GitDreamNodeService: Git commit result:`, commitResult);
-      
+
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
     } catch (error) {
       console.error('Failed to create git repository:', error);
@@ -504,7 +520,10 @@ export class GitDreamNodeService {
       repoPath: repoName,
       hasUnsavedChanges: false,
       email: udd.email,
-      phone: udd.phone
+      phone: udd.phone,
+      radicleId: udd.radicleId,
+      githubRepoUrl: udd.githubRepoUrl,
+      githubPagesUrl: udd.githubPagesUrl
     };
     
     // Add to store
@@ -527,17 +546,38 @@ export class GitDreamNodeService {
   private async updateNodeFromVault(
     existingData: RealNodeData,
     dirPath: string,
-    udd: UDDFile
+    udd: UDDFile,
+    repoName: string
   ): Promise<boolean> {
     let updated = false;
     const node = { ...existingData.node };
-    
-    // Check metadata changes
-    if (node.name !== udd.title || node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone) {
+
+    // CRITICAL: Sync repoPath with actual directory name (handles Radicle clone renames)
+    if (node.repoPath !== repoName) {
+      console.log(`📁 [GitDreamNodeService] Syncing repoPath: "${node.repoPath}" → "${repoName}"`);
+      node.repoPath = repoName;
+      updated = true;
+    }
+
+    // CRITICAL: Sync display name with .udd title (human-readable)
+    // .udd file is source of truth for display names, NOT the folder name
+    // Folder names are PascalCase for compatibility, but display uses human-readable titles
+    if (node.name !== udd.title) {
+      console.log(`✏️ [GitDreamNodeService] Syncing display name from .udd: "${node.name}" → "${udd.title}"`);
       node.name = udd.title;
+      updated = true;
+    }
+
+    // Check metadata changes (type, contact fields, radicleId, and GitHub URLs - name synced from .udd)
+    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone ||
+        node.radicleId !== udd.radicleId || node.githubRepoUrl !== udd.githubRepoUrl ||
+        node.githubPagesUrl !== udd.githubPagesUrl) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
+      node.radicleId = udd.radicleId;
+      node.githubRepoUrl = udd.githubRepoUrl;
+      node.githubPagesUrl = udd.githubPagesUrl;
       updated = true;
     }
     
@@ -575,8 +615,12 @@ export class GitDreamNodeService {
         fileHash: existingData.fileHash,
         lastSynced: Date.now()
       });
+
+      // Write updated metadata back to .udd file (keeps file system in sync)
+      await this.updateUDDFile(node);
+      console.log(`💾 [GitDreamNodeService] Updated .udd file for ${node.name}`);
     }
-    
+
     return updated;
   }
   
@@ -602,6 +646,19 @@ export class GitDreamNodeService {
       if (node.phone) udd.phone = node.phone;
     }
 
+    // CRITICAL: Preserve radicleId field if it exists
+    if (node.radicleId) {
+      udd.radicleId = node.radicleId;
+    }
+
+    // CRITICAL: Preserve GitHub URLs if they exist
+    if (node.githubRepoUrl) {
+      udd.githubRepoUrl = node.githubRepoUrl;
+    }
+    if (node.githubPagesUrl) {
+      udd.githubPagesUrl = node.githubPagesUrl;
+    }
+
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
   }
   
@@ -617,13 +674,12 @@ export class GitDreamNodeService {
     }
   }
   
+  /**
+   * Sanitize title to PascalCase for folder names
+   * Uses unified sanitization utility for consistency across all layers
+   */
   private sanitizeRepoName(title: string): string {
-    return title
-      .replace(/[^a-zA-Z0-9-_\s]/g, '-') // Allow letters, numbers, hyphens, underscores, and spaces
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
-      .substring(0, 50); // Limit length
+    return sanitizeTitleToPascalCase(title);
   }
   
   private generateRepoName(title: string, _type: string, _nodeId: string): string {
@@ -698,6 +754,17 @@ export class GitDreamNodeService {
   }
   
   private async fileToDataUrl(file: globalThis.File): Promise<string> {
+    // .link files contain JSON metadata and should be read as text, not data URLs
+    if (file.name.toLowerCase().endsWith('.link')) {
+      return new Promise((resolve, reject) => {
+        const reader = new globalThis.FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    // Regular media files get converted to data URLs
     return new Promise((resolve, reject) => {
       const reader = new globalThis.FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -707,6 +774,12 @@ export class GitDreamNodeService {
   }
   
   private async filePathToDataUrl(filePath: string): Promise<string> {
+    // .link files contain JSON metadata and should be read as text, not data URLs
+    if (filePath.toLowerCase().endsWith('.link')) {
+      return await fsPromises.readFile(filePath, 'utf-8');
+    }
+
+    // Regular media files get converted to data URLs
     const buffer = await fsPromises.readFile(filePath);
     const mimeType = this.getMimeType(filePath);
     return `data:${mimeType};base64,${buffer.toString('base64')}`;

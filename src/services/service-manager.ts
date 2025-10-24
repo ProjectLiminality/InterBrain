@@ -8,6 +8,7 @@ import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../utils/url-utils';
+import { RadicleService, RadicleServiceImpl } from './radicle-service';
 
 /**
  * Service interface that both mock and real implementations will follow
@@ -57,15 +58,18 @@ export class ServiceManager {
   private mockService: MockDreamNodeService;
   private realService: GitDreamNodeService | null = null;
   private indexingService: IndexingService;
+  private radicleService: RadicleService;
   private plugin: Plugin | null = null;
   private vaultService: VaultService | null = null;
   private canvasParserService: CanvasParserService | null = null;
   private leafManagerService: LeafManagerService | null = null;
+  private submoduleManagerService: any = null; // SubmoduleManagerService
 
   constructor() {
     this.mockService = mockDreamNodeService;
     this.indexingService = indexingService;
-    
+    this.radicleService = new RadicleServiceImpl();
+
     // Wrap mock service methods to sync with store
     this.wrapMockServiceMethods();
   }
@@ -174,6 +178,7 @@ export class ServiceManager {
     this.vaultService = pluginWithServices.vaultService;
     this.canvasParserService = pluginWithServices.canvasParserService;
     this.leafManagerService = pluginWithServices.leafManagerService;
+    this.submoduleManagerService = (pluginWithServices as any).submoduleManagerService;
     
     
     // Sync with store's data mode
@@ -221,6 +226,13 @@ export class ServiceManager {
    */
   getLeafManagerService() {
     return this.leafManagerService;
+  }
+
+  /**
+   * Get SubmoduleManagerService instance (only available when plugin is initialized)
+   */
+  getSubmoduleManagerService() {
+    return this.submoduleManagerService;
   }
 
   /**
@@ -361,6 +373,13 @@ export class ServiceManager {
    */
   getIndexingService(): IndexingService {
     return this.indexingService;
+  }
+
+  /**
+   * Get the Radicle service
+   */
+  getRadicleService(): RadicleService {
+    return this.radicleService;
   }
   
   /**

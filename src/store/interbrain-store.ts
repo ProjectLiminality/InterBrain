@@ -180,6 +180,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   realNodes: Map<string, RealNodeData>;
   setRealNodes: (nodes: Map<string, RealNodeData>) => void;
   updateRealNode: (id: string, data: RealNodeData) => void;
+  batchUpdateNodePositions: (positions: Map<string, [number, number, number]>) => void;
   deleteRealNode: (id: string) => void;
   
   // Selected DreamNode state
@@ -334,6 +335,16 @@ export interface InterBrainState extends OllamaConfigSlice {
   setConstellationScanning: (scanning: boolean) => void;
   setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
   clearConstellationData: () => void;
+
+  // Radial button UI state (option-key triggered)
+  radialButtonUI: {
+    isActive: boolean;
+    buttonCount: number;
+    optionKeyPressed: boolean; // Track actual hardware key state
+  };
+  setRadialButtonUIActive: (active: boolean) => void;
+  setRadialButtonCount: (count: number) => void;
+  setOptionKeyPressed: (pressed: boolean) => void;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -461,12 +472,31 @@ export const useInterBrainStore = create<InterBrainState>()(
     lastLayoutTimestamp: null
   },
 
+  radialButtonUI: {
+    isActive: false,
+    buttonCount: 6,
+    optionKeyPressed: false
+  },
+
   // Actions
   setDataMode: (mode) => set({ dataMode: mode }),
   setRealNodes: (nodes) => set({ realNodes: nodes }),
   updateRealNode: (id, data) => set(state => {
     const newMap = new Map(state.realNodes);
     newMap.set(id, data);
+    return { realNodes: newMap };
+  }),
+  batchUpdateNodePositions: (positions) => set(state => {
+    const newMap = new Map(state.realNodes);
+    for (const [nodeId, position] of positions) {
+      const nodeData = newMap.get(nodeId);
+      if (nodeData) {
+        newMap.set(nodeId, {
+          ...nodeData,
+          node: { ...nodeData.node, position }
+        });
+      }
+    }
     return { realNodes: newMap };
   }),
   deleteRealNode: (id) => set(state => {
@@ -1380,6 +1410,27 @@ export const useInterBrainStore = create<InterBrainState>()(
       isScanning: false,
       positions: null,
       lastLayoutTimestamp: null
+    }
+  })),
+
+  setRadialButtonUIActive: (active) => set((state) => ({
+    radialButtonUI: {
+      ...state.radialButtonUI,
+      isActive: active
+    }
+  })),
+
+  setRadialButtonCount: (count) => set((state) => ({
+    radialButtonUI: {
+      ...state.radialButtonUI,
+      buttonCount: count
+    }
+  })),
+
+  setOptionKeyPressed: (pressed) => set((state) => ({
+    radialButtonUI: {
+      ...state.radialButtonUI,
+      optionKeyPressed: pressed
     }
   })),
     }),

@@ -12,14 +12,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Dream Song**: Elaborate explanations with references to other Dream Talks
 - **Liminal Web**: Self-organizing knowledge based on social relationships
 
+### ⚠️ CRITICAL: .udd File Structure
+**IMPORTANT**: The `.udd` file is a **SINGLE JSON FILE**, NOT a directory.
+- **Correct**: `DreamNode/.udd` (single file containing all metadata)
+- **Wrong**: `DreamNode/.udd/metadata.json` (directory structure - OBSOLETE)
+
+This file contains the complete UDD (Universal Dream Description) schema including:
+- `uuid`, `title`, `type`, `dreamTalk`
+- `liminalWebRelationships`, `submodules`, `supermodules`
+- `email`, `phone`, `radicleId` (contact fields for dreamer-type nodes)
+
 ## Current Development Status
 
 **Current Branch**: `main`
-**Phase**: Epic 8 Planning - Next Development Cycle
+**Phase**: Epic 9 Planning - Next Development Cycle
 
 **Epic Progress Summary**:
-- ✅ **Epics 1-7 Complete**: Foundation through Conversational Copilot System (see CHANGELOG.md for details)
-- 📋 **Epic 8 Next**: Ready for specification and feature planning
+- ✅ **Epics 1-8 Complete**: Foundation through Coherence Beacon System (see CHANGELOG.md for details)
+- 📋 **Epic 9 Next**: Ready for community input and prioritization
 
 **Note**: For detailed achievement history of completed epics, see CHANGELOG.md
 
@@ -85,6 +95,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Or: Investigate macOS accessibility APIs for input state activation
 - Current workaround is acceptable for MVP
 
+### Progressive Loading for URI Clones
+**Status**: Deferred - Future enhancement (October 17, 2025)
+**Issue**: GitHub/Radicle clone links block UI during clone operation instead of showing immediate placeholder
+
+**Conceptual Design - Disk-Based Placeholder Approach**:
+The key insight is to use **disk as single source of truth** rather than coordinating store-only placeholders:
+
+1. **Immediate Placeholder Creation**:
+   - Create directory + minimal `.udd` file BEFORE clone operation
+   - Trigger `scanVault()` immediately → shows placeholder in DreamSpace
+   - `.udd` contains: uuid, title (normalized from repo name), type, source URL/ID, empty relationships
+
+2. **Background Clone**:
+   - Use `git init + remote + fetch + reset --hard` instead of `git clone` (merge-friendly)
+   - Allows existing `.udd` file to persist during git operations
+   - Clone completes in background without blocking UI
+
+3. **Observation-First Approach**:
+   - Test what happens automatically when clone completes (existing code may handle it)
+   - Only add custom refresh logic if needed based on observation
+   - Simpler than coordinating complex state updates
+
+**Benefits**:
+- Single source of truth (disk) eliminates state coordination complexity
+- Leverages existing `scanVault()` infrastructure
+- Git-native workflow with merge-friendly operations
+- No React state synchronization issues
+
+**Implementation Notes**:
+- `createMinimalUDD(destinationPath, repoName, sourceUrl, sourceType)` helper method
+- Apply to both GitHub and Radicle clone flows
+- Revert all store-only placeholder attempts (too complex)
+
+**Next Steps** (when prioritized):
+- Implement for GitHub first, then map to Radicle
+- Test placeholder appearance and clone completion behavior
+- Document what automatic behavior occurs vs custom logic needed
+
+### Incomplete DreamNode Metadata
+**Status**: Known Limitation - Not a Bug (October 18, 2025)
+**Issue**: DreamNodes cloned from repositories not fully initialized for InterBrain may exhibit constellation positioning issues:
+- **Symptom**: Node may not return to proper constellation position when deselected after auto-focus
+- **Root Cause**: Repository missing `.udd` file or has incomplete InterBrain metadata
+- **Occurs**: When cloning external/legacy repositories not created through InterBrain
+- **Both Radicle and GitHub**: Not specific to one clone method
+
+**Workaround**: Run "Scan vault for dream song relationships" command to refresh constellation layout
+
+**Fixes Applied**:
+- ✅ File system timing issue for GitHub clones (async `.udd` write - commit 34658da)
+- ✅ Branch selection optimization (clone only `main`, not `gh-pages` - commit 7a7fa2f)
+
+**Resolution**: Acceptable for MVP
+- InterBrain-created DreamNodes work correctly out of the box
+- Legacy/external repos have simple manual workaround
+- Future: Consider auto-detection and repair of incomplete DreamNode metadata
+
 ### Proto Node Fly-In Animation Issues
 **Status**: Deferred - Animation system complexity (August 26, 2025)
 **Issue**: Proto node creation animation system needs refinement:
@@ -99,8 +166,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Root Cause**: Complex interaction between component lifecycle, animation state management, and useFrame timing. Animation states conflict and create unwanted side effects.
 
-**Next Steps**: 
-- Consider simpler animation approach focusing only on essential transitions  
+**Next Steps**:
+- Consider simpler animation approach focusing only on essential transitions
 - May require rethinking animation architecture for creation components
 - Alternative: Accept current immediate appearance/disappearance as sufficient for MVP
 - **Current Status**: Reverted to stable state (commit 3402622) with working core functionality
@@ -254,13 +321,14 @@ interface DreamNodeService {
 - **Epic 5**: #256 - Semantic Search System ✅ Complete
 - **Epic 6**: #259 - DreamWeaving Operations ✅ Complete
 - **Epic 7**: Spec #269 - Conversational Copilot System ✅ Complete
+- **Epic 8**: Coherence Beacon System ✅ Complete
 
 **Next Epic**:
-- **Epic 8**: Ready for specification and feature planning
+- **Epic 9**: Ready for community input and prioritization
 
 **Current Project Status**:
-- **7 major epics completed** with comprehensive feature sets
-- **Foundation established** for conversational AI-powered knowledge work
+- **8 major epics completed** with comprehensive feature sets
+- **Foundation established** for distributed knowledge management
 - **Next development cycle** ready for community input and prioritization
 
 ## Technical Documentation References
@@ -476,17 +544,51 @@ This project is designed for AI-first development:
 ```bash
 # Template stored in plugin directory (outside vault)
 DreamNode-template/
-├── .udd/
-│   └── metadata.json     # UUID, title, type, dreamTalk, relationships
+├── .udd                  # Single JSON file: UUID, title, type, dreamTalk, relationships
 ├── hooks/
-│   ├── pre-commit        # Coherence beacon updates
-│   ├── post-commit       # Relationship tracking
-│   └── post-merge        # Submodule sync for DreamSong integration
+│   ├── pre-commit        # Template initialization + canvas validation
+│   ├── post-commit       # Bidirectional supermodule tracking
+│   └── hook-helper.js    # Node.js utilities for hook operations
 └── README.md            # DreamNode documentation
 
 # DreamNode creation:
 git init --template=${pluginPath}/DreamNode-template
 ```
+
+### Git Hooks System (Coherence Beacon Foundation)
+
+**Pre-Commit Hook** - Initialization & Validation:
+- **First commit only**: Moves template files (.udd, README.md, LICENSE) from `.git/` to working directory
+- **Canvas validation**: Warns when committing `.canvas` files, reminds user to run "Sync Canvas Submodules"
+- **Non-blocking**: Always allows commit to proceed (just provides helpful reminders)
+
+**Post-Commit Hook** - Bidirectional Relationship Tracking:
+- **Detects submodule changes**: Compares `.gitmodules` between HEAD and HEAD~1
+- **Added submodules**:
+  - Initializes submodule to ensure `.udd` is readable
+  - Adds child UUID to parent's `submodules` array
+  - Adds parent UUID to child's `supermodules` array
+  - Commits relationship in child repo
+- **Removed submodules**:
+  - Removes child UUID from parent's `submodules` array
+  - Child's `supermodules` becomes stale (acceptable - will sync on next use)
+- **Automatic commits**: Creates "Update submodule relationships" commit in parent repo
+
+**Hook Helper Script** (`hook-helper.js`):
+- **UDD operations**: Read, write, add/remove supermodule/submodule relationships
+- **Git operations**: Parse `.gitmodules`, compare commits, execute git commands
+- **Callable from shell**: Provides CLI interface for hook scripts
+- **Reusable logic**: Shared utilities for both pre-commit and post-commit hooks
+
+**Key Design Decisions**:
+- Git natively tracks submodules via `.gitmodules`, BUT `.udd` also tracks them for:
+  - UUID-based relationships (git uses paths, we use UUIDs)
+  - Coherence Beacon discovery (who uses this DreamNode?)
+  - Symmetry with `supermodules` array
+- Bidirectional tracking: Parent tracks children (`submodules`), children track parents (`supermodules`)
+- Hooks use Node.js for complex logic (JSON parsing, file I/O)
+- All hook output goes to stderr (keeps stdout clean for git)
+- Hooks never fail - log errors but allow operations to complete
 
 ### Creator Mode Workflow (Feature #310 Complete)
 ```bash

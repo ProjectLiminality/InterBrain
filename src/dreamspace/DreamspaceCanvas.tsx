@@ -13,6 +13,8 @@ import SearchOrchestrator from '../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../features/edit-mode';
 import CopilotModeOverlay from '../features/conversational-copilot/CopilotModeOverlay';
 import ConstellationEdges, { shouldShowConstellationEdges } from './constellation/ConstellationEdges';
+import { RadialButtonRing3D } from '../features/radial-buttons/RadialButtonRing3D';
+import { ActiveVideoCallButton } from '../features/radial-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
@@ -105,6 +107,12 @@ export default function DreamspaceCanvas() {
         // Complete hierarchical navigation for all states
         switch (layout) {
           case 'creation':
+            // Hide radial buttons when exiting creation mode
+            if (store.radialButtonUI.isActive) {
+              console.log('🎯 [RadialUI] Exiting creation mode - hiding radial buttons');
+              store.setRadialButtonUIActive(false);
+            }
+
             // Exit creation mode, return to constellation
             console.log(`🛠️ Exit creation → constellation`);
             store.cancelCreation(); // This sets layout to 'constellation'
@@ -121,6 +129,19 @@ export default function DreamspaceCanvas() {
             console.log(`✏️ Exit edit → liminal-web`);
             store.exitEditMode();
             store.setSpatialLayout('liminal-web');
+
+            // Only show radial buttons if option key is ACTUALLY pressed
+            // This prevents buttons from appearing when exiting edit mode with escape
+            if (store.radialButtonUI.optionKeyPressed) {
+              console.log('🎯 [Edit Exit] Option key is held - showing radial buttons');
+              store.setRadialButtonUIActive(true);
+              if (spatialOrchestratorRef.current) {
+                spatialOrchestratorRef.current.hideRelatedNodesInLiminalWeb();
+              }
+            } else {
+              console.log('🎯 [Edit Exit] Option key not held - buttons remain hidden');
+              store.setRadialButtonUIActive(false);
+            }
             break;
             
           case 'search':
@@ -208,6 +229,20 @@ export default function DreamspaceCanvas() {
   // Search interface state
   const searchInterface = useInterBrainStore(state => state.searchInterface);
 
+  // Radial button UI state
+  const radialButtonUI = useInterBrainStore(state => state.radialButtonUI);
+
+  // Track whether radial button component should be mounted (for exit animation)
+  const [shouldMountRadialButtons, setShouldMountRadialButtons] = useState(false);
+
+  // Mount/unmount radial button component based on isActive and animation completion
+  useEffect(() => {
+    if (radialButtonUI.isActive) {
+      setShouldMountRadialButtons(true);
+    }
+    // Unmount happens via onExitComplete callback
+  }, [radialButtonUI.isActive]);
+
   // Option key handler for copilot mode show/hide
   useEffect(() => {
     if (spatialLayout !== 'copilot') return;
@@ -262,6 +297,69 @@ export default function DreamspaceCanvas() {
     };
   }, [spatialLayout, copilotMode.showSearchResults]);
 
+  // Option key handler for radial button UI in liminal-web mode
+  // Coordinated animation: buttons appear + related nodes hide (and vice versa)
+  // ARCHITECTURE: Track actual hardware key state separately from UI visibility
+  useEffect(() => {
+    if (spatialLayout !== 'liminal-web' || !selectedNode) return;
+
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Option key on Mac, Alt key on Windows/Linux
+      if (e.altKey) {
+        e.preventDefault();
+        const store = useInterBrainStore.getState();
+
+        // Always track the hardware key state
+        if (!store.radialButtonUI.optionKeyPressed) {
+          console.log('🎯 [RadialUI] Option key pressed - tracking state');
+          store.setOptionKeyPressed(true);
+        }
+
+        // Only show buttons if not already showing
+        if (!store.radialButtonUI.isActive) {
+          console.log('🎯 [RadialUI] Showing buttons & hiding related nodes');
+          store.setRadialButtonUIActive(true);
+
+          // Hide related nodes by moving them to constellation
+          if (spatialOrchestratorRef.current) {
+            spatialOrchestratorRef.current.hideRelatedNodesInLiminalWeb();
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
+      // Detect when Option/Alt key is released
+      if (!e.altKey) {
+        const store = useInterBrainStore.getState();
+
+        // Always clear the hardware key state
+        if (store.radialButtonUI.optionKeyPressed) {
+          console.log('🎯 [RadialUI] Option key released - tracking state');
+          store.setOptionKeyPressed(false);
+        }
+
+        // Only hide buttons if they're currently showing
+        if (store.radialButtonUI.isActive) {
+          console.log('🎯 [RadialUI] Hiding buttons & showing related nodes');
+          store.setRadialButtonUIActive(false);
+
+          // Show related nodes by moving them back to ring positions
+          if (spatialOrchestratorRef.current) {
+            spatialOrchestratorRef.current.showRelatedNodesInLiminalWeb();
+          }
+        }
+      }
+    };
+
+    globalThis.document.addEventListener('keydown', handleKeyDown);
+    globalThis.document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      globalThis.document.removeEventListener('keydown', handleKeyDown);
+      globalThis.document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [spatialLayout, selectedNode]);
 
   // Creation state for proto-node rendering
   const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
@@ -382,12 +480,19 @@ export default function DreamspaceCanvas() {
   // React to spatial layout changes and trigger appropriate orchestrator methods
   useEffect(() => {
     if (!spatialOrchestratorRef.current) return;
-    
+
+    const store = useInterBrainStore.getState();
+
     switch (spatialLayout) {
       case 'search':
       case 'edit-search': {
+        // Hide radial buttons when entering search mode (incompatible mode)
+        if (store.radialButtonUI.isActive) {
+          console.log('🎯 [RadialUI] Entering search mode - hiding radial buttons');
+          store.setRadialButtonUIActive(false);
+        }
+
         // Both search and edit-search use the same visual architecture
-        const store = useInterBrainStore.getState();
         if (searchResults && searchResults.length > 0) {
           // Check if we're in edit mode - need special handling to maintain stable lists
           if (store.editMode.isActive && store.editMode.editingNode) {
@@ -405,8 +510,14 @@ export default function DreamspaceCanvas() {
         }
         break;
       }
-        
+
       case 'edit':
+        // Hide radial buttons when entering edit mode (incompatible mode)
+        if (store.radialButtonUI.isActive) {
+          console.log('🎯 [RadialUI] Entering edit mode - hiding radial buttons');
+          store.setRadialButtonUIActive(false);
+        }
+
         // Edit mode - similar to liminal-web but in edit state
         if (selectedNode) {
           console.log(`✏️ [Canvas-Layout] Edit mode for node "${selectedNode.name}" (${selectedNode.id})`);
@@ -416,7 +527,7 @@ export default function DreamspaceCanvas() {
           console.warn(`⚠️ [Canvas-Layout] Edit mode triggered but no selectedNode available`);
         }
         break;
-        
+
       case 'liminal-web':
         // Trigger liminal web when a node is selected
         if (selectedNode) {
@@ -426,10 +537,15 @@ export default function DreamspaceCanvas() {
           console.warn(`⚠️ [Canvas-Layout] liminal-web layout triggered but no selectedNode available`);
         }
         break;
-        
+
       case 'copilot': {
+        // Hide radial buttons when entering copilot mode (incompatible mode)
+        if (store.radialButtonUI.isActive) {
+          console.log('🎯 [RadialUI] Entering copilot mode - hiding radial buttons');
+          store.setRadialButtonUIActive(false);
+        }
+
         // Copilot mode - conversation partner at center with search results around them
-        const store = useInterBrainStore.getState();
         if (store.copilotMode.isActive && store.copilotMode.conversationPartner) {
           console.log(`🤖 [Canvas-Layout] Copilot mode for person "${store.copilotMode.conversationPartner.name}" (${store.copilotMode.conversationPartner.id})`);
           // Position conversation partner at center (like edit mode)
@@ -449,6 +565,12 @@ export default function DreamspaceCanvas() {
       }
 
       case 'constellation':
+        // Hide radial buttons when returning to constellation (no selected node)
+        if (store.radialButtonUI.isActive) {
+          console.log('🎯 [RadialUI] Returning to constellation - hiding radial buttons');
+          store.setRadialButtonUIActive(false);
+        }
+
         // Return to constellation
         console.log('DreamspaceCanvas: Returning to constellation mode');
         spatialOrchestratorRef.current.returnToConstellation();
@@ -1073,7 +1195,14 @@ export default function DreamspaceCanvas() {
     try {
       const primaryFile = files[0]; // Use first file for node naming and primary dreamTalk
       const fileNameWithoutExt = primaryFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
-      
+
+      // Convert PascalCase file names to human-readable titles with spaces
+      // Example: "HawkinsScale" → "Hawkins Scale"
+      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+      const humanReadableTitle = isPascalCase(fileNameWithoutExt)
+        ? pascalCaseToTitle(fileNameWithoutExt)
+        : fileNameWithoutExt;
+
       const store = useInterBrainStore.getState();
       const service = serviceManager.getActive();
       
@@ -1100,7 +1229,7 @@ export default function DreamspaceCanvas() {
       
       // Create node with determined type
       const newNode = await service.create(
-        fileNameWithoutExt,
+        humanReadableTitle,
         nodeType,
         dreamTalkFile,
         position,
@@ -1146,6 +1275,13 @@ export default function DreamspaceCanvas() {
       const file = files[0]; // Use first file for title
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
 
+      // Convert PascalCase file names to human-readable titles with spaces
+      // Example: "HawkinsScale" → "Hawkins Scale"
+      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+      const humanReadableTitle = isPascalCase(fileNameWithoutExt)
+        ? pascalCaseToTitle(fileNameWithoutExt)
+        : fileNameWithoutExt;
+
       // Use the EXACT same position as the Create DreamNode command
       const spawnPosition: [number, number, number] = [0, 0, -25];
 
@@ -1162,7 +1298,7 @@ export default function DreamspaceCanvas() {
 
       // Start creation with pre-filled data including all files
       startCreationWithData(spawnPosition, {
-        title: fileNameWithoutExt,
+        title: humanReadableTitle,
         type: 'dream',
         dreamTalkFile: dreamTalkFile,
         additionalFiles: additionalFiles.length > 0 ? additionalFiles : undefined
@@ -1304,6 +1440,7 @@ export default function DreamspaceCanvas() {
           near: 0.1,
           far: 20000  // Increased for better visibility of intersection point
         }}
+        gl={{ antialias: true }}
         style={{
           width: '100%',
           height: '100%',
@@ -1324,7 +1461,13 @@ export default function DreamspaceCanvas() {
             console.log('Empty space clicked during copilot mode - ignoring to prevent accidental constellation return');
             return;
           }
-          
+
+          // Suppress empty space clicks when option key is held (radial button mode)
+          if (store.radialButtonUI.optionKeyPressed) {
+            console.log('🎯 Empty space clicked while option key held - ignoring to prevent accidental navigation');
+            return;
+          }
+
           if (store.spatialLayout === 'search') {
             if (store.searchInterface.isActive) {
               // Dismiss search interface and return to constellation
@@ -1357,6 +1500,23 @@ export default function DreamspaceCanvas() {
             <sphereGeometry args={[60, 16, 16]} />
             <meshBasicMaterial color="#ff0000" />
           </mesh>
+        )}
+
+        {/* Radial button UI - STATIONARY relative to camera (outside rotatable group) */}
+        {shouldMountRadialButtons && selectedNode && spatialLayout === 'liminal-web' && (
+          <RadialButtonRing3D
+            centerNodePosition={[0, 0, -50]}
+            isActive={radialButtonUI.isActive}
+            onExitComplete={() => {
+              console.log('🎯 [RadialUI] Exit animation complete - unmounting');
+              setShouldMountRadialButtons(false);
+            }}
+          />
+        )}
+
+        {/* Active video call button - visible during copilot mode (outside rotatable group) */}
+        {copilotMode.isActive && copilotMode.conversationPartner && (
+          <ActiveVideoCallButton />
         )}
 
         {/* Rotatable group containing all DreamNodes */}

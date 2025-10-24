@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
-import { MediaFile } from '../../types/dreamnode';
+import { MediaFile, DreamNode } from '../../types/dreamnode';
+import { Perspective } from '../conversational-copilot/services/perspective-service';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
+import { PerspectivesSection } from './PerspectivesSection';
+import { ConversationsSection } from './ConversationsSection';
+import { ReadmeSection } from './ReadmeSection';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -12,6 +16,12 @@ interface DreamSongProps {
   dreamTalkMedia?: MediaFile[]; // DreamTalk media files to display above header
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
   embedded?: boolean; // Whether this is being rendered in embedded context (e.g., 3D sphere back)
+  githubPagesUrl?: string; // GitHub Pages URL for "View on Web" button
+  dreamNode?: DreamNode; // Full DreamNode object for Songline features
+  vaultPath?: string; // Vault path for audio file resolution
+  onDreamerNodeClick?: (dreamerNodeId: string) => void; // Callback for navigating to DreamerNode
+  onEditCanvas?: () => void; // Callback for editing canvas file
+  onEditReadme?: () => void; // Callback for editing README file
 }
 
 /**
@@ -21,6 +31,8 @@ interface DreamSongProps {
  * Purely presentational - renders blocks without any state management.
  * All data transformation happens in Layer 1 (parser).
  * All state management happens in Layer 2 (hook).
+ *
+ * Extended for Songline feature to display Perspectives and Conversations.
  */
 export const DreamSong: React.FC<DreamSongProps> = ({
   blocks,
@@ -29,12 +41,62 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   dreamNodeName,
   dreamTalkMedia,
   onMediaClick,
-  embedded = false
+  embedded = false,
+  githubPagesUrl,
+  dreamNode,
+  vaultPath,
+  onDreamerNodeClick,
+  onEditCanvas,
+  onEditReadme
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
+  const [perspectives, setPerspectives] = useState<Perspective[]>([]);
 
-  // Check if we have content to display
-  const hasContent = blocks.length > 0;
+  // Check node type
+  const isDreamerNode = dreamNode?.type === 'dreamer';
+
+  // Load perspectives for dream nodes
+  useEffect(() => {
+    const loadPerspectives = async () => {
+      console.log(`🎵 [Perspectives] Loading for node:`, dreamNode?.name);
+      console.log(`🎵 [Perspectives] isDreamerNode: ${isDreamerNode}, vaultPath: ${vaultPath}`);
+
+      if (!dreamNode || isDreamerNode || !vaultPath) {
+        console.log(`⚠️ [Perspectives] Skipping - missing requirements`);
+        return;
+      }
+
+      try {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const absoluteRepoPath = path.join(vaultPath, dreamNode.repoPath);
+        const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
+
+        console.log(`🎵 [Perspectives] Looking for: ${perspectivesPath}`);
+
+        try {
+          const content = await fs.readFile(perspectivesPath, 'utf-8');
+          const perspectivesFile = JSON.parse(content);
+          console.log(`✅ [Perspectives] Loaded ${perspectivesFile.perspectives?.length || 0} perspectives`);
+          setPerspectives(perspectivesFile.perspectives || []);
+        } catch (error: any) {
+          // Perspectives file not present yet - this is normal for DreamNodes without conversations
+          if (error?.code === 'ENOENT') {
+            console.log(`[Perspectives] No perspectives file yet for ${dreamNode.name}`);
+          } else {
+            // Actual error (parse error, permissions, etc.)
+            console.warn(`⚠️ [Perspectives] Error loading perspectives:`, error);
+          }
+          setPerspectives([]);
+        }
+      } catch (error) {
+        console.error('❌ [Perspectives] Failed to load:', error);
+        setPerspectives([]);
+      }
+    };
+
+    loadPerspectives();
+  }, [dreamNode?.id, isDreamerNode, vaultPath]);
 
   // Helper function to render DreamTalk media
   const renderDreamTalkMedia = (): React.ReactNode => {
@@ -108,22 +170,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
     return null;
   };
 
-  if (!hasContent) {
-    return (
-      <div className={containerClass} style={{ pointerEvents: 'auto' }}>
-        <div className={styles.dreamSongEmptyState}>
-          <div className={styles.emptyStateIcon}>📖</div>
-          <div className={styles.emptyStateText}>
-            No DreamSong content yet
-          </div>
-          <div className={styles.emptyStateSubtitle}>
-            Add content to your canvas to create a story flow
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Always render UI - header with title and conditional sections
   return (
     <div
       className={containerClass}
@@ -138,6 +185,29 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       )}
 
       <div className={styles.dreamSongHeader}>
+        {/* "View on Web" button - top right corner (only in fullscreen with GitHub Pages URL) */}
+        {!embedded && githubPagesUrl && (
+          <svg
+            viewBox="0 0 16 16"
+            width="40"
+            height="40"
+            fill="currentColor"
+            className={styles.viewOnWebButton}
+            onClick={() => window.open(githubPagesUrl, '_blank', 'noopener,noreferrer')}
+            aria-label="View DreamSong on GitHub Pages"
+            role="button"
+            tabIndex={0}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                window.open(githubPagesUrl, '_blank', 'noopener,noreferrer');
+              }
+            }}
+          >
+            <title>View on GitHub Pages</title>
+            <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
+          </svg>
+        )}
+
         <div className={styles.dreamSongTitle}>
           {dreamNodeName || 'DreamSong'}
         </div>
@@ -148,16 +218,82 @@ export const DreamSong: React.FC<DreamSongProps> = ({
         />
       </div>
 
-      <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
-        {blocks.map((block, index) => (
-          <DreamSongBlockComponent
-            key={block.id}
-            block={block}
-            blockIndex={index}
-            onMediaClick={onMediaClick}
+      {/* Conditional rendering based on node type */}
+      {isDreamerNode ? (
+        /* DreamerNode: Show Conversations Section */
+        vaultPath && dreamNode && (
+          <ConversationsSection
+            dreamerNode={dreamNode}
+            vaultPath={vaultPath}
           />
-        ))}
-      </div>
+        )
+      ) : (
+        /* Regular DreamNode: Show DreamSong content + Perspectives */
+        <>
+          {/* Canvas content section with optional edit button */}
+          {blocks.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              {onEditCanvas && !embedded && (
+                <button
+                  onClick={onEditCanvas}
+                  style={{
+                    position: 'absolute',
+                    top: '1rem',
+                    right: '1rem',
+                    padding: '0.5rem',
+                    cursor: 'pointer',
+                    border: '1px solid var(--background-modifier-border)',
+                    borderRadius: '4px',
+                    background: 'var(--background-secondary)',
+                    color: 'var(--text-muted)',
+                    opacity: 0.6,
+                    transition: 'opacity 0.2s',
+                    zIndex: 10,
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                  title="Edit DreamSong canvas"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+              )}
+              <div className={styles.dreamSongContent} style={{ pointerEvents: 'auto' }}>
+                {blocks.map((block, index) => (
+                  <DreamSongBlockComponent
+                    key={block.id}
+                    block={block}
+                    blockIndex={index}
+                    onMediaClick={onMediaClick}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Perspectives Section for dream nodes */}
+          {perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
+            <PerspectivesSection
+              perspectives={perspectives}
+              vaultPath={vaultPath}
+              onDreamerNodeClick={onDreamerNodeClick}
+            />
+          )}
+        </>
+      )}
+
+      {/* README Section - Always at bottom, collapsed by default (if present) */}
+      {dreamNode && vaultPath && (
+        <ReadmeSection
+          dreamNode={dreamNode}
+          vaultPath={vaultPath}
+          onEdit={!embedded ? onEditReadme : undefined}
+        />
+      )}
     </div>
   );
 };

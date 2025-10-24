@@ -629,8 +629,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
   // Clean Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
   return (
-    <group 
-      ref={groupRef} 
+    <group
+      ref={groupRef}
       position={finalPosition}
     >
       {/* Billboard component - always faces camera */}

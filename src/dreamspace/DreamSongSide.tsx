@@ -62,12 +62,12 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     return service;
   }, []);
 
-  // Use the new hook for DreamSong data
+  // Use the new hook for DreamSong data (with dreamNode for Songline feature detection)
   const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
-  const { blocks, hasContent, isLoading: isLoadingDreamSong, error } = useDreamSongData(
+  const { blocks, isLoading: isLoadingDreamSong, error } = useDreamSongData(
     canvasPath,
     dreamNode.repoPath,
-    { canvasParser, vaultService },
+    { canvasParser, vaultService, dreamNode },
     dreamNode.id
   );
   const nodeColors = getNodeColors(dreamNode.type);
@@ -83,13 +83,19 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
 
   // Handler for media click navigation
   const handleMediaClick = useCallback((sourceDreamNodeId: string) => {
+    console.log(`DreamSongSide: handleMediaClick called with sourceDreamNodeId="${sourceDreamNodeId}"`);
+    console.log(`DreamSongSide: Available dreamNodes:`, dreamNodes?.map(n => ({ id: n.id, name: n.name })));
+
     // Find the DreamNode by ID or name
-    const targetNode = dreamNodes?.find(node => 
+    const targetNode = dreamNodes?.find(node =>
       node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
     );
-    
+
     if (targetNode) {
+      console.log(`DreamSongSide: Found target node:`, { id: targetNode.id, name: targetNode.name });
       setSelectedNode(targetNode);
+    } else {
+      console.warn(`DreamSongSide: No matching DreamNode found for "${sourceDreamNodeId}"`);
     }
   }, [dreamNodes, setSelectedNode]);
 
@@ -147,12 +153,46 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             pointerEvents: 'auto' // Enable scrolling interaction
           }}
         >
-          {hasContent ? (
+          {/* Always render DreamSong - it handles empty states internally */}
+          {isLoadingDreamSong ? (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: dreamNodeStyles.colors.text.primary,
+                pointerEvents: 'auto'
+              }}
+            >
+              Loading DreamSong...
+            </div>
+          ) : error ? (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: dreamNodeStyles.colors.text.primary,
+                pointerEvents: 'auto',
+                flexDirection: 'column',
+                fontSize: '12px',
+                textAlign: 'center',
+                padding: '20px'
+              }}
+            >
+              <div>DreamSong Error</div>
+              <div style={{ marginTop: '8px', opacity: 0.7 }}>{error}</div>
+            </div>
+          ) : (
             <div style={{
               height: 'auto',
               minHeight: '100%',
               position: 'relative',
-              paddingBottom: '20px' // Extra space to ensure scrollable area
+              paddingBottom: '20px'
             }}>
               <DreamSong
                 blocks={blocks}
@@ -162,62 +202,16 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 dreamTalkMedia={dreamNode.dreamTalkMedia}
                 onMediaClick={handleMediaClick}
                 embedded={true}
+                dreamNode={dreamNode}
+                vaultPath={vaultService.getVaultPath()}
+                onDreamerNodeClick={handleMediaClick}
               />
             </div>
-          ) : isLoadingDreamSong ? (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              pointerEvents: 'auto' // Allow content interaction
-            }}
-          >
-            Loading DreamSong...
-          </div>
-        ) : error ? (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              pointerEvents: 'auto',
-              flexDirection: 'column',
-              fontSize: '12px',
-              textAlign: 'center',
-              padding: '20px'
-            }}
-          >
-            <div>DreamSong Error</div>
-            <div style={{ marginTop: '8px', opacity: 0.7 }}>{error}</div>
-          </div>
-        ) : (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: dreamNodeStyles.colors.text.primary,
-              pointerEvents: 'auto' // Allow content interaction
-            }}
-          >
-            No DreamSong available
-          </div>
-        )}
+          )}
         </div>
 
-        {/* Fade-to-black overlay - positioned outside scrolling container but inside circular mask */}
-        {hasContent && (
-          <div style={getMediaOverlayStyle()} />
-        )}
+        {/* Fade-to-black overlay - always show for visual consistency */}
+        <div style={getMediaOverlayStyle()} />
       </div>
 
       {/* Full-screen button (top-center, on back side) - Stable Click Wrapper */}

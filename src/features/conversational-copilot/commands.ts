@@ -7,6 +7,8 @@ import { getConversationRecordingService } from './services/conversation-recordi
 import { getConversationSummaryService } from './services/conversation-summary-service';
 import { getEmailExportService } from './services/email-export-service';
 import { getRealtimeTranscriptionService } from '../realtime-transcription';
+import { getAudioRecordingService } from './services/audio-recording-service';
+import { getPerspectiveService } from './services/perspective-service';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -89,10 +91,16 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const path = require('path');
         const absoluteTranscriptPath = path.join(vaultPath, transcriptFile.path);
 
-        // Start Python real-time transcription to the transcript file
+        // Prepare audio recording path for Songline feature
+        const audioRecordingService = getAudioRecordingService();
+        await audioRecordingService.ensureConversationsDirectory(freshNode);
+        const audioOutputPath = audioRecordingService.getAudioOutputPath(freshNode, transcriptFile.name);
+
+        // Start Python real-time transcription with audio recording to the transcript file
         const pythonTranscriptionService = getRealtimeTranscriptionService();
         await pythonTranscriptionService.startTranscription(absoluteTranscriptPath, {
-          model: 'small.en'
+          model: 'small.en',
+          audioOutput: audioOutputPath  // Enable audio recording for Songline
         });
 
         // Start conversation recording (for DreamNode invocations)
@@ -181,6 +189,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
             console.log(`📧 [Copilot-Exit] API key configured:`, apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO');
 
             let aiSummary = '';
+            const clipSuggestions: any[] = [];
 
             if (!apiKey) {
               console.warn(`⚠️ [Copilot-Exit] No Claude API key configured - using basic summary`);
@@ -188,21 +197,25 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
               // Fallback: No AI summary, just list shared nodes
               aiSummary = ''; // Empty string will trigger basic template in email service
             } else {
-              console.log(`📧 [Copilot-Exit] Starting AI summary generation...`);
-              uiService.showInfo('Generating AI conversation summary...');
+              console.log(`📧 [Copilot-Exit] Starting AI summary and clip generation...`);
+              uiService.showInfo('Generating AI conversation summary and clips...');
 
-              // Generate AI summary from transcript content
+              // Generate AI summary and clip suggestions from transcript content
               console.log(`📧 [Copilot-Exit] Getting summary service...`);
               const summaryService = getConversationSummaryService();
-              console.log(`📧 [Copilot-Exit] Calling generateSummary with content...`);
-              aiSummary = await summaryService.generateSummaryFromContent(
+              console.log(`📧 [Copilot-Exit] Calling generateSummaryFromContent...`);
+              const result = await summaryService.generateSummaryFromContent(
                 transcriptContent,
                 invocations,
                 partnerToFocus,
                 apiKey
               );
 
+              aiSummary = result.summary;
+              clipSuggestions.push(...result.clips);
+
               console.log(`✅ [Copilot-Exit] AI summary generated (length: ${aiSummary.length})`);
+              console.log(`✅ [Copilot-Exit] ${clipSuggestions.length} clip suggestions generated`);
               console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, 200)}..."`);
             }
 
@@ -222,6 +235,86 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
 
             console.log(`✅ [Copilot-Exit] Email draft created successfully`);
             uiService.showSuccess('Email draft created in Apple Mail');
+
+            // Process clip suggestions and create Perspectives (Songline feature)
+            if (clipSuggestions.length > 0 && transcriptFile) {
+              try {
+                console.log(`🎵 [Songline] Processing ${clipSuggestions.length} clip suggestions...`);
+
+                // Check for recorded audio file (optional - perspectives work without it)
+                const audioRecordingService = getAudioRecordingService();
+                const audioPath = await audioRecordingService.getRecordedAudioPath(partnerToFocus, transcriptFile.name);
+
+                let relativeAudioPath: string;
+                const vaultPath = (plugin.app.vault.adapter as any).basePath;
+                const path = require('path');
+
+                if (!audioPath) {
+                  console.warn(`⚠️ [Songline] Audio recording not found - creating perspectives without audio`);
+                  console.log(`🎵 [Songline] Expected audio at: conversations/conversation-${transcriptFile.name.replace('transcript-', '').replace('.md', '')}.mp3`);
+
+                  // Create expected path even if file doesn't exist yet
+                  // (audio might be added later, or recording might have failed)
+                  const baseName = transcriptFile.name.replace('transcript-', 'conversation-').replace('.md', '');
+                  const expectedPath = path.join(partnerToFocus.repoPath, 'conversations', `${baseName}.mp3`);
+                  relativeAudioPath = expectedPath;
+                  console.log(`🎵 [Songline] Using expected audio path: ${relativeAudioPath}`);
+                } else {
+                  relativeAudioPath = path.relative(vaultPath, audioPath);
+                  console.log(`✅ [Songline] Audio recording found: ${audioPath}`);
+                }
+
+                // Get perspective service and dream node service
+                const perspectiveService = getPerspectiveService();
+                const dreamNodeService = serviceManager.getActive();
+
+                // Process each clip suggestion
+                let successCount = 0;
+                for (const clip of clipSuggestions) {
+                  try {
+                    // Find the DreamNode for this clip
+                    const dreamNode = await dreamNodeService.get(clip.nodeUuid);
+                    if (!dreamNode) {
+                      console.warn(`⚠️ [Songline] DreamNode not found for clip: ${clip.nodeUuid} (${clip.nodeName})`);
+                      continue;
+                    }
+
+                    // Convert timestamp strings to seconds
+                    const startSeconds = perspectiveService.timestampToSeconds(clip.startTime);
+                    const endSeconds = perspectiveService.timestampToSeconds(clip.endTime);
+
+                    console.log(`🎵 [Songline] Creating perspective for ${dreamNode.name}:`);
+                    console.log(`   - Time: ${clip.startTime} → ${clip.endTime} (${startSeconds}s → ${endSeconds}s)`);
+                    console.log(`   - Audio: ${relativeAudioPath}`);
+
+                    // Create perspective (works with or without audio file)
+                    await perspectiveService.addPerspective(dreamNode, {
+                      sourceAudioPath: relativeAudioPath,
+                      startTime: startSeconds,
+                      endTime: endSeconds,
+                      transcript: clip.transcript,
+                      conversationDate: conversationStartTime.toISOString(),
+                      participants: [partnerToFocus.name, 'Me'],  // TODO: Get user's name from settings
+                      dreamerNodeId: partnerToFocus.id,
+                      dreamerNodeName: partnerToFocus.name
+                    });
+
+                    successCount++;
+                    console.log(`✅ [Songline] Created perspective ${successCount}/${clipSuggestions.length} for ${dreamNode.name}`);
+                  } catch (error) {
+                    console.error(`❌ [Songline] Failed to create perspective for ${clip.nodeName}:`, error);
+                  }
+                }
+
+                console.log(`✅ [Songline] Finished processing: ${successCount}/${clipSuggestions.length} perspectives created`);
+                if (successCount > 0) {
+                  uiService.showSuccess(`Created ${successCount} conversation perspective${successCount > 1 ? 's' : ''}`);
+                }
+              } catch (error) {
+                console.error('❌ [Songline] Failed to process perspectives:', error);
+                uiService.showWarning('Failed to create conversation clips - check console');
+              }
+            }
           } catch (error) {
             console.error('❌ [Copilot-Exit] Failed to generate summary or export email:', error);
             console.error('❌ [Copilot-Exit] Error stack:', (error as Error).stack);

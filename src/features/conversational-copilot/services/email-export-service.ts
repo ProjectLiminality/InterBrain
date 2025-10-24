@@ -2,6 +2,10 @@ import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
+import { getRadicleBatchInitService } from '../../../services/radicle-batch-init-service';
+import { getGitHubBatchShareService } from '../../../services/github-batch-share-service';
+import { serviceManager } from '../../../services/service-manager';
+import { useInterBrainStore } from '../../../store/interbrain-store';
 
 /**
  * Email Export Service
@@ -32,7 +36,42 @@ export class EmailExportService {
 			// Get vault name for deep links
 			const vaultName = this.app.vault.getName();
 
-			// Build email components
+			// Check if Radicle is available on this machine FIRST
+			const radicleService = serviceManager.getRadicleService();
+			const radicleAvailable = await radicleService.isAvailable();
+
+			let uuidToRadicleIdMap = new Map<string, string>();
+			let uuidToGitHubUrlMap = new Map<string, string>();
+
+			if (radicleAvailable) {
+				// CRITICAL: Ensure all invoked nodes have Radicle IDs before generating links
+				const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
+				console.log(`🔮 [EmailExport] Radicle available - ensuring ${nodeUUIDs.length} nodes have Radicle IDs...`);
+
+				try {
+					const batchInitService = getRadicleBatchInitService();
+					uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds(nodeUUIDs);
+					console.log(`✅ [EmailExport] ${uuidToRadicleIdMap.size}/${nodeUUIDs.length} nodes have Radicle IDs`);
+				} catch (error) {
+					console.error('❌ [EmailExport] Batch init failed, will use fallback:', error);
+					// Continue with fallback for all nodes
+				}
+			} else {
+				// FALLBACK: Ensure all invoked nodes have GitHub URLs before generating links
+				const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
+				console.log(`🧪 [EmailExport] Radicle not available - ensuring ${nodeUUIDs.length} nodes have GitHub URLs...`);
+
+				try {
+					const batchShareService = getGitHubBatchShareService();
+					uuidToGitHubUrlMap = await batchShareService.ensureNodesHaveGitHubUrls(nodeUUIDs);
+					console.log(`✅ [EmailExport] ${uuidToGitHubUrlMap.size}/${nodeUUIDs.length} nodes have GitHub URLs`);
+				} catch (error) {
+					console.error('❌ [EmailExport] Batch GitHub share failed, will use UUID fallback:', error);
+					// Continue with UUID fallback for all nodes
+				}
+			}
+
+			// Build email components (with Radicle IDs or GitHub URLs where available)
 			const subject = this.buildSubject(conversationPartner, conversationStartTime);
 			const body = this.buildEmailBody(
 				conversationPartner,
@@ -40,7 +79,9 @@ export class EmailExportService {
 				conversationEndTime,
 				invocations,
 				aiSummary,
-				vaultName
+				vaultName,
+				uuidToRadicleIdMap,
+				uuidToGitHubUrlMap
 			);
 
 			// Get recipient email (from metadata or parameter)
@@ -75,7 +116,9 @@ export class EmailExportService {
 		endTime: Date,
 		invocations: InvocationEvent[],
 		aiSummary: string,
-		vaultName: string
+		vaultName: string,
+		uuidToRadicleIdMap: Map<string, string>,
+		uuidToGitHubUrlMap: Map<string, string>
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -96,18 +139,57 @@ export class EmailExportService {
 			body += `## Shared DreamNodes\n\n`;
 			body += `During our conversation, I shared ${invocations.length} DreamNode${invocations.length > 1 ? 's' : ''}:\n\n`;
 
+			// Get store to access node metadata (for GitHub URLs)
+			const store = useInterBrainStore.getState();
+
+			// Track all identifiers for batch link (mixed Radicle/GitHub/UUID)
+			const allIdentifiers: string[] = [];
+
 			invocations.forEach((inv, i) => {
 				const invTimeStr = inv.timestamp.toLocaleTimeString();
-				const deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);
+
+				// Four-tier fallback: Radicle ID → Batch GitHub URL → Store GitHub URL → UUID
+				const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
+				const githubUrlFromBatch = uuidToGitHubUrlMap.get(inv.dreamUUID);
+				const nodeData = store.realNodes.get(inv.dreamUUID);
+				const node = nodeData?.node;
+
+				let deepLink: string;
+				let identifier: string;
+
+				if (radicleId) {
+					// Primary: Radicle ID (peer-to-peer)
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId);
+					identifier = radicleId;
+				} else if (githubUrlFromBatch) {
+					// Fallback 1: GitHub URL from batch share (just pushed!)
+					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, githubUrlFromBatch);
+					// For batch link, store the repo path without protocol
+					identifier = githubUrlFromBatch.replace(/^https?:\/\//, '');
+					console.log(`📧 [EmailExport] Using batch GitHub URL for "${inv.nodeName}": ${githubUrlFromBatch}`);
+				} else if (node?.githubRepoUrl) {
+					// Fallback 2: GitHub URL from store (already existed)
+					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, node.githubRepoUrl);
+					// For batch link, store the repo path without protocol
+					identifier = node.githubRepoUrl.replace(/^https?:\/\//, '');
+					console.log(`📧 [EmailExport] Using stored GitHub URL for "${inv.nodeName}"`);
+				} else {
+					// Last resort: UUID (legacy, requires network broadcast)
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);
+					identifier = inv.dreamUUID;
+					console.warn(`⚠️ [EmailExport] Node "${inv.nodeName}" has no Radicle ID or GitHub URL, using UUID fallback`);
+				}
+
+				allIdentifiers.push(identifier);
+
 				body += `${i + 1}. **${inv.nodeName}** (${invTimeStr})\n`;
 				body += `   → ${deepLink}\n\n`;
 			});
 
-			// Add batch clone link if multiple nodes
+			// Add batch clone link if multiple nodes shared
 			if (invocations.length > 1) {
-				const uuids = invocations.map(inv => inv.dreamUUID);
-				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, uuids);
-				body += `📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
+				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, allIdentifiers);
+				body += `\n📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
 			}
 		}
 

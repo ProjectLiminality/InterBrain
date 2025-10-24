@@ -36,6 +36,7 @@ export default function EditNode3D({
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
   const [localEmail, setLocalEmail] = useState('');
   const [localPhone, setLocalPhone] = useState('');
+  const [localRadicleId, setLocalRadicleId] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -119,17 +120,19 @@ export default function EditNode3D({
   }, [editingNode?.name]);
 
   // Load contact info from editingNode (for dreamer nodes only)
-  // Only reload when node ID changes, not when email/phone fields update
+  // Only reload when node ID changes, not when email/phone/radicleId fields update
   useEffect(() => {
     if (!editingNode || editingNode.type !== 'dreamer') {
       setLocalEmail('');
       setLocalPhone('');
+      setLocalRadicleId('');
       return;
     }
 
     // Load from the DreamNode which is already populated by the service layer
     setLocalEmail(editingNode.email || '');
     setLocalPhone(editingNode.phone || '');
+    setLocalRadicleId(editingNode.radicleId || '');
   }, [editingNode?.id, editingNode?.type]); // Only depend on ID and type, not the whole object
   
   if (!editingNode) {
@@ -205,6 +208,12 @@ export default function EditNode3D({
     const phone = e.target.value;
     setLocalPhone(phone);
     updateEditingNodeMetadata({ phone });
+  };
+
+  const handleRadicleIdChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const radicleId = e.target.value;
+    setLocalRadicleId(radicleId);
+    updateEditingNodeMetadata({ radicleId });
   };
   
   // File handling (same patterns as ProtoNode3D)
@@ -601,6 +610,28 @@ export default function EditNode3D({
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               />
+              <input
+                type="text"
+                value={localRadicleId}
+                onChange={handleRadicleIdChange}
+                placeholder="Radicle ID (optional)"
+                className="contact-field-radicle"
+                style={{
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '24px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
             </div>
           )}
 
@@ -608,7 +639,7 @@ export default function EditNode3D({
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 240 : 220) : (validationErrors.title ? 120 : 100))}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 300 : 280) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',

@@ -3,57 +3,53 @@
 # DreamNode Pre-Commit Hook
 # Part of InterBrain DreamNode Template System
 #
-# DUAL PURPOSE:
+# PURPOSE:
 # 1. INITIALIZATION: Move template files to working directory on first commit
-# 2. DREAMTALK INTEGRATION: DreamSong submodule integration (future)
+# 2. VALIDATION: Warn about canvas files with un-synced external references
 #
 
 # === PHASE 1: INITIALIZATION (First Commit Only) ===
 # Check if this is the first commit by seeing if HEAD exists
 if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-    echo "DreamNode Pre-Commit Hook: Initial setup - moving template files to working directory"
-    
+    echo "DreamNode Pre-Commit Hook: Initial setup - moving template files to working directory" >&2
+
     # Move template files from .git/ to working directory
     if [ -f ".git/udd" ]; then
         mv .git/udd .udd
-        echo "  ✓ Moved .git/udd to .udd"
+        echo "  ✓ Moved .git/udd to .udd" >&2
     fi
-    
+
     if [ -f ".git/README.md" ]; then
         mv .git/README.md README.md
-        echo "  ✓ Moved .git/README.md to README.md"
+        echo "  ✓ Moved .git/README.md to README.md" >&2
     fi
-    
+
     if [ -f ".git/LICENSE" ]; then
         mv .git/LICENSE LICENSE
-        echo "  ✓ Moved .git/LICENSE to LICENSE"
+        echo "  ✓ Moved .git/LICENSE to LICENSE" >&2
     fi
-    
+
     # Stage the moved files for this commit
     git add .udd README.md LICENSE 2>/dev/null
-    
-    echo "  ✓ DreamNode initialization complete"
+
+    echo "  ✓ DreamNode initialization complete" >&2
 fi
 
-# === PHASE 2: DREAMTALK INTEGRATION (Future Implementation) ===
-# 
-# FUTURE FUNCTIONALITY for DreamSong submodule integration:
-# - Analyzes Obsidian canvas files (.canvas) for external media references
-# - Identifies media files that come from other DreamNode repositories  
-# - Automatically imports external sources as git submodules
-# - Updates file paths in canvas files to reference submodule paths
-# - Maintains seamless UX while creating proper git relationships
-# - Enables coherence beacon propagation via submodule relationships
-#
-# Future implementation will:
-# 1. Scan for .canvas files in staging area
-# 2. Parse canvas JSON for external media references
-# 3. Identify which references come from other DreamNodes
-# 4. Import those DreamNodes as submodules
-# 5. Update canvas file paths to reference submodule paths
-# 6. Re-stage modified canvas files
+# === PHASE 2: CANVAS VALIDATION ===
+# Check if any .canvas files are being committed
+CANVAS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.canvas$')
 
-echo "DreamNode Pre-Commit Hook: DreamSong submodule integration (placeholder)"
+if [ -n "$CANVAS_FILES" ]; then
+    echo "" >&2
+    echo "⚠️  DreamNode Pre-Commit Hook: Canvas file(s) detected in commit" >&2
+    echo "   If your canvas references external DreamNodes, remember to:" >&2
+    echo "   1. Run 'Sync Canvas Submodules' command BEFORE committing" >&2
+    echo "   2. This ensures submodule relationships are properly tracked" >&2
+    echo "" >&2
+
+    # Note: We don't block the commit - just remind the user
+    # The post-commit hook will still update supermodule relationships if submodules exist
+fi
 
 # Allow commit to proceed
 exit 0

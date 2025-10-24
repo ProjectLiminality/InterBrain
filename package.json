@@ -1,12 +1,12 @@
 {
   "name": "interbrain",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A revolutionary knowledge management system for Obsidian that transcends traditional Second Brain paradigms",
   "main": "main.js",
   "scripts": {
     "dev": "vite --config vite.dev.config.ts",
-    "build": "vite build",
-    "plugin-build": "vite build && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
+    "build": "vite build && npm run build-github-viewer && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css && cp -r src/features/github-sharing/viewer-bundle .",
+    "build-github-viewer": "cd src/features/github-sharing/dreamsong-standalone && vite build --config vite.config.ts --outDir ../viewer-bundle",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "check-all": "npm run lint && npm run typecheck && npm run test",

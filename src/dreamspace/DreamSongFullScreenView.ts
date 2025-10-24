@@ -176,38 +176,26 @@ export class DreamSongFullScreenView extends ItemView {
       this.root = createRoot(container);
     }
 
-    if (!this.blocks || this.blocks.length === 0) {
-      console.log('Rendering loading state (no blocks data)');
-      // Show loading or empty state
-      this.root.render(
-        createElement(StrictMode, null,
-          createElement('div', {
-            style: {
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              height: '100%',
-              color: '#ffffff',
-              fontSize: '18px'
-            }
-          }, this.dreamNode ? `Loading DreamSong for ${this.dreamNode.name}...` : 'Loading DreamSong...')
-        )
-      );
-      return;
-    }
+    // Always render the DreamSong component - it handles empty states internally
+    // This matches the new DreamSongSide architecture where UI is always visible
+    const vaultService = serviceManager.getVaultService();
+    const vaultPath = vaultService?.getVaultPath();
 
-    console.log('Rendering DreamSong component with blocks:', this.blocks);
-    // Render the DreamSong component directly - CSS modules handle all styling
     this.root.render(
       createElement(StrictMode, null,
         createElement(DreamSong, {
-          blocks: this.blocks,
+          blocks: this.blocks || [],
           sourceDreamNodeId: this.dreamNode?.id,
           dreamNodeName: this.dreamNode?.name,
           dreamTalkMedia: this.dreamNode?.dreamTalkMedia,
           onMediaClick: this.handleMediaClick.bind(this),
-          embedded: false
+          embedded: false,
+          githubPagesUrl: this.dreamNode?.githubPagesUrl,
+          dreamNode: this.dreamNode || undefined,
+          vaultPath: vaultPath,
+          onDreamerNodeClick: this.handleMediaClick.bind(this),
+          onEditCanvas: this.handleEditCanvas.bind(this),
+          onEditReadme: this.handleEditReadme.bind(this)
         })
       )
     );
@@ -217,19 +205,61 @@ export class DreamSongFullScreenView extends ItemView {
    * Handle media click navigation
    */
   private handleMediaClick(sourceDreamNodeId: string): void {
+    console.log(`DreamSongFullScreenView: handleMediaClick called with sourceDreamNodeId="${sourceDreamNodeId}"`);
+
     const store = useInterBrainStore.getState();
     const { realNodes, setSelectedNode } = store;
-    
+
     // Convert realNodes Map to dreamNodes array (same pattern as DreamspaceCanvas)
     const dreamNodes = Array.from(realNodes.values()).map(data => data.node);
-    
+    console.log(`DreamSongFullScreenView: Available dreamNodes:`, dreamNodes.map(n => ({ id: n.id, name: n.name })));
+
     // Find the DreamNode by ID or name
-    const targetNode = dreamNodes.find(node => 
+    const targetNode = dreamNodes.find(node =>
       node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
     );
-    
+
     if (targetNode) {
+      console.log(`DreamSongFullScreenView: Found target node:`, { id: targetNode.id, name: targetNode.name });
       setSelectedNode(targetNode);
+    } else {
+      console.warn(`DreamSongFullScreenView: No matching DreamNode found for "${sourceDreamNodeId}"`);
+    }
+  }
+
+  /**
+   * Handle edit canvas button click
+   */
+  private async handleEditCanvas(): Promise<void> {
+    if (!this.dreamNode) return;
+
+    const canvasPath = `${this.dreamNode.repoPath}/DreamSong.canvas`;
+    const file = this.app.vault.getAbstractFileByPath(canvasPath);
+
+    if (file) {
+      // Open the canvas file in a new leaf
+      const leaf = this.app.workspace.getLeaf('tab');
+      await leaf.openFile(file as any);
+    } else {
+      console.warn('Canvas file not found:', canvasPath);
+    }
+  }
+
+  /**
+   * Handle edit README button click
+   */
+  private async handleEditReadme(): Promise<void> {
+    if (!this.dreamNode) return;
+
+    const readmePath = `${this.dreamNode.repoPath}/README.md`;
+    const file = this.app.vault.getAbstractFileByPath(readmePath);
+
+    if (file) {
+      // Open the README file in a new leaf
+      const leaf = this.app.workspace.getLeaf('tab');
+      await leaf.openFile(file as any);
+    } else {
+      console.warn('README file not found:', readmePath);
     }
   }
 

@@ -10,12 +10,12 @@ The InterBrain is an innovative knowledge gardening system that aims to revoluti
 
 The InterBrain is work-in-progress software with basic functionality now installable as an Obsidian plugin. You can download and install the plugin to start building your liminal web using the existing features, while other capabilities are still in development and the full vision has yet to be comprehensively implemented.
 
-**[→ Download Plugin](https://github.com/ProjectLiminality/InterBrain/releases/tag/v0.5.0)** | **[→ Installation Guide](#installation--setup)**
+**[→ Download Plugin](https://github.com/ProjectLiminality/InterBrain/releases/tag/v0.8.0)** | **[→ Installation Guide](#installation--setup)**
 
 ## Project Status & Roadmap
 
-> ⚡️ **Current Status: DreamWeaving Operations Complete & Ready for Epic 7**
-Epic 7 (Conversational Copilot System) is complete with real-time transcription, FaceTime integration, and AI-powered conversation export. All 7 foundation epics are now complete and the InterBrain supports conversational AI-powered knowledge work.
+> ⚡️ **Current Status: Coherence Beacon System Complete - 8 Foundation Epics Delivered**
+Epic 8 (Coherence Beacon System) is complete with automatic relationship discovery, bidirectional tracking, Radicle network integration, GitHub Pages publishing, and radial action buttons. All 8 foundation epics are now complete and the InterBrain provides comprehensive distributed knowledge management.
 
 > 🔬 **Previous Exploration:**  
 Earlier exploration work including screenshots and recordings can be found at [**InterBrain-Prototype**](https://github.com/ProjectLiminality/InterBrain-Prototype). This repository contains the conceptual foundation and visual demonstrations that inform the current development approach.
@@ -74,14 +74,26 @@ Advanced force-directed relationship visualization with mathematical precision:
 - ✅ [**Interactive Algorithm Demos**](https://projectliminality.github.io/InterBrain/algorithms/constellation-layout.html) with JSON data support
 
 > ✅ **Epic 7 Complete - Conversational Copilot System**
-Comprehensive canvas integration and immersive DreamSong experiences:
-- ✅ DreamNode Flip Animation System (Feature #324) - 3D flip animations with canvas content
-- ✅ Full-Screen DreamSong Experience (Feature #325) - Dedicated full-screen exploration
-- ✅ DreamWeaving Canvas Integration (Feature #286) - Complete .canvas and .link file support
-- ✅ Constellation Layout System (Feature #326) - Force-directed graph clustering
-- ✅ Developer workflow automation with comprehensive slash commands
-- ✅ Three-layer DreamSong architecture with intelligent caching
-- ✅ Real-time file monitoring and seamless content synchronization
+Person-centered conversational mode with real-time capabilities:
+- ✅ Real-time transcription with whisper_streaming integration
+- ✅ FaceTime automation with contact metadata system
+- ✅ AI-powered conversation summaries via Claude API
+- ✅ Email export with Obsidian URI deep links
+- ✅ Semantic search-driven UX with 500-char context window
+- ✅ Fullscreen DreamTalk/DreamSong overlays
+- ✅ Shared nodes tracking with bidirectional relationships
+
+> ✅ **Epic 8 Complete - Coherence Beacon System**
+Distributed knowledge management with automatic relationship discovery:
+- ✅ Coherence Beacon discovery system with modal acceptance workflow
+- ✅ Bidirectional relationship tracking via git hooks
+- ✅ Radicle network integration with CLI automation
+- ✅ GitHub Pages publishing with static DreamSong sites
+- ✅ Universal DreamNode cloning (Radicle/GitHub/UUID support)
+- ✅ Radial action button system with 10 context-aware buttons
+- ✅ PascalCase naming system with migration tools
+- ✅ Songline feature for audio perspectives
+- ✅ Digital Campfire metaphor for video calls
 
 > 🌱 **Beyond the Plugin:**
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
@@ -95,8 +107,9 @@ The InterBrain is designed as the foundation for **DreamOS** — a decentralized
 6. ✅ Epic 5: Semantic Search System (complete)
 7. ✅ Epic 6: DreamWeaving Operations (complete)
 8. ✅ Epic 7: Conversational Copilot System (complete)
-9. 📋 Epic 8: Ready for specification and planning
-10. 🪐 DreamOS system (future evolution)  
+9. ✅ Epic 8: Coherence Beacon System (complete)
+10. 📋 Epic 9: Ready for community input and prioritization
+11. 🪐 DreamOS system (future evolution)  
 
 Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2).
 
@@ -125,6 +138,27 @@ Current development progress is tracked through [**GitHub Issues**](https://gith
 2. **Install Model**: Run `ollama pull nomic-embed-text` in terminal
 3. **Check Status**: Use command palette "Ollama: Check Status" to verify setup
 4. **Index**: Run "Full Index" command to enable semantic search on your DreamNodes
+
+### Optional: Radicle Network Setup (Peer-to-Peer Sharing)
+
+**Note**: Radicle enables peer-to-peer DreamNode sharing without centralized servers. This is optional - DreamNodes work fully offline without it.
+
+**Platform Support**:
+- ✅ **macOS & Linux**: Full Radicle support
+- ⚠️ **Windows**: GitHub-based sharing coming soon (use local-only DreamNodes for now)
+
+**Setup Steps (macOS/Linux)**:
+1. **Install Radicle**: Download from [radicle.xyz](https://radicle.xyz) and follow their installation guide
+2. **Create Identity**: Run `rad auth` to set up your Radicle identity
+3. **Verify**: The "Share DreamNode" command will appear in InterBrain's command palette once Radicle is detected
+
+**Using Radicle Network**:
+- **Initialize**: After creating a DreamNode, open Terminal in that directory and run `rad init --name "YourNodeName"`
+- **Share DreamNode**: After making commits (saves), use "Share DreamNode" to push to the Radicle network
+- **Clone DreamNode**: Use "Clone DreamNode from Radicle Network" and enter a friend's Radicle ID
+- **Note**: Automatic initialization during DreamNode creation is not yet supported due to Radicle CLI requirements
+
+**What is Radicle?**: A peer-to-peer alternative to GitHub that enables decentralized code collaboration. Your DreamNodes sync directly with trusted peers instead of through centralized servers. Perfect for private knowledge sharing within friend/family networks.
 
 ### Getting Started
 

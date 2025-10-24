@@ -96,10 +96,14 @@ EOF
 )"`
 
 #### Epic Branch Integration
+
+**⚠️ CRITICAL: LOCAL-ONLY WORKFLOW ⚠️**
+- **Epic and feature branches are NEVER pushed to remote**
+- **ONLY main branch gets pushed to remote (during epic completion)**
+
 - **Switch to epic branch**: Run `git checkout epic/EPIC_NUMBER-epic-name`
-- **Pull latest epic**: Run `git pull origin epic/EPIC_NUMBER-epic-name`
 - **Merge feature**: Run `git merge feature/FEATURE_NAME-from-issue --no-ff`
-- **Push epic branch**: Run `git push origin epic/EPIC_NUMBER-epic-name`
+- **NO PUSH**: Epic branch stays local until epic completion (merges to main)
 
 ### GitHub Issue Management
 
@@ -134,8 +138,8 @@ Mark all acceptance criteria as complete:
 ## Phase 5: Cleanup & Next Steps
 
 ### Branch Cleanup
-- **Delete feature branch**: Run `git branch -d feature/FEATURE_NAME-from-issue`
-- **Delete remote branch**: Run `git push origin --delete feature/FEATURE_NAME-from-issue`
+- **Delete local feature branch**: Run `git branch -d feature/FEATURE_NAME-from-issue`
+- **NO remote cleanup needed**: Feature branches never pushed to remote
 
 ### TodoWrite Cleanup
 - **Mark all feature todos complete**: Update any remaining TodoWrite tasks
