@@ -10,37 +10,102 @@ import { useInterBrainStore } from '../store/interbrain-store';
 
 interface MediaLoadTask {
   nodeId: string;
-  degree: number; // 0 = selected, 1 = direct neighbor, 2 = 2nd degree
+  degree: number; // 0 = selected, 1 = direct neighbor, 2 = 2nd degree, 10 = viewport
   priority: number; // Lower = higher priority
+  distance?: number; // Distance from camera (for viewport-based loading)
 }
 
 export class MediaLoadingService {
   private mediaCache: Map<string, { dreamTalkMedia: MediaFile[], dreamSongContent: CanvasFile[] }> = new Map();
   private loadingQueue: MediaLoadTask[] = [];
   private isProcessingQueue = false;
-  private abortController: AbortController | null = null;
   private maxConcurrentLoads = 3;
   private maxSecondDegreeNodes = 50; // Cap 2nd degree to prevent loading entire graph
 
   // Viewport-based loading (constellation mode)
-  private viewportQueue: Set<string> = new Set();
+  private viewportQueue: Map<string, number> = new Map(); // nodeId -> distance
   private viewportBatchTimer: ReturnType<typeof setTimeout> | null = null;
-  private viewportBatchDelay = 2000; // 2 seconds debounce
+  private viewportBatchDelay = 100; // 100ms debounce for same-frame batching
+  private requestedNodes: Set<string> = new Set(); // Track all requested nodes to prevent duplicate requests
+
+  /**
+   * Load all nodes by distance from camera (startup background loading)
+   * Phase 1: Immediate FOV nodes (within scaling zone)
+   * Phase 2: Remaining nodes by distance (background streaming)
+   */
+  async loadAllNodesByDistance(): Promise<void> {
+    console.log('[MediaLoading] Starting two-phase loading...');
+
+    const store = useInterBrainStore.getState();
+    const allNodeIds = Array.from(store.realNodes.keys());
+
+    if (allNodeIds.length === 0) {
+      console.log('[MediaLoading] No nodes to load');
+      return;
+    }
+
+    // Calculate distance for each node from FOV center (0, 0, 1500)
+    const FOV_CENTER = { x: 0, y: 0, z: 1500 }; // DEFAULT_SCALING_CONFIG.intersectionPoint
+    const FOV_OUTER_RADIUS = 3000; // DEFAULT_SCALING_CONFIG.outerRadius
+
+    const nodesWithDistance = allNodeIds.map(nodeId => {
+      const nodeData = store.realNodes.get(nodeId);
+      if (!nodeData) return null;
+
+      const pos = nodeData.node.position;
+      if (!pos) return null; // Skip nodes without positions
+
+      const distance = Math.sqrt(
+        Math.pow(pos[0] - FOV_CENTER.x, 2) +
+        Math.pow(pos[1] - FOV_CENTER.y, 2) +
+        Math.pow(pos[2] - FOV_CENTER.z, 2)
+      );
+
+      return { nodeId, distance, inFOV: distance < FOV_OUTER_RADIUS };
+    }).filter(Boolean) as { nodeId: string; distance: number; inFOV: boolean }[];
+
+    // Sort by distance (closest first)
+    nodesWithDistance.sort((a, b) => a.distance - b.distance);
+
+    // Phase 1: Immediate FOV nodes (priority 0-2)
+    const fovNodes = nodesWithDistance.filter(n => n.inFOV);
+    const backgroundNodes = nodesWithDistance.filter(n => !n.inFOV);
+
+    console.log(`[MediaLoading] Phase 1: ${fovNodes.length} FOV nodes`);
+    console.log(`[MediaLoading] Phase 2: ${backgroundNodes.length} background nodes`);
+
+    // Queue FOV nodes with high priority
+    const fovTasks: MediaLoadTask[] = fovNodes.map(({ nodeId, distance }) => ({
+      nodeId,
+      degree: 0, // Highest priority
+      priority: distance, // Closest first within FOV
+      distance
+    }));
+
+    // Queue background nodes with low priority
+    const backgroundTasks: MediaLoadTask[] = backgroundNodes.map(({ nodeId, distance }) => ({
+      nodeId,
+      degree: 10, // Low priority
+      priority: 10000 + distance, // Much lower priority than FOV
+      distance
+    }));
+
+    // Add all to loading queue
+    this.loadingQueue.push(...fovTasks, ...backgroundTasks);
+
+    // Mark all as requested
+    nodesWithDistance.forEach(({ nodeId }) => this.requestedNodes.add(nodeId));
+
+    // Start processing
+    this.processQueue();
+  }
 
   /**
    * Load media for a node and its 2-degree neighborhood
+   * Smart: Only loads nodes not already cached (no-op if all loaded)
    */
   async loadNodeWithNeighborhood(selectedNodeId: string): Promise<void> {
     console.log(`[MediaLoading] Loading neighborhood for ${selectedNodeId}`);
-
-    // Cancel any previous loading operation
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-    this.abortController = new AbortController();
-
-    // Clear queue and start fresh
-    this.loadingQueue = [];
 
     // Build relationship graph (2 degrees)
     const visited = new Set<string>();
@@ -53,8 +118,10 @@ export class MediaLoadingService {
       if (visited.has(task.nodeId) || task.degree > 2) continue;
       visited.add(task.nodeId);
 
-      // Add to load list
-      nodesToLoad.push(task);
+      // Only add to load list if not already cached
+      if (!this.mediaCache.has(task.nodeId)) {
+        nodesToLoad.push(task);
+      }
 
       // Queue neighbors if within degree limit
       if (task.degree < 2) {
@@ -82,19 +149,30 @@ export class MediaLoadingService {
       }
     }
 
+    // Early exit if all nodes already cached
+    if (nodesToLoad.length === 0) {
+      console.log(`[MediaLoading] All neighborhood nodes already loaded (cache hit)`);
+      return;
+    }
+
     // Cap 2nd degree nodes to prevent loading too much
     const cappedNodesToLoad = nodesToLoad.slice(0, this.maxSecondDegreeNodes);
 
-    console.log(`[MediaLoading] Queuing ${cappedNodesToLoad.length} nodes (${nodesToLoad.length - cappedNodesToLoad.length} capped)`);
+    console.log(`[MediaLoading] Queuing ${cappedNodesToLoad.length} uncached nodes (${nodesToLoad.length - cappedNodesToLoad.length} capped)`);
 
     // Sort by priority (degree 0 first, then 1, then 2)
     cappedNodesToLoad.sort((a, b) => a.priority - b.priority);
 
-    // Add to loading queue
-    this.loadingQueue = cappedNodesToLoad;
+    // Prepend to loading queue (higher priority than background streaming)
+    this.loadingQueue.unshift(...cappedNodesToLoad);
 
-    // Start processing queue
-    this.processQueue();
+    // Re-sort queue to respect priorities
+    this.loadingQueue.sort((a, b) => a.priority - b.priority);
+
+    // Start processing queue if not already running
+    if (!this.isProcessingQueue) {
+      this.processQueue();
+    }
   }
 
   /**
@@ -106,7 +184,7 @@ export class MediaLoadingService {
 
     const activeLoads: Promise<void>[] = [];
 
-    while (this.loadingQueue.length > 0 && !this.abortController?.signal.aborted) {
+    while (this.loadingQueue.length > 0) {
       // Wait if we hit concurrency limit
       if (activeLoads.length >= this.maxConcurrentLoads) {
         await Promise.race(activeLoads);
@@ -147,8 +225,6 @@ export class MediaLoadingService {
    * Load media for a single node
    */
   private async loadNodeMedia(nodeId: string): Promise<void> {
-    if (this.abortController?.signal.aborted) return;
-
     const store = useInterBrainStore.getState();
     const node = this.getNode(nodeId, store);
 
@@ -222,18 +298,7 @@ export class MediaLoadingService {
         }
       };
 
-      console.log(`[MediaLoading] Updating store for ${node.name}`, {
-        before: existingData.node.dreamTalkMedia[0]?.data?.substring(0, 50),
-        after: dreamTalkMedia[0]?.data?.substring(0, 50)
-      });
-
       store.updateRealNode(nodeId, updatedData);
-
-      // Verify update
-      const verifyData = store.realNodes.get(nodeId);
-      console.log(`[MediaLoading] Verified store update:`, {
-        updated: verifyData?.node.dreamTalkMedia[0]?.data?.substring(0, 50)
-      });
     }
 
     console.log(`[MediaLoading] Loaded media for ${node.name}`);
@@ -258,16 +323,19 @@ export class MediaLoadingService {
    * Request viewport-based media loading (constellation mode)
    * Debounced batch processing - called from DreamNode3D useFrame
    */
-  requestViewportLoad(nodeId: string): void {
-    // Skip if already loaded or in queue
-    if (this.mediaCache.has(nodeId)) {
+  requestViewportLoad(nodeId: string, distance: number): void {
+    // Skip if already loaded, already requested, or currently in loading queue
+    if (this.mediaCache.has(nodeId) || this.requestedNodes.has(nodeId)) {
       return;
     }
 
-    // Add to viewport queue
-    this.viewportQueue.add(nodeId);
+    // Mark as requested to prevent duplicate requests
+    this.requestedNodes.add(nodeId);
 
-    // Debounce batch processing
+    // Add to viewport queue with distance priority
+    this.viewportQueue.set(nodeId, distance);
+
+    // Debounce batch processing (100ms to catch same-frame requests)
     if (this.viewportBatchTimer) {
       clearTimeout(this.viewportBatchTimer);
     }
@@ -279,24 +347,34 @@ export class MediaLoadingService {
 
   /**
    * Process queued viewport loads as low-priority background tasks
+   * Sorted by distance - closest nodes load first
    */
   private async processViewportQueue(): Promise<void> {
-    if (this.viewportQueue.size === 0) return;
+    if (this.viewportQueue.size === 0) {
+      return;
+    }
 
-    const nodesToLoad = Array.from(this.viewportQueue);
+    // Convert to array and sort by distance (closest first)
+    const nodesToLoad = Array.from(this.viewportQueue.entries())
+      .sort((a, b) => a[1] - b[1]); // Sort by distance (smaller = closer)
+
     this.viewportQueue.clear();
 
-    console.log(`[MediaLoading] Processing ${nodesToLoad.length} viewport nodes`);
+    console.log(`[MediaLoading] Processing ${nodesToLoad.length} viewport nodes by distance`);
 
-    // Add to loading queue with low priority (priority 10)
-    const viewportTasks: MediaLoadTask[] = nodesToLoad.map(nodeId => ({
+    // Add to loading queue with distance-based priority
+    const viewportTasks: MediaLoadTask[] = nodesToLoad.map(([nodeId, distance]) => ({
       nodeId,
-      degree: 10, // Very low priority (after 2nd degree)
-      priority: 10
+      degree: 10, // Viewport loads (lower priority than relationship-based)
+      priority: 10 + distance, // Closer nodes = lower priority number = load first
+      distance
     }));
 
     // Append to existing queue (after relationship-based loads)
     this.loadingQueue.push(...viewportTasks);
+
+    // Re-sort entire queue to respect distance priorities
+    this.loadingQueue.sort((a, b) => a.priority - b.priority);
 
     // Trigger queue processing if not already running
     if (!this.isProcessingQueue) {
@@ -312,13 +390,10 @@ export class MediaLoadingService {
     this.mediaCache.clear();
     this.loadingQueue = [];
     this.viewportQueue.clear();
+    this.requestedNodes.clear();
     if (this.viewportBatchTimer) {
       clearTimeout(this.viewportBatchTimer);
       this.viewportBatchTimer = null;
-    }
-    if (this.abortController) {
-      this.abortController.abort();
-      this.abortController = null;
     }
   }
 

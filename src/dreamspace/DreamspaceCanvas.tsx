@@ -49,6 +49,7 @@ export default function DreamspaceCanvas() {
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
   const mockRelationshipData = useInterBrainStore(state => state.mockRelationshipData);
   const realNodes = useInterBrainStore(state => state.realNodes);
+  const constellationData = useInterBrainStore(state => state.constellationData);
   
   // State for dynamic nodes from mock service
   const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
@@ -195,7 +196,7 @@ export default function DreamspaceCanvas() {
     const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
     dreamNodes = [...staticNodes, ...dynamicNodes];
   } else {
-    // Use real nodes from store
+    // Real mode: use realNodes from store
     dreamNodes = Array.from(realNodes.values()).map(data => data.node);
   }
   

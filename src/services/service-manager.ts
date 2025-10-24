@@ -184,7 +184,7 @@ export class ServiceManager {
     // Sync with store's data mode
     const store = useInterBrainStore.getState();
     if (store.dataMode === 'real' && this.realService) {
-      // Perform initial vault scan when starting in real mode
+      // Perform batched vault scan when starting in real mode
       this.realService.scanVault().catch(error => {
         console.error('Initial vault scan failed:', error);
       });

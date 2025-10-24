@@ -78,49 +78,22 @@ export default class InterBrainPlugin extends Plugin {
     // Add settings tab
     this.addSettingTab(new InterBrainSettingTab(this.app, this));
 
-    // Initialize services
+    // Initialize core services first (triggers vault scan)
     this.initializeServices();
 
-    // Initialize transcription service for copilot mode
-    initializeTranscriptionService(this.app);
-
-    // Initialize conversation recording service for invocation tracking
-    initializeConversationRecordingService(this.app);
-
-    // Initialize conversation summary service for AI-powered summaries
-    initializeConversationSummaryService(this.app);
-
-    // Initialize email export service for conversation summaries
-    initializeEmailExportService(this.app);
-
-    // Initialize audio recording service for Songline feature
-    initializeAudioRecordingService(this);
-
-    // Initialize perspective service for Songline feature
-    initializePerspectiveService(this);
-
-    // Initialize conversations service for Songline feature
-    initializeConversationsService(this);
-
-    // Initialize audio streaming service for Songline feature
-    initializeAudioStreamingService(this);
-
-    // Initialize media loading service for lazy media loading
+    // Initialize media loading service immediately (needed for two-phase loading)
     initializeMediaLoadingService();
 
-    // Get services for dependency injection
+    // Initialize essential services needed for URI handling
     const radicleService = serviceManager.getRadicleService();
     const dreamNodeService = serviceManager.getActive();
-
-    // Initialize URI handler service for deep links
-    // Cast to GitDreamNodeService since we know it's the concrete implementation at runtime
     initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
-
-    // Initialize Radicle batch init service for post-call processing
     initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
-
-    // Initialize GitHub batch share service for Windows/GitHub fallback mode
     initializeGitHubBatchShareService(this, dreamNodeService as any);
+
+    // Defer heavy copilot/songline services until after critical path
+    // These will initialize in background after plugin loads
+    this.initializeBackgroundServices();
 
     // Auto-generate mock relationships if not present (ensures deterministic behavior)
     const store = useInterBrainStore.getState();
@@ -147,6 +120,23 @@ export default class InterBrainPlugin extends Plugin {
     this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
       this.app.commands.executeCommandById('interbrain:open-dreamspace');
     });
+  }
+
+  private initializeBackgroundServices(): void {
+    // Defer heavy copilot/songline services to background
+    // These aren't needed until user actually opens those features
+    setTimeout(() => {
+      console.log('[Plugin] Initializing background services...');
+      initializeTranscriptionService(this.app);
+      initializeConversationRecordingService(this.app);
+      initializeConversationSummaryService(this.app);
+      initializeEmailExportService(this.app);
+      initializeAudioRecordingService(this);
+      initializePerspectiveService(this);
+      initializeConversationsService(this);
+      initializeAudioStreamingService(this);
+      console.log('[Plugin] Background services initialized');
+    }, 100); // Tiny delay to let vault scan finish first
   }
 
   private initializeServices(): void {
@@ -633,6 +623,15 @@ export default class InterBrainPlugin extends Plugin {
             this.uiService.showSuccess(
               `Scan complete: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed`
             );
+
+            // Trigger two-phase media loading after vault scan
+            try {
+              const { getMediaLoadingService } = await import('./services/media-loading-service');
+              const mediaLoadingService = getMediaLoadingService();
+              mediaLoadingService.loadAllNodesByDistance();
+            } catch (error) {
+              console.warn('[Main] Failed to start media loading:', error);
+            }
           }
         } catch (error) {
           this.uiService.showError(error instanceof Error ? error.message : 'Vault scan failed');

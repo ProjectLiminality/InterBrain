@@ -279,15 +279,21 @@ export class GitDreamNodeService {
    */
   async scanVault(): Promise<{ added: number; updated: number; removed: number }> {
     const stats = { added: 0, updated: 0, removed: 0 };
-    
+
     try {
+      console.log('[VaultScan] Starting batch scan...');
+
       // Get all root-level directories
       const entries = await fsPromises.readdir(this.vaultPath, { withFileTypes: true });
       const directories = entries.filter((entry: { isDirectory(): boolean }) => entry.isDirectory());
-      
+
       // Track found nodes for removal detection
       const foundNodeIds = new Set<string>();
-      
+
+      // Batch collection - don't update store until all nodes are processed
+      const nodesToAdd: Array<{ dirPath: string; udd: UDDFile; dirName: string }> = [];
+      const nodesToUpdate: Array<{ existingData: RealNodeData; dirPath: string; udd: UDDFile; dirName: string }> = [];
+
       // Check each directory
       for (const dir of directories) {
         const dirPath = path.join(this.vaultPath, dir.name);
@@ -318,13 +324,11 @@ export class GitDreamNodeService {
           const existingData = store.realNodes.get(udd.uuid);
 
           if (!existingData) {
-            // New node - add to store
-            await this.addNodeFromVault(dirPath, udd, dir.name);
-            stats.added++;
+            // Queue for batch add
+            nodesToAdd.push({ dirPath, udd, dirName: dir.name });
           } else {
-            // Existing node - check for updates
-            const updated = await this.updateNodeFromVault(existingData, dirPath, udd, dir.name);
-            if (updated) stats.updated++;
+            // Queue for batch update
+            nodesToUpdate.push({ existingData, dirPath, udd, dirName: dir.name });
           }
         } catch (error) {
           // Log error for this specific node but continue scanning others
@@ -332,20 +336,74 @@ export class GitDreamNodeService {
           continue;
         }
       }
-      
-      // Remove nodes that no longer exist in vault
+
+      // Now process all batched operations - build complete Map without triggering re-renders
+      console.log(`[VaultScan] Processing ${nodesToAdd.length} adds, ${nodesToUpdate.length} updates`);
+
       const store = useInterBrainStore.getState();
+      const newRealNodes = new Map(store.realNodes); // Clone existing map
+
+      // Process all new nodes
+      for (const { dirPath, udd, dirName } of nodesToAdd) {
+        const nodeData = await this.buildNodeDataFromVault(dirPath, udd, dirName);
+        if (nodeData) {
+          newRealNodes.set(udd.uuid, nodeData);
+          stats.added++;
+        }
+      }
+
+      // Process all updates
+      for (const { existingData, dirPath, udd, dirName } of nodesToUpdate) {
+        const nodeData = await this.buildNodeDataFromVault(dirPath, udd, dirName);
+        if (nodeData) {
+          // Check if actually changed before counting as update
+          const changed = JSON.stringify(existingData.node) !== JSON.stringify(nodeData.node);
+          if (changed) {
+            newRealNodes.set(udd.uuid, nodeData);
+            stats.updated++;
+          }
+        }
+      }
+
+      // Remove nodes that no longer exist in vault
       for (const [id] of store.realNodes) {
         if (!foundNodeIds.has(id)) {
-          store.deleteRealNode(id);
+          newRealNodes.delete(id);
           stats.removed++;
         }
       }
-      
+
+      // Extract and persist lightweight metadata for instant startup
+      const nodeMetadata = new Map<string, { name: string; type: string; uuid: string }>();
+      for (const [id, data] of newRealNodes) {
+        nodeMetadata.set(id, {
+          name: data.node.name,
+          type: data.node.type,
+          uuid: data.node.id
+        });
+      }
+
+      // Single store update - triggers only ONE React re-render
+      console.log(`[VaultScan] Applying batched update to store...`);
+      store.setRealNodes(newRealNodes);
+      store.setNodeMetadata(nodeMetadata);
+      console.log(`[VaultScan] Batch scan complete - persisted metadata for ${nodeMetadata.size} nodes`);
+
+      // Trigger two-phase media loading in background (non-blocking)
+      import('./media-loading-service').then(({ getMediaLoadingService }) => {
+        try {
+          const mediaLoadingService = getMediaLoadingService();
+          mediaLoadingService.loadAllNodesByDistance();
+          console.log(`[VaultScan] Two-phase media loading started in background`);
+        } catch (error) {
+          console.warn('[VaultScan] Failed to start media loading:', error);
+        }
+      });
+
     } catch (error) {
       console.error('Vault scan error:', error);
     }
-    
+
     return stats;
   }
   
@@ -479,9 +537,9 @@ export class GitDreamNodeService {
   }
   
   /**
-   * Add node from vault to store
+   * Build node data from vault without updating store (for batching)
    */
-  private async addNodeFromVault(dirPath: string, udd: UDDFile, repoName: string): Promise<void> {
+  private async buildNodeDataFromVault(dirPath: string, udd: UDDFile, repoName: string): Promise<RealNodeData | null> {
     // Load dreamTalk media if specified
     let dreamTalkMedia: Array<{
       path: string;
@@ -508,12 +566,15 @@ export class GitDreamNodeService {
       }
     }
     
-    // Create node with random position
+    // Use cached constellation position if available, otherwise random
+    const store = useInterBrainStore.getState();
+    const cachedPosition = store.constellationData.positions?.get(udd.uuid);
+
     const node: DreamNode = {
       id: udd.uuid,
       type: udd.type,
       name: udd.title,
-      position: this.calculateNewNodePosition(),
+      position: cachedPosition || this.calculateNewNodePosition(),
       dreamTalkMedia,
       dreamSongContent: [],
       liminalWebConnections: udd.liminalWebRelationships || [],
@@ -526,18 +587,30 @@ export class GitDreamNodeService {
       githubPagesUrl: udd.githubPagesUrl
     };
     
-    // Add to store
-    const store = useInterBrainStore.getState();
+    // Calculate file hash if needed
     let fileHash: string | undefined;
     if (dreamTalkMedia.length > 0 && udd.dreamTalk) {
       const mediaPath = path.join(dirPath, udd.dreamTalk);
       fileHash = await this.calculateFileHashFromPath(mediaPath);
     }
-    store.updateRealNode(udd.uuid, {
+
+    // Return node data without updating store
+    return {
       node,
       fileHash,
       lastSynced: Date.now()
-    });
+    };
+  }
+
+  /**
+   * Add node from vault to store (legacy method - use buildNodeDataFromVault for batching)
+   */
+  private async addNodeFromVault(dirPath: string, udd: UDDFile, repoName: string): Promise<void> {
+    const nodeData = await this.buildNodeDataFromVault(dirPath, udd, repoName);
+    if (nodeData) {
+      const store = useInterBrainStore.getState();
+      store.updateRealNode(udd.uuid, nodeData);
+    }
   }
   
   /**

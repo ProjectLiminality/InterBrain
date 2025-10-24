@@ -330,10 +330,13 @@ export interface InterBrainState extends OllamaConfigSlice {
     isScanning: boolean;
     positions: Map<string, [number, number, number]> | null;
     lastLayoutTimestamp: number | null;
+    // Lightweight node metadata for instant startup rendering
+    nodeMetadata: Map<string, { name: string; type: string; uuid: string }> | null;
   };
   setRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
   setConstellationScanning: (scanning: boolean) => void;
   setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
+  setNodeMetadata: (metadata: Map<string, { name: string; type: string; uuid: string }> | null) => void;
   clearConstellationData: () => void;
 
   // Radial button UI state (option-key triggered)
@@ -469,7 +472,8 @@ export const useInterBrainStore = create<InterBrainState>()(
     lastScanTimestamp: null,
     isScanning: false,
     positions: null,
-    lastLayoutTimestamp: null
+    lastLayoutTimestamp: null,
+    nodeMetadata: null
   },
 
   radialButtonUI: {
@@ -1418,13 +1422,21 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   })),
 
+  setNodeMetadata: (metadata) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      nodeMetadata: metadata
+    }
+  })),
+
   clearConstellationData: () => set(() => ({
     constellationData: {
       relationshipGraph: null,
       lastScanTimestamp: null,
       isScanning: false,
       positions: null,
-      lastLayoutTimestamp: null
+      lastLayoutTimestamp: null,
+      nodeMetadata: null
     }
   })),
 
@@ -1458,12 +1470,14 @@ export const useInterBrainStore = create<InterBrainState>()(
         // This avoids localStorage quota issues entirely
         realNodes: [],
         mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
-        constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions) ? {
+        constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions || state.constellationData.nodeMetadata) ? {
           ...state.constellationData,
           relationshipGraph: state.constellationData.relationshipGraph ?
             serializeRelationshipGraph(state.constellationData.relationshipGraph) : null,
           positions: state.constellationData.positions ?
-            mapToArray(state.constellationData.positions) : null
+            mapToArray(state.constellationData.positions) : null,
+          nodeMetadata: state.constellationData.nodeMetadata ?
+            mapToArray(state.constellationData.nodeMetadata) : null
         } : null,
         ...extractOllamaPersistenceData(state),
       }),
@@ -1479,6 +1493,7 @@ export const useInterBrainStore = create<InterBrainState>()(
             isScanning: boolean;
             positions: [string, [number, number, number]][] | null;
             lastLayoutTimestamp: number | null;
+            nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
           } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
@@ -1490,7 +1505,8 @@ export const useInterBrainStore = create<InterBrainState>()(
           lastScanTimestamp: null as number | null,
           isScanning: false,
           positions: null as Map<string, [number, number, number]> | null,
-          lastLayoutTimestamp: null as number | null
+          lastLayoutTimestamp: null as number | null,
+          nodeMetadata: null as Map<string, { name: string; type: string; uuid: string }> | null
         };
 
         if (persistedData.constellationData) {
@@ -1502,7 +1518,9 @@ export const useInterBrainStore = create<InterBrainState>()(
               isScanning: false,
               positions: persistedData.constellationData.positions ?
                 arrayToMap(persistedData.constellationData.positions) : null,
-              lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp
+              lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp,
+              nodeMetadata: persistedData.constellationData.nodeMetadata ?
+                arrayToMap(persistedData.constellationData.nodeMetadata) : null
             };
           } catch (error) {
             console.warn('Failed to deserialize constellation data:', error);
