@@ -59,9 +59,9 @@ export const ActiveVideoCallButton: React.FC = () => {
   };
 
   // Button configuration
-  // Position in polar coordinates: radius=10, phi=135° (upper-left quadrant)
-  // x = 10 × cos(135°) ≈ -7.07, y = 10 × sin(135°) ≈ 7.07
-  const BUTTON_POSITION: [number, number, number] = [-7.07, 7.07, -45];
+  // Position in polar coordinates: radius=10, phi=-45° (lower-right quadrant)
+  // x = 10 × cos(-45°) ≈ 7.07, y = 10 × sin(-45°) ≈ -7.07
+  const BUTTON_POSITION: [number, number, number] = [7.07, -7.07, -45];
   const ICON_NAME = 'lucide-video';
   const LABEL = 'End Video Call';
 
