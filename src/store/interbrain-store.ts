@@ -1540,3 +1540,21 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
   )
 );
+
+// DIAGNOSTIC: Log all store updates to identify re-render storm trigger
+if (typeof window !== 'undefined') {
+  let updateCount = 0;
+  useInterBrainStore.subscribe((state, prevState) => {
+    updateCount++;
+
+    // Only log during the critical period (when nodes are being loaded)
+    if (state.realNodes.size > 0 && state.realNodes.size <= 72) {
+      console.log(`[StoreDiagnostic] 🔄 Store update #${updateCount} - realNodes.size: ${prevState.realNodes.size} → ${state.realNodes.size}`);
+
+      // Show stack trace for updates 2-5 to see who's calling set()
+      if (updateCount >= 2 && updateCount <= 5) {
+        console.trace(`[StoreDiagnostic] Stack trace for update #${updateCount}`);
+      }
+    }
+  });
+}

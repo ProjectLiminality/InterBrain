@@ -319,23 +319,11 @@ export class MediaLoadingService {
     // Cache the loaded media
     this.mediaCache.set(nodeId, { dreamTalkMedia, dreamSongContent });
 
-    // Update node in store with loaded media
-    // Use setTimeout to ensure each update gets its own event loop tick and React render
-    setTimeout(() => {
-      const existingData = store.realNodes.get(nodeId);
-      if (existingData) {
-        const updatedData = {
-          ...existingData,
-          node: {
-            ...existingData.node,
-            dreamTalkMedia,
-            dreamSongContent
-          }
-        };
-
-        store.updateRealNode(nodeId, updatedData);
-      }
-    }, 1); // 1ms is enough to create a new event loop tick
+    // PERFORMANCE FIX: Do NOT update store here!
+    // - Each updateRealNode() triggers full React re-render
+    // - With 72 nodes = 72 store updates = re-render storm
+    // - Media is in cache and will be accessed when DreamNode mounts
+    // - No need to update store since media is lazy-loaded on demand
   }
 
   /**
