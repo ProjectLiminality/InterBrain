@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { Group, Vector3, Raycaster, Sphere, Mesh, Frustum, Matrix4 } from 'three';
+import { Canvas, useThree } from '@react-three/fiber';
+import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D, { DreamNode3DRef } from './DreamNode3D';
@@ -1431,9 +1431,6 @@ export default function DreamspaceCanvas() {
     }
   };
 
-  // Track visible nodes using frustum culling (only in liminal-web mode with many nodes)
-  const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
-  const shouldUseFrustumCulling = spatialLayout === 'liminal-web' && dreamNodes.length > 15;
   const prevRenderCountRef = useRef(0);
 
   return (
@@ -1505,14 +1502,6 @@ export default function DreamspaceCanvas() {
       >
         {/* Camera reset handler - listens for store changes and resets camera */}
         <CameraResetHandler />
-
-        {/* Frustum culling tracker - only render visible nodes in liminal-web mode */}
-        <FrustumCullingTracker
-          dreamNodes={dreamNodes}
-          dreamWorldRef={dreamWorldRef}
-          onVisibilityChange={setVisibleNodeIds}
-          enabled={shouldUseFrustumCulling}
-        />
         
         {/* Debug intersection point - STATIONARY relative to camera (outside rotatable group) */}
         {debugIntersectionPoint && (
@@ -1553,30 +1542,13 @@ export default function DreamspaceCanvas() {
           {(() => {
             const shouldEnableDynamicScaling = spatialLayout === 'constellation';
 
-            // Filter nodes based on frustum culling when enabled
-            // CRITICAL: In liminal-web mode, always render selected node AND its related nodes (even if off-screen during animation)
-            const nodesToRender = shouldUseFrustumCulling
-              ? dreamNodes.filter(node => {
-                  // Always render if visible in frustum
-                  if (visibleNodeIds.has(node.id)) return true;
-
-                  // Always render the selected node
-                  if (node.id === selectedNode?.id) return true;
-
-                  // Always render nodes related to the selected node (they're animating into view)
-                  if (selectedNode?.liminalWebConnections?.includes(node.id)) return true;
-
-                  return false;
-                })
-              : dreamNodes;
-
             // DIAGNOSTIC: Only log when node count changes significantly
-            if (Math.abs(nodesToRender.length - prevRenderCountRef.current) > 2) {
-              console.log(`[DreamNodeRendering] 🎨 Rendering ${nodesToRender.length}/${dreamNodes.length} nodes (culling: ${shouldUseFrustumCulling})`);
-              prevRenderCountRef.current = nodesToRender.length;
+            if (Math.abs(dreamNodes.length - prevRenderCountRef.current) > 2) {
+              console.log(`[DreamNodeRendering] 🎨 Rendering ${dreamNodes.length} nodes`);
+              prevRenderCountRef.current = dreamNodes.length;
             }
 
-            const renderedNodes = nodesToRender.map((node) => (
+            const renderedNodes = dreamNodes.map((node) => (
               <React.Fragment key={node.id}>
                 {/* Star component - purely visual, positioned slightly closer than anchor */}
                 <Star3D
@@ -1704,76 +1676,3 @@ function CameraResetHandler() {
   return null; // This component doesn't render anything
 }
 
-/**
- * Frustum culling component that tracks which nodes are visible to the camera
- * Only updates when necessary to minimize re-renders
- */
-function FrustumCullingTracker({
-  dreamNodes,
-  dreamWorldRef,
-  onVisibilityChange,
-  enabled
-}: {
-  dreamNodes: DreamNode[];
-  dreamWorldRef: React.RefObject<Group | null>;
-  onVisibilityChange: (visibleIds: Set<string>) => void;
-  enabled: boolean;
-}) {
-  const { camera } = useThree();
-  const frustum = useRef(new Frustum());
-  const cameraViewProjectionMatrix = useRef(new Matrix4());
-  const frameCount = useRef(0);
-
-  const previousVisibleIds = useRef<Set<string>>(new Set());
-
-  useFrame(() => {
-    if (!enabled) return;
-
-    // Only update every 3 frames to reduce overhead (still 20fps at 60fps)
-    frameCount.current++;
-    if (frameCount.current % 3 !== 0) return;
-
-    // Update frustum from camera
-    cameraViewProjectionMatrix.current.multiplyMatrices(
-      camera.projectionMatrix,
-      camera.matrixWorldInverse
-    );
-    frustum.current.setFromProjectionMatrix(cameraViewProjectionMatrix.current);
-
-    // Check which nodes are visible
-    const visibleIds = new Set<string>();
-    const worldRotation = dreamWorldRef.current?.quaternion;
-
-    dreamNodes.forEach(node => {
-      // Transform node position by world rotation to get actual world position
-      const nodeWorldPos = new Vector3(node.position[0], node.position[1], node.position[2]);
-      if (worldRotation) {
-        nodeWorldPos.applyQuaternion(worldRotation);
-      }
-
-      // Expand frustum check slightly to avoid pop-in at edges
-      // Use a sphere around the node position with radius 200 (larger than node size)
-      const isVisible = frustum.current.intersectsSphere(
-        new Sphere(nodeWorldPos, 200)
-      );
-
-      if (isVisible) {
-        visibleIds.add(node.id);
-      }
-    });
-
-    // CRITICAL FIX: Only update if the visible set ACTUALLY changed
-    // Compare sets to prevent infinite re-render loop
-    const hasChanged =
-      visibleIds.size !== previousVisibleIds.current.size ||
-      Array.from(visibleIds).some(id => !previousVisibleIds.current.has(id));
-
-    if (hasChanged) {
-      console.log(`[FrustumCulling] Visibility changed: ${previousVisibleIds.current.size} → ${visibleIds.size} nodes`);
-      previousVisibleIds.current = visibleIds;
-      onVisibilityChange(visibleIds);
-    }
-  });
-
-  return null;
-}
