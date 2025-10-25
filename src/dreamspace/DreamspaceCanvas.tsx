@@ -1554,8 +1554,20 @@ export default function DreamspaceCanvas() {
             const shouldEnableDynamicScaling = spatialLayout === 'constellation';
 
             // Filter nodes based on frustum culling when enabled
+            // CRITICAL: In liminal-web mode, always render selected node AND its related nodes (even if off-screen during animation)
             const nodesToRender = shouldUseFrustumCulling
-              ? dreamNodes.filter(node => visibleNodeIds.has(node.id) || node.id === selectedNode?.id)
+              ? dreamNodes.filter(node => {
+                  // Always render if visible in frustum
+                  if (visibleNodeIds.has(node.id)) return true;
+
+                  // Always render the selected node
+                  if (node.id === selectedNode?.id) return true;
+
+                  // Always render nodes related to the selected node (they're animating into view)
+                  if (selectedNode?.liminalWebConnections?.includes(node.id)) return true;
+
+                  return false;
+                })
               : dreamNodes;
 
             // DIAGNOSTIC: Only log when node count changes significantly
