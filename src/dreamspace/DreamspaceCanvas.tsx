@@ -197,29 +197,18 @@ export default function DreamspaceCanvas() {
     dreamNodes = [...staticNodes, ...dynamicNodes];
   } else {
     // Real mode: use realNodes from store
-    console.log(`[DreamNodeRendering] 📊 Converting ${realNodes.size} store nodes to dreamNodes array`);
-    const startConversion = performance.now();
     dreamNodes = Array.from(realNodes.values()).map(data => data.node);
-    const conversionTime = performance.now() - startConversion;
-    console.log(`[DreamNodeRendering] ⚡ Conversion took ${conversionTime.toFixed(2)}ms`);
   }
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
 
-  // Track when DreamNodes are actually rendered in DOM
-  useEffect(() => {
-    if (dreamNodes.length > 0) {
-      console.log(`[DreamNodeRendering] 🎯 useEffect fired - ${dreamNodes.length} dreamNodes in React state`);
-
-      // Schedule after next paint to measure actual DOM rendering
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          console.log(`[DreamNodeRendering] 🖼️ DreamNodes should be visible in viewport now`);
-        });
-      });
-    }
-  }, [dreamNodes.length]);
+  // Track when DreamNodes are actually rendered in DOM (for debugging)
+  // useEffect(() => {
+  //   if (dreamNodes.length > 0) {
+  //     console.log(`[DreamNodeRendering] 🎯 useEffect fired - ${dreamNodes.length} dreamNodes`);
+  //   }
+  // }, [dreamNodes.length]);
   
   // Hit sphere references for scene-based raycasting
   const hitSphereRefs = useRef<Map<string, React.RefObject<Mesh | null>>>(new Map());

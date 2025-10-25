@@ -342,6 +342,13 @@ export class MediaLoadingService {
   }
 
   /**
+   * Get cached media for a node (returns null if not loaded)
+   */
+  getCachedMedia(nodeId: string): { dreamTalkMedia: MediaFile[], dreamSongContent: DreamSongContent[] } | null {
+    return this.mediaCache.get(nodeId) || null;
+  }
+
+  /**
    * Request viewport-based media loading (constellation mode)
    * Debounced batch processing - called from DreamNode3D useFrame
    */

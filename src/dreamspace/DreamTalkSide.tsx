@@ -7,6 +7,7 @@ import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../utils/lin
 
 interface DreamTalkSideProps {
   dreamNode: DreamNode;
+  cachedMedia: { dreamTalkMedia: MediaFile[], dreamSongContent: any[] } | null;
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
@@ -24,6 +25,7 @@ interface DreamTalkSideProps {
 
 export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   dreamNode,
+  cachedMedia,
   isHovered,
   isEditModeActive: _isEditModeActive,
   isPendingRelationship,
@@ -77,9 +79,9 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
       onDoubleClick={onDoubleClick}
     >
       {/* DreamTalk Media Container */}
-      {dreamNode.dreamTalkMedia[0] && (
+      {cachedMedia?.dreamTalkMedia[0] && (
         <div style={getMediaContainerStyle()}>
-          <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
+          <MediaRenderer media={cachedMedia.dreamTalkMedia[0]} />
           {/* Fade-to-black overlay */}
           <div style={getMediaOverlayStyle()} />
           
@@ -120,7 +122,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
       )}
 
       {/* Empty state text - when no media */}
-      {!dreamNode.dreamTalkMedia[0] && (
+      {!cachedMedia?.dreamTalkMedia[0] && (
         <div
           style={{
             width: '100%',
