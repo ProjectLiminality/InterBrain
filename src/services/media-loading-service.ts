@@ -338,8 +338,8 @@ export class MediaLoadingService {
     this.mediaCache.set(nodeId, { dreamTalkMedia, dreamSongContent });
 
     // Update node in store with loaded media
-    // Use queueMicrotask to break out of React's automatic batching
-    queueMicrotask(() => {
+    // Use setTimeout to ensure each update gets its own event loop tick and React render
+    setTimeout(() => {
       console.log(`[MediaLoading] ⏰ ${Date.now()} - 💾 Updating store for ${node.name}`);
       const existingData = store.realNodes.get(nodeId);
       if (existingData) {
@@ -355,7 +355,7 @@ export class MediaLoadingService {
         store.updateRealNode(nodeId, updatedData);
         console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ Media loaded and stored for ${node.name}`);
       }
-    });
+    }, 1); // 1ms is enough to create a new event loop tick
   }
 
   /**

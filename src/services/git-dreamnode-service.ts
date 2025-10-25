@@ -390,18 +390,22 @@ export class GitDreamNodeService {
       console.log(`[VaultScan] ⏰ ${Date.now()} - Batch scan complete - persisted metadata for ${nodeMetadata.size} nodes`);
       console.log(`[VaultScan] 🚀 NODES SHOULD BE VISIBLE NOW - Store updated with ${newRealNodes.size} nodes`);
 
-      // Trigger two-phase media loading in background (non-blocking)
-      console.log(`[VaultScan] ⏰ ${Date.now()} - Starting dynamic import of media loading service...`);
-      import('./media-loading-service').then(({ getMediaLoadingService }) => {
-        console.log(`[VaultScan] ⏰ ${Date.now()} - Media loading service imported, calling loadAllNodesByDistance()...`);
-        try {
-          const mediaLoadingService = getMediaLoadingService();
-          mediaLoadingService.loadAllNodesByDistance();
-          console.log(`[VaultScan] ⏰ ${Date.now()} - loadAllNodesByDistance() called (non-blocking)`);
-        } catch (error) {
-          console.warn('[VaultScan] Failed to start media loading:', error);
-        }
-      });
+      // CRITICAL: Defer media loading to give React time to render placeholders first
+      // setTimeout ensures media loading starts AFTER React has completed its render cycle
+      console.log(`[VaultScan] ⏰ ${Date.now()} - Scheduling media loading to start after React renders...`);
+      setTimeout(() => {
+        console.log(`[VaultScan] ⏰ ${Date.now()} - React should have rendered by now, starting media loading...`);
+        import('./media-loading-service').then(({ getMediaLoadingService }) => {
+          console.log(`[VaultScan] ⏰ ${Date.now()} - Media loading service imported, calling loadAllNodesByDistance()...`);
+          try {
+            const mediaLoadingService = getMediaLoadingService();
+            mediaLoadingService.loadAllNodesByDistance();
+            console.log(`[VaultScan] ⏰ ${Date.now()} - loadAllNodesByDistance() called (non-blocking)`);
+          } catch (error) {
+            console.warn('[VaultScan] Failed to start media loading:', error);
+          }
+        });
+      }, 50); // 50ms delay to let React render
 
     } catch (error) {
       console.error('Vault scan error:', error);
