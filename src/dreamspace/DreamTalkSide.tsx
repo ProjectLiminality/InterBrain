@@ -76,13 +76,13 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      {/* DreamTalk Media Container */}
-      {dreamNode.dreamTalkMedia[0] && (
+      {/* DreamTalk Media Container - only show if media has actual data */}
+      {dreamNode.dreamTalkMedia[0]?.data && dreamNode.dreamTalkMedia[0].data.length > 0 && (
         <div style={getMediaContainerStyle()}>
           <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
           {/* Fade-to-black overlay */}
           <div style={getMediaOverlayStyle()} />
-          
+
           {/* Hover overlay with name */}
           {isHovered && (
             <div
@@ -119,8 +119,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         </div>
       )}
 
-      {/* Empty state text - when no media */}
-      {!dreamNode.dreamTalkMedia[0] && (
+      {/* Empty state text - when no media OR media data not loaded yet */}
+      {(!dreamNode.dreamTalkMedia[0] || !dreamNode.dreamTalkMedia[0].data || dreamNode.dreamTalkMedia[0].data.length === 0) && (
         <div
           style={{
             width: '100%',
