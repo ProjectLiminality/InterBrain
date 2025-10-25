@@ -277,22 +277,9 @@ function MediaRenderer({ media }: { media: MediaFile }) {
     backfaceVisibility: 'hidden' as const
   };
 
-  // Show loading placeholder if media data not yet loaded
+  // Don't render anything if media data not yet loaded (no loading placeholder)
   if (!media.data || media.data.length === 0) {
-    return (
-      <div style={{
-        ...mediaStyle,
-        background: 'rgba(255, 255, 255, 0.1)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '10px',
-        textAlign: 'center'
-      }}>
-        ⏳
-      </div>
-    );
+    return null;
   }
 
   // Handle .link files
