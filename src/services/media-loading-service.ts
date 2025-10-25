@@ -165,9 +165,7 @@ export class MediaLoadingService {
 
         if (node) {
           const neighbors = [
-            ...(node.liminalWebConnections || []),
-            ...(node.submodules || []),
-            ...(node.supermodules || [])
+            ...(node.liminalWebConnections || [])
           ];
 
           // Add neighbors with incremented degree and priority
@@ -344,7 +342,7 @@ export class MediaLoadingService {
   /**
    * Get cached media for a node (returns null if not loaded)
    */
-  getCachedMedia(nodeId: string): { dreamTalkMedia: MediaFile[], dreamSongContent: DreamSongContent[] } | null {
+  getCachedMedia(nodeId: string): { dreamTalkMedia: MediaFile[], dreamSongContent: CanvasFile[] } | null {
     return this.mediaCache.get(nodeId) || null;
   }
 
@@ -366,10 +364,10 @@ export class MediaLoadingService {
 
     // Debounce batch processing (100ms to catch same-frame requests)
     if (this.viewportBatchTimer) {
-      clearTimeout(this.viewportBatchTimer);
+      globalThis.clearTimeout(this.viewportBatchTimer);
     }
 
-    this.viewportBatchTimer = setTimeout(() => {
+    this.viewportBatchTimer = globalThis.setTimeout(() => {
       this.processViewportQueue();
     }, this.viewportBatchDelay);
   }
@@ -419,7 +417,7 @@ export class MediaLoadingService {
     this.viewportQueue.clear();
     this.requestedNodes.clear();
     if (this.viewportBatchTimer) {
-      clearTimeout(this.viewportBatchTimer);
+      globalThis.clearTimeout(this.viewportBatchTimer);
       this.viewportBatchTimer = null;
     }
   }

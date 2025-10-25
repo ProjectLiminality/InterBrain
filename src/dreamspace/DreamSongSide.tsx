@@ -126,15 +126,18 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           if (gitStyle.glowIntensity > 0) {
             return getGitGlow(gitState, gitStyle.glowIntensity);
           }
-          
+
           // Priority 2: Relationship glow (edit mode OR copilot mode)
           if (isPendingRelationship) {
             return getEditModeGlow(25); // Strong gold glow for relationships
           }
-          
+
           // Priority 3: Hover glow (fallback)
           return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-        })()
+        })(),
+        // CSS containment for better browser rendering with many nodes
+        contain: 'layout style paint' as const,
+        contentVisibility: 'auto' as const
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

@@ -85,7 +85,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     // Poll every 100ms until media is loaded (max 30 seconds)
     let pollCount = 0;
     const maxPolls = 300; // 30 seconds
-    const pollInterval = setInterval(() => {
+    const pollInterval = globalThis.setInterval(() => {
       pollCount++;
       const media = mediaService.getCachedMedia(dreamNode.id);
 
@@ -94,13 +94,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         dreamNode.dreamTalkMedia = media.dreamTalkMedia;
         dreamNode.dreamSongContent = media.dreamSongContent;
         setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
-        clearInterval(pollInterval);
+        globalThis.clearInterval(pollInterval);
       } else if (pollCount >= maxPolls) {
-        clearInterval(pollInterval);
+        globalThis.clearInterval(pollInterval);
       }
     }, 100);
 
-    return () => clearInterval(pollInterval);
+    return () => globalThis.clearInterval(pollInterval);
   }, [dreamNode.id]);
   
   // Dual-mode position state

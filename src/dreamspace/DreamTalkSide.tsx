@@ -61,15 +61,18 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
           if (gitStyle.glowIntensity > 0) {
             return getGitGlow(gitState, gitStyle.glowIntensity);
           }
-          
+
           // Priority 2: Relationship glow (edit mode OR copilot mode)
           if (isPendingRelationship) {
             return getEditModeGlow(25); // Strong gold glow for relationships
           }
-          
+
           // Priority 3: Hover glow (fallback)
           return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-        })()
+        })(),
+        // CSS containment for better browser rendering with many nodes
+        contain: 'layout style paint' as const,
+        contentVisibility: 'auto' as const
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -274,7 +277,10 @@ function MediaRenderer({ media }: { media: MediaFile }) {
     willChange: 'transform',
     imageRendering: 'auto' as const,
     WebkitFontSmoothing: 'antialiased' as const,
-    backfaceVisibility: 'hidden' as const
+    backfaceVisibility: 'hidden' as const,
+    // CSS containment for better browser rendering with many nodes
+    contain: 'layout style paint' as const,
+    contentVisibility: 'auto' as const
   };
 
   // Don't render anything if media data not yet loaded (no loading placeholder)

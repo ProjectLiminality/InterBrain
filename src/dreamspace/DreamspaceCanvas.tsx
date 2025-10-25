@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
-import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { Group, Vector3, Raycaster, Sphere, Mesh, Frustum, Matrix4 } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D, { DreamNode3DRef } from './DreamNode3D';
@@ -49,7 +49,6 @@ export default function DreamspaceCanvas() {
   const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
   const mockRelationshipData = useInterBrainStore(state => state.mockRelationshipData);
   const realNodes = useInterBrainStore(state => state.realNodes);
-  const constellationData = useInterBrainStore(state => state.constellationData);
   
   // State for dynamic nodes from mock service
   const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
@@ -1432,8 +1431,12 @@ export default function DreamspaceCanvas() {
     }
   };
 
+  // Track visible nodes using frustum culling (only in liminal-web mode with many nodes)
+  const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
+  const shouldUseFrustumCulling = spatialLayout === 'liminal-web' && dreamNodes.length > 15;
+
   return (
-    <div 
+    <div
       className="dreamspace-canvas-container"
       data-dreamspace-canvas
       onDragEnter={handleDragEnter}
@@ -1501,6 +1504,14 @@ export default function DreamspaceCanvas() {
       >
         {/* Camera reset handler - listens for store changes and resets camera */}
         <CameraResetHandler />
+
+        {/* Frustum culling tracker - only render visible nodes in liminal-web mode */}
+        <FrustumCullingTracker
+          dreamNodes={dreamNodes}
+          dreamWorldRef={dreamWorldRef}
+          onVisibilityChange={setVisibleNodeIds}
+          enabled={shouldUseFrustumCulling}
+        />
         
         {/* Debug intersection point - STATIONARY relative to camera (outside rotatable group) */}
         {debugIntersectionPoint && (
@@ -1541,10 +1552,15 @@ export default function DreamspaceCanvas() {
           {(() => {
             const shouldEnableDynamicScaling = spatialLayout === 'constellation';
 
-            console.log(`[DreamNodeRendering] 🎨 Starting to render ${dreamNodes.length} DreamNode components`);
+            // Filter nodes based on frustum culling when enabled
+            const nodesToRender = shouldUseFrustumCulling
+              ? dreamNodes.filter(node => visibleNodeIds.has(node.id) || node.id === selectedNode?.id)
+              : dreamNodes;
+
+            console.log(`[DreamNodeRendering] 🎨 Starting to render ${nodesToRender.length}/${dreamNodes.length} DreamNode components (culling: ${shouldUseFrustumCulling})`);
             const renderStart = performance.now();
 
-            const renderedNodes = dreamNodes.map((node) => (
+            const renderedNodes = nodesToRender.map((node) => (
               <React.Fragment key={node.id}>
                 {/* Star component - purely visual, positioned slightly closer than anchor */}
                 <Star3D
@@ -1568,7 +1584,7 @@ export default function DreamspaceCanvas() {
             ));
 
             const renderTime = performance.now() - renderStart;
-            console.log(`[DreamNodeRendering] ✅ JSX creation took ${renderTime.toFixed(2)}ms for ${dreamNodes.length} nodes`);
+            console.log(`[DreamNodeRendering] ✅ JSX creation took ${renderTime.toFixed(2)}ms for ${nodesToRender.length} nodes`);
 
             return renderedNodes;
           })()}
@@ -1664,13 +1680,76 @@ function CameraResetHandler() {
   const { camera } = useThree();
   const cameraPosition = useInterBrainStore(state => state.camera.position);
   const cameraTarget = useInterBrainStore(state => state.camera.target);
-  
+
   useEffect(() => {
     // Reset camera position when store values change
     camera.position.set(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
     camera.lookAt(cameraTarget[0], cameraTarget[1], cameraTarget[2]);
     camera.updateProjectionMatrix();
   }, [camera, cameraPosition, cameraTarget]);
-  
+
   return null; // This component doesn't render anything
+}
+
+/**
+ * Frustum culling component that tracks which nodes are visible to the camera
+ * Only updates when necessary to minimize re-renders
+ */
+function FrustumCullingTracker({
+  dreamNodes,
+  dreamWorldRef,
+  onVisibilityChange,
+  enabled
+}: {
+  dreamNodes: DreamNode[];
+  dreamWorldRef: React.RefObject<Group | null>;
+  onVisibilityChange: (visibleIds: Set<string>) => void;
+  enabled: boolean;
+}) {
+  const { camera } = useThree();
+  const frustum = useRef(new Frustum());
+  const cameraViewProjectionMatrix = useRef(new Matrix4());
+  const frameCount = useRef(0);
+
+  useFrame(() => {
+    if (!enabled) return;
+
+    // Only update every 3 frames to reduce overhead (still 20fps at 60fps)
+    frameCount.current++;
+    if (frameCount.current % 3 !== 0) return;
+
+    // Update frustum from camera
+    cameraViewProjectionMatrix.current.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse
+    );
+    frustum.current.setFromProjectionMatrix(cameraViewProjectionMatrix.current);
+
+    // Check which nodes are visible
+    const visibleIds = new Set<string>();
+    const worldRotation = dreamWorldRef.current?.quaternion;
+
+    dreamNodes.forEach(node => {
+      // Transform node position by world rotation to get actual world position
+      const nodeWorldPos = new Vector3(node.position[0], node.position[1], node.position[2]);
+      if (worldRotation) {
+        nodeWorldPos.applyQuaternion(worldRotation);
+      }
+
+      // Expand frustum check slightly to avoid pop-in at edges
+      // Use a sphere around the node position with radius 200 (larger than node size)
+      const isVisible = frustum.current.intersectsSphere(
+        new Sphere(nodeWorldPos, 200)
+      );
+
+      if (isVisible) {
+        visibleIds.add(node.id);
+      }
+    });
+
+    // Only update if the visible set changed
+    onVisibilityChange(visibleIds);
+  });
+
+  return null;
 }
