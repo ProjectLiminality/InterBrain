@@ -65,7 +65,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // PERFORMANCE FIX: Populate dreamNode media from cache without triggering store updates
   // - Media loads in background via media-loading-service
   // - Poll cache and update dreamNode properties directly
+  // - Trigger re-render when media loads (without store update)
   // - Avoids 72+ store updates that caused re-render storm
+  const [mediaLoadedTrigger, setMediaLoadedTrigger] = useState(0);
+
   useEffect(() => {
     const mediaService = getMediaLoadingService();
 
@@ -75,6 +78,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       // Update dreamNode properties directly (maintains compatibility with existing code)
       dreamNode.dreamTalkMedia = media.dreamTalkMedia;
       dreamNode.dreamSongContent = media.dreamSongContent;
+      setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
       return; // Stop polling once loaded
     }
 
@@ -89,6 +93,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         // Update dreamNode properties directly
         dreamNode.dreamTalkMedia = media.dreamTalkMedia;
         dreamNode.dreamSongContent = media.dreamSongContent;
+        setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
         clearInterval(pollInterval);
       } else if (pollCount >= maxPolls) {
         clearInterval(pollInterval);
@@ -182,7 +187,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                    !isDragging;
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging, mediaLoadedTrigger]);
 
   // Determine if DreamSong fullscreen button should be visible (stable version)
   const shouldShowDreamSongFullscreen = useMemo(() => {
