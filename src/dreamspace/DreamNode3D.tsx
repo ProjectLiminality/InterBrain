@@ -62,16 +62,36 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Back-side lazy loading optimization - only mount DreamSongSide when needed
   const [hasLoadedBackSide, setHasLoadedBackSide] = useState(false);
 
-  // Media loading from cache - check for loaded media
+  // Media loading from cache - poll for loaded media
   const [cachedMedia, setCachedMedia] = useState<{ dreamTalkMedia: any[], dreamSongContent: any[] } | null>(null);
 
   useEffect(() => {
     const mediaService = getMediaLoadingService();
+
+    // Check immediately
     const media = mediaService.getCachedMedia(dreamNode.id);
-    if (media && !cachedMedia) {
+    if (media) {
       setCachedMedia(media);
+      return; // Stop polling once loaded
     }
-  }, [dreamNode.id, cachedMedia]);
+
+    // Poll every 100ms until media is loaded (max 30 seconds)
+    let pollCount = 0;
+    const maxPolls = 300; // 30 seconds
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      const media = mediaService.getCachedMedia(dreamNode.id);
+
+      if (media) {
+        setCachedMedia(media);
+        clearInterval(pollInterval);
+      } else if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+      }
+    }, 100);
+
+    return () => clearInterval(pollInterval);
+  }, [dreamNode.id]);
   
   // Dual-mode position state
   const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
