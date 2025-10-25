@@ -62,16 +62,19 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Back-side lazy loading optimization - only mount DreamSongSide when needed
   const [hasLoadedBackSide, setHasLoadedBackSide] = useState(false);
 
-  // Media loading from cache - poll for loaded media
-  const [cachedMedia, setCachedMedia] = useState<{ dreamTalkMedia: any[], dreamSongContent: any[] } | null>(null);
-
+  // PERFORMANCE FIX: Populate dreamNode media from cache without triggering store updates
+  // - Media loads in background via media-loading-service
+  // - Poll cache and update dreamNode properties directly
+  // - Avoids 72+ store updates that caused re-render storm
   useEffect(() => {
     const mediaService = getMediaLoadingService();
 
     // Check immediately
     const media = mediaService.getCachedMedia(dreamNode.id);
     if (media) {
-      setCachedMedia(media);
+      // Update dreamNode properties directly (maintains compatibility with existing code)
+      dreamNode.dreamTalkMedia = media.dreamTalkMedia;
+      dreamNode.dreamSongContent = media.dreamSongContent;
       return; // Stop polling once loaded
     }
 
@@ -83,7 +86,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       const media = mediaService.getCachedMedia(dreamNode.id);
 
       if (media) {
-        setCachedMedia(media);
+        // Update dreamNode properties directly
+        dreamNode.dreamTalkMedia = media.dreamTalkMedia;
+        dreamNode.dreamSongContent = media.dreamSongContent;
         clearInterval(pollInterval);
       } else if (pollCount >= maxPolls) {
         clearInterval(pollInterval);
@@ -172,12 +177,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&
                    isHovered &&
-                   cachedMedia?.dreamTalkMedia &&
-                   cachedMedia.dreamTalkMedia[0] &&
+                   dreamNode.dreamTalkMedia &&
+                   dreamNode.dreamTalkMedia[0] &&
                    !isDragging;
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, cachedMedia, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging]);
 
   // Determine if DreamSong fullscreen button should be visible (stable version)
   const shouldShowDreamSongFullscreen = useMemo(() => {
@@ -720,7 +725,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               {/* Front side - DreamTalk */}
               <DreamTalkSide
                 dreamNode={dreamNode}
-                cachedMedia={cachedMedia}
                 isHovered={isHovered}
                 isEditModeActive={isEditModeActive}
                 isPendingRelationship={isPendingRelationship}
