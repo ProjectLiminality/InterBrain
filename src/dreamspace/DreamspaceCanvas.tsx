@@ -1434,6 +1434,7 @@ export default function DreamspaceCanvas() {
   // Track visible nodes using frustum culling (only in liminal-web mode with many nodes)
   const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
   const shouldUseFrustumCulling = spatialLayout === 'liminal-web' && dreamNodes.length > 15;
+  const prevRenderCountRef = useRef(0);
 
   return (
     <div
@@ -1557,8 +1558,11 @@ export default function DreamspaceCanvas() {
               ? dreamNodes.filter(node => visibleNodeIds.has(node.id) || node.id === selectedNode?.id)
               : dreamNodes;
 
-            console.log(`[DreamNodeRendering] 🎨 Starting to render ${nodesToRender.length}/${dreamNodes.length} DreamNode components (culling: ${shouldUseFrustumCulling})`);
-            const renderStart = performance.now();
+            // DIAGNOSTIC: Only log when node count changes significantly
+            if (Math.abs(nodesToRender.length - prevRenderCountRef.current) > 2) {
+              console.log(`[DreamNodeRendering] 🎨 Rendering ${nodesToRender.length}/${dreamNodes.length} nodes (culling: ${shouldUseFrustumCulling})`);
+              prevRenderCountRef.current = nodesToRender.length;
+            }
 
             const renderedNodes = nodesToRender.map((node) => (
               <React.Fragment key={node.id}>
@@ -1582,9 +1586,6 @@ export default function DreamspaceCanvas() {
                 />
               </React.Fragment>
             ));
-
-            const renderTime = performance.now() - renderStart;
-            console.log(`[DreamNodeRendering] ✅ JSX creation took ${renderTime.toFixed(2)}ms for ${nodesToRender.length} nodes`);
 
             return renderedNodes;
           })()}
@@ -1711,6 +1712,8 @@ function FrustumCullingTracker({
   const cameraViewProjectionMatrix = useRef(new Matrix4());
   const frameCount = useRef(0);
 
+  const previousVisibleIds = useRef<Set<string>>(new Set());
+
   useFrame(() => {
     if (!enabled) return;
 
@@ -1747,8 +1750,17 @@ function FrustumCullingTracker({
       }
     });
 
-    // Only update if the visible set changed
-    onVisibilityChange(visibleIds);
+    // CRITICAL FIX: Only update if the visible set ACTUALLY changed
+    // Compare sets to prevent infinite re-render loop
+    const hasChanged =
+      visibleIds.size !== previousVisibleIds.current.size ||
+      Array.from(visibleIds).some(id => !previousVisibleIds.current.has(id));
+
+    if (hasChanged) {
+      console.log(`[FrustumCulling] Visibility changed: ${previousVisibleIds.current.size} → ${visibleIds.size} nodes`);
+      previousVisibleIds.current = visibleIds;
+      onVisibilityChange(visibleIds);
+    }
   });
 
   return null;
