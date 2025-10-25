@@ -343,25 +343,41 @@ export class GitDreamNodeService {
       const store = useInterBrainStore.getState();
       const newRealNodes = new Map(store.realNodes); // Clone existing map
 
-      // Process all new nodes
-      for (const { dirPath, udd, dirName } of nodesToAdd) {
+      // Process all new nodes IN PARALLEL for speed (disk I/O can happen concurrently)
+      const addPromises = nodesToAdd.map(async ({ dirPath, udd, dirName }) => {
         const nodeData = await this.buildNodeDataFromVault(dirPath, udd, dirName);
         if (nodeData) {
-          newRealNodes.set(udd.uuid, nodeData);
+          return { uuid: udd.uuid, nodeData };
+        }
+        return null;
+      });
+
+      const addResults = await Promise.all(addPromises);
+      for (const result of addResults) {
+        if (result) {
+          newRealNodes.set(result.uuid, result.nodeData);
           stats.added++;
         }
       }
 
-      // Process all updates
-      for (const { existingData, dirPath, udd, dirName } of nodesToUpdate) {
+      // Process all updates IN PARALLEL for speed
+      const updatePromises = nodesToUpdate.map(async ({ existingData, dirPath, udd, dirName }) => {
         const nodeData = await this.buildNodeDataFromVault(dirPath, udd, dirName);
         if (nodeData) {
           // Check if actually changed before counting as update
           const changed = JSON.stringify(existingData.node) !== JSON.stringify(nodeData.node);
           if (changed) {
-            newRealNodes.set(udd.uuid, nodeData);
-            stats.updated++;
+            return { uuid: udd.uuid, nodeData };
           }
+        }
+        return null;
+      });
+
+      const updateResults = await Promise.all(updatePromises);
+      for (const result of updateResults) {
+        if (result) {
+          newRealNodes.set(result.uuid, result.nodeData);
+          stats.updated++;
         }
       }
 
