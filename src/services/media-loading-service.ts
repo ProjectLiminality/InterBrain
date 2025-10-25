@@ -263,12 +263,14 @@ export class MediaLoadingService {
       activeLoads.push(loadPromise);
     }
 
-    // Wait for remaining loads to complete
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - Waiting for ${activeLoads.length} remaining loads to complete...`);
-    await Promise.all(activeLoads);
+    // Don't wait for remaining loads - let them complete in background
+    console.log(`[MediaLoading] ⏰ ${Date.now()} - Queue exhausted, ${activeLoads.length} loads still running in background`);
 
-    this.isProcessingQueue = false;
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ processQueue() COMPLETE`);
+    // Clean up remaining loads in background without blocking
+    Promise.all(activeLoads).then(() => {
+      this.isProcessingQueue = false;
+      console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ All background loads COMPLETE`);
+    });
   }
 
   /**
