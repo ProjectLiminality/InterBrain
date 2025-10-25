@@ -197,11 +197,29 @@ export default function DreamspaceCanvas() {
     dreamNodes = [...staticNodes, ...dynamicNodes];
   } else {
     // Real mode: use realNodes from store
+    console.log(`[DreamNodeRendering] 📊 Converting ${realNodes.size} store nodes to dreamNodes array`);
+    const startConversion = performance.now();
     dreamNodes = Array.from(realNodes.values()).map(data => data.node);
+    const conversionTime = performance.now() - startConversion;
+    console.log(`[DreamNodeRendering] ⚡ Conversion took ${conversionTime.toFixed(2)}ms`);
   }
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
+
+  // Track when DreamNodes are actually rendered in DOM
+  useEffect(() => {
+    if (dreamNodes.length > 0) {
+      console.log(`[DreamNodeRendering] 🎯 useEffect fired - ${dreamNodes.length} dreamNodes in React state`);
+
+      // Schedule after next paint to measure actual DOM rendering
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          console.log(`[DreamNodeRendering] 🖼️ DreamNodes should be visible in viewport now`);
+        });
+      });
+    }
+  }, [dreamNodes.length]);
   
   // Hit sphere references for scene-based raycasting
   const hitSphereRefs = useRef<Map<string, React.RefObject<Mesh | null>>>(new Map());
@@ -1530,14 +1548,14 @@ export default function DreamspaceCanvas() {
             </mesh>
           )}
           
-          {dreamNodes.map((node) => {
-            // Check if we're in focused mode to disable dynamic scaling
-            const isFocusedMode = spatialOrchestratorRef.current?.isFocusedMode() || false;
-            const shouldEnableDynamicScaling = spatialLayout === 'constellation' && !isFocusedMode;
-            
-            // Removed excessive dynamic scaling logging for performance
-            
-            return (
+          {/* OPTIMIZATION: Dynamic scaling only needed in constellation view */}
+          {(() => {
+            const shouldEnableDynamicScaling = spatialLayout === 'constellation';
+
+            console.log(`[DreamNodeRendering] 🎨 Starting to render ${dreamNodes.length} DreamNode components`);
+            const renderStart = performance.now();
+
+            const renderedNodes = dreamNodes.map((node) => (
               <React.Fragment key={node.id}>
                 {/* Star component - purely visual, positioned slightly closer than anchor */}
                 <Star3D
@@ -1558,8 +1576,13 @@ export default function DreamspaceCanvas() {
                   canvasParserService={canvasParserService}
                 />
               </React.Fragment>
-            );
-          })}
+            ));
+
+            const renderTime = performance.now() - renderStart;
+            console.log(`[DreamNodeRendering] ✅ JSX creation took ${renderTime.toFixed(2)}ms for ${dreamNodes.length} nodes`);
+
+            return renderedNodes;
+          })()}
 
           {/* Constellation edges - render DreamSong relationship threads */}
           {shouldShowConstellationEdges(spatialLayout) && (
