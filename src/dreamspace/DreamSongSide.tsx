@@ -62,6 +62,14 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     return service;
   }, []);
 
+  // Log when DreamSongSide mounts (validates lazy loading optimization)
+  React.useEffect(() => {
+    console.log(`[BackSideLazyLoad] 📦 DreamSongSide MOUNTED for ${dreamNode.name} - will trigger canvas parsing`);
+    return () => {
+      console.log(`[BackSideLazyLoad] 🗑️ DreamSongSide UNMOUNTED for ${dreamNode.name}`);
+    };
+  }, [dreamNode.name]);
+
   // Use the new hook for DreamSong data (with dreamNode for Songline feature detection)
   const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
   const { blocks, isLoading: isLoadingDreamSong, error } = useDreamSongData(

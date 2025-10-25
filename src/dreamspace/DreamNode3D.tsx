@@ -57,6 +57,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Flip animation state
   const [flipRotation, setFlipRotation] = useState(0);
   // DreamSong state now managed by DreamSongSide component via hook
+
+  // Back-side lazy loading optimization - only mount DreamSongSide when needed
+  const [hasLoadedBackSide, setHasLoadedBackSide] = useState(false);
   
   // Dual-mode position state
   const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
@@ -154,12 +157,37 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     return result;
   }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
+  // Determine when to load back-side component (after animation completes)
+  const shouldLoadBackSide = useMemo(() => {
+    return spatialLayout === 'liminal-web' &&
+           selectedNode?.id === dreamNode.id &&
+           !isTransitioning; // Wait for animation to complete
+  }, [spatialLayout, selectedNode?.id, dreamNode.id, isTransitioning]);
+
   // Register hit sphere reference
   useEffect(() => {
     if (onHitSphereRef && hitSphereRef) {
       onHitSphereRef(dreamNode.id, hitSphereRef);
     }
   }, [dreamNode.id, onHitSphereRef]);
+
+  // Trigger back-side loading when animation completes
+  useEffect(() => {
+    if (shouldLoadBackSide && !hasLoadedBackSide) {
+      console.log(`[BackSideLazyLoad] 🎯 Conditions met for ${dreamNode.name}:`, {
+        spatialLayout,
+        isSelected: selectedNode?.id === dreamNode.id,
+        isTransitioning,
+        willLoadIn: '100ms'
+      });
+
+      // Small delay to ensure animation is fully complete and avoid any frame drops
+      globalThis.setTimeout(() => {
+        console.log(`[BackSideLazyLoad] ✅ Loading DreamSongSide for ${dreamNode.name}`);
+        setHasLoadedBackSide(true);
+      }, 100);
+    }
+  }, [shouldLoadBackSide, hasLoadedBackSide, dreamNode.name, spatialLayout, selectedNode?.id, isTransitioning]);
   
   // DreamSong logic now handled by DreamSongSide component via hook
   
@@ -678,46 +706,48 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           </Html>
 
           {/* Second Html component - DreamSong with 3D offset and rotation */}
-          <Html
-            position={[0, 0, -0.01]}
-            rotation={[0, Math.PI, 0]}
-            center
-            transform
-            distanceFactor={10}
-            style={{
-              pointerEvents: isDragging ? 'none' : 'auto',
-              userSelect: isHovered ? 'auto' : 'none'
-            }}
-          >
-            {/* Container div */}
-            <div
+          {/* OPTIMIZATION: Only mount DreamSongSide when node is selected in liminal-web mode */}
+          {hasLoadedBackSide && (
+            <Html
+              position={[0, 0, -0.01]}
+              rotation={[0, Math.PI, 0]}
+              center
+              transform
+              distanceFactor={10}
               style={{
-                transformStyle: 'preserve-3d',
-                width: `${nodeSize}px`,
-                height: `${nodeSize}px`,
-                position: 'relative'
+                pointerEvents: isDragging ? 'none' : 'auto',
+                userSelect: isHovered ? 'auto' : 'none'
               }}
             >
-              {/* DreamSong side */}
-              <DreamSongSide
-                dreamNode={dreamNode}
-                isHovered={isHovered}
-                isEditModeActive={isEditModeActive}
-                isPendingRelationship={isPendingRelationship}
-                shouldShowFlipButton={shouldShowFlipButton}
-                shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
-                nodeSize={nodeSize}
-                borderWidth={borderWidth}
-                // Note: DreamSong always rendered, CSS backface-visibility handles optimization
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                onClick={handleClick}
-                onDoubleClick={handleDoubleClick}
-                onFlipClick={handleFlipClick}
-                onFullScreenClick={handleDreamSongFullScreen}
-              />
-            </div>
-          </Html>
+              {/* Container div */}
+              <div
+                style={{
+                  transformStyle: 'preserve-3d',
+                  width: `${nodeSize}px`,
+                  height: `${nodeSize}px`,
+                  position: 'relative'
+                }}
+              >
+                {/* DreamSong side - lazy loaded after animation completes */}
+                <DreamSongSide
+                  dreamNode={dreamNode}
+                  isHovered={isHovered}
+                  isEditModeActive={isEditModeActive}
+                  isPendingRelationship={isPendingRelationship}
+                  shouldShowFlipButton={shouldShowFlipButton}
+                  shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
+                  nodeSize={nodeSize}
+                  borderWidth={borderWidth}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                  onClick={handleClick}
+                  onDoubleClick={handleDoubleClick}
+                  onFlipClick={handleFlipClick}
+                  onFullScreenClick={handleDreamSongFullScreen}
+                />
+              </div>
+            </Html>
+          )}
         </group>
       </Billboard>
     

@@ -34,17 +34,14 @@ export class MediaLoadingService {
    * Phase 2: Remaining nodes by distance (background streaming)
    */
   async loadAllNodesByDistance(): Promise<void> {
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - 🎬 START loadAllNodesByDistance()`);
 
     const store = useInterBrainStore.getState();
     const allNodeIds = Array.from(store.realNodes.keys());
 
     if (allNodeIds.length === 0) {
-      console.log('[MediaLoading] No nodes to load');
       return;
     }
 
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - Found ${allNodeIds.length} nodes to process`);
 
     // Calculate distance for each node from FOV center (0, 0, 1500)
     const FOV_CENTER = { x: 0, y: 0, z: 1500 }; // DEFAULT_SCALING_CONFIG.intersectionPoint
@@ -55,7 +52,6 @@ export class MediaLoadingService {
     const fovTasks: MediaLoadTask[] = [];
     const backgroundTasks: MediaLoadTask[] = [];
 
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - Processing first chunk of ${CHUNK_SIZE} nodes synchronously...`);
     // Process first chunk immediately to start FOV loading ASAP
     for (let i = 0; i < Math.min(CHUNK_SIZE, allNodeIds.length); i++) {
       const nodeId = allNodeIds[i];
@@ -89,19 +85,15 @@ export class MediaLoadingService {
 
     // Add first batch and start processing immediately
     this.loadingQueue.push(...fovTasks, ...backgroundTasks);
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - Phase 1 batch: ${fovTasks.length} FOV nodes, ${backgroundTasks.length} background`);
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - 🚀 Starting processQueue() for first batch (NON-BLOCKING)`);
 
     // Start processing first batch (non-blocking)
     if (!this.isProcessingQueue) {
       this.processQueue();
     }
 
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ END loadAllNodesByDistance() - processQueue() running in background`);
 
     // Process remaining nodes in background (async, non-blocking)
     setTimeout(() => {
-      console.log(`[MediaLoading] ⏰ ${Date.now()} - Processing remaining ${allNodeIds.length - CHUNK_SIZE} nodes in setTimeout...`);
       const remainingFovTasks: MediaLoadTask[] = [];
       const remainingBackgroundTasks: MediaLoadTask[] = [];
 
@@ -141,7 +133,6 @@ export class MediaLoadingService {
 
       // Add to queue
       this.loadingQueue.push(...remainingFovTasks, ...remainingBackgroundTasks);
-      console.log(`[MediaLoading] ⏰ ${Date.now()} - Phase 2 batch: ${remainingFovTasks.length} FOV nodes, ${remainingBackgroundTasks.length} background`);
     }, 0);
   }
 
@@ -150,7 +141,6 @@ export class MediaLoadingService {
    * Smart: Only loads nodes not already cached (no-op if all loaded)
    */
   async loadNodeWithNeighborhood(selectedNodeId: string): Promise<void> {
-    console.log(`[MediaLoading] Loading neighborhood for ${selectedNodeId}`);
 
     // Build relationship graph (2 degrees)
     const visited = new Set<string>();
@@ -196,14 +186,12 @@ export class MediaLoadingService {
 
     // Early exit if all nodes already cached
     if (nodesToLoad.length === 0) {
-      console.log(`[MediaLoading] All neighborhood nodes already loaded (cache hit)`);
       return;
     }
 
     // Cap 2nd degree nodes to prevent loading too much
     const cappedNodesToLoad = nodesToLoad.slice(0, this.maxSecondDegreeNodes);
 
-    console.log(`[MediaLoading] Queuing ${cappedNodesToLoad.length} uncached nodes (${nodesToLoad.length - cappedNodesToLoad.length} capped)`);
 
     // Sort by priority (degree 0 first, then 1, then 2)
     cappedNodesToLoad.sort((a, b) => a.priority - b.priority);
@@ -225,11 +213,9 @@ export class MediaLoadingService {
    */
   private async processQueue(): Promise<void> {
     if (this.isProcessingQueue) {
-      console.log(`[MediaLoading] ⏰ ${Date.now()} - ⚠️ processQueue() already running, skipping`);
       return;
     }
     this.isProcessingQueue = true;
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - 🔄 processQueue() STARTED - queue size: ${this.loadingQueue.length}`);
 
     const activeLoads: Promise<void>[] = [];
 
@@ -245,7 +231,6 @@ export class MediaLoadingService {
 
       // Skip if already cached
       if (this.mediaCache.has(task.nodeId)) {
-        console.log(`[MediaLoading] Cache hit for ${task.nodeId}`);
         continue;
       }
 
@@ -264,12 +249,10 @@ export class MediaLoadingService {
     }
 
     // Don't wait for remaining loads - let them complete in background
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - Queue exhausted, ${activeLoads.length} loads still running in background`);
 
     // Clean up remaining loads in background without blocking
     Promise.all(activeLoads).then(() => {
       this.isProcessingQueue = false;
-      console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ All background loads COMPLETE`);
     });
   }
 
@@ -277,7 +260,6 @@ export class MediaLoadingService {
    * Load media for a single node
    */
   private async loadNodeMedia(nodeId: string): Promise<void> {
-    console.log(`[MediaLoading] ⏰ ${Date.now()} - 📥 START loading media for ${nodeId.slice(0, 8)}...`);
     const store = useInterBrainStore.getState();
     const node = this.getNode(nodeId, store);
 
@@ -340,7 +322,6 @@ export class MediaLoadingService {
     // Update node in store with loaded media
     // Use setTimeout to ensure each update gets its own event loop tick and React render
     setTimeout(() => {
-      console.log(`[MediaLoading] ⏰ ${Date.now()} - 💾 Updating store for ${node.name}`);
       const existingData = store.realNodes.get(nodeId);
       if (existingData) {
         const updatedData = {
@@ -353,7 +334,6 @@ export class MediaLoadingService {
         };
 
         store.updateRealNode(nodeId, updatedData);
-        console.log(`[MediaLoading] ⏰ ${Date.now()} - ✅ Media loaded and stored for ${node.name}`);
       }
     }, 1); // 1ms is enough to create a new event loop tick
   }
@@ -414,7 +394,6 @@ export class MediaLoadingService {
 
     this.viewportQueue.clear();
 
-    console.log(`[MediaLoading] Processing ${nodesToLoad.length} viewport nodes by distance`);
 
     // Add to loading queue with distance-based priority
     const viewportTasks: MediaLoadTask[] = nodesToLoad.map(([nodeId, distance]) => ({
@@ -440,7 +419,6 @@ export class MediaLoadingService {
    * Clear media cache (call on vault rescan)
    */
   clearCache(): void {
-    console.log('[MediaLoading] Clearing cache');
     this.mediaCache.clear();
     this.loadingQueue = [];
     this.viewportQueue.clear();
@@ -467,7 +445,6 @@ let _mediaLoadingServiceInstance: MediaLoadingService | null = null;
 
 export function initializeMediaLoadingService(): void {
   _mediaLoadingServiceInstance = new MediaLoadingService();
-  console.log('[MediaLoading] Service initialized');
 }
 
 export function getMediaLoadingService(): MediaLoadingService {
