@@ -23,6 +23,7 @@ interface DreamSongProps {
   onDreamerNodeClick?: (dreamerNodeId: string) => void; // Callback for navigating to DreamerNode
   onEditCanvas?: () => void; // Callback for editing canvas file
   onEditReadme?: () => void; // Callback for editing README file
+  standalone?: boolean; // Whether this is standalone mode (GitHub Pages) - disables Node.js-dependent sections
 }
 
 /**
@@ -48,6 +49,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   vaultPath,
   onDreamerNodeClick,
   onEditCanvas,
+  standalone = false,
   onEditReadme
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
@@ -219,8 +221,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
 
       {/* Conditional rendering based on node type */}
       {isDreamerNode ? (
-        /* DreamerNode: Show Conversations Section */
-        vaultPath && dreamNode && (
+        /* DreamerNode: Show Conversations Section (disabled in standalone mode) */
+        !standalone && vaultPath && dreamNode && (
           <ConversationsSection
             dreamerNode={dreamNode}
             vaultPath={vaultPath}
@@ -274,15 +276,15 @@ export const DreamSong: React.FC<DreamSongProps> = ({
             </div>
           )}
 
-          {/* Perspectives Section for dream nodes */}
-          {isLoadingPerspectives && (
+          {/* Perspectives Section for dream nodes (disabled in standalone mode) */}
+          {!standalone && isLoadingPerspectives && (
             <div style={{ padding: '2rem', textAlign: 'center' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9em' }}>
                 Loading perspectives...
               </p>
             </div>
           )}
-          {!isLoadingPerspectives && perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
+          {!standalone && !isLoadingPerspectives && perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
             <PerspectivesSection
               perspectives={perspectives}
               vaultPath={vaultPath}
@@ -292,8 +294,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
         </>
       )}
 
-      {/* README Section - Always at bottom, collapsed by default (if present) */}
-      {dreamNode && vaultPath && (
+      {/* README Section - Always at bottom, collapsed by default (if present) (disabled in standalone mode) */}
+      {!standalone && dreamNode && vaultPath && (
         <ReadmeSection
           dreamNode={dreamNode}
           vaultPath={vaultPath}
