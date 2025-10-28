@@ -142,6 +142,149 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
   }
 }
 
+/**
+ * Clean up dangling relationship references
+ * Removes references to non-existent DreamNodes
+ */
+async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<void> {
+  try {
+    new Notice('Starting relationship cleanup...');
+
+    const adapter = plugin.app.vault.adapter as any;
+    const vaultPath = adapter.basePath || '';
+
+    // Get all DreamNode directories
+    const entries = await fsPromises.readdir(vaultPath, { withFileTypes: true });
+    const dreamNodeDirs = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const dirPath = path.join(vaultPath, entry.name);
+      const uddPath = path.join(dirPath, '.udd');
+      const gitPath = path.join(dirPath, '.git');
+
+      try {
+        await fsPromises.access(uddPath);
+        await fsPromises.access(gitPath);
+        dreamNodeDirs.push({ name: entry.name, path: dirPath });
+      } catch {
+        // Not a valid DreamNode, skip
+        continue;
+      }
+    }
+
+    console.log(`[RelationshipCleanup] Found ${dreamNodeDirs.length} DreamNodes to scan`);
+
+    // Load all UDD files in parallel
+    const uddDataMap = new Map<string, { uuid: string; relationships: string[]; path: string; dirName: string }>();
+
+    await Promise.all(
+      dreamNodeDirs.map(async ({ name, path: dirPath }) => {
+        try {
+          const uddPath = path.join(dirPath, '.udd');
+          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+
+          uddDataMap.set(udd.uuid, {
+            uuid: udd.uuid,
+            relationships: udd.liminalWebRelationships || [],
+            path: uddPath,
+            dirName: name
+          });
+        } catch (error) {
+          console.error(`[RelationshipCleanup] Error reading ${name}/.udd:`, error);
+        }
+      })
+    );
+
+    console.log(`[RelationshipCleanup] Loaded ${uddDataMap.size} UDD files`);
+
+    // Build set of valid UUIDs for fast lookup
+    const validUuids = new Set(uddDataMap.keys());
+
+    // Find dangling references
+    const nodesToClean = new Map<string, Set<string>>();
+
+    for (const [uuid, data] of uddDataMap) {
+      const danglingRefs = new Set<string>();
+
+      for (const relatedUuid of data.relationships) {
+        if (!validUuids.has(relatedUuid)) {
+          console.warn(`[RelationshipCleanup] Node ${data.dirName} references non-existent node ${relatedUuid}`);
+          danglingRefs.add(relatedUuid);
+        }
+      }
+
+      if (danglingRefs.size > 0) {
+        nodesToClean.set(uuid, danglingRefs);
+      }
+    }
+
+    console.log(`[RelationshipCleanup] Found ${nodesToClean.size} nodes with dangling references`);
+
+    if (nodesToClean.size === 0) {
+      new Notice('✓ No dangling references found - all relationships are valid!');
+      return;
+    }
+
+    // Show summary before cleaning
+    let totalDanglingRefs = 0;
+    for (const danglingRefs of nodesToClean.values()) {
+      totalDanglingRefs += danglingRefs.size;
+    }
+
+    console.log(`[RelationshipCleanup] Total dangling references to remove: ${totalDanglingRefs}`);
+    new Notice(`Found ${totalDanglingRefs} dangling references in ${nodesToClean.size} nodes. Cleaning up...`);
+
+    // Clean up dangling references in parallel
+    let cleanedCount = 0;
+    let errorCount = 0;
+
+    await Promise.all(
+      Array.from(nodesToClean.entries()).map(async ([uuid, danglingRefs]) => {
+        try {
+          const data = uddDataMap.get(uuid);
+          if (!data) return;
+
+          // Read current UDD file
+          const uddContent = await fsPromises.readFile(data.path, 'utf-8');
+          const udd = JSON.parse(uddContent);
+
+          // Filter out dangling references
+          const cleanedRelationships = (udd.liminalWebRelationships || []).filter(
+            (refUuid: string) => !danglingRefs.has(refUuid)
+          );
+
+          const removedCount = (udd.liminalWebRelationships || []).length - cleanedRelationships.length;
+
+          udd.liminalWebRelationships = cleanedRelationships;
+
+          // Write back to disk
+          await fsPromises.writeFile(data.path, JSON.stringify(udd, null, 2));
+
+          cleanedCount++;
+          console.log(`[RelationshipCleanup] Cleaned ${data.dirName} - removed ${removedCount} dangling references`);
+        } catch (error) {
+          errorCount++;
+          console.error(`[RelationshipCleanup] Error cleaning node ${uuid}:`, error);
+        }
+      })
+    );
+
+    console.log(`[RelationshipCleanup] Complete - Cleaned: ${cleanedCount}, Errors: ${errorCount}`);
+
+    // Rescan vault to update UI
+    await serviceManager.scanVault();
+
+    new Notice(`✓ Removed ${totalDanglingRefs} dangling references from ${cleanedCount} DreamNodes! ${errorCount > 0 ? `(${errorCount} errors)` : ''}`);
+
+  } catch (error) {
+    console.error('[RelationshipCleanup] Fatal error:', error);
+    new Notice(`Failed to clean relationships: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
 export function registerRelationshipCommands(plugin: InterBrainPlugin) {
   // Command: Sync bidirectional relationships
   plugin.addCommand({
@@ -149,6 +292,15 @@ export function registerRelationshipCommands(plugin: InterBrainPlugin) {
     name: 'Sync Bidirectional Relationships',
     callback: async () => {
       await syncBidirectionalRelationships(plugin);
+    }
+  });
+
+  // Command: Clean dangling relationship references
+  plugin.addCommand({
+    id: 'clean-dangling-relationships',
+    name: 'Clean Dangling Relationship References',
+    callback: async () => {
+      await cleanDanglingRelationships(plugin);
     }
   });
 }
