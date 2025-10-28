@@ -289,6 +289,35 @@ export function registerGitHubCommands(
           // For now, we'll skip this and implement it in a future iteration
           console.log(`GitHubCommands: Static site building deferred - requires separate build process`);
 
+          // Update in-memory store to reflect GitHub URLs immediately
+          const store = useInterBrainStore.getState();
+
+          // Update selectedNode if it matches the published node
+          if (store.selectedNode?.id === selectedNode.id) {
+            const updatedNode = {
+              ...store.selectedNode,
+              githubRepoUrl: result.repoUrl,
+              githubPagesUrl: result.pagesUrl || store.selectedNode.githubPagesUrl
+            };
+            store.setSelectedNode(updatedNode);
+            console.log(`GitHubCommands: Updated selectedNode with GitHub URLs`);
+          }
+
+          // Update realNodes store
+          const realNodeData = store.realNodes.get(selectedNode.id);
+          if (realNodeData) {
+            const updatedNodeData = {
+              ...realNodeData,
+              node: {
+                ...realNodeData.node,
+                githubRepoUrl: result.repoUrl,
+                githubPagesUrl: result.pagesUrl || realNodeData.node.githubPagesUrl
+              }
+            };
+            store.updateRealNode(selectedNode.id, updatedNodeData);
+            console.log(`GitHubCommands: Updated realNodes with GitHub URLs`);
+          }
+
           // Copy Obsidian URI to clipboard
           await navigator.clipboard.writeText(result.obsidianUri);
 
@@ -299,10 +328,7 @@ export function registerGitHubCommands(
             : `DreamNode shared!\n\nRepository: ${result.repoUrl}\n\nObsidian URI copied to clipboard.`;
 
           new Notice(successMessage, 10000);
-          console.log(`GitHubCommands: Share workflow complete`);
-
-          // Reload DreamNode to update UI with GitHub URLs
-          console.log(`GitHubCommands: Share complete, node should update with GitHub URLs`);
+          console.log(`GitHubCommands: Share workflow complete with immediate UI update`);
 
         } catch (error) {
           notice.hide();
@@ -413,10 +439,39 @@ export function registerGitHubCommands(
 
           console.log(`GitHubCommands: Successfully unpublished from GitHub`);
 
+          // Update in-memory store to clear GitHub URLs immediately
+          const store = useInterBrainStore.getState();
+
+          // Update selectedNode if it matches the unpublished node
+          if (store.selectedNode?.id === selectedNode.id) {
+            const updatedNode = {
+              ...store.selectedNode,
+              githubRepoUrl: undefined,
+              githubPagesUrl: undefined
+            };
+            store.setSelectedNode(updatedNode);
+            console.log(`GitHubCommands: Cleared selectedNode GitHub URLs`);
+          }
+
+          // Update realNodes store
+          const realNodeData = store.realNodes.get(selectedNode.id);
+          if (realNodeData) {
+            const updatedNodeData = {
+              ...realNodeData,
+              node: {
+                ...realNodeData.node,
+                githubRepoUrl: undefined,
+                githubPagesUrl: undefined
+              }
+            };
+            store.updateRealNode(selectedNode.id, updatedNodeData);
+            console.log(`GitHubCommands: Cleared realNodes GitHub URLs`);
+          }
+
           // Success notification
           notice.hide();
           new Notice(`DreamNode unpublished from GitHub successfully!`, 5000);
-          console.log(`GitHubCommands: Unpublish workflow complete`);
+          console.log(`GitHubCommands: Unpublish workflow complete with immediate UI update`);
 
         } catch (error) {
           notice.hide();
