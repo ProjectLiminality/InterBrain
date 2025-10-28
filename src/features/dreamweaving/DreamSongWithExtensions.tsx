@@ -102,7 +102,7 @@ export const DreamSongWithExtensions: React.FC<DreamSongWithExtensionsProps> = (
   }, [dreamNode?.id, isDreamerNode, spatialLayout, selectedNode?.id, perspectives.length, isLoadingPerspectives]);
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
       {/* Pure DreamSong canvas renderer */}
       <DreamSong
         blocks={blocks}
@@ -157,6 +157,6 @@ export const DreamSongWithExtensions: React.FC<DreamSongWithExtensionsProps> = (
           )}
         </>
       )}
-    </>
+    </div>
   );
 };
