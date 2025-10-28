@@ -119,7 +119,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         overflow: 'hidden',
         cursor: 'pointer !important',
         transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        transform: isHovered ? `scale(${dreamNodeStyles.states.hover.scale})` : 'scale(1)',
         animation: gitStyle.animation,
         boxShadow: (() => {
           // Priority 1: Git status glow (always highest priority)

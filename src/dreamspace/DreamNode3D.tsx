@@ -718,7 +718,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       {/* Billboard component - always faces camera */}
       <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
         {/* R3F rotating group for true 3D flip animation */}
-        <group rotation={[0, flipRotation, 0]}>
+        <group
+          rotation={[0, flipRotation, 0]}
+          scale={isHovered ? dreamNodeStyles.states.hover.scale : 1}
+        >
           {/* First Html component - original DreamTalk */}
           <Html
             position={[0, 0, 0.01]}
