@@ -54,6 +54,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [radialOffset, setRadialOffset] = useState(0);
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
+  const hoverGroupRef = useRef<Group>(null); // Ref for animated hover group
+  const targetHoverScale = useRef(1); // Target scale for smooth animation
 
   // Flip animation state
   const [flipRotation, setFlipRotation] = useState(0);
@@ -568,8 +570,22 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     isMoving: () => isTransitioning
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing]);
   
+  // Update target hover scale when hover state changes
+  useEffect(() => {
+    targetHoverScale.current = isHovered ? dreamNodeStyles.states.hover.scale : 1;
+  }, [isHovered]);
+
   // Position calculation and animation frame logic
-  useFrame((_state, _delta) => {
+  useFrame((_state, delta) => {
+    // Smooth hover scale animation (lerp towards target)
+    if (hoverGroupRef.current) {
+      const currentScale = hoverGroupRef.current.scale.x;
+      const targetScale = targetHoverScale.current;
+      const lerpFactor = 1 - Math.pow(0.001, delta); // Smooth interpolation (similar to 0.2s CSS transition)
+      const newScale = currentScale + (targetScale - currentScale) * lerpFactor;
+      hoverGroupRef.current.scale.set(newScale, newScale, newScale);
+    }
+
     // Constellation mode dynamic scaling
     if (positionMode === 'constellation' && enableDynamicScaling && groupRef.current) {
       const worldPosition = new Vector3();
@@ -717,10 +733,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     >
       {/* Billboard component - always faces camera */}
       <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
-        {/* R3F rotating group for true 3D flip animation */}
+        {/* R3F rotating group for true 3D flip animation with smooth hover scaling */}
         <group
+          ref={hoverGroupRef}
           rotation={[0, flipRotation, 0]}
-          scale={isHovered ? dreamNodeStyles.states.hover.scale : 1}
         >
           {/* First Html component - original DreamTalk */}
           <Html
