@@ -212,9 +212,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 dreamTalkMedia={dreamNode.dreamTalkMedia}
                 onMediaClick={handleMediaClick}
                 embedded={true}
-                dreamNode={dreamNode}
-                vaultPath={vaultService.getVaultPath()}
-                onDreamerNodeClick={handleMediaClick}
               />
             </div>
           )}
