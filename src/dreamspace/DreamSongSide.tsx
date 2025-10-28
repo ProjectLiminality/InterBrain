@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { DreamNode } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
-import { DreamSong } from '../features/dreamweaving/DreamSong';
+import { DreamSong } from '../features/dreamweaving/DreamSong'; // Use pure DreamSong for 3D back side (embedded context)
 import { useInterBrainStore } from '../store/interbrain-store';
 import { useDreamSongData } from '../hooks/useDreamSongData';
 import { CanvasParserService } from '../services/canvas-parser-service';

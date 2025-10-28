@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
 import { Root, createRoot } from 'react-dom/client';
 import { StrictMode, createElement } from 'react';
-import { DreamSong } from '../features/dreamweaving/DreamSong';
+import { DreamSongWithExtensions } from '../features/dreamweaving/DreamSongWithExtensions';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -183,7 +183,7 @@ export class DreamSongFullScreenView extends ItemView {
 
     this.root.render(
       createElement(StrictMode, null,
-        createElement(DreamSong, {
+        createElement(DreamSongWithExtensions, {
           blocks: this.blocks || [],
           sourceDreamNodeId: this.dreamNode?.id,
           dreamNodeName: this.dreamNode?.name,

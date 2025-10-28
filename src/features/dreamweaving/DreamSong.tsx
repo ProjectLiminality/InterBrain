@@ -1,13 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
-import { MediaFile, DreamNode } from '../../types/dreamnode';
-import { Perspective, getPerspectiveService } from '../conversational-copilot/services/perspective-service';
+import { MediaFile } from '../../types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
-import { PerspectivesSection } from './PerspectivesSection';
-import { ConversationsSection } from './ConversationsSection';
-import { ReadmeSection } from './ReadmeSection';
-import { useInterBrainStore } from '../../store/interbrain-store';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -18,23 +13,17 @@ interface DreamSongProps {
   onMediaClick?: (sourceDreamNodeId: string) => void; // Callback for media click navigation
   embedded?: boolean; // Whether this is being rendered in embedded context (e.g., 3D sphere back)
   githubPagesUrl?: string; // GitHub Pages URL for "View on Web" button
-  dreamNode?: DreamNode; // Full DreamNode object for Songline features
-  vaultPath?: string; // Vault path for audio file resolution
-  onDreamerNodeClick?: (dreamerNodeId: string) => void; // Callback for navigating to DreamerNode
   onEditCanvas?: () => void; // Callback for editing canvas file
-  onEditReadme?: () => void; // Callback for editing README file
-  standalone?: boolean; // Whether this is standalone mode (GitHub Pages) - disables Node.js-dependent sections
 }
 
 /**
- * DreamSong Component - Pure Presentational Component
+ * DreamSong Component - Pure Canvas Renderer
  *
- * Layer 3 of the three-layer DreamSong architecture.
- * Purely presentational - renders blocks without any state management.
- * All data transformation happens in Layer 1 (parser).
- * All state management happens in Layer 2 (hook).
+ * Browser-safe component that renders DreamSong canvas content.
+ * No Node.js dependencies - works in both Obsidian and GitHub Pages.
  *
- * Extended for Songline feature to display Perspectives and Conversations.
+ * For local Obsidian use with extensions (Perspectives, README, etc.),
+ * use DreamSongWithExtensions wrapper instead.
  */
 export const DreamSong: React.FC<DreamSongProps> = ({
   blocks,
@@ -45,59 +34,9 @@ export const DreamSong: React.FC<DreamSongProps> = ({
   onMediaClick,
   embedded = false,
   githubPagesUrl,
-  dreamNode,
-  vaultPath,
-  onDreamerNodeClick,
-  onEditCanvas,
-  standalone = false,
-  onEditReadme
+  onEditCanvas
 }) => {
   const containerClass = `${styles.dreamSongContainer} ${embedded ? styles.embedded : ''} ${className}`.trim();
-  const [perspectives, setPerspectives] = useState<Perspective[]>([]);
-  const [isLoadingPerspectives, setIsLoadingPerspectives] = useState(false);
-
-  // Check node type
-  const isDreamerNode = dreamNode?.type === 'dreamer';
-
-  // Subscribe to store for lazy loading trigger
-  const spatialLayout = useInterBrainStore(state => state.spatialLayout);
-  const selectedNode = useInterBrainStore(state => state.selectedNode);
-
-  // Lazy-load perspectives only when node is selected in liminal-web mode
-  useEffect(() => {
-    const loadPerspectives = async () => {
-      // Only load if:
-      // 1. Not a dreamer node
-      // 2. In liminal-web layout
-      // 3. This node is selected
-      // 4. Haven't loaded yet
-      const isNodeSelected = spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode?.id;
-
-      if (!dreamNode || isDreamerNode || !isNodeSelected) {
-        return;
-      }
-
-      // Skip if already loaded or loading
-      if (perspectives.length > 0 || isLoadingPerspectives) {
-        return;
-      }
-
-      setIsLoadingPerspectives(true);
-
-      try {
-        const perspectiveService = getPerspectiveService();
-        const loadedPerspectives = await perspectiveService.loadPerspectives(dreamNode);
-        setPerspectives(loadedPerspectives);
-      } catch (error) {
-        console.error('❌ [Perspectives] Failed to load:', error);
-        setPerspectives([]);
-      } finally {
-        setIsLoadingPerspectives(false);
-      }
-    };
-
-    loadPerspectives();
-  }, [dreamNode?.id, isDreamerNode, spatialLayout, selectedNode?.id, perspectives.length, isLoadingPerspectives]);
 
   // Helper function to render DreamTalk media
   const renderDreamTalkMedia = (): React.ReactNode => {
@@ -219,20 +158,8 @@ export const DreamSong: React.FC<DreamSongProps> = ({
         />
       </div>
 
-      {/* Conditional rendering based on node type */}
-      {isDreamerNode ? (
-        /* DreamerNode: Show Conversations Section (disabled in standalone mode) */
-        !standalone && vaultPath && dreamNode && (
-          <ConversationsSection
-            dreamerNode={dreamNode}
-            vaultPath={vaultPath}
-          />
-        )
-      ) : (
-        /* Regular DreamNode: Show DreamSong content + Perspectives */
-        <>
-          {/* Canvas content section with optional edit button */}
-          {blocks.length > 0 && (
+      {/* Canvas content section with optional edit button */}
+      {blocks.length > 0 && (
             <div style={{ position: 'relative' }}>
               {onEditCanvas && !embedded && (
                 <button
@@ -275,33 +202,6 @@ export const DreamSong: React.FC<DreamSongProps> = ({
               </div>
             </div>
           )}
-
-          {/* Perspectives Section for dream nodes (disabled in standalone mode) */}
-          {!standalone && isLoadingPerspectives && (
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9em' }}>
-                Loading perspectives...
-              </p>
-            </div>
-          )}
-          {!standalone && !isLoadingPerspectives && perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
-            <PerspectivesSection
-              perspectives={perspectives}
-              vaultPath={vaultPath}
-              onDreamerNodeClick={onDreamerNodeClick}
-            />
-          )}
-        </>
-      )}
-
-      {/* README Section - Always at bottom, collapsed by default (if present) (disabled in standalone mode) */}
-      {!standalone && dreamNode && vaultPath && (
-        <ReadmeSection
-          dreamNode={dreamNode}
-          vaultPath={vaultPath}
-          onEdit={!embedded ? onEditReadme : undefined}
-        />
-      )}
     </div>
   );
 };

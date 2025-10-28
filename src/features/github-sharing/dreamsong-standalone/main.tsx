@@ -86,7 +86,6 @@ function App() {
         dreamNodeName={data.dreamNodeName}
         dreamTalkMedia={data.dreamTalkMedia}
         onMediaClick={handleMediaClick}
-        standalone={true}
       />
     </div>
   );
