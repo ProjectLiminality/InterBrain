@@ -1185,17 +1185,18 @@ export class GitDreamNodeService {
   
   /**
    * Update relationships for a node (bidirectional)
+   * This method enforces bidirectionality by using atomic add/remove operations
    */
   async updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void> {
     const store = useInterBrainStore.getState();
     const nodeData = store.realNodes.get(nodeId);
-    
+
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
     }
 
     const node = nodeData.node;
-    
+
     // Get current relationships
     const currentRelationships = new Set(node.liminalWebConnections || []);
     const newRelationships = new Set(relationshipIds);
@@ -1204,27 +1205,14 @@ export class GitDreamNodeService {
     const added = relationshipIds.filter(id => !currentRelationships.has(id));
     const removed = Array.from(currentRelationships).filter(id => !newRelationships.has(id));
 
-    // Update the node's relationships
-    node.liminalWebConnections = relationshipIds;
-
-    // Update bidirectional relationships
+    // Use atomic operations for each change to ensure bidirectionality
     for (const addedId of added) {
-      await this.addBidirectionalRelationshipReal(nodeId, addedId);
+      await this.addRelationship(nodeId, addedId);
     }
 
     for (const removedId of removed) {
-      await this.removeBidirectionalRelationshipReal(nodeId, removedId);
+      await this.removeRelationship(nodeId, removedId);
     }
-
-    // Update store
-    store.updateRealNode(nodeId, {
-      ...nodeData,
-      node,
-      lastSynced: Date.now()
-    });
-
-    // Update .udd file
-    await this.updateUDDFile(node);
 
     console.log(`GitDreamNodeService: Updated relationships for ${nodeId}:`, {
       added: added.length,
@@ -1249,116 +1237,121 @@ export class GitDreamNodeService {
 
   /**
    * Add a single relationship (bidirectional)
+   * This method enforces bidirectionality by updating BOTH nodes atomically
    */
   async addRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
     const store = useInterBrainStore.getState();
     const nodeData = store.realNodes.get(nodeId);
-    
+    const relatedNodeData = store.realNodes.get(relatedNodeId);
+
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
     }
 
+    if (!relatedNodeData) {
+      throw new Error(`Related DreamNode with ID ${relatedNodeId} not found`);
+    }
+
+    // Update both nodes' relationships atomically
     const node = nodeData.node;
+    const relatedNode = relatedNodeData.node;
+
+    // Add relationship in both directions
     const relationships = new Set(node.liminalWebConnections || []);
     relationships.add(relatedNodeId);
     node.liminalWebConnections = Array.from(relationships);
 
-    // Add bidirectional relationship
-    await this.addBidirectionalRelationshipReal(nodeId, relatedNodeId);
+    const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+    relatedRelationships.add(nodeId);
+    relatedNode.liminalWebConnections = Array.from(relatedRelationships);
 
-    // Update store
+    // Update both nodes in store
     store.updateRealNode(nodeId, {
       ...nodeData,
       node,
       lastSynced: Date.now()
     });
 
-    // Update .udd file
-    await this.updateUDDFile(node);
+    store.updateRealNode(relatedNodeId, {
+      ...relatedNodeData,
+      node: relatedNode,
+      lastSynced: Date.now()
+    });
 
-    console.log(`GitDreamNodeService: Added relationship ${nodeId} <-> ${relatedNodeId}`);
+    // Update both .udd files
+    await Promise.all([
+      this.updateUDDFile(node),
+      this.updateUDDFile(relatedNode)
+    ]);
+
+    console.log(`GitDreamNodeService: Added bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
   /**
    * Remove a single relationship (bidirectional)
+   * This method enforces bidirectionality by updating BOTH nodes atomically
    */
   async removeRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
     const store = useInterBrainStore.getState();
     const nodeData = store.realNodes.get(nodeId);
-    
+    const relatedNodeData = store.realNodes.get(relatedNodeId);
+
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
     }
 
+    if (!relatedNodeData) {
+      console.warn(`Related DreamNode with ID ${relatedNodeId} not found - removing one-way relationship only`);
+      // Still remove from the first node even if related node is missing
+      const node = nodeData.node;
+      const relationships = new Set(node.liminalWebConnections || []);
+      relationships.delete(relatedNodeId);
+      node.liminalWebConnections = Array.from(relationships);
+
+      store.updateRealNode(nodeId, {
+        ...nodeData,
+        node,
+        lastSynced: Date.now()
+      });
+
+      await this.updateUDDFile(node);
+      console.log(`GitDreamNodeService: Removed one-way relationship ${nodeId} -> ${relatedNodeId}`);
+      return;
+    }
+
+    // Update both nodes' relationships atomically
     const node = nodeData.node;
+    const relatedNode = relatedNodeData.node;
+
+    // Remove relationship in both directions
     const relationships = new Set(node.liminalWebConnections || []);
     relationships.delete(relatedNodeId);
     node.liminalWebConnections = Array.from(relationships);
 
-    // Remove bidirectional relationship
-    await this.removeBidirectionalRelationshipReal(nodeId, relatedNodeId);
+    const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+    relatedRelationships.delete(nodeId);
+    relatedNode.liminalWebConnections = Array.from(relatedRelationships);
 
-    // Update store
+    // Update both nodes in store
     store.updateRealNode(nodeId, {
       ...nodeData,
       node,
       lastSynced: Date.now()
     });
 
-    // Update .udd file
-    await this.updateUDDFile(node);
+    store.updateRealNode(relatedNodeId, {
+      ...relatedNodeData,
+      node: relatedNode,
+      lastSynced: Date.now()
+    });
 
-    console.log(`GitDreamNodeService: Removed relationship ${nodeId} <-> ${relatedNodeId}`);
-  }
+    // Update both .udd files
+    await Promise.all([
+      this.updateUDDFile(node),
+      this.updateUDDFile(relatedNode)
+    ]);
 
-  /**
-   * Add bidirectional relationship (internal helper)
-   */
-  private async addBidirectionalRelationshipReal(nodeId: string, relatedNodeId: string): Promise<void> {
-    const store = useInterBrainStore.getState();
-    const relatedNodeData = store.realNodes.get(relatedNodeId);
-    
-    if (relatedNodeData) {
-      const relatedNode = relatedNodeData.node;
-      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
-      relatedRelationships.add(nodeId);
-      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
-
-      // Update store
-      store.updateRealNode(relatedNodeId, {
-        ...relatedNodeData,
-        node: relatedNode,
-        lastSynced: Date.now()
-      });
-
-      // Update .udd file
-      await this.updateUDDFile(relatedNode);
-    }
-  }
-
-  /**
-   * Remove bidirectional relationship (internal helper)
-   */
-  private async removeBidirectionalRelationshipReal(nodeId: string, relatedNodeId: string): Promise<void> {
-    const store = useInterBrainStore.getState();
-    const relatedNodeData = store.realNodes.get(relatedNodeId);
-    
-    if (relatedNodeData) {
-      const relatedNode = relatedNodeData.node;
-      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
-      relatedRelationships.delete(nodeId);
-      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
-
-      // Update store
-      store.updateRealNode(relatedNodeId, {
-        ...relatedNodeData,
-        node: relatedNode,
-        lastSynced: Date.now()
-      });
-
-      // Update .udd file
-      await this.updateUDDFile(relatedNode);
-    }
+    console.log(`GitDreamNodeService: Removed bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
   /**

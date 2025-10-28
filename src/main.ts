@@ -25,6 +25,7 @@ import { registerGitHubCommands } from './commands/github-commands';
 import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { registerMigrationCommands } from './commands/migration-commands';
+import { registerRelationshipCommands } from './commands/relationship-commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
@@ -216,6 +217,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register migration commands (PascalCase naming migration)
     registerMigrationCommands(this);
+
+    // Register relationship commands (bidirectional sync)
+    registerRelationshipCommands(this);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);

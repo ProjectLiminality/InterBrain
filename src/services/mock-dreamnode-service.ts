@@ -384,6 +384,7 @@ export class MockDreamNodeService {
   
   /**
    * Update relationships for a node (bidirectional)
+   * This method enforces bidirectionality by using atomic add/remove operations
    */
   async updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void> {
     const node = this.nodes.get(nodeId);
@@ -399,17 +400,13 @@ export class MockDreamNodeService {
     const added = relationshipIds.filter(id => !currentRelationships.has(id));
     const removed = Array.from(currentRelationships).filter(id => !newRelationships.has(id));
 
-    // Update the node's relationships
-    node.liminalWebConnections = relationshipIds;
-    this.nodes.set(nodeId, node);
-
-    // Update bidirectional relationships
+    // Use atomic operations for each change to ensure bidirectionality
     for (const addedId of added) {
-      await this.addBidirectionalRelationship(nodeId, addedId);
+      await this.addRelationship(nodeId, addedId);
     }
 
     for (const removedId of removed) {
-      await this.removeBidirectionalRelationship(nodeId, removedId);
+      await this.removeRelationship(nodeId, removedId);
     }
 
     console.log(`MockDreamNodeService: Updated relationships for ${nodeId}:`, {
@@ -432,70 +429,73 @@ export class MockDreamNodeService {
 
   /**
    * Add a single relationship (bidirectional)
+   * This method enforces bidirectionality by updating BOTH nodes atomically
    */
   async addRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
-    // Add to the first node
     const node = this.nodes.get(nodeId);
+    const relatedNode = this.nodes.get(relatedNodeId);
+
     if (!node) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
     }
 
+    if (!relatedNode) {
+      throw new Error(`Related DreamNode with ID ${relatedNodeId} not found`);
+    }
+
+    // Add relationship in both directions
     const relationships = new Set(node.liminalWebConnections || []);
     relationships.add(relatedNodeId);
     node.liminalWebConnections = Array.from(relationships);
+
+    const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+    relatedRelationships.add(nodeId);
+    relatedNode.liminalWebConnections = Array.from(relatedRelationships);
+
+    // Update both nodes
     this.nodes.set(nodeId, node);
+    this.nodes.set(relatedNodeId, relatedNode);
 
-    // Add bidirectional relationship
-    await this.addBidirectionalRelationship(nodeId, relatedNodeId);
-
-    console.log(`MockDreamNodeService: Added relationship ${nodeId} <-> ${relatedNodeId}`);
+    console.log(`MockDreamNodeService: Added bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
   /**
    * Remove a single relationship (bidirectional)
+   * This method enforces bidirectionality by updating BOTH nodes atomically
    */
   async removeRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
-    // Remove from the first node
     const node = this.nodes.get(nodeId);
+    const relatedNode = this.nodes.get(relatedNodeId);
+
     if (!node) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
     }
 
+    if (!relatedNode) {
+      console.warn(`Related DreamNode with ID ${relatedNodeId} not found - removing one-way relationship only`);
+      // Still remove from the first node even if related node is missing
+      const relationships = new Set(node.liminalWebConnections || []);
+      relationships.delete(relatedNodeId);
+      node.liminalWebConnections = Array.from(relationships);
+      this.nodes.set(nodeId, node);
+      console.log(`MockDreamNodeService: Removed one-way relationship ${nodeId} -> ${relatedNodeId}`);
+      return;
+    }
+
+    // Remove relationship in both directions
     const relationships = new Set(node.liminalWebConnections || []);
     relationships.delete(relatedNodeId);
     node.liminalWebConnections = Array.from(relationships);
+
+    const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
+    relatedRelationships.delete(nodeId);
+    relatedNode.liminalWebConnections = Array.from(relatedRelationships);
+
+    // Update both nodes
     this.nodes.set(nodeId, node);
+    this.nodes.set(relatedNodeId, relatedNode);
 
-    // Remove bidirectional relationship
-    await this.removeBidirectionalRelationship(nodeId, relatedNodeId);
-
-    console.log(`MockDreamNodeService: Removed relationship ${nodeId} <-> ${relatedNodeId}`);
-  }
-
-  /**
-   * Add bidirectional relationship (internal helper)
-   */
-  private async addBidirectionalRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
-    const relatedNode = this.nodes.get(relatedNodeId);
-    if (relatedNode) {
-      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
-      relatedRelationships.add(nodeId);
-      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
-      this.nodes.set(relatedNodeId, relatedNode);
-    }
-  }
-
-  /**
-   * Remove bidirectional relationship (internal helper)
-   */
-  private async removeBidirectionalRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
-    const relatedNode = this.nodes.get(relatedNodeId);
-    if (relatedNode) {
-      const relatedRelationships = new Set(relatedNode.liminalWebConnections || []);
-      relatedRelationships.delete(nodeId);
-      relatedNode.liminalWebConnections = Array.from(relatedRelationships);
-      this.nodes.set(relatedNodeId, relatedNode);
-    }
+    console.log(`MockDreamNodeService: Removed bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
   /**
