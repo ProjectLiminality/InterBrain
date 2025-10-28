@@ -146,6 +146,44 @@ export class GitService {
   }
 
   /**
+   * Commit all uncommitted changes with a given message
+   * Returns true if changes were committed, false if there was nothing to commit
+   */
+  async commitAllChanges(repoPath: string, commitMessage: string): Promise<boolean> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Committing all changes in ${fullPath}`);
+
+      // First check if there are any changes to commit
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+      if (!statusOutput.trim()) {
+        console.log('GitService: No changes to commit');
+        return false;
+      }
+
+      // Add all changes
+      await execAsync('git add -A', { cwd: fullPath });
+
+      // Commit with the provided message
+      await execAsync(`git commit -m "${commitMessage}"`, { cwd: fullPath });
+
+      console.log(`GitService: Successfully committed changes in: ${fullPath}`);
+      return true;
+    } catch (error) {
+      console.error('GitService: Failed to commit changes:', error);
+      // Check if error is because there's nothing to commit
+      if (error instanceof Error && (
+        error.message.includes('nothing to commit') ||
+        error.message.includes('no changes added')
+      )) {
+        console.log('GitService: No changes to commit (expected)');
+        return false;
+      }
+      throw new Error(`Failed to commit changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Check if a repository has any stashes
    */
   async hasStashes(repoPath: string): Promise<boolean> {

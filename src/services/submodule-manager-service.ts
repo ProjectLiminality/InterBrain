@@ -421,13 +421,20 @@ export class SubmoduleManagerService {
 
   /**
    * Ensure git repository is in clean state before submodule operations
+   * Auto-commits any uncommitted changes to prevent data loss
    */
   private async ensureCleanGitState(dreamNodePath: string): Promise<void> {
     const hasUncommitted = await this.gitService.hasUncommittedChanges(dreamNodePath);
     if (hasUncommitted) {
-      // Use existing autostash system
-      await this.gitService.stashChanges(dreamNodePath);
-      console.log('SubmoduleManagerService: Stashed uncommitted changes for clean state');
+      // Auto-commit changes before submodule operations
+      // This is safer than stashing because commits are permanent and traceable
+      const committed = await this.gitService.commitAllChanges(
+        dreamNodePath,
+        'Auto-save before submodule sync'
+      );
+      if (committed) {
+        console.log('SubmoduleManagerService: Auto-committed uncommitted changes for clean state');
+      }
     }
   }
 
