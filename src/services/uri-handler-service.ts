@@ -512,18 +512,30 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Generate deep link URL for single DreamNode
+	 * Generate deep link URL for single DreamNode with collaboration handshake
 	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
 	 * @param identifier Radicle ID (preferred) or UUID (fallback)
+	 * @param senderDid Optional sender's Radicle DID for peer following
+	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
-	static generateSingleNodeLink(vaultName: string, identifier: string): string {
+	static generateSingleNodeLink(vaultName: string, identifier: string, senderDid?: string, senderName?: string): string {
 		// Don't encode colons in Radicle IDs - they're part of the protocol
 		// rad:z... should stay as rad:z..., not rad%3Az...
 		const encodedIdentifier = identifier.startsWith('rad:')
 			? identifier // Keep Radicle ID as-is
 			: encodeURIComponent(identifier); // Encode other identifiers (UUIDs)
 
-		return `obsidian://interbrain-clone?id=${encodedIdentifier}`;
+		let uri = `obsidian://interbrain-clone?id=${encodedIdentifier}`;
+
+		// Add collaboration handshake parameters if provided
+		if (senderDid) {
+			uri += `&senderDid=${encodeURIComponent(senderDid)}`;
+		}
+		if (senderName) {
+			uri += `&senderName=${encodeURIComponent(senderName)}`;
+		}
+
+		return uri;
 	}
 
 	/**
@@ -542,13 +554,25 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Generate deep link URL for batch clone (Universal: supports mixed Radicle/GitHub/UUID identifiers)
+	 * Generate deep link URL for batch clone with collaboration handshake
 	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
 	 * @param identifiers Array of identifiers (can be Radicle IDs, GitHub URLs, or UUIDs)
+	 * @param senderDid Optional sender's Radicle DID for peer following
+	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
-	static generateBatchNodeLink(vaultName: string, identifiers: string[]): string {
+	static generateBatchNodeLink(vaultName: string, identifiers: string[], senderDid?: string, senderName?: string): string {
 		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
-		return `obsidian://interbrain-clone-batch?ids=${encodedIdentifiers}`;
+		let uri = `obsidian://interbrain-clone-batch?ids=${encodedIdentifiers}`;
+
+		// Add collaboration handshake parameters if provided
+		if (senderDid) {
+			uri += `&senderDid=${encodeURIComponent(senderDid)}`;
+		}
+		if (senderName) {
+			uri += `&senderName=${encodeURIComponent(senderName)}`;
+		}
+
+		return uri;
 	}
 }
 

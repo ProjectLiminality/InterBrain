@@ -306,6 +306,80 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
+   * Follow a peer's Radicle DID to receive their updates
+   * This is ESSENTIAL for bidirectional collaboration
+   */
+  async followPeer(peerDid: string, passphrase?: string): Promise<void> {
+    if (!await this.isAvailable()) {
+      throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+    }
+
+    const radCmd = this.getRadCommand();
+
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+    }
+
+    try {
+      console.log(`RadicleService: Following peer ${peerDid}...`);
+      await execAsync(`"${radCmd}" follow ${peerDid}`, { env });
+      console.log(`RadicleService: ✅ Now following ${peerDid} - will receive their updates`);
+    } catch (error: any) {
+      const errorOutput = error.stderr || error.stdout || error.message || '';
+
+      // Check if already following - not an error
+      if (errorOutput.includes('already following') || errorOutput.includes('Already following')) {
+        console.log(`RadicleService: Already following ${peerDid} (not an error)`);
+        return;
+      }
+
+      // Log other errors but don't fail
+      console.warn(`RadicleService: Could not follow peer ${peerDid}:`, errorOutput);
+      throw new Error(`Failed to follow peer: ${errorOutput || error.message}`);
+    }
+  }
+
+  /**
+   * Get the delegate (owner) DID for a repository
+   */
+  async getRepositoryDelegate(radicleId: string, passphrase?: string): Promise<string | null> {
+    if (!await this.isAvailable()) {
+      return null;
+    }
+
+    const radCmd = this.getRadCommand();
+
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+    }
+
+    try {
+      // Use rad inspect to get repository metadata
+      const { stdout } = await execAsync(`"${radCmd}" inspect ${radicleId}`, { env });
+
+      // Parse the delegate DID from the output
+      // Format: delegate: did:key:z6Mkxyz...
+      const delegateMatch = stdout.match(/delegate:\s*(did:key:[A-Za-z0-9]+)/i);
+
+      if (delegateMatch && delegateMatch[1]) {
+        const delegateDid = delegateMatch[1];
+        console.log(`RadicleService: Found delegate for ${radicleId}: ${delegateDid}`);
+        return delegateDid;
+      }
+
+      console.warn(`RadicleService: Could not parse delegate DID from rad inspect output`);
+      return null;
+    } catch (error: any) {
+      console.warn(`RadicleService: Failed to get repository delegate:`, error.message);
+      return null;
+    }
+  }
+
+  /**
    * Get Radicle ID for a repository
    */
   async getRadicleId(repoPath: string): Promise<string | null> {
@@ -561,6 +635,25 @@ export class RadicleServiceImpl implements RadicleService {
     } catch (error) {
       console.warn(`RadicleService: ⚠️ Could not save Radicle ID to .udd file (non-critical):`, error);
       // Don't fail the clone if .udd update fails
+    }
+
+    // CRITICAL: Follow the repository delegate to receive their updates
+    // This is ESSENTIAL for the Radicle peer-to-peer collaboration model
+    try {
+      console.log(`RadicleService: Establishing peer following relationship...`);
+      const delegateDid = await this.getRepositoryDelegate(radicleId, passphrase);
+
+      if (delegateDid) {
+        await this.followPeer(delegateDid, passphrase);
+        console.log(`RadicleService: ✅ Collaboration handshake complete - following ${delegateDid}`);
+      } else {
+        console.warn(`RadicleService: ⚠️ Could not determine repository delegate - peer following skipped`);
+        console.warn(`RadicleService: ⚠️ You may not receive updates from this repository's owner`);
+      }
+    } catch (followError: any) {
+      // Don't fail the clone if following fails - log warning
+      console.warn(`RadicleService: ⚠️ Could not follow repository delegate (non-critical):`, followError.message);
+      console.warn(`RadicleService: ⚠️ You may not receive updates automatically. Run 'rad follow <DID>' manually if needed.`);
     }
 
     return { repoName, alreadyExisted: false };
