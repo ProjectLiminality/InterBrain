@@ -25,11 +25,16 @@ This file contains the complete UDD (Universal Dream Description) schema includi
 ## Current Development Status
 
 **Current Branch**: `main`
-**Phase**: Epic 9 Planning - Next Development Cycle
+**Phase**: Epic 8 Completion - Soft Beta Launch Preparation
 
 **Epic Progress Summary**:
-- ✅ **Epics 1-8 Complete**: Foundation through Coherence Beacon System (see CHANGELOG.md for details)
-- 📋 **Epic 9 Next**: Ready for community input and prioritization
+- ✅ **Epics 1-7 Complete**: Foundation through Conversational Copilot (see CHANGELOG.md for details)
+- 🚧 **Epic 8 In Progress**: Coherence Beacon System + Soft Beta readiness (#258)
+
+**Three-Phase Launch Strategy**:
+1. **Soft Beta Launch** (~2 weeks) - Small closed group of tech-savvy peers, core functionality working end-to-end, acceptable rough edges
+2. **Hard Beta Launch** - Broader testing across diverse machines, refined UX, comprehensive robustness
+3. **Public Stable Release** - Full public announcement, polished experience, production-ready
 
 **Note**: For detailed achievement history of completed epics, see CHANGELOG.md
 
@@ -308,8 +313,13 @@ interface DreamNodeService {
 **Key Principles**:
 - **Issue Clarity Before Implementation**: Always refine issues through knowledge transfer interviews
 - **User Testing Protocol**: Never commit without user validation
-- **3-Tier Hierarchy**: Epic → Specification → Features
+- **Issue Hierarchy**: Epic → Features (simplified from previous 3-tier Epic → Spec → Feature model)
 - **Branch Strategy**: `main → epic/N-name → feature/name-from-issue`
+
+**GitHub Issue Hierarchy Decision** (October 2025):
+- Simplified from 3-tier (Epic → Specification → Feature) to 2-tier (Epic → Feature)
+- Rationale: Specifications added unnecessary layer for this project's workflow
+- Existing spec issues remain open for future epics, new issues follow 2-tier model
 
 ## Epic Quick Reference
 
@@ -320,16 +330,15 @@ interface DreamNodeService {
 - **Epic 4**: #255 - Liminal Web Layout System ✅ Complete
 - **Epic 5**: #256 - Semantic Search System ✅ Complete
 - **Epic 6**: #259 - DreamWeaving Operations ✅ Complete
-- **Epic 7**: Spec #269 - Conversational Copilot System ✅ Complete
-- **Epic 8**: Coherence Beacon System ✅ Complete
+- **Epic 7**: #257 - Conversational Copilot System ✅ Complete
 
-**Next Epic**:
-- **Epic 9**: Ready for community input and prioritization
+**Active Epic**:
+- **Epic 8**: #258 - Coherence Beacon System + Soft Beta Launch 🚧 In Progress
 
 **Current Project Status**:
-- **8 major epics completed** with comprehensive feature sets
-- **Foundation established** for distributed knowledge management
-- **Next development cycle** ready for community input and prioritization
+- **7 major epics completed** with comprehensive feature sets
+- **Epic 8 in progress** - Final collaboration layer + polish for soft beta
+- **Soft Beta Launch target**: ~2 weeks (small closed group testing)
 
 ## Technical Documentation References
 
