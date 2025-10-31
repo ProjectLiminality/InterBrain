@@ -71,6 +71,21 @@ export class EmailExportService {
 				}
 			}
 
+
+		// Get sender's identity for collaboration handshake
+		let senderDid: string | undefined;
+		let senderName: string | undefined;
+
+		if (radicleAvailable) {
+			try {
+				const identity = await radicleService.getIdentity();
+				senderDid = identity.did;
+				senderName = identity.alias || 'Friend';
+				console.log(`👤 [EmailExport] Sender identity: ${senderName} (${senderDid})`);
+			} catch (error) {
+				console.warn('⚠️ [EmailExport] Could not get Radicle identity:', error);
+			}
+		}
 			// Build email components (with Radicle IDs or GitHub URLs where available)
 			const subject = this.buildSubject(conversationPartner, conversationStartTime);
 			const body = this.buildEmailBody(
@@ -81,7 +96,9 @@ export class EmailExportService {
 				aiSummary,
 				vaultName,
 				uuidToRadicleIdMap,
-				uuidToGitHubUrlMap
+				uuidToGitHubUrlMap,
+				senderDid,
+				senderName
 			);
 
 			// Get recipient email (from metadata or parameter)
@@ -118,7 +135,9 @@ export class EmailExportService {
 		aiSummary: string,
 		vaultName: string,
 		uuidToRadicleIdMap: Map<string, string>,
-		uuidToGitHubUrlMap: Map<string, string>
+		uuidToGitHubUrlMap: Map<string, string>,
+		senderDid?: string,
+		senderName?: string
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -158,8 +177,8 @@ export class EmailExportService {
 				let identifier: string;
 
 				if (radicleId) {
-					// Primary: Radicle ID (peer-to-peer)
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId);
+					// Primary: Radicle ID (peer-to-peer) with collaboration handshake
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
 					identifier = radicleId;
 				} else if (githubUrlFromBatch) {
 					// Fallback 1: GitHub URL from batch share (just pushed!)
@@ -175,7 +194,7 @@ export class EmailExportService {
 					console.log(`📧 [EmailExport] Using stored GitHub URL for "${inv.nodeName}"`);
 				} else {
 					// Last resort: UUID (legacy, requires network broadcast)
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID);
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID, senderDid, senderName);
 					identifier = inv.dreamUUID;
 					console.warn(`⚠️ [EmailExport] Node "${inv.nodeName}" has no Radicle ID or GitHub URL, using UUID fallback`);
 				}
@@ -188,7 +207,7 @@ export class EmailExportService {
 
 			// Add batch clone link if multiple nodes shared
 			if (invocations.length > 1) {
-				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, allIdentifiers);
+				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, allIdentifiers, senderDid, senderName);
 				body += `\n📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
 			}
 		}

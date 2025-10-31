@@ -547,6 +547,29 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Copy share link for selected DreamNode
+    this.addCommand({
+      id: 'copy-share-link',
+      name: 'Copy Share Link for Selected DreamNode',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode) {
+          this.uiService.showError('No DreamNode selected');
+          return;
+        }
+
+        try {
+          const { ShareLinkService } = await import('./services/share-link-service');
+          const shareLinkService = new ShareLinkService(this.app);
+          await shareLinkService.copyShareLink(currentNode);
+        } catch (error) {
+          console.error('Failed to copy share link:', error);
+          this.uiService.showError(`Failed to copy share link: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+    });
+
     // Debug: Toggle wireframe sphere
     this.addCommand({
       id: 'toggle-debug-wireframe-sphere',
