@@ -713,17 +713,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = dreamNodeStyles.dimensions.borderWidth;
 
-  // DIAGNOSTIC: Log rendering state for debugging intermittent rendering issues
-  if (Math.random() < 0.01) { // Log 1% of renders to avoid spam
-    console.log(`[DreamNode-Render] ${dreamNode.name}:`, {
-      positionMode,
-      finalPosition,
-      isTransitioning,
-      flipRotation,
-      hasBackSide: hasLoadedBackSide,
-      mediaLoaded: !!(dreamNode.dreamTalkMedia[0]?.data)
-    });
-  }
 
   // Clean Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
   return (
@@ -749,10 +738,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               userSelect: isHovered ? 'auto' : 'none'
             }}
             onOcclude={() => {
-              // DIAGNOSTIC: Log when browser thinks element is occluded
-              if (Math.random() < 0.1) {
-                console.warn(`[DreamNode-Occlude] ${dreamNode.name} front side occluded`);
-              }
+              // Noop - occlude detection not needed
             }}
           >
             {/* Container div */}
