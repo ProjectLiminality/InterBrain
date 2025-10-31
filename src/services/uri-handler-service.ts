@@ -676,7 +676,7 @@ export class URIHandlerService {
 
 					return node;
 				}
-			} catch (error) {
+			} catch {
 				// Skip nodes without .udd or invalid JSON
 			}
 		}

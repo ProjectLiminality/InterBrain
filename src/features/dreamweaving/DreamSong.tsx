@@ -107,6 +107,34 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       );
     }
 
+    if (mimeType === 'application/pdf') {
+      return (
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            padding: '12px',
+            borderRadius: '8px',
+            cursor: onMediaClick ? 'pointer' : 'default'
+          }}
+          onClick={onMediaClick && sourceDreamNodeId ? () => onMediaClick(sourceDreamNodeId) : undefined}
+        >
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
+            DreamTalk PDF
+          </div>
+          <iframe
+            src={primaryMedia.data}
+            style={{
+              width: '100%',
+              height: '400px',
+              border: 'none',
+              borderRadius: '8px'
+            }}
+            title="PDF preview"
+          />
+        </div>
+      );
+    }
+
     return null;
   };
 

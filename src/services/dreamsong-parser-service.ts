@@ -623,7 +623,8 @@ export class DreamSongParserService {
       '.mov': 'video/quicktime',
       '.mp3': 'audio/mpeg',
       '.wav': 'audio/wav',
-      '.m4a': 'audio/mp4'
+      '.m4a': 'audio/mp4',
+      '.pdf': 'application/pdf'
     };
     return mimeTypes[`.${ext}`] || 'application/octet-stream';
   }

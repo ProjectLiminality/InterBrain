@@ -883,7 +883,8 @@ export class GitDreamNodeService {
       '.gif': 'image/gif',
       '.webp': 'image/webp',
       '.mp4': 'video/mp4',
-      '.webm': 'video/webm'
+      '.webm': 'video/webm',
+      '.pdf': 'application/pdf'
     };
     return mimeTypes[ext] || 'application/octet-stream';
   }
