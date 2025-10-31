@@ -53,8 +53,9 @@ export interface RadicleService {
 
   /**
    * Get Radicle ID for a repository
+   * @param passphrase Optional passphrase (uses ssh-agent if not provided)
    */
-  getRadicleId(repoPath: string): Promise<string | null>;
+  getRadicleId(repoPath: string, passphrase?: string): Promise<string | null>;
 
   /**
    * Get current user's Radicle identity
@@ -382,7 +383,7 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Get Radicle ID for a repository
    */
-  async getRadicleId(repoPath: string): Promise<string | null> {
+  async getRadicleId(repoPath: string, passphrase?: string): Promise<string | null> {
     // Check availability first - return null silently if not available
     if (!await this.isAvailable()) {
       return null;
@@ -390,7 +391,7 @@ export class RadicleServiceImpl implements RadicleService {
 
     try {
       // Ensure Radicle node is running before querying repository
-      await this.ensureNodeRunning();
+      await this.ensureNodeRunning(passphrase);
 
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" .`, { cwd: repoPath });

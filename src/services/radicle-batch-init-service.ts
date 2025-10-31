@@ -210,8 +210,8 @@ export class RadicleBatchInitService {
 					passphrase
 				);
 
-				// Get the Radicle ID
-				const radicleId = await this.radicleService.getRadicleId(fullRepoPath);
+				// Get the Radicle ID (pass passphrase for node startup)
+				const radicleId = await this.radicleService.getRadicleId(fullRepoPath, passphrase);
 
 				if (radicleId) {
 					result.set(node.id, radicleId);
