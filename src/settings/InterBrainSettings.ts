@@ -3,10 +3,12 @@ import type InterBrainPlugin from '../main';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
+	radiclePassphrase: string;
 }
 
 export const DEFAULT_SETTINGS: InterBrainSettings = {
-	claudeApiKey: ''
+	claudeApiKey: '',
+	radiclePassphrase: ''
 };
 
 export class InterBrainSettingTab extends PluginSettingTab {
@@ -35,6 +37,21 @@ export class InterBrainSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.claudeApiKey)
 				.onChange(async (value) => {
 					this.plugin.settings.claudeApiKey = value;
+					await this.plugin.saveSettings();
+				})
+				.inputEl.type = 'password');
+
+		// Radicle Settings Section
+		containerEl.createEl('h3', { text: 'Radicle Peer-to-Peer' });
+
+		new Setting(containerEl)
+			.setName('Radicle Passphrase')
+			.setDesc('Your Radicle passphrase for non-interactive operations (rad init, rad clone)')
+			.addText(text => text
+				.setPlaceholder('Enter passphrase...')
+				.setValue(this.plugin.settings.radiclePassphrase)
+				.onChange(async (value) => {
+					this.plugin.settings.radiclePassphrase = value;
 					await this.plugin.saveSettings();
 				})
 				.inputEl.type = 'password');

@@ -200,10 +200,14 @@ export class RadicleBatchInitService {
 				// Directory stays clean PascalCase, but Radicle repo name gets UUID for backend uniqueness
 				const uniqueRadicleName = node.id ? `${node.repoPath}-${node.id.substring(0, 7)}` : node.repoPath;
 
+				// Get passphrase from settings
+				const passphrase = (this.plugin as any).settings?.radiclePassphrase || undefined;
+
 				await this.radicleService.init(
 					fullRepoPath,
 					uniqueRadicleName, // Backend name with UUID for uniqueness
-					`DreamNode: ${node.name}`
+					`DreamNode: ${node.name}`,
+					passphrase
 				);
 
 				// Get the Radicle ID
