@@ -28,11 +28,29 @@ export class ShareLinkService {
 			if (!node) {
 				throw new Error('Node is undefined');
 			}
-			if (!node.uuid) {
-				throw new Error(`Node "${node.name}" has no UUID`);
+			if (!node.repoPath) {
+				throw new Error(`Node "${node.name}" has no repoPath`);
 			}
 
-			console.log(`🔗 [ShareLink] Generating share link for "${node.name}" (UUID: ${node.uuid})...`);
+			// Read UUID from .udd file (don't trust store state)
+			const fs = require('fs').promises;
+			const path = require('path');
+			const uddPath = path.join(this.app.vault.adapter.basePath, node.repoPath, '.udd');
+
+			let nodeUuid: string;
+			try {
+				const uddContent = await fs.readFile(uddPath, 'utf-8');
+				const udd = JSON.parse(uddContent);
+				nodeUuid = udd.uuid;
+
+				if (!nodeUuid) {
+					throw new Error(`Node "${node.name}" .udd file has no uuid field`);
+				}
+			} catch (error) {
+				throw new Error(`Failed to read UUID from .udd file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+
+			console.log(`🔗 [ShareLink] Generating share link for "${node.name}" (UUID: ${nodeUuid})...`);
 
 			const vaultName = this.app.vault.getName();
 			console.log(`🔗 [ShareLink] Vault name: ${vaultName}`);
@@ -65,8 +83,8 @@ export class ShareLinkService {
 
 				try {
 					const batchInitService = getRadicleBatchInitService();
-					const uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds([node.uuid]);
-					radicleId = uuidToRadicleIdMap.get(node.uuid) || null;
+					const uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds([nodeUuid]);
+					radicleId = uuidToRadicleIdMap.get(nodeUuid) || null;
 
 					if (radicleId) {
 						console.log(`✅ [ShareLink] Node has Radicle ID: ${radicleId}`);
@@ -82,8 +100,8 @@ export class ShareLinkService {
 					identifier = radicleId;
 				} else {
 					// Fallback: UUID
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, node.uuid, senderDid, senderName);
-					identifier = node.uuid;
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid, senderDid, senderName);
+					identifier = nodeUuid;
 					console.warn(`⚠️ [ShareLink] Using UUID fallback (Radicle init may have failed)`);
 				}
 			} else {
@@ -94,8 +112,8 @@ export class ShareLinkService {
 
 				try {
 					const batchShareService = getGitHubBatchShareService();
-					const uuidToGitHubUrlMap = await batchShareService.ensureNodesHaveGitHubUrls([node.uuid]);
-					githubUrl = uuidToGitHubUrlMap.get(node.uuid) || null;
+					const uuidToGitHubUrlMap = await batchShareService.ensureNodesHaveGitHubUrls([nodeUuid]);
+					githubUrl = uuidToGitHubUrlMap.get(nodeUuid) || null;
 
 					if (githubUrl) {
 						console.log(`✅ [ShareLink] Node has GitHub URL: ${githubUrl}`);
@@ -111,8 +129,8 @@ export class ShareLinkService {
 					identifier = githubUrl.replace(/^https?:\/\//, '');
 				} else {
 					// Last resort: UUID
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, node.uuid);
-					identifier = node.uuid;
+					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid);
+					identifier = nodeUuid;
 					console.warn(`⚠️ [ShareLink] Using UUID fallback (GitHub push may have failed)`);
 				}
 			}
