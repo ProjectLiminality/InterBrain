@@ -652,6 +652,11 @@ export class URIHandlerService {
 
 				if (udd.radicleId === radicleId) {
 					console.log(`🔍 [URIHandler] Found node by Radicle ID: "${node.name}"`);
+
+					// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
+					node.uuid = udd.uuid;
+					console.log(`✅ [URIHandler] Node UUID populated: ${node.uuid}`);
+
 					return node;
 				}
 			} catch (error) {
@@ -668,6 +673,16 @@ export class URIHandlerService {
 	 */
 	private async linkNodes(sourceNode: any, targetNode: any): Promise<void> {
 		try {
+			// CRITICAL VALIDATION: Ensure both nodes have UUIDs
+			if (!sourceNode.uuid) {
+				console.error(`❌ [URIHandler] Source node "${sourceNode.name}" has no UUID!`);
+				throw new Error(`Cannot link node without UUID: ${sourceNode.name}`);
+			}
+			if (!targetNode.uuid) {
+				console.error(`❌ [URIHandler] Target node "${targetNode.name}" has no UUID!`);
+				throw new Error(`Cannot link node without UUID: ${targetNode.name}`);
+			}
+
 			const fs = require('fs').promises;
 			const path = require('path');
 			const adapter = this.app.vault.adapter as any;
