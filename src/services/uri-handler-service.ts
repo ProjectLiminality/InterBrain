@@ -648,12 +648,45 @@ export class URIHandlerService {
 	 */
 	private async linkNodes(sourceNode: any, targetNode: any): Promise<void> {
 		try {
-			const relationshipService = new DreamSongRelationshipService(this.plugin);
+			const fs = require('fs').promises;
+			const path = require('path');
+			const adapter = this.app.vault.adapter as any;
+			const vaultPath = adapter.basePath || '';
 
-			// Add bidirectional relationship
-			await relationshipService.addRelationship(sourceNode, targetNode);
+			// Add bidirectional relationship by updating .udd files
+			// Source -> Target
+			const sourceUddPath = path.join(vaultPath, sourceNode.repoPath, '.udd');
+			const sourceUddContent = await fs.readFile(sourceUddPath, 'utf-8');
+			const sourceUdd = JSON.parse(sourceUddContent);
 
-			console.log(`🔗 [URIHandler] Linked "${sourceNode.name}" to "${targetNode.name}"`);
+			if (!sourceUdd.liminalWebRelationships) {
+				sourceUdd.liminalWebRelationships = [];
+			}
+
+			// Add relationship if not already present
+			if (!sourceUdd.liminalWebRelationships.includes(targetNode.uuid)) {
+				sourceUdd.liminalWebRelationships.push(targetNode.uuid);
+				await fs.writeFile(sourceUddPath, JSON.stringify(sourceUdd, null, 2), 'utf-8');
+				console.log(`🔗 [URIHandler] Added relationship: "${sourceNode.name}" -> "${targetNode.name}"`);
+			}
+
+			// Target -> Source
+			const targetUddPath = path.join(vaultPath, targetNode.repoPath, '.udd');
+			const targetUddContent = await fs.readFile(targetUddPath, 'utf-8');
+			const targetUdd = JSON.parse(targetUddContent);
+
+			if (!targetUdd.liminalWebRelationships) {
+				targetUdd.liminalWebRelationships = [];
+			}
+
+			// Add relationship if not already present
+			if (!targetUdd.liminalWebRelationships.includes(sourceNode.uuid)) {
+				targetUdd.liminalWebRelationships.push(sourceNode.uuid);
+				await fs.writeFile(targetUddPath, JSON.stringify(targetUdd, null, 2), 'utf-8');
+				console.log(`🔗 [URIHandler] Added relationship: "${targetNode.name}" -> "${sourceNode.name}"`);
+			}
+
+			console.log(`✅ [URIHandler] Linked "${sourceNode.name}" <-> "${targetNode.name}"`);
 		} catch (error) {
 			console.error(`❌ [URIHandler] Failed to link nodes:`, error);
 			throw error;
