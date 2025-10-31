@@ -24,13 +24,15 @@ export class ShareLinkService {
 	 */
 	async copyShareLink(node: DreamNode): Promise<void> {
 		try {
-			console.log(`🔗 [ShareLink] Generating share link for "${node.name}"...`);
+			console.log(`🔗 [ShareLink] Generating share link for "${node.name}" (UUID: ${node.uuid})...`);
 
 			const vaultName = this.app.vault.getName();
+			console.log(`🔗 [ShareLink] Vault name: ${vaultName}`);
 
 			// Check if Radicle is available on this machine
 			const radicleService = serviceManager.getRadicleService();
 			const radicleAvailable = await radicleService.isAvailable();
+			console.log(`🔗 [ShareLink] Radicle available: ${radicleAvailable}`);
 
 			let deepLink: string;
 			let identifier: string;
@@ -105,6 +107,11 @@ export class ShareLinkService {
 					identifier = node.uuid;
 					console.warn(`⚠️ [ShareLink] Using UUID fallback (GitHub push may have failed)`);
 				}
+			}
+
+			// Validate that we have a link
+			if (!deepLink || !identifier) {
+				throw new Error('Failed to generate share link: identifier or deepLink is undefined');
 			}
 
 			// Copy to clipboard
