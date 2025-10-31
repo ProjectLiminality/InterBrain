@@ -369,6 +369,23 @@ export class URIHandlerService {
 				new Notice(`✅ Cloned "${finalRepoName}" successfully!`);
 			}
 
+			// CRITICAL: Write Radicle ID to .udd file for future lookups
+			try {
+				const fs = require('fs').promises;
+				const path = require('path');
+				const uddPath = path.join(vaultPath, finalRepoName, '.udd');
+				const uddContent = await fs.readFile(uddPath, 'utf-8');
+				const udd = JSON.parse(uddContent);
+
+				if (!udd.radicleId) {
+					udd.radicleId = radicleId;
+					await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
+					console.log(`✅ [URIHandler] Saved Radicle ID to .udd: ${radicleId}`);
+				}
+			} catch (uddError) {
+				console.warn(`⚠️ [URIHandler] Could not save Radicle ID to .udd:`, uddError);
+			}
+
 			// AUTO-REFRESH: Make the newly cloned node appear immediately
 			try {
 				// Step 1: Rescan vault to detect the new DreamNode
