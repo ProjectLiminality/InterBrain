@@ -648,7 +648,7 @@ export class URIHandlerService {
 	 */
 	private async linkNodes(sourceNode: any, targetNode: any): Promise<void> {
 		try {
-			const relationshipService = new DreamSongRelationshipService(this.app);
+			const relationshipService = new DreamSongRelationshipService(this.plugin);
 
 			// Add bidirectional relationship
 			await relationshipService.addRelationship(sourceNode, targetNode);
