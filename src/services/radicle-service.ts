@@ -277,6 +277,9 @@ export class RadicleServiceImpl implements RadicleService {
 
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
+      console.log('RadicleService: Using passphrase for node start (length:', passphrase.length, ')');
+    } else {
+      console.log('RadicleService: No passphrase provided for node start');
     }
 
     // CRITICAL: Add Radicle bin to PATH so rad can find radicle-node binary
@@ -285,8 +288,17 @@ export class RadicleServiceImpl implements RadicleService {
     env.PATH = `${radBinDir}:${env.PATH}`;
 
     console.log('RadicleService: Starting Radicle node...');
-    await execAsync(`"${radCmd}" node start`, { env });
-    console.log('RadicleService: Radicle node started successfully');
+    try {
+      const result = await execAsync(`"${radCmd}" node start`, { env });
+      console.log('RadicleService: Radicle node started successfully');
+      if (result.stdout) console.log('RadicleService: node start stdout:', result.stdout);
+      if (result.stderr) console.log('RadicleService: node start stderr:', result.stderr);
+    } catch (error: any) {
+      console.error('RadicleService: node start failed:', error.message);
+      if (error.stdout) console.error('RadicleService: node start stdout:', error.stdout);
+      if (error.stderr) console.error('RadicleService: node start stderr:', error.stderr);
+      throw error;
+    }
 
     // Wait for node to be fully ready
     console.log('RadicleService: Waiting for node to be fully ready...');

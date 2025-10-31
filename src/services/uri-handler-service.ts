@@ -88,8 +88,8 @@ export class URIHandlerService {
 				// Clone from Radicle network with collaboration handshake
 				const result = await this.cloneFromRadicle(id);
 
-				// If clone successful and we have sender info, create/link Dreamer node
-				if (result === 'success' && senderDid && senderName) {
+				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
+				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
 					await this.handleCollaborationHandshake(id, senderDid, senderName);
 				}
 
