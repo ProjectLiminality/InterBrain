@@ -589,6 +589,22 @@ export class URIHandlerService {
 
 		if (existingDreamer) {
 			console.log(`👤 [URIHandler] Found existing Dreamer node: "${existingDreamer.name}"`);
+
+			// Ensure UUID is populated (store object might not have it)
+			if (!existingDreamer.uuid) {
+				const fs = require('fs').promises;
+				const path = require('path');
+				try {
+					const uddPath = path.join(this.app.vault.adapter.basePath, existingDreamer.repoPath, '.udd');
+					const uddContent = await fs.readFile(uddPath, 'utf-8');
+					const udd = JSON.parse(uddContent);
+					existingDreamer.uuid = udd.uuid;
+					console.log(`✅ [URIHandler] Populated UUID for existing Dreamer: ${existingDreamer.uuid}`);
+				} catch (error) {
+					console.warn(`⚠️ [URIHandler] Could not read UUID for existing Dreamer:`, error);
+				}
+			}
+
 			return existingDreamer;
 		}
 
@@ -597,7 +613,7 @@ export class URIHandlerService {
 
 		const newDreamer = await this.dreamNodeService.create(name, 'dreamer');
 
-		// Update .udd file to include Radicle DID
+		// Update .udd file to include Radicle DID and read back UUID
 		const uddPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 		const fs = require('fs').promises;
 
@@ -607,6 +623,10 @@ export class URIHandlerService {
 			udd.radicleId = did;
 			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
 			console.log(`✅ [URIHandler] Saved DID to Dreamer node: ${did}`);
+
+			// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
+			newDreamer.uuid = udd.uuid;
+			console.log(`✅ [URIHandler] Dreamer node UUID: ${newDreamer.uuid}`);
 		} catch (error) {
 			console.warn(`⚠️ [URIHandler] Could not save DID to .udd file:`, error);
 		}
