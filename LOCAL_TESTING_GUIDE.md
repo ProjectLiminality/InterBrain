@@ -62,7 +62,20 @@ obsidian://interbrain-clone-batch?ids=rad:z123,rad:z456&senderDid=did:key:z6Mk..
    rad node start
    ```
 
-4. **Get your Radicle identity:**
+4. **Add Radicle key to ssh-agent (CRITICAL for non-interactive operations):**
+   ```bash
+   # Add your Radicle key to ssh-agent
+   ssh-add ~/.radicle/keys/radicle
+   # You'll be prompted for passphrase ONCE
+
+   # Verify it's loaded:
+   ssh-add -l
+   # Should show your Radicle key
+   ```
+
+   **Why this is needed**: InterBrain runs `rad init` and other commands non-interactively (from within Obsidian). Without ssh-agent, these commands fail with "please set `RAD_PASSPHRASE`" error.
+
+5. **Get your Radicle identity:**
    ```bash
    rad self --did
    # Example: did:key:z6MkxyzABC123...
