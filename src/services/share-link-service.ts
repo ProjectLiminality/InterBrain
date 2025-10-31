@@ -24,6 +24,14 @@ export class ShareLinkService {
 	 */
 	async copyShareLink(node: DreamNode): Promise<void> {
 		try {
+			// Validate node has required fields
+			if (!node) {
+				throw new Error('Node is undefined');
+			}
+			if (!node.uuid) {
+				throw new Error(`Node "${node.name}" has no UUID`);
+			}
+
 			console.log(`🔗 [ShareLink] Generating share link for "${node.name}" (UUID: ${node.uuid})...`);
 
 			const vaultName = this.app.vault.getName();
