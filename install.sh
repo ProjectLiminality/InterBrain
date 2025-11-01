@@ -205,6 +205,22 @@ cat > "$VAULT_PATH/.obsidian/community-plugins.json" << 'EOF'
 ["interbrain"]
 EOF
 
+# Create snippets directory and enable InterBrain theme
+mkdir -p "$VAULT_PATH/.obsidian/snippets"
+
+# Create appearance.json with InterBrain theme enabled
+cat > "$VAULT_PATH/.obsidian/appearance.json" << 'EOF'
+{
+  "accentColor": "#00A2FF",
+  "theme": "obsidian",
+  "baseFontSize": 16,
+  "enabledCssSnippets": [
+    "interbrain"
+  ]
+}
+EOF
+success "Created theme configuration"
+
 echo ""
 echo "Step 4: Cloning InterBrain..."
 echo "------------------------------"
@@ -262,8 +278,20 @@ npm run build
 success "Plugin built successfully"
 
 echo ""
-echo "Step 6: Linking to vault..."
-echo "---------------------------"
+echo "Step 6: Installing InterBrain theme..."
+echo "---------------------------------------"
+
+# Copy theme CSS to snippets directory
+if [ -f "$INTERBRAIN_PATH/theme/interbrain.css" ]; then
+    cp "$INTERBRAIN_PATH/theme/interbrain.css" "$VAULT_PATH/.obsidian/snippets/"
+    success "InterBrain theme installed"
+else
+    warning "Theme file not found, skipping theme installation"
+fi
+
+echo ""
+echo "Step 7: Linking plugin to vault..."
+echo "-----------------------------------"
 
 PLUGINS_DIR="$VAULT_PATH/.obsidian/plugins"
 SYMLINK_PATH="$PLUGINS_DIR/interbrain"
@@ -282,7 +310,7 @@ ln -s "$INTERBRAIN_PATH" "$SYMLINK_PATH"
 success "Symlink created: $SYMLINK_PATH → $INTERBRAIN_PATH"
 
 echo ""
-echo "Step 7: Radicle identity setup..."
+echo "Step 8: Radicle identity setup..."
 echo "----------------------------------"
 
 # Check if Radicle identity exists
@@ -323,7 +351,7 @@ else
 fi
 
 echo ""
-echo "Step 8: Starting Radicle node..."
+echo "Step 9: Starting Radicle node..."
 echo "---------------------------------"
 
 # Check if node is already running
@@ -337,8 +365,8 @@ else
 fi
 
 echo ""
-echo "Step 9: Final verification..."
-echo "------------------------------"
+echo "Step 10: Final verification..."
+echo "-------------------------------"
 
 # Verify everything
 ALL_GOOD=true
@@ -368,7 +396,7 @@ if [ "$OBSIDIAN_INSTALLED" = true ]; then
 fi
 
 echo ""
-echo "Step 10: Opening Obsidian..."
+echo "Step 11: Opening Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then

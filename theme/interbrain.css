@@ -1,0 +1,171 @@
+/* InterBrain Theme - CSS Snippet
+ * Pitch black space aesthetic with vibrant accent colors
+ *
+ * Colors:
+ * - Background: Pure black (#000000)
+ * - Text: White (#ffffff)
+ * - Interactive: Red (#FF644E) and Blue (#00A2FF)
+ */
+
+.theme-dark {
+  /* === BACKGROUNDS === */
+  --background-primary: #000000;
+  --background-primary-alt: #000000;
+  --background-secondary: #0a0a0a;
+  --background-secondary-alt: #0f0f0f;
+  --background-modifier-border: rgba(255, 255, 255, 0.1);
+  --background-modifier-form-field: rgba(255, 255, 255, 0.05);
+  --background-modifier-form-field-highlighted: rgba(255, 255, 255, 0.1);
+  --background-modifier-box-shadow: rgba(0, 0, 0, 0.5);
+  --background-modifier-success: rgba(0, 162, 255, 0.2);
+  --background-modifier-error: rgba(255, 100, 78, 0.2);
+  --background-modifier-error-hover: rgba(255, 100, 78, 0.3);
+
+  /* === TEXT COLORS === */
+  --text-normal: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-faint: rgba(255, 255, 255, 0.3);
+  --text-error: #FF644E;
+  --text-success: #00A2FF;
+  --text-selection: rgba(0, 162, 255, 0.3);
+  --text-on-accent: #ffffff;
+
+  /* === INTERACTIVE ELEMENTS === */
+  --interactive-normal: rgba(255, 255, 255, 0.1);
+  --interactive-hover: rgba(0, 162, 255, 0.2);
+  --interactive-accent: #00A2FF;
+  --interactive-accent-hover: #0088cc;
+  --interactive-success: #00A2FF;
+
+  /* === ACCENT COLORS === */
+  --accent-color: #00A2FF;
+  --accent-color-hover: #0088cc;
+
+  /* === SCROLLBARS === */
+  --scrollbar-bg: rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb-bg: rgba(255, 255, 255, 0.2);
+  --scrollbar-active-thumb-bg: rgba(0, 162, 255, 0.5);
+
+  /* === BUTTONS === */
+  --button-primary-bg: #00A2FF;
+  --button-primary-bg-hover: #0088cc;
+  --button-secondary-bg: #FF644E;
+  --button-secondary-bg-hover: #e5503c;
+
+  /* === LINKS === */
+  --link-color: #00A2FF;
+  --link-color-hover: #0088cc;
+  --link-external-color: #FF644E;
+  --link-external-color-hover: #e5503c;
+
+  /* === FILE EXPLORER === */
+  --nav-item-background-hover: rgba(0, 162, 255, 0.1);
+  --nav-item-background-active: rgba(0, 162, 255, 0.2);
+  --nav-file-tag: rgba(255, 100, 78, 0.8);
+
+  /* === TABS === */
+  --tab-background-active: rgba(0, 162, 255, 0.15);
+  --tab-text-color-active: #00A2FF;
+
+  /* === TOGGLES & CHECKBOXES === */
+  --checkbox-color: #00A2FF;
+  --checkbox-color-hover: #0088cc;
+  --toggle-thumb-color: #ffffff;
+  --toggle-bg-active: #00A2FF;
+  --toggle-bg-inactive: rgba(255, 255, 255, 0.2);
+
+  /* === SLIDERS === */
+  --slider-track-background: rgba(255, 255, 255, 0.1);
+  --slider-thumb-bg: #00A2FF;
+
+  /* === MODALS & PROMPTS === */
+  --modal-background: #000000;
+  --modal-border-color: rgba(0, 162, 255, 0.3);
+  --prompt-border-color: rgba(0, 162, 255, 0.5);
+
+  /* === CODE BLOCKS === */
+  --code-background: rgba(255, 255, 255, 0.05);
+  --code-normal: #ffffff;
+  --code-comment: rgba(255, 255, 255, 0.4);
+  --code-function: #00A2FF;
+  --code-keyword: #FF644E;
+  --code-string: rgba(255, 255, 255, 0.8);
+
+  /* === GRAPH VIEW === */
+  --graph-line: rgba(255, 255, 255, 0.1);
+  --graph-node: #00A2FF;
+  --graph-node-unresolved: #FF644E;
+  --graph-node-tag: rgba(255, 100, 78, 0.8);
+  --graph-node-attachment: rgba(0, 162, 255, 0.6);
+
+  /* === TABLES === */
+  --table-header-background: rgba(0, 162, 255, 0.1);
+  --table-row-even-background: rgba(255, 255, 255, 0.02);
+  --table-row-odd-background: rgba(255, 255, 255, 0.04);
+  --table-border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* === ADDITIONAL CUSTOM STYLING === */
+
+/* Ribbon icons with accent color on hover */
+.workspace-ribbon-collapse-btn:hover,
+.side-dock-ribbon-action:hover {
+  color: #00A2FF !important;
+}
+
+/* Settings tabs accent */
+.vertical-tab-nav-item.is-active {
+  background-color: rgba(0, 162, 255, 0.2);
+  color: #00A2FF;
+}
+
+/* Button styling */
+button.mod-cta {
+  background-color: #00A2FF;
+  color: #ffffff;
+}
+
+button.mod-cta:hover {
+  background-color: #0088cc;
+}
+
+button.mod-warning {
+  background-color: #FF644E;
+  color: #ffffff;
+}
+
+button.mod-warning:hover {
+  background-color: #e5503c;
+}
+
+/* Active file in sidebar */
+.nav-file-title.is-active {
+  background-color: rgba(0, 162, 255, 0.15);
+  color: #00A2FF;
+}
+
+/* Tag pills */
+.tag {
+  background-color: rgba(255, 100, 78, 0.2);
+  color: #FF644E;
+  border: 1px solid rgba(255, 100, 78, 0.3);
+}
+
+.tag:hover {
+  background-color: rgba(255, 100, 78, 0.3);
+}
+
+/* Workspace background - ensure pitch black */
+.workspace {
+  background-color: #000000;
+}
+
+.workspace-leaf-content {
+  background-color: #000000;
+}
+
+/* Ensure DreamSpace stays black */
+.dreamspace-container,
+.dreamspace-canvas-container {
+  background-color: #000000 !important;
+}
