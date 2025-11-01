@@ -213,9 +213,32 @@ echo "------------------------------"
 INTERBRAIN_PATH="$VAULT_PATH/InterBrain"
 
 if [ -d "$INTERBRAIN_PATH" ]; then
-    warning "InterBrain directory already exists. Updating..."
-    cd "$INTERBRAIN_PATH"
-    git pull origin main
+    # Check if it's actually the InterBrain repo
+    if [ -d "$INTERBRAIN_PATH/.git" ]; then
+        cd "$INTERBRAIN_PATH"
+        REPO_URL=$(git config --get remote.origin.url 2>/dev/null || echo "")
+
+        if [[ "$REPO_URL" == *"ProjectLiminality/InterBrain"* ]]; then
+            warning "InterBrain already exists. Updating..."
+            git pull origin main
+        else
+            echo ""
+            error "Directory '$INTERBRAIN_PATH' already exists but is a different repository."
+            echo ""
+            echo "Please rename or move the existing directory, then run this script again:"
+            echo "  mv '$INTERBRAIN_PATH' '$INTERBRAIN_PATH.backup'"
+            echo ""
+            exit 1
+        fi
+    else
+        echo ""
+        error "Directory '$INTERBRAIN_PATH' already exists but is not a git repository."
+        echo ""
+        echo "Please rename or move the existing directory, then run this script again:"
+        echo "  mv '$INTERBRAIN_PATH' '$INTERBRAIN_PATH.backup'"
+        echo ""
+        exit 1
+    fi
 else
     echo "Cloning from GitHub..."
     cd "$VAULT_PATH"
