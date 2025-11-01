@@ -221,6 +221,17 @@ cat > "$VAULT_PATH/.obsidian/appearance.json" << 'EOF'
 EOF
 success "Created theme configuration"
 
+# Create .obsidianignore to prevent Obsidian from indexing development files
+cat > "$VAULT_PATH/.obsidianignore" << 'EOF'
+# Ignore InterBrain development files
+InterBrain/node_modules
+InterBrain/dist
+InterBrain/.git
+InterBrain/src
+InterBrain/.github
+EOF
+success "Created .obsidianignore"
+
 echo ""
 echo "Step 4: Cloning InterBrain..."
 echo "------------------------------"
