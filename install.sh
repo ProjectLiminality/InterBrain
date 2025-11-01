@@ -188,17 +188,21 @@ fi
 # Create .obsidian directory structure if it doesn't exist
 mkdir -p "$VAULT_PATH/.obsidian/plugins"
 
-# Create minimal Obsidian config if it doesn't exist
-if [ ! -f "$VAULT_PATH/.obsidian/app.json" ]; then
-    cat > "$VAULT_PATH/.obsidian/app.json" << 'EOF'
+# Create Obsidian config with excluded files
+cat > "$VAULT_PATH/.obsidian/app.json" << 'EOF'
 {
   "showLineNumber": true,
   "spellcheck": true,
-  "promptDelete": false
+  "promptDelete": false,
+  "userIgnoreFilters": [
+    "InterBrain/node_modules",
+    "InterBrain/dist",
+    "InterBrain/.git",
+    "InterBrain/src"
+  ]
 }
 EOF
-    success "Created Obsidian config"
-fi
+success "Created Obsidian config with exclusions"
 
 # Create community-plugins.json to enable InterBrain plugin
 cat > "$VAULT_PATH/.obsidian/community-plugins.json" << 'EOF'
@@ -220,17 +224,6 @@ cat > "$VAULT_PATH/.obsidian/appearance.json" << 'EOF'
 }
 EOF
 success "Created theme configuration"
-
-# Create .obsidianignore to prevent Obsidian from indexing development files
-cat > "$VAULT_PATH/.obsidianignore" << 'EOF'
-# Ignore InterBrain development files
-InterBrain/node_modules
-InterBrain/dist
-InterBrain/.git
-InterBrain/src
-InterBrain/.github
-EOF
-success "Created .obsidianignore"
 
 echo ""
 echo "Step 4: Cloning InterBrain..."
