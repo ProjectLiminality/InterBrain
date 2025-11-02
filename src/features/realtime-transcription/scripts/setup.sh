@@ -76,10 +76,44 @@ fi
 pip install RealtimeSTT numpy
 
 echo ""
+echo "📥 Pre-downloading Whisper model (small.en)..."
+echo "This may take 1-2 minutes but saves time on first transcription..."
+echo ""
+
+# Pre-download the model by running a quick test
+# This triggers the model download without requiring user interaction
+python3 << 'PYTHON_SCRIPT'
+try:
+    from RealtimeSTT import AudioToTextRecorder
+    import sys
+
+    print("⏳ Initializing Whisper model (small.en)...")
+
+    # Initialize recorder with default model - this downloads it
+    recorder = AudioToTextRecorder(
+        model='small.en',
+        language='en',
+        compute_type='float32',
+        no_log_file=True
+    )
+
+    print("✅ Model downloaded successfully!")
+
+    # Shutdown recorder
+    recorder.shutdown()
+
+except Exception as e:
+    print(f"⚠️  Model pre-download skipped: {e}")
+    print("Model will download automatically on first transcription run")
+    sys.exit(0)  # Don't fail the setup
+PYTHON_SCRIPT
+
+echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "The transcription feature is now ready to use."
 echo "Obsidian will automatically use the virtual environment."
+echo "Whisper model (small.en) is pre-downloaded and ready."
 echo ""
 echo "To test manually:"
 echo "  source $VENV_DIR/bin/activate"
