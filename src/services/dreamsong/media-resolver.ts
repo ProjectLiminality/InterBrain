@@ -326,15 +326,21 @@ async function resolveSourceDreamNodeUuid(
 
     const submoduleDirName = submoduleMatch[2]; // "VectorEquilibrium"
 
+    // Check if this is a known non-DreamNode folder (media, assets, etc.)
+    const nonDreamNodeFolders = ['media', 'assets', 'attachments', '.obsidian', '.git'];
+    if (nonDreamNodeFolders.includes(submoduleDirName.toLowerCase())) {
+      // Silently skip - this is expected behavior for non-DreamNode folders
+      return null;
+    }
+
     // Read .udd file from submodule directory
     const vaultPath = vaultService.getVaultPath();
     const uddPath = path.join(vaultPath, submoduleDirName, '.udd');
 
     if (!fs.existsSync(uddPath)) {
-      // CRITICAL ERROR: Missing .udd file
-      console.error(`❌ [Media Resolver] CORRUPTED DREAMNODE: ${submoduleDirName} is missing .udd metadata file`);
-      console.error(`   Expected .udd at: ${uddPath}`);
-      console.error(`   Media will be non-clickable until .udd is restored`);
+      // Only log warning if this looks like it should be a DreamNode
+      // (reduce noise for non-DreamNode folders)
+      console.warn(`⚠️ [Media Resolver] Directory '${submoduleDirName}' missing .udd file (media non-clickable)`);
       return null; // Media will be non-clickable
     }
 
@@ -353,9 +359,10 @@ async function resolveSourceDreamNodeUuid(
     return udd.uuid;
 
   } catch (error) {
-    // CRITICAL ERROR: .udd file read/parse failure
-    console.error(`❌ [Media Resolver] FAILED to resolve UUID from .udd file for ${filename}:`, error);
-    console.error(`   Media will be non-clickable until .udd corruption is fixed`);
+    // Only log error for actual corruption, not missing files
+    if (error instanceof SyntaxError) {
+      console.error(`❌ [Media Resolver] Corrupted .udd JSON for ${filename}:`, error);
+    }
     return null; // Media will be non-clickable on error
   }
 }
