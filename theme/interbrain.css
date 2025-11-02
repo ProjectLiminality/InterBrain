@@ -66,6 +66,8 @@
   /* === TABS === */
   --tab-background-active: rgba(0, 162, 255, 0.15);
   --tab-text-color-active: #00A2FF;
+  --tab-text-color: rgba(255, 255, 255, 0.6);
+  --tab-text-color-focused: #ffffff;
 
   /* === TOGGLES & CHECKBOXES === */
   --checkbox-color: #00A2FF;
@@ -168,4 +170,59 @@ button.mod-warning:hover {
 .dreamspace-container,
 .dreamspace-canvas-container {
   background-color: #000000 !important;
+}
+
+/* === TAB STYLING - MINIMAL AND CLEAN === */
+
+/* Clean up tab bar background */
+.workspace-tab-header-container {
+  background-color: #000000;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Tab styling */
+.workspace-tab-header {
+  background-color: #000000;
+  color: rgba(255, 255, 255, 0.6);
+  border: none;
+}
+
+/* Active tab */
+.workspace-tab-header.is-active {
+  background-color: #000000;
+  color: #00A2FF;
+  border-bottom: 2px solid #00A2FF;
+}
+
+/* Tab close button - clean minimal style */
+.workspace-tab-header-inner-close-button {
+  background-color: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  border: none;
+  border-radius: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.workspace-tab-header:hover .workspace-tab-header-inner-close-button {
+  opacity: 1;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.workspace-tab-header-inner-close-button:hover {
+  background-color: transparent;
+  color: #FF644E;
+}
+
+/* Remove those little square backgrounds on tab elements */
+.workspace-tab-header-inner-icon,
+.workspace-tab-header-status-icon {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+/* Clean up any other tab decorations */
+.mod-root .workspace-tab-header.is-active::before,
+.mod-root .workspace-tab-header.is-active::after {
+  display: none;
 }
