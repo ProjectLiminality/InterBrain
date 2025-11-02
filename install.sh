@@ -16,6 +16,9 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Total number of steps (for progress tracking)
+TOTAL_STEPS=14
+
 # Default vault name and location
 DEFAULT_VAULT_NAME="DreamVault"
 DEFAULT_VAULT_PARENT="$HOME"
@@ -45,6 +48,31 @@ info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
+# Function to show spinner during long operations
+show_spinner() {
+    local pid=$1
+    local message=$2
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+
+    echo -n "   "
+    while kill -0 $pid 2>/dev/null; do
+        i=$(( (i+1) %10 ))
+        printf "\r   ${BLUE}${spin:$i:1}${NC} $message"
+        sleep .1
+    done
+    printf "\r   ✓ $message\n"
+}
+
+# Function to run command with spinner
+run_with_spinner() {
+    local message=$1
+    shift
+    "$@" > /dev/null 2>&1 &
+    show_spinner $! "$message"
+    wait $!
+}
+
 # Function to refresh shell environment
 refresh_shell_env() {
     # Ensure newly installed binaries are available
@@ -61,8 +89,10 @@ refresh_shell_env() {
     fi
 }
 
-echo "Step 1: Checking prerequisites..."
-echo "-----------------------------------"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 1/$TOTAL_STEPS: Checking prerequisites"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Check for Homebrew (macOS)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -273,11 +303,16 @@ echo "Step 5: Building plugin..."
 echo "--------------------------"
 
 cd "$INTERBRAIN_PATH"
-info "Installing dependencies (this may take a minute)..."
-npm install --silent
 
-info "Building plugin..."
-npm run build
+# Install dependencies with spinner
+npm install --silent > /dev/null 2>&1 &
+show_spinner $! "Installing Node.js dependencies..."
+wait $!
+
+# Build with spinner
+npm run build > /dev/null 2>&1 &
+show_spinner $! "Building InterBrain plugin..."
+wait $!
 
 success "Plugin built successfully"
 
@@ -316,9 +351,14 @@ fi
 # Build Plugin Reloader
 cd "$PLUGIN_RELOADER_PATH"
 if [ -f "package.json" ]; then
-    info "Building Plugin Reloader..."
-    npm install --silent
-    npm run build
+    npm install --silent > /dev/null 2>&1 &
+    show_spinner $! "Installing Plugin Reloader dependencies..."
+    wait $!
+
+    npm run build > /dev/null 2>&1 &
+    show_spinner $! "Building Plugin Reloader..."
+    wait $!
+
     success "Plugin Reloader built successfully"
 else
     warning "Plugin Reloader package.json not found, skipping build"
@@ -373,11 +413,13 @@ else
 fi
 
 # Pull the embedding model
-echo "Pulling nomic-embed-text model (this may take a minute)..."
 if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
     success "nomic-embed-text model already installed"
 else
-    ollama pull nomic-embed-text
+    info "Downloading nomic-embed-text model (this may take 1-2 minutes)..."
+    ollama pull nomic-embed-text > /dev/null 2>&1 &
+    show_spinner $! "Pulling nomic-embed-text model..."
+    wait $!
     success "nomic-embed-text model installed"
 fi
 
@@ -476,16 +518,24 @@ if [ -d "$TRANSCRIPTION_DIR" ]; then
     cd "$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
 
     if [ ! -d "venv" ]; then
-        info "Creating Python virtual environment for transcription..."
-        python3 -m venv venv
+        info "Setting up Python environment (this may take 1-2 minutes)..."
 
-        # Activate venv and install dependencies
-        source venv/bin/activate
-        pip install --upgrade pip --quiet
-        pip install -r requirements.txt --quiet
-        deactivate
+        # Create venv
+        python3 -m venv venv > /dev/null 2>&1 &
+        show_spinner $! "Creating virtual environment..."
+        wait $!
 
-        success "Transcription environment set up (whisper_streaming installed)"
+        # Install dependencies with spinner
+        (
+            source venv/bin/activate
+            pip install --upgrade pip --quiet
+            pip install -r requirements.txt --quiet
+            deactivate
+        ) > /dev/null 2>&1 &
+        show_spinner $! "Installing whisper_streaming and dependencies..."
+        wait $!
+
+        success "Transcription environment ready"
     else
         success "Transcription environment already exists"
     fi
