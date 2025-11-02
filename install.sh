@@ -338,11 +338,11 @@ if [ -f "$COMMUNITY_PLUGINS_FILE" ]; then
     fi
 fi
 
-# Configure hotkey for Plugin Reloader (Command+R)
+# Configure hotkey for Plugin Reloader (Command+R to reload InterBrain)
 mkdir -p "$VAULT_PATH/.obsidian"
 cat > "$VAULT_PATH/.obsidian/hotkeys.json" << 'EOF'
 {
-  "plugin-reloader:reload-plugin": [
+  "plugin-reloader:interbrain": [
     {
       "modifiers": [
         "Mod"
@@ -352,7 +352,7 @@ cat > "$VAULT_PATH/.obsidian/hotkeys.json" << 'EOF'
   ]
 }
 EOF
-success "Hotkey configured: Command+R to reload plugins"
+success "Hotkey configured: Command+R to reload InterBrain plugin"
 
 echo ""
 echo "Step 8: Installing Ollama for semantic search..."
