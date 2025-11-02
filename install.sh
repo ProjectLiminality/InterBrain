@@ -218,7 +218,8 @@ fi
 # Create .obsidian directory structure if it doesn't exist
 mkdir -p "$VAULT_PATH/.obsidian/plugins"
 
-# Create Obsidian config with excluded files
+# Create Obsidian config with smart exclusions
+# We exclude build artifacts and source code, but NOT media (needed for canvas)
 cat > "$VAULT_PATH/.obsidian/app.json" << 'EOF'
 {
   "showLineNumber": true,
@@ -228,11 +229,14 @@ cat > "$VAULT_PATH/.obsidian/app.json" << 'EOF'
     "InterBrain/node_modules",
     "InterBrain/dist",
     "InterBrain/.git",
-    "InterBrain/src"
+    "InterBrain/src",
+    "InterBrain/scripts",
+    "InterBrain/tests",
+    "InterBrain/viewer-bundle"
   ]
 }
 EOF
-success "Created Obsidian config with exclusions"
+success "Created Obsidian config with smart exclusions"
 
 # Create community-plugins.json to enable InterBrain plugin
 cat > "$VAULT_PATH/.obsidian/community-plugins.json" << 'EOF'
