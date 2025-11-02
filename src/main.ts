@@ -1,4 +1,6 @@
-import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
+import { Plugin, TFolder, TAbstractFile, Menu, TFile } from 'obsidian';
+import * as fs from 'fs';
+import * as path from 'path';
 import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
 import { VaultService } from './services/vault-service';
@@ -1591,22 +1593,18 @@ export default class InterBrainPlugin extends Plugin {
 
   /**
    * Register file explorer context menu for selecting DreamNodes
+   * Works for any file or folder - intelligently finds the containing DreamNode
    */
   private registerFileExplorerContextMenu(): void {
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile) => {
-        // Only show for folders (DreamNodes are folders)
-        if (!(file instanceof TFolder)) return;
-
-        // Only show for root-level folders (canonical DreamNodes are at vault root)
-        if (file.parent && file.parent.path !== '') return;
-
+        // Show for all files and folders
         menu.addItem((item) => {
           item
-            .setTitle('Select DreamNode')
+            .setTitle('Reveal in DreamSpace')
             .setIcon('target')
             .onClick(async () => {
-              await this.selectDreamNodeFromFolder(file);
+              await this.revealContainingDreamNode(file);
             });
         });
       })
@@ -1614,25 +1612,57 @@ export default class InterBrainPlugin extends Plugin {
   }
 
   /**
-   * Select a DreamNode in DreamSpace based on folder path
+   * Intelligently find and reveal the containing DreamNode for any file or folder
    */
-  private async selectDreamNodeFromFolder(folder: TFolder): Promise<void> {
-    const store = useInterBrainStore.getState();
-    const folderPath = folder.path;
+  private async revealContainingDreamNode(file: TAbstractFile): Promise<void> {
+    const vaultPath = (this.app.vault.adapter as any).basePath;
 
-    // Find the DreamNode by matching repoPath
-    let targetNode: DreamNode | null = null;
-    for (const [_id, nodeData] of store.realNodes.entries()) {
-      if (nodeData.node.repoPath === folderPath) {
-        targetNode = nodeData.node;
-        break;
-      }
-    }
+    console.log('[RevealDreamNode] Starting search for:', file.path);
 
-    if (!targetNode) {
-      this.uiService.showNotice(`No DreamNode found for folder: ${folder.name}`);
+    // Find the containing DreamNode by searching for .udd file
+    const dreamNodePath = await this.findContainingDreamNode(file, vaultPath);
+
+    console.log('[RevealDreamNode] Found DreamNode path:', dreamNodePath);
+
+    if (!dreamNodePath) {
+      this.uiService.showInfo('No DreamNode found for this item');
       return;
     }
+
+    // Read the UUID from the .udd file
+    const uddPath = path.join(dreamNodePath, '.udd');
+    let uuid: string;
+
+    try {
+      const uddContent = fs.readFileSync(uddPath, 'utf-8');
+      const uddData = JSON.parse(uddContent);
+      uuid = uddData.uuid;
+      console.log('[RevealDreamNode] Read UUID from .udd:', uuid);
+    } catch (error) {
+      console.error('[RevealDreamNode] Failed to read UUID from .udd:', error);
+      this.uiService.showError('Failed to read DreamNode UUID');
+      return;
+    }
+
+    if (!uuid) {
+      console.error('[RevealDreamNode] No UUID found in .udd file');
+      this.uiService.showError('Invalid DreamNode: missing UUID');
+      return;
+    }
+
+    // Find the DreamNode by UUID (which is the node ID)
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(uuid);
+
+    if (!nodeData) {
+      console.error('[RevealDreamNode] No matching node found for UUID:', uuid);
+      console.log('[RevealDreamNode] Available UUIDs:', Array.from(store.realNodes.keys()));
+      this.uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
+      return;
+    }
+
+    const targetNode = nodeData.node;
+    console.log('[RevealDreamNode] Found target node:', targetNode.name);
 
     // Open DreamSpace if not already open
     const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
@@ -1658,7 +1688,61 @@ export default class InterBrainPlugin extends Plugin {
       store.setSpatialLayout('liminal-web');
     }
 
-    this.uiService.showNotice(`Selected: ${targetNode.name}`);
+    this.uiService.showInfo(`Revealed: ${targetNode.name}`);
+  }
+
+  /**
+   * Find the containing DreamNode by searching upward for .udd file
+   * Returns the absolute path to the DreamNode folder, or null if not found
+   */
+  private async findContainingDreamNode(file: TAbstractFile, vaultPath: string): Promise<string | null> {
+    // Start from the file's directory (or the folder itself if it's a folder)
+    let currentPath: string;
+
+    if (file instanceof TFolder) {
+      // For folders: first check if this folder has .udd directly inside
+      currentPath = path.join(vaultPath, file.path);
+      const uddInFolder = path.join(currentPath, '.udd');
+      console.log('[FindDreamNode] Checking folder for .udd:', uddInFolder);
+      if (fs.existsSync(uddInFolder)) {
+        console.log('[FindDreamNode] Found .udd in folder!');
+        return currentPath;
+      }
+      // If not, check parent (same level as this folder)
+      currentPath = path.dirname(currentPath);
+      console.log('[FindDreamNode] Not found in folder, moving to parent:', currentPath);
+    } else {
+      // For files: start from parent directory
+      currentPath = path.join(vaultPath, path.dirname(file.path));
+      console.log('[FindDreamNode] File detected, starting from parent:', currentPath);
+    }
+
+    // Walk up the tree looking for .udd file
+    let iterations = 0;
+    while (currentPath.startsWith(vaultPath)) {
+      iterations++;
+      const uddPath = path.join(currentPath, '.udd');
+      console.log(`[FindDreamNode] Iteration ${iterations}: Checking ${uddPath}`);
+
+      if (fs.existsSync(uddPath)) {
+        console.log('[FindDreamNode] Found .udd file!');
+        return currentPath;
+      }
+
+      // Move up one directory
+      const parentPath = path.dirname(currentPath);
+
+      // Stop if we've reached the vault root or can't go higher
+      if (parentPath === currentPath || parentPath === vaultPath) {
+        console.log('[FindDreamNode] Reached vault root, stopping');
+        break;
+      }
+
+      currentPath = parentPath;
+    }
+
+    console.log('[FindDreamNode] No .udd file found after', iterations, 'iterations');
+    return null;
   }
 
   // Helper method to get all available nodes (used by undo/redo)
