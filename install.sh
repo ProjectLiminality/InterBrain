@@ -294,14 +294,87 @@ else
 fi
 
 echo ""
-echo "Step 7: Linking plugin to vault..."
-echo "-----------------------------------"
+echo "Step 7: Installing Plugin Reloader..."
+echo "--------------------------------------"
 
 PLUGINS_DIR="$VAULT_PATH/.obsidian/plugins"
-SYMLINK_PATH="$PLUGINS_DIR/interbrain"
-
-# Create plugins directory if it doesn't exist
 mkdir -p "$PLUGINS_DIR"
+
+PLUGIN_RELOADER_PATH="$PLUGINS_DIR/plugin-reloader"
+
+if [ -d "$PLUGIN_RELOADER_PATH" ]; then
+    warning "Plugin Reloader already exists. Updating..."
+    cd "$PLUGIN_RELOADER_PATH"
+    git pull origin master
+else
+    echo "Cloning Plugin Reloader from GitHub..."
+    cd "$PLUGINS_DIR"
+    git clone https://github.com/Benature/obsidian-plugin-reloader.git plugin-reloader
+    cd plugin-reloader
+fi
+
+success "Plugin Reloader installed at: $PLUGIN_RELOADER_PATH"
+
+# Add Plugin Reloader to enabled plugins
+COMMUNITY_PLUGINS_FILE="$VAULT_PATH/.obsidian/community-plugins.json"
+if [ -f "$COMMUNITY_PLUGINS_FILE" ]; then
+    # Check if plugin-reloader is already in the list
+    if ! grep -q "plugin-reloader" "$COMMUNITY_PLUGINS_FILE"; then
+        # Add plugin-reloader to the array
+        sed -i.bak 's/\["interbrain"\]/["interbrain","plugin-reloader"]/' "$COMMUNITY_PLUGINS_FILE"
+        rm "${COMMUNITY_PLUGINS_FILE}.bak"
+        success "Plugin Reloader enabled"
+    fi
+fi
+
+# Configure hotkey for Plugin Reloader (Command+R)
+mkdir -p "$VAULT_PATH/.obsidian"
+cat > "$VAULT_PATH/.obsidian/hotkeys.json" << 'EOF'
+{
+  "plugin-reloader:reload-plugin": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "R"
+    }
+  ]
+}
+EOF
+success "Hotkey configured: Command+R to reload plugins"
+
+echo ""
+echo "Step 8: Installing Ollama for semantic search..."
+echo "-------------------------------------------------"
+
+# Check for Ollama
+if ! command_exists ollama; then
+    echo "Installing Ollama..."
+    curl -fsSL https://ollama.ai/install.sh | sh
+
+    # Add Ollama to PATH for this session
+    export PATH="$HOME/.ollama/bin:$PATH"
+    refresh_shell_env
+
+    success "Ollama installed"
+else
+    success "Ollama found ($(ollama --version 2>/dev/null || echo 'version unknown'))"
+fi
+
+# Pull the embedding model
+echo "Pulling nomic-embed-text model (this may take a minute)..."
+if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
+    success "nomic-embed-text model already installed"
+else
+    ollama pull nomic-embed-text
+    success "nomic-embed-text model installed"
+fi
+
+echo ""
+echo "Step 9: Linking plugin to vault..."
+echo "-----------------------------------"
+
+SYMLINK_PATH="$PLUGINS_DIR/interbrain"
 
 # Remove old symlink if exists
 if [ -L "$SYMLINK_PATH" ]; then
@@ -314,8 +387,8 @@ ln -s "$INTERBRAIN_PATH" "$SYMLINK_PATH"
 success "Symlink created: $SYMLINK_PATH → $INTERBRAIN_PATH"
 
 echo ""
-echo "Step 8: Radicle identity setup..."
-echo "----------------------------------"
+echo "Step 10: Radicle identity setup..."
+echo "-----------------------------------"
 
 # Check if Radicle identity exists
 if rad self --did >/dev/null 2>&1; then
@@ -355,8 +428,8 @@ else
 fi
 
 echo ""
-echo "Step 9: Starting Radicle node..."
-echo "---------------------------------"
+echo "Step 11: Starting Radicle node..."
+echo "----------------------------------"
 
 # Check if node is already running
 if rad node status 2>/dev/null | grep -qi "running"; then
@@ -369,7 +442,7 @@ else
 fi
 
 echo ""
-echo "Step 10: Final verification..."
+echo "Step 12: Final verification..."
 echo "-------------------------------"
 
 # Verify everything
@@ -399,8 +472,20 @@ if [ "$OBSIDIAN_INSTALLED" = true ]; then
     success "Obsidian installed"
 fi
 
+if [ -d "$PLUGIN_RELOADER_PATH" ]; then
+    success "Plugin Reloader installed"
+else
+    warning "Plugin Reloader not installed"
+fi
+
+if command_exists ollama && ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
+    success "Ollama with nomic-embed-text model ready"
+else
+    warning "Ollama or embedding model not ready"
+fi
+
 echo ""
-echo "Step 11: Opening Obsidian..."
+echo "Step 13: Opening Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
@@ -422,7 +507,9 @@ if [ "$ALL_GOOD" = true ]; then
     echo "Next steps:"
     echo "1. In Obsidian: Click 'Trust author and enable plugins' when prompted"
     echo "2. Look for the InterBrain icon (🧠) in the left ribbon"
-    echo "3. Click Clone URIs from your email to add DreamNodes"
+    echo "3. Use Command+R to reload plugins during development"
+    echo "4. Run 'Full Index' command to enable semantic search"
+    echo "5. Click Clone URIs from your email to add DreamNodes"
     echo ""
     if [[ "$RAD_DID" != "[Not created - run 'rad auth']" ]]; then
         echo "Your Radicle identity:"
