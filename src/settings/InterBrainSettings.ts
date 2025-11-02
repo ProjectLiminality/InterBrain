@@ -6,12 +6,16 @@ export interface InterBrainSettings {
 	claudeApiKey: string;
 	radiclePassphrase: string;
 	hasLaunchedBefore: boolean;
+	transcriptionEnabled: boolean;
+	transcriptionSetupComplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: InterBrainSettings = {
 	claudeApiKey: '',
 	radiclePassphrase: '',
-	hasLaunchedBefore: false
+	hasLaunchedBefore: false,
+	transcriptionEnabled: true,  // Auto-enabled on first launch
+	transcriptionSetupComplete: false
 };
 
 export class InterBrainSettingTab extends PluginSettingTab {
@@ -260,16 +264,37 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			this.createStatusDisplay(containerEl, status);
 		}
 
+		// Enable/Disable Toggle
+		new Setting(containerEl)
+			.setName('Enable Transcription')
+			.setDesc('Automatically set up and enable real-time transcription features')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.transcriptionEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.transcriptionEnabled = value;
+					await this.plugin.saveSettings();
+
+					// If enabled and not setup, trigger auto-setup
+					if (value && !this.plugin.settings.transcriptionSetupComplete) {
+						window.alert('Transcription enabled! Setup will run automatically in the background.');
+						this.runTranscriptionSetup();
+					}
+
+					// Refresh display
+					await this.display();
+				}));
+
 		// Model info
 		containerEl.createEl('p', {
-			text: 'Transcription uses OpenAI Whisper for real-time speech-to-text. First run downloads the model.',
+			text: 'Transcription uses OpenAI Whisper for real-time speech-to-text. Setup runs automatically on first launch.',
 			cls: 'setting-item-description'
 		});
 
-		// Action buttons
-		const buttonSetting = new Setting(containerEl)
-			.setName('Actions')
-			.setDesc('Set up transcription environment and manage features');
+		// Action buttons (only show if enabled)
+		if (this.plugin.settings.transcriptionEnabled) {
+			const buttonSetting = new Setting(containerEl)
+				.setName('Actions')
+				.setDesc('Set up transcription environment and manage features');
 
 		// Setup Environment button (if not ready)
 		if (status?.status !== 'ready') {
@@ -303,23 +328,51 @@ export class InterBrainSettingTab extends PluginSettingTab {
 				}));
 		}
 
-		// Start Transcription button (always available)
-		buttonSetting.addButton(button => button
-			.setButtonText('Start Transcription')
-			.onClick(() => {
-				this.app.commands.executeCommandById('interbrain:start-realtime-transcription');
-			}));
+			// Start Transcription button (always available)
+			buttonSetting.addButton(button => button
+				.setButtonText('Start Transcription')
+				.onClick(() => {
+					this.app.commands.executeCommandById('interbrain:start-realtime-transcription');
+				}));
 
-		// Installation instructions
-		if (status?.status !== 'ready') {
-			const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
-			installDiv.createEl('p', { text: '📦 Automatic setup:' });
-			const ol = installDiv.createEl('ol');
-			ol.createEl('li', { text: 'Ensure Python 3 is installed on your system' });
-			ol.createEl('li', { text: 'Click "Setup Environment" button above' });
-			ol.createEl('li', { text: 'Setup will create venv and download Whisper model (1-2 minutes)' });
-			ol.createEl('li', { text: 'Once complete, use "Start Transcription" anytime' });
+			// Installation instructions
+			if (status?.status !== 'ready') {
+				const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
+				installDiv.createEl('p', { text: '📦 Automatic setup:' });
+				const ol = installDiv.createEl('ol');
+				ol.createEl('li', { text: 'Transcription auto-setup runs on first launch' });
+				ol.createEl('li', { text: 'Or click "Setup Environment" button above to run manually' });
+				ol.createEl('li', { text: 'Setup creates venv and downloads Whisper model (1-2 minutes)' });
+				ol.createEl('li', { text: 'Once complete, use "Start Transcription" anytime' });
+			}
 		}
+	}
+
+	/**
+	 * Run transcription setup in background
+	 */
+	private async runTranscriptionSetup(): Promise<void> {
+		const vaultPath = (this.app.vault.adapter as any).basePath;
+		const { exec } = require('child_process');
+
+		console.log('🎙️ Running transcription auto-setup...');
+
+		exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+			async (error: Error | null, stdout: string, stderr: string) => {
+				if (error) {
+					console.error('Transcription setup error:', error);
+					console.error('stderr:', stderr);
+					console.log('Setup will retry on manual trigger or transcription start');
+				} else {
+					console.log('✅ Transcription setup complete!');
+					console.log('Setup output:', stdout);
+					this.plugin.settings.transcriptionSetupComplete = true;
+					await this.plugin.saveSettings();
+					// Refresh status display
+					await this.display();
+				}
+			}
+		);
 	}
 
 	/**

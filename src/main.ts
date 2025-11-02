@@ -170,11 +170,42 @@ export default class InterBrainPlugin extends Plugin {
           console.warn('[InterBrain] InterBrain node not found for auto-selection');
         }
 
+        // Run transcription auto-setup if enabled
+        if (this.settings.transcriptionEnabled && !this.settings.transcriptionSetupComplete) {
+          console.log('[InterBrain] Starting transcription auto-setup...');
+          this.uiService.showInfo('Setting up transcription in background...');
+          this.runTranscriptionAutoSetup();
+        }
+
         // Mark first launch as complete
         this.settings.hasLaunchedBefore = true;
         await this.saveSettings();
       }, 1000); // 1 second delay for full initialization
     });
+  }
+
+  /**
+   * Run transcription auto-setup in background on first launch
+   */
+  private async runTranscriptionAutoSetup(): Promise<void> {
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+    const { exec } = require('child_process');
+
+    exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+      async (error: Error | null, stdout: string, stderr: string) => {
+        if (error) {
+          console.error('[InterBrain] Transcription setup error:', error);
+          console.error('stderr:', stderr);
+          this.uiService.showWarning('Transcription setup failed. You can retry from settings.');
+        } else {
+          console.log('[InterBrain] ✅ Transcription setup complete!');
+          console.log('Setup output:', stdout);
+          this.settings.transcriptionSetupComplete = true;
+          await this.saveSettings();
+          this.uiService.showInfo('Transcription setup complete! Ready to use.');
+        }
+      }
+    );
   }
 
   private initializeBackgroundServices(): void {
