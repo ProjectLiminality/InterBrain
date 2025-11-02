@@ -70,22 +70,20 @@ export class SettingsStatusService {
 		}
 
 		try {
-			const isAvailable = await this.ollamaService.isAvailable();
+			// Use getHealth() directly for detailed status
+			const health = await (this.ollamaService as any).getHealth();
 
-			if (!isAvailable) {
+			if (!health.isAvailable) {
 				return {
 					available: false,
 					status: 'not-installed',
-					message: 'Ollama not installed',
-					details: 'Install from https://ollama.ai then run: ollama pull nomic-embed-text'
+					message: 'Ollama not running',
+					details: health.error || 'Install from https://ollama.ai then run: ollama pull nomic-embed-text'
 				};
 			}
 
-			// Check if model is loaded
-			const health = await (this.ollamaService as any).getHealth?.();
-			const modelLoaded = health?.modelLoaded ?? true; // Assume loaded if no health check
-
-			if (modelLoaded) {
+			// Ollama is running, check if model is loaded
+			if (health.modelLoaded) {
 				return {
 					available: true,
 					status: 'ready',
@@ -145,7 +143,7 @@ export class SettingsStatusService {
 					available: false,
 					status: 'warning',
 					message: 'Python installed, environment needs setup',
-					details: 'Run: cd scripts && ./setup.sh'
+					details: 'Click "Setup Environment" button below to initialize'
 				};
 			}
 

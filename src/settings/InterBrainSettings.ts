@@ -100,7 +100,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			const img = headerDiv.createEl('img', {
 				cls: 'interbrain-logo',
 				attr: {
-					src: `app://local/${logoPath}`,
+					src: logoPath,
 					alt: 'InterBrain Logo'
 				}
 			});
@@ -266,25 +266,59 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			cls: 'setting-item-description'
 		});
 
-		// Setup button
-		new Setting(containerEl)
-			.setName('Setup')
-			.setDesc('Initialize Python environment and download Whisper model')
-			.addButton(button => button
-				.setButtonText('Start Transcription')
-				.onClick(() => {
-					this.app.commands.executeCommandById('interbrain:start-realtime-transcription');
+		// Action buttons
+		const buttonSetting = new Setting(containerEl)
+			.setName('Actions')
+			.setDesc('Set up transcription environment and manage features');
+
+		// Setup Environment button (if not ready)
+		if (status?.status !== 'ready') {
+			buttonSetting.addButton(button => button
+				.setButtonText('Setup Environment')
+				.onClick(async () => {
+					const vaultPath = (this.app.vault.adapter as any).basePath;
+
+					// Run setup script
+					const { exec } = require('child_process');
+					button.setButtonText('Setting up...');
+					button.setDisabled(true);
+
+					exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+						(error: Error | null, stdout: string, stderr: string) => {
+							if (error) {
+								console.error('Setup error:', error);
+								console.error('stderr:', stderr);
+								window.alert(`Setup failed: ${error.message}\n\nCheck console for details.`);
+								button.setButtonText('Setup Environment');
+								button.setDisabled(false);
+							} else {
+								console.log('Setup output:', stdout);
+								window.alert('Setup complete! Python environment and Whisper model are ready.');
+								button.setButtonText('Setup Complete ✓');
+								// Refresh status
+								setTimeout(() => this.display(), 1000);
+							}
+						}
+					);
 				}));
+		}
+
+		// Start Transcription button (always available)
+		buttonSetting.addButton(button => button
+			.setButtonText('Start Transcription')
+			.onClick(() => {
+				this.app.commands.executeCommandById('interbrain:start-realtime-transcription');
+			}));
 
 		// Installation instructions
 		if (status?.status !== 'ready') {
 			const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
-			installDiv.createEl('p', { text: '📦 Setup instructions:' });
+			installDiv.createEl('p', { text: '📦 Automatic setup:' });
 			const ol = installDiv.createEl('ol');
-			ol.createEl('li', { text: 'Ensure Python 3 is installed' });
-			ol.createEl('li', { text: 'Click "Start Transcription" above' });
-			ol.createEl('li', { text: 'First run will download Whisper model (may take 1-2 minutes)' });
-			ol.createEl('li', { text: 'Subsequent runs start immediately' });
+			ol.createEl('li', { text: 'Ensure Python 3 is installed on your system' });
+			ol.createEl('li', { text: 'Click "Setup Environment" button above' });
+			ol.createEl('li', { text: 'Setup will create venv and download Whisper model (1-2 minutes)' });
+			ol.createEl('li', { text: 'Once complete, use "Start Transcription" anytime' });
 		}
 	}
 
