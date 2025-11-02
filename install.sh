@@ -453,7 +453,48 @@ else
 fi
 
 echo ""
-echo "Step 12: Final verification..."
+echo "Step 12: Setting up real-time transcription (Python + Whisper)..."
+echo "------------------------------------------------------------------"
+
+# Check for Python 3
+if ! command_exists python3; then
+    echo "Installing Python 3..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        brew install python3
+        refresh_shell_env
+    else
+        sudo apt-get update && sudo apt-get install -y python3 python3-pip
+    fi
+    success "Python 3 installed"
+else
+    success "Python 3 found ($(python3 --version))"
+fi
+
+# Set up whisper_streaming virtual environment
+TRANSCRIPTION_DIR="$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
+if [ -d "$TRANSCRIPTION_DIR" ]; then
+    cd "$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
+
+    if [ ! -d "venv" ]; then
+        info "Creating Python virtual environment for transcription..."
+        python3 -m venv venv
+
+        # Activate venv and install dependencies
+        source venv/bin/activate
+        pip install --upgrade pip --quiet
+        pip install -r requirements.txt --quiet
+        deactivate
+
+        success "Transcription environment set up (whisper_streaming installed)"
+    else
+        success "Transcription environment already exists"
+    fi
+else
+    warning "Transcription directory not found, skipping Python setup"
+fi
+
+echo ""
+echo "Step 13: Final verification..."
 echo "-------------------------------"
 
 # Verify everything
@@ -504,47 +545,6 @@ if command_exists python3; then
     fi
 else
     warning "Python 3 not installed (needed for transcription)"
-fi
-
-echo ""
-echo "Step 13: Setting up real-time transcription (Python + Whisper)..."
-echo "------------------------------------------------------------------"
-
-# Check for Python 3
-if ! command_exists python3; then
-    echo "Installing Python 3..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install python3
-        refresh_shell_env
-    else
-        sudo apt-get update && sudo apt-get install -y python3 python3-pip
-    fi
-    success "Python 3 installed"
-else
-    success "Python 3 found ($(python3 --version))"
-fi
-
-# Set up whisper_streaming virtual environment
-TRANSCRIPTION_DIR="$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
-if [ -d "$TRANSCRIPTION_DIR" ]; then
-    cd "$TRANSCRIPTION_DIR"
-
-    if [ ! -d "venv" ]; then
-        info "Creating Python virtual environment for transcription..."
-        python3 -m venv venv
-
-        # Activate venv and install dependencies
-        source venv/bin/activate
-        pip install --upgrade pip --quiet
-        pip install -r requirements.txt --quiet
-        deactivate
-
-        success "Transcription environment set up (whisper_streaming installed)"
-    else
-        success "Transcription environment already exists"
-    fi
-else
-    warning "Transcription directory not found, skipping Python setup"
 fi
 
 echo ""
