@@ -122,9 +122,58 @@ export default class InterBrainPlugin extends Plugin {
     // Start canvas observer for .link file preview
     this.canvasObserverService.start();
 
-    // Add ribbon icon
-    this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
+    // Add ribbon icon with rotation
+    const ribbonIconEl = this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
       this.app.commands.executeCommandById('interbrain:open-dreamspace');
+    });
+    // Rotate icon 90° clockwise so it's upright
+    ribbonIconEl.style.transform = 'rotate(90deg)';
+
+    // First launch experience: auto-open DreamSpace with InterBrain selected
+    if (!this.settings.hasLaunchedBefore) {
+      this.handleFirstLaunch();
+    }
+  }
+
+  /**
+   * First launch experience: open DreamSpace and select InterBrain node
+   */
+  private async handleFirstLaunch(): Promise<void> {
+    // Wait for workspace to be ready
+    this.app.workspace.onLayoutReady(async () => {
+      // Small delay to ensure everything is initialized
+      setTimeout(async () => {
+        console.log('[InterBrain] First launch detected - opening DreamSpace');
+
+        // Open DreamSpace
+        const leaf = this.app.workspace.getLeaf(true);
+        await leaf.setViewState({
+          type: DREAMSPACE_VIEW_TYPE,
+          active: true
+        });
+        this.app.workspace.revealLeaf(leaf);
+
+        // Wait for DreamSpace to initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Find and select the InterBrain node by UUID
+        const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
+        const store = useInterBrainStore.getState();
+        const nodeData = store.realNodes.get(interbrainUUID);
+
+        if (nodeData) {
+          console.log('[InterBrain] Selecting InterBrain node');
+          store.setSelectedNode(nodeData.node);
+          store.setSpatialLayout('liminal-web');
+          this.uiService.showInfo('Welcome to InterBrain! Drag images here to create Dreamer nodes.');
+        } else {
+          console.warn('[InterBrain] InterBrain node not found for auto-selection');
+        }
+
+        // Mark first launch as complete
+        this.settings.hasLaunchedBefore = true;
+        await this.saveSettings();
+      }, 1000); // 1 second delay for full initialization
     });
   }
 

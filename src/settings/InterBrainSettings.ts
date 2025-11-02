@@ -4,11 +4,13 @@ import type InterBrainPlugin from '../main';
 export interface InterBrainSettings {
 	claudeApiKey: string;
 	radiclePassphrase: string;
+	hasLaunchedBefore: boolean;
 }
 
 export const DEFAULT_SETTINGS: InterBrainSettings = {
 	claudeApiKey: '',
-	radiclePassphrase: ''
+	radiclePassphrase: '',
+	hasLaunchedBefore: false
 };
 
 export class InterBrainSettingTab extends PluginSettingTab {
