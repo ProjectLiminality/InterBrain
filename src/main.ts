@@ -1,4 +1,4 @@
-import { Plugin } from 'obsidian';
+import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import { UIService } from './services/ui-service';
 import { GitService } from './services/git-service';
 import { VaultService } from './services/vault-service';
@@ -113,6 +113,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register commands
     this.registerCommands();
+
+    // Register file explorer context menu handler
+    this.registerFileExplorerContextMenu();
 
     // Start canvas observer for .link file preview
     this.canvasObserverService.start();
@@ -1584,6 +1587,78 @@ export default class InterBrainPlugin extends Plugin {
     });
 
     // Note: Semantic search commands now registered via registerSemanticSearchCommands()
+  }
+
+  /**
+   * Register file explorer context menu for selecting DreamNodes
+   */
+  private registerFileExplorerContextMenu(): void {
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile) => {
+        // Only show for folders (DreamNodes are folders)
+        if (!(file instanceof TFolder)) return;
+
+        // Only show for root-level folders (canonical DreamNodes are at vault root)
+        if (file.parent && file.parent.path !== '') return;
+
+        menu.addItem((item) => {
+          item
+            .setTitle('Select DreamNode')
+            .setIcon('target')
+            .onClick(async () => {
+              await this.selectDreamNodeFromFolder(file);
+            });
+        });
+      })
+    );
+  }
+
+  /**
+   * Select a DreamNode in DreamSpace based on folder path
+   */
+  private async selectDreamNodeFromFolder(folder: TFolder): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const folderPath = folder.path;
+
+    // Find the DreamNode by matching repoPath
+    let targetNode: DreamNode | null = null;
+    for (const [_id, nodeData] of store.realNodes.entries()) {
+      if (nodeData.node.repoPath === folderPath) {
+        targetNode = nodeData.node;
+        break;
+      }
+    }
+
+    if (!targetNode) {
+      this.uiService.showNotice(`No DreamNode found for folder: ${folder.name}`);
+      return;
+    }
+
+    // Open DreamSpace if not already open
+    const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+    if (!dreamspaceLeaf) {
+      const leaf = this.app.workspace.getLeaf(true);
+      await leaf.setViewState({
+        type: DREAMSPACE_VIEW_TYPE,
+        active: true
+      });
+      this.app.workspace.revealLeaf(leaf);
+      // Wait a bit for DreamSpace to initialize
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } else {
+      // Focus existing DreamSpace
+      this.app.workspace.revealLeaf(dreamspaceLeaf);
+    }
+
+    // Select the node
+    store.setSelectedNode(targetNode);
+
+    // Switch to liminal-web layout to show the selected node
+    if (store.spatialLayout !== 'liminal-web') {
+      store.setSpatialLayout('liminal-web');
+    }
+
+    this.uiService.showNotice(`Selected: ${targetNode.name}`);
   }
 
   // Helper method to get all available nodes (used by undo/redo)
