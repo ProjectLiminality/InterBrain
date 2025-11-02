@@ -1,6 +1,9 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type InterBrainPlugin from '../main';
 import { SettingsStatusService, type SystemStatus } from '../services/settings-status-service';
+import { ollamaEmbeddingService } from '../features/semantic-search/services/ollama-embedding-service';
+import { getRealtimeTranscriptionService } from '../features/realtime-transcription';
+import { serviceManager } from '../services/service-manager';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
@@ -20,26 +23,28 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 
 export class InterBrainSettingTab extends PluginSettingTab {
 	plugin: InterBrainPlugin;
-	private statusService: SettingsStatusService;
+	private statusService: SettingsStatusService | null = null;
 	private systemStatus: SystemStatus | null = null;
 
 	constructor(app: App, plugin: InterBrainPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
-
-		// Initialize status service
-		this.statusService = new SettingsStatusService(
-			app,
-			(plugin as any).ollamaService,
-			(plugin as any).transcriptionService,
-			(plugin as any).radicleService
-		);
 	}
 
 	async display(): Promise<void> {
 		const { containerEl } = this;
 		containerEl.empty();
 		containerEl.addClass('interbrain-settings');
+
+		// Initialize status service lazily with singleton service instances
+		if (!this.statusService) {
+			this.statusService = new SettingsStatusService(
+				this.app,
+				ollamaEmbeddingService,
+				getRealtimeTranscriptionService(),
+				serviceManager.getRadicleService()
+			);
+		}
 
 		// Load system status
 		this.systemStatus = await this.statusService.getSystemStatus(this.plugin.settings.claudeApiKey);
@@ -96,22 +101,31 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	private createHeader(containerEl: HTMLElement): void {
 		const headerDiv = containerEl.createDiv({ cls: 'interbrain-settings-header' });
 
-		// Try to load logo
+		// Try to load logo using Obsidian's resource path API
 		try {
-			const vaultPath = (this.app.vault.adapter as any).basePath;
-			const logoPath = `${vaultPath}/InterBrain/InterBrain.png`;
+			// Get the logo file from vault
+			const logoFile = this.app.vault.getAbstractFileByPath('InterBrain/InterBrain.png');
 
-			const img = headerDiv.createEl('img', {
-				cls: 'interbrain-logo',
-				attr: {
-					src: logoPath,
-					alt: 'InterBrain Logo'
-				}
-			});
-			img.style.width = '64px';
-			img.style.height = '64px';
-			img.style.display = 'block';
-			img.style.margin = '0 auto 16px';
+			if (logoFile) {
+				// Use Obsidian's getResourcePath to get proper URL
+				const logoUrl = this.app.vault.adapter.getResourcePath(logoFile.path);
+
+				const img = headerDiv.createEl('img', {
+					cls: 'interbrain-logo',
+					attr: {
+						src: logoUrl,
+						alt: 'InterBrain Logo'
+					}
+				});
+				img.style.width = '64px';
+				img.style.height = '64px';
+				img.style.display = 'block';
+				img.style.margin = '0 auto 16px';
+
+				console.log('InterBrain logo loaded:', logoUrl);
+			} else {
+				console.warn('InterBrain logo not found at: InterBrain/InterBrain.png');
+			}
 		} catch (error) {
 			console.error('Failed to load InterBrain logo:', error);
 		}
