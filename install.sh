@@ -313,6 +313,17 @@ else
     cd plugin-reloader
 fi
 
+# Build Plugin Reloader
+cd "$PLUGIN_RELOADER_PATH"
+if [ -f "package.json" ]; then
+    info "Building Plugin Reloader..."
+    npm install --silent
+    npm run build
+    success "Plugin Reloader built successfully"
+else
+    warning "Plugin Reloader package.json not found, skipping build"
+fi
+
 success "Plugin Reloader installed at: $PLUGIN_RELOADER_PATH"
 
 # Add Plugin Reloader to enabled plugins
@@ -472,10 +483,10 @@ if [ "$OBSIDIAN_INSTALLED" = true ]; then
     success "Obsidian installed"
 fi
 
-if [ -d "$PLUGIN_RELOADER_PATH" ]; then
-    success "Plugin Reloader installed"
+if [ -f "$PLUGIN_RELOADER_PATH/main.js" ]; then
+    success "Plugin Reloader installed and built"
 else
-    warning "Plugin Reloader not installed"
+    warning "Plugin Reloader not built (main.js missing)"
 fi
 
 if command_exists ollama && ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
