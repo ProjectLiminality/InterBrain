@@ -495,8 +495,60 @@ else
     warning "Ollama or embedding model not ready"
 fi
 
+if command_exists python3; then
+    success "Python 3 ready for transcription"
+    if [ -d "$TRANSCRIPTION_DIR/venv" ]; then
+        success "Whisper transcription environment ready"
+    else
+        warning "Whisper environment not set up"
+    fi
+else
+    warning "Python 3 not installed (needed for transcription)"
+fi
+
 echo ""
-echo "Step 13: Opening Obsidian..."
+echo "Step 13: Setting up real-time transcription (Python + Whisper)..."
+echo "------------------------------------------------------------------"
+
+# Check for Python 3
+if ! command_exists python3; then
+    echo "Installing Python 3..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        brew install python3
+        refresh_shell_env
+    else
+        sudo apt-get update && sudo apt-get install -y python3 python3-pip
+    fi
+    success "Python 3 installed"
+else
+    success "Python 3 found ($(python3 --version))"
+fi
+
+# Set up whisper_streaming virtual environment
+TRANSCRIPTION_DIR="$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
+if [ -d "$TRANSCRIPTION_DIR" ]; then
+    cd "$TRANSCRIPTION_DIR"
+
+    if [ ! -d "venv" ]; then
+        info "Creating Python virtual environment for transcription..."
+        python3 -m venv venv
+
+        # Activate venv and install dependencies
+        source venv/bin/activate
+        pip install --upgrade pip --quiet
+        pip install -r requirements.txt --quiet
+        deactivate
+
+        success "Transcription environment set up (whisper_streaming installed)"
+    else
+        success "Transcription environment already exists"
+    fi
+else
+    warning "Transcription directory not found, skipping Python setup"
+fi
+
+echo ""
+echo "Step 14: Opening Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
@@ -521,6 +573,19 @@ if [ "$ALL_GOOD" = true ]; then
     echo "3. Use Command+R to reload plugins during development"
     echo "4. Run 'Full Index' command to enable semantic search"
     echo "5. Click Clone URIs from your email to add DreamNodes"
+    echo ""
+    echo "⚙️  IMPORTANT: Configure settings for full functionality:"
+    echo ""
+    echo "In Obsidian Settings → InterBrain:"
+    echo ""
+    echo "• Anthropic API Key - Required for AI features:"
+    echo "  - Get your key from: https://console.anthropic.com/settings/keys"
+    echo "  - Used for conversation summaries and semantic analysis"
+    echo ""
+    echo "• Radicle Passphrase - Required for seamless Radicle operations:"
+    echo "  - This is the passphrase you created during 'rad auth'"
+    echo "  - Enables automatic peer-to-peer syncing without password prompts"
+    echo "  - Note: Stored locally in Obsidian's secure storage"
     echo ""
     if [[ "$RAD_DID" != "[Not created - run 'rad auth']" ]]; then
         echo "Your Radicle identity:"
