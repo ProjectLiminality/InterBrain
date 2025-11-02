@@ -218,25 +218,50 @@ fi
 # Create .obsidian directory structure if it doesn't exist
 mkdir -p "$VAULT_PATH/.obsidian/plugins"
 
-# Create Obsidian config with smart exclusions
-# We exclude build artifacts and source code, but NOT media (needed for canvas)
-cat > "$VAULT_PATH/.obsidian/app.json" << 'EOF'
+# Parse .gitignore and create Obsidian config with smart exclusions
+info "Parsing .gitignore patterns for vault exclusions..."
+
+# Generate userIgnoreFilters from .gitignore
+INTERBRAIN_PATH="$VAULT_PATH/InterBrain"
+GITIGNORE_PATH="$INTERBRAIN_PATH/.gitignore"
+
+# Always exclude .git directory (not in .gitignore but critical)
+FILTERS='["InterBrain/.git"'
+
+if [ -f "$GITIGNORE_PATH" ]; then
+    # Parse .gitignore: filter comments, empty lines, and convert to JSON array
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip empty lines and comments
+        if [ -z "$line" ] || [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
+        # Remove trailing slashes for consistency
+        pattern="${line%/}"
+
+        # Skip negation patterns (lines starting with !)
+        if [[ "$pattern" =~ ^! ]]; then
+            continue
+        fi
+
+        # Add InterBrain/ prefix and append to filters
+        FILTERS="$FILTERS, \"InterBrain/$pattern\""
+    done < "$GITIGNORE_PATH"
+fi
+
+# Close JSON array
+FILTERS="$FILTERS]"
+
+# Create app.json with parsed filters
+cat > "$VAULT_PATH/.obsidian/app.json" << EOF
 {
   "showLineNumber": true,
   "spellcheck": true,
   "promptDelete": false,
-  "userIgnoreFilters": [
-    "InterBrain/node_modules",
-    "InterBrain/dist",
-    "InterBrain/.git",
-    "InterBrain/src",
-    "InterBrain/scripts",
-    "InterBrain/tests",
-    "InterBrain/viewer-bundle"
-  ]
+  "userIgnoreFilters": $FILTERS
 }
 EOF
-success "Created Obsidian config with smart exclusions"
+success "Created Obsidian config with $(echo "$FILTERS" | grep -o "InterBrain/" | wc -l | tr -d ' ') exclusion patterns from .gitignore"
 
 # Create community-plugins.json to enable InterBrain plugin
 cat > "$VAULT_PATH/.obsidian/community-plugins.json" << 'EOF'
