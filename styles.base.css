@@ -110,3 +110,274 @@
   justify-content: flex-end;
   margin-top: 20px;
 }
+
+/* ============================================================
+ * InterBrain Settings Panel Styling
+ * Beautiful system status dashboard matching install script aesthetic
+ * ============================================================ */
+
+.interbrain-settings {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header with Logo */
+.interbrain-settings-header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding: 30px 20px;
+  background: rgba(0, 162, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 162, 255, 0.2);
+}
+
+.interbrain-logo {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 162, 255, 0.3);
+}
+
+.interbrain-settings-title {
+  font-size: 2em;
+  margin: 16px 0 8px;
+  color: var(--text-normal);
+}
+
+.interbrain-settings-subtitle {
+  font-size: 1.1em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Status Overview Grid */
+.interbrain-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 20px 0 40px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.status-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 162, 255, 0.3);
+}
+
+.status-label {
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.status-message {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Status Colors */
+.status-ready {
+  color: #00FF00;
+}
+
+.status-warning {
+  color: #FFB800;
+}
+
+.status-error,
+.status-not-installed {
+  color: #FF644E;
+}
+
+.status-unknown {
+  color: var(--text-muted);
+}
+
+/* Feature Status Display */
+.interbrain-status-display {
+  margin: 16px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid rgba(0, 162, 255, 0.5);
+}
+
+.interbrain-status-text {
+  font-size: 1em;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.interbrain-status-details {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  margin: 0;
+  font-style: italic;
+}
+
+/* Installation Instructions */
+.interbrain-install-instructions {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(255, 100, 78, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 100, 78, 0.2);
+}
+
+.interbrain-install-instructions p {
+  margin: 8px 0;
+  font-size: 0.95em;
+}
+
+.interbrain-install-instructions ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.interbrain-install-instructions li {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.interbrain-install-instructions a {
+  color: #00A2FF;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.interbrain-install-instructions a:hover {
+  text-decoration: underline;
+}
+
+/* Radicle Identity Display */
+.interbrain-radicle-identity {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(0, 162, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 162, 255, 0.2);
+}
+
+.interbrain-radicle-identity p {
+  margin: 8px 0;
+}
+
+.interbrain-radicle-identity code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #00A2FF;
+  word-break: break-all;
+}
+
+/* Hotkey List */
+.interbrain-hotkey-list {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.interbrain-hotkey-list h4 {
+  margin: 0 0 12px 0;
+  font-size: 1.1em;
+  color: var(--text-normal);
+}
+
+.interbrain-hotkey-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.interbrain-hotkey-list li {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  font-size: 0.95em;
+}
+
+.interbrain-hotkey-list code {
+  background: rgba(0, 162, 255, 0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: #00A2FF;
+  margin-right: 8px;
+}
+
+/* Section Headers */
+.interbrain-settings h2 {
+  margin: 40px 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(0, 162, 255, 0.3);
+  color: var(--text-normal);
+  font-size: 1.5em;
+}
+
+.interbrain-settings h2:first-of-type {
+  margin-top: 20px;
+}
+
+/* Setting Items */
+.interbrain-settings .setting-item {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.interbrain-settings .setting-item:last-child {
+  border-bottom: none;
+}
+
+/* Links */
+.interbrain-settings a {
+  color: #00A2FF;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.interbrain-settings a:hover {
+  color: #0088cc;
+  text-decoration: underline;
+}
+
+/* Button Styling */
+.interbrain-settings button {
+  transition: all 0.2s ease;
+}
+
+.interbrain-settings button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 162, 255, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .interbrain-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .status-message {
+    text-align: left;
+  }
+}
