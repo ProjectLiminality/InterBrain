@@ -103,29 +103,26 @@ export class InterBrainSettingTab extends PluginSettingTab {
 
 		// Try to load logo using Obsidian's resource path API
 		try {
-			// Get the logo file from vault
-			const logoFile = this.app.vault.getAbstractFileByPath('InterBrain/InterBrain.png');
+			// Get vault base path dynamically and construct logo path
+			const vaultPath = (this.app.vault.adapter as any).basePath;
+			const logoPath = `${vaultPath}/InterBrain/InterBrain.png`;
 
-			if (logoFile) {
-				// Use Obsidian's getResourcePath to get proper URL
-				const logoUrl = this.app.vault.adapter.getResourcePath(logoFile.path);
+			// Use Obsidian's getResourcePath to get proper URL
+			const logoUrl = this.app.vault.adapter.getResourcePath('InterBrain/InterBrain.png');
 
-				const img = headerDiv.createEl('img', {
-					cls: 'interbrain-logo',
-					attr: {
-						src: logoUrl,
-						alt: 'InterBrain Logo'
-					}
-				});
-				img.style.width = '64px';
-				img.style.height = '64px';
-				img.style.display = 'block';
-				img.style.margin = '0 auto 16px';
+			const img = headerDiv.createEl('img', {
+				cls: 'interbrain-logo',
+				attr: {
+					src: logoUrl,
+					alt: 'InterBrain Logo'
+				}
+			});
+			img.style.width = '64px';
+			img.style.height = '64px';
+			img.style.display = 'block';
+			img.style.margin = '0 auto 16px';
 
-				console.log('InterBrain logo loaded:', logoUrl);
-			} else {
-				console.warn('InterBrain logo not found at: InterBrain/InterBrain.png');
-			}
+			console.log('InterBrain logo loaded from:', logoPath);
 		} catch (error) {
 			console.error('Failed to load InterBrain logo:', error);
 		}
