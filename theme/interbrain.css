@@ -11,8 +11,8 @@
   /* === BACKGROUNDS === */
   --background-primary: #000000;
   --background-primary-alt: #000000;
-  --background-secondary: #0a0a0a;
-  --background-secondary-alt: #0f0f0f;
+  --background-secondary: #000000;
+  --background-secondary-alt: #000000;
   --background-modifier-border: rgba(255, 255, 255, 0.1);
   --background-modifier-form-field: rgba(255, 255, 255, 0.05);
   --background-modifier-form-field-highlighted: rgba(255, 255, 255, 0.1);
