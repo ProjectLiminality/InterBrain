@@ -1,4 +1,4 @@
-import { Plugin, TFolder, TAbstractFile, Menu, TFile } from 'obsidian';
+import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UIService } from './services/ui-service';

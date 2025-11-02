@@ -8,6 +8,7 @@
 
 import { CanvasData, CanvasNode, CanvasEdge } from '../canvas-parser-service';
 import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
+import { marked } from 'marked';
 
 // Processed edge for topological sorting
 export interface ProcessedCanvasEdge {
@@ -364,8 +365,7 @@ export function createAltText(filename: string): string {
 
 /**
  * Process text content (apply markdown parsing if needed)
- * For now, return as-is. Future: integrate markdown parser
  */
 export function processTextContent(text: string): string {
-  return text;
+  return marked.parse(text) as string;
 }
