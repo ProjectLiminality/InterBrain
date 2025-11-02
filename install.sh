@@ -359,7 +359,7 @@ echo "Step 9: Starting Radicle node..."
 echo "---------------------------------"
 
 # Check if node is already running
-if rad node status 2>/dev/null | grep -q "Running"; then
+if rad node status 2>/dev/null | grep -qi "running"; then
     success "Radicle node already running"
 else
     echo "Starting Radicle node..."
@@ -389,7 +389,7 @@ else
     success "Plugin built (main.js exists)"
 fi
 
-if ! rad node status 2>/dev/null | grep -q "Running"; then
+if ! rad node status 2>/dev/null | grep -qi "running"; then
     warning "Radicle node not running (you can start it with: rad node start)"
 else
     success "Radicle node running"
