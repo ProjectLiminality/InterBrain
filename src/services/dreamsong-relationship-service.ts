@@ -53,6 +53,10 @@ export class DreamSongRelationshipService {
     console.log('🔍 [DreamSong Relationships] Starting vault scan...');
 
     try {
+      // Phase 0: Clean up dangling relationship references FIRST
+      console.log('🧹 [DreamSong Relationships] Cleaning dangling relationship references...');
+      await this.cleanDanglingRelationshipsInternal();
+
       // Phase 1: Discover all DreamNodes and build UUID mapping
       const { dreamNodes, uuidToPathMap } = await this.discoverAllDreamNodes();
       console.log(`📊 [DreamSong Relationships] Found ${dreamNodes.length} DreamNodes`);
@@ -344,7 +348,11 @@ export class DreamSongRelationshipService {
         }
       }
 
-      console.warn(`⚠️ [DreamSong Relationships] Could not resolve extracted source ID: ${extractedSourceId} for path: ${mediaPath}`);
+      // Truncate mediaPath if it's a data URL to avoid logging huge base64 strings
+      const displayPath = mediaPath.startsWith('data:')
+        ? mediaPath.substring(0, 50) + '...'
+        : mediaPath;
+      console.warn(`⚠️ [DreamSong Relationships] Could not resolve extracted source ID: ${extractedSourceId} for path: ${displayPath}`);
     }
 
     // Fallback to current DreamNode ID for local files
@@ -405,5 +413,119 @@ export class DreamSongRelationshipService {
         lastScanned: Date.now()
       }
     };
+  }
+
+  /**
+   * Clean up dangling relationship references (internal method, no UI notifications)
+   * Called automatically during vault scan
+   */
+  private async cleanDanglingRelationshipsInternal(): Promise<void> {
+    try {
+      const vaultPath = this.vaultService.getVaultPath();
+      const fsPromises = fs.promises;
+
+      // Get all DreamNode directories
+      const entries = await fsPromises.readdir(vaultPath, { withFileTypes: true });
+      const dreamNodeDirs = [];
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const dirPath = path.join(vaultPath, entry.name);
+        const uddPath = path.join(dirPath, '.udd');
+        const gitPath = path.join(dirPath, '.git');
+
+        try {
+          await fsPromises.access(uddPath);
+          await fsPromises.access(gitPath);
+          dreamNodeDirs.push({ name: entry.name, path: dirPath });
+        } catch {
+          continue;
+        }
+      }
+
+      // Load all UDD files in parallel
+      const uddDataMap = new Map<string, { uuid: string; relationships: string[]; path: string; dirName: string }>();
+
+      await Promise.all(
+        dreamNodeDirs.map(async ({ name, path: dirPath }) => {
+          try {
+            const uddPath = path.join(dirPath, '.udd');
+            const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+            const udd = JSON.parse(uddContent);
+
+            uddDataMap.set(udd.uuid, {
+              uuid: udd.uuid,
+              relationships: udd.liminalWebRelationships || [],
+              path: uddPath,
+              dirName: name
+            });
+          } catch (error) {
+            // Skip invalid UDD files
+          }
+        })
+      );
+
+      // Build set of valid UUIDs
+      const validUuids = new Set(uddDataMap.keys());
+
+      // Find and clean dangling references
+      const nodesToClean = new Map<string, Set<string>>();
+
+      for (const [uuid, data] of uddDataMap) {
+        const danglingRefs = new Set<string>();
+
+        for (const relatedUuid of data.relationships) {
+          if (!validUuids.has(relatedUuid)) {
+            danglingRefs.add(relatedUuid);
+          }
+        }
+
+        if (danglingRefs.size > 0) {
+          nodesToClean.set(uuid, danglingRefs);
+        }
+      }
+
+      if (nodesToClean.size === 0) {
+        console.log('✓ [DreamSong Relationships] No dangling references found');
+        return;
+      }
+
+      let totalRemoved = 0;
+
+      // Clean up in parallel
+      await Promise.all(
+        Array.from(nodesToClean.entries()).map(async ([uuid, danglingRefs]) => {
+          try {
+            const data = uddDataMap.get(uuid);
+            if (!data) return;
+
+            const uddContent = await fsPromises.readFile(data.path, 'utf-8');
+            const udd = JSON.parse(uddContent);
+
+            const cleanedRelationships = (udd.liminalWebRelationships || []).filter(
+              (refUuid: string) => !danglingRefs.has(refUuid)
+            );
+
+            const removedCount = (udd.liminalWebRelationships || []).length - cleanedRelationships.length;
+            totalRemoved += removedCount;
+
+            udd.liminalWebRelationships = cleanedRelationships;
+
+            await fsPromises.writeFile(data.path, JSON.stringify(udd, null, 2));
+
+            console.log(`🧹 [DreamSong Relationships] Cleaned ${data.dirName} - removed ${removedCount} dangling references`);
+          } catch (error) {
+            console.error(`❌ [DreamSong Relationships] Error cleaning ${uuid}:`, error);
+          }
+        })
+      );
+
+      console.log(`✅ [DreamSong Relationships] Removed ${totalRemoved} dangling references from ${nodesToClean.size} nodes`);
+
+    } catch (error) {
+      console.error('❌ [DreamSong Relationships] Cleanup failed:', error);
+      // Don't throw - this is a cleanup step that shouldn't fail the main scan
+    }
   }
 }
