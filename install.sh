@@ -2,6 +2,7 @@
 # InterBrain Installation Script
 # For macOS/Linux systems
 # One-command setup: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash
+# With URI: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash -s -- --uri "obsidian://interbrain-clone?..."
 
 set -e  # Exit on error
 
@@ -22,6 +23,20 @@ TOTAL_STEPS=13
 # Default vault name and location
 DEFAULT_VAULT_NAME="DreamVault"
 DEFAULT_VAULT_PARENT="$HOME"
+
+# Parse command-line arguments
+CLONE_URI=""
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --uri)
+      CLONE_URI="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 # Function to check if command exists
 command_exists() {
@@ -567,6 +582,21 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
     sleep 1
     open -a Obsidian "$VAULT_PATH"
     success "Obsidian opened"
+
+    # If a clone URI was provided, trigger it after Obsidian loads
+    if [ -n "$CLONE_URI" ]; then
+        echo ""
+        info "Waiting for Obsidian and InterBrain to initialize..."
+        sleep 5  # Give Obsidian time to load the vault and enable plugins
+
+        info "Triggering clone URI..."
+        open "$CLONE_URI"
+        success "Clone URI triggered - DreamNode(s) will appear shortly"
+        echo ""
+        info "The clone operation is running in the background."
+        info "Watch for notifications in Obsidian about the clone progress."
+    fi
+
     echo ""
     info "Obsidian should open shortly. If not, open Obsidian and select:"
     info "  $VAULT_PATH"
@@ -577,12 +607,21 @@ echo "=================================="
 if [ "$ALL_GOOD" = true ]; then
     echo -e "${GREEN}✅ Installation complete!${NC}"
     echo ""
+    if [ -n "$CLONE_URI" ]; then
+        echo "🎯 Personalized installation detected!"
+        echo ""
+        echo "The clone operation has been triggered automatically."
+        echo "Your collaborator's DreamNodes and Dreamer profile will appear in InterBrain."
+        echo ""
+    fi
     echo "Next steps:"
     echo "1. In Obsidian: Click 'Trust author and enable plugins' when prompted"
     echo "2. Look for the InterBrain icon (🧠) in the left ribbon"
     echo "3. Use Command+R to reload the plugin during development"
     echo "4. Run 'Full Index' command to enable semantic search"
-    echo "5. Click Clone URIs from your email to add DreamNodes"
+    if [ -z "$CLONE_URI" ]; then
+        echo "5. Click Clone URIs from your email to add DreamNodes"
+    fi
     echo ""
     echo "⚙️  IMPORTANT: Configure settings for full functionality:"
     echo ""
