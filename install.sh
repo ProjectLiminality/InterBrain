@@ -378,16 +378,36 @@ echo "-------------------------------------------------"
 
 # Check for Ollama
 if ! command_exists ollama; then
-    echo "Installing Ollama..."
-    curl -fsSL https://ollama.ai/install.sh | sh
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: Install via Homebrew
+        echo "Installing Ollama via Homebrew..."
+        brew install ollama
 
-    # Add Ollama to PATH for this session
-    export PATH="$HOME/.ollama/bin:$PATH"
-    refresh_shell_env
+        # Start Ollama service (Homebrew installs it as a service)
+        brew services start ollama
 
-    success "Ollama installed"
+        success "Ollama installed and service started"
+    else
+        # Linux: Use official install script
+        echo "Installing Ollama..."
+        curl -fsSL https://ollama.ai/install.sh | sh
+
+        # Add Ollama to PATH for this session
+        export PATH="$HOME/.ollama/bin:$PATH"
+        refresh_shell_env
+
+        success "Ollama installed"
+    fi
 else
     success "Ollama found ($(ollama --version 2>/dev/null || echo 'version unknown'))"
+
+    # Ensure Ollama service is running on macOS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if ! brew services list | grep -q "ollama.*started"; then
+            info "Starting Ollama service..."
+            brew services start ollama
+        fi
+    fi
 fi
 
 # Pull the embedding model
