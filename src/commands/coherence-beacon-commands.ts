@@ -123,37 +123,29 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
  * Pull latest changes from GitHub and rebuild the InterBrain plugin
  */
 async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: string): Promise<void> {
-  const path = require('path');
-  const { exec } = require('child_process');
-  const adapter = plugin.app.vault.adapter as any;
-  const vaultPath = adapter.basePath || '';
-  const fullPath = path.join(vaultPath, repoPath);
-
   new Notice('Pulling latest InterBrain updates from GitHub...');
 
-  // Execute git pull and npm build in sequence
-  exec(
-    `cd "${fullPath}" && git pull origin main && npm run build`,
-    { timeout: 120000 }, // 2 minute timeout
-    async (error: Error | null, stdout: string, stderr: string) => {
-      if (error) {
-        console.error('Pull and rebuild error:', error);
-        console.error('stderr:', stderr);
-        new Notice(`❌ Failed to update InterBrain: ${error.message}`);
-        return;
-      }
+  try {
+    // Use GitService for proper PATH handling
+    const { GitService } = await import('../services/git-service');
+    const gitService = new GitService(plugin.app);
 
-      console.log('Pull and rebuild output:', stdout);
-      if (stderr) {
-        console.log('stderr:', stderr);
-      }
+    // Pull updates
+    await gitService.pullUpdates(repoPath);
 
-      new Notice('✅ InterBrain updated and rebuilt! Reload plugin to see changes.');
+    new Notice('Building InterBrain plugin...');
 
-      // Show helpful instruction
-      setTimeout(() => {
-        new Notice('💡 Use Plugin Reloader hotkey to reload InterBrain');
-      }, 1000);
-    }
-  );
+    // Build the plugin
+    await gitService.buildDreamNode(repoPath);
+
+    new Notice('✅ InterBrain updated and rebuilt! Reload plugin to see changes.');
+
+    // Show helpful instruction
+    setTimeout(() => {
+      new Notice('💡 Use Plugin Reloader hotkey to reload InterBrain');
+    }, 1000);
+  } catch (error) {
+    console.error('Pull and rebuild error:', error);
+    new Notice(`❌ Failed to update InterBrain: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }

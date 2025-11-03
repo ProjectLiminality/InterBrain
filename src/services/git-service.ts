@@ -387,7 +387,33 @@ export class GitService {
     const fullPath = this.getFullPath(repoPath);
     try {
       console.log(`GitService: Running build for ${fullPath}`);
-      await execAsync('npm run plugin-build', { cwd: fullPath });
+
+      // Find npm path (needed because Electron/Obsidian doesn't inherit full shell PATH)
+      let npmPath = 'npm';
+      try {
+        const { stdout } = await execAsync('which npm');
+        npmPath = stdout.trim() || 'npm';
+      } catch {
+        // Fallback to common locations if 'which' fails
+        const commonPaths = [
+          '/usr/local/bin/npm',
+          '/opt/homebrew/bin/npm',
+          `${process.env.HOME}/.nvm/versions/node/*/bin/npm`
+        ];
+
+        for (const testPath of commonPaths) {
+          try {
+            await execAsync(`test -f ${testPath}`);
+            npmPath = testPath;
+            break;
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      console.log(`GitService: Using npm at: ${npmPath}`);
+      await execAsync(`${npmPath} run plugin-build`, { cwd: fullPath });
       console.log(`GitService: Successfully built: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to build:', error);
