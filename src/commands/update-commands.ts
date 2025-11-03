@@ -10,6 +10,7 @@ import { getUpdateCheckerService } from '../services/update-checker-service';
 import { getUpdateSummaryService, initializeUpdateSummaryService } from '../services/update-summary-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { GitService } from '../services/git-service';
+import { UpdatePreviewModal } from '../ui/update-preview-modal';
 
 export function registerUpdateCommands(plugin: Plugin, uiService: UIService): void {
   const gitService = new GitService(plugin.app);
@@ -46,55 +47,99 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
     id: 'preview-updates',
     name: 'Preview Updates for Selected DreamNode',
     callback: async () => {
+      console.log('[UpdatePreview] Command triggered');
       const store = useInterBrainStore.getState();
       const selectedNode = store.selectedNode;
 
       if (!selectedNode) {
+        console.log('[UpdatePreview] No node selected');
         uiService.showError('Please select a DreamNode first');
         return;
       }
 
+      console.log('[UpdatePreview] Selected node:', selectedNode.name, selectedNode.id);
+
       const updateStatus = store.getNodeUpdateStatus(selectedNode.id);
+      console.log('[UpdatePreview] Update status:', updateStatus);
+
       if (!updateStatus || !updateStatus.hasUpdates) {
+        console.log('[UpdatePreview] No updates available');
         uiService.showInfo(`${selectedNode.name} is up to date`);
         return;
       }
+
+      console.log('[UpdatePreview] Found updates:', updateStatus.commits.length, 'commits');
 
       const loadingNotice = uiService.showLoading('Generating update summary...');
       try {
         // Initialize summary service with API key from settings if available
         const settings = (plugin as any).settings;
         const apiKey = settings?.claudeApiKey;
+        console.log('[UpdatePreview] API key available:', !!apiKey);
+
         if (apiKey) {
           initializeUpdateSummaryService(apiKey);
         }
 
         const summaryService = getUpdateSummaryService();
+        console.log('[UpdatePreview] Generating summary...');
         const summary = await summaryService.generateUpdateSummary(updateStatus);
+        console.log('[UpdatePreview] Summary generated:', summary);
 
-        // Create markdown preview
-        const markdown = generateUpdatePreviewMarkdown(selectedNode.name, updateStatus, summary);
-
-        // Create temporary file for preview
-        const vault = plugin.app.vault;
-        const tempPath = `.interbrain-temp-update-preview.md`;
-
-        // Write the preview
-        await vault.adapter.write(tempPath, markdown);
-
-        // Open in new leaf
-        const leaf = plugin.app.workspace.getLeaf('tab');
-        const file = vault.getAbstractFileByPath(tempPath);
-        if (file && 'stat' in file) {
-          await leaf.openFile(file as any);
-        }
-
-        uiService.showSuccess('Update preview ready');
-      } catch (error) {
-        console.error('Failed to generate update preview:', error);
-        uiService.showError('Failed to generate update preview');
-      } finally {
+        // Hide loading notice before showing modal
         loadingNotice.hide();
+
+        // Show modal with update preview
+        console.log('[UpdatePreview] Opening modal...');
+        const modal = new UpdatePreviewModal(
+          plugin.app,
+          selectedNode.name,
+          updateStatus,
+          summary,
+          // On Accept
+          async () => {
+            console.log('[UpdatePreview] User accepted update');
+            const applyNotice = uiService.showLoading(`Updating ${selectedNode.name}...`);
+            try {
+              // Pull updates
+              await gitService.pullUpdates(selectedNode.repoPath);
+
+              // If it's the InterBrain node, run build
+              if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
+                uiService.showLoading('Building InterBrain...');
+                await gitService.buildDreamNode(selectedNode.repoPath);
+              }
+
+              // Clear update status
+              const store = useInterBrainStore.getState();
+              store.clearNodeUpdateStatus(selectedNode.id);
+
+              uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
+
+              // If InterBrain was updated, suggest reload
+              if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
+                uiService.showInfo('InterBrain updated - reload Obsidian to use new version');
+              }
+            } catch (error) {
+              console.error('[UpdatePreview] Failed to apply update:', error);
+              uiService.showError(`Failed to update: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            } finally {
+              applyNotice.hide();
+            }
+          },
+          // On Reject
+          () => {
+            console.log('[UpdatePreview] User rejected update');
+            uiService.showInfo('Update cancelled');
+          }
+        );
+
+        modal.open();
+        console.log('[UpdatePreview] Modal opened');
+      } catch (error) {
+        console.error('[UpdatePreview] Error:', error);
+        loadingNotice.hide();
+        uiService.showError('Failed to generate update preview');
       }
     }
   });
