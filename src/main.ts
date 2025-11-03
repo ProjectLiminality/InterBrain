@@ -163,6 +163,23 @@ export default class InterBrainPlugin extends Plugin {
           store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
         } else {
           console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect}`);
+
+          // Fallback: Try again after vault scan completes
+          if (targetUUID) {
+            console.log(`[InterBrain] Retrying node selection after brief delay...`);
+            setTimeout(() => {
+              const retryStore = useInterBrainStore.getState();
+              const retryNodeData = retryStore.realNodes.get(uuidToSelect);
+
+              if (retryNodeData) {
+                console.log(`[InterBrain] Auto-selecting node (retry): ${retryNodeData.node.name} (${uuidToSelect})`);
+                retryStore.setSelectedNode(retryNodeData.node);
+                retryStore.setSpatialLayout('liminal-web');
+              } else {
+                console.warn(`[InterBrain] Node still not found after retry: ${uuidToSelect}`);
+              }
+            }, 500); // Additional 500ms delay for vault scan to complete
+          }
         }
       }, 1000); // Same 1 second delay as first launch
     });
