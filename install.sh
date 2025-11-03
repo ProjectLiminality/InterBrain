@@ -395,12 +395,6 @@ mkdir -p "$PLUGINS_DIR"
 
 SYMLINK_PATH="$PLUGINS_DIR/interbrain"
 
-# Debug output
-info "VAULT_PATH: $VAULT_PATH"
-info "PLUGINS_DIR: $PLUGINS_DIR"
-info "INTERBRAIN_PATH: $INTERBRAIN_PATH"
-info "SYMLINK_PATH: $SYMLINK_PATH"
-
 # Remove old symlink if exists
 if [ -L "$SYMLINK_PATH" ]; then
     rm "$SYMLINK_PATH"
