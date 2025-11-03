@@ -126,18 +126,12 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                 uiService.showLoading('Building InterBrain...');
                 await gitService.buildDreamNode(selectedNode.repoPath);
 
-                // Auto-reload plugin after build
+                // Auto-reload plugin after build using lightweight reload
                 uiService.showLoading('Reloading plugin...');
-                // @ts-ignore - app.commands exists but not in type definitions
-                const reloadCommand = plugin.app.commands.findCommand('plugin-reloader:interbrain');
-                if (reloadCommand) {
-                  // @ts-ignore
-                  plugin.app.commands.executeCommandById('plugin-reloader:interbrain');
-                  uiService.showSuccess(`InterBrain updated and reloaded!`);
-                } else {
-                  uiService.showSuccess(`InterBrain updated and rebuilt!`);
-                  uiService.showInfo('Use Plugin Reloader hotkey (Cmd+R) to reload');
-                }
+                const plugins = (plugin.app as any).plugins;
+                await plugins.disablePlugin('interbrain');
+                await plugins.enablePlugin('interbrain');
+                uiService.showSuccess(`InterBrain updated and reloaded!`);
               } else {
                 uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
               }
