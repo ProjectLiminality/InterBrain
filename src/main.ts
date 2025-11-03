@@ -831,11 +831,12 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Refresh plugin with node reselection (Command-R replacement)
+    // Refresh plugin with node reselection
+    // NOTE: Plugin Reloader takes precedence over Cmd+R, so use Cmd+Shift+R instead
     this.addCommand({
       id: 'refresh-plugin',
       name: 'Refresh Plugin (with node reselection)',
-      hotkeys: [{ modifiers: ['Mod'], key: 'r' }],
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'r' }],
       callback: async () => {
         const store = useInterBrainStore.getState();
         const currentNode = store.selectedNode;
