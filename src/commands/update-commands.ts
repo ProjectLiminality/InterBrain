@@ -121,22 +121,30 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               // Pull updates
               await gitService.pullUpdates(selectedNode.repoPath);
 
-              // If it's the InterBrain node, run build
+              // If it's the InterBrain node, run build and reload
               if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
                 uiService.showLoading('Building InterBrain...');
                 await gitService.buildDreamNode(selectedNode.repoPath);
+
+                // Auto-reload plugin after build
+                uiService.showLoading('Reloading plugin...');
+                // @ts-ignore - app.commands exists but not in type definitions
+                const reloadCommand = plugin.app.commands.findCommand('plugin-reloader:interbrain');
+                if (reloadCommand) {
+                  // @ts-ignore
+                  plugin.app.commands.executeCommandById('plugin-reloader:interbrain');
+                  uiService.showSuccess(`InterBrain updated and reloaded!`);
+                } else {
+                  uiService.showSuccess(`InterBrain updated and rebuilt!`);
+                  uiService.showInfo('Use Plugin Reloader hotkey (Cmd+R) to reload');
+                }
+              } else {
+                uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
               }
 
               // Clear update status
               const store = useInterBrainStore.getState();
               store.clearNodeUpdateStatus(selectedNode.id);
-
-              uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
-
-              // If InterBrain was updated, suggest reload
-              if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
-                uiService.showInfo('InterBrain updated - reload Obsidian to use new version');
-              }
             } catch (error) {
               console.error('[UpdatePreview] Failed to apply update:', error);
               uiService.showError(`Failed to update: ${error instanceof Error ? error.message : 'Unknown error'}`);
