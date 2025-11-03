@@ -3,6 +3,7 @@ import { RadicleService } from './radicle-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { DreamSongRelationshipService } from './dreamsong-relationship-service';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { DreamNode } from '../types/dreamnode';
 
 /**
  * URI Handler Service
@@ -68,12 +69,25 @@ export class URIHandlerService {
 				const result = await this.cloneFromGitHub(repo);
 
 				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
+				let targetNodeUUID: string | undefined;
 				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
-					await this.handleCollaborationHandshake(repo, senderDid, senderName);
+					const dreamerNode = await this.handleCollaborationHandshake(repo, senderDid, senderName);
+					targetNodeUUID = dreamerNode?.id;
 				}
 
-				// FINAL STEP: Trigger lightweight plugin reload to finalize clone
+				// FINAL STEP: Trigger lightweight plugin reload with explicit UUID
 				if (result === 'success' || result === 'skipped') {
+					// If no Dreamer node, find the cloned node itself
+					if (!targetNodeUUID) {
+						const clonedNode = await this.findNodeByIdentifier(repo);
+						targetNodeUUID = clonedNode?.id;
+					}
+
+					if (targetNodeUUID) {
+						console.log(`🔄 [URIHandler] Storing target UUID for reload: ${targetNodeUUID}`);
+						(globalThis as any).__interbrainReloadTargetUUID = targetNodeUUID;
+					}
+
 					console.log(`🔄 [URIHandler] Triggering plugin reload to finalize single clone...`);
 					const plugins = (this.app as any).plugins;
 					await plugins.disablePlugin('interbrain');
@@ -103,12 +117,25 @@ export class URIHandlerService {
 				const result = await this.cloneFromRadicle(id);
 
 				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
+				let targetNodeUUID: string | undefined;
 				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
-					await this.handleCollaborationHandshake(id, senderDid, senderName);
+					const dreamerNode = await this.handleCollaborationHandshake(id, senderDid, senderName);
+					targetNodeUUID = dreamerNode?.id;
 				}
 
-				// FINAL STEP: Trigger lightweight plugin reload to finalize clone
+				// FINAL STEP: Trigger lightweight plugin reload with explicit UUID
 				if (result === 'success' || result === 'skipped') {
+					// If no Dreamer node, find the cloned node itself
+					if (!targetNodeUUID) {
+						const clonedNode = await this.findNodeByIdentifier(id);
+						targetNodeUUID = clonedNode?.id;
+					}
+
+					if (targetNodeUUID) {
+						console.log(`🔄 [URIHandler] Storing target UUID for reload: ${targetNodeUUID}`);
+						(globalThis as any).__interbrainReloadTargetUUID = targetNodeUUID;
+					}
+
 					console.log(`🔄 [URIHandler] Triggering plugin reload to finalize single clone...`);
 					const plugins = (this.app as any).plugins;
 					await plugins.disablePlugin('interbrain');
@@ -267,8 +294,12 @@ export class URIHandlerService {
 					console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
 				}
 
-				// FINAL STEP: Trigger lightweight plugin reload to ensure clean state
-				// This preserves the selected Dreamer node thanks to UUID persistence
+				// FINAL STEP: Trigger lightweight plugin reload with explicit Dreamer node UUID
+				if (dreamerNode?.id) {
+					console.log(`🔄 [URIHandler] Storing Dreamer node UUID for reload: ${dreamerNode.id}`);
+					(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
+				}
+
 				console.log(`🔄 [URIHandler] Triggering plugin reload to finalize batch clone...`);
 				const plugins = (this.app as any).plugins;
 				await plugins.disablePlugin('interbrain');
@@ -653,7 +684,7 @@ export class URIHandlerService {
 		clonedNodeIdentifier: string,
 		senderDid: string,
 		senderName: string
-	): Promise<void> {
+	): Promise<DreamNode | undefined> {
 		try {
 			console.log(`🤝 [URIHandler] Starting collaboration handshake for ${senderName} (${senderDid})...`);
 
@@ -696,9 +727,12 @@ export class URIHandlerService {
 				console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
 			}
 
+			return dreamerNode;
+
 		} catch (error) {
 			console.error(`❌ [URIHandler] Collaboration handshake failed:`, error);
 			// Don't fail the whole operation if handshake fails
+			return undefined;
 		}
 	}
 
