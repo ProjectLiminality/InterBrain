@@ -106,37 +106,99 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
 
   /**
    * Generate a simple fallback summary without LLM
+   * Extracts key information from commit messages and presents them clearly
    */
   private generateFallbackSummary(fetchResult: FetchResult): UpdateSummary {
-    const { commits, filesChanged } = fetchResult;
+    const { commits, filesChanged, insertions, deletions } = fetchResult;
 
-    // Simple heuristics
-    const isMajor = commits.length > 10 || filesChanged > 20;
-    const hasFeatures = commits.some(c =>
-      c.subject.toLowerCase().includes('add') ||
-      c.subject.toLowerCase().includes('feature')
+    // Categorize commits by keywords
+    const features = commits.filter(c =>
+      /\b(add|feature|new|implement|create)\b/i.test(c.subject)
     );
-    const hasFixes = commits.some(c =>
-      c.subject.toLowerCase().includes('fix') ||
-      c.subject.toLowerCase().includes('bug')
+    const fixes = commits.filter(c =>
+      /\b(fix|bug|issue|resolve|correct)\b/i.test(c.subject)
+    );
+    const improvements = commits.filter(c =>
+      /\b(improve|enhance|update|refactor|optimize|clean)\b/i.test(c.subject)
+    );
+    const docs = commits.filter(c =>
+      /\b(doc|readme|comment)\b/i.test(c.subject)
     );
 
-    let userFacing = '';
-    if (hasFeatures && hasFixes) {
-      userFacing = `This update includes new features and bug fixes across ${commits.length} commits.`;
-    } else if (hasFeatures) {
-      userFacing = `This update adds new features and improvements.`;
-    } else if (hasFixes) {
-      userFacing = `This update fixes several bugs and issues.`;
-    } else {
-      userFacing = `This update includes various improvements and refinements.`;
+    // Build user-facing summary from actual commit subjects
+    const userFacingParts: string[] = [];
+
+    if (features.length > 0) {
+      const featureList = features.slice(0, 3).map(c =>
+        c.subject.replace(/^(add|feature|new|implement|create)[:\s]*/i, '').trim()
+      );
+      if (features.length <= 2) {
+        userFacingParts.push(`New: ${featureList.join(', ')}`);
+      } else {
+        userFacingParts.push(`${features.length} new features including ${featureList[0]}`);
+      }
     }
 
-    const technical = `Improved stability and performance across ${filesChanged} files.`;
+    if (fixes.length > 0) {
+      const fixList = fixes.slice(0, 2).map(c =>
+        c.subject.replace(/^(fix|bug|issue|resolve|correct)[:\s]*/i, '').trim()
+      );
+      if (fixes.length <= 2) {
+        userFacingParts.push(`Fixed: ${fixList.join(', ')}`);
+      } else {
+        userFacingParts.push(`${fixes.length} bug fixes`);
+      }
+    }
 
-    const overall = isMajor
-      ? 'Major update recommended for best experience'
-      : 'Minor update with helpful improvements';
+    if (improvements.length > 0 && userFacingParts.length < 2) {
+      const improvementList = improvements.slice(0, 2).map(c =>
+        c.subject.replace(/^(improve|enhance|update|refactor|optimize|clean)[:\s]*/i, '').trim()
+      );
+      userFacingParts.push(`Improved: ${improvementList[0]}`);
+    }
+
+    const userFacing = userFacingParts.length > 0
+      ? userFacingParts.join('. ') + '.'
+      : `${commits.length} update${commits.length > 1 ? 's' : ''} with various improvements.`;
+
+    // Build technical summary
+    const technicalParts: string[] = [];
+
+    if (filesChanged > 0) {
+      technicalParts.push(`${filesChanged} file${filesChanged > 1 ? 's' : ''} changed`);
+    }
+    if (insertions > 0) {
+      technicalParts.push(`${insertions} additions`);
+    }
+    if (deletions > 0) {
+      technicalParts.push(`${deletions} deletions`);
+    }
+    if (docs.length > 0) {
+      technicalParts.push(`documentation updates`);
+    }
+
+    const technical = technicalParts.length > 0
+      ? technicalParts.join(', ') + '.'
+      : 'Code improvements and refinements.';
+
+    // Determine overall impact
+    const isMajor = commits.length > 10 || filesChanged > 20;
+    const hasCriticalFixes = fixes.some(c =>
+      /\b(critical|urgent|security|crash|data loss)\b/i.test(c.subject + c.body)
+    );
+
+    let overall = '';
+    if (hasCriticalFixes) {
+      overall = '⚠️ Important update with critical fixes';
+    } else if (isMajor) {
+      overall = '📦 Major update with significant changes';
+    } else if (features.length > fixes.length) {
+      overall = '✨ Nice update with new features';
+    } else if (fixes.length > 0) {
+      overall = '🔧 Helpful update with bug fixes';
+    } else {
+      overall = '📝 Minor update with refinements';
+    }
 
     return {
       userFacingChanges: userFacing,
