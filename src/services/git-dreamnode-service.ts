@@ -147,9 +147,15 @@ export class GitDreamNodeService {
           // Don't fail the creation if indexing fails
         }
       })
-      .catch(error => {
-        console.error('Failed to create git repository:', error);
-        // TODO: Add error handling/retry logic
+      .catch(async (error) => {
+        // Check if git repository actually exists (commit might have succeeded despite stderr)
+        try {
+          await execAsync('git rev-parse HEAD', { cwd: repoPath });
+          console.log(`GitDreamNodeService: Repository created successfully (stderr from hook is normal)`);
+        } catch {
+          // Actually failed
+          console.error('Failed to create git repository:', error);
+        }
       });
     
     console.log(`GitDreamNodeService: Created ${type} "${title}" with ID ${uuid}`);
@@ -491,18 +497,29 @@ export class GitDreamNodeService {
         // Pre-commit hook outputs to stderr which causes exec to throw even on success
         // Check if commit actually succeeded by verifying HEAD exists
         try {
-          await execAsync('git rev-parse HEAD', { cwd: repoPath });
-          console.log(`GitDreamNodeService: Commit successful (stderr output from hook is normal)`);
-        } catch {
-          // Commit actually failed
+          const headResult = await execAsync('git rev-parse HEAD', { cwd: repoPath });
+          console.log(`[GitDreamNodeService] ✅ Commit verified successful despite stderr - HEAD exists: ${headResult.stdout.trim()}`);
+          // Commit succeeded - don't rethrow, continue normally
+        } catch (verifyError) {
+          // Commit actually failed - HEAD doesn't exist
+          console.error(`[GitDreamNodeService] ❌ Commit failed - HEAD verification failed:`, verifyError);
           throw commitError;
         }
       }
 
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
-    } catch (error) {
-      console.error('Failed to create git repository:', error);
-      throw error;
+    } catch (error: any) {
+      // Don't log error if repository was actually created successfully
+      // (This can happen if earlier operations like git init had stderr output)
+      try {
+        await execAsync('git rev-parse HEAD', { cwd: repoPath });
+        console.log(`[GitDreamNodeService] ✅ Repository exists despite error - operation succeeded`);
+        return; // Success - don't throw
+      } catch {
+        // Repository doesn't exist - this is a real error
+        console.error('Failed to create git repository:', error);
+        throw error;
+      }
     }
   }
   
