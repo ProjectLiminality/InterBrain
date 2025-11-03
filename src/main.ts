@@ -138,9 +138,13 @@ export default class InterBrainPlugin extends Plugin {
 
     // Every launch: check for reload target UUID, otherwise auto-select InterBrain
     const reloadTargetUUID = (globalThis as any).__interbrainReloadTargetUUID;
+    console.log(`[InterBrain] Checking for reload target UUID...`);
+    console.log(`[InterBrain] globalThis.__interbrainReloadTargetUUID =`, reloadTargetUUID);
     if (reloadTargetUUID) {
-      console.log(`[InterBrain] Reload target UUID detected: ${reloadTargetUUID}`);
+      console.log(`[InterBrain] ✅ Reload target UUID detected: ${reloadTargetUUID}`);
       delete (globalThis as any).__interbrainReloadTargetUUID; // Clean up after use
+    } else {
+      console.log(`[InterBrain] ℹ️ No reload target UUID - will select default InterBrain node`);
     }
     this.autoSelectNode(reloadTargetUUID);
   }
@@ -840,14 +844,19 @@ export default class InterBrainPlugin extends Plugin {
         let nodeUUID: string | undefined;
         if (currentNode) {
           nodeUUID = currentNode.id;
-          console.log(`[Refresh] Storing UUID for reselection: ${nodeUUID} (${currentNode.name})`);
+          console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
+          console.log(`[Refresh] Storing UUID for reselection...`);
+        } else {
+          console.log(`[Refresh] ℹ️ No node currently selected`);
         }
 
         // Store UUID in a global variable that persists across plugin reload
         (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
+        console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
 
         // Trigger plugin reload via Obsidian's built-in command
         // This will call onunload() then onload() with fresh state
+        console.log(`[Refresh] Triggering app:reload...`);
         this.app.commands.executeCommandById('app:reload');
       }
     });
