@@ -413,7 +413,7 @@ export class GitService {
       }
 
       console.log(`GitService: Using npm at: ${npmPath}`);
-      await execAsync(`${npmPath} run plugin-build`, { cwd: fullPath });
+      await execAsync(`${npmPath} run build`, { cwd: fullPath });
       console.log(`GitService: Successfully built: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to build:', error);
