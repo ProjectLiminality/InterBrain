@@ -279,4 +279,142 @@ export class GitService {
       throw new Error(`Failed to open in Terminal: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Fetch updates from remote without merging
+   * Returns metadata about new commits available
+   */
+  async fetchUpdates(repoPath: string): Promise<FetchResult> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Fetching updates for ${fullPath}`);
+
+      // First check if there's a remote configured
+      const { stdout: remoteOutput } = await execAsync('git remote', { cwd: fullPath });
+      if (!remoteOutput.trim()) {
+        return {
+          hasUpdates: false,
+          commits: [],
+          filesChanged: 0,
+          insertions: 0,
+          deletions: 0
+        };
+      }
+
+      // Fetch from remote
+      await execAsync('git fetch', { cwd: fullPath });
+
+      // Check if there are new commits (compare HEAD with @{upstream})
+      const { stdout: logOutput } = await execAsync(
+        'git log HEAD..@{upstream} --format="%H|||%an|||%ae|||%at|||%s|||%b"',
+        { cwd: fullPath }
+      );
+
+      if (!logOutput.trim()) {
+        return {
+          hasUpdates: false,
+          commits: [],
+          filesChanged: 0,
+          insertions: 0,
+          deletions: 0
+        };
+      }
+
+      // Parse commits
+      const commitLines = logOutput.trim().split('\n').filter((line: string) => line.trim());
+      const commits: CommitInfo[] = commitLines.map((line: string) => {
+        const [hash, author, email, timestamp, subject, body] = line.split('|||');
+        return {
+          hash,
+          author,
+          email,
+          timestamp: parseInt(timestamp, 10),
+          subject,
+          body: body || ''
+        };
+      });
+
+      // Get diff stats
+      const { stdout: statsOutput } = await execAsync(
+        'git diff --shortstat HEAD @{upstream}',
+        { cwd: fullPath }
+      );
+
+      // Parse stats like: "12 files changed, 450 insertions(+), 200 deletions(-)"
+      const filesMatch = statsOutput.match(/(\d+) files? changed/);
+      const insertMatch = statsOutput.match(/(\d+) insertions?/);
+      const deleteMatch = statsOutput.match(/(\d+) deletions?/);
+
+      return {
+        hasUpdates: true,
+        commits,
+        filesChanged: filesMatch ? parseInt(filesMatch[1], 10) : 0,
+        insertions: insertMatch ? parseInt(insertMatch[1], 10) : 0,
+        deletions: deleteMatch ? parseInt(deleteMatch[1], 10) : 0
+      };
+    } catch (error) {
+      console.error('GitService: Failed to fetch updates:', error);
+      // Return no updates on error (remote might not exist, network issue, etc.)
+      return {
+        hasUpdates: false,
+        commits: [],
+        filesChanged: 0,
+        insertions: 0,
+        deletions: 0
+      };
+    }
+  }
+
+  /**
+   * Pull updates from remote (merge fetched changes)
+   */
+  async pullUpdates(repoPath: string): Promise<void> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Pulling updates for ${fullPath}`);
+      await execAsync('git pull', { cwd: fullPath });
+      console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
+    } catch (error) {
+      console.error('GitService: Failed to pull updates:', error);
+      throw new Error(`Failed to pull updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Run npm build in a DreamNode repository
+   */
+  async buildDreamNode(repoPath: string): Promise<void> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Running build for ${fullPath}`);
+      await execAsync('npm run plugin-build', { cwd: fullPath });
+      console.log(`GitService: Successfully built: ${fullPath}`);
+    } catch (error) {
+      console.error('GitService: Failed to build:', error);
+      throw new Error(`Failed to build: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+}
+
+/**
+ * Information about a single commit
+ */
+export interface CommitInfo {
+  hash: string;
+  author: string;
+  email: string;
+  timestamp: number;
+  subject: string;
+  body: string;
+}
+
+/**
+ * Result of fetching updates from remote
+ */
+export interface FetchResult {
+  hasUpdates: boolean;
+  commits: CommitInfo[];
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
 }

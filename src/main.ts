@@ -28,6 +28,7 @@ import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-com
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { registerMigrationCommands } from './commands/migration-commands';
 import { registerRelationshipCommands } from './commands/relationship-commands';
+import { registerUpdateCommands } from './commands/update-commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
@@ -54,6 +55,7 @@ import { initializeMediaLoadingService } from './services/media-loading-service'
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
 import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
+import { initializeUpdateCheckerService } from './services/update-checker-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -223,6 +225,19 @@ export default class InterBrainPlugin extends Plugin {
       initializeAudioStreamingService(this);
       console.log('[Plugin] Background services initialized');
     }, 100); // Tiny delay to let vault scan finish first
+
+    // Start auto-fetch for updates after vault scan completes
+    setTimeout(() => {
+      console.log('[Plugin] Starting auto-fetch for DreamNode updates...');
+      const updateChecker = initializeUpdateCheckerService(this.app);
+
+      // Run auto-fetch in background (non-blocking)
+      updateChecker.checkAllDreamNodesForUpdates().then(() => {
+        console.log('[Plugin] Auto-fetch complete');
+      }).catch((error) => {
+        console.error('[Plugin] Auto-fetch failed:', error);
+      });
+    }, 500); // Wait for vault scan to complete
   }
 
   private initializeServices(): void {
@@ -305,6 +320,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register relationship commands (bidirectional sync)
     registerRelationshipCommands(this);
+
+    // Register update commands (auto-fetch and update management)
+    registerUpdateCommands(this, this.uiService);
 
     // Register full-screen commands
     registerFullScreenCommands(this, this.uiService);

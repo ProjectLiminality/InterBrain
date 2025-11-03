@@ -348,6 +348,12 @@ export interface InterBrainState extends OllamaConfigSlice {
   setRadialButtonUIActive: (active: boolean) => void;
   setRadialButtonCount: (count: number) => void;
   setOptionKeyPressed: (pressed: boolean) => void;
+
+  // Update status for DreamNodes (non-persisted)
+  updateStatus: Map<string, import('../services/git-service').FetchResult>;
+  setNodeUpdateStatus: (nodeId: string, result: import('../services/git-service').FetchResult) => void;
+  clearNodeUpdateStatus: (nodeId: string) => void;
+  getNodeUpdateStatus: (nodeId: string) => import('../services/git-service').FetchResult | null;
 }
 
 // Helper to convert Map to serializable format for persistence
@@ -1460,6 +1466,25 @@ export const useInterBrainStore = create<InterBrainState>()(
       optionKeyPressed: pressed
     }
   })),
+
+  // Update status management (non-persisted)
+  updateStatus: new Map(),
+
+  setNodeUpdateStatus: (nodeId, result) => set((state) => {
+    const newStatus = new Map(state.updateStatus);
+    newStatus.set(nodeId, result);
+    return { updateStatus: newStatus };
+  }),
+
+  clearNodeUpdateStatus: (nodeId) => set((state) => {
+    const newStatus = new Map(state.updateStatus);
+    newStatus.delete(nodeId);
+    return { updateStatus: newStatus };
+  }),
+
+  getNodeUpdateStatus: (nodeId) => {
+    return get().updateStatus.get(nodeId) || null;
+  },
     }),
     {
       name: 'interbrain-storage', // Storage key
