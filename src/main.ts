@@ -136,27 +136,33 @@ export default class InterBrainPlugin extends Plugin {
       this.handleFirstLaunch();
     }
 
-    // Every launch: auto-select InterBrain (reuses first launch logic)
-    this.autoSelectInterBrain();
+    // Every launch: check for reload target UUID, otherwise auto-select InterBrain
+    const reloadTargetUUID = (globalThis as any).__interbrainReloadTargetUUID;
+    if (reloadTargetUUID) {
+      console.log(`[InterBrain] Reload target UUID detected: ${reloadTargetUUID}`);
+      delete (globalThis as any).__interbrainReloadTargetUUID; // Clean up after use
+    }
+    this.autoSelectNode(reloadTargetUUID);
   }
 
   /**
-   * Auto-select InterBrain node on every plugin startup
+   * Auto-select a node on plugin startup (or reload)
    * Uses the same reliable logic as first launch
+   * @param targetUUID - Optional UUID to select. Defaults to InterBrain UUID if not provided.
    */
-  private autoSelectInterBrain(): void {
+  private autoSelectNode(targetUUID?: string): void {
     this.app.workspace.onLayoutReady(() => {
       setTimeout(() => {
-        const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
+        const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
-        const nodeData = store.realNodes.get(interbrainUUID);
+        const nodeData = store.realNodes.get(uuidToSelect);
 
         if (nodeData) {
-          console.log('[InterBrain] Auto-selecting InterBrain node');
+          console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
           store.setSelectedNode(nodeData.node);
           store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
         } else {
-          console.warn('[InterBrain] InterBrain node not found for auto-selection');
+          console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect}`);
         }
       }, 1000); // Same 1 second delay as first launch
     });
@@ -250,6 +256,14 @@ export default class InterBrainPlugin extends Plugin {
       initializeAudioStreamingService(this);
       console.log('[Plugin] Background services initialized');
     }, 100); // Tiny delay to let vault scan finish first
+
+    // Run DreamSong relationship scan after vault scan completes
+    setTimeout(() => {
+      console.log('[Plugin] Starting DreamSong relationship scan...');
+
+      // Run the scan via constellation commands
+      this.app.commands.executeCommandById('interbrain:scan-vault-dreamsong-relationships');
+    }, 600); // Wait for vault scan to complete (after update checker)
 
     // Start auto-fetch for updates after vault scan completes
     setTimeout(() => {
@@ -770,7 +784,7 @@ export default class InterBrainPlugin extends Plugin {
           this.uiService.showError('Vault scan only available in real mode');
           return;
         }
-        
+
         const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
         try {
           const stats = await serviceManager.scanVault();
@@ -793,6 +807,31 @@ export default class InterBrainPlugin extends Plugin {
         } finally {
           loadingNotice.hide();
         }
+      }
+    });
+
+    // Refresh plugin with node reselection (Command-R replacement)
+    this.addCommand({
+      id: 'refresh-plugin',
+      name: 'Refresh Plugin (with node reselection)',
+      hotkeys: [{ modifiers: ['Mod'], key: 'r' }],
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+
+        // Store UUID for reselection after reload
+        let nodeUUID: string | undefined;
+        if (currentNode) {
+          nodeUUID = currentNode.id;
+          console.log(`[Refresh] Storing UUID for reselection: ${nodeUUID} (${currentNode.name})`);
+        }
+
+        // Store UUID in a global variable that persists across plugin reload
+        (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
+
+        // Trigger plugin reload via Obsidian's built-in command
+        // This will call onunload() then onload() with fresh state
+        this.app.commands.executeCommandById('app:reload');
       }
     });
 
