@@ -596,6 +596,27 @@ export class URIHandlerService {
 
 			console.log(`✅ [URIHandler] Collaboration handshake complete: "${clonedNode.name}" linked to "${dreamerNode.name}"`);
 
+			// Step 4: Refresh UI to show new relationship immediately
+			try {
+				// Rescan vault to detect the new Dreamer node (if created)
+				await this.dreamNodeService.scanVault();
+
+				// Rescan relationships to update constellation
+				const relationshipService = new DreamSongRelationshipService(this.plugin);
+				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
+
+				if (scanResult.success) {
+					// Apply constellation layout to show new relationship
+					const canvasAPI = (globalThis as any).__interbrainCanvas;
+					if (canvasAPI?.applyConstellationLayout) {
+						await canvasAPI.applyConstellationLayout();
+						console.log(`✅ [URIHandler] UI refreshed - relationship now visible`);
+					}
+				}
+			} catch (refreshError) {
+				console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
+			}
+
 		} catch (error) {
 			console.error(`❌ [URIHandler] Collaboration handshake failed:`, error);
 			// Don't fail the whole operation if handshake fails
