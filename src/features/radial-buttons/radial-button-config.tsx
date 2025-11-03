@@ -146,7 +146,7 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'check-updates',
     iconName: 'lucide-refresh-cw',
-    commandId: 'interbrain:check-coherence-beacons',
+    commandId: 'interbrain:preview-updates',
     label: 'Check for Updates'
   },
   {

@@ -59,6 +59,23 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       console.log('[UpdatePreview] Selected node:', selectedNode.name, selectedNode.id);
 
+      // Always fetch first to ensure we have latest update status
+      const fetchNotice = uiService.showLoading('Checking for updates...');
+      try {
+        const fetchResult = await gitService.fetchUpdates(selectedNode.repoPath);
+        if (fetchResult.hasUpdates) {
+          store.setNodeUpdateStatus(selectedNode.id, fetchResult);
+        } else {
+          store.clearNodeUpdateStatus(selectedNode.id);
+        }
+      } catch (error) {
+        console.error('[UpdatePreview] Fetch failed:', error);
+        fetchNotice.hide();
+        uiService.showError('Failed to check for updates');
+        return;
+      }
+      fetchNotice.hide();
+
       const updateStatus = store.getNodeUpdateStatus(selectedNode.id);
       console.log('[UpdatePreview] Update status:', updateStatus);
 
