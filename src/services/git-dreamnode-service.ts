@@ -479,10 +479,39 @@ export class GitDreamNodeService {
         type,
         dreamTalk: dreamTalkPath ? dreamTalk!.name : ''
       });
-      
-      // Make initial commit (will trigger pre-commit hook to move files)
+
+      // Move template files from .git/ to working directory
+      // (This is what the pre-commit hook used to do, but doing it here prevents timing issues)
+      console.log(`GitDreamNodeService: Moving template files to working directory`);
+      const gitDir = path.join(repoPath, '.git');
+
+      // Move .udd file
+      const uddSource = path.join(gitDir, 'udd');
+      const uddDest = path.join(repoPath, '.udd');
+      if (await this.fileExists(uddSource)) {
+        await fsPromises.rename(uddSource, uddDest);
+        console.log(`GitDreamNodeService: Moved .git/udd to .udd`);
+      }
+
+      // Move README.md
+      const readmeSource = path.join(gitDir, 'README.md');
+      const readmeDest = path.join(repoPath, 'README.md');
+      if (await this.fileExists(readmeSource)) {
+        await fsPromises.rename(readmeSource, readmeDest);
+        console.log(`GitDreamNodeService: Moved .git/README.md to README.md`);
+      }
+
+      // Move LICENSE
+      const licenseSource = path.join(gitDir, 'LICENSE');
+      const licenseDest = path.join(repoPath, 'LICENSE');
+      if (await this.fileExists(licenseSource)) {
+        await fsPromises.rename(licenseSource, licenseDest);
+        console.log(`GitDreamNodeService: Moved .git/LICENSE to LICENSE`);
+      }
+
+      // Make initial commit
       console.log(`GitDreamNodeService: Starting git operations in ${repoPath}`);
-      
+
       // Add all files
       const addResult = await execAsync('git add -A', { cwd: repoPath });
       console.log(`GitDreamNodeService: Git add result:`, addResult);
