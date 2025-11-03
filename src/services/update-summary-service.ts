@@ -97,10 +97,20 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
     const technicalMatch = content.match(/Technical Improvements[:\s]+(.*?)(?=Overall Impact|$)/is);
     const overallMatch = content.match(/Overall Impact[:\s]+(.*?)$/is);
 
+    // Helper to clean markdown formatting
+    const cleanMarkdown = (text: string): string => {
+      return text
+        .replace(/#{1,6}\s+/g, '') // Remove markdown headers
+        .replace(/\*\*/g, '')      // Remove bold
+        .replace(/\*/g, '')        // Remove italic
+        .replace(/`/g, '')         // Remove code markers
+        .trim();
+    };
+
     return {
-      userFacingChanges: userFacingMatch?.[1]?.trim() || 'Various updates and improvements',
-      technicalImprovements: technicalMatch?.[1]?.trim() || 'Improved stability and performance',
-      overallImpact: overallMatch?.[1]?.trim() || 'Recommended update for better experience'
+      userFacingChanges: cleanMarkdown(userFacingMatch?.[1] || 'Various updates and improvements'),
+      technicalImprovements: cleanMarkdown(technicalMatch?.[1] || 'Improved stability and performance'),
+      overallImpact: cleanMarkdown(overallMatch?.[1] || 'Recommended update for better experience')
     };
   }
 
