@@ -154,6 +154,7 @@ export default class InterBrainPlugin extends Plugin {
         if (nodeData) {
           console.log('[InterBrain] Auto-selecting InterBrain node');
           store.setSelectedNode(nodeData.node);
+          store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
         } else {
           console.warn('[InterBrain] InterBrain node not found for auto-selection');
         }
