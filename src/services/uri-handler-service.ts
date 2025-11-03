@@ -72,6 +72,15 @@ export class URIHandlerService {
 					await this.handleCollaborationHandshake(repo, senderDid, senderName);
 				}
 
+				// FINAL STEP: Trigger lightweight plugin reload to finalize clone
+				if (result === 'success' || result === 'skipped') {
+					console.log(`🔄 [URIHandler] Triggering plugin reload to finalize single clone...`);
+					const plugins = (this.app as any).plugins;
+					await plugins.disablePlugin('interbrain');
+					await plugins.enablePlugin('interbrain');
+					console.log(`✅ [URIHandler] Plugin reload complete - single clone finalized`);
+				}
+
 				return result;
 			}
 
@@ -96,6 +105,15 @@ export class URIHandlerService {
 				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
 				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
 					await this.handleCollaborationHandshake(id, senderDid, senderName);
+				}
+
+				// FINAL STEP: Trigger lightweight plugin reload to finalize clone
+				if (result === 'success' || result === 'skipped') {
+					console.log(`🔄 [URIHandler] Triggering plugin reload to finalize single clone...`);
+					const plugins = (this.app as any).plugins;
+					await plugins.disablePlugin('interbrain');
+					await plugins.enablePlugin('interbrain');
+					console.log(`✅ [URIHandler] Plugin reload complete - single clone finalized`);
 				}
 
 				return result;
@@ -248,6 +266,14 @@ export class URIHandlerService {
 				} catch (refreshError) {
 					console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
 				}
+
+				// FINAL STEP: Trigger lightweight plugin reload to ensure clean state
+				// This preserves the selected Dreamer node thanks to UUID persistence
+				console.log(`🔄 [URIHandler] Triggering plugin reload to finalize batch clone...`);
+				const plugins = (this.app as any).plugins;
+				await plugins.disablePlugin('interbrain');
+				await plugins.enablePlugin('interbrain');
+				console.log(`✅ [URIHandler] Plugin reload complete - batch clone finalized`);
 			}
 
 		} catch (error) {
