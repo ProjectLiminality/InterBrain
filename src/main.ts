@@ -832,7 +832,7 @@ export default class InterBrainPlugin extends Plugin {
     });
 
     // Refresh plugin with node reselection
-    // NOTE: Plugin Reloader takes precedence over Cmd+R, so use Cmd+Shift+R instead
+    // Uses lightweight plugin disable/enable instead of full app reload
     this.addCommand({
       id: 'refresh-plugin',
       name: 'Refresh Plugin (with node reselection)',
@@ -855,10 +855,13 @@ export default class InterBrainPlugin extends Plugin {
         (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
         console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
 
-        // Trigger plugin reload via Obsidian's built-in command
-        // This will call onunload() then onload() with fresh state
-        console.log(`[Refresh] Triggering app:reload...`);
-        this.app.commands.executeCommandById('app:reload');
+        // Lightweight plugin reload using Obsidian's plugin manager
+        // This is much faster than app:reload and preserves console logs
+        console.log(`[Refresh] Triggering lightweight plugin reload...`);
+        const plugins = (this.app as any).plugins;
+        await plugins.disablePlugin('interbrain');
+        await plugins.enablePlugin('interbrain');
+        console.log(`[Refresh] Plugin reload complete`);
       }
     });
 
