@@ -305,10 +305,13 @@ export class GitService {
       await execAsync('git fetch', { cwd: fullPath });
 
       // Check if there are new commits (compare HEAD with @{upstream})
+      // Use %x00 (null byte) as delimiter to handle multiline commit messages
       const { stdout: logOutput } = await execAsync(
-        'git log HEAD..@{upstream} --format="%H|||%an|||%ae|||%at|||%s|||%b"',
+        'git log HEAD..@{upstream} --format="%H%x00%an%x00%ae%x00%at%x00%s%x00%b%x00"',
         { cwd: fullPath }
       );
+
+      console.log('[GitService] Raw git log output:', logOutput);
 
       if (!logOutput.trim()) {
         return {
@@ -320,19 +323,32 @@ export class GitService {
         };
       }
 
-      // Parse commits
-      const commitLines = logOutput.trim().split('\n').filter((line: string) => line.trim());
-      const commits: CommitInfo[] = commitLines.map((line: string) => {
-        const [hash, author, email, timestamp, subject, body] = line.split('|||');
+      // Parse commits - split by double null byte (between commits)
+      const commitBlocks = logOutput.trim().split('\x00\n').filter((block: string) => block.trim());
+      console.log('[GitService] Found commit blocks:', commitBlocks.length);
+
+      const commits: CommitInfo[] = commitBlocks.map((block: string) => {
+        const parts = block.split('\x00');
+        console.log('[GitService] Parsing commit block parts:', parts.length, parts);
+
+        const hash = parts[0] || '';
+        const author = parts[1] || 'Unknown';
+        const email = parts[2] || '';
+        const timestamp = parseInt(parts[3] || '0', 10);
+        const subject = parts[4] || 'No subject';
+        const body = parts[5] || '';
+
         return {
           hash,
           author,
           email,
-          timestamp: parseInt(timestamp, 10),
+          timestamp,
           subject,
-          body: body || ''
+          body: body.trim()
         };
       });
+
+      console.log('[GitService] Parsed commits:', commits);
 
       // Get diff stats
       const { stdout: statsOutput } = await execAsync(

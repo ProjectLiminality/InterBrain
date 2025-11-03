@@ -35,6 +35,13 @@ export class UpdatePreviewModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
+    console.log('[UpdatePreviewModal] Opening with data:', {
+      nodeName: this.nodeName,
+      commitCount: this.updateStatus.commits.length,
+      commits: this.updateStatus.commits,
+      summary: this.summary
+    });
+
     // Title
     contentEl.createEl('h2', { text: `Updates Available for ${this.nodeName}` });
 
