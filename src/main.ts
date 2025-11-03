@@ -836,7 +836,7 @@ export default class InterBrainPlugin extends Plugin {
     this.addCommand({
       id: 'refresh-plugin',
       name: 'Refresh Plugin (with node reselection)',
-      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'r' }],
+      hotkeys: [{ modifiers: ['Mod'], key: 'r' }],
       callback: async () => {
         const store = useInterBrainStore.getState();
         const currentNode = store.selectedNode;
