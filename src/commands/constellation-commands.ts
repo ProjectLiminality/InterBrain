@@ -117,10 +117,14 @@ export class ConstellationCommands {
           console.error('Failed to auto-export JSON:', exportError);
         }
 
-        // NOTE: Auto-apply constellation layout REMOVED
-        // This was causing media to disappear during plugin reload
-        // Layout should only be applied when user explicitly requests it via command
-        console.log('✅ [Constellation Commands] DreamSong relationship scan complete (layout not auto-applied)');
+        // Auto-apply constellation layout positioning
+        try {
+          await this.applyConstellationLayout();
+          console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
+        } catch (layoutError) {
+          console.error('Failed to auto-apply constellation layout:', layoutError);
+          this.uiService.showError('⚠️ Layout positioning failed, but scan data was saved', 3000);
+        }
 
       } else {
         // Clear scanning state and show error

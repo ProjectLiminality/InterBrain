@@ -141,10 +141,12 @@ export class DreamSongRelationshipService {
     dreamNodes: DreamNode[];
     uuidToPathMap: Map<string, string>;
   }> {
-    // Force fresh vault scan to ensure we have all current DreamNodes
-    await this.dreamNodeService.scanVault();
+    // NOTE: Vault scan removed - already done during plugin initialization
+    // Calling scanVault() here was causing media to disappear because it replaced
+    // the entire realNodes Map, losing any media that was already loaded
+    // The vault scan during plugin init is sufficient - we just use that data
 
-    // Get all DreamNodes from the service
+    // Get all DreamNodes from the service (uses existing store data)
     const dreamNodes = await this.dreamNodeService.list();
 
     // Build UUID to path mapping for media resolution
