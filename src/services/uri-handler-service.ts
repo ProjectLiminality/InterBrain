@@ -69,22 +69,19 @@ export class URIHandlerService {
 				const result = await this.cloneFromGitHub(repo);
 
 				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
-				let targetNodeUUID: string | undefined;
+				// (but for single links, we still select the cloned node, not the Dreamer)
 				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
-					const dreamerNode = await this.handleCollaborationHandshake(repo, senderDid, senderName);
-					targetNodeUUID = dreamerNode?.id;
+					await this.handleCollaborationHandshake(repo, senderDid, senderName);
 				}
 
-				// FINAL STEP: Trigger lightweight plugin reload with explicit UUID
+				// FINAL STEP: Trigger lightweight plugin reload with cloned node as target
 				if (result === 'success' || result === 'skipped') {
-					// If no Dreamer node, find the cloned node itself
-					if (!targetNodeUUID) {
-						const clonedNode = await this.findNodeByIdentifier(repo);
-						targetNodeUUID = clonedNode?.id;
-					}
+					// Single clone links should ALWAYS select the cloned node (not Dreamer)
+					const clonedNode = await this.findNodeByIdentifier(repo);
+					const targetNodeUUID = clonedNode?.id;
 
 					if (targetNodeUUID) {
-						console.log(`🔄 [URIHandler] Storing target UUID for reload: ${targetNodeUUID}`);
+						console.log(`🔄 [URIHandler] Storing target UUID for reload (cloned node): ${targetNodeUUID}`);
 						(globalThis as any).__interbrainReloadTargetUUID = targetNodeUUID;
 					}
 
@@ -117,22 +114,19 @@ export class URIHandlerService {
 				const result = await this.cloneFromRadicle(id);
 
 				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
-				let targetNodeUUID: string | undefined;
+				// (but for single links, we still select the cloned node, not the Dreamer)
 				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
-					const dreamerNode = await this.handleCollaborationHandshake(id, senderDid, senderName);
-					targetNodeUUID = dreamerNode?.id;
+					await this.handleCollaborationHandshake(id, senderDid, senderName);
 				}
 
-				// FINAL STEP: Trigger lightweight plugin reload with explicit UUID
+				// FINAL STEP: Trigger lightweight plugin reload with cloned node as target
 				if (result === 'success' || result === 'skipped') {
-					// If no Dreamer node, find the cloned node itself
-					if (!targetNodeUUID) {
-						const clonedNode = await this.findNodeByIdentifier(id);
-						targetNodeUUID = clonedNode?.id;
-					}
+					// Single clone links should ALWAYS select the cloned node (not Dreamer)
+					const clonedNode = await this.findNodeByIdentifier(id);
+					const targetNodeUUID = clonedNode?.id;
 
 					if (targetNodeUUID) {
-						console.log(`🔄 [URIHandler] Storing target UUID for reload: ${targetNodeUUID}`);
+						console.log(`🔄 [URIHandler] Storing target UUID for reload (cloned node): ${targetNodeUUID}`);
 						(globalThis as any).__interbrainReloadTargetUUID = targetNodeUUID;
 					}
 
