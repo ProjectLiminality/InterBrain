@@ -635,12 +635,29 @@ export class URIHandlerService {
 
 		const newDreamer = await this.dreamNodeService.create(name, 'dreamer');
 
-		// Update .udd file to include Radicle DID and read back UUID
+		// Wait for .udd file to be created by pre-commit hook
 		const uddPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 		const fs = require('fs').promises;
 
 		try {
-			const uddContent = await fs.readFile(uddPath, 'utf-8');
+			// Retry loop: wait for pre-commit hook to move .udd file
+			let retries = 10;
+			let uddContent = null;
+			while (retries > 0) {
+				try {
+					uddContent = await fs.readFile(uddPath, 'utf-8');
+					break; // Success!
+				} catch (error) {
+					if (retries === 1) throw error; // Last attempt failed
+					await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+					retries--;
+				}
+			}
+
+			if (!uddContent) {
+				throw new Error('Failed to read .udd file after retries');
+			}
+
 			const udd = JSON.parse(uddContent);
 			udd.radicleId = did;
 			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
