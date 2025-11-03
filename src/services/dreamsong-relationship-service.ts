@@ -334,6 +334,11 @@ export class DreamSongRelationshipService {
     currentDreamNodeId: string,
     uuidToPathMap: Map<string, string>
   ): string {
+    // Skip data URLs entirely - they're embedded media, not node references
+    if (mediaPath.startsWith('data:')) {
+      return currentDreamNodeId;
+    }
+
     // If we have an extracted source ID (e.g., from submodule path), try to find it
     if (extractedSourceId) {
       // First, try exact UUID match
@@ -348,11 +353,8 @@ export class DreamSongRelationshipService {
         }
       }
 
-      // Truncate mediaPath if it's a data URL to avoid logging huge base64 strings
-      const displayPath = mediaPath.startsWith('data:')
-        ? mediaPath.substring(0, 50) + '...'
-        : mediaPath;
-      console.warn(`⚠️ [DreamSong Relationships] Could not resolve extracted source ID: ${extractedSourceId} for path: ${displayPath}`);
+      // Only warn for real file paths, not data URLs
+      console.warn(`⚠️ [DreamSong Relationships] Could not resolve extracted source ID: ${extractedSourceId} for path: ${mediaPath}`);
     }
 
     // Fallback to current DreamNode ID for local files

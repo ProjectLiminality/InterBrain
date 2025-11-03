@@ -199,17 +199,25 @@ export class URIHandlerService {
 
 			// If we have sender info, handle collaboration handshake ONCE at the end
 			if (senderDid && senderName) {
+				// CRITICAL: Scan vault FIRST to ensure all cloned nodes are in the store
+				// before trying to link them (prevents dangling reference cleanup from removing them)
+				console.log(`🔄 [URIHandler] Scanning vault to register ${successCount + skipCount} cloned nodes...`);
+				await this.dreamNodeService.scanVault();
+
 				// Find or create the Dreamer node
 				const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
 				await new Promise(resolve => setTimeout(resolve, 200));
 
-				// Link all successfully cloned nodes to the Dreamer node
+				// Now link all successfully cloned nodes to the Dreamer node
+				// (nodes are now guaranteed to exist in the store)
 				for (const { result, identifier } of results) {
 					if (result === 'success' || result === 'skipped') {
 						try {
 							const clonedNode = await this.findNodeByIdentifier(identifier);
 							if (clonedNode) {
 								await this.linkNodes(clonedNode, dreamerNode);
+							} else {
+								console.warn(`⚠️ [URIHandler] Node not found after vault scan: ${identifier}`);
 							}
 						} catch (linkError) {
 							console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
@@ -217,9 +225,9 @@ export class URIHandlerService {
 					}
 				}
 
-				// FINAL UI REFRESH: Rescan everything and select the Dreamer node
+				// FINAL UI REFRESH: Run comprehensive refresh and select the Dreamer node
 				try {
-					await this.dreamNodeService.scanVault();
+					console.log(`🔄 [URIHandler] Running comprehensive refresh (DreamSong relationships + constellation)...`);
 
 					const relationshipService = new DreamSongRelationshipService(this.plugin);
 					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
