@@ -1483,7 +1483,6 @@ export default function DreamspaceCanvas() {
             centerNodePosition={[0, 0, -50]}
             isActive={radialButtonUI.isActive}
             onExitComplete={() => {
-              console.log('🎯 [RadialUI] Exit animation complete - unmounting');
               setShouldMountRadialButtons(false);
             }}
           />
