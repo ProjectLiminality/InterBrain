@@ -84,7 +84,9 @@ export class UpdatePreviewModal extends Modal {
       });
       if (commit.body) {
         li.createEl('br');
-        li.createEl('span', { text: commit.body, cls: 'update-preview-commit-body' });
+        // Format commit body: convert bullet points to clean list
+        const formattedBody = this.formatCommitBody(commit.body);
+        li.createEl('span', { text: formattedBody, cls: 'update-preview-commit-body' });
       }
     });
 
@@ -119,6 +121,24 @@ export class UpdatePreviewModal extends Modal {
   onClose() {
     const { contentEl } = this;
     contentEl.empty();
+  }
+
+  /**
+   * Format commit body text for display
+   * Converts bullet points (- item) to clean comma-separated list
+   */
+  private formatCommitBody(body: string): string {
+    // Split by newlines and filter out empty lines
+    const lines = body.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    // Convert bullet points to clean list
+    const cleaned = lines.map(line => {
+      // Remove leading dash/bullet
+      return line.replace(/^[-*•]\s*/, '');
+    });
+
+    // Join with commas for cleaner reading
+    return cleaned.join(', ');
   }
 
   private addStyles() {
