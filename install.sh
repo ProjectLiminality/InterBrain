@@ -390,6 +390,9 @@ echo ""
 echo "Step 8: Linking plugin to vault..."
 echo "-----------------------------------"
 
+PLUGINS_DIR="$VAULT_PATH/.obsidian/plugins"
+mkdir -p "$PLUGINS_DIR"
+
 SYMLINK_PATH="$PLUGINS_DIR/interbrain"
 
 # Remove old symlink if exists
