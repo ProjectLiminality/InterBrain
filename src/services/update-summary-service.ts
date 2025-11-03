@@ -53,6 +53,7 @@ export class UpdateSummaryService {
       ];
 
       const response = await this.llmProvider.generateCompletion(messages, {
+        model: 'claude-haiku-4-5', // Fast, cost-effective model for summaries
         maxTokens: 1024,
         temperature: 0.7
       });
