@@ -400,7 +400,6 @@ export class GitDreamNodeService {
       }
 
       // Single store update - triggers only ONE React re-render
-      console.log(`[BackSideLazyLoad] 🚀 Vault scan complete - ${newRealNodes.size} placeholder nodes loaded (front-side only)`);
       store.setRealNodes(newRealNodes);
       store.setNodeMetadata(nodeMetadata);
 

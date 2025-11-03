@@ -649,7 +649,6 @@ export const useInterBrainStore = create<InterBrainState>()(
     
     // Only log actual changes, not redundant calls
     if (previousLayout !== layout) {
-      console.log(`Layout changed: ${previousLayout} → ${layout}`);
     }
     
     // Detect meaningful layout changes for history tracking

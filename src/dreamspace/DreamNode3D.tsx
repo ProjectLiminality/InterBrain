@@ -218,16 +218,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Trigger back-side loading when animation completes
   useEffect(() => {
     if (shouldLoadBackSide && !hasLoadedBackSide) {
-      console.log(`[BackSideLazyLoad] 🎯 Conditions met for ${dreamNode.name}:`, {
-        spatialLayout,
-        isSelected: selectedNode?.id === dreamNode.id,
-        isTransitioning,
-        willLoadIn: '100ms'
-      });
-
       // Small delay to ensure animation is fully complete and avoid any frame drops
       globalThis.setTimeout(() => {
-        console.log(`[BackSideLazyLoad] ✅ Loading DreamSongSide for ${dreamNode.name}`);
         setHasLoadedBackSide(true);
       }, 100);
     }

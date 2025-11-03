@@ -1557,7 +1557,7 @@ export default function DreamspaceCanvas() {
           dreamNodes={dreamNodes}
           dreamWorldRef={dreamWorldRef}
           onNodeFocused={(nodeId) => {
-            console.log(`DreamspaceCanvas: Node ${nodeId} focused by orchestrator`);
+            // Node focused by orchestrator
           }}
           onConstellationReturn={() => {
             console.log('DreamspaceCanvas: Returned to constellation by orchestrator');
