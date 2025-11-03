@@ -41,7 +41,7 @@ export interface LLMProvider {
 export class ClaudeProvider implements LLMProvider {
 	name = 'Claude';
 	private apiKey: string;
-	private defaultModel = 'claude-sonnet-4-5-20250929'; // Latest Sonnet 4.5 (2025)
+	private defaultModel = 'claude-haiku-4-5'; // Fast, cost-effective, surprisingly capable
 	private apiEndpoint = 'https://api.anthropic.com/v1/messages';
 
 	constructor(apiKey: string) {
