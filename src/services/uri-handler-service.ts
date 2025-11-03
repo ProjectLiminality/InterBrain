@@ -581,6 +581,9 @@ export class URIHandlerService {
 			// Step 1: Find or create Dreamer node for sender
 			const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
 
+			// Wait a bit to ensure all file operations are complete
+			await new Promise(resolve => setTimeout(resolve, 200));
+
 			// Step 2: Find the cloned node by identifier (Radicle ID or GitHub URL)
 			const clonedNode = await this.findNodeByIdentifier(clonedNodeIdentifier);
 			if (!clonedNode) {
