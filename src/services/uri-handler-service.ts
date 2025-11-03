@@ -66,7 +66,12 @@ export class URIHandlerService {
 			// Check for GitHub repository
 			if (repo) {
 				const result = await this.cloneFromGitHub(repo);
-				// GitHub doesn't support collaboration handshake yet
+
+				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
+				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
+					await this.handleCollaborationHandshake(repo, senderDid, senderName);
+				}
+
 				return result;
 			}
 
@@ -561,7 +566,7 @@ export class URIHandlerService {
 
 	/**
 	 * Handle collaboration handshake: create Dreamer node for sender and link cloned node
-	 * @param clonedNodeIdentifier Radicle ID of the cloned node
+	 * @param clonedNodeIdentifier Radicle ID or GitHub URL of the cloned node
 	 * @param senderDid Sender's Radicle DID
 	 * @param senderName Sender's human-readable name
 	 */
@@ -576,10 +581,10 @@ export class URIHandlerService {
 			// Step 1: Find or create Dreamer node for sender
 			const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
 
-			// Step 2: Find the cloned node by Radicle ID
-			const clonedNode = await this.findNodeByRadicleId(clonedNodeIdentifier);
+			// Step 2: Find the cloned node by identifier (Radicle ID or GitHub URL)
+			const clonedNode = await this.findNodeByIdentifier(clonedNodeIdentifier);
 			if (!clonedNode) {
-				console.warn(`⚠️ [URIHandler] Could not find cloned node with Radicle ID: ${clonedNodeIdentifier}`);
+				console.warn(`⚠️ [URIHandler] Could not find cloned node with identifier: ${clonedNodeIdentifier}`);
 				return;
 			}
 
@@ -652,12 +657,20 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Find node by Radicle ID
+	 * Find node by identifier (Radicle ID or GitHub URL)
 	 */
-	private async findNodeByRadicleId(radicleId: string): Promise<any> {
+	private async findNodeByIdentifier(identifier: string): Promise<any> {
 		const allNodes = await this.dreamNodeService.list();
 
-		// First check .udd files for radicleId field (fast path)
+		// Determine if identifier is Radicle ID or GitHub URL
+		const isRadicleId = identifier.startsWith('rad:');
+		const isGitHubUrl = identifier.includes('github.com/');
+
+		// Normalize GitHub URL if needed (remove protocol, .git suffix)
+		const normalizedGitHubUrl = isGitHubUrl
+			? identifier.replace(/^https?:\/\//, '').replace(/\.git$/, '')
+			: null;
+
 		const fs = require('fs').promises;
 		const path = require('path');
 
@@ -667,21 +680,28 @@ export class URIHandlerService {
 				const uddContent = await fs.readFile(uddPath, 'utf-8');
 				const udd = JSON.parse(uddContent);
 
-				if (udd.radicleId === radicleId) {
+				// Check Radicle ID
+				if (isRadicleId && udd.radicleId === identifier) {
 					console.log(`🔍 [URIHandler] Found node by Radicle ID: "${node.name}"`);
-
-					// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
 					node.uuid = udd.uuid;
-					console.log(`✅ [URIHandler] Node UUID populated: ${node.uuid}`);
-
 					return node;
+				}
+
+				// Check GitHub URL
+				if (isGitHubUrl && udd.githubRepoUrl) {
+					const normalizedUddUrl = udd.githubRepoUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '');
+					if (normalizedUddUrl === normalizedGitHubUrl) {
+						console.log(`🔍 [URIHandler] Found node by GitHub URL: "${node.name}"`);
+						node.uuid = udd.uuid;
+						return node;
+					}
 				}
 			} catch {
 				// Skip nodes without .udd or invalid JSON
 			}
 		}
 
-		console.warn(`⚠️ [URIHandler] No node found with Radicle ID: ${radicleId}`);
+		console.warn(`⚠️ [URIHandler] No node found with identifier: ${identifier}`);
 		return null;
 	}
 
