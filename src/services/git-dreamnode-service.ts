@@ -484,8 +484,20 @@ export class GitDreamNodeService {
       // Make the initial commit (this triggers the pre-commit hook)
       // Escape the title to handle quotes and special characters
       const escapedTitle = title.replace(/"/g, '\\"');
-      const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
-      console.log(`GitDreamNodeService: Git commit result:`, commitResult);
+      try {
+        const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
+        console.log(`GitDreamNodeService: Git commit result:`, commitResult);
+      } catch (commitError: any) {
+        // Pre-commit hook outputs to stderr which causes exec to throw even on success
+        // Check if commit actually succeeded by verifying HEAD exists
+        try {
+          await execAsync('git rev-parse HEAD', { cwd: repoPath });
+          console.log(`GitDreamNodeService: Commit successful (stderr output from hook is normal)`);
+        } catch {
+          // Commit actually failed
+          throw commitError;
+        }
+      }
 
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
     } catch (error) {
@@ -556,14 +568,17 @@ export class GitDreamNodeService {
    */
   private async buildNodeDataFromVault(dirPath: string, udd: UDDFile, repoName: string): Promise<RealNodeData | null> {
     // Load dreamTalk media if specified
+    // IMPORTANT: If file temporarily doesn't exist, preserve existing dreamTalkMedia from store
+    const store = useInterBrainStore.getState();
+    const existingData = store.realNodes.get(udd.uuid);
     let dreamTalkMedia: Array<{
       path: string;
       absolutePath: string;
       type: string;
       data: string;
       size: number;
-    }> = [];
-    
+    }> = existingData?.node.dreamTalkMedia || []; // Preserve existing if we have it
+
     if (udd.dreamTalk) {
       const mediaPath = path.join(dirPath, udd.dreamTalk);
       if (await this.fileExists(mediaPath)) {
@@ -579,10 +594,11 @@ export class GitDreamNodeService {
           size: stats.size
         }];
       }
+      // If file doesn't exist but udd.dreamTalk is set, keep existing dreamTalkMedia
+      // This prevents flickering when file system is temporarily inaccessible
     }
-    
+
     // Use cached constellation position if available, otherwise random
-    const store = useInterBrainStore.getState();
     const cachedPosition = store.constellationData.positions?.get(udd.uuid);
 
     const node: DreamNode = {
