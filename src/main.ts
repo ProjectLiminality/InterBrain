@@ -134,31 +134,30 @@ export default class InterBrainPlugin extends Plugin {
     // First launch experience: auto-open DreamSpace with InterBrain selected
     if (!this.settings.hasLaunchedBefore) {
       this.handleFirstLaunch();
-    } else {
-      // Every launch: auto-select InterBrain after vault scan completes
-      this.autoSelectInterBrainOnStartup();
     }
+
+    // Every launch: auto-select InterBrain (reuses first launch logic)
+    this.autoSelectInterBrain();
   }
 
   /**
-   * Auto-select InterBrain node on plugin startup (every launch)
+   * Auto-select InterBrain node on every plugin startup
+   * Uses the same reliable logic as first launch
    */
-  private autoSelectInterBrainOnStartup(): void {
-    // Wait for workspace to be ready
+  private autoSelectInterBrain(): void {
     this.app.workspace.onLayoutReady(() => {
-      // Small delay to ensure vault scan has completed
       setTimeout(() => {
         const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
         const nodeData = store.realNodes.get(interbrainUUID);
 
         if (nodeData) {
-          console.log('[InterBrain] Auto-selecting InterBrain node on startup');
+          console.log('[InterBrain] Auto-selecting InterBrain node');
           store.setSelectedNode(nodeData.node);
         } else {
           console.warn('[InterBrain] InterBrain node not found for auto-selection');
         }
-      }, 800); // 800ms delay to ensure vault scan completes
+      }, 1000); // Same 1 second delay as first launch
     });
   }
 
