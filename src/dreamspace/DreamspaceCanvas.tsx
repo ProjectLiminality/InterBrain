@@ -109,57 +109,48 @@ export default function DreamspaceCanvas() {
           case 'creation':
             // Hide radial buttons when exiting creation mode
             if (store.radialButtonUI.isActive) {
-              console.log('🎯 [RadialUI] Exiting creation mode - hiding radial buttons');
               store.setRadialButtonUIActive(false);
             }
 
             // Exit creation mode, return to constellation
-            console.log(`🛠️ Exit creation → constellation`);
             store.cancelCreation(); // This sets layout to 'constellation'
             break;
             
           case 'edit-search':
             // Exit search mode, stay in edit mode
-            console.log(`🔍 Exit edit-search → edit`);
             store.setEditModeSearchActive(false); // This will set layout to 'edit'
             break;
             
           case 'edit':
             // Exit edit mode, go to liminal-web
-            console.log(`✏️ Exit edit → liminal-web`);
             store.exitEditMode();
             store.setSpatialLayout('liminal-web');
 
             // Only show radial buttons if option key is ACTUALLY pressed
             // This prevents buttons from appearing when exiting edit mode with escape
             if (store.radialButtonUI.optionKeyPressed) {
-              console.log('🎯 [Edit Exit] Option key is held - showing radial buttons');
               store.setRadialButtonUIActive(true);
               if (spatialOrchestratorRef.current) {
                 spatialOrchestratorRef.current.hideRelatedNodesInLiminalWeb();
               }
             } else {
-              console.log('🎯 [Edit Exit] Option key not held - buttons remain hidden');
               store.setRadialButtonUIActive(false);
             }
             break;
             
           case 'search':
             // Exit global search, go to constellation
-            console.log(`🔍 Exit search → constellation`);
             store.setSearchResults([]);
             store.setSpatialLayout('constellation');
             break;
             
           case 'copilot':
             // Exit copilot mode, go to liminal-web
-            console.log(`🤖 Exit copilot → liminal-web`);
             store.exitCopilotMode();
             break;
 
           case 'liminal-web':
             // Exit liminal-web, go to constellation
-            console.log(`🕸️ Exit liminal-web → constellation`);
             store.setSelectedNode(null);
             store.setSpatialLayout('constellation');
             break;
@@ -318,13 +309,11 @@ export default function DreamspaceCanvas() {
 
         // Always track the hardware key state
         if (!store.radialButtonUI.optionKeyPressed) {
-          console.log('🎯 [RadialUI] Option key pressed - tracking state');
           store.setOptionKeyPressed(true);
         }
 
         // Only show buttons if not already showing
         if (!store.radialButtonUI.isActive) {
-          console.log('🎯 [RadialUI] Showing buttons & hiding related nodes');
           store.setRadialButtonUIActive(true);
 
           // Hide related nodes by moving them to constellation
@@ -342,13 +331,11 @@ export default function DreamspaceCanvas() {
 
         // Always clear the hardware key state
         if (store.radialButtonUI.optionKeyPressed) {
-          console.log('🎯 [RadialUI] Option key released - tracking state');
           store.setOptionKeyPressed(false);
         }
 
         // Only hide buttons if they're currently showing
         if (store.radialButtonUI.isActive) {
-          console.log('🎯 [RadialUI] Hiding buttons & showing related nodes');
           store.setRadialButtonUIActive(false);
 
           // Show related nodes by moving them back to ring positions
@@ -495,7 +482,6 @@ export default function DreamspaceCanvas() {
       case 'edit-search': {
         // Hide radial buttons when entering search mode (incompatible mode)
         if (store.radialButtonUI.isActive) {
-          console.log('🎯 [RadialUI] Entering search mode - hiding radial buttons');
           store.setRadialButtonUIActive(false);
         }
 
@@ -521,40 +507,35 @@ export default function DreamspaceCanvas() {
       case 'edit':
         // Hide radial buttons when entering edit mode (incompatible mode)
         if (store.radialButtonUI.isActive) {
-          console.log('🎯 [RadialUI] Entering edit mode - hiding radial buttons');
           store.setRadialButtonUIActive(false);
         }
 
         // Edit mode - similar to liminal-web but in edit state
         if (selectedNode) {
-          console.log(`✏️ [Canvas-Layout] Edit mode for node "${selectedNode.name}" (${selectedNode.id})`);
           // Use the same focus logic as liminal-web for now
           spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
         } else {
-          console.warn(`⚠️ [Canvas-Layout] Edit mode triggered but no selectedNode available`);
+          console.warn('[Canvas-Layout] Edit mode triggered but no selectedNode available');
         }
         break;
 
       case 'liminal-web':
         // Trigger liminal web when a node is selected
         if (selectedNode) {
-          console.log(`🌐 [Canvas-Layout] Switching to liminal-web for node "${selectedNode.name}" (${selectedNode.id}) with ${selectedNode.liminalWebConnections?.length || 0} relationships`);
           spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
         } else {
-          console.warn(`⚠️ [Canvas-Layout] liminal-web layout triggered but no selectedNode available`);
+          console.warn('[Canvas-Layout] liminal-web layout triggered but no selectedNode available');
         }
         break;
 
       case 'copilot': {
         // Hide radial buttons when entering copilot mode (incompatible mode)
         if (store.radialButtonUI.isActive) {
-          console.log('🎯 [RadialUI] Entering copilot mode - hiding radial buttons');
           store.setRadialButtonUIActive(false);
         }
 
         // Copilot mode - conversation partner at center with search results around them
         if (store.copilotMode.isActive && store.copilotMode.conversationPartner) {
-          console.log(`🤖 [Canvas-Layout] Copilot mode for person "${store.copilotMode.conversationPartner.name}" (${store.copilotMode.conversationPartner.id})`);
           // Position conversation partner at center (like edit mode)
           spatialOrchestratorRef.current.focusOnNode(store.copilotMode.conversationPartner.id);
 
@@ -562,11 +543,10 @@ export default function DreamspaceCanvas() {
           // Empty array = all nodes fly to sphere (Option key not held behavior)
           // Non-empty array = relevant nodes in honeycomb, rest on sphere
           if (searchResults) {
-            console.log(`🤖 [Canvas-Layout] Showing ${searchResults.length} copilot search results around person`);
             spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, searchResults);
           }
         } else {
-          console.warn(`⚠️ [Canvas-Layout] Copilot mode triggered but no active conversation partner`);
+          console.warn('[Canvas-Layout] Copilot mode triggered but no active conversation partner');
         }
         break;
       }
@@ -574,7 +554,6 @@ export default function DreamspaceCanvas() {
       case 'constellation':
         // Hide radial buttons when returning to constellation (no selected node)
         if (store.radialButtonUI.isActive) {
-          console.log('🎯 [RadialUI] Returning to constellation - hiding radial buttons');
           store.setRadialButtonUIActive(false);
         }
 
@@ -605,28 +584,20 @@ export default function DreamspaceCanvas() {
       const customEvent = event as globalThis.CustomEvent;
       const centerNodeId = customEvent.detail?.centerNodeId;
       const searchResults = customEvent.detail?.searchResults;
-      
-      console.log(`🎪 [Canvas-Event] Received edit-mode-search-layout event for center ${centerNodeId} with ${searchResults?.length || 0} related nodes`);
-      
+
       if (centerNodeId && searchResults && spatialOrchestratorRef.current) {
-        console.log(`🎯 [Canvas-Event] Calling orchestrator.showEditModeSearchResults()`);
         spatialOrchestratorRef.current.showEditModeSearchResults(centerNodeId, searchResults);
       } else {
-        console.error(`❌ [Canvas-Event] Missing required data - centerNode: ${!!centerNodeId}, searchResults: ${!!searchResults}, orchestrator: ${!!spatialOrchestratorRef.current}`);
+        console.error('[Canvas-Event] Missing required data - centerNode:', !!centerNodeId, 'searchResults:', !!searchResults, 'orchestrator:', !!spatialOrchestratorRef.current);
       }
     };
     
     // Handle clear edit mode data event (called when cancelling edit mode)
     const handleClearEditModeData = (event: globalThis.Event) => {
-      const customEvent = event as globalThis.CustomEvent;
-      const source = customEvent.detail?.source;
-
-      console.log(`🧹 [Canvas-Event] Received clear-edit-mode-data event from ${source}`);
-
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.clearEditModeData();
       } else {
-        console.error(`❌ [Canvas-Event] Orchestrator not available for cleanup`);
+        console.error('[Canvas-Event] Orchestrator not available for cleanup');
       }
     };
 
@@ -634,16 +605,12 @@ export default function DreamspaceCanvas() {
     const handleCopilotModeLayout = (event: globalThis.Event) => {
       const customEvent = event as globalThis.CustomEvent;
       const conversationPartnerId = customEvent.detail?.conversationPartnerId;
-      const showSearchField = customEvent.detail?.showSearchField;
-
-      console.log(`🤖 [Canvas-Event] Received copilot-mode-layout event for person ${conversationPartnerId}, searchField: ${showSearchField}`);
 
       if (conversationPartnerId && spatialOrchestratorRef.current) {
         // Position the conversation partner at center
         spatialOrchestratorRef.current.focusOnNode(conversationPartnerId);
-        console.log(`🎯 [Canvas-Event] Positioned conversation partner ${conversationPartnerId} at center`);
       } else {
-        console.error(`❌ [Canvas-Event] Missing required data - conversationPartnerId: ${!!conversationPartnerId}, orchestrator: ${!!spatialOrchestratorRef.current}`);
+        console.error('[Canvas-Event] Missing required data - conversationPartnerId:', !!conversationPartnerId, 'orchestrator:', !!spatialOrchestratorRef.current);
       }
     };
     
@@ -1473,7 +1440,6 @@ export default function DreamspaceCanvas() {
 
           // Suppress empty space clicks when option key is held (radial button mode)
           if (store.radialButtonUI.optionKeyPressed) {
-            console.log('🎯 Empty space clicked while option key held - ignoring to prevent accidental navigation');
             return;
           }
 

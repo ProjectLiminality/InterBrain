@@ -113,7 +113,6 @@ export class RadicleServiceImpl implements RadicleService {
     for (const radPath of possiblePaths) {
       try {
         await execAsync(`"${radPath}" --version`);
-        console.log(`RadicleService: Found rad command at: ${radPath}`);
         return radPath;
       } catch {
         // Continue to next path

@@ -700,15 +700,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => {
       try {
-        console.log(`🎪 [Orchestrator-EditMode] Received request to show ${searchResults.length} related nodes for center node ${centerNodeId}`);
-        
         // Store current search results for dynamic reordering
         const previousCenterNodeId = currentEditModeCenterNodeId.current;
         currentEditModeSearchResults.current = searchResults;
         currentEditModeCenterNodeId.current = centerNodeId;
-        
-        console.log(`🔄 [Orchestrator-EditMode] Center node change: ${previousCenterNodeId} → ${centerNodeId}`);
-        
+
         // Mark as transitioning
         isTransitioning.current = true;
         
@@ -718,8 +714,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Get current pending relationships from store for priority ordering
         const store = useInterBrainStore.getState();
         const pendingRelationshipIds = store.editMode.pendingRelationships || [];
-        
-        console.log(`📋 [Orchestrator-EditMode] Pending relationships from store:`, pendingRelationshipIds);
         
         // Filter out already-related nodes from search results to avoid duplicates
         const filteredSearchResults = searchResults.filter(node => 
@@ -750,14 +744,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           // Initial call - set up the lists
           relatedNodesList.current = [...relatedNodes];
           unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
-          console.log(`📝 [Orchestrator-EditMode] Initial list setup - related: ${relatedNodes.length}, unrelated: ${unrelatedSearchNodes.length}`);
         } else if (isNewEditModeSession) {
           // New edit mode session for different node - reset lists to avoid stale data
-          console.log(`🔄 [Orchestrator-EditMode] NEW SESSION DETECTED - clearing stale lists`);
-          console.log(`   Previous lists - related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length}`);
           relatedNodesList.current = [...relatedNodes];
           unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
-          console.log(`   New lists - related: ${relatedNodes.length}, unrelated: ${unrelatedSearchNodes.length}`);
         } else {
           // Check if we're in copilot mode vs edit mode
           const store = useInterBrainStore.getState();
@@ -767,7 +757,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             // COPILOT MODE: Replace entire list with new search results
             // Copilot needs complete replacement on each search, not accumulation
             unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
-            console.log(`🤖 [Orchestrator-Copilot] Replaced search results with ${unrelatedSearchNodes.length} nodes`);
           } else {
             // EDIT MODE: Keep existing stable list management for relationship editing
             // Subsequent call (new search results) - merge new unrelated nodes with existing lists
@@ -777,8 +766,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
             // Add new unrelated nodes to the list
             unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
-
-            console.log(`➕ [Orchestrator-EditMode] Added ${newUnrelatedNodes.length} new unrelated nodes, total unrelated: ${unrelatedSearchResultsList.current.length}`);
           }
         }
         
@@ -804,18 +791,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           orderedNodes = [...relatedNodesList.current, ...unrelatedSearchResultsList.current];
         }
         
-        if (isInCopilotMode && store.copilotMode.showSearchResults) {
-          console.log(`🎯 [Orchestrator-Copilot] Showing frozen results: ${orderedNodes.length} nodes`);
-        } else if (isInCopilotMode) {
-          console.log(`🎯 [Orchestrator-Copilot] Hiding results (Option key not held): ${orderedNodes.length} nodes`);
-        } else {
-          console.log(`🎯 [Orchestrator-EditMode] Final layout data - ordered nodes: ${orderedNodes.length} (related: ${relatedNodesList.current.length}, unrelated: ${unrelatedSearchResultsList.current.length})`);
-        }
         
         // Calculate ring layout positions for search results (honeycomb pattern)
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
-        const totalPositions = positions.ring1Nodes.length + positions.ring2Nodes.length + positions.ring3Nodes.length + positions.sphereNodes.length + (positions.centerNode ? 1 : 0);
-        console.log(`📐 [Orchestrator-EditMode] Calculated ${totalPositions} positions for layout`);
         
         // Apply world-space position correction
         if (dreamWorldRef.current) {
@@ -847,8 +825,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         
         // Move search result nodes to ring positions
         const ringNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
-        console.log(`🎪 [Orchestrator-EditMode] Moving ${ringNodes.length} nodes to ring positions (excluding center ${centerNodeId})`);
-        
+
         ringNodes.forEach(({ nodeId: searchNodeId, position }) => {
           if (searchNodeId === centerNodeId) {
             // Skip the center node - it stays where it is
@@ -865,7 +842,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         });
         
         // Move sphere nodes to sphere surface
-        console.log(`🌐 [Orchestrator-EditMode] Moving ${positions.sphereNodes.length} nodes back to sphere surface`);
         positions.sphereNodes.forEach(sphereNodeId => {
           // Skip the center node if it's somehow in sphere nodes
           if (sphereNodeId === centerNodeId) {
@@ -1101,8 +1077,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     },
     
     clearEditModeData: () => {
-      console.log(`🧹 [Orchestrator-Cleanup] Clearing stale edit mode data`);
-
       // Clear stable edit mode lists
       relatedNodesList.current = [];
       unrelatedSearchResultsList.current = [];
@@ -1110,8 +1084,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Clear edit mode tracking
       currentEditModeSearchResults.current = [];
       currentEditModeCenterNodeId.current = null;
-
-      console.log(`✅ [Orchestrator-Cleanup] Edit mode data cleared`);
     },
 
     applyConstellationLayout: async () => {
@@ -1158,16 +1130,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
     hideRelatedNodesInLiminalWeb: () => {
       try {
-        console.log('🎯 [Orchestrator-LiminalWeb] Hiding related nodes (moving to constellation)');
-
         // Get all ring nodes from stored roles
         const allRingNodeIds = [
           ...liminalWebRoles.current.ring1NodeIds,
           ...liminalWebRoles.current.ring2NodeIds,
           ...liminalWebRoles.current.ring3NodeIds
         ];
-
-        console.log(`🌐 [Orchestrator-LiminalWeb] Moving ${allRingNodeIds.length} ring nodes to constellation`);
 
         // Match button animation duration (500ms) for parallel motion
         const buttonAnimationDuration = 500;
@@ -1182,17 +1150,16 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         });
 
       } catch (error) {
-        console.error('❌ [Orchestrator-LiminalWeb] Error hiding related nodes:', error);
+        console.error('[Orchestrator-LiminalWeb] Error hiding related nodes:', error);
       }
     },
 
     showRelatedNodesInLiminalWeb: () => {
       try {
-        console.log('🎯 [Orchestrator-LiminalWeb] Showing related nodes (moving back to ring positions)');
 
         // Need to recalculate positions to get them back to their ring spots
         if (!liminalWebRoles.current.centerNodeId) {
-          console.warn('⚠️ [Orchestrator-LiminalWeb] No center node found in roles');
+          console.warn('[Orchestrator-LiminalWeb] No center node found in roles');
           return;
         }
 
@@ -1221,7 +1188,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Move ring nodes back to their positions
         const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
-        console.log(`🎪 [Orchestrator-LiminalWeb] Moving ${allRingNodes.length} nodes back to ring positions`);
 
         allRingNodes.forEach(({ nodeId, position }) => {
           const nodeRef = nodeRefs.current.get(nodeId);
@@ -1233,7 +1199,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         });
 
       } catch (error) {
-        console.error('❌ [Orchestrator-LiminalWeb] Error showing related nodes:', error);
+        console.error('[Orchestrator-LiminalWeb] Error showing related nodes:', error);
       }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);

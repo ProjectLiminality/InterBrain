@@ -64,9 +64,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
 
   // Log when DreamSongSide mounts (validates lazy loading optimization)
   React.useEffect(() => {
-    console.log(`[BackSideLazyLoad] 📦 DreamSongSide MOUNTED for ${dreamNode.name} - will trigger canvas parsing`);
     return () => {
-      console.log(`[BackSideLazyLoad] 🗑️ DreamSongSide UNMOUNTED for ${dreamNode.name}`);
+      // Cleanup if needed
     };
   }, [dreamNode.name]);
 

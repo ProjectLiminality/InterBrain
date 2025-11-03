@@ -93,7 +93,6 @@ export const RadialButtonRing3D: React.FC<RadialButtonRing3DProps> = ({
   // When all buttons have exited, notify parent
   useEffect(() => {
     if (!isActive && exitedCount === buttonCount) {
-      console.log(`🎯 [RadialButtonRing3D] All ${buttonCount} buttons exited - notifying parent`);
       onExitComplete?.();
     }
   }, [exitedCount, buttonCount, isActive, onExitComplete]);
@@ -165,12 +164,11 @@ const RadialButton: React.FC<RadialButtonProps> = ({
 
   // Handle button click - execute the mapped command
   const handleClick = () => {
-    console.log(`🎯 [RadialButton] Button "${actualLabel}" clicked - executing command: ${actualCommand}`);
     const app = serviceManager.getApp();
     if (app) {
       (app as any).commands.executeCommandById(actualCommand);
     } else {
-      console.error('🎯 [RadialButton] App not available, cannot execute command');
+      console.error('[RadialButton] App not available, cannot execute command');
     }
   };
 
@@ -198,14 +196,12 @@ const RadialButton: React.FC<RadialButtonProps> = ({
 
     if (!isActive) {
       // Exit animation: interrupt current animation and move to center
-      console.log(`🎯 [RadialButton ${actualLabel}] Interrupting - moving to center from:`, animatedPosition);
       animationStartPos.current = animatedPosition;
       animationTargetPos.current = centerPosition;
       transitionStartTime.current = globalThis.performance.now();
       setIsTransitioning(true);
     } else {
       // Enter animation: interrupt current animation and move to ring
-      console.log(`🎯 [RadialButton ${actualLabel}] Interrupting - moving to ring from:`, animatedPosition);
       animationStartPos.current = animatedPosition;
       animationTargetPos.current = ringPosition;
       transitionStartTime.current = globalThis.performance.now();
@@ -273,7 +269,6 @@ const RadialButton: React.FC<RadialButtonProps> = ({
             {/* Circular button */}
             <div
               onMouseEnter={() => {
-                console.log(`🎯 [RadialButton] Button "${actualLabel}" hovered`);
                 setIsHovered(true);
               }}
               onMouseLeave={() => setIsHovered(false)}
