@@ -47,6 +47,7 @@ import { initializeTranscriptionService } from './features/conversational-copilo
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
+import { initializePDFGeneratorService } from './features/conversational-copilot/services/pdf-generator-service';
 import { initializeAudioRecordingService } from './features/conversational-copilot/services/audio-recording-service';
 import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
 import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
@@ -270,6 +271,7 @@ export default class InterBrainPlugin extends Plugin {
       initializeTranscriptionService(this.app);
       initializeConversationRecordingService(this.app);
       initializeConversationSummaryService(this.app);
+      initializePDFGeneratorService();
       initializeEmailExportService(this.app);
       initializeAudioRecordingService(this);
       initializePerspectiveService(this);

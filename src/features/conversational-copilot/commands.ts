@@ -364,5 +364,80 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
     }
   });
 
+  // Mock Email Export (Testing)
+  plugin.addCommand({
+    id: 'mock-email-export',
+    name: 'Mock Email Export (Testing)',
+    callback: async () => {
+      try {
+        console.log('📧 [MockEmail] Starting mock email export...');
+
+        // Create mock conversation data using REAL InterfaceGuy DreamNode
+        const mockPartner = {
+          id: 'e1ef8db5-a534-42d8-adcb-fc3dc84f805d', // InterfaceGuy UUID
+          name: 'InterfaceGuy',
+          type: 'dreamer' as const,
+          repoPath: '/Users/davidrug/DreamVault/Interfaceguy',
+          liminalWebConnections: []
+        };
+
+        const now = new Date();
+        const startTime = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes ago
+        const endTime = now;
+
+        // Mock invocations with REAL DreamNodes from vault
+        const mockInvocations = [
+          {
+            dreamUUID: '550e8400-e29b-41d4-a716-446655440000', // InterBrain UUID (has GitHub)
+            nodeName: 'InterBrain',
+            timestamp: new Date(startTime.getTime() + 5 * 60 * 1000),
+            searchQuery: ''
+          },
+          {
+            dreamUUID: 'ab6052dc-94bf-497b-8a56-f69edc7b41cb', // Implosion Vortex Engine UUID (has Radicle)
+            nodeName: 'Implosion Vortex Engine',
+            timestamp: new Date(startTime.getTime() + 15 * 60 * 1000),
+            searchQuery: ''
+          },
+          {
+            dreamUUID: '69d834f3-c187-4c22-a067-0bc6211e5a56', // The Vortex UUID (has Radicle)
+            nodeName: 'The Vortex',
+            timestamp: new Date(startTime.getTime() + 20 * 60 * 1000),
+            searchQuery: ''
+          }
+        ];
+
+        const mockSummary = `We had an amazing conversation about the future of InterBrain and decentralized knowledge sharing.
+
+Key points discussed:
+- The vision for DreamOS as a decentralized operating system for collective sensemaking
+- How DreamNodes enable peer-to-peer sharing of ideas without centralized servers
+- The importance of local-first architecture and user data sovereignty
+- Potential collaboration opportunities on the coherence beacon system
+
+This was a highly productive session that revealed exciting possibilities for the project!`;
+
+        console.log('📧 [MockEmail] Mock data created, generating email...');
+
+        // Use the email export service
+        const emailService = getEmailExportService();
+        await emailService.exportToEmail(
+          mockPartner,
+          startTime,
+          endTime,
+          mockInvocations,
+          mockSummary,
+          'david.rug98@icloud.com' // Test recipient
+        );
+
+        console.log('✅ [MockEmail] Mock email export completed successfully');
+        uiService.showSuccess('Mock email draft created - check Apple Mail!');
+
+      } catch (error) {
+        console.error('❌ [MockEmail] Failed to create mock email:', error);
+        uiService.showError(`Mock email export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  });
 
 }

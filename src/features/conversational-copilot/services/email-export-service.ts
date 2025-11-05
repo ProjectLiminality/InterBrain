@@ -6,6 +6,9 @@ import { getRadicleBatchInitService } from '../../../services/radicle-batch-init
 import { getGitHubBatchShareService } from '../../../services/github-batch-share-service';
 import { serviceManager } from '../../../services/service-manager';
 import { useInterBrainStore } from '../../../store/interbrain-store';
+import { getPDFGeneratorService } from './pdf-generator-service';
+import * as os from 'os';
+import * as path from 'path';
 
 /**
  * Email Export Service
@@ -101,11 +104,76 @@ export class EmailExportService {
 				senderName
 			);
 
+			// Collect deep links for PDF (no image rendering)
+			const deepLinks: Array<{ nodeName: string; link: string }> = [];
+			const allIdentifiers: string[] = [];
+
+			// Build deep links for each invoked DreamNode
+			for (const inv of invocations) {
+				const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
+				const githubUrlFromBatch = uuidToGitHubUrlMap.get(inv.dreamUUID);
+				const nodeData = useInterBrainStore.getState().realNodes.get(inv.dreamUUID);
+				const node = nodeData?.node;
+
+				let link: string;
+				let identifier: string;
+
+				if (radicleId) {
+					link = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
+					identifier = radicleId;
+				} else if (githubUrlFromBatch) {
+					link = URIHandlerService.generateGitHubCloneLink(vaultName, githubUrlFromBatch);
+					identifier = githubUrlFromBatch.replace(/^https?:\/\//, '');
+				} else if (node?.githubRepoUrl) {
+					link = URIHandlerService.generateGitHubCloneLink(vaultName, node.githubRepoUrl);
+					identifier = node.githubRepoUrl.replace(/^https?:\/\//, '');
+				} else {
+					link = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID, senderDid, senderName);
+					identifier = inv.dreamUUID;
+				}
+
+				deepLinks.push({ nodeName: inv.nodeName, link });
+				allIdentifiers.push(identifier);
+			}
+
+			// Build install script links for PDF
+			const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
+			const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
+			const conservativeIdentifiers = [interbrainGitHub];
+			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
+			const conservativeInstall = `curl -fsSL ${installScriptBase} | bash -s -- --uri "${conservativeUri}"`;
+
+			let fullInstall: string | undefined;
+			if (invocations.length > 0 && allIdentifiers.length > 0) {
+				const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
+				const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName);
+				fullInstall = `curl -fsSL ${installScriptBase} | bash -s -- --uri "${fullUri}"`;
+			}
+
+			const installLinks = {
+				conservative: conservativeInstall,
+				full: fullInstall
+			};
+
+			// Generate PDF with ALL content (no separate email body needed)
+			const pdfPath = path.join(os.tmpdir(), `interbrain-summary-${Date.now()}.pdf`);
+			const pdfGenerator = getPDFGeneratorService();
+			await pdfGenerator.generateCallSummary(
+				conversationPartner,
+				conversationStartTime,
+				conversationEndTime,
+				invocations,
+				aiSummary,
+				deepLinks,
+				installLinks,
+				pdfPath
+			);
+
 			// Get recipient email (from metadata or parameter)
 			const toEmail = recipientEmail || await this.getRecipientEmail(conversationPartner);
 
-			// Generate and execute AppleScript
-			await this.createMailDraft(toEmail, subject, body);
+			// Create .eml with plain text body + PDF attachment
+			await this.createMailDraftWithPDF(toEmail, subject, body, pdfPath);
 
 			new Notice('Email draft created in Apple Mail');
 			console.log(`✅ [EmailExport] Email draft created successfully`);
@@ -152,6 +220,9 @@ export class EmailExportService {
 			body += `${aiSummary}\n\n`;
 		}
 
+		// Track all identifiers for batch link (mixed Radicle/GitHub/UUID)
+		const allIdentifiers: string[] = [];
+
 		// Add invoked DreamNodes section if any
 		if (invocations.length > 0) {
 			body += `---\n\n`;
@@ -160,9 +231,6 @@ export class EmailExportService {
 
 			// Get store to access node metadata (for GitHub URLs)
 			const store = useInterBrainStore.getState();
-
-			// Track all identifiers for batch link (mixed Radicle/GitHub/UUID)
-			const allIdentifiers: string[] = [];
 
 			invocations.forEach((inv, i) => {
 				const invTimeStr = inv.timestamp.toLocaleTimeString();
@@ -281,74 +349,72 @@ export class EmailExportService {
 	}
 
 	/**
-	 * Create Apple Mail draft using AppleScript via Electron
+	 * Create Apple Mail draft with plain text body + PDF attachment using .eml file
 	 */
-	private async createMailDraft(to: string, subject: string, body: string): Promise<void> {
-		// Escape strings for AppleScript
-		const escapeAS = (str: string): string => {
-			return str
-				.replace(/\\/g, '\\\\')
-				.replace(/"/g, '\\"')
-				.replace(/\n/g, '\\n')
-				.replace(/\r/g, '\\r');
-		};
-
-		const escapedTo = escapeAS(to);
-		const escapedSubject = escapeAS(subject);
-		const escapedBody = escapeAS(body);
-
-		// Build AppleScript to create email draft
-		const appleScript = `
-tell application "Mail"
-	activate
-	set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", content:"${escapedBody}", visible:true}
-	tell newMessage
-		${to ? `make new to recipient at end of to recipients with properties {address:"${escapedTo}"}` : ''}
-	end tell
-end tell
-`;
-
-		console.log(`🍎 [EmailExport] Executing AppleScript to create Mail draft`);
-		console.log(`🍎 [EmailExport] AppleScript preview (first 500 chars):`, appleScript.substring(0, 500));
+	private async createMailDraftWithPDF(to: string, subject: string, body: string, pdfPath: string): Promise<void> {
+		console.log(`📧 [EmailExport] Creating .eml file with text body + PDF attachment`);
+		console.log(`📧 [EmailExport] PDF path:`, pdfPath);
 
 		try {
-			// Check if require is available
-			if (!(window as any).require) {
-				console.error('❌ [EmailExport] window.require is not available');
-				throw new Error('Node.js require not available in this environment');
-			}
+			// Read PDF file as base64
+			const fs = (window as any).require('fs');
+			const pdfBuffer = fs.readFileSync(pdfPath);
+			const pdfBase64 = pdfBuffer.toString('base64');
 
-			console.log('✅ [EmailExport] window.require is available');
+			// Create unique boundary for multipart MIME
+			const boundary = `----=_InterBrain_${Date.now()}`;
 
-			// Access Node.js child_process through Obsidian's environment
+			// Build multipart/mixed .eml with plain text body + PDF attachment
+			const emlContent = `From: ${to}
+To: ${to}
+Subject: ${subject}
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="${boundary}"
+
+--${boundary}
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+${body}
+
+--${boundary}
+Content-Type: application/pdf; name="call-summary.pdf"
+Content-Disposition: attachment; filename="call-summary.pdf"
+Content-Transfer-Encoding: base64
+
+${pdfBase64}
+--${boundary}--
+`;
+
+			// Save .eml file to temp directory
+			const os = (window as any).require('os');
+			const path = (window as any).require('path');
+			const emlPath = path.join(os.tmpdir(), `interbrain-draft-${Date.now()}.eml`);
+
+			fs.writeFileSync(emlPath, emlContent);
+			console.log(`✅ [EmailExport] .eml file created:`, emlPath);
+
+			// Open .eml file in Mail.app
 			const childProcess = (window as any).require('child_process');
-			console.log('✅ [EmailExport] child_process module loaded:', !!childProcess);
-
 			const { exec } = childProcess;
-			console.log('✅ [EmailExport] exec function available:', typeof exec);
-
-			// Execute AppleScript
-			const command = `osascript -e '${appleScript.replace(/'/g, "'\\''")}'`;
-			console.log(`🍎 [EmailExport] Command length:`, command.length);
-			console.log(`🍎 [EmailExport] Executing command...`);
 
 			await new Promise<void>((resolve, reject) => {
-				exec(command, (error: any, stdout: any, stderr: any) => {
+				exec(`open -a Mail "${emlPath}"`, (error: any, stdout: any, stderr: any) => {
 					if (error) {
-						console.error('❌ [EmailExport] AppleScript error:', error);
+						console.error('❌ [EmailExport] Failed to open .eml file:', error);
 						console.error('❌ [EmailExport] stderr:', stderr);
 						reject(error);
 					} else {
-						console.log('✅ [EmailExport] AppleScript stdout:', stdout);
+						console.log('✅ [EmailExport] .eml file opened in Mail.app');
 						resolve();
 					}
 				});
 			});
 
-			console.log(`✅ [EmailExport] AppleScript executed successfully`);
+			console.log(`✅ [EmailExport] Email draft created with text body + PDF attachment`);
 		} catch (error) {
-			console.error('❌ [EmailExport] AppleScript execution failed:', error);
-			throw new Error('Failed to create email draft - ensure Apple Mail is installed');
+			console.error('❌ [EmailExport] Failed to create .eml file:', error);
+			throw new Error('Failed to create email draft with text body and PDF attachment');
 		}
 	}
 }
