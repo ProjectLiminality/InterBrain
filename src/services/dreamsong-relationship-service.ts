@@ -269,6 +269,10 @@ export class DreamSongRelationshipService {
     }
 
     console.log(`🔗 [DreamSong Relationships] Processing sequence of ${mediaBlocks.length} media blocks`);
+    console.log(`🔍 [DreamSong Relationships] Media blocks:`, mediaBlocks.map(b => ({
+      sourceDreamNodeId: b.sourceDreamNodeId,
+      mediaPath: b.mediaPath
+    })));
 
     // Create edges from sequential pairs
     for (let i = 0; i < mediaBlocks.length - 1; i++) {
@@ -295,8 +299,12 @@ export class DreamSongRelationshipService {
         uuidToPathMap
       );
 
+      console.log(`🔗 [Edge ${i}] source: ${sourceUUID} (from ${currentMedia.sourceDreamNodeId}/${currentMedia.mediaPath})`);
+      console.log(`🔗 [Edge ${i}] target: ${targetUUID} (from ${nextMedia.sourceDreamNodeId}/${nextMedia.mediaPath})`);
+
       // Skip self-loops
       if (sourceUUID === targetUUID) {
+        console.log(`⚠️ [Edge ${i}] SKIPPED (self-loop): ${sourceUUID} === ${targetUUID}`);
         continue;
       }
 
