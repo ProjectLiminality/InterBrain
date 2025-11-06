@@ -256,7 +256,7 @@ export class DreamSongRelationshipService {
     // Re-read the canvas to get ORIGINAL file paths (not resolved data URLs)
     // The DreamSongData has media.src as data URLs for display,
     // but we need the actual canvas file paths for relationship extraction
-    const canvasContent = await this.vaultService.read(dreamSongPath);
+    const canvasContent = await this.vaultService.readFile(dreamSongPath);
     const canvas = JSON.parse(canvasContent);
 
     // Build a map from node IDs to original file paths
