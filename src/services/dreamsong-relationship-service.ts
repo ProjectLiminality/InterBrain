@@ -271,7 +271,7 @@ export class DreamSongRelationshipService {
     console.log(`🔗 [DreamSong Relationships] Processing sequence of ${mediaBlocks.length} media blocks`);
     console.log(`🔍 [DreamSong Relationships] Media blocks:`, mediaBlocks.map(b => ({
       sourceDreamNodeId: b.sourceDreamNodeId,
-      mediaPath: b.mediaPath
+      mediaPath: b.mediaPath.startsWith('data:') ? `[data URL: ${b.mediaPath.substring(0, 30)}...]` : b.mediaPath
     })));
 
     // Create edges from sequential pairs
@@ -299,8 +299,15 @@ export class DreamSongRelationshipService {
         uuidToPathMap
       );
 
-      console.log(`🔗 [Edge ${i}] source: ${sourceUUID} (from ${currentMedia.sourceDreamNodeId}/${currentMedia.mediaPath})`);
-      console.log(`🔗 [Edge ${i}] target: ${targetUUID} (from ${nextMedia.sourceDreamNodeId}/${nextMedia.mediaPath})`);
+      const truncatedCurrentPath = currentMedia.mediaPath.startsWith('data:')
+        ? `[data URL: ${currentMedia.mediaPath.substring(0, 30)}...]`
+        : currentMedia.mediaPath;
+      const truncatedNextPath = nextMedia.mediaPath.startsWith('data:')
+        ? `[data URL: ${nextMedia.mediaPath.substring(0, 30)}...]`
+        : nextMedia.mediaPath;
+
+      console.log(`🔗 [Edge ${i}] source: ${sourceUUID} (from ${currentMedia.sourceDreamNodeId}/${truncatedCurrentPath})`);
+      console.log(`🔗 [Edge ${i}] target: ${targetUUID} (from ${nextMedia.sourceDreamNodeId}/${truncatedNextPath})`);
 
       // Skip self-loops
       if (sourceUUID === targetUUID) {
