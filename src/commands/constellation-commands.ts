@@ -3,7 +3,7 @@ import { DreamSongRelationshipService } from '../services/dreamsong-relationship
 import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG } from '../types/constellation';
+import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from '../types/constellation';
 
 /**
  * Constellation Commands - Obsidian commands for DreamSong relationship analysis
@@ -84,12 +84,17 @@ export class ConstellationCommands {
       if (result.success && result.graph) {
         const { metadata, nodes } = result.graph;
 
-        // Store the relationship graph in Zustand
+        // Check if relationships have changed (intelligent diff)
+        const existingGraph = store.constellationData.relationshipGraph;
+        const relationshipsChanged = this.hasRelationshipGraphChanged(existingGraph, result.graph);
+
+        // Store the relationship graph in Zustand (persisted to localStorage automatically)
         store.setRelationshipGraph(result.graph);
 
         // Show success with detailed statistics
+        const changeIndicator = relationshipsChanged ? '🔄 UPDATED' : '✅ NO CHANGES';
         const statsMessage = [
-          `✅ DreamSong relationship scan complete!`,
+          `✅ DreamSong relationship scan complete! ${changeIndicator}`,
           ``,
           `📊 Results:`,
           `• ${metadata.totalNodes} DreamNodes discovered`,
@@ -99,7 +104,9 @@ export class ConstellationCommands {
           `• ${nodes.size - metadata.standaloneNodes} connected nodes`,
           ``,
           `⏱️ Scan completed in ${result.stats.scanTimeMs}ms`,
-          `💾 Relationship data stored in plugin memory`
+          relationshipsChanged
+            ? `🔄 Relationships changed - applying new layout...`
+            : `✓ No changes detected - keeping existing layout`
         ].join('\n');
 
         this.uiService.showSuccess(statsMessage, 8000);
@@ -110,35 +117,32 @@ export class ConstellationCommands {
           dreamSongs: metadata.totalDreamSongs,
           edges: metadata.totalEdges,
           standalone: metadata.standaloneNodes,
-          scanTime: result.stats.scanTimeMs
+          scanTime: result.stats.scanTimeMs,
+          relationshipsChanged
         });
 
-        // Auto-export to JSON for testing
-        try {
-          await this.relationshipService.exportGraphToJSON(
-            result.graph,
-            'dreamsong-relationships.json'
-          );
-          this.uiService.showInfo('📤 Relationship data exported to dreamsong-relationships.json', 3000);
-        } catch (exportError) {
-          console.error('Failed to auto-export JSON:', exportError);
-        }
+        // Only apply layout if relationships actually changed
+        if (relationshipsChanged) {
+          console.log('🔄 [Constellation Commands] Relationships changed - applying constellation layout...');
 
-        // Auto-apply constellation layout positioning (if DreamSpace is open)
-        try {
-          // Check if SpatialOrchestrator is available before attempting layout
-          const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { applyConstellationLayout?(): Promise<void> } }).__interbrainCanvas;
+          // Auto-apply constellation layout positioning (if DreamSpace is open)
+          try {
+            // Check if SpatialOrchestrator is available before attempting layout
+            const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { applyConstellationLayout?(): Promise<void> } }).__interbrainCanvas;
 
-          if (canvasAPI && canvasAPI.applyConstellationLayout) {
-            await this.applyConstellationLayout();
-            console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
-          } else {
-            console.log('ℹ️ [Constellation Commands] SpatialOrchestrator not available (DreamSpace not open) - skipping layout application');
-            console.log('   Layout will be applied automatically when DreamSpace opens');
+            if (canvasAPI && canvasAPI.applyConstellationLayout) {
+              await this.applyConstellationLayout();
+              console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
+            } else {
+              console.log('ℹ️ [Constellation Commands] SpatialOrchestrator not available (DreamSpace not open) - skipping layout application');
+              console.log('   Layout will be applied automatically when DreamSpace opens');
+            }
+          } catch (layoutError) {
+            console.error('Failed to auto-apply constellation layout:', layoutError);
+            // Non-fatal - data is saved, layout can be applied later
           }
-        } catch (layoutError) {
-          console.error('Failed to auto-apply constellation layout:', layoutError);
-          // Non-fatal - data is saved, layout can be applied later
+        } else {
+          console.log('✓ [Constellation Commands] No relationship changes detected - keeping existing layout');
         }
 
       } else {
@@ -165,36 +169,22 @@ export class ConstellationCommands {
   }
 
   /**
-   * Export current relationship data to JSON file
+   * Export current relationship data to JSON file (MANUAL COMMAND ONLY)
+   * NOTE: Automatic export removed - data is persisted to localStorage automatically
    */
   private async exportDreamSongRelationshipsToJSON(): Promise<void> {
     console.log('📤 [Constellation Commands] Exporting DreamSong relationships to JSON...');
     const store = useInterBrainStore.getState();
 
     try {
-      let graphToExport = store.constellationData.relationshipGraph;
+      const graphToExport = store.constellationData.relationshipGraph;
 
-      // If no cached data or it's old, perform fresh scan
-      if (!graphToExport ||
-          !store.constellationData.lastScanTimestamp ||
-          Date.now() - store.constellationData.lastScanTimestamp > 5 * 60 * 1000) { // 5 minutes
-
-        console.log('📤 [Constellation Commands] No recent data, performing fresh scan...');
-
-        const result = await this.relationshipService.scanVaultForDreamSongRelationships(
-          DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
-        );
-
-        if (!result.success || !result.graph) {
-          this.uiService.showError(`❌ Cannot export: ${result.error?.message || 'Scan failed'}`, 5000);
-          return;
-        }
-
-        graphToExport = result.graph;
-        store.setRelationshipGraph(result.graph);
+      if (!graphToExport) {
+        this.uiService.showError('❌ No relationship data available. Run "Scan Vault for DreamSong Relationships" first.', 5000);
+        return;
       }
 
-      // Export to JSON
+      // Export current graph to timestamped JSON file (for debugging/sharing)
       const filename = `dreamsong-relationships-${Date.now()}.json`;
       await this.relationshipService.exportGraphToJSON(graphToExport, filename);
 
@@ -268,6 +258,65 @@ export class ConstellationCommands {
       this.uiService.showError(errorMessage, 5000);
       console.error('❌ [Constellation Commands] Statistics error:', error);
     }
+  }
+
+  /**
+   * Check if relationship graph has changed (intelligent diff)
+   * Returns true if edges or node count changed
+   */
+  private hasRelationshipGraphChanged(
+    oldGraph: DreamSongRelationshipGraph | null,
+    newGraph: DreamSongRelationshipGraph
+  ): boolean {
+    // If no existing graph, this is the first scan - relationships "changed"
+    if (!oldGraph) {
+      console.log('🔍 [Relationship Diff] No existing graph - first scan');
+      return true;
+    }
+
+    // Compare edge counts
+    const oldEdgeCount = oldGraph.edges.length;
+    const newEdgeCount = newGraph.edges.length;
+
+    if (oldEdgeCount !== newEdgeCount) {
+      console.log(`🔍 [Relationship Diff] Edge count changed: ${oldEdgeCount} → ${newEdgeCount}`);
+      return true;
+    }
+
+    // Compare node counts
+    const oldNodeCount = oldGraph.metadata.totalNodes;
+    const newNodeCount = newGraph.metadata.totalNodes;
+
+    if (oldNodeCount !== newNodeCount) {
+      console.log(`🔍 [Relationship Diff] Node count changed: ${oldNodeCount} → ${newNodeCount}`);
+      return true;
+    }
+
+    // Compare edge signatures (source → target pairs)
+    const oldEdgeSignatures = new Set(
+      oldGraph.edges.map(e => `${e.source}→${e.target}`)
+    );
+    const newEdgeSignatures = new Set(
+      newGraph.edges.map(e => `${e.source}→${e.target}`)
+    );
+
+    // Check if any edges were added or removed
+    for (const sig of newEdgeSignatures) {
+      if (!oldEdgeSignatures.has(sig)) {
+        console.log(`🔍 [Relationship Diff] New edge detected: ${sig}`);
+        return true;
+      }
+    }
+
+    for (const sig of oldEdgeSignatures) {
+      if (!newEdgeSignatures.has(sig)) {
+        console.log(`🔍 [Relationship Diff] Edge removed: ${sig}`);
+        return true;
+      }
+    }
+
+    console.log('✓ [Relationship Diff] No changes detected');
+    return false;
   }
 
   /**
