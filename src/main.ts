@@ -476,7 +476,7 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Save DreamNode command
+    // Save DreamNode command - Robust workflow with canvas sync
     this.addCommand({
       id: 'save-dreamnode',
       name: 'Save DreamNode (commit changes)',
@@ -488,17 +488,98 @@ export default class InterBrainPlugin extends Plugin {
           if (!currentNode) {
             throw new Error('No DreamNode selected');
           }
-          // TODO: Implement save through service layer when auto-stash workflow is ready
-          await this.gitService.commitWithAI(currentNode.repoPath);
-          
-          // Exit creator mode after successful save
+
+          console.log(`💾 [Save Changes] Starting save workflow for: ${currentNode.name}`);
+          const { exec } = require('child_process');
+          const { promisify } = require('util');
+          const execAsync = promisify(exec);
+          const fullRepoPath = path.join(this.vaultService.getVaultPath(), currentNode.repoPath);
+
+          // STEP 1: Check if DreamSong.canvas exists
+          const dreamSongPath = `${currentNode.repoPath}/DreamSong.canvas`;
+          const dreamSongFile = this.app.vault.getAbstractFileByPath(dreamSongPath);
+          const hasDreamSong = dreamSongFile !== null;
+
+          if (hasDreamSong) {
+            console.log(`💾 [Save Changes] Step 1: DreamSong.canvas detected - syncing submodules...`);
+            loadingNotice.hide();
+            const syncNotice = this.uiService.showLoading('Syncing canvas submodules...');
+
+            try {
+              // Run canvas sync workflow (imports submodules, updates paths, commits)
+              const syncResult = await this.submoduleManagerService.syncCanvasSubmodules(dreamSongPath);
+
+              if (!syncResult.success) {
+                throw new Error(`Canvas sync failed: ${syncResult.error}`);
+              }
+
+              console.log(`💾 [Save Changes] ✓ Canvas synced (${syncResult.submodulesImported.length} submodules)`);
+              syncNotice.hide();
+              loadingNotice.show();
+            } catch (syncError) {
+              syncNotice.hide();
+              console.error('💾 [Save Changes] Canvas sync error:', syncError);
+              // Non-fatal - continue with regular commit
+              this.uiService.showWarning('Canvas sync had issues - continuing with commit');
+              loadingNotice.show();
+            }
+          } else {
+            console.log(`💾 [Save Changes] Step 1: No DreamSong.canvas - skipping canvas sync`);
+          }
+
+          // STEP 2: Stage all remaining changes (anything not already committed by canvas sync)
+          console.log(`💾 [Save Changes] Step 2: Staging all changes...`);
+          await execAsync('git add -A', { cwd: fullRepoPath });
+
+          // STEP 3: Check if there are changes to commit
+          console.log(`💾 [Save Changes] Step 3: Checking for uncommitted changes...`);
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullRepoPath });
+
+          if (!statusOutput.trim()) {
+            console.log(`💾 [Save Changes] ✓ No changes to commit - repository is clean`);
+            this.uiService.showSuccess('No changes to commit - all changes already saved');
+
+            // Exit creator mode even if no changes
+            const { creatorMode } = store;
+            if (creatorMode.isActive && creatorMode.nodeId === currentNode.id) {
+              store.setCreatorMode(false);
+            }
+
+            loadingNotice.hide();
+            return;
+          }
+
+          // STEP 4: Commit remaining changes (with AI-generated message if needed)
+          console.log(`💾 [Save Changes] Step 4: Committing remaining changes...`);
+          loadingNotice.hide();
+          const commitNotice = this.uiService.showLoading('Creating commit...');
+
+          try {
+            // Use AI-generated commit message for better commit history
+            await this.gitService.commitWithAI(currentNode.repoPath);
+            commitNotice.hide();
+            console.log(`💾 [Save Changes] ✓ Changes committed successfully`);
+          } catch (commitError) {
+            commitNotice.hide();
+            throw commitError;
+          }
+
+          // STEP 5: Exit creator mode after successful save
           const { creatorMode } = store;
           if (creatorMode.isActive && creatorMode.nodeId === currentNode.id) {
             store.setCreatorMode(false);
+            console.log(`💾 [Save Changes] ✓ Exited creator mode`);
           }
-          
-          this.uiService.showSuccess('DreamNode saved successfully');
+
+          // STEP 6: Success feedback
+          const summary = hasDreamSong
+            ? 'DreamSong synced and all changes committed'
+            : 'All changes committed';
+          this.uiService.showSuccess(summary);
+          console.log(`💾 [Save Changes] ✓ Save workflow complete`);
+
         } catch (error) {
+          console.error('💾 [Save Changes] Failed:', error);
           this.uiService.showError(error instanceof Error ? error.message : 'Unknown error occurred');
         } finally {
           loadingNotice.hide();
