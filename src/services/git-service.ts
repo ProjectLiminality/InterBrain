@@ -439,9 +439,14 @@ export class GitService {
 
   /**
    * Detect available git remote and push to it intelligently
-   * Priority: Radicle → GitHub → other remotes
+   * Strategy:
+   * - If both Radicle (rad) and GitHub (github) exist: Push to BOTH
+   * - Otherwise: Priority is Radicle → GitHub → origin → first available
+   *
+   * Radicle: Full collaboration (push/pull)
+   * GitHub: Publishing layer (push only)
    */
-  async pushToAvailableRemote(repoPath: string): Promise<{ remote: string; type: 'radicle' | 'github' | 'other' }> {
+  async pushToAvailableRemote(repoPath: string): Promise<{ remote: string; type: 'radicle' | 'github' | 'other' | 'dual' }> {
     const fullPath = this.getFullPath(repoPath);
 
     try {
@@ -450,7 +455,30 @@ export class GitService {
 
       // Check git status first
       const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+      const hasUncommittedChanges = !!statusOutput.trim();
       console.log(`📊 [GitService] Git status:\n${statusOutput || '  (no changes)'}`);
+
+      // If there are uncommitted changes, commit them first
+      if (hasUncommittedChanges) {
+        console.log(`⚠️ [GitService] Found uncommitted changes - committing before push...`);
+
+        // Stage all changes
+        await execAsync('git add -A', { cwd: fullPath });
+
+        // Commit with AI or fallback message
+        try {
+          // Try to use AI commit (if available)
+          const { GitService } = await import('./git-service');
+          const gitService = new GitService(this.app);
+          await gitService.commitWithAI(repoPath);
+          console.log(`✅ [GitService] Changes committed with AI message`);
+        } catch (aiError) {
+          // Fallback: Simple commit message
+          const timestamp = new Date().toISOString();
+          await execAsync(`git commit -m "Auto-commit before push (${timestamp})"`, { cwd: fullPath });
+          console.log(`✅ [GitService] Changes committed with fallback message`);
+        }
+      }
 
       // Check current branch
       const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
@@ -468,23 +496,38 @@ export class GitService {
         throw new Error('No git remotes configured. Please set up GitHub or Radicle first.');
       }
 
-      // Check for unpushed commits
-      let hasUnpushedCommits = false;
-      try {
-        const { stdout: logOutput } = await execAsync(`git log origin/${currentBranch}..HEAD --oneline`, { cwd: fullPath });
-        hasUnpushedCommits = !!logOutput.trim();
-        if (hasUnpushedCommits) {
-          console.log(`📝 [GitService] Unpushed commits:\n${logOutput}`);
-        } else {
-          console.log(`✅ [GitService] No unpushed commits - repository is up to date`);
+      const hasRadicle = remotes.includes('rad');
+      const hasGitHub = remotes.includes('github');
+      const hasOrigin = remotes.includes('origin');
+
+      // DUAL REMOTE MODE: If both Radicle and GitHub exist, push to BOTH
+      if (hasRadicle && hasGitHub) {
+        console.log(`\n🌐 [GitService] DUAL REMOTE MODE: Found both Radicle and GitHub`);
+        console.log(`📡 [GitService] Strategy: Radicle (collaboration) + GitHub (publishing)`);
+
+        // Push to Radicle first (collaboration layer)
+        console.log(`\n🚀 [GitService] [1/2] Pushing to Radicle...`);
+        const serviceManager = await import('./service-manager');
+        const radicleService = serviceManager.serviceManager.getRadicleService();
+        await radicleService.share(fullPath);
+        console.log(`✅ [GitService] Radicle sync complete!`);
+
+        // Then push to GitHub (publishing layer)
+        console.log(`\n🚀 [GitService] [2/2] Pushing to GitHub...`);
+        const { stdout: ghPushOutput, stderr: ghPushError } = await execAsync(`git push github ${currentBranch}`, { cwd: fullPath });
+        console.log(`📤 [GitService] GitHub push stdout:\n${ghPushOutput || '(empty)'}`);
+        if (ghPushError) {
+          console.log(`⚠️ [GitService] GitHub push stderr:\n${ghPushError}`);
         }
-      } catch (error) {
-        console.log(`ℹ️ [GitService] Could not check unpushed commits (may not have upstream):`);
-        console.log(`   ${error instanceof Error ? error.message : String(error)}`);
+        console.log(`✅ [GitService] GitHub push complete!`);
+
+        console.log(`\n🎉 [GitService] DUAL PUSH COMPLETE: Radicle + GitHub`);
+        return { remote: 'rad + github', type: 'dual' };
       }
 
-      // Priority 1: Check for Radicle (rad remote)
-      if (remotes.includes('rad')) {
+      // SINGLE REMOTE MODE: Priority-based selection
+      // Priority 1: Radicle only
+      if (hasRadicle) {
         console.log(`\n🚀 [GitService] Found Radicle remote - using RadicleService.share()`);
         const serviceManager = await import('./service-manager');
         const radicleService = serviceManager.serviceManager.getRadicleService();
@@ -493,8 +536,8 @@ export class GitService {
         return { remote: 'rad', type: 'radicle' };
       }
 
-      // Priority 2: Check for GitHub (github remote)
-      if (remotes.includes('github')) {
+      // Priority 2: GitHub only
+      if (hasGitHub) {
         console.log(`\n🚀 [GitService] Found GitHub remote - pushing to github ${currentBranch}`);
         const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push github ${currentBranch}`, { cwd: fullPath });
         console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
@@ -505,9 +548,8 @@ export class GitService {
         return { remote: 'github', type: 'github' };
       }
 
-      // Priority 3: Check for origin (could be GitHub or other)
-      if (remotes.includes('origin')) {
-        // Try to detect if origin is GitHub
+      // Priority 3: origin (could be GitHub or other)
+      if (hasOrigin) {
         try {
           const { stdout: originUrl } = await execAsync('git remote get-url origin', { cwd: fullPath });
           const isGitHub = originUrl.includes('github.com');

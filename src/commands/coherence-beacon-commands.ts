@@ -30,7 +30,11 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
         const result = await gitService.pushToAvailableRemote(selectedNode.repoPath);
 
         // Show success with remote type
-        const remoteTypeLabel = result.type === 'radicle' ? 'Radicle' : result.type === 'github' ? 'GitHub' : 'remote';
+        const remoteTypeLabel =
+          result.type === 'dual' ? 'Radicle + GitHub' :
+          result.type === 'radicle' ? 'Radicle' :
+          result.type === 'github' ? 'GitHub' :
+          'remote';
         new Notice(`✓ Pushed ${selectedNode.name} to ${remoteTypeLabel}!`);
 
         console.log(`CoherenceBeaconCommands: Pushed to ${result.remote} (${result.type})`);
