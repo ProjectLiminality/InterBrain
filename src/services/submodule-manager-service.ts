@@ -326,9 +326,10 @@ export class SubmoduleManagerService {
   /**
    * Sync canvas submodules - complete end-to-end workflow
    */
-  async syncCanvasSubmodules(canvasPath: string): Promise<SyncResult> {
-    console.log(`SubmoduleManagerService: Starting sync for canvas ${canvasPath}`);
-    
+  async syncCanvasSubmodules(canvasPath: string, options?: { skipRadicle?: boolean }): Promise<SyncResult> {
+    const skipRadicle = options?.skipRadicle ?? false; // Default: false (Radicle enabled)
+    console.log(`SubmoduleManagerService: Starting sync for canvas ${canvasPath} (Radicle: ${skipRadicle ? 'DISABLED' : 'enabled'})`);
+
     try {
       // Analyze canvas dependencies
       const analysis = await this.canvasParser.analyzeCanvasDependencies(canvasPath);
@@ -347,10 +348,12 @@ export class SubmoduleManagerService {
 
       // Update bidirectional .udd relationships (submodules <-> supermodules)
       // This ALWAYS runs to ensure existing submodules have correct relationships
+      // SKIP RADICLE for local-only saves (massive performance improvement)
       await this.updateBidirectionalRelationships(
         analysis.dreamNodeBoundary,
         importResults,
-        removedSubmodules
+        removedSubmodules,
+        { skipRadicle }
       );
 
       // Early exit: If all submodules already existed AND none removed, no git commit needed
@@ -674,24 +677,35 @@ export class SubmoduleManagerService {
   private async updateBidirectionalRelationships(
     parentPath: string,
     importResults: SubmoduleImportResult[],
-    removedSubmodules: string[]
+    removedSubmodules: string[],
+    options?: { skipRadicle?: boolean }
   ): Promise<void> {
-    console.log('SubmoduleManagerService: Updating bidirectional .udd relationships...');
+    const skipRadicle = options?.skipRadicle ?? false;
+    console.log(`SubmoduleManagerService: Updating bidirectional .udd relationships... (Radicle: ${skipRadicle ? 'SKIP' : 'enabled'})`);
 
     const fullParentPath = this.getFullPath(parentPath);
 
     try {
-      // Get parent's Radicle ID (initialize if needed) and title
+      // Get parent's title (always needed)
       const parentUDD = await UDDService.readUDD(fullParentPath);
-      const parentRadicleId = await this.getOrInitializeRadicleId(fullParentPath);
       const parentTitle = parentUDD.title;
 
-      if (!parentRadicleId) {
-        console.error('SubmoduleManagerService: Could not get/initialize parent Radicle ID - skipping relationship tracking');
-        return;
-      }
+      // Get parent's Radicle ID (skip if disabled for performance)
+      let parentRadicleId: string | null = null;
+      if (!skipRadicle) {
+        parentRadicleId = await this.getOrInitializeRadicleId(fullParentPath);
 
-      console.log(`SubmoduleManagerService: Parent Radicle ID: ${parentRadicleId}`);
+        if (!parentRadicleId) {
+          console.error('SubmoduleManagerService: Could not get/initialize parent Radicle ID - skipping relationship tracking');
+          return;
+        }
+
+        console.log(`SubmoduleManagerService: Parent Radicle ID: ${parentRadicleId}`);
+      } else {
+        console.log(`SubmoduleManagerService: Radicle initialization SKIPPED for fast local-only save`);
+        // Still get existing Radicle ID from .udd if it exists (no network calls)
+        parentRadicleId = parentUDD.radicleId || null;
+      }
 
       let parentModified = false;
 
@@ -718,17 +732,25 @@ export class SubmoduleManagerService {
 
           // STEP 1: Work in sovereign repo ONLY - update all metadata before importing submodule
 
-          // Get child's Radicle ID (initialize if needed)
-          const childRadicleId = await this.getOrInitializeRadicleId(sovereignPath);
+          // Get child's Radicle ID (skip if disabled for performance)
+          let childRadicleId: string | null = null;
           let childUDD = await UDDService.readUDD(sovereignPath);
           const childTitle = childUDD.title;
 
-          if (!childRadicleId) {
-            console.warn(`SubmoduleManagerService: Could not get/initialize Radicle ID for ${result.submoduleName} - skipping`);
-            continue;
-          }
+          if (!skipRadicle) {
+            childRadicleId = await this.getOrInitializeRadicleId(sovereignPath);
 
-          console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
+            if (!childRadicleId) {
+              console.warn(`SubmoduleManagerService: Could not get/initialize Radicle ID for ${result.submoduleName} - skipping`);
+              continue;
+            }
+
+            console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
+          } else {
+            // Still get existing Radicle ID from .udd if it exists (no network calls)
+            childRadicleId = childUDD.radicleId || null;
+            console.log(`SubmoduleManagerService: Radicle initialization SKIPPED for child ${result.submoduleName}`);
+          }
 
           let sovereignModified = false;
 
@@ -741,13 +763,17 @@ export class SubmoduleManagerService {
           }
 
           // Add parent's Radicle ID to sovereign's supermodules array (source of truth)
-          if (await UDDService.addSupermodule(sovereignPath, parentRadicleId)) {
+          // Skip if Radicle is disabled (no parent Radicle ID available)
+          if (parentRadicleId && await UDDService.addSupermodule(sovereignPath, parentRadicleId)) {
             console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentRadicleId}) to sovereign ${childTitle}'s supermodules`);
             sovereignModified = true;
+          } else if (!parentRadicleId && !skipRadicle) {
+            console.warn(`SubmoduleManagerService: No parent Radicle ID - skipping supermodule tracking`);
           }
 
           // Commit all sovereign changes at once (only if there are actual changes)
-          if (sovereignModified) {
+          // Skip coherence beacon if Radicle is disabled
+          if (sovereignModified && !skipRadicle) {
             try {
               await execAsync('git add .udd', { cwd: sovereignPath });
 

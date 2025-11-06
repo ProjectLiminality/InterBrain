@@ -124,13 +124,21 @@ export class ConstellationCommands {
           console.error('Failed to auto-export JSON:', exportError);
         }
 
-        // Auto-apply constellation layout positioning
+        // Auto-apply constellation layout positioning (if DreamSpace is open)
         try {
-          await this.applyConstellationLayout();
-          console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
+          // Check if SpatialOrchestrator is available before attempting layout
+          const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { applyConstellationLayout?(): Promise<void> } }).__interbrainCanvas;
+
+          if (canvasAPI && canvasAPI.applyConstellationLayout) {
+            await this.applyConstellationLayout();
+            console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
+          } else {
+            console.log('ℹ️ [Constellation Commands] SpatialOrchestrator not available (DreamSpace not open) - skipping layout application');
+            console.log('   Layout will be applied automatically when DreamSpace opens');
+          }
         } catch (layoutError) {
           console.error('Failed to auto-apply constellation layout:', layoutError);
-          this.uiService.showError('⚠️ Layout positioning failed, but scan data was saved', 3000);
+          // Non-fatal - data is saved, layout can be applied later
         }
 
       } else {

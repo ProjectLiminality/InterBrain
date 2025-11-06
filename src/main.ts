@@ -501,27 +501,29 @@ export default class InterBrainPlugin extends Plugin {
           const hasDreamSong = dreamSongFile !== null;
 
           if (hasDreamSong) {
-            console.log(`💾 [Save Changes] Step 1: DreamSong.canvas detected - syncing submodules...`);
+            console.log(`💾 [Save Changes] Step 1: DreamSong.canvas detected - syncing submodules (LOCAL-ONLY mode)...`);
             loadingNotice.hide();
             const syncNotice = this.uiService.showLoading('Syncing canvas submodules...');
 
             try {
               // Run canvas sync workflow (imports submodules, updates paths, commits)
-              const syncResult = await this.submoduleManagerService.syncCanvasSubmodules(dreamSongPath);
+              // SKIP RADICLE for local-only saves (massive performance improvement)
+              const syncResult = await this.submoduleManagerService.syncCanvasSubmodules(
+                dreamSongPath,
+                { skipRadicle: true } // LOCAL-ONLY: Skip Radicle initialization for fast saves
+              );
 
               if (!syncResult.success) {
                 throw new Error(`Canvas sync failed: ${syncResult.error}`);
               }
 
-              console.log(`💾 [Save Changes] ✓ Canvas synced (${syncResult.submodulesImported.length} submodules)`);
+              console.log(`💾 [Save Changes] ✓ Canvas synced (${syncResult.submodulesImported.length} submodules, Radicle skipped)`);
               syncNotice.hide();
-              loadingNotice.show();
             } catch (syncError) {
               syncNotice.hide();
               console.error('💾 [Save Changes] Canvas sync error:', syncError);
               // Non-fatal - continue with regular commit
               this.uiService.showWarning('Canvas sync had issues - continuing with commit');
-              loadingNotice.show();
             }
           } else {
             console.log(`💾 [Save Changes] Step 1: No DreamSong.canvas - skipping canvas sync`);
@@ -549,19 +551,28 @@ export default class InterBrainPlugin extends Plugin {
             return;
           }
 
-          // STEP 4: Commit remaining changes (with AI-generated message if needed)
+          // STEP 4: Commit remaining changes (with AI-generated message or fallback)
           console.log(`💾 [Save Changes] Step 4: Committing remaining changes...`);
-          loadingNotice.hide();
           const commitNotice = this.uiService.showLoading('Creating commit...');
 
           try {
-            // Use AI-generated commit message for better commit history
+            // Try AI-generated commit message first
             await this.gitService.commitWithAI(currentNode.repoPath);
             commitNotice.hide();
-            console.log(`💾 [Save Changes] ✓ Changes committed successfully`);
+            console.log(`💾 [Save Changes] ✓ Changes committed with AI-generated message`);
           } catch (commitError) {
-            commitNotice.hide();
-            throw commitError;
+            console.warn(`💾 [Save Changes] AI commit failed, using fallback message:`, commitError);
+
+            // Fallback: Use simple generic commit message if AI fails
+            try {
+              const fallbackMessage = `Save changes in ${currentNode.name}`;
+              await execAsync(`git commit -m "${fallbackMessage}"`, { cwd: fullRepoPath });
+              commitNotice.hide();
+              console.log(`💾 [Save Changes] ✓ Changes committed with fallback message`);
+            } catch (fallbackError) {
+              commitNotice.hide();
+              throw fallbackError;
+            }
           }
 
           // STEP 5: Exit creator mode after successful save
