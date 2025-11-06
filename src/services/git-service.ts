@@ -445,31 +445,63 @@ export class GitService {
     const fullPath = this.getFullPath(repoPath);
 
     try {
-      console.log(`GitService: Detecting available remotes for ${fullPath}`);
+      console.log(`\n🔍 [GitService] ===== PUSH TO NETWORK DEBUG =====`);
+      console.log(`📂 [GitService] Full path: ${fullPath}`);
+
+      // Check git status first
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+      console.log(`📊 [GitService] Git status:\n${statusOutput || '  (no changes)'}`);
+
+      // Check current branch
+      const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
+      const currentBranch = branchOutput.trim();
+      console.log(`🌿 [GitService] Current branch: ${currentBranch}`);
 
       // Get all configured remotes
-      const { stdout: remotesOutput } = await execAsync('git remote', { cwd: fullPath });
-      const remotes = remotesOutput.trim().split('\n').filter((r: string) => r);
+      const { stdout: remotesOutput } = await execAsync('git remote -v', { cwd: fullPath });
+      console.log(`🌐 [GitService] Configured remotes:\n${remotesOutput}`);
+
+      const { stdout: remoteListOutput } = await execAsync('git remote', { cwd: fullPath });
+      const remotes = remoteListOutput.trim().split('\n').filter((r: string) => r);
 
       if (remotes.length === 0) {
         throw new Error('No git remotes configured. Please set up GitHub or Radicle first.');
       }
 
-      console.log(`GitService: Found remotes: ${remotes.join(', ')}`);
+      // Check for unpushed commits
+      let hasUnpushedCommits = false;
+      try {
+        const { stdout: logOutput } = await execAsync(`git log origin/${currentBranch}..HEAD --oneline`, { cwd: fullPath });
+        hasUnpushedCommits = !!logOutput.trim();
+        if (hasUnpushedCommits) {
+          console.log(`📝 [GitService] Unpushed commits:\n${logOutput}`);
+        } else {
+          console.log(`✅ [GitService] No unpushed commits - repository is up to date`);
+        }
+      } catch (error) {
+        console.log(`ℹ️ [GitService] Could not check unpushed commits (may not have upstream):`);
+        console.log(`   ${error instanceof Error ? error.message : String(error)}`);
+      }
 
       // Priority 1: Check for Radicle (rad remote)
       if (remotes.includes('rad')) {
-        console.log(`GitService: Found Radicle remote - using RadicleService.share()`);
+        console.log(`\n🚀 [GitService] Found Radicle remote - using RadicleService.share()`);
         const serviceManager = await import('./service-manager');
         const radicleService = serviceManager.serviceManager.getRadicleService();
         await radicleService.share(fullPath);
+        console.log(`✅ [GitService] Radicle sync complete!`);
         return { remote: 'rad', type: 'radicle' };
       }
 
       // Priority 2: Check for GitHub (github remote)
       if (remotes.includes('github')) {
-        console.log(`GitService: Found GitHub remote - pushing to github main`);
-        await execAsync('git push github main', { cwd: fullPath });
+        console.log(`\n🚀 [GitService] Found GitHub remote - pushing to github ${currentBranch}`);
+        const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push github ${currentBranch}`, { cwd: fullPath });
+        console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
+        if (pushError) {
+          console.log(`⚠️ [GitService] Push stderr:\n${pushError}`);
+        }
+        console.log(`✅ [GitService] GitHub push complete!`);
         return { remote: 'github', type: 'github' };
       }
 
@@ -480,23 +512,39 @@ export class GitService {
           const { stdout: originUrl } = await execAsync('git remote get-url origin', { cwd: fullPath });
           const isGitHub = originUrl.includes('github.com');
 
-          console.log(`GitService: Found origin remote (${isGitHub ? 'GitHub' : 'other'}) - pushing to origin main`);
-          await execAsync('git push origin main', { cwd: fullPath });
+          console.log(`\n🚀 [GitService] Found origin remote (${isGitHub ? 'GitHub' : 'other'}) - pushing to origin ${currentBranch}`);
+          const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push origin ${currentBranch}`, { cwd: fullPath });
+          console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
+          if (pushError) {
+            console.log(`⚠️ [GitService] Push stderr:\n${pushError}`);
+          }
+          console.log(`✅ [GitService] Origin push complete!`);
           return { remote: 'origin', type: isGitHub ? 'github' : 'other' };
         } catch (error) {
-          console.error('GitService: Failed to get origin URL:', error);
+          console.error('❌ [GitService] Failed to get origin URL:', error);
           throw new Error('Failed to detect origin remote URL');
         }
       }
 
       // Fallback: Use first available remote
       const firstRemote = remotes[0];
-      console.log(`GitService: Using first available remote: ${firstRemote}`);
-      await execAsync(`git push ${firstRemote} main`, { cwd: fullPath });
+      console.log(`\n🚀 [GitService] Using first available remote: ${firstRemote}`);
+      const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push ${firstRemote} ${currentBranch}`, { cwd: fullPath });
+      console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
+      if (pushError) {
+        console.log(`⚠️ [GitService] Push stderr:\n${pushError}`);
+      }
+      console.log(`✅ [GitService] Push complete!`);
       return { remote: firstRemote, type: 'other' };
 
     } catch (error) {
-      console.error('GitService: Failed to push to remote:', error);
+      console.error('❌ [GitService] Failed to push to remote:', error);
+      if (error instanceof Error) {
+        console.error('❌ [GitService] Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
       throw new Error(`Failed to push changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
