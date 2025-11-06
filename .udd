@@ -3,7 +3,9 @@
   "title": "InterBrain",
   "type": "dream",
   "dreamTalk": "InterBrain.png",
-  "liminalWebRelationships": [],
+  "liminalWebRelationships": [
+    "7a42db51-a60d-441b-b65d-8bc04dc50c78"
+  ],
   "submodules": [],
   "supermodules": [],
   "githubRepoUrl": "https://github.com/ProjectLiminality/InterBrain",
