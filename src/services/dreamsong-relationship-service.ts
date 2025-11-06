@@ -253,15 +253,38 @@ export class DreamSongRelationshipService {
   ): Promise<DreamSongEdge[]> {
     const edges: DreamSongEdge[] = [];
 
-    // Filter to only media blocks that have sourceDreamNodeId
+    // Re-read the canvas to get ORIGINAL file paths (not resolved data URLs)
+    // The DreamSongData has media.src as data URLs for display,
+    // but we need the actual canvas file paths for relationship extraction
+    const canvasContent = await this.vaultService.read(dreamSongPath);
+    const canvas = JSON.parse(canvasContent);
+
+    // Build a map from node IDs to original file paths
+    const nodeIdToFilePath = new Map<string, string>();
+    for (const node of canvas.nodes) {
+      if (node.type === 'file' && node.file) {
+        nodeIdToFilePath.set(node.id, node.file);
+      }
+    }
+
+    // Filter to only media blocks that have sourceDreamNodeId AND original file paths
     const mediaBlocks = dreamSongData.blocks
-      .filter((block: DreamSongBlock) =>
-        block.media && block.media.sourceDreamNodeId
-      )
-      .map((block: DreamSongBlock) => ({
-        sourceDreamNodeId: block.media!.sourceDreamNodeId,
-        mediaPath: block.media!.src
-      }));
+      .filter((block: DreamSongBlock) => {
+        if (!block.media || !block.media.sourceDreamNodeId) return false;
+
+        // Get the original file path from canvas
+        const originalPath = nodeIdToFilePath.get(block.id.split('-')[0]); // Extract node ID from block ID
+        return originalPath !== undefined;
+      })
+      .map((block: DreamSongBlock) => {
+        const nodeId = block.id.split('-')[0]; // Extract node ID from block ID (handles media-text pairs)
+        const originalPath = nodeIdToFilePath.get(nodeId) || block.media!.src;
+
+        return {
+          sourceDreamNodeId: block.media!.sourceDreamNodeId,
+          mediaPath: originalPath // Use ORIGINAL canvas path, not data URL
+        };
+      });
 
     if (mediaBlocks.length < config.minSequenceLength) {
       console.log(`📏 [DreamSong Relationships] Skipping ${dreamSongPath}: sequence too short (${mediaBlocks.length})`);
