@@ -7,7 +7,7 @@ import { serviceManager } from '../services/service-manager';
 // Removed unused execAsync
 
 export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
-  // Command: Push current DreamNode to network
+  // Command: Push current DreamNode to network (Intelligent: Radicle → GitHub → Other)
   plugin.addCommand({
     id: 'push-to-network',
     name: 'Push Current DreamNode to Network',
@@ -21,27 +21,19 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
           return;
         }
 
-        const path = require('path');
-        const adapter = plugin.app.vault.adapter as any;
-        const vaultPath = adapter.basePath || '';
-        const fullPath = path.join(vaultPath, selectedNode.repoPath);
+        new Notice(`📤 Detecting available remote for ${selectedNode.name}...`);
 
-        // Get Radicle service
-        const radicleService = serviceManager.getRadicleService();
+        // Use intelligent push that detects available remotes
+        const { GitService } = await import('../services/git-service');
+        const gitService = new GitService(plugin.app);
 
-        // Check if Radicle is initialized
-        const radicleId = await radicleService.getRadicleId(fullPath);
-        if (!radicleId) {
-          new Notice('⚠️ This DreamNode is not initialized with Radicle. Run "Initialize DreamNode with Radicle" first.');
-          return;
-        }
+        const result = await gitService.pushToAvailableRemote(selectedNode.repoPath);
 
-        new Notice(`Pushing ${selectedNode.name} to network...`);
+        // Show success with remote type
+        const remoteTypeLabel = result.type === 'radicle' ? 'Radicle' : result.type === 'github' ? 'GitHub' : 'remote';
+        new Notice(`✓ Pushed ${selectedNode.name} to ${remoteTypeLabel}!`);
 
-        // Use RadicleService.share() which runs 'rad sync'
-        await radicleService.share(fullPath);
-
-        new Notice(`✓ Pushed ${selectedNode.name} to network!`);
+        console.log(`CoherenceBeaconCommands: Pushed to ${result.remote} (${result.type})`);
 
       } catch (error) {
         console.error('Error pushing to network:', error);

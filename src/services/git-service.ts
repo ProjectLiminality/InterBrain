@@ -436,6 +436,70 @@ export class GitService {
       throw new Error(`Failed to build: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Detect available git remote and push to it intelligently
+   * Priority: Radicle → GitHub → other remotes
+   */
+  async pushToAvailableRemote(repoPath: string): Promise<{ remote: string; type: 'radicle' | 'github' | 'other' }> {
+    const fullPath = this.getFullPath(repoPath);
+
+    try {
+      console.log(`GitService: Detecting available remotes for ${fullPath}`);
+
+      // Get all configured remotes
+      const { stdout: remotesOutput } = await execAsync('git remote', { cwd: fullPath });
+      const remotes = remotesOutput.trim().split('\n').filter((r: string) => r);
+
+      if (remotes.length === 0) {
+        throw new Error('No git remotes configured. Please set up GitHub or Radicle first.');
+      }
+
+      console.log(`GitService: Found remotes: ${remotes.join(', ')}`);
+
+      // Priority 1: Check for Radicle (rad remote)
+      if (remotes.includes('rad')) {
+        console.log(`GitService: Found Radicle remote - using RadicleService.share()`);
+        const serviceManager = await import('./service-manager');
+        const radicleService = serviceManager.serviceManager.getRadicleService();
+        await radicleService.share(fullPath);
+        return { remote: 'rad', type: 'radicle' };
+      }
+
+      // Priority 2: Check for GitHub (github remote)
+      if (remotes.includes('github')) {
+        console.log(`GitService: Found GitHub remote - pushing to github main`);
+        await execAsync('git push github main', { cwd: fullPath });
+        return { remote: 'github', type: 'github' };
+      }
+
+      // Priority 3: Check for origin (could be GitHub or other)
+      if (remotes.includes('origin')) {
+        // Try to detect if origin is GitHub
+        try {
+          const { stdout: originUrl } = await execAsync('git remote get-url origin', { cwd: fullPath });
+          const isGitHub = originUrl.includes('github.com');
+
+          console.log(`GitService: Found origin remote (${isGitHub ? 'GitHub' : 'other'}) - pushing to origin main`);
+          await execAsync('git push origin main', { cwd: fullPath });
+          return { remote: 'origin', type: isGitHub ? 'github' : 'other' };
+        } catch (error) {
+          console.error('GitService: Failed to get origin URL:', error);
+          throw new Error('Failed to detect origin remote URL');
+        }
+      }
+
+      // Fallback: Use first available remote
+      const firstRemote = remotes[0];
+      console.log(`GitService: Using first available remote: ${firstRemote}`);
+      await execAsync(`git push ${firstRemote} main`, { cwd: fullPath });
+      return { remote: firstRemote, type: 'other' };
+
+    } catch (error) {
+      console.error('GitService: Failed to push to remote:', error);
+      throw new Error(`Failed to push changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 /**
