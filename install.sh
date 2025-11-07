@@ -1063,12 +1063,15 @@ echo "Step 14/$TOTAL_STEPS: Opening Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
-    # Open Obsidian with the vault to register it
+    # Open Obsidian with the specific vault using URI path parameter
     info "Opening Obsidian with your vault..."
     echo ""
     info "This registers the vault so URI commands can find it"
     sleep 1
-    open -a Obsidian "$VAULT_PATH"
+
+    # Use obsidian:// URI with path parameter to open the specific vault
+    # This works even if Obsidian is already open with another vault
+    open "obsidian://open?path=${VAULT_PATH}"
     success "Obsidian launched with vault"
 
     # If a clone URI was provided, trigger it after Obsidian loads
