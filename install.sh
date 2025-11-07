@@ -1081,17 +1081,11 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
         info "🎯 Personalized Installation Detected"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        echo "Waiting for Obsidian to fully initialize before triggering clone..."
-        echo ""
-        echo "⏱️  This takes ~10-15 seconds:"
-        echo "  1. Obsidian starts up"
-        echo "  2. Vault is registered in Obsidian's vault list"
-        echo "  3. InterBrain plugin loads and activates"
-        echo "  4. Clone URI handler becomes available"
+        echo "Waiting for InterBrain plugin to activate..."
         echo ""
 
-        # Wait longer to ensure vault is registered and plugin is loaded
-        for i in {10..1}; do
+        # Wait for plugin to load (much shorter now that vault opens properly)
+        for i in {5..1}; do
             printf "\r   Triggering clone in %d seconds...  " $i
             sleep 1
         done
