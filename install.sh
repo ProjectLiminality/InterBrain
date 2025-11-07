@@ -381,7 +381,7 @@ fi
 # TEST: Simulate failure before GitHub CLI (no gh available for issue creation)
 if [ "$TEST_FAIL" = "before-gh" ]; then
     error "TEST FAILURE: Simulating error before GitHub CLI installation"
-    exit 1
+    false  # This triggers the ERR trap properly
 fi
 
 # Check for GitHub CLI
@@ -814,7 +814,7 @@ if [ "$TEST_FAIL" = "after-gh" ]; then
     error "TEST FAILURE: Simulating error after GitHub CLI installation"
     echo ""
     info "This should offer GitHub issue creation if gh is installed and authenticated"
-    exit 1
+    false  # This triggers the ERR trap properly
 fi
 
 echo ""
