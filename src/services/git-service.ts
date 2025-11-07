@@ -303,6 +303,8 @@ export class GitService {
 
       // Determine which remote to fetch from (avoid broken Radicle remotes if CLI not available)
       let remoteName = 'origin'; // Default
+      const remotes = remoteOutput.trim().split('\n');
+
       try {
         // Try to get the upstream remote for current branch
         const { stdout: upstreamOutput } = await execAsync('git rev-parse --abbrev-ref --symbolic-full-name @{upstream}', { cwd: fullPath });
@@ -311,24 +313,62 @@ export class GitService {
           // Extract remote name from refs/remotes/<remote>/<branch>
           const remoteMatch = upstream.match(/^([^\/]+)\//);
           if (remoteMatch) {
-            remoteName = remoteMatch[1];
+            const detectedRemote = remoteMatch[1];
+
+            // Skip 'rad' remote if Radicle CLI is not available
+            if (detectedRemote === 'rad') {
+              const { serviceManager } = await import('./service-manager');
+              const radicleService = serviceManager.getRadicleService();
+              const isRadicleAvailable = await radicleService.isAvailable();
+
+              if (!isRadicleAvailable) {
+                console.log(`GitService: Skipping 'rad' remote - Radicle CLI not available`);
+                // Fall through to manual selection below
+              } else {
+                remoteName = detectedRemote;
+              }
+            } else {
+              remoteName = detectedRemote;
+            }
           }
         }
       } catch {
-        // No upstream configured, try common remotes in order
-        const remotes = remoteOutput.trim().split('\n');
+        // No upstream configured, continue to manual selection
+      }
+
+      // If we're still on 'origin' (default), try to pick a better remote
+      if (remoteName === 'origin' && !remotes.includes('origin')) {
+        // Try common remotes in order (skip 'rad' if Radicle unavailable)
         if (remotes.includes('github')) {
           remoteName = 'github';
-        } else if (remotes.includes('origin')) {
-          remoteName = 'origin';
         } else if (remotes.length > 0) {
-          remoteName = remotes[0];
+          // Pick first non-rad remote
+          remoteName = remotes.find(r => r !== 'rad') || remotes[0];
         }
       }
 
       // Fetch from specific remote (not all remotes)
       console.log(`GitService: Fetching from remote: ${remoteName}`);
-      await execAsync(`git fetch ${remoteName}`, { cwd: fullPath });
+      try {
+        await execAsync(`git fetch ${remoteName}`, { cwd: fullPath });
+      } catch (fetchError: any) {
+        // Handle fetch errors gracefully (remote not found, network issues, etc.)
+        const errorMsg = fetchError.message || '';
+        if (errorMsg.includes('Repository not found') ||
+            errorMsg.includes('remote-rad') ||
+            errorMsg.includes('Could not resolve host')) {
+          console.log(`GitService: Fetch failed (${errorMsg.split('\n')[0]}) - treating as no updates`);
+          return {
+            hasUpdates: false,
+            commits: [],
+            filesChanged: 0,
+            insertions: 0,
+            deletions: 0
+          };
+        }
+        // Re-throw other unexpected errors
+        throw fetchError;
+      }
 
       // Check if there are new commits (compare HEAD with @{upstream})
       // Use %x00 (null byte) as delimiter to handle multiline commit messages
