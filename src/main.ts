@@ -26,6 +26,7 @@ import { registerRadicleCommands } from './commands/radicle-commands';
 import { registerGitHubCommands } from './commands/github-commands';
 import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
 import { registerHousekeepingCommands } from './commands/housekeeping-commands';
+import { registerDreamerUpdateCommands } from './commands/dreamer-update-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { registerMigrationCommands } from './commands/migration-commands';
 import { registerRelationshipCommands } from './commands/relationship-commands';
@@ -380,6 +381,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register housekeeping commands (system maintenance)
     registerHousekeepingCommands(this);
+
+    // Register Dreamer update commands (check all projects from peer)
+    registerDreamerUpdateCommands(this);
 
     // Register migration commands (PascalCase naming migration)
     registerMigrationCommands(this);
