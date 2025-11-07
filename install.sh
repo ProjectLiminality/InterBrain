@@ -1059,18 +1059,68 @@ else
 fi
 
 echo ""
-echo "Step 14/$TOTAL_STEPS: Opening Obsidian..."
+echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
-    # Open Obsidian with the specific vault using URI path parameter
-    info "Opening Obsidian with your vault..."
-    echo ""
-    info "This registers the vault so URI commands can find it"
-    sleep 1
+    # Register vault in Obsidian's obsidian.json file
+    OBSIDIAN_CONFIG="$HOME/Library/Application Support/obsidian/obsidian.json"
 
-    # Use obsidian:// URI with path parameter to open the specific vault
-    # This works even if Obsidian is already open with another vault
+    # Create config directory if it doesn't exist
+    mkdir -p "$HOME/Library/Application Support/obsidian"
+
+    # Generate a random vault ID (16 character hex)
+    VAULT_ID=$(openssl rand -hex 8)
+
+    # Get current timestamp in milliseconds
+    TIMESTAMP=$(date +%s)000
+
+    if [ -f "$OBSIDIAN_CONFIG" ]; then
+        # File exists - add vault to existing config using Python
+        python3 << EOF
+import json
+import sys
+
+config_file = "$OBSIDIAN_CONFIG"
+vault_id = "$VAULT_ID"
+vault_path = "$VAULT_PATH"
+timestamp = $TIMESTAMP
+
+try:
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+except:
+    config = {"vaults": {}}
+
+# Ensure vaults key exists
+if "vaults" not in config:
+    config["vaults"] = {}
+
+# Add new vault
+config["vaults"][vault_id] = {
+    "path": vault_path,
+    "ts": timestamp,
+    "open": True
+}
+
+# Write back
+with open(config_file, 'w') as f:
+    json.dump(config, f)
+
+print("Vault registered successfully")
+EOF
+        success "Vault registered in Obsidian"
+    else
+        # File doesn't exist - create new config
+        cat > "$OBSIDIAN_CONFIG" << EOF
+{"vaults":{"$VAULT_ID":{"path":"$VAULT_PATH","ts":$TIMESTAMP,"open":true}}}
+EOF
+        success "Created Obsidian config and registered vault"
+    fi
+
+    # Now open Obsidian with the vault
+    info "Opening Obsidian with your vault..."
+    sleep 1
     open "obsidian://open?path=${VAULT_PATH}"
     success "Obsidian launched with vault"
 
