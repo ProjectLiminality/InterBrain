@@ -3,6 +3,85 @@ import { setIcon } from 'obsidian';
 import { useInterBrainStore } from '../../store/interbrain-store';
 
 /**
+ * Check if a DreamNode is a GitHub-only repository where the user lacks push access
+ * Returns { isGitHubOnly: boolean, hasAccess: boolean }
+ */
+async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; hasAccess: boolean }> {
+  if (!node?.repoPath) {
+    return { isGitHubOnly: false, hasAccess: true };
+  }
+
+  try {
+    const { execAsync } = require('child_process');
+    const { promisify } = require('util');
+    const execAsyncPromise = promisify(execAsync);
+    const path = require('path');
+
+    // Get vault path
+    const app = (window as any).app;
+    const vaultPath = (app?.vault?.adapter as any)?.basePath || '';
+    const fullPath = path.join(vaultPath, node.repoPath);
+
+    // Check for remotes
+    const { stdout: remotesOutput } = await execAsyncPromise('git remote -v', { cwd: fullPath });
+
+    // Check if has Radicle remote (means it's not GitHub-only)
+    if (remotesOutput.includes('rad://') || remotesOutput.includes('rad\t')) {
+      return { isGitHubOnly: false, hasAccess: true };
+    }
+
+    // Check if has GitHub remote
+    const hasGitHub = remotesOutput.includes('github.com');
+    if (!hasGitHub) {
+      return { isGitHubOnly: false, hasAccess: true };
+    }
+
+    // It's GitHub-only - check push access by attempting a dry-run push
+    try {
+      await execAsyncPromise('git push --dry-run 2>&1', { cwd: fullPath });
+      return { isGitHubOnly: true, hasAccess: true };
+    } catch (error: any) {
+      // Check if error is permission-related
+      const errorOutput = error.stderr || error.stdout || error.message || '';
+      const isPermissionError = errorOutput.includes('Permission denied') ||
+                                errorOutput.includes('403') ||
+                                errorOutput.includes('fatal: unable to access');
+
+      if (isPermissionError) {
+        return { isGitHubOnly: true, hasAccess: false };
+      }
+
+      // Other errors (like "Everything up-to-date") mean we have access
+      return { isGitHubOnly: true, hasAccess: true };
+    }
+  } catch (error) {
+    console.error('Error checking GitHub access:', error);
+    return { isGitHubOnly: false, hasAccess: true }; // Fail open
+  }
+}
+
+// Cache GitHub access checks to avoid repeated git commands
+const githubAccessCache = new Map<string, { isGitHubOnly: boolean; hasAccess: boolean; timestamp: number }>();
+const CACHE_TTL = 60000; // 1 minute
+
+async function checkGitHubAccessCached(node: any): Promise<{ isGitHubOnly: boolean; hasAccess: boolean }> {
+  if (!node?.id) {
+    return { isGitHubOnly: false, hasAccess: true };
+  }
+
+  const cached = githubAccessCache.get(node.id);
+  const now = Date.now();
+
+  if (cached && (now - cached.timestamp) < CACHE_TTL) {
+    return { isGitHubOnly: cached.isGitHubOnly, hasAccess: cached.hasAccess };
+  }
+
+  const result = await checkGitHubAccess(node);
+  githubAccessCache.set(node.id, { ...result, timestamp: now });
+  return result;
+}
+
+/**
  * Radial Button Configuration
  *
  * Defines the buttons that appear around the selected DreamNode in liminal-web mode.
@@ -41,6 +120,9 @@ export interface RadialButtonConfig {
 
   /** Optional function to get dynamic command based on node state */
   getDynamicCommand?: (node: any) => string;
+
+  /** Optional function to determine if button should be disabled with tooltip */
+  shouldDisable?: (node: any) => { disabled: boolean; reason?: string };
 }
 
 /**
@@ -140,8 +222,24 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'share-changes',
     iconName: 'lucide-upload-cloud',
     commandId: 'interbrain:push-to-network',
-    label: 'Share Changes'
+    label: 'Share Changes',
     // TODO: Combine push-to-network + initialize/share radicle
+    // Disable for GitHub-only repos where user lacks push access
+    shouldDisable: (node) => {
+      // This is intentionally synchronous - we use cached result
+      const cached = githubAccessCache.get(node?.id);
+      if (cached && cached.isGitHubOnly && !cached.hasAccess) {
+        return {
+          disabled: true,
+          reason: 'Follow-only: You don\'t own this GitHub repository'
+        };
+      }
+      // Trigger async check in background (will populate cache for next render)
+      if (node?.id) {
+        checkGitHubAccessCached(node).catch(console.error);
+      }
+      return { disabled: false };
+    }
   },
   {
     id: 'check-updates',

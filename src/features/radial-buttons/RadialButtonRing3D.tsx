@@ -162,8 +162,16 @@ const RadialButton: React.FC<RadialButtonProps> = ({
     ? config.getDynamicLabel(selectedNode)
     : config.label;
 
+  // Check if button should be disabled
+  const disabledState = config.shouldDisable
+    ? config.shouldDisable(selectedNode)
+    : { disabled: false };
+
   // Handle button click - execute the mapped command
   const handleClick = () => {
+    if (disabledState.disabled) {
+      return; // Don't execute if disabled
+    }
     const app = serviceManager.getApp();
     if (app) {
       (app as any).commands.executeCommandById(actualCommand);
@@ -280,31 +288,32 @@ const RadialButton: React.FC<RadialButtonProps> = ({
                 width: '270px',
                 height: '270px',
                 borderRadius: '50%',
-                border: `6px solid ${isHovered ? '#ffffff' : '#4FC3F7'}`,
+                border: `6px solid ${disabledState.disabled ? '#666666' : (isHovered ? '#ffffff' : '#4FC3F7')}`,
                 background: '#000000',  // Black fill
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
-                transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-                boxShadow: isHovered ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',  // Hover glow
-                cursor: 'pointer',
-                color: '#ffffff'  // Icon color
+                transform: (isHovered && !disabledState.disabled) ? 'scale(1.1)' : 'scale(1)',
+                boxShadow: (isHovered && !disabledState.disabled) ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',  // Hover glow
+                cursor: disabledState.disabled ? 'not-allowed' : 'pointer',
+                color: disabledState.disabled ? '#666666' : '#ffffff',  // Grayed out icon when disabled
+                opacity: disabledState.disabled ? 0.5 : 1
               }}
             >
               {/* Icon from configuration using Obsidian's setIcon API */}
               {createIconElement(config.iconName)}
             </div>
 
-            {/* Label underneath - only visible on hover */}
-            {isHovered && actualLabel && (
+            {/* Label/Tooltip underneath - visible on hover */}
+            {isHovered && (
               <div
                 style={{
                   position: 'absolute',
                   top: '300px',  // Moved down from 280px
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  color: '#ffffff',
+                  color: disabledState.disabled ? '#ff6b6b' : '#ffffff',
                   fontSize: '18px',  // Increased from 14px
                   fontWeight: '500',
                   textAlign: 'center',
@@ -316,7 +325,7 @@ const RadialButton: React.FC<RadialButtonProps> = ({
                   pointerEvents: 'none'  // Don't interfere with hover detection
                 }}
               >
-                {actualLabel}
+                {disabledState.disabled ? disabledState.reason || 'Disabled' : actualLabel}
               </div>
             )}
           </div>
