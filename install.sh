@@ -1063,6 +1063,13 @@ echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
+    # Kill Obsidian if running so it can read the updated config
+    if pgrep -x "Obsidian" > /dev/null; then
+        info "Closing Obsidian to update vault registry..."
+        killall Obsidian 2>/dev/null || true
+        sleep 1
+    fi
+
     # Register vault in Obsidian's obsidian.json file
     OBSIDIAN_CONFIG="$HOME/Library/Application Support/obsidian/obsidian.json"
 
@@ -1124,8 +1131,8 @@ EOF
     # Extract vault name for URI
     VAULT_NAME=$(basename "$VAULT_PATH")
 
-    # Give Obsidian a moment if it needs to restart to read the new config
-    sleep 1
+    # Give Obsidian time to fully restart and read the new config
+    sleep 2
 
     # Open by vault name now that it's registered
     open "obsidian://open?vault=${VAULT_NAME}"
