@@ -3,6 +3,10 @@
 # For macOS/Linux systems
 # One-command setup: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash
 # With URI: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash -s -- --uri "obsidian://interbrain-clone?..."
+#
+# Testing flags:
+# --test-fail before-gh   Simulate failure before GitHub CLI installed (no automatic issue creation available)
+# --test-fail after-gh    Simulate failure after GitHub CLI installed (should offer automatic issue creation)
 
 # Create log file FIRST (before anything else)
 LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
@@ -44,10 +48,15 @@ DEFAULT_VAULT_PARENT="$HOME"
 
 # Parse command-line arguments
 CLONE_URI=""
+TEST_FAIL=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --uri)
       CLONE_URI="$2"
+      shift 2
+      ;;
+    --test-fail)
+      TEST_FAIL="$2"
       shift 2
       ;;
     *)
@@ -367,6 +376,12 @@ if ! command_exists node; then
     success "Node.js installed"
 else
     success "Node.js found ($(node --version))"
+fi
+
+# TEST: Simulate failure before GitHub CLI (no gh available for issue creation)
+if [ "$TEST_FAIL" = "before-gh" ]; then
+    error "TEST FAILURE: Simulating error before GitHub CLI installation"
+    exit 1
 fi
 
 # Check for GitHub CLI
@@ -792,6 +807,14 @@ else
         info "Or rerun this installer in an interactive terminal"
         GH_USER="[Not authenticated]"
     fi
+fi
+
+# TEST: Simulate failure after GitHub CLI installed (gh available for issue creation)
+if [ "$TEST_FAIL" = "after-gh" ]; then
+    error "TEST FAILURE: Simulating error after GitHub CLI installation"
+    echo ""
+    info "This should offer GitHub issue creation if gh is installed and authenticated"
+    exit 1
 fi
 
 echo ""
