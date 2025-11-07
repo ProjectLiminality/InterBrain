@@ -740,7 +740,7 @@ echo "-----------------------------------"
 PLUGINS_DIR="$VAULT_PATH/.obsidian/plugins"
 mkdir -p "$PLUGINS_DIR"
 
-SYMLINK_PATH="$PLUGINS_DIR/interbrain"
+SYMLINK_PATH="$PLUGINS_DIR/InterBrain"
 
 # Remove old symlink if exists
 if [ -L "$SYMLINK_PATH" ]; then
@@ -1118,11 +1118,18 @@ EOF
         success "Created Obsidian config and registered vault"
     fi
 
-    # Now open Obsidian with the vault
+    # Now open Obsidian with the vault by name (now that it's registered)
     info "Opening Obsidian with your vault..."
+
+    # Extract vault name for URI
+    VAULT_NAME=$(basename "$VAULT_PATH")
+
+    # Give Obsidian a moment if it needs to restart to read the new config
     sleep 1
-    open "obsidian://open?path=${VAULT_PATH}"
-    success "Obsidian launched with vault"
+
+    # Open by vault name now that it's registered
+    open "obsidian://open?vault=${VAULT_NAME}"
+    success "Obsidian launched with vault: $VAULT_NAME"
 
     # If a clone URI was provided, trigger it after Obsidian loads
     if [ -n "$CLONE_URI" ]; then
