@@ -25,6 +25,7 @@ import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
 import { registerRadicleCommands } from './commands/radicle-commands';
 import { registerGitHubCommands } from './commands/github-commands';
 import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
+import { registerHousekeepingCommands } from './commands/housekeeping-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
 import { registerMigrationCommands } from './commands/migration-commands';
 import { registerRelationshipCommands } from './commands/relationship-commands';
@@ -376,6 +377,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register Coherence Beacon commands (network discovery)
     registerCoherenceBeaconCommands(this);
+
+    // Register housekeeping commands (system maintenance)
+    registerHousekeepingCommands(this);
 
     // Register migration commands (PascalCase naming migration)
     registerMigrationCommands(this);
