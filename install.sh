@@ -1067,6 +1067,16 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
     if pgrep -x "Obsidian" > /dev/null; then
         info "Closing Obsidian to update vault registry..."
         killall Obsidian 2>/dev/null || true
+
+        # Wait for Obsidian to fully quit (up to 5 seconds)
+        for i in {1..10}; do
+            if ! pgrep -x "Obsidian" > /dev/null; then
+                break
+            fi
+            sleep 0.5
+        done
+
+        # Extra moment to ensure clean exit
         sleep 1
     fi
 
@@ -1084,7 +1094,7 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
 
     if [ -f "$OBSIDIAN_CONFIG" ]; then
         # File exists - add vault to existing config using Python
-        python3 << EOF
+        PYTHON_OUTPUT=$(python3 << EOF
 import json
 import sys
 
@@ -1096,8 +1106,9 @@ timestamp = $TIMESTAMP
 try:
     with open(config_file, 'r') as f:
         config = json.load(f)
-except:
-    config = {"vaults": {}}
+except Exception as e:
+    print(f"ERROR: Failed to read config: {e}", file=sys.stderr)
+    sys.exit(1)
 
 # Ensure vaults key exists
 if "vaults" not in config:
@@ -1110,13 +1121,23 @@ config["vaults"][vault_id] = {
     "open": True
 }
 
-# Write back
-with open(config_file, 'w') as f:
-    json.dump(config, f)
-
-print("Vault registered successfully")
+try:
+    # Write back
+    with open(config_file, 'w') as f:
+        json.dump(config, f)
+    print(f"SUCCESS: Vault '{vault_path}' registered with ID {vault_id}")
+except Exception as e:
+    print(f"ERROR: Failed to write config: {e}", file=sys.stderr)
+    sys.exit(1)
 EOF
-        success "Vault registered in Obsidian"
+)
+        if [ $? -eq 0 ]; then
+            success "Vault registered in Obsidian"
+            info "$PYTHON_OUTPUT"
+        else
+            error "Failed to register vault"
+            echo "$PYTHON_OUTPUT"
+        fi
     else
         # File doesn't exist - create new config
         cat > "$OBSIDIAN_CONFIG" << EOF
