@@ -1013,8 +1013,20 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
         info "Waiting for Obsidian and InterBrain to initialize..."
         sleep 5  # Give Obsidian time to load the vault and enable plugins
 
-        info "Triggering clone URI..."
-        open "$CLONE_URI"
+        # Extract vault name from path and add it to the URI
+        VAULT_NAME=$(basename "$VAULT_PATH")
+
+        # Add vault parameter to ensure URI goes to correct vault
+        if [[ "$CLONE_URI" == *"?"* ]]; then
+            # URI already has parameters, append with &
+            MODIFIED_URI="${CLONE_URI}&vault=${VAULT_NAME}"
+        else
+            # URI has no parameters, add with ?
+            MODIFIED_URI="${CLONE_URI}?vault=${VAULT_NAME}"
+        fi
+
+        info "Triggering clone URI for vault: $VAULT_NAME"
+        open "$MODIFIED_URI"
         success "Clone URI triggered - DreamNode(s) will appear shortly"
         echo ""
         info "The clone operation is running in the background."
@@ -1084,7 +1096,7 @@ echo "In Obsidian Settings → InterBrain:"
 echo ""
 echo "• Anthropic API Key - Required for AI features:"
 echo "  - Get your key from: https://console.anthropic.com/settings/keys"
-echo "  - Used for conversation summaries and semantic analysis"
+echo "  - Used for conversation summaries and other LLM magic"
 echo ""
 echo "• Radicle Passphrase - Required for seamless Radicle operations:"
 echo "  - This is the passphrase you created during 'rad auth'"
