@@ -12,9 +12,9 @@ async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; ha
   }
 
   try {
-    const { execAsync } = require('child_process');
+    const { exec } = require('child_process');
     const { promisify } = require('util');
-    const execAsyncPromise = promisify(execAsync);
+    const execAsyncPromise = promisify(exec);
     const path = require('path');
 
     // Get vault path
