@@ -301,8 +301,34 @@ export class GitService {
         };
       }
 
-      // Fetch from remote
-      await execAsync('git fetch', { cwd: fullPath });
+      // Determine which remote to fetch from (avoid broken Radicle remotes if CLI not available)
+      let remoteName = 'origin'; // Default
+      try {
+        // Try to get the upstream remote for current branch
+        const { stdout: upstreamOutput } = await execAsync('git rev-parse --abbrev-ref --symbolic-full-name @{upstream}', { cwd: fullPath });
+        const upstream = upstreamOutput.trim();
+        if (upstream && upstream !== '@{upstream}') {
+          // Extract remote name from refs/remotes/<remote>/<branch>
+          const remoteMatch = upstream.match(/^([^\/]+)\//);
+          if (remoteMatch) {
+            remoteName = remoteMatch[1];
+          }
+        }
+      } catch {
+        // No upstream configured, try common remotes in order
+        const remotes = remoteOutput.trim().split('\n');
+        if (remotes.includes('github')) {
+          remoteName = 'github';
+        } else if (remotes.includes('origin')) {
+          remoteName = 'origin';
+        } else if (remotes.length > 0) {
+          remoteName = remotes[0];
+        }
+      }
+
+      // Fetch from specific remote (not all remotes)
+      console.log(`GitService: Fetching from remote: ${remoteName}`);
+      await execAsync(`git fetch ${remoteName}`, { cwd: fullPath });
 
       // Check if there are new commits (compare HEAD with @{upstream})
       // Use %x00 (null byte) as delimiter to handle multiline commit messages
