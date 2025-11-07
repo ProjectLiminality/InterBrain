@@ -4,7 +4,25 @@
 # One-command setup: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash
 # With URI: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash -s -- --uri "obsidian://interbrain-clone?..."
 
-set -e  # Exit on error
+# Create log file FIRST (before anything else)
+LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
+
+# Redirect all output to both terminal AND log file
+exec > >(tee -a "$LOG_FILE")
+exec 2>&1
+
+# Log system diagnostics silently to log file only
+{
+  echo "=== InterBrain Installation Log ==="
+  echo "Date: $(date)"
+  echo "OS: $(uname -s) $(uname -r)"
+  echo "Architecture: $(uname -m)"
+  echo "Shell: $SHELL"
+  echo "User: $USER"
+  echo "Interactive: $([ -t 0 ] && echo 'Yes' || echo 'No (piped)')"
+  echo "===================================="
+  echo ""
+} >> "$LOG_FILE" 2>&1
 
 echo "🚀 InterBrain Installation Script"
 echo "=================================="
@@ -17,8 +35,8 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Total number of steps (for progress tracking)
-TOTAL_STEPS=13
+# Total number of steps (updated for new steps)
+TOTAL_STEPS=15
 
 # Default vault name and location
 DEFAULT_VAULT_NAME="DreamVault"
@@ -63,6 +81,152 @@ info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
+# Function to sanitize log (remove sensitive data)
+sanitize_log() {
+    cat "$LOG_FILE" | \
+        sed "s|$HOME|~|g" | \
+        sed "s|$USER|<USER>|g" | \
+        sed -E 's/([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})/[EMAIL]/g' | \
+        sed -E 's/(api[_-]?key|token|secret|password|passphrase)[:=][[:space:]]*[^ ]+/\1=<REDACTED>/gi'
+}
+
+# Function to copy log to clipboard
+copy_to_clipboard() {
+    local copied=false
+
+    # Sanitize before copying
+    SANITIZED_LOG=$(sanitize_log)
+
+    if command_exists pbcopy; then
+        echo "$SANITIZED_LOG" | pbcopy && copied=true
+    elif command_exists xclip; then
+        echo "$SANITIZED_LOG" | xclip -selection clipboard && copied=true
+    elif command_exists xsel; then
+        echo "$SANITIZED_LOG" | xsel --clipboard --input && copied=true
+    elif command_exists clip.exe; then
+        echo "$SANITIZED_LOG" | clip.exe && copied=true
+    fi
+
+    if [ "$copied" = true ]; then
+        success "Installation log copied to clipboard!"
+        echo ""
+        info "Please paste it in a new issue at:"
+        info "https://github.com/ProjectLiminality/InterBrain/issues/new"
+    else
+        warning "Could not copy to clipboard automatically."
+        echo ""
+        info "You can manually copy the log from:"
+        info "  $LOG_FILE"
+    fi
+}
+
+# Function to create GitHub issue
+create_github_issue() {
+    if ! command_exists gh; then
+        warning "GitHub CLI ('gh') not installed yet."
+        echo ""
+        info "Install complete and this error will be reportable via GitHub CLI"
+        echo ""
+        copy_to_clipboard
+        return
+    fi
+
+    # Check if gh is authenticated
+    if ! gh auth status >/dev/null 2>&1; then
+        warning "GitHub CLI not authenticated yet."
+        echo ""
+        info "Complete the installation and authenticate, then you can report issues directly"
+        echo ""
+        copy_to_clipboard
+        return
+    fi
+
+    info "Creating GitHub issue with installation log..."
+
+    # Sanitize log (remove sensitive data)
+    SANITIZED_LOG=$(sanitize_log)
+
+    gh issue create \
+        --repo ProjectLiminality/InterBrain \
+        --title "Install failed on $(uname -s) $(uname -r)" \
+        --label "installation,bug" \
+        --body "$(cat <<EOF
+## Installation Error Report
+
+**Generated**: $(date)
+**OS**: $(uname -s) $(uname -r)
+**Architecture**: $(uname -m)
+**Shell**: $SHELL
+
+---
+
+## Installation Log
+
+\`\`\`bash
+$SANITIZED_LOG
+\`\`\`
+
+---
+
+**Note**: Sensitive information has been automatically sanitized from this log.
+EOF
+)"
+
+    if [ $? -eq 0 ]; then
+        success "GitHub issue created!"
+        echo ""
+        info "Thank you for reporting this issue. We'll investigate and improve the installer."
+    else
+        error "Failed to create issue. Falling back to clipboard..."
+        copy_to_clipboard
+    fi
+}
+
+# Error handler
+handle_error() {
+    local exit_code=$1
+    local line_number=$2
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    error "Installation failed at line $line_number"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "📋 Installation log saved to:"
+    echo "   $LOG_FILE"
+    echo ""
+    echo "💡 You can safely rerun this script - it won't destroy existing data"
+    echo ""
+
+    # Only offer interactive feedback if terminal attached
+    if [ -t 0 ]; then
+        echo "Would you like to report this issue?"
+        echo ""
+        echo "  1) Create GitHub issue (if gh CLI is set up)"
+        echo "  2) Copy log to clipboard"
+        echo "  3) Just show me the log location"
+        echo ""
+        read -p "Choose [1/2/3]: " -n 1 choice
+        echo ""
+        echo ""
+
+        case $choice in
+            1) create_github_issue ;;
+            2) copy_to_clipboard ;;
+            3) echo ""; info "Log: $LOG_FILE" ;;
+        esac
+    else
+        echo "To report this issue:"
+        echo "  1) View log: cat $LOG_FILE"
+        echo "  2) File issue: https://github.com/ProjectLiminality/InterBrain/issues"
+    fi
+
+    exit $exit_code
+}
+
+# Trap errors
+trap 'handle_error $? $LINENO' ERR
+
 # Function to show spinner during long operations
 show_spinner() {
     local pid=$1
@@ -96,11 +260,19 @@ refresh_shell_env() {
     # Add common paths explicitly
     export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.radicle/bin:$PATH"
 
+    # For Radicle specifically, also update current shell's hash table
+    if [ -d "$HOME/.radicle/bin" ]; then
+        export PATH="$HOME/.radicle/bin:$PATH"
+        hash -r 2>/dev/null || true
+    fi
+
     # Source shell profile if it exists
     if [ -f "$HOME/.zshrc" ]; then
         source "$HOME/.zshrc" 2>/dev/null || true
     elif [ -f "$HOME/.bashrc" ]; then
         source "$HOME/.bashrc" 2>/dev/null || true
+    elif [ -f "$HOME/.bash_profile" ]; then
+        source "$HOME/.bash_profile" 2>/dev/null || true
     fi
 }
 
@@ -112,14 +284,53 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # Check for Homebrew (macOS)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     if ! command_exists brew; then
-        warning "Homebrew not found. Installing..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        warning "Homebrew not found."
+        echo ""
+
+        # Check if Xcode CLI tools are installed
+        if ! xcode-select -p &>/dev/null; then
+            info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            info "📦 Xcode Command Line Tools Required"
+            info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "Homebrew requires Xcode Command Line Tools to build packages."
+            echo ""
+            echo "Download details:"
+            echo "  • Size: ~700 MB"
+            echo "  • Time: 5-15 minutes (depending on connection)"
+            echo "  • Required: Yes (cannot skip)"
+            echo ""
+            info "The download will begin automatically. Please be patient..."
+            echo ""
+            sleep 3  # Give user time to read
+        fi
+
+        if [ -t 0 ]; then
+            # Interactive mode - proceed with installation
+            echo "Installing Homebrew..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        else
+            # Non-interactive mode - provide instructions
+            echo ""
+            error "Cannot install Homebrew in non-interactive mode (requires password)."
+            echo ""
+            echo "📋 Please run this command in your terminal:"
+            echo ""
+            echo '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+            echo ""
+            echo "Then run the InterBrain installer again:"
+            echo '  curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash'
+            echo ""
+            exit 1
+        fi
 
         # Add Homebrew to PATH based on architecture
         if [[ $(uname -m) == 'arm64' ]]; then
             eval "$(/opt/homebrew/bin/brew shellenv)"
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
         else
             eval "$(/usr/local/bin/brew shellenv)"
+            echo 'eval "$(/usr/local/bin/brew shellenv)"' >> ~/.bash_profile
         fi
 
         refresh_shell_env
@@ -158,16 +369,50 @@ else
     success "Node.js found ($(node --version))"
 fi
 
+# Check for GitHub CLI
+if ! command_exists gh; then
+    echo "Installing GitHub CLI..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        brew install gh
+        refresh_shell_env
+    else
+        # Linux installation
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update && sudo apt install gh
+    fi
+
+    # Verify it's accessible
+    if command_exists gh; then
+        success "GitHub CLI installed ($(gh --version | head -1))"
+    else
+        warning "GitHub CLI installed but not yet available in PATH"
+        info "It will be available after restarting your terminal"
+    fi
+else
+    success "GitHub CLI found ($(gh --version | head -1))"
+fi
+
 # Check for Radicle
+RADICLE_AVAILABLE=true
 if ! command_exists rad; then
     echo "Installing Radicle..."
     curl -sSf https://radicle.xyz/install | sh
 
-    # Add Radicle to PATH for this session
+    # Aggressively ensure rad is in PATH
     export PATH="$HOME/.radicle/bin:$PATH"
+    hash -r 2>/dev/null || true
     refresh_shell_env
 
-    success "Radicle installed"
+    # Verify it's actually available
+    if command_exists rad; then
+        success "Radicle installed and available ($(rad --version))"
+    else
+        warning "Radicle installed but not immediately available in PATH"
+        info "The 'rad' command will be available after restarting your terminal"
+        info "You can rerun this installer after restart to complete Radicle setup"
+        RADICLE_AVAILABLE=false
+    fi
 else
     success "Radicle found ($(rad --version))"
 fi
@@ -175,7 +420,7 @@ fi
 # Check for Obsidian
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo ""
-    echo "Step 2: Checking for Obsidian..."
+    echo "Step 2/$TOTAL_STEPS: Checking for Obsidian..."
     echo "----------------------------------"
 
     if [ -d "/Applications/Obsidian.app" ]; then
@@ -193,7 +438,7 @@ else
 fi
 
 echo ""
-echo "Step 3: Setting up vault..."
+echo "Step 3/$TOTAL_STEPS: Setting up vault..."
 echo "----------------------------"
 
 # Check if user wants to use existing vault or create new one
@@ -233,74 +478,8 @@ fi
 # Create .obsidian directory structure if it doesn't exist
 mkdir -p "$VAULT_PATH/.obsidian/plugins"
 
-# Parse .gitignore and create Obsidian config with smart exclusions
-info "Parsing .gitignore patterns for vault exclusions..."
-
-# Generate userIgnoreFilters from .gitignore
-INTERBRAIN_PATH="$VAULT_PATH/InterBrain"
-GITIGNORE_PATH="$INTERBRAIN_PATH/.gitignore"
-
-# Always exclude .git directory (not in .gitignore but critical)
-FILTERS='["InterBrain/.git"'
-
-if [ -f "$GITIGNORE_PATH" ]; then
-    # Parse .gitignore: filter comments, empty lines, and convert to JSON array
-    while IFS= read -r line || [ -n "$line" ]; do
-        # Skip empty lines and comments
-        if [ -z "$line" ] || [[ "$line" =~ ^[[:space:]]*# ]]; then
-            continue
-        fi
-
-        # Remove trailing slashes for consistency
-        pattern="${line%/}"
-
-        # Skip negation patterns (lines starting with !)
-        if [[ "$pattern" =~ ^! ]]; then
-            continue
-        fi
-
-        # Add InterBrain/ prefix and append to filters
-        FILTERS="$FILTERS, \"InterBrain/$pattern\""
-    done < "$GITIGNORE_PATH"
-fi
-
-# Close JSON array
-FILTERS="$FILTERS]"
-
-# Create app.json with parsed filters
-cat > "$VAULT_PATH/.obsidian/app.json" << EOF
-{
-  "showLineNumber": true,
-  "spellcheck": true,
-  "promptDelete": false,
-  "userIgnoreFilters": $FILTERS
-}
-EOF
-success "Created Obsidian config with $(echo "$FILTERS" | grep -o "InterBrain/" | wc -l | tr -d ' ') exclusion patterns from .gitignore"
-
-# Create community-plugins.json to enable InterBrain plugin
-cat > "$VAULT_PATH/.obsidian/community-plugins.json" << 'EOF'
-["interbrain"]
-EOF
-
-# Create snippets directory and enable InterBrain theme
-mkdir -p "$VAULT_PATH/.obsidian/snippets"
-
-# Create appearance.json with InterBrain theme enabled
-cat > "$VAULT_PATH/.obsidian/appearance.json" << 'EOF'
-{
-  "accentColor": "#00A2FF",
-  "theme": "obsidian",
-  "baseFontSize": 16,
-  "enabledCssSnippets": [
-    "interbrain"
-  ]
-}
-EOF
-success "Created theme configuration"
-
 echo ""
-echo "Step 4: Cloning InterBrain..."
+echo "Step 4/$TOTAL_STEPS: Cloning InterBrain..."
 echo "------------------------------"
 
 # Clone into vault
@@ -342,8 +521,77 @@ fi
 
 success "InterBrain code ready at: $INTERBRAIN_PATH"
 
+# Now parse .gitignore and create Obsidian config (after InterBrain is cloned)
+info "Configuring Obsidian vault exclusions from .gitignore..."
+
+GITIGNORE_PATH="$INTERBRAIN_PATH/.gitignore"
+
+# Always exclude .git directory (not in .gitignore but critical)
+FILTERS='["InterBrain/.git"'
+
+if [ -f "$GITIGNORE_PATH" ]; then
+    # Parse .gitignore: filter comments, empty lines, and convert to JSON array
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip empty lines and comments
+        if [ -z "$line" ] || [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
+        # Remove trailing slashes for consistency
+        pattern="${line%/}"
+
+        # Skip negation patterns (lines starting with !)
+        if [[ "$pattern" =~ ^! ]]; then
+            continue
+        fi
+
+        # Add InterBrain/ prefix and append to filters
+        FILTERS="$FILTERS, \"InterBrain/$pattern\""
+    done < "$GITIGNORE_PATH"
+fi
+
+# Close JSON array
+FILTERS="$FILTERS]"
+
+# Only create/update app.json if it doesn't exist or .gitignore is newer
+if [ ! -f "$VAULT_PATH/.obsidian/app.json" ] || [ "$GITIGNORE_PATH" -nt "$VAULT_PATH/.obsidian/app.json" ]; then
+    # Create app.json with parsed filters
+    cat > "$VAULT_PATH/.obsidian/app.json" << EOF
+{
+  "showLineNumber": true,
+  "spellcheck": true,
+  "promptDelete": false,
+  "userIgnoreFilters": $FILTERS
+}
+EOF
+    success "Created Obsidian config with $(echo "$FILTERS" | grep -o "InterBrain/" | wc -l | tr -d ' ') exclusion patterns"
+else
+    success "Obsidian config already up to date"
+fi
+
+# Create community-plugins.json to enable InterBrain plugin
+cat > "$VAULT_PATH/.obsidian/community-plugins.json" << 'EOF'
+["interbrain"]
+EOF
+
+# Create snippets directory and enable InterBrain theme
+mkdir -p "$VAULT_PATH/.obsidian/snippets"
+
+# Create appearance.json with InterBrain theme enabled
+cat > "$VAULT_PATH/.obsidian/appearance.json" << 'EOF'
+{
+  "accentColor": "#00A2FF",
+  "theme": "obsidian",
+  "baseFontSize": 16,
+  "enabledCssSnippets": [
+    "interbrain"
+  ]
+}
+EOF
+success "Created theme configuration"
+
 echo ""
-echo "Step 5: Building plugin..."
+echo "Step 5/$TOTAL_STEPS: Building plugin..."
 echo "--------------------------"
 
 cd "$INTERBRAIN_PATH"
@@ -361,7 +609,7 @@ wait $!
 success "Plugin built successfully"
 
 echo ""
-echo "Step 6: Installing InterBrain theme..."
+echo "Step 6/$TOTAL_STEPS: Installing InterBrain theme..."
 echo "---------------------------------------"
 
 # Copy theme CSS to snippets directory
@@ -373,7 +621,7 @@ else
 fi
 
 echo ""
-echo "Step 7: Installing Ollama for semantic search..."
+echo "Step 7/$TOTAL_STEPS: Installing Ollama for semantic search..."
 echo "-------------------------------------------------"
 
 # Check for Ollama
@@ -422,7 +670,7 @@ else
 fi
 
 echo ""
-echo "Step 8: Linking plugin to vault..."
+echo "Step 8/$TOTAL_STEPS: Linking plugin to vault..."
 echo "-----------------------------------"
 
 PLUGINS_DIR="$VAULT_PATH/.obsidian/plugins"
@@ -441,62 +689,198 @@ ln -s "$INTERBRAIN_PATH" "$SYMLINK_PATH"
 success "Symlink created: $SYMLINK_PATH → $INTERBRAIN_PATH"
 
 echo ""
-echo "Step 9: Radicle identity setup..."
+echo "Step 9/$TOTAL_STEPS: GitHub account & authentication..."
+echo "-------------------------------------------"
+
+# Check if already authenticated
+if gh auth status >/dev/null 2>&1; then
+    success "GitHub CLI already authenticated"
+    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
+    echo "   Logged in as: $GH_USER"
+else
+    warning "GitHub CLI not authenticated"
+    echo ""
+    info "InterBrain uses GitHub for:"
+    info "  • Collaborative DreamNode sharing"
+    info "  • Version control and backups"
+    info "  • Community features"
+    echo ""
+
+    if [ -t 0 ]; then
+        # Interactive mode - offer authentication
+        echo "Do you have a GitHub account?"
+        echo ""
+        echo "  1) Yes - Log in now"
+        echo "  2) No - Create account and log in"
+        echo "  3) Skip - I'll do this later"
+        echo ""
+        read -p "Choose [1/2/3]: " -n 1 gh_choice
+        echo ""
+        echo ""
+
+        case $gh_choice in
+            1)
+                info "Starting GitHub authentication flow..."
+                echo ""
+                gh auth login -h github.com -p https -w
+
+                if gh auth status >/dev/null 2>&1; then
+                    success "GitHub authenticated successfully"
+                    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
+                    echo "   Logged in as: $GH_USER"
+                else
+                    warning "Authentication incomplete"
+                    info "You can complete it later with: gh auth login"
+                    info "Or rerun this installer - it's safe and non-destructive"
+                    GH_USER="[Not authenticated]"
+                fi
+                ;;
+            2)
+                info "Opening GitHub signup page in your browser..."
+                echo ""
+
+                # Open signup page
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    open "https://github.com/signup"
+                elif command_exists xdg-open; then
+                    xdg-open "https://github.com/signup"
+                fi
+
+                echo "After creating your account, press Enter to authenticate GitHub CLI..."
+                read -p ""
+
+                # Now run auth flow
+                gh auth login -h github.com -p https -w
+
+                if gh auth status >/dev/null 2>&1; then
+                    success "GitHub account created and authenticated!"
+                    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
+                    echo "   Logged in as: $GH_USER"
+                else
+                    warning "Authentication incomplete"
+                    info "You can complete it later with: gh auth login"
+                    info "Or rerun this installer - it's safe and non-destructive"
+                    GH_USER="[Not authenticated]"
+                fi
+                ;;
+            3)
+                info "Skipping GitHub authentication"
+                info "You can authenticate later with: gh auth login"
+                info "Or rerun this installer - it's safe and non-destructive"
+                GH_USER="[Not authenticated]"
+                ;;
+            *)
+                info "Invalid choice - skipping authentication"
+                GH_USER="[Not authenticated]"
+                ;;
+        esac
+    else
+        # Non-interactive mode
+        info "Non-interactive mode: Skipping GitHub authentication"
+        echo ""
+        info "To authenticate later, run: gh auth login"
+        info "Or rerun this installer in an interactive terminal"
+        GH_USER="[Not authenticated]"
+    fi
+fi
+
+echo ""
+echo "Step 10/$TOTAL_STEPS: Radicle identity setup..."
 echo "-----------------------------------"
 
-# Check if Radicle identity exists
-if rad self --did >/dev/null 2>&1; then
+# Only proceed if Radicle is available
+if [ "$RADICLE_AVAILABLE" = false ]; then
+    warning "Radicle not available in current session - skipping for now"
+    info "Open a new terminal and rerun this script to complete Radicle setup"
+    info "The installer is safe to run multiple times - it won't destroy data"
+    RAD_DID="[Open new terminal and rerun installer]"
+    RAD_ALIAS="[Not created]"
+elif rad self --did >/dev/null 2>&1; then
+    # Identity already exists
     success "Radicle identity already exists"
     RAD_DID=$(rad self --did)
     RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "Unknown")
     echo "   DID: $RAD_DID"
     echo "   Alias: $RAD_ALIAS"
 else
-    warning "No Radicle identity found. Creating one..."
+    # No identity - offer to create
+    warning "No Radicle identity found"
+    echo ""
+    info "Radicle identity enables peer-to-peer collaboration."
     echo ""
     echo "You will be asked to:"
     echo "  1. Enter an alias (your name or nickname)"
-    echo "  2. Enter a passphrase (keep this safe!)"
+    echo "  2. Create a passphrase (keep this safe!)"
     echo ""
 
     if [ -t 0 ]; then
-        read -p "Press Enter to continue..."
-        rad auth
+        # Interactive mode - offer choice
+        read -p "Create Radicle identity now? [Y/n] (you can skip and rerun installer later): " -n 1 -r
+        echo ""
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            rad auth
+
+            if rad self --did >/dev/null 2>&1; then
+                success "Radicle identity created"
+                RAD_DID=$(rad self --did)
+                RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "Unknown")
+                echo "   DID: $RAD_DID"
+                echo "   Alias: $RAD_ALIAS"
+            else
+                warning "Identity creation incomplete"
+                info "You can create it later with: rad auth"
+                info "Or rerun this installer - it's safe and non-destructive"
+                RAD_DID="[Run 'rad auth' to create]"
+                RAD_ALIAS="[Not created]"
+            fi
+        else
+            info "Skipping Radicle identity creation"
+            info "You can create it later with: rad auth"
+            info "Or rerun this installer - it's safe and non-destructive"
+            RAD_DID="[Run 'rad auth' to create]"
+            RAD_ALIAS="[Not created]"
+        fi
     else
-        echo ""
-        error "Cannot create Radicle identity in non-interactive mode."
-        echo "Please run this command after installation completes:"
-        echo "  rad auth"
-        echo ""
-        RAD_DID="[Not created - run 'rad auth']"
+        # Non-interactive mode
+        info "Non-interactive mode: Skipping Radicle identity creation"
+        info "Run this command after installation: rad auth"
+        info "Or rerun installer in interactive terminal"
+        RAD_DID="[Run 'rad auth' to create]"
         RAD_ALIAS="[Not created]"
     fi
+fi
 
-    if rad self --did >/dev/null 2>&1; then
-        success "Radicle identity created"
-        RAD_DID=$(rad self --did)
-        RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "Unknown")
-        echo "   DID: $RAD_DID"
-        echo "   Alias: $RAD_ALIAS"
+echo ""
+echo "Step 11/$TOTAL_STEPS: Starting Radicle node..."
+echo "----------------------------------"
+
+# Only attempt if Radicle is available and identity exists
+if [ "$RADICLE_AVAILABLE" = false ]; then
+    info "Skipping Radicle node (rad command not available yet)"
+    info "Rerun installer after opening new terminal to complete setup"
+elif [[ "$RAD_DID" == "["* ]]; then
+    info "Skipping Radicle node (no identity created yet)"
+    info "Create identity with 'rad auth' then start node with 'rad node start'"
+else
+    # Check if node is already running
+    if rad node status 2>/dev/null | grep -qi "running"; then
+        success "Radicle node already running"
+    else
+        echo "Starting Radicle node..."
+        if rad node start 2>/dev/null; then
+            sleep 2
+            success "Radicle node started"
+        else
+            warning "Could not start Radicle node automatically"
+            info "You can start it manually with: rad node start"
+        fi
     fi
 fi
 
 echo ""
-echo "Step 10: Starting Radicle node..."
-echo "----------------------------------"
-
-# Check if node is already running
-if rad node status 2>/dev/null | grep -qi "running"; then
-    success "Radicle node already running"
-else
-    echo "Starting Radicle node..."
-    rad node start
-    sleep 2
-    success "Radicle node started"
-fi
-
-echo ""
-echo "Step 11: Setting up real-time transcription (Python + Whisper)..."
+echo "Step 12/$TOTAL_STEPS: Setting up real-time transcription (Python + Whisper)..."
 echo "------------------------------------------------------------------"
 
 # Check for Python 3
@@ -545,7 +929,7 @@ else
 fi
 
 echo ""
-echo "Step 12: Final verification..."
+echo "Step 13/$TOTAL_STEPS: Final verification..."
 echo "-------------------------------"
 
 # Verify everything
@@ -565,10 +949,14 @@ else
     success "Plugin built (main.js exists)"
 fi
 
-if ! rad node status 2>/dev/null | grep -qi "running"; then
-    warning "Radicle node not running (you can start it with: rad node start)"
+if [ "$RADICLE_AVAILABLE" = true ]; then
+    if rad node status 2>/dev/null | grep -qi "running"; then
+        success "Radicle node running"
+    else
+        warning "Radicle node not running (start with: rad node start)"
+    fi
 else
-    success "Radicle node running"
+    warning "Radicle not available (rerun installer after opening new terminal)"
 fi
 
 if [ "$OBSIDIAN_INSTALLED" = true ]; then
@@ -592,8 +980,14 @@ else
     warning "Python 3 not installed (needed for transcription)"
 fi
 
+if gh auth status >/dev/null 2>&1; then
+    success "GitHub CLI authenticated"
+else
+    warning "GitHub CLI not authenticated (run: gh auth login)"
+fi
+
 echo ""
-echo "Step 13: Opening Obsidian..."
+echo "Step 14/$TOTAL_STEPS: Opening Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
@@ -623,55 +1017,89 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
 fi
 
 echo ""
+echo "Step 15/$TOTAL_STEPS: Installation summary..."
+echo "-------------------------------"
+
+echo ""
 echo "=================================="
 if [ "$ALL_GOOD" = true ]; then
     echo -e "${GREEN}✅ Installation complete!${NC}"
-    echo ""
-    if [ -n "$CLONE_URI" ]; then
-        echo "🎯 Personalized installation detected!"
-        echo ""
-        echo "The clone operation has been triggered automatically."
-        echo "Your collaborator's DreamNodes and Dreamer profile will appear in InterBrain."
-        echo ""
-    fi
-    echo "Next steps:"
-    echo "1. In Obsidian: Click 'Trust author and enable plugins' when prompted"
-    echo "2. Look for the InterBrain icon (🧠) in the left ribbon"
-    echo "3. Use Command+R to reload the plugin during development"
-    echo "4. Run 'Full Index' command to enable semantic search"
-    if [ -z "$CLONE_URI" ]; then
-        echo "5. Click Clone URIs from your email to add DreamNodes"
-    fi
-    echo ""
-    echo "⚙️  IMPORTANT: Configure settings for full functionality:"
-    echo ""
-    echo "In Obsidian Settings → InterBrain:"
-    echo ""
-    echo "• Anthropic API Key - Required for AI features:"
-    echo "  - Get your key from: https://console.anthropic.com/settings/keys"
-    echo "  - Used for conversation summaries and semantic analysis"
-    echo ""
-    echo "• Radicle Passphrase - Required for seamless Radicle operations:"
-    echo "  - This is the passphrase you created during 'rad auth'"
-    echo "  - Enables automatic peer-to-peer syncing without password prompts"
-    echo "  - Note: Stored locally in Obsidian's secure storage"
-    echo ""
-    if [[ "$RAD_DID" != "[Not created - run 'rad auth']" ]]; then
-        echo "Your Radicle identity:"
-        echo "   DID: $RAD_DID"
-        echo "   Alias: $RAD_ALIAS"
-        echo ""
-        echo "Share your DID with collaborators so they can follow you!"
-    fi
 else
-    error "Installation completed with warnings. Please review the output above."
+    echo -e "${YELLOW}⚠️  Installation complete with optional steps remaining${NC}"
+fi
+echo "=================================="
+echo ""
+
+if [ -n "$CLONE_URI" ]; then
+    echo "🎯 Personalized installation detected!"
     echo ""
-    echo "Common issues:"
-    echo "• If Radicle commands don't work, try: source ~/.zshrc"
-    echo "• If plugin doesn't appear, restart Obsidian"
-    echo "• If you need help, see: https://github.com/ProjectLiminality/InterBrain/issues"
+    echo "The clone operation has been triggered automatically."
+    echo "Your collaborator's DreamNodes and Dreamer profile will appear in InterBrain."
+    echo ""
+fi
+
+echo "📋 Installation log saved to: $LOG_FILE"
+echo ""
+
+echo "Next steps:"
+echo "1. In Obsidian: Click 'Trust author and enable plugins' when prompted"
+echo "2. Look for the InterBrain icon (🧠) in the left ribbon"
+echo "3. Use Command+R to reload the plugin during development"
+echo "4. Run 'Full Index' command to enable semantic search"
+if [ -z "$CLONE_URI" ]; then
+    echo "5. Click Clone URIs from your email to add DreamNodes"
+fi
+echo ""
+
+# Show authentication status
+if [[ "$GH_USER" == "["* ]]; then
+    warning "GitHub not authenticated - run: gh auth login"
+    echo "   (Or rerun installer - it's safe to run multiple times)"
+fi
+
+if [[ "$RAD_DID" == "["* ]]; then
+    warning "Radicle identity not created - run: rad auth"
+    echo "   (Or rerun installer - it's safe to run multiple times)"
+fi
+
+if [ "$RADICLE_AVAILABLE" = false ]; then
+    warning "Radicle not available in PATH yet"
+    info "Open a new terminal and rerun this script to complete Radicle setup"
 fi
 
 echo ""
+echo "⚙️  IMPORTANT: Configure settings for full functionality:"
+echo ""
+echo "In Obsidian Settings → InterBrain:"
+echo ""
+echo "• Anthropic API Key - Required for AI features:"
+echo "  - Get your key from: https://console.anthropic.com/settings/keys"
+echo "  - Used for conversation summaries and semantic analysis"
+echo ""
+echo "• Radicle Passphrase - Required for seamless Radicle operations:"
+echo "  - This is the passphrase you created during 'rad auth'"
+echo "  - Enables automatic peer-to-peer syncing without password prompts"
+echo "  - Note: Stored locally in Obsidian's secure storage"
+echo ""
+
+if [[ "$RAD_DID" != "["* ]]; then
+    echo "Your Radicle identity:"
+    echo "   DID: $RAD_DID"
+    echo "   Alias: $RAD_ALIAS"
+    echo ""
+    echo "Share your DID with collaborators so they can follow you!"
+    echo ""
+fi
+
+if [[ "$GH_USER" != "["* ]]; then
+    echo "Your GitHub account:"
+    echo "   Username: $GH_USER"
+    echo ""
+fi
+
+echo "💡 Remember: This installer is safe to run multiple times!"
+echo "   It won't destroy existing data or configurations."
+echo ""
+
 echo "Happy dreaming! 🌙✨"
 echo ""
