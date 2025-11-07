@@ -649,11 +649,21 @@ if ! command_exists ollama; then
 else
     success "Ollama found ($(ollama --version 2>/dev/null || echo 'version unknown'))"
 
-    # Ensure Ollama service is running on macOS
+    # Ensure Ollama service is running on macOS (only if installed via Homebrew)
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        if ! brew services list | grep -q "ollama.*started"; then
-            info "Starting Ollama service..."
-            brew services start ollama
+        # Check if Ollama was installed via Homebrew
+        if brew list ollama &>/dev/null; then
+            # Installed via Homebrew - manage with brew services
+            if ! brew services list | grep -q "ollama.*started"; then
+                info "Starting Ollama service..."
+                brew services start ollama
+            fi
+        else
+            # Installed via other method - check if running manually
+            if ! pgrep -x "ollama" > /dev/null; then
+                warning "Ollama installed but not running"
+                info "Start it manually if needed (it may already be running as a service)"
+            fi
         fi
     fi
 fi
