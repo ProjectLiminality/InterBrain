@@ -366,10 +366,19 @@ export class GitHubService {
         fs.mkdirSync(parentDir, { recursive: true });
       }
 
-      // Clone only the main branch (avoid gh-pages branch used for GitHub Pages)
-      // --single-branch ensures we only get main, not all branches
-      // -b main explicitly checks out main branch
-      await execAsync(`git clone --single-branch -b main "${githubUrl}" "${destinationPath}"`);
+      // Clone with --single-branch (avoids gh-pages and other branches)
+      // Try main first, fall back to master for older repos, then let git auto-detect default
+      try {
+        await execAsync(`git clone --single-branch -b main "${githubUrl}" "${destinationPath}"`);
+      } catch (mainError) {
+        // If main branch doesn't exist, try master (older repos like octocat/Hello-World)
+        try {
+          await execAsync(`git clone --single-branch -b master "${githubUrl}" "${destinationPath}"`);
+        } catch (masterError) {
+          // If both fail, let git auto-detect the default branch
+          await execAsync(`git clone --single-branch "${githubUrl}" "${destinationPath}"`);
+        }
+      }
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Failed to clone from GitHub: ${error.message}`);
