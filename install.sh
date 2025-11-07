@@ -1159,22 +1159,32 @@ EOF
     open "obsidian://open?vault=${VAULT_NAME}"
     success "Obsidian launched with vault: $VAULT_NAME"
 
-    # If a clone URI was provided, trigger it after Obsidian loads
+    # If a clone URI was provided, wait for user to trust the vault first
     if [ -n "$CLONE_URI" ]; then
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        info "🎯 Personalized Installation Detected"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        info "📋 ACTION REQUIRED: Trust Author and Enable Plugins"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        echo "Waiting for InterBrain plugin to activate..."
+        echo "Obsidian has opened with your new vault."
+        echo ""
+        echo "You should see a popup asking:"
+        echo "  \"Do you trust the author of this vault?\""
+        echo ""
+        echo "  👉 Click: \"Trust author and enable plugins\""
         echo ""
 
-        # Wait for plugin to load (much shorter now that vault opens properly)
-        for i in {5..1}; do
-            printf "\r   Triggering clone in %d seconds...  " $i
-            sleep 1
-        done
+        # Only prompt if interactive terminal
+        if [ -t 0 ]; then
+            read -p "Press ENTER after you've clicked the button to continue... "
+        else
+            # Non-interactive mode - just wait a reasonable time
+            echo "Waiting 10 seconds for plugin activation..."
+            sleep 10
+        fi
+
         echo ""
+        info "Great! Now triggering the personalized installation..."
         echo ""
 
         # Extract vault name from path and add it to the URI
