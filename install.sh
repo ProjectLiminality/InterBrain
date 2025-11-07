@@ -1,12 +1,16 @@
 #!/bin/bash
 # InterBrain Installation Script
 # For macOS/Linux systems
-# One-command setup: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash
-# With URI: curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh | bash -s -- --uri "obsidian://interbrain-clone?..."
+#
+# One-command setup (interactive):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)
+#
+# With personalized clone URI:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh) --uri "obsidian://interbrain-clone?..."
 #
 # Testing flags:
-# --test-fail before-gh   Simulate failure before GitHub CLI installed (no automatic issue creation available)
-# --test-fail after-gh    Simulate failure after GitHub CLI installed (should offer automatic issue creation)
+#   --test-fail before-gh   Simulate failure before GitHub CLI installed (no automatic issue creation available)
+#   --test-fail after-gh    Simulate failure after GitHub CLI installed (should offer automatic issue creation)
 
 # Create log file FIRST (before anything else)
 LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
@@ -456,38 +460,73 @@ echo ""
 echo "Step 3/$TOTAL_STEPS: Setting up vault..."
 echo "----------------------------"
 
-# Check if user wants to use existing vault or create new one
+# Vault setup for InterBrain
 if [ -t 0 ]; then
-    # Interactive mode (terminal attached)
+    # Interactive mode - let user name their vault
     echo ""
-    echo "Do you have an existing Obsidian vault?"
-    read -p "Press Enter to create a new vault, or type the path to your existing vault: " USER_VAULT_PATH
+    info "InterBrain works best in a dedicated vault (not mixed with regular notes)"
+    echo ""
+    read -p "Vault name (press Enter for default '$DEFAULT_VAULT_NAME'): " VAULT_NAME
+    VAULT_NAME=${VAULT_NAME:-$DEFAULT_VAULT_NAME}
 
-    if [ -z "$USER_VAULT_PATH" ]; then
-        # Create new vault
-        echo ""
-        read -p "Vault name (default: $DEFAULT_VAULT_NAME): " VAULT_NAME
-        VAULT_NAME=${VAULT_NAME:-$DEFAULT_VAULT_NAME}
-
-        read -p "Location (default: $DEFAULT_VAULT_PARENT): " VAULT_PARENT
-        VAULT_PARENT=${VAULT_PARENT:-$DEFAULT_VAULT_PARENT}
-
-        VAULT_PATH="$VAULT_PARENT/$VAULT_NAME"
-    else
-        VAULT_PATH="$USER_VAULT_PATH"
-    fi
+    VAULT_PATH="$DEFAULT_VAULT_PARENT/$VAULT_NAME"
 else
-    # Non-interactive mode (piped from curl)
+    # Non-interactive mode - use defaults
+    VAULT_NAME="$DEFAULT_VAULT_NAME"
     VAULT_PATH="$DEFAULT_VAULT_PARENT/$DEFAULT_VAULT_NAME"
     info "Non-interactive mode: Creating vault at $VAULT_PATH"
 fi
 
-# Create vault if it doesn't exist
-if [ ! -d "$VAULT_PATH" ]; then
-    mkdir -p "$VAULT_PATH"
-    success "Created vault directory: $VAULT_PATH"
+# Check if vault already exists
+if [ -d "$VAULT_PATH" ]; then
+    # Vault exists - check if it's an InterBrain vault
+    INTERBRAIN_PLUGIN_PATH="$VAULT_PATH/.obsidian/plugins/interbrain"
+
+    if [ -L "$INTERBRAIN_PLUGIN_PATH" ] || [ -d "$INTERBRAIN_PLUGIN_PATH" ]; then
+        # It's an InterBrain vault - safe to proceed
+        success "Found existing InterBrain vault: $VAULT_PATH"
+        info "Re-running setup to ensure everything is up to date..."
+    else
+        # It's an existing vault but NOT an InterBrain vault
+        echo ""
+        warning "Vault '$VAULT_NAME' already exists but is not an InterBrain vault"
+        echo ""
+        echo "⚠️  IMPORTANT: InterBrain works best in a dedicated vault."
+        echo ""
+        echo "Installing InterBrain into an existing vault with regular notes"
+        echo "is not recommended. InterBrain uses a fundamentally different"
+        echo "approach to knowledge management."
+        echo ""
+        info "Recommended approach:"
+        echo "  1. Use a fresh vault for InterBrain (choose a different name)"
+        echo "  2. Gradually migrate meaningful knowledge into your InterBrain vault"
+        echo ""
+
+        if [ -t 0 ]; then
+            read -p "Continue anyway? [y/N]: " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo ""
+                info "Installation cancelled. Please rerun with a different vault name."
+                exit 0
+            fi
+            echo ""
+            warning "Proceeding with existing vault (not recommended)..."
+        else
+            echo ""
+            error "Cannot proceed in non-interactive mode with existing non-InterBrain vault"
+            echo ""
+            echo "Please either:"
+            echo "  1. Run interactively and choose a different vault name"
+            echo "  2. Remove or rename the existing vault at: $VAULT_PATH"
+            echo ""
+            exit 1
+        fi
+    fi
 else
-    success "Using existing vault: $VAULT_PATH"
+    # New vault - create it
+    mkdir -p "$VAULT_PATH"
+    success "Created new InterBrain vault: $VAULT_PATH"
 fi
 
 # Create .obsidian directory structure if it doesn't exist
