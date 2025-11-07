@@ -1063,17 +1063,37 @@ echo "Step 14/$TOTAL_STEPS: Opening Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
-    # Open Obsidian with the vault
-    info "Opening Obsidian to your DreamVault..."
+    # Open Obsidian with the vault to register it
+    info "Opening Obsidian with your vault..."
+    echo ""
+    info "This registers the vault so URI commands can find it"
     sleep 1
     open -a Obsidian "$VAULT_PATH"
-    success "Obsidian opened"
+    success "Obsidian launched with vault"
 
     # If a clone URI was provided, trigger it after Obsidian loads
     if [ -n "$CLONE_URI" ]; then
         echo ""
-        info "Waiting for Obsidian and InterBrain to initialize..."
-        sleep 5  # Give Obsidian time to load the vault and enable plugins
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        info "🎯 Personalized Installation Detected"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "Waiting for Obsidian to fully initialize before triggering clone..."
+        echo ""
+        echo "⏱️  This takes ~10-15 seconds:"
+        echo "  1. Obsidian starts up"
+        echo "  2. Vault is registered in Obsidian's vault list"
+        echo "  3. InterBrain plugin loads and activates"
+        echo "  4. Clone URI handler becomes available"
+        echo ""
+
+        # Wait longer to ensure vault is registered and plugin is loaded
+        for i in {10..1}; do
+            printf "\r   Triggering clone in %d seconds...  " $i
+            sleep 1
+        done
+        echo ""
+        echo ""
 
         # Extract vault name from path and add it to the URI
         VAULT_NAME=$(basename "$VAULT_PATH")
@@ -1089,14 +1109,18 @@ if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
 
         info "Triggering clone URI for vault: $VAULT_NAME"
         open "$MODIFIED_URI"
-        success "Clone URI triggered - DreamNode(s) will appear shortly"
+        success "Clone URI triggered!"
         echo ""
-        info "The clone operation is running in the background."
+        info "The clone operation is now running in the background."
         info "Watch for notifications in Obsidian about the clone progress."
+        echo ""
+        info "If you see 'vault not found', please:"
+        info "  1. Wait a few more seconds for Obsidian to fully load"
+        info "  2. Manually trigger the clone URI again from your email/link"
     fi
 
     echo ""
-    info "Obsidian should open shortly. If not, open Obsidian and select:"
+    info "Obsidian should be running. If not, open Obsidian and select:"
     info "  $VAULT_PATH"
 fi
 
