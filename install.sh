@@ -219,14 +219,14 @@ handle_error() {
         echo "  2) Copy log to clipboard"
         echo "  3) Just show me the log location"
         echo ""
-        read -p "Choose [1/2/3]: " -n 1 choice
-        echo ""
+        read -p "Choose [1/2/3]: " choice
         echo ""
 
         case $choice in
             1) create_github_issue ;;
             2) copy_to_clipboard ;;
             3) echo ""; info "Log: $LOG_FILE" ;;
+            *) echo ""; info "No option selected. Log: $LOG_FILE" ;;
         esac
     else
         echo "To report this issue:"
