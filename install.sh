@@ -993,8 +993,8 @@ echo "-----------------------------------"
 
 # Only proceed if Radicle is available AND identity exists
 if [ "$RADICLE_AVAILABLE" = true ] && rad self --did >/dev/null 2>&1; then
-    # Check if node is already running
-    if rad node status >/dev/null 2>&1; then
+    # Check if node is already running (rad node status always returns 0, so check output)
+    if rad node status 2>&1 | grep -q "Node is running"; then
         success "Radicle node already running"
     else
         warning "Radicle node not started yet"
@@ -1010,11 +1010,15 @@ if [ "$RADICLE_AVAILABLE" = true ] && rad self --did >/dev/null 2>&1; then
             if rad node start; then
                 success "Radicle node started successfully"
 
-                # Verify node is running
-                if rad node status >/dev/null 2>&1; then
+                # Wait a moment for node to initialize
+                sleep 2
+
+                # Verify node is running (check output, not just exit code)
+                if rad node status 2>&1 | grep -q "Node is running"; then
                     success "Radicle node is running and ready"
                 else
-                    warning "Node started but status check failed - this is usually OK"
+                    warning "Node started but status check shows it's not running"
+                    info "You may need to start it manually with: rad node start"
                 fi
             else
                 warning "Failed to start Radicle node"
