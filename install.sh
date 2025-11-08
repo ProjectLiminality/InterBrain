@@ -300,6 +300,54 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         warning "Homebrew not found."
         echo ""
 
+        # Check if user can authenticate with sudo (required for Homebrew installation)
+        if [ -t 0 ]; then
+            # Interactive mode - test sudo access
+            info "Testing system permissions..."
+            echo ""
+            echo "Homebrew installation requires your password to set up."
+            echo "(This is normal - Homebrew needs to create system directories)"
+            echo ""
+
+            # Test sudo with a harmless command
+            if sudo -v 2>/dev/null; then
+                success "Password authentication successful"
+                echo ""
+            else
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                error "⚠️  Permission Issue Detected"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo ""
+                echo "Your account cannot install system software (Homebrew)."
+                echo ""
+                echo "This might be because:"
+                echo "  • Your account is set to 'Standard' instead of 'Administrator'"
+                echo "  • You have parental controls or MDM restrictions"
+                echo "  • This is a managed/company computer"
+                echo ""
+                echo "📋 How to fix this:"
+                echo ""
+                echo "Option 1: Give your account administrator rights"
+                echo "  1. Go to System Settings (or System Preferences)"
+                echo "  2. Click 'Users & Groups'"
+                echo "  3. Click the lock icon and enter an admin password"
+                echo "  4. Select your account"
+                echo "  5. Check 'Allow user to administer this computer'"
+                echo ""
+                echo "Option 2: Ask an administrator to run this installer"
+                echo "  • Have someone with admin rights log in and run this script"
+                echo "  • They only need to run it once to install Homebrew"
+                echo "  • After that, you can use InterBrain normally"
+                echo ""
+                echo "Option 3: Manual installation (advanced)"
+                echo "  • Follow Homebrew's non-standard installation:"
+                echo "  • https://docs.brew.sh/Installation#untar-anywhere-unsupported"
+                echo ""
+                exit 1
+            fi
+        fi
+
         # Check if Xcode CLI tools are installed
         if ! xcode-select -p &>/dev/null; then
             info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
