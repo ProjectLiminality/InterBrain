@@ -349,8 +349,27 @@ export class GitService {
 
       // Fetch from specific remote (not all remotes)
       console.log(`GitService: Fetching from remote: ${remoteName}`);
+
+      // If fetching from Radicle, enhance PATH with git-remote-rad helper
+      const execOptions: any = { cwd: fullPath };
+      if (remoteName === 'rad') {
+        const homeDir = (globalThis as any).process?.env?.HOME || '';
+        const radicleGitHelperPaths = [
+          `${homeDir}/.radicle/bin`,
+          '/usr/local/bin',
+          '/opt/homebrew/bin'
+        ];
+
+        const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
+        execOptions.env = {
+          ...(globalThis as any).process.env,
+          PATH: enhancedPath
+        };
+        console.log(`GitService: Enhanced PATH for Radicle fetch: ${enhancedPath}`);
+      }
+
       try {
-        await execAsync(`git fetch ${remoteName}`, { cwd: fullPath });
+        await execAsync(`git fetch ${remoteName}`, execOptions);
       } catch (fetchError: any) {
         // Handle fetch errors gracefully (remote not found, network issues, etc.)
         const errorMsg = fetchError.message || '';
@@ -461,7 +480,25 @@ export class GitService {
     const fullPath = this.getFullPath(repoPath);
     try {
       console.log(`GitService: Pulling updates for ${fullPath}`);
-      await execAsync('git pull --ff-only', { cwd: fullPath });
+
+      // Enhance PATH for Radicle git-remote-rad helper
+      const homeDir = (globalThis as any).process?.env?.HOME || '';
+      const radicleGitHelperPaths = [
+        `${homeDir}/.radicle/bin`,
+        '/usr/local/bin',
+        '/opt/homebrew/bin'
+      ];
+
+      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
+      const execOptions = {
+        cwd: fullPath,
+        env: {
+          ...(globalThis as any).process.env,
+          PATH: enhancedPath
+        }
+      };
+
+      await execAsync('git pull --ff-only', execOptions);
       console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to pull updates:', error);
