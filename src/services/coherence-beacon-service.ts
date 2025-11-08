@@ -342,9 +342,9 @@ export class CoherenceBeaconService {
         return;
       }
 
-      // Initialize all submodules
+      // Initialize all submodules (allow rad:// transport protocol)
       console.log(`CoherenceBeaconService: Running git submodule update --init --recursive...`);
-      await execAsync('git submodule update --init --recursive', { cwd: clonedNodePath });
+      await execAsync('git -c protocol.rad.allow=always submodule update --init --recursive', { cwd: clonedNodePath });
       console.log(`CoherenceBeaconService: ✓ Submodules initialized`);
 
       // Parse .gitmodules to find submodule Radicle IDs
