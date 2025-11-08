@@ -47,20 +47,35 @@ async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; ha
 
       const repoOwner = githubMatch[1];
 
-      // Check authenticated GitHub user
-      const { stdout: ghUser } = await execAsyncPromise('gh api user -q .login 2>&1', { cwd: fullPath });
-      const currentUser = ghUser.trim();
+      // Check authenticated GitHub user (only if gh CLI hasn't been determined unavailable)
+      if (ghCliAvailable !== false) {
+        try {
+          const { stdout: ghUser } = await execAsyncPromise('gh api user -q .login 2>&1', { cwd: fullPath });
+          const currentUser = ghUser.trim();
 
-      if (!currentUser) {
-        // Not authenticated with gh - can't determine, fail open
-        return { isGitHubOnly: true, hasAccess: true };
+          if (!currentUser) {
+            // Not authenticated with gh - mark as unavailable and skip to dry-run fallback
+            ghCliAvailable = false;
+            throw new Error('gh not authenticated');
+          }
+
+          // gh CLI is working - mark as available for future checks
+          ghCliAvailable = true;
+
+          // User owns repo if they are the owner
+          const hasAccess = repoOwner === currentUser;
+          return { isGitHubOnly: true, hasAccess };
+        } catch {
+          // gh CLI not available or not authenticated - mark as unavailable
+          ghCliAvailable = false;
+          // Silently fall through to dry-run check
+        }
       }
-
-      // User owns repo if they are the owner
-      const hasAccess = repoOwner === currentUser;
-      return { isGitHubOnly: true, hasAccess };
     } catch (error: any) {
-      console.error('Error checking repository ownership:', error);
+      // Only log unexpected errors, not gh CLI availability issues
+      if (!error.message?.includes('gh') && !error.message?.includes('not found')) {
+        console.error('Error checking repository ownership:', error);
+      }
       // If gh is not available or check fails, fall back to dry-run push
       try {
         await execAsyncPromise('git push --dry-run 2>&1', { cwd: fullPath });
@@ -90,6 +105,9 @@ async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; ha
 // Cache GitHub access checks to avoid repeated git commands
 const githubAccessCache = new Map<string, { isGitHubOnly: boolean; hasAccess: boolean; timestamp: number }>();
 const CACHE_TTL = 60000; // 1 minute
+
+// Cache gh CLI availability check (session-level - never expires)
+let ghCliAvailable: boolean | null = null;
 
 async function checkGitHubAccessCached(node: any): Promise<{ isGitHubOnly: boolean; hasAccess: boolean }> {
   if (!node?.id) {
