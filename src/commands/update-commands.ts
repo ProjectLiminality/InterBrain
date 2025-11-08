@@ -158,11 +158,15 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               // Pull updates (will be fast-forward only now)
               await gitService.pullUpdates(selectedNode.repoPath);
 
-              // Check for coherence beacons in the new commits
+              // Check for coherence beacons in the commits we just pulled
               applyNotice.hide();
               const checkingNotice = uiService.showLoading('Checking for new relationships...');
               try {
-                const beacons = await (plugin as any).coherenceBeaconService.checkForBeacons(selectedNode.repoPath);
+                // Use the commits we already fetched (from updateStatus) instead of re-fetching
+                const beacons = await (plugin as any).coherenceBeaconService.checkCommitsForBeacons(
+                  selectedNode.repoPath,
+                  updateStatus.commits
+                );
                 checkingNotice.hide();
 
                 if (beacons.length > 0) {

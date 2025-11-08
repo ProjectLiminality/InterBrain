@@ -166,6 +166,51 @@ export class CoherenceBeaconService {
   }
 
   /**
+   * Check specific commits (that were just pulled) for coherence beacons
+   * This is used after merging updates to detect new supermodule relationships
+   */
+  async checkCommitsForBeacons(dreamNodePath: string, commits: Array<{ hash: string; subject: string; body: string }>): Promise<CoherenceBeacon[]> {
+    const path = require('path');
+    const fullPath = path.join(this.vaultPath, dreamNodePath);
+
+    console.log(`CoherenceBeaconService: Checking ${commits.length} pulled commit(s) for beacons...`);
+
+    const beacons: CoherenceBeacon[] = [];
+    const BEACON_REGEX = /COHERENCE_BEACON:\s*({.*?})/g;
+
+    for (const commit of commits) {
+      const fullMessage = `${commit.subject}\n${commit.body}`;
+      const match = BEACON_REGEX.exec(fullMessage);
+
+      if (match) {
+        try {
+          const beaconData = JSON.parse(match[1]);
+
+          if (beaconData.type === 'supermodule') {
+            beacons.push({
+              type: 'supermodule',
+              radicleId: beaconData.radicleId,
+              title: beaconData.title,
+              commitHash: commit.hash,
+              commitMessage: commit.subject
+            });
+
+            console.log(`CoherenceBeaconService: ✨ Found beacon in commit ${commit.hash.substring(0, 7)}: ${beaconData.title}`);
+          }
+        } catch (error) {
+          console.warn(`CoherenceBeaconService: Failed to parse beacon data:`, error);
+        }
+      }
+    }
+
+    // Filter out previously rejected beacons
+    const unrejectedBeacons = await this.filterRejectedBeacons(beacons, fullPath);
+    console.log(`CoherenceBeaconService: Found ${beacons.length} beacon(s), ${unrejectedBeacons.length} not previously rejected`);
+
+    return unrejectedBeacons;
+  }
+
+  /**
    * Parse git log output for COHERENCE_BEACON metadata
    */
   private parseCommitsForBeacons(logOutput: string): CoherenceBeacon[] {
