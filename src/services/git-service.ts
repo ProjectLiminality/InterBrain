@@ -435,7 +435,7 @@ export class GitService {
         const { stdout: upstreamOutput } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
         const upstream = upstreamOutput.trim();
         console.log(`[GitService] Upstream tracking: ${upstream}`);
-      } catch (upstreamError) {
+      } catch {
         console.log(`[GitService] No upstream tracking branch configured`);
       }
 
@@ -460,8 +460,8 @@ export class GitService {
 
       console.log(`[GitService] Checking for updates from: ${refsToCheck.join(', ')}`);
 
-      // Check each ref for new commits
-      let logOutput = '';
+      // Check each ref for new commits and track source
+      const commits: CommitInfo[] = [];
       for (const ref of refsToCheck) {
         try {
           const { stdout } = await execAsync(
@@ -469,18 +469,40 @@ export class GitService {
             { cwd: fullPath }
           );
           if (stdout.trim()) {
-            logOutput += stdout;
             console.log(`[GitService] Found updates from ${ref}`);
+
+            // Parse commits from this ref
+            const commitBlocks = stdout.trim().split('\x00\n').filter((block: string) => block.trim());
+
+            for (const block of commitBlocks) {
+              const parts = block.split('\x00');
+              const hash = parts[0] || '';
+              const author = parts[1] || 'Unknown';
+              const email = parts[2] || '';
+              const timestamp = parseInt(parts[3] || '0', 10);
+              const subject = parts[4] || 'No subject';
+              const body = parts[5] || '';
+
+              commits.push({
+                hash,
+                author,
+                email,
+                timestamp,
+                subject,
+                body: body.trim(),
+                source: ref // Track which ref (peer) this commit came from
+              });
+            }
           }
-        } catch (error) {
+        } catch {
           // Ref might not exist, skip it
           console.log(`[GitService] No commits from ${ref} (may not exist)`);
         }
       }
 
-      console.log('[GitService] Raw git log output:', logOutput);
+      console.log('[GitService] Parsed commits from all refs:', commits.length);
 
-      if (!logOutput.trim()) {
+      if (commits.length === 0) {
         console.log('[GitService] No updates from any peer or upstream');
         return {
           hasUpdates: false,
@@ -491,32 +513,7 @@ export class GitService {
         };
       }
 
-      // Parse commits - split by double null byte (between commits)
-      const commitBlocks = logOutput.trim().split('\x00\n').filter((block: string) => block.trim());
-      console.log('[GitService] Found commit blocks:', commitBlocks.length);
-
-      const commits: CommitInfo[] = commitBlocks.map((block: string) => {
-        const parts = block.split('\x00');
-        console.log('[GitService] Parsing commit block parts:', parts.length, parts);
-
-        const hash = parts[0] || '';
-        const author = parts[1] || 'Unknown';
-        const email = parts[2] || '';
-        const timestamp = parseInt(parts[3] || '0', 10);
-        const subject = parts[4] || 'No subject';
-        const body = parts[5] || '';
-
-        return {
-          hash,
-          author,
-          email,
-          timestamp,
-          subject,
-          body: body.trim()
-        };
-      });
-
-      console.log('[GitService] Parsed commits:', commits);
+      console.log('[GitService] Commits with sources:', commits);
 
       // Get diff stats
       const { stdout: statsOutput } = await execAsync(
@@ -606,7 +603,7 @@ export class GitService {
       try {
         const { stdout: upstreamOutput } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
         upstream = upstreamOutput.trim();
-      } catch (upstreamError) {
+      } catch {
         // No upstream tracking branch configured - not an error in Radicle
         // This can happen with fresh clones or repos without remotes
         console.log(`GitService: No upstream tracking branch for ${currentBranch}, skipping divergence check`);
@@ -992,6 +989,7 @@ export interface CommitInfo {
   timestamp: number;
   subject: string;
   body: string;
+  source?: string; // The ref this commit came from (e.g., "Martina/main", "Bob/main", "rad/main")
 }
 
 /**

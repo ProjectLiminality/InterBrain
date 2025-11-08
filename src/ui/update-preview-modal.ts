@@ -67,27 +67,58 @@ export class UpdatePreviewModal extends Modal {
     statsEl.createEl('p', { text: `➕ ${this.updateStatus.insertions} lines added` });
     statsEl.createEl('p', { text: `➖ ${this.updateStatus.deletions} lines removed` });
 
-    // Commit list (collapsible)
+    // Commit list (collapsible) - group by source for clarity
     const commitsEl = contentEl.createDiv({ cls: 'update-preview-commits' });
     const detailsEl = commitsEl.createEl('details');
     detailsEl.createEl('summary', { text: `View ${this.updateStatus.commits.length} commit${this.updateStatus.commits.length > 1 ? 's' : ''}` });
 
-    const commitList = detailsEl.createEl('ul');
+    // Group commits by source (peer)
+    const commitsBySource = new Map<string, typeof this.updateStatus.commits>();
     this.updateStatus.commits.forEach((commit) => {
-      const date = new Date(commit.timestamp * 1000).toLocaleDateString();
-      const li = commitList.createEl('li');
-      li.createEl('strong', { text: commit.subject });
-      li.createEl('br');
-      li.createEl('span', {
-        text: `${commit.author} • ${date}`,
-        cls: 'update-preview-commit-meta'
-      });
-      if (commit.body) {
-        li.createEl('br');
-        // Format commit body: convert bullet points to clean list
-        const formattedBody = this.formatCommitBody(commit.body);
-        li.createEl('span', { text: formattedBody, cls: 'update-preview-commit-body' });
+      const source = commit.source || 'upstream';
+      if (!commitsBySource.has(source)) {
+        commitsBySource.set(source, []);
       }
+      commitsBySource.get(source)!.push(commit);
+    });
+
+    const commitList = detailsEl.createEl('ul');
+
+    // Display commits grouped by source
+    commitsBySource.forEach((commits, source) => {
+      // Extract peer name from source (e.g., "Martina/main" -> "Martina")
+      const peerName = source.includes('/') ? source.split('/')[0] : source;
+
+      if (commitsBySource.size > 1) {
+        // Only show grouping header if there are multiple sources
+        const groupHeader = commitList.createEl('li', { cls: 'update-preview-source-group' });
+        groupHeader.createEl('strong', { text: `📡 From ${peerName}:`, cls: 'update-preview-peer-name' });
+      }
+
+      commits.forEach((commit) => {
+        const date = new Date(commit.timestamp * 1000).toLocaleDateString();
+        const li = commitList.createEl('li', { cls: commitsBySource.size > 1 ? 'update-preview-commit-indented' : '' });
+        li.createEl('strong', { text: commit.subject });
+        li.createEl('br');
+
+        // Show author and peer if single source (no grouping)
+        let metaText = `${commit.author} • ${date}`;
+        if (commitsBySource.size === 1 && commit.source) {
+          metaText += ` • via ${peerName}`;
+        }
+
+        li.createEl('span', {
+          text: metaText,
+          cls: 'update-preview-commit-meta'
+        });
+
+        if (commit.body) {
+          li.createEl('br');
+          // Format commit body: convert bullet points to clean list
+          const formattedBody = this.formatCommitBody(commit.body);
+          li.createEl('span', { text: formattedBody, cls: 'update-preview-commit-body' });
+        }
+      });
     });
 
     // Action buttons
@@ -196,6 +227,20 @@ export class UpdatePreviewModal extends Modal {
       .update-preview-commits li {
         margin: 1em 0;
         line-height: 1.6;
+      }
+
+      .update-preview-source-group {
+        margin: 1.5em 0 0.5em 0 !important;
+        list-style: none;
+      }
+
+      .update-preview-peer-name {
+        color: var(--text-accent);
+        font-size: 1em;
+      }
+
+      .update-preview-commit-indented {
+        margin-left: 1.5em;
       }
 
       .update-preview-commit-meta {
