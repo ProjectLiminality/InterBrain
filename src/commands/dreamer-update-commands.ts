@@ -76,7 +76,7 @@ async function checkAllUpdatesFromDreamer(plugin: Plugin): Promise<void> {
         // Check if this is a Radicle repo
         if (dream.radicleId) {
           // Use Radicle coherence beacon check
-          const beacons = await plugin.coherenceBeaconService.checkForBeacons(dream.repoPath);
+          const beacons = await (plugin as any).coherenceBeaconService.checkForBeacons(dream.repoPath);
           if (beacons.length > 0) {
             updatesFound++;
             console.log(`    ✅ Found ${beacons.length} update(s) in ${dream.name}`);

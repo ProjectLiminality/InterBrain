@@ -373,12 +373,16 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log('📧 [MockEmail] Starting mock email export...');
 
         // Create mock conversation data using REAL InterfaceGuy DreamNode
-        const mockPartner = {
+        const mockPartner: DreamNode = {
           id: 'e1ef8db5-a534-42d8-adcb-fc3dc84f805d', // InterfaceGuy UUID
           name: 'InterfaceGuy',
           type: 'dreamer' as const,
           repoPath: '/Users/davidrug/DreamVault/Interfaceguy',
-          liminalWebConnections: []
+          liminalWebConnections: [],
+          position: [0, 0, 0],
+          dreamTalkMedia: [],
+          dreamSongContent: [],
+          hasUnsavedChanges: false
         };
 
         const now = new Date();

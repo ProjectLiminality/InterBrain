@@ -343,7 +343,7 @@ export class GitService {
           remoteName = 'github';
         } else if (remotes.length > 0) {
           // Pick first non-rad remote
-          remoteName = remotes.find(r => r !== 'rad') || remotes[0];
+          remoteName = remotes.find((r: string) => r !== 'rad') || remotes[0];
         }
       }
 

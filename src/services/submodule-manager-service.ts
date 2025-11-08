@@ -757,7 +757,7 @@ export class SubmoduleManagerService {
           // Ensure sovereign's .udd has its own Radicle ID (may have been just initialized)
           if (!childUDD.radicleId || childUDD.radicleId !== childRadicleId) {
             console.log(`SubmoduleManagerService: Adding Radicle ID to sovereign ${childTitle}'s .udd...`);
-            childUDD.radicleId = childRadicleId;
+            childUDD.radicleId = childRadicleId || undefined;
             await UDDService.writeUDD(sovereignPath, childUDD);
             sovereignModified = true;
           }
@@ -823,7 +823,7 @@ export class SubmoduleManagerService {
           console.log(`SubmoduleManagerService: Submodule ${childTitle} updated to latest with complete metadata`);
 
           // Update parent's .udd (add child's Radicle ID to submodules array if missing)
-          if (await UDDService.addSubmodule(fullParentPath, childRadicleId)) {
+          if (childRadicleId && await UDDService.addSubmodule(fullParentPath, childRadicleId)) {
             console.log(`SubmoduleManagerService: Added ${childTitle} (${childRadicleId}) to parent's submodules`);
             parentModified = true;
           }
@@ -867,7 +867,7 @@ export class SubmoduleManagerService {
           // Update sovereign's supermodules on removal (bidirectional cleanup)
           console.log(`SubmoduleManagerService: Removing supermodule relationship from sovereign ${submoduleName}`);
 
-          if (await UDDService.removeSupermodule(sovereignPath, parentRadicleId)) {
+          if (parentRadicleId && await UDDService.removeSupermodule(sovereignPath, parentRadicleId)) {
             console.log(`SubmoduleManagerService: Removed ${parentTitle} (${parentRadicleId}) from sovereign ${submoduleName}'s supermodules`);
 
             // Commit the change in the sovereign repository

@@ -35,7 +35,7 @@ export class ShareLinkService {
 			// Read UUID from .udd file (don't trust store state)
 			const fs = require('fs').promises;
 			const path = require('path');
-			const uddPath = path.join(this.app.vault.adapter.basePath, node.repoPath, '.udd');
+			const uddPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath, '.udd');
 
 			let nodeUuid: string;
 			try {
