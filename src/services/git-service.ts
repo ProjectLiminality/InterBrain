@@ -464,6 +464,109 @@ export class GitService {
   }
 
   /**
+   * Check if branches have diverged (local and remote have different commits)
+   */
+  async checkDivergentBranches(repoPath: string): Promise<{ hasDivergence: boolean; localCommits: number; remoteCommits: number }> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      // Get current branch
+      const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
+      const currentBranch = branchOutput.trim();
+
+      if (!currentBranch) {
+        return { hasDivergence: false, localCommits: 0, remoteCommits: 0 };
+      }
+
+      // Count commits ahead/behind
+      const { stdout } = await execAsync(`git rev-list --left-right --count origin/${currentBranch}...HEAD`, { cwd: fullPath });
+      const [remoteCommits, localCommits] = stdout.trim().split('\t').map(Number);
+
+      const hasDivergence = localCommits > 0 && remoteCommits > 0;
+
+      return { hasDivergence, localCommits, remoteCommits };
+    } catch (error) {
+      console.error('GitService: Failed to check divergent branches:', error);
+      // If check fails, assume no divergence to allow pull
+      return { hasDivergence: false, localCommits: 0, remoteCommits: 0 };
+    }
+  }
+
+  /**
+   * Check if repository is read-only (GitHub-only without push access)
+   */
+  async isReadOnlyRepo(repoPath: string): Promise<boolean> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      // Check for remotes
+      const { stdout: remotesOutput } = await execAsync('git remote -v', { cwd: fullPath });
+
+      // If has Radicle remote, it's not read-only
+      if (remotesOutput.includes('rad://') || remotesOutput.includes('rad\t')) {
+        return false;
+      }
+
+      // If no GitHub remote, not read-only
+      const hasGitHub = remotesOutput.includes('github.com');
+      if (!hasGitHub) {
+        return false;
+      }
+
+      // Extract repository owner from GitHub URL
+      const githubMatch = remotesOutput.match(/github\.com[:/]([^/]+)\/([^/\s.]+)/);
+      if (!githubMatch) {
+        return false;
+      }
+
+      const repoOwner = githubMatch[1];
+
+      // Check authenticated GitHub user
+      try {
+        const { stdout: ghUser } = await execAsync('gh api user -q .login 2>&1', { cwd: fullPath });
+        const currentUser = ghUser.trim();
+
+        if (!currentUser) {
+          // Not authenticated - assume read-only
+          return true;
+        }
+
+        // Read-only if user doesn't own the repo
+        return repoOwner !== currentUser;
+      } catch {
+        // gh command failed - assume read-only
+        return true;
+      }
+    } catch (error) {
+      console.error('GitService: Failed to check read-only status:', error);
+      return false; // Fail open
+    }
+  }
+
+  /**
+   * Reset local branch to match remote (discard local commits)
+   */
+  async resetToRemote(repoPath: string): Promise<void> {
+    const fullPath = this.getFullPath(repoPath);
+    try {
+      console.log(`GitService: Resetting ${fullPath} to remote`);
+
+      // Get current branch
+      const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
+      const currentBranch = branchOutput.trim();
+
+      if (!currentBranch) {
+        throw new Error('Not on a branch');
+      }
+
+      // Reset to origin
+      await execAsync(`git reset --hard origin/${currentBranch}`, { cwd: fullPath });
+      console.log(`GitService: Successfully reset to origin/${currentBranch}`);
+    } catch (error) {
+      console.error('GitService: Failed to reset to remote:', error);
+      throw new Error(`Failed to reset to remote: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Run npm build in a DreamNode repository
    */
   async buildDreamNode(repoPath: string): Promise<void> {

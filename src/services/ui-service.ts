@@ -156,4 +156,63 @@ export class UIService {
       modal.open();
     });
   }
+
+  async showConfirmDialog(
+    title: string,
+    message: string,
+    confirmText: string = 'Continue',
+    cancelText: string = 'Cancel'
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.app) {
+        resolve(false);
+        return;
+      }
+
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(title);
+
+      // Add message with preserved newlines
+      const messageEl = modal.contentEl.createDiv();
+      messageEl.style.whiteSpace = 'pre-wrap';
+      messageEl.style.marginBottom = '20px';
+      messageEl.setText(message);
+
+      const buttonContainer = modal.contentEl.createDiv('modal-button-container');
+
+      const confirmBtn = buttonContainer.createEl('button', {
+        text: confirmText,
+        cls: 'mod-warning' // Warning style for destructive actions
+      });
+
+      const cancelBtn = buttonContainer.createEl('button', {
+        text: cancelText,
+        cls: 'mod-cta' // Primary style for safe option
+      });
+
+      // Handle confirm
+      const handleConfirm = () => {
+        modal.close();
+        resolve(true);
+      };
+
+      // Handle cancel
+      const handleCancel = () => {
+        modal.close();
+        resolve(false);
+      };
+
+      // Event listeners
+      confirmBtn.onclick = handleConfirm;
+      cancelBtn.onclick = handleCancel;
+
+      // Escape key cancels
+      modal.scope.register([], 'Escape', () => {
+        handleCancel();
+        return false;
+      });
+
+      modal.open();
+    });
+  }
 }

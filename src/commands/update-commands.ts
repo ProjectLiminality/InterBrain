@@ -116,9 +116,46 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
           // On Accept
           async () => {
             console.log('[UpdatePreview] User accepted update');
+
+            // Check if this is a read-only repo with divergent branches
+            const divergentCheck = await gitService.checkDivergentBranches(selectedNode.repoPath);
+            const isReadOnly = await gitService.isReadOnlyRepo(selectedNode.repoPath);
+
+            if (isReadOnly && divergentCheck.hasDivergence) {
+              // Show warning dialog for read-only repos with local changes
+              const confirmed = await uiService.showConfirmDialog(
+                'Read-Only DreamNode - Local Changes Will Be Lost',
+                `This is a read-only DreamNode and your local branch has diverged from the remote.\n\n` +
+                `Your local commits: ${divergentCheck.localCommits}\n` +
+                `Remote commits: ${divergentCheck.remoteCommits}\n\n` +
+                `By pulling updates, your local changes will be DISCARDED and replaced with the remote version.\n\n` +
+                `Continue?`,
+                'Continue and Discard Local Changes',
+                'Abort'
+              );
+
+              if (!confirmed) {
+                console.log('[UpdatePreview] User aborted update due to divergent branches');
+                return;
+              }
+
+              // User confirmed - reset to remote
+              console.log('[UpdatePreview] Resetting read-only repo to remote');
+              const resetNotice = uiService.showLoading(`Resetting ${selectedNode.name} to remote...`);
+              try {
+                await gitService.resetToRemote(selectedNode.repoPath);
+                resetNotice.hide();
+              } catch (error) {
+                resetNotice.hide();
+                console.error('[UpdatePreview] Failed to reset:', error);
+                uiService.showError(`Failed to reset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                return;
+              }
+            }
+
             const applyNotice = uiService.showLoading(`Updating ${selectedNode.name}...`);
             try {
-              // Pull updates
+              // Pull updates (will be fast-forward only now)
               await gitService.pullUpdates(selectedNode.repoPath);
 
               // If it's the InterBrain node, run build and reload

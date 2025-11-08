@@ -36,23 +36,50 @@ async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; ha
       return { isGitHubOnly: false, hasAccess: true };
     }
 
-    // It's GitHub-only - check push access by attempting a dry-run push
+    // It's GitHub-only - check if user owns the repository
     try {
-      await execAsyncPromise('git push --dry-run 2>&1', { cwd: fullPath });
-      return { isGitHubOnly: true, hasAccess: true };
-    } catch (error: any) {
-      // Check if error is permission-related
-      const errorOutput = error.stderr || error.stdout || error.message || '';
-      const isPermissionError = errorOutput.includes('Permission denied') ||
-                                errorOutput.includes('403') ||
-                                errorOutput.includes('fatal: unable to access');
-
-      if (isPermissionError) {
-        return { isGitHubOnly: true, hasAccess: false };
+      // Extract repository owner from remote URL
+      const githubMatch = remotesOutput.match(/github\.com[:/]([^/]+)\/([^/\s.]+)/);
+      if (!githubMatch) {
+        // Can't determine owner - fail open (allow push)
+        return { isGitHubOnly: true, hasAccess: true };
       }
 
-      // Other errors (like "Everything up-to-date") mean we have access
-      return { isGitHubOnly: true, hasAccess: true };
+      const repoOwner = githubMatch[1];
+
+      // Check authenticated GitHub user
+      const { stdout: ghUser } = await execAsyncPromise('gh api user -q .login 2>&1', { cwd: fullPath });
+      const currentUser = ghUser.trim();
+
+      if (!currentUser) {
+        // Not authenticated with gh - can't determine, fail open
+        return { isGitHubOnly: true, hasAccess: true };
+      }
+
+      // User owns repo if they are the owner
+      const hasAccess = repoOwner === currentUser;
+      return { isGitHubOnly: true, hasAccess };
+    } catch (error: any) {
+      console.error('Error checking repository ownership:', error);
+      // If gh is not available or check fails, fall back to dry-run push
+      try {
+        await execAsyncPromise('git push --dry-run 2>&1', { cwd: fullPath });
+        return { isGitHubOnly: true, hasAccess: true };
+      } catch (pushError: any) {
+        // Check if error is permission-related
+        const errorOutput = pushError.stderr || pushError.stdout || pushError.message || '';
+        const isPermissionError = errorOutput.includes('Permission denied') ||
+                                  errorOutput.includes('403') ||
+                                  errorOutput.includes('fatal: unable to access') ||
+                                  errorOutput.includes('could not read Username');
+
+        if (isPermissionError) {
+          return { isGitHubOnly: true, hasAccess: false };
+        }
+
+        // Other errors (like "Everything up-to-date") mean we have access
+        return { isGitHubOnly: true, hasAccess: true };
+      }
     }
   } catch (error) {
     console.error('Error checking GitHub access:', error);
