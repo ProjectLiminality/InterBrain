@@ -513,9 +513,9 @@ export class GitService {
         }
       };
 
-      // Use regular git pull (not --ff-only) to support Radicle's merge-based collaboration
-      // This allows peers to merge each other's divergent changes
-      await execAsync('git pull', execOptions);
+      // Use git pull with --no-rebase to support Radicle's merge-based collaboration
+      // This explicitly tells git to merge (not rebase) when branches diverge
+      await execAsync('git pull --no-rebase', execOptions);
       console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to pull updates:', error);
