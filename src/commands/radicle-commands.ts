@@ -669,4 +669,159 @@ export function registerRadicleCommands(
       }
     }
   });
+
+  // Sync Radicle peer following with Liminal Web relationships
+  plugin.addCommand({
+    id: 'sync-radicle-peer-following',
+    name: 'Sync Radicle Peer Following (Maintenance)',
+    callback: async () => {
+      try {
+        console.log('🔄 [Radicle Peer Sync] Starting maintenance sync...');
+        const loadingNotice = uiService.showLoading('Syncing Radicle peer following...');
+
+        const radicleService = serviceManager.getRadicleService();
+        if (!radicleService) {
+          throw new Error('Radicle service not available');
+        }
+
+        // Check if Radicle is available
+        const isAvailable = await radicleService.isAvailable();
+        if (!isAvailable) {
+          throw new Error('Radicle CLI not installed or not in PATH');
+        }
+
+        // Get passphrase (from settings or prompt)
+        const settings = (plugin as any).settings;
+        let passphrase = settings?.radiclePassphrase || passphraseManager.getPassphrase();
+
+        if (!passphrase || passphrase.trim() === '') {
+          loadingNotice.hide();
+          passphrase = await uiService.promptForText(
+            'Enter your Radicle passphrase to sync peer following',
+            ''
+          );
+          if (!passphrase || passphrase.trim() === '') {
+            console.log('🔄 [Radicle Peer Sync] User cancelled - no passphrase provided');
+            return;
+          }
+        }
+
+        // Get all DreamNodes
+        const { GitDreamNodeService } = await import('../services/git-dreamnode-service');
+        const adapter = plugin.app.vault.adapter as { basePath?: string };
+        const vaultPath = adapter.basePath || '';
+        const dreamNodeService = new GitDreamNodeService(vaultPath);
+        const allNodes = await dreamNodeService.list();
+
+        console.log(`🔄 [Radicle Peer Sync] Found ${allNodes.length} total DreamNodes`);
+
+        // Find all Dreamer nodes with DIDs
+        const dreamersWithDids: Array<{ node: DreamNode; did: string }> = [];
+        const path = require('path');
+        const fs = require('fs').promises;
+
+        for (const node of allNodes) {
+          if (node.type === 'dreamer') {
+            try {
+              const uddPath = path.join(vaultPath, node.repoPath, '.udd');
+              const uddContent = await fs.readFile(uddPath, 'utf-8');
+              const udd = JSON.parse(uddContent);
+
+              if (udd.radicleId && udd.radicleId.startsWith('did:key:')) {
+                dreamersWithDids.push({ node, did: udd.radicleId });
+                console.log(`🔄 [Radicle Peer Sync] Found Dreamer with DID: ${node.name} (${udd.radicleId})`);
+              }
+            } catch (error) {
+              // Skip nodes without .udd or invalid DID
+              continue;
+            }
+          }
+        }
+
+        console.log(`🔄 [Radicle Peer Sync] Found ${dreamersWithDids.length} Dreamers with DIDs`);
+
+        let totalRelationships = 0;
+        let followsEnsured = 0;
+        let errors = 0;
+
+        // For each Dreamer with a DID, check their related nodes
+        for (const { node: dreamer, did } of dreamersWithDids) {
+          try {
+            const dreamerUddPath = path.join(vaultPath, dreamer.repoPath, '.udd');
+            const dreamerUddContent = await fs.readFile(dreamerUddPath, 'utf-8');
+            const dreamerUdd = JSON.parse(dreamerUddContent);
+
+            const relatedNodeUuids = dreamerUdd.liminalWebRelationships || [];
+            console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamer.name}" has ${relatedNodeUuids.length} relationships`);
+
+            // For each related node, check if it's a Radicle repo
+            for (const relatedUuid of relatedNodeUuids) {
+              const relatedNode = allNodes.find(n => {
+                // Check UUID from .udd file
+                try {
+                  const relatedUddPath = path.join(vaultPath, n.repoPath, '.udd');
+                  const relatedUddContentSync = require('fs').readFileSync(relatedUddPath, 'utf-8');
+                  const relatedUdd = JSON.parse(relatedUddContentSync);
+                  return relatedUdd.uuid === relatedUuid;
+                } catch {
+                  return false;
+                }
+              });
+
+              if (!relatedNode) {
+                console.log(`🔄 [Radicle Peer Sync] Related node UUID ${relatedUuid} not found, skipping`);
+                continue;
+              }
+
+              // Check if related node has a Radicle ID
+              try {
+                const relatedNodePath = path.join(vaultPath, relatedNode.repoPath);
+                const radicleId = await radicleService.getRadicleId(relatedNodePath, passphrase);
+
+                if (radicleId) {
+                  totalRelationships++;
+                  console.log(`🔄 [Radicle Peer Sync] Related node "${relatedNode.name}" is a Radicle repo: ${radicleId}`);
+
+                  // Ensure we're following this peer for this repo
+                  try {
+                    await radicleService.followPeer(did, passphrase);
+                    followsEnsured++;
+                    console.log(`✅ [Radicle Peer Sync] Ensured following ${did} for repo ${radicleId}`);
+                  } catch (followError: any) {
+                    // Non-destructive: if already following, that's fine
+                    if (followError.message?.includes('already') || followError.message?.includes('exists')) {
+                      followsEnsured++;
+                      console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${radicleId}`);
+                    } else {
+                      console.error(`❌ [Radicle Peer Sync] Failed to follow ${did}:`, followError);
+                      errors++;
+                    }
+                  }
+                } else {
+                  console.log(`🔄 [Radicle Peer Sync] Related node "${relatedNode.name}" is not a Radicle repo, skipping`);
+                }
+              } catch (error) {
+                console.warn(`⚠️ [Radicle Peer Sync] Could not check Radicle status for "${relatedNode.name}":`, error);
+              }
+            }
+          } catch (error) {
+            console.error(`❌ [Radicle Peer Sync] Error processing Dreamer "${dreamer.name}":`, error);
+            errors++;
+          }
+        }
+
+        loadingNotice.hide();
+
+        const summary = `Synced ${followsEnsured}/${totalRelationships} peer follows for ${dreamersWithDids.length} Dreamers` +
+                       (errors > 0 ? ` (${errors} errors)` : '');
+
+        console.log(`✅ [Radicle Peer Sync] ${summary}`);
+        uiService.showSuccess(summary);
+
+      } catch (error) {
+        console.error('❌ [Radicle Peer Sync] Maintenance sync failed:', error);
+        uiService.showError(error instanceof Error ? error.message : 'Radicle peer sync failed');
+      }
+    }
+  });
 }
