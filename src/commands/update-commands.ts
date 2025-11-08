@@ -158,6 +158,57 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               // Pull updates (will be fast-forward only now)
               await gitService.pullUpdates(selectedNode.repoPath);
 
+              // Check for coherence beacons in the new commits
+              applyNotice.hide();
+              const checkingNotice = uiService.showLoading('Checking for new relationships...');
+              try {
+                const beacons = await (plugin as any).coherenceBeaconService.checkForBeacons(selectedNode.repoPath);
+                checkingNotice.hide();
+
+                if (beacons.length > 0) {
+                  console.log(`[UpdatePreview] Found ${beacons.length} coherence beacon(s)`);
+
+                  // Import modal dynamically to avoid circular dependencies
+                  const { CoherenceBeaconModal } = await import('../ui/coherence-beacon-modal');
+
+                  // Process each beacon sequentially
+                  for (const beacon of beacons) {
+                    await new Promise<void>((resolve) => {
+                      const beaconModal = new CoherenceBeaconModal(
+                        plugin.app,
+                        beacon,
+                        // On Accept - clone the supermodule
+                        async () => {
+                          try {
+                            new Notice(`Cloning ${beacon.title}...`);
+                            await (plugin as any).coherenceBeaconService.acceptBeacon(selectedNode.repoPath, beacon);
+                            new Notice(`Successfully cloned ${beacon.title}! 🌟`);
+                          } catch (error) {
+                            console.error('Failed to accept beacon:', error);
+                            new Notice(`Failed to clone ${beacon.title}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                          } finally {
+                            resolve();
+                          }
+                        },
+                        // On Reject - skip this supermodule
+                        async () => {
+                          await (plugin as any).coherenceBeaconService.rejectBeacon(selectedNode.repoPath, beacon);
+                          new Notice(`Skipped ${beacon.title}`);
+                          resolve();
+                        }
+                      );
+                      beaconModal.open();
+                    });
+                  }
+                } else {
+                  console.log('[UpdatePreview] No coherence beacons found');
+                }
+              } catch (beaconError) {
+                checkingNotice.hide();
+                console.error('[UpdatePreview] Error checking beacons:', beaconError);
+                // Don't fail the update if beacon check fails
+              }
+
               // If it's the InterBrain node, run build and reload
               if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
                 const buildNotice = uiService.showLoading('Building InterBrain...');
