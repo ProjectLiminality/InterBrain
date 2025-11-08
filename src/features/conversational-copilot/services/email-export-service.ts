@@ -136,18 +136,18 @@ export class EmailExportService {
 				allIdentifiers.push(identifier);
 			}
 
-			// Build install script links for PDF
+			// Build install script links for PDF (using interactive mode with bash wrapper)
 			const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
 			const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 			const conservativeIdentifiers = [interbrainGitHub];
 			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
-			const conservativeInstall = `curl -fsSL ${installScriptBase} | bash -s -- --uri "${conservativeUri}"`;
+			const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"`;
 
 			let fullInstall: string | undefined;
 			if (invocations.length > 0 && allIdentifiers.length > 0) {
 				const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
 				const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName);
-				fullInstall = `curl -fsSL ${installScriptBase} | bash -s -- --uri "${fullUri}"`;
+				fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"`;
 			}
 
 			const installLinks = {
@@ -285,14 +285,14 @@ export class EmailExportService {
 		body += `## 💡 New to InterBrain?\n\n`;
 		body += `Choose your installation path:\n\n`;
 
-		// Build install script URIs
+		// Build install script URIs (using interactive mode with bash wrapper)
 		const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
 
 		// Conservative install: Just InterBrain + sender connection (always included)
 		const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 		const conservativeIdentifiers = [interbrainGitHub]; // Always include InterBrain itself
 		const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
-		const conservativeInstall = `curl -fsSL ${installScriptBase} | bash -s -- --uri "${conservativeUri}"`;
+		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"`;
 
 		body += `**🌱 Minimal Install** (InterBrain + connection to ${senderName || 'me'}):\n\n`;
 		body += `\`\`\`\n${conservativeInstall}\n\`\`\`\n\n`;
@@ -302,7 +302,7 @@ export class EmailExportService {
 			// Include InterBrain in the batch link along with all shared nodes
 			const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
 			const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName);
-			const fullInstall = `curl -fsSL ${installScriptBase} | bash -s -- --uri "${fullUri}"`;
+			const fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"`;
 
 			body += `**🚀 Full Install** (InterBrain + all ${invocations.length} shared DreamNode${invocations.length > 1 ? 's' : ''}):\n\n`;
 			body += `\`\`\`\n${fullInstall}\n\`\`\`\n\n`;
