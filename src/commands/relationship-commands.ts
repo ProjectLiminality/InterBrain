@@ -6,6 +6,9 @@ const fs = require('fs');
 const path = require('path');
 const fsPromises = fs.promises;
 
+// InterBrain node UUID - the anchor of the space
+const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
 /**
  * Sync bidirectional relationships across all DreamNodes
  * Ensures that if A points to B, then B also points to A
@@ -40,8 +43,8 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
 
     console.log(`[RelationshipSync] Found ${dreamNodeDirs.length} DreamNodes to scan`);
 
-    // Load all UDD files in parallel
-    const uddDataMap = new Map<string, { uuid: string; relationships: string[]; path: string; dirName: string }>();
+    // Load all UDD files in parallel (include type for dreamer detection)
+    const uddDataMap = new Map<string, { uuid: string; type: string; relationships: string[]; path: string; dirName: string }>();
 
     await Promise.all(
       dreamNodeDirs.map(async ({ name, path: dirPath }) => {
@@ -52,6 +55,7 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
 
           uddDataMap.set(udd.uuid, {
             uuid: udd.uuid,
+            type: udd.type || 'dream', // Default to 'dream' if type missing
             relationships: udd.liminalWebRelationships || [],
             path: uddPath,
             dirName: name
@@ -67,6 +71,35 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
     // Build relationship graph and detect missing bidirectional links
     const fixesNeeded = new Map<string, Set<string>>();
 
+    // First, ensure all dreamer nodes are linked to InterBrain (the anchor of the space)
+    const interbrainData = uddDataMap.get(INTERBRAIN_UUID);
+    if (interbrainData) {
+      for (const [uuid, data] of uddDataMap) {
+        if (data.type === 'dreamer' && uuid !== INTERBRAIN_UUID) {
+          // Check if dreamer is linked to InterBrain
+          if (!data.relationships.includes(INTERBRAIN_UUID)) {
+            console.log(`[RelationshipSync] Auto-linking dreamer ${data.dirName} to InterBrain`);
+            if (!fixesNeeded.has(uuid)) {
+              fixesNeeded.set(uuid, new Set());
+            }
+            fixesNeeded.get(uuid)!.add(INTERBRAIN_UUID);
+          }
+
+          // Check if InterBrain is linked back to dreamer (bidirectional)
+          if (!interbrainData.relationships.includes(uuid)) {
+            console.log(`[RelationshipSync] Auto-linking InterBrain to dreamer ${data.dirName}`);
+            if (!fixesNeeded.has(INTERBRAIN_UUID)) {
+              fixesNeeded.set(INTERBRAIN_UUID, new Set());
+            }
+            fixesNeeded.get(INTERBRAIN_UUID)!.add(uuid);
+          }
+        }
+      }
+    } else {
+      console.warn(`[RelationshipSync] InterBrain node (${INTERBRAIN_UUID}) not found - skipping auto-link for dreamers`);
+    }
+
+    // Then handle general bidirectional relationship sync
     for (const [uuid, data] of uddDataMap) {
       for (const relatedUuid of data.relationships) {
         const relatedData = uddDataMap.get(relatedUuid);
