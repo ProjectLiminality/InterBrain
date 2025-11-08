@@ -354,10 +354,16 @@ export class GitService {
       } catch (fetchError: any) {
         // Handle fetch errors gracefully (remote not found, network issues, etc.)
         const errorMsg = fetchError.message || '';
+        const errorOutput = fetchError.stderr || fetchError.stdout || '';
+        console.log(`GitService: Fetch failed from ${remoteName}:`, errorMsg);
+        if (errorOutput) {
+          console.log(`GitService: Fetch error output:`, errorOutput);
+        }
+
         if (errorMsg.includes('Repository not found') ||
             errorMsg.includes('remote-rad') ||
             errorMsg.includes('Could not resolve host')) {
-          console.log(`GitService: Fetch failed (${errorMsg.split('\n')[0]}) - treating as no updates`);
+          console.log(`GitService: Treating as no updates (remote unavailable or no access)`);
           return {
             hasUpdates: false,
             commits: [],
