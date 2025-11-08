@@ -428,6 +428,18 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
+    // Open InterBrain Settings command
+    this.addCommand({
+      id: 'open-interbrain-settings',
+      name: 'Open InterBrain Settings',
+      callback: () => {
+        // @ts-ignore - Private API
+        this.app.setting.open();
+        // @ts-ignore - Private API
+        this.app.setting.openTabById('interbrain');
+      }
+    });
+
     // Toggle Creator Mode command
     this.addCommand({
       id: 'toggle-creator-mode',

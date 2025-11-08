@@ -200,7 +200,7 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     // Special handling for InterBrain node - open settings instead of edit mode
     getDynamicCommand: (node) => {
       if (node?.id === INTERBRAIN_UUID) {
-        return 'app:open-settings'; // Obsidian's built-in settings command
+        return 'interbrain:open-interbrain-settings';
       }
       return 'interbrain:enter-edit-mode';
     },
