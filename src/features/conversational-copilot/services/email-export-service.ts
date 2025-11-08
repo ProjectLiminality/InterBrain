@@ -349,72 +349,63 @@ export class EmailExportService {
 	}
 
 	/**
-	 * Create Apple Mail draft with plain text body + PDF attachment using .eml file
+	 * Create Apple Mail draft using AppleScript with body content + PDF attachment
 	 */
 	private async createMailDraftWithPDF(to: string, subject: string, body: string, pdfPath: string): Promise<void> {
-		console.log(`📧 [EmailExport] Creating .eml file with text body + PDF attachment`);
+		console.log(`📧 [EmailExport] Creating Apple Mail draft via AppleScript`);
 		console.log(`📧 [EmailExport] PDF path:`, pdfPath);
+		console.log(`📧 [EmailExport] Recipient:`, to);
 
 		try {
-			// Read PDF file as base64
-			const fs = (window as any).require('fs');
-			const pdfBuffer = fs.readFileSync(pdfPath);
-			const pdfBase64 = pdfBuffer.toString('base64');
+			// Escape strings for AppleScript (replace quotes and backslashes)
+			const escapeAppleScript = (str: string): string => {
+				return str
+					.replace(/\\/g, '\\\\')  // Escape backslashes
+					.replace(/"/g, '\\"');   // Escape quotes
+			};
 
-			// Create unique boundary for multipart MIME
-			const boundary = `----=_InterBrain_${Date.now()}`;
+			const escapedTo = escapeAppleScript(to);
+			const escapedSubject = escapeAppleScript(subject);
+			const escapedBody = escapeAppleScript(body);
+			const escapedPdfPath = escapeAppleScript(pdfPath);
 
-			// Build multipart/mixed .eml with plain text body + PDF attachment
-			const emlContent = `From: ${to}
-To: ${to}
-Subject: ${subject}
-MIME-Version: 1.0
-Content-Type: multipart/mixed; boundary="${boundary}"
+			// AppleScript to create Mail draft with all fields populated + PDF attachment
+			const appleScript = `
+tell application "Mail"
+	set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", content:"${escapedBody}", visible:true}
 
---${boundary}
-Content-Type: text/plain; charset=utf-8
-Content-Transfer-Encoding: 8bit
+	tell newMessage
+		make new to recipient with properties {address:"${escapedTo}"}
 
-${body}
+		-- Attach PDF file
+		make new attachment with properties {file name:POSIX file "${escapedPdfPath}"} at after the last paragraph
+	end tell
 
---${boundary}
-Content-Type: application/pdf; name="call-summary.pdf"
-Content-Disposition: attachment; filename="call-summary.pdf"
-Content-Transfer-Encoding: base64
-
-${pdfBase64}
---${boundary}--
+	activate
+end tell
 `;
 
-			// Save .eml file to temp directory
-			const os = (window as any).require('os');
-			const path = (window as any).require('path');
-			const emlPath = path.join(os.tmpdir(), `interbrain-draft-${Date.now()}.eml`);
-
-			fs.writeFileSync(emlPath, emlContent);
-			console.log(`✅ [EmailExport] .eml file created:`, emlPath);
-
-			// Open .eml file in Mail.app
+			// Execute AppleScript
 			const childProcess = (window as any).require('child_process');
 			const { exec } = childProcess;
 
 			await new Promise<void>((resolve, reject) => {
-				exec(`open -a Mail "${emlPath}"`, (error: any, stdout: any, stderr: any) => {
+				exec(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`, (error: any, stdout: any, stderr: any) => {
 					if (error) {
-						console.error('❌ [EmailExport] Failed to open .eml file:', error);
+						console.error('❌ [EmailExport] AppleScript failed:', error);
 						console.error('❌ [EmailExport] stderr:', stderr);
 						reject(error);
 					} else {
-						console.log('✅ [EmailExport] .eml file opened in Mail.app');
+						console.log('✅ [EmailExport] Apple Mail draft created successfully');
 						resolve();
 					}
 				});
 			});
 
-			console.log(`✅ [EmailExport] Email draft created with text body + PDF attachment`);
+			console.log(`✅ [EmailExport] Email draft created with body + PDF attachment`);
 		} catch (error) {
-			console.error('❌ [EmailExport] Failed to create .eml file:', error);
-			throw new Error('Failed to create email draft with text body and PDF attachment');
+			console.error('❌ [EmailExport] Failed to create Mail draft:', error);
+			throw new Error('Failed to create email draft via AppleScript');
 		}
 	}
 }
