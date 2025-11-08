@@ -758,7 +758,15 @@ export class GitService {
           const { stdout: originUrl } = await execAsync('git remote get-url origin', { cwd: fullPath });
           const isGitHub = originUrl.includes('github.com');
 
-          console.log(`\n🚀 [GitService] Found origin remote (${isGitHub ? 'GitHub' : 'other'}) - pushing to origin ${currentBranch}`);
+          console.log(`\n🚀 [GitService] Found origin remote (${isGitHub ? 'GitHub' : 'other'}): ${originUrl.trim()}`);
+
+          // Skip GitHub HTTPS URLs that would require interactive auth
+          if (isGitHub && originUrl.startsWith('https://')) {
+            console.log(`⚠️ [GitService] Skipping GitHub HTTPS remote (requires authentication)`);
+            throw new Error('GitHub HTTPS remote requires authentication - skipping');
+          }
+
+          console.log(`🚀 [GitService] Pushing to origin ${currentBranch}...`);
           const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push origin ${currentBranch}`, { cwd: fullPath });
           console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
           if (pushError) {
@@ -767,21 +775,43 @@ export class GitService {
           console.log(`✅ [GitService] Origin push complete!`);
           return { remote: 'origin', type: isGitHub ? 'github' : 'other' };
         } catch (error) {
-          console.error('❌ [GitService] Failed to get origin URL:', error);
-          throw new Error('Failed to detect origin remote URL');
+          console.error('❌ [GitService] Failed to push to origin:', error);
+          // Fall through to try other remotes
         }
       }
 
-      // Fallback: Use first available remote
-      const firstRemote = remotes[0];
-      console.log(`\n🚀 [GitService] Using first available remote: ${firstRemote}`);
-      const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push ${firstRemote} ${currentBranch}`, { cwd: fullPath });
-      console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
-      if (pushError) {
-        console.log(`⚠️ [GitService] Push stderr:\n${pushError}`);
+      // Fallback: Try remaining remotes in order, skipping problematic ones
+      console.log(`\n🔍 [GitService] Trying remaining remotes in order...`);
+
+      for (const remote of remotes) {
+        try {
+          // Check remote URL to skip HTTPS GitHub
+          const { stdout: remoteUrl } = await execAsync(`git remote get-url ${remote}`, { cwd: fullPath });
+          const isGitHubHttps = remoteUrl.includes('github.com') && remoteUrl.startsWith('https://');
+
+          if (isGitHubHttps) {
+            console.log(`⚠️ [GitService] Skipping ${remote} (GitHub HTTPS requires auth): ${remoteUrl.trim()}`);
+            continue;
+          }
+
+          console.log(`\n🚀 [GitService] Trying remote: ${remote} (${remoteUrl.trim()})`);
+          const { stdout: pushOutput, stderr: pushError } = await execAsync(`git push ${remote} ${currentBranch}`, { cwd: fullPath });
+          console.log(`📤 [GitService] Push stdout:\n${pushOutput || '(empty)'}`);
+          if (pushError) {
+            console.log(`⚠️ [GitService] Push stderr:\n${pushError}`);
+          }
+          console.log(`✅ [GitService] Push complete to ${remote}!`);
+
+          const isGitHub = remoteUrl.includes('github.com');
+          return { remote, type: isGitHub ? 'github' : 'other' };
+        } catch (error) {
+          console.warn(`⚠️ [GitService] Failed to push to ${remote}, trying next...`, error);
+          continue;
+        }
       }
-      console.log(`✅ [GitService] Push complete!`);
-      return { remote: firstRemote, type: 'other' };
+
+      // If we get here, all remotes failed
+      throw new Error('No pushable remotes available (all remotes require authentication or failed)');
 
     } catch (error) {
       console.error('❌ [GitService] Failed to push to remote:', error);
