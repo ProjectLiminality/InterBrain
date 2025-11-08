@@ -59,7 +59,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Total number of steps (updated for new steps)
-TOTAL_STEPS=14
+TOTAL_STEPS=15
 
 # Default vault name and location
 DEFAULT_VAULT_NAME="DreamVault"
@@ -988,7 +988,50 @@ else
 fi
 
 echo ""
-echo "Step 11/$TOTAL_STEPS: Setting up real-time transcription (Python + Whisper)..."
+echo "Step 11/$TOTAL_STEPS: Starting Radicle node..."
+echo "-----------------------------------"
+
+# Only proceed if Radicle is available AND identity exists
+if [ "$RADICLE_AVAILABLE" = true ] && rad self --did >/dev/null 2>&1; then
+    # Check if node is already running
+    if rad node status >/dev/null 2>&1; then
+        success "Radicle node already running"
+    else
+        warning "Radicle node not started yet"
+        echo ""
+        info "Starting Radicle node for peer-to-peer collaboration..."
+        echo ""
+        echo "You will be prompted to enter your Radicle passphrase."
+        echo "(This is the passphrase you created during 'rad auth')"
+        echo ""
+
+        if [ -t 0 ]; then
+            # Interactive mode - start node (will prompt for passphrase)
+            if rad node start; then
+                success "Radicle node started successfully"
+                echo ""
+                info "💡 Tip: You can configure the passphrase in InterBrain settings"
+                info "   to avoid entering it every time (Settings → InterBrain → Radicle Passphrase)"
+            else
+                warning "Failed to start Radicle node"
+                info "You can start it manually later with: rad node start"
+                info "Or configure passphrase in InterBrain settings for automatic startup"
+            fi
+        else
+            # Non-interactive mode - cannot start node interactively
+            info "Non-interactive mode: Skipping node startup"
+            info "Start manually after installation: rad node start"
+        fi
+    fi
+elif [ "$RADICLE_AVAILABLE" = false ]; then
+    info "Radicle not available - skipping node startup"
+elif ! rad self --did >/dev/null 2>&1; then
+    info "No Radicle identity - skipping node startup"
+    info "Create identity first with: rad auth"
+fi
+
+echo ""
+echo "Step 12/$TOTAL_STEPS: Setting up real-time transcription (Python + Whisper)..."
 echo "------------------------------------------------------------------"
 
 # Check for Python 3
@@ -1037,7 +1080,7 @@ else
 fi
 
 echo ""
-echo "Step 12/$TOTAL_STEPS: Final verification..."
+echo "Step 13/$TOTAL_STEPS: Final verification..."
 echo "-------------------------------"
 
 # Verify everything
@@ -1091,7 +1134,7 @@ else
 fi
 
 echo ""
-echo "Step 13/$TOTAL_STEPS: Registering vault with Obsidian..."
+echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
@@ -1249,7 +1292,7 @@ EOF
 fi
 
 echo ""
-echo "Step 14/$TOTAL_STEPS: Installation summary..."
+echo "Step 15/$TOTAL_STEPS: Installation summary..."
 echo "-------------------------------"
 
 echo ""
