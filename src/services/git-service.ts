@@ -488,7 +488,8 @@ export class GitService {
 
   /**
    * Pull updates from remote (merge fetched changes)
-   * Uses --ff-only to ensure safe fast-forward updates without merge conflicts
+   * Uses regular git pull (fetch + merge) to support Radicle's peer-to-peer workflow
+   * In Radicle, divergent branches are normal and should be merged, not rejected
    */
   async pullUpdates(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
@@ -512,7 +513,9 @@ export class GitService {
         }
       };
 
-      await execAsync('git pull --ff-only', execOptions);
+      // Use regular git pull (not --ff-only) to support Radicle's merge-based collaboration
+      // This allows peers to merge each other's divergent changes
+      await execAsync('git pull', execOptions);
       console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to pull updates:', error);
@@ -522,6 +525,7 @@ export class GitService {
 
   /**
    * Check if branches have diverged (local and remote have different commits)
+   * Note: In Radicle p2p workflow, divergence is normal and gets resolved via merge
    */
   async checkDivergentBranches(repoPath: string): Promise<{ hasDivergence: boolean; localCommits: number; remoteCommits: number }> {
     const fullPath = this.getFullPath(repoPath);
@@ -534,9 +538,17 @@ export class GitService {
         return { hasDivergence: false, localCommits: 0, remoteCommits: 0 };
       }
 
-      // Get upstream tracking branch (e.g., rad/main or origin/main)
-      const { stdout: upstreamOutput } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
-      const upstream = upstreamOutput.trim();
+      // Try to get upstream tracking branch (e.g., rad/main, origin/main, github/main)
+      let upstream: string;
+      try {
+        const { stdout: upstreamOutput } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
+        upstream = upstreamOutput.trim();
+      } catch (upstreamError) {
+        // No upstream tracking branch configured - not an error in Radicle
+        // This can happen with fresh clones or repos without remotes
+        console.log(`GitService: No upstream tracking branch for ${currentBranch}, skipping divergence check`);
+        return { hasDivergence: false, localCommits: 0, remoteCommits: 0 };
+      }
 
       // Count commits ahead/behind using upstream tracking branch
       const { stdout } = await execAsync(`git rev-list --left-right --count ${upstream}...HEAD`, { cwd: fullPath });
