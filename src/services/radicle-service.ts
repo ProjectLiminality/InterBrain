@@ -705,7 +705,24 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      // STEP 1: Seed the repository to public seeds for async sharing
+      // STEP 1: Push commits to Radicle remote
+      // rad sync alone doesn't push commits - need explicit git push
+      console.log(`RadicleService: Pushing commits to Radicle remote...`);
+      try {
+        const pushResult = await execAsync('git push rad main', {
+          cwd: dreamNodePath,
+          env: env,
+        });
+        console.log('RadicleService: git push rad main output:', pushResult.stdout);
+        if (pushResult.stderr) {
+          console.log('RadicleService: git push rad main stderr:', pushResult.stderr);
+        }
+      } catch (pushError: any) {
+        // If push fails, log but continue - might be up to date
+        console.warn('RadicleService: git push warning (continuing anyway):', pushError.message);
+      }
+
+      // STEP 2: Seed the repository to public seeds for async sharing
       // This ensures others can fetch your changes even when you're offline
       console.log(`RadicleService: Seeding repository to enable async sharing...`);
       try {
@@ -719,7 +736,7 @@ export class RadicleServiceImpl implements RadicleService {
         console.warn('RadicleService: rad seed warning (continuing anyway):', seedError.message);
       }
 
-      // STEP 2: Sync to push changes to seeds
+      // STEP 3: Sync to announce changes to network
       console.log(`RadicleService: Running '${radCmd} sync' in ${dreamNodePath}`);
       const result = await execAsync(`"${radCmd}" sync`, {
         cwd: dreamNodePath,
