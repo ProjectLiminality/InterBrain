@@ -38,11 +38,11 @@ export class SettingsStatusService {
 	/**
 	 * Get comprehensive status of all InterBrain features
 	 */
-	async getSystemStatus(claudeApiKey: string): Promise<SystemStatus> {
+	async getSystemStatus(claudeApiKey: string, radiclePassphrase?: string): Promise<SystemStatus> {
 		const [semanticSearch, transcription, radicle, github, claudeApi] = await Promise.all([
 			this.checkSemanticSearch(),
 			this.checkTranscription(),
-			this.checkRadicle(),
+			this.checkRadicle(radiclePassphrase),
 			this.checkGitHub(),
 			this.checkClaudeApi(claudeApiKey)
 		]);
@@ -166,7 +166,7 @@ export class SettingsStatusService {
 	/**
 	 * Check Radicle Network status
 	 */
-	private async checkRadicle(): Promise<FeatureStatus> {
+	private async checkRadicle(radiclePassphrase?: string): Promise<FeatureStatus> {
 		if (!this.radicleService) {
 			return {
 				available: false,
@@ -197,6 +197,16 @@ export class SettingsStatusService {
 			try {
 				const identity = await this.radicleService.getIdentity();
 				if (identity) {
+					// Identity exists - now check if passphrase is configured
+					if (!radiclePassphrase || radiclePassphrase.trim() === '') {
+						return {
+							available: true,
+							status: 'warning',
+							message: 'Passphrase not configured',
+							details: 'Enter your Radicle passphrase below to enable automatic node startup'
+						};
+					}
+
 					return {
 						available: true,
 						status: 'ready',

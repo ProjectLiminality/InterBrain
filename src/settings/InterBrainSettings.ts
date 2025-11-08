@@ -47,7 +47,10 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		}
 
 		// Load system status
-		this.systemStatus = await this.statusService.getSystemStatus(this.plugin.settings.claudeApiKey);
+		this.systemStatus = await this.statusService.getSystemStatus(
+			this.plugin.settings.claudeApiKey,
+			this.plugin.settings.radiclePassphrase
+		);
 
 		// ============================================================
 		// Header with Logo
