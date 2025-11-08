@@ -44,7 +44,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Total number of steps (updated for new steps)
-TOTAL_STEPS=15
+TOTAL_STEPS=14
 
 # Default vault name and location
 DEFAULT_VAULT_NAME="DreamVault"
@@ -925,34 +925,7 @@ else
 fi
 
 echo ""
-echo "Step 11/$TOTAL_STEPS: Starting Radicle node..."
-echo "----------------------------------"
-
-# Only attempt if Radicle is available and identity exists
-if [ "$RADICLE_AVAILABLE" = false ]; then
-    info "Skipping Radicle node (rad command not available yet)"
-    info "Rerun installer after opening new terminal to complete setup"
-elif [[ "$RAD_DID" == "["* ]]; then
-    info "Skipping Radicle node (no identity created yet)"
-    info "Create identity with 'rad auth' then start node with 'rad node start'"
-else
-    # Check if node is already running
-    if rad node status 2>/dev/null | grep -qi "running"; then
-        success "Radicle node already running"
-    else
-        echo "Starting Radicle node..."
-        if rad node start 2>/dev/null; then
-            sleep 2
-            success "Radicle node started"
-        else
-            warning "Could not start Radicle node automatically"
-            info "You can start it manually with: rad node start"
-        fi
-    fi
-fi
-
-echo ""
-echo "Step 12/$TOTAL_STEPS: Setting up real-time transcription (Python + Whisper)..."
+echo "Step 11/$TOTAL_STEPS: Setting up real-time transcription (Python + Whisper)..."
 echo "------------------------------------------------------------------"
 
 # Check for Python 3
@@ -1001,7 +974,7 @@ else
 fi
 
 echo ""
-echo "Step 13/$TOTAL_STEPS: Final verification..."
+echo "Step 12/$TOTAL_STEPS: Final verification..."
 echo "-------------------------------"
 
 # Verify everything
@@ -1022,11 +995,7 @@ else
 fi
 
 if [ "$RADICLE_AVAILABLE" = true ]; then
-    if rad node status 2>/dev/null | grep -qi "running"; then
-        success "Radicle node running"
-    else
-        warning "Radicle node not running (start with: rad node start)"
-    fi
+    success "Radicle installed and identity configured"
 else
     warning "Radicle not available (rerun installer after opening new terminal)"
 fi
@@ -1059,7 +1028,7 @@ else
 fi
 
 echo ""
-echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
+echo "Step 13/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
@@ -1217,7 +1186,7 @@ EOF
 fi
 
 echo ""
-echo "Step 15/$TOTAL_STEPS: Installation summary..."
+echo "Step 14/$TOTAL_STEPS: Installation summary..."
 echo "-------------------------------"
 
 echo ""
@@ -1278,6 +1247,7 @@ echo "  - Used for conversation summaries and other LLM magic"
 echo ""
 echo "• Radicle Passphrase - Required for seamless Radicle operations:"
 echo "  - This is the passphrase you created during 'rad auth'"
+echo "  - InterBrain will automatically start the Radicle node when needed"
 echo "  - Enables automatic peer-to-peer syncing without password prompts"
 echo "  - Note: Stored locally in Obsidian's secure storage"
 echo ""
