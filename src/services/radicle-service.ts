@@ -166,6 +166,9 @@ export class RadicleServiceImpl implements RadicleService {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
+    // Ensure Radicle node is running before initializing
+    await this.ensureNodeRunning(passphrase);
+
     const radCmd = this.getRadCommand();
 
     // Build command with proper flags to bypass TTY requirements
