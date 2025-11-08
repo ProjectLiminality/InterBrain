@@ -395,8 +395,8 @@ export class CoherenceBeaconService {
           }
 
           // Use rad clone directly into the submodule path
-          const RadicleService = (await import('./radicle-service')).RadicleService;
-          const radicleService = new RadicleService(this.app);
+          const { RadicleServiceImpl } = await import('./radicle-service');
+          const radicleService = new RadicleServiceImpl(this.app);
 
           // Clone to parent directory (rad clone will create the submodule directory)
           const parentDir = path.dirname(nestedSubmodulePath);
