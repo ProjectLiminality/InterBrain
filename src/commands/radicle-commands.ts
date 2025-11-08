@@ -834,6 +834,9 @@ export function registerRadicleCommands(
         let totalRelationships = 0;
         let alreadyFollowing = 0;
         let newFollows = 0;
+        let newDelegates = 0;
+        let newRemotes = 0;
+        let scopeUpdates = 0;
         let errors = 0;
 
         // For each Dreamer with a DID, check their related nodes
@@ -858,15 +861,13 @@ export function registerRadicleCommands(
                 totalRelationships++;
                 console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is a Radicle repo: ${radicleId}`);
 
-                // Query existing follows for this specific repo
+                // STEP 1: Ensure peer is followed (node-level)
                 const repoFollows = await getExistingFollowsForRepo(relatedData.dirPath);
 
-                // Check if already following this peer in this repo
                 if (repoFollows.has(did)) {
                   alreadyFollowing++;
                   console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${relatedData.dirName}`);
                 } else {
-                  // Attempt to follow this peer (must be run from within the repo)
                   try {
                     await radicleService.followPeer(did, passphrase, relatedData.dirPath);
                     newFollows++;
@@ -874,8 +875,41 @@ export function registerRadicleCommands(
                   } catch (followError: any) {
                     console.error(`❌ [Radicle Peer Sync] Failed to follow ${did} for repo ${relatedData.dirName}:`, followError);
                     errors++;
+                    continue; // Skip remaining steps if follow failed
                   }
                 }
+
+                // STEP 2: Add peer as equal delegate (threshold 1)
+                try {
+                  await radicleService.addDelegate(relatedData.dirPath, did, dreamerData.dirName, passphrase);
+                  newDelegates++;
+                  console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);
+                } catch (delegateError: any) {
+                  // Delegate might already exist - log but don't fail
+                  if (!delegateError.message?.includes('already')) {
+                    console.warn(`⚠️ [Radicle Peer Sync] Could not add delegate (may already exist):`, delegateError.message);
+                  }
+                }
+
+                // STEP 3: Add peer's fork as git remote
+                try {
+                  await radicleService.addPeerRemote(relatedData.dirPath, dreamerData.dirName, radicleId, did);
+                  newRemotes++;
+                  console.log(`✅ [Radicle Peer Sync] Added git remote '${dreamerData.dirName}' for ${relatedData.dirName}`);
+                } catch (remoteError: any) {
+                  // Remote might already exist - log but don't fail
+                  console.warn(`⚠️ [Radicle Peer Sync] Could not add remote (may already exist):`, remoteError.message);
+                }
+
+                // STEP 4: Set seeding scope to 'followed' (only direct peers)
+                try {
+                  await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
+                  scopeUpdates++;
+                  console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'followed' for ${relatedData.dirName}`);
+                } catch (scopeError: any) {
+                  console.warn(`⚠️ [Radicle Peer Sync] Could not set seeding scope:`, scopeError.message);
+                }
+
               } else {
                 console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is not a Radicle repo, skipping`);
               }
@@ -889,11 +923,20 @@ export function registerRadicleCommands(
         let summary: string;
         if (totalRelationships === 0) {
           summary = 'No Radicle relationships found';
-        } else if (newFollows === 0 && errors === 0) {
-          summary = `✓ All ${totalRelationships} peer follow${totalRelationships > 1 ? 's' : ''} already established!`;
         } else {
-          summary = `Created ${newFollows} new follow${newFollows !== 1 ? 's' : ''}, ${alreadyFollowing} already established` +
-                   (errors > 0 ? ` (${errors} error${errors !== 1 ? 's' : ''})` : '');
+          const updates: string[] = [];
+          if (newFollows > 0) updates.push(`${newFollows} follow${newFollows !== 1 ? 's' : ''}`);
+          if (newDelegates > 0) updates.push(`${newDelegates} delegate${newDelegates !== 1 ? 's' : ''}`);
+          if (newRemotes > 0) updates.push(`${newRemotes} remote${newRemotes !== 1 ? 's' : ''}`);
+          if (scopeUpdates > 0) updates.push(`${scopeUpdates} scope update${scopeUpdates !== 1 ? 's' : ''}`);
+
+          if (updates.length === 0 && errors === 0) {
+            summary = `✓ All ${totalRelationships} peer relationship${totalRelationships > 1 ? 's' : ''} already configured for pure p2p!`;
+          } else {
+            summary = `Configured: ${updates.join(', ')}` +
+                     (alreadyFollowing > 0 ? ` (${alreadyFollowing} already established)` : '') +
+                     (errors > 0 ? ` ⚠️ ${errors} error${errors !== 1 ? 's' : ''}` : '');
+          }
         }
 
         console.log(`✅ [Radicle Peer Sync] ${summary}`);
