@@ -742,8 +742,17 @@ export class RadicleServiceImpl implements RadicleService {
 
     const radCmd = this.getRadCommand();
 
-    // Prepare environment with passphrase if provided
-    const env = { ...process.env };
+    // Prepare environment with passphrase and enhanced PATH for git-remote-rad helper
+    const homeDir = (globalThis as any).process?.env?.HOME || '';
+    const radicleGitHelperPaths = [
+      `${homeDir}/.radicle/bin`,
+      '/usr/local/bin',
+      '/opt/homebrew/bin'
+    ];
+    const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
+
+    const env = { ...(globalThis as any).process.env };
+    env.PATH = enhancedPath;
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
       console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
@@ -755,6 +764,7 @@ export class RadicleServiceImpl implements RadicleService {
       // STEP 1: Push commits to Radicle remote
       // rad sync alone doesn't push commits - need explicit git push
       console.log(`RadicleService: Pushing commits to Radicle remote...`);
+      console.log(`RadicleService: Enhanced PATH for git-remote-rad: ${enhancedPath}`);
       try {
         const pushResult = await execAsync('git push rad main', {
           cwd: dreamNodePath,
