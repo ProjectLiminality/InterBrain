@@ -796,6 +796,19 @@ export class URIHandlerService {
 			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
 			console.log(`✅ [URIHandler] Saved DID to Dreamer node: ${did}`);
 
+			// CRITICAL: Commit the DID change to git (similar to how submodules are committed)
+			const { exec } = require('child_process');
+			const { promisify } = require('util');
+			const execAsync = promisify(exec);
+			try {
+				const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
+				await execAsync('git add .udd', { cwd: dreamerRepoPath });
+				await execAsync(`git commit -m "Add Radicle DID: ${did}"`, { cwd: dreamerRepoPath });
+				console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
+			} catch (commitError) {
+				console.warn(`⚠️ [URIHandler] Could not commit DID to git:`, commitError);
+			}
+
 			// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
 			newDreamer.uuid = udd.uuid;
 			console.log(`✅ [URIHandler] Dreamer node UUID: ${newDreamer.uuid}`);
