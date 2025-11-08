@@ -431,7 +431,9 @@ export class URIHandlerService {
 				new Notice(`Cloning from Radicle network...`, 3000);
 			}
 
-			const cloneResult = await this.radicleService.clone(radicleId, vaultPath);
+			// Get Radicle passphrase from settings for automatic node start
+			const passphrase = (this.plugin as any).settings?.radiclePassphrase || undefined;
+			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase);
 			let finalRepoName = cloneResult.repoName;
 
 			// Strip UUID suffix from directory name if present (backend uses it for uniqueness)
