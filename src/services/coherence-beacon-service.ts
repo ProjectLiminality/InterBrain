@@ -344,7 +344,21 @@ export class CoherenceBeaconService {
 
       // Initialize all submodules (allow rad:// transport protocol)
       console.log(`CoherenceBeaconService: Running git submodule update --init --recursive...`);
-      await execAsync('git -c protocol.rad.allow=always submodule update --init --recursive', { cwd: clonedNodePath });
+
+      // Enhance PATH to include Radicle bin directory for git-remote-rad helper
+      const os = require('os');
+      const homedir = os.homedir();
+      const radiclePathAdditions = [
+        `${homedir}/.radicle/bin`,
+        '/usr/local/bin',
+        '/opt/homebrew/bin'
+      ];
+      const enhancedPath = `${radiclePathAdditions.join(':')}:${process.env.PATH}`;
+
+      await execAsync('git -c protocol.rad.allow=always submodule update --init --recursive', {
+        cwd: clonedNodePath,
+        env: { ...process.env, PATH: enhancedPath }
+      });
       console.log(`CoherenceBeaconService: ✓ Submodules initialized`);
 
       // Parse .gitmodules to find submodule Radicle IDs
