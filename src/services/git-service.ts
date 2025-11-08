@@ -449,12 +449,13 @@ export class GitService {
 
   /**
    * Pull updates from remote (merge fetched changes)
+   * Uses --ff-only to ensure safe fast-forward updates without merge conflicts
    */
   async pullUpdates(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
       console.log(`GitService: Pulling updates for ${fullPath}`);
-      await execAsync('git pull', { cwd: fullPath });
+      await execAsync('git pull --ff-only', { cwd: fullPath });
       console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to pull updates:', error);
