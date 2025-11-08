@@ -1243,10 +1243,22 @@ EOF
 
     # If a clone URI was provided, wait for user to trust the vault first
     if [ -n "$CLONE_URI" ]; then
+        # Check if URI contains Radicle repos (rad: prefix)
+        HAS_RADICLE_REPOS=false
+        if echo "$CLONE_URI" | grep -q "rad:"; then
+            HAS_RADICLE_REPOS=true
+        fi
+
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        info "📋 ACTION REQUIRED: Enable Plugins & Configure Radicle"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        if [ "$HAS_RADICLE_REPOS" = true ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            info "📋 ACTION REQUIRED: Enable Plugins & Configure Radicle"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        else
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            info "📋 ACTION REQUIRED: Trust Author and Enable Plugins"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        fi
         echo ""
         echo "Obsidian has opened with your new vault."
         echo ""
@@ -1266,24 +1278,30 @@ EOF
             sleep 10
         fi
 
-        echo ""
-        echo "STEP 2: Configure Radicle Passphrase (REQUIRED for cloning)"
-        echo "  1. Open Settings (⌘+,) or click gear icon"
-        echo "  2. Go to: Community Plugins → InterBrain"
-        echo "  3. Scroll to: Radicle Settings"
-        echo "  4. Enter your Radicle passphrase in the 'Radicle Passphrase' field"
-        echo "     (This is the passphrase you just entered for 'rad node start')"
-        echo "  5. Close Settings"
-        echo ""
-        info "⚠️  IMPORTANT: The passphrase is required for InterBrain to automatically"
-        info "   start the Radicle node when cloning peer-to-peer repositories."
-        echo ""
+        # Only show Radicle passphrase config if URI contains Radicle repos
+        if [ "$HAS_RADICLE_REPOS" = true ]; then
+            echo ""
+            echo "STEP 2: Configure Radicle Passphrase (REQUIRED for Radicle repos)"
+            echo "  Your batch clone includes peer-to-peer Radicle repositories."
+            echo "  To clone them automatically, please configure your passphrase:"
+            echo ""
+            echo "  1. Open Settings (⌘+,) or click gear icon"
+            echo "  2. Go to: Community Plugins → InterBrain"
+            echo "  3. Scroll to: Radicle Settings"
+            echo "  4. Enter your Radicle passphrase in the 'Radicle Passphrase' field"
+            echo "     (This is the passphrase you just entered for 'rad node start')"
+            echo "  5. Close Settings"
+            echo ""
+            info "⚠️  IMPORTANT: The passphrase enables InterBrain to automatically start"
+            info "   the Radicle node when needed for cloning peer-to-peer repositories."
+            echo ""
 
-        if [ -t 0 ]; then
-            read -p "Press ENTER after configuring the passphrase... "
-        else
-            echo "Waiting 15 seconds for configuration..."
-            sleep 15
+            if [ -t 0 ]; then
+                read -p "Press ENTER after configuring the passphrase... "
+            else
+                echo "Waiting 15 seconds for configuration..."
+                sleep 15
+            fi
         fi
 
         echo ""
