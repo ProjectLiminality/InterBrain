@@ -534,8 +534,12 @@ export class GitService {
         return { hasDivergence: false, localCommits: 0, remoteCommits: 0 };
       }
 
-      // Count commits ahead/behind
-      const { stdout } = await execAsync(`git rev-list --left-right --count origin/${currentBranch}...HEAD`, { cwd: fullPath });
+      // Get upstream tracking branch (e.g., rad/main or origin/main)
+      const { stdout: upstreamOutput } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
+      const upstream = upstreamOutput.trim();
+
+      // Count commits ahead/behind using upstream tracking branch
+      const { stdout } = await execAsync(`git rev-list --left-right --count ${upstream}...HEAD`, { cwd: fullPath });
       const [remoteCommits, localCommits] = stdout.trim().split('\t').map(Number);
 
       const hasDivergence = localCommits > 0 && remoteCommits > 0;
