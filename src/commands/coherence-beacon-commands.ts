@@ -26,7 +26,9 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
         const { GitService } = await import('../services/git-service');
         const gitService = new GitService(plugin.app);
 
-        const result = await gitService.pushToAvailableRemote(selectedNode.repoPath);
+        // Get Radicle passphrase from settings for automatic node start
+        const passphrase = (plugin as any).settings?.radiclePassphrase || undefined;
+        const result = await gitService.pushToAvailableRemote(selectedNode.repoPath, passphrase);
 
         // Show success with remote type
         const remoteTypeLabel =

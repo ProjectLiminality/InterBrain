@@ -616,7 +616,7 @@ export class GitService {
    * Radicle: Full collaboration (push/pull)
    * GitHub: Publishing layer (push only)
    */
-  async pushToAvailableRemote(repoPath: string): Promise<{ remote: string; type: 'radicle' | 'github' | 'other' | 'dual' }> {
+  async pushToAvailableRemote(repoPath: string, radiclePassphrase?: string): Promise<{ remote: string; type: 'radicle' | 'github' | 'other' | 'dual' }> {
     const fullPath = this.getFullPath(repoPath);
 
     try {
@@ -679,7 +679,7 @@ export class GitService {
         console.log(`\n🚀 [GitService] [1/2] Pushing to Radicle...`);
         const serviceManager = await import('./service-manager');
         const radicleService = serviceManager.serviceManager.getRadicleService();
-        await radicleService.share(fullPath);
+        await radicleService.share(fullPath, radiclePassphrase);
         console.log(`✅ [GitService] Radicle sync complete!`);
 
         // Then push to GitHub (publishing layer)
@@ -701,7 +701,7 @@ export class GitService {
         console.log(`\n🚀 [GitService] Found Radicle remote - using RadicleService.share()`);
         const serviceManager = await import('./service-manager');
         const radicleService = serviceManager.serviceManager.getRadicleService();
-        await radicleService.share(fullPath);
+        await radicleService.share(fullPath, radiclePassphrase);
         console.log(`✅ [GitService] Radicle sync complete!`);
         return { remote: 'rad', type: 'radicle' };
       }
