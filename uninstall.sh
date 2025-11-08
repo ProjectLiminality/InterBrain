@@ -3,7 +3,22 @@
 # For macOS/Linux systems
 #
 # Usage:
-#   bash uninstall.sh
+#   bash uninstall.sh              # Normal mode (preserves shared dependencies)
+#   bash uninstall.sh --full       # Nuclear mode (removes everything, including vault)
+
+# Parse command-line arguments
+FULL_UNINSTALL=false
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --full)
+      FULL_UNINSTALL=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 echo "🗑️  InterBrain Uninstall Script"
 echo "=================================="
@@ -41,19 +56,39 @@ info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
-echo "This will uninstall InterBrain dependencies:"
-echo "  • GitHub CLI (gh)"
-echo "  • Radicle (rad)"
-echo "  • Ollama"
-echo "  • Python dependencies (whisper_streaming virtual environment)"
-echo ""
-warning "This will NOT uninstall:"
-echo "  • Homebrew (shared with other apps)"
-echo "  • Git (shared with other apps)"
-echo "  • Node.js (shared with other apps)"
-echo "  • Obsidian (shared with other apps)"
-echo "  • Your vault or DreamNodes (data is preserved)"
-echo ""
+if [ "$FULL_UNINSTALL" = true ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    error "⚠️  NUCLEAR MODE: FULL UNINSTALL ⚠️"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    warning "This will remove EVERYTHING:"
+    echo "  • All InterBrain dependencies (gh, rad, ollama, python venv)"
+    echo "  • Homebrew"
+    echo "  • Git"
+    echo "  • Node.js"
+    echo "  • Obsidian"
+    echo "  • Your entire vault and all DreamNodes (DATA LOSS!)"
+    echo ""
+    error "This is intended ONLY for testing fresh installations!"
+    echo ""
+else
+    echo "This will uninstall InterBrain dependencies:"
+    echo "  • GitHub CLI (gh)"
+    echo "  • Radicle (rad)"
+    echo "  • Ollama"
+    echo "  • Python dependencies (whisper_streaming virtual environment)"
+    echo ""
+    warning "This will NOT uninstall:"
+    echo "  • Homebrew (shared with other apps)"
+    echo "  • Git (shared with other apps)"
+    echo "  • Node.js (shared with other apps)"
+    echo "  • Obsidian (shared with other apps)"
+    echo "  • Your vault or DreamNodes (data is preserved)"
+    echo ""
+    info "For complete removal (testing only), use: bash uninstall.sh --full"
+    echo ""
+fi
 
 if [ -t 0 ]; then
     read -p "Continue with uninstall? [y/N]: " -n 1 -r
@@ -156,17 +191,96 @@ else
     info "Python transcription environment not found, skipping"
 fi
 
+# NUCLEAR MODE: Remove shared dependencies and vault
+if [ "$FULL_UNINSTALL" = true ]; then
+    echo ""
+    echo "5. Uninstalling Obsidian..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if [ -d "/Applications/Obsidian.app" ]; then
+            # Kill Obsidian if running
+            killall Obsidian 2>/dev/null || true
+            sleep 1
+            rm -rf "/Applications/Obsidian.app"
+            success "Obsidian uninstalled"
+        else
+            info "Obsidian not found, skipping"
+        fi
+
+        # Remove Obsidian config
+        if [ -d "$HOME/Library/Application Support/obsidian" ]; then
+            rm -rf "$HOME/Library/Application Support/obsidian"
+            success "Obsidian config removed"
+        fi
+    else
+        warning "Non-macOS system - manually remove Obsidian if needed"
+    fi
+
+    echo ""
+    echo "6. Uninstalling Node.js..."
+    if command_exists node; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            brew uninstall node 2>/dev/null && success "Node.js uninstalled" || warning "Node.js uninstall failed"
+        else
+            sudo apt remove nodejs -y 2>/dev/null && success "Node.js uninstalled" || warning "Node.js uninstall failed"
+        fi
+    else
+        info "Node.js not installed, skipping"
+    fi
+
+    echo ""
+    echo "7. Uninstalling Git..."
+    if command_exists git; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            brew uninstall git 2>/dev/null && success "Git uninstalled" || warning "Git uninstall failed"
+        else
+            sudo apt remove git -y 2>/dev/null && success "Git uninstalled" || warning "Git uninstall failed"
+        fi
+    else
+        info "Git not installed, skipping"
+    fi
+
+    echo ""
+    echo "8. Uninstalling Homebrew..."
+    if [[ "$OSTYPE" == "darwin"* ]] && command_exists brew; then
+        warning "Removing Homebrew (this may take a few minutes)..."
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)" -- --force
+        success "Homebrew uninstalled"
+    else
+        info "Homebrew not installed or not on macOS, skipping"
+    fi
+
+    echo ""
+    echo "9. Removing vault and all DreamNodes..."
+    VAULT_PATH="$DEFAULT_VAULT_PARENT/$DEFAULT_VAULT_NAME"
+    if [ -d "$VAULT_PATH" ]; then
+        rm -rf "$VAULT_PATH"
+        success "Vault removed: $VAULT_PATH"
+    else
+        info "Vault not found at default location, skipping"
+    fi
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Uninstall complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-success "InterBrain dependencies removed"
-echo ""
-info "Your vault and DreamNodes are preserved at:"
-info "  $DEFAULT_VAULT_PARENT/$DEFAULT_VAULT_NAME"
-echo ""
-info "To reinstall InterBrain, run:"
-info "  bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)"
+if [ "$FULL_UNINSTALL" = true ]; then
+    success "Complete system cleanup finished"
+    echo ""
+    warning "All InterBrain components and data have been removed"
+    echo ""
+    info "To reinstall from scratch, run:"
+    info "  bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)"
+else
+    success "InterBrain dependencies removed"
+    echo ""
+    info "Your vault and DreamNodes are preserved at:"
+    info "  $DEFAULT_VAULT_PARENT/$DEFAULT_VAULT_NAME"
+    echo ""
+    info "To reinstall InterBrain, run:"
+    info "  bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)"
+fi
+
 echo ""
