@@ -171,6 +171,16 @@
   transition: all 0.2s ease;
 }
 
+.status-item.clickable-status {
+  cursor: pointer;
+}
+
+.status-item.clickable-status:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 162, 255, 0.5);
+  transform: translateY(-1px);
+}
+
 .status-item:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(0, 162, 255, 0.3);

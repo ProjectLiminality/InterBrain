@@ -146,15 +146,23 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		if (!this.systemStatus) return;
 
 		const features = [
-			{ name: 'Semantic Search', status: this.systemStatus.semanticSearch },
-			{ name: 'Transcription', status: this.systemStatus.transcription },
-			{ name: 'Radicle Network', status: this.systemStatus.radicle },
-			{ name: 'GitHub Sharing', status: this.systemStatus.github },
-			{ name: 'Claude API', status: this.systemStatus.claudeApi }
+			{ name: 'Semantic Search', status: this.systemStatus.semanticSearch, sectionId: 'semantic-search-section' },
+			{ name: 'Transcription', status: this.systemStatus.transcription, sectionId: 'transcription-section' },
+			{ name: 'Radicle Network', status: this.systemStatus.radicle, sectionId: 'radicle-section' },
+			{ name: 'GitHub Sharing', status: this.systemStatus.github, sectionId: 'github-section' },
+			{ name: 'Claude API', status: this.systemStatus.claudeApi, sectionId: 'ai-section' }
 		];
 
 		features.forEach(feature => {
-			const statusItem = statusGrid.createDiv({ cls: 'status-item' });
+			const statusItem = statusGrid.createDiv({ cls: 'status-item clickable-status' });
+
+			// Make the entire status item clickable to jump to section
+			statusItem.addEventListener('click', () => {
+				const section = document.getElementById(feature.sectionId);
+				if (section) {
+					section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			});
 
 			const icon = SettingsStatusService.getStatusIcon(feature.status.status);
 			const colorClass = SettingsStatusService.getStatusColor(feature.status.status);
@@ -184,7 +192,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 * AI Integration Section
 	 */
 	private createAISection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: '🤖 AI Integration' });
+		const header = containerEl.createEl('h2', { text: '🤖 AI Integration' });
+		header.id = 'ai-section';
 
 		const status = this.systemStatus?.claudeApi;
 		if (status) {
@@ -220,7 +229,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 * Semantic Search Section
 	 */
 	private createSemanticSearchSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: '🔍 Semantic Search (Ollama)' });
+		const header = containerEl.createEl('h2', { text: '🔍 Semantic Search (Ollama)' });
+		header.id = 'semantic-search-section';
 
 		const status = this.systemStatus?.semanticSearch;
 		if (status) {
@@ -265,7 +275,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 * Transcription Section
 	 */
 	private createTranscriptionSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: '🎙️ Real-Time Transcription (Whisper)' });
+		const header = containerEl.createEl('h2', { text: '🎙️ Real-Time Transcription (Whisper)' });
+		header.id = 'transcription-section';
 
 		const status = this.systemStatus?.transcription;
 		if (status) {
@@ -387,7 +398,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 * Radicle Network Section
 	 */
 	private createRadicleSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: '🌐 Radicle Peer-to-Peer Network' });
+		const header = containerEl.createEl('h2', { text: '🌐 Radicle Peer-to-Peer Network' });
+		header.id = 'radicle-section';
 
 		const status = this.systemStatus?.radicle;
 		if (status) {
@@ -448,7 +460,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 * GitHub Sharing Section
 	 */
 	private createGitHubSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: '📤 GitHub Sharing (Fallback)' });
+		const header = containerEl.createEl('h2', { text: '📤 GitHub Sharing (Fallback)' });
+		header.id = 'github-section';
 
 		const status = this.systemStatus?.github;
 		if (status) {
