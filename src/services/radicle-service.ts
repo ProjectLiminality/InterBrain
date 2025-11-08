@@ -208,10 +208,45 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      const result = await execAsync(command, {
-        env: env,
-        cwd: dreamNodePath,  // Run from the repo directory
+      // Use spawn instead of exec to provide proper stdin
+      const { spawn } = require('child_process');
+      const { promisify } = require('util');
+
+      const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        const child = spawn(radCmd, ['init', dreamNodePath, '--public', '--default-branch', 'main', '--no-confirm', ...(name ? ['--name', name] : []), ...(description ? ['--description', description] : [])], {
+          env: env,
+          cwd: dreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']  // Provide stdin pipe
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve({ stdout, stderr });
+          } else {
+            reject(new Error(`Command exited with code ${code}: ${stderr}`));
+          }
+        });
+
+        child.on('error', (error) => {
+          reject(error);
+        });
+
+        // Close stdin immediately since we're non-interactive
+        child.stdin?.end();
       });
+
+      const result = await spawnPromise();
 
       console.log('RadicleService: rad init output:', result.stdout);
       if (result.stderr) {
