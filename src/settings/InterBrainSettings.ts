@@ -406,15 +406,22 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			this.createStatusDisplay(containerEl, status);
 		}
 
+		// Create placeholder for identity (will be populated asynchronously)
+		const identityPlaceholder = containerEl.createDiv({ cls: 'interbrain-radicle-identity-placeholder' });
+
 		// Show identity if available
 		const radicleService = serviceManager.getRadicleService();
 		if (radicleService && status?.available) {
 			radicleService.getIdentity().then((identity: any) => {
 				if (identity) {
-					const identityDiv = containerEl.createDiv({ cls: 'interbrain-radicle-identity' });
-					identityDiv.createEl('p', { text: 'Your Identity:' });
+					// Clear placeholder and create identity div IN THE SAME LOCATION
+					identityPlaceholder.empty();
+					identityPlaceholder.addClass('interbrain-radicle-identity');
+					identityPlaceholder.removeClass('interbrain-radicle-identity-placeholder');
 
-					const didContainer = identityDiv.createDiv({ cls: 'did-container' });
+					identityPlaceholder.createEl('p', { text: 'Your Identity:' });
+
+					const didContainer = identityPlaceholder.createDiv({ cls: 'did-container' });
 					didContainer.createSpan({ text: 'DID: ' });
 					didContainer.createEl('code', { text: identity.did });
 
@@ -439,11 +446,12 @@ export class InterBrainSettingTab extends PluginSettingTab {
 					});
 
 					if (identity.alias) {
-						identityDiv.createEl('p', { text: `Alias: ${identity.alias}` });
+						identityPlaceholder.createEl('p', { text: `Alias: ${identity.alias}` });
 					}
 				}
 			}).catch(() => {
-				// Identity not available, that's ok
+				// Identity not available, remove placeholder
+				identityPlaceholder.remove();
 			});
 		}
 
