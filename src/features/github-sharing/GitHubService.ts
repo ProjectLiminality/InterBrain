@@ -370,11 +370,11 @@ export class GitHubService {
       // Try main first, fall back to master for older repos, then let git auto-detect default
       try {
         await execAsync(`git clone --single-branch -b main "${githubUrl}" "${destinationPath}"`);
-      } catch (mainError) {
+      } catch {
         // If main branch doesn't exist, try master (older repos like octocat/Hello-World)
         try {
           await execAsync(`git clone --single-branch -b master "${githubUrl}" "${destinationPath}"`);
-        } catch (masterError) {
+        } catch {
           // If both fail, let git auto-detect the default branch
           await execAsync(`git clone --single-branch "${githubUrl}" "${destinationPath}"`);
         }

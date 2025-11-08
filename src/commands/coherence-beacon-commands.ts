@@ -2,9 +2,8 @@ import { Notice } from 'obsidian';
 import type InterBrainPlugin from '../main';
 import { CoherenceBeaconModal } from '../ui/coherence-beacon-modal';
 import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
 
-// Removed unused execAsync
+// Removed unused imports
 
 export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
   // Command: Push current DreamNode to network (Intelligent: Radicle → GitHub → Other)

@@ -593,7 +593,7 @@ export default function DreamspaceCanvas() {
     };
     
     // Handle clear edit mode data event (called when cancelling edit mode)
-    const handleClearEditModeData = (event: globalThis.Event) => {
+    const handleClearEditModeData = (_event: globalThis.Event) => {
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.clearEditModeData();
       } else {
@@ -1555,7 +1555,7 @@ export default function DreamspaceCanvas() {
           ref={spatialOrchestratorRef}
           dreamNodes={dreamNodes}
           dreamWorldRef={dreamWorldRef}
-          onNodeFocused={(nodeId) => {
+          onNodeFocused={(_nodeId) => {
             // Node focused by orchestrator
           }}
           onConstellationReturn={() => {

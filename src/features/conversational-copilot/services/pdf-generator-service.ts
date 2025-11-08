@@ -259,7 +259,7 @@ export class PDFGeneratorService {
 
 		// Save PDF to file
 		const pdfOutput = doc.output('arraybuffer');
-		fs.writeFileSync(outputPath, Buffer.from(pdfOutput));
+		fs.writeFileSync(outputPath, globalThis.Buffer.from(pdfOutput));
 
 		console.log('✅ [PDFGenerator] PDF created successfully:', outputPath);
 		return outputPath;

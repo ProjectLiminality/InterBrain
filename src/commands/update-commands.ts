@@ -262,7 +262,9 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
 /**
  * Generate markdown for update preview
+ * NOTE: Currently unused - kept for potential future use
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function generateUpdatePreviewMarkdown(
   nodeName: string,
   updateStatus: import('../services/git-service').FetchResult,

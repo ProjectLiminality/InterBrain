@@ -311,7 +311,7 @@ export class GitService {
         const upstream = upstreamOutput.trim();
         if (upstream && upstream !== '@{upstream}') {
           // Extract remote name from refs/remotes/<remote>/<branch>
-          const remoteMatch = upstream.match(/^([^\/]+)\//);
+          const remoteMatch = upstream.match(/^([^/]+)\//);
           if (remoteMatch) {
             const detectedRemote = remoteMatch[1];
 
@@ -584,7 +584,7 @@ export class GitService {
         const commonPaths = [
           '/usr/local/bin/npm',
           '/opt/homebrew/bin/npm',
-          `${process.env.HOME}/.nvm/versions/node/*/bin/npm`
+          `${(globalThis as any).process?.env?.HOME}/.nvm/versions/node/*/bin/npm`
         ];
 
         for (const testPath of commonPaths) {
@@ -642,7 +642,7 @@ export class GitService {
           const gitService = new GitService(this.app);
           await gitService.commitWithAI(repoPath);
           console.log(`✅ [GitService] Changes committed with AI message`);
-        } catch (aiError) {
+        } catch {
           // Fallback: Simple commit message
           const timestamp = new Date().toISOString();
           await execAsync(`git commit -m "Auto-commit before push (${timestamp})"`, { cwd: fullPath });

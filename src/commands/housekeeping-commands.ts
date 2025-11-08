@@ -8,7 +8,6 @@
  */
 
 import { Notice, Plugin } from 'obsidian';
-import { useInterBrainStore } from '../store/interbrain-store';
 import { DreamNode } from '../types/dreamnode';
 import { serviceManager } from '../services/service-manager';
 
@@ -37,7 +36,7 @@ export function registerHousekeepingCommands(plugin: Plugin): void {
  * For each pair, verifies we're following the peer's DID for that repository.
  * This is the "housekeeping" command that ensures collaboration handshakes are complete.
  */
-async function syncRadicleFollowRelationships(plugin: Plugin): Promise<void> {
+async function syncRadicleFollowRelationships(_plugin: Plugin): Promise<void> {
   const notice = new Notice('🔄 Synchronizing Radicle follow relationships...', 0);
 
   try {

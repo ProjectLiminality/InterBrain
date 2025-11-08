@@ -502,7 +502,7 @@ export class DreamSongRelationshipService {
               path: uddPath,
               dirName: name
             });
-          } catch (error) {
+          } catch {
             // Skip invalid UDD files
           }
         })

@@ -649,6 +649,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     
     // Only log actual changes, not redundant calls
     if (previousLayout !== layout) {
+      // Layout changed - could add logging here if needed
     }
     
     // Detect meaningful layout changes for history tracking
@@ -1566,11 +1567,9 @@ export const useInterBrainStore = create<InterBrainState>()(
 );
 
 // DIAGNOSTIC: Log all store updates to identify re-render storm trigger
+// Currently disabled but kept for potential debugging
 if (typeof window !== 'undefined') {
-  let updateCount = 0;
-  useInterBrainStore.subscribe((state, prevState) => {
-    updateCount++;
-
-    // Diagnostic logging disabled
+  useInterBrainStore.subscribe((_state, _prevState) => {
+    // Diagnostic logging disabled - could track update count here if needed
   });
 }
