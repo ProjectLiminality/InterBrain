@@ -768,26 +768,11 @@ export class GitService {
           throw new Error('No git remotes configured and Radicle CLI not available. Please install Radicle or set up GitHub.');
         }
 
-        // Get passphrase (from parameter, settings, or prompt)
-        let passphrase = radiclePassphrase;
-        if (!passphrase) {
-          const settings = (this.app as any).settings;
-          passphrase = settings?.radiclePassphrase;
-        }
-        if (!passphrase) {
-          const { UIService } = await import('./ui-service');
-          const uiService = new UIService(this.app);
-          passphrase = await uiService.promptForText('Enter Radicle passphrase to initialize', '');
-          if (!passphrase) {
-            throw new Error('Radicle passphrase required to initialize repository');
-          }
-        }
-
-        // Initialize as Radicle repository
+        // Initialize as Radicle repository (no passphrase - rely on ssh-agent)
         const path = require('path');
         const dirName = path.basename(fullPath);
         console.log(`🔧 [GitService] Initializing ${dirName} as Radicle repository...`);
-        await radicleService.init(fullPath, dirName, undefined, passphrase);
+        await radicleService.init(fullPath, dirName, undefined, undefined);
         console.log(`✅ [GitService] Radicle initialized!`);
 
         // Re-fetch remotes after initialization
