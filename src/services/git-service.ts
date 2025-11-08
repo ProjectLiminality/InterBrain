@@ -395,7 +395,37 @@ export class GitService {
         throw fetchError;
       }
 
-      // Check current branch and upstream
+      // ALSO fetch from peer remotes (for pure p2p collaboration)
+      // Peer remotes have URLs like rad://RID/DID (with DID suffix)
+      console.log(`GitService: Checking for peer remotes...`);
+      const { stdout: remoteVerbose } = await execAsync('git remote -v', { cwd: fullPath });
+      const peerRemotes = new Set<string>();
+
+      for (const line of remoteVerbose.split('\n')) {
+        const match = line.match(/^(\S+)\s+rad:\/\/\S+\/did:key:\S+/);
+        if (match) {
+          const peerName = match[1];
+          peerRemotes.add(peerName);
+        }
+      }
+
+      if (peerRemotes.size > 0) {
+        console.log(`GitService: Found ${peerRemotes.size} peer remote(s): ${Array.from(peerRemotes).join(', ')}`);
+        for (const peerName of peerRemotes) {
+          try {
+            console.log(`GitService: Fetching from peer ${peerName}...`);
+            await execAsync(`git fetch ${peerName}`, execOptions);
+            console.log(`GitService: Successfully fetched from ${peerName}`);
+          } catch (peerFetchError: any) {
+            console.warn(`GitService: Failed to fetch from peer ${peerName}:`, peerFetchError.message);
+            // Continue with other peers even if one fails
+          }
+        }
+      } else {
+        console.log(`GitService: No peer remotes found`);
+      }
+
+      // Check current branch
       const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
       const currentBranch = branchOutput.trim();
       console.log(`[GitService] Current branch: ${currentBranch}`);
@@ -409,16 +439,49 @@ export class GitService {
         console.log(`[GitService] No upstream tracking branch configured`);
       }
 
-      // Check if there are new commits (compare HEAD with @{upstream})
-      // Use %x00 (null byte) as delimiter to handle multiline commit messages
-      const { stdout: logOutput } = await execAsync(
-        'git log HEAD..@{upstream} --format="%H%x00%an%x00%ae%x00%at%x00%s%x00%b%x00"',
-        { cwd: fullPath }
-      );
+      // For pure p2p: Check for updates from ALL peer branches, not just upstream
+      // Build list of refs to check: upstream + all peer main branches
+      const refsToCheck: string[] = [];
+
+      // Add upstream (canonical rad/main)
+      try {
+        const { stdout: upstreamRef } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
+        if (upstreamRef.trim()) {
+          refsToCheck.push(upstreamRef.trim());
+        }
+      } catch {
+        // No upstream, that's ok
+      }
+
+      // Add all peer branches (Martina/main, Bob/main, etc.)
+      for (const peerName of peerRemotes) {
+        refsToCheck.push(`${peerName}/${currentBranch}`);
+      }
+
+      console.log(`[GitService] Checking for updates from: ${refsToCheck.join(', ')}`);
+
+      // Check each ref for new commits
+      let logOutput = '';
+      for (const ref of refsToCheck) {
+        try {
+          const { stdout } = await execAsync(
+            `git log HEAD..${ref} --format="%H%x00%an%x00%ae%x00%at%x00%s%x00%b%x00"`,
+            { cwd: fullPath }
+          );
+          if (stdout.trim()) {
+            logOutput += stdout;
+            console.log(`[GitService] Found updates from ${ref}`);
+          }
+        } catch (error) {
+          // Ref might not exist, skip it
+          console.log(`[GitService] No commits from ${ref} (may not exist)`);
+        }
+      }
 
       console.log('[GitService] Raw git log output:', logOutput);
 
       if (!logOutput.trim()) {
+        console.log('[GitService] No updates from any peer or upstream');
         return {
           hasUpdates: false,
           commits: [],
