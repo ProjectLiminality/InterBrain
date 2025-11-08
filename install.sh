@@ -36,6 +36,21 @@ echo "🚀 InterBrain Installation Script"
 echo "=================================="
 echo ""
 
+# Check if running in non-interactive mode (piped without bash)
+if [ ! -t 0 ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "⚠️  NON-INTERACTIVE MODE NOT SUPPORTED"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "This installer requires interactive mode."
+    echo ""
+    echo "Please run it like this instead:"
+    echo ""
+    echo "  bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)"
+    echo ""
+    exit 1
+fi
+
 # Color output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
