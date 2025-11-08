@@ -188,12 +188,28 @@ export function createIconElement(iconName: string): React.ReactNode {
  * Add/remove buttons by modifying this array.
  * Order determines position (starts at top, goes clockwise).
  */
+// InterBrain node UUID constant
+const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
 export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'edit-mode',
     iconName: 'lucide-settings',  // Gear icon
     commandId: 'interbrain:enter-edit-mode',
-    label: 'Edit Mode'
+    label: 'Edit Mode',
+    // Special handling for InterBrain node - open settings instead of edit mode
+    getDynamicCommand: (node) => {
+      if (node?.id === INTERBRAIN_UUID) {
+        return 'app:open-settings'; // Obsidian's built-in settings command
+      }
+      return 'interbrain:enter-edit-mode';
+    },
+    getDynamicLabel: (node) => {
+      if (node?.id === INTERBRAIN_UUID) {
+        return 'InterBrain Settings';
+      }
+      return 'Edit Mode';
+    }
   },
   {
     id: 'video-call',
