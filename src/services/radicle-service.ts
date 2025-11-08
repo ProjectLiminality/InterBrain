@@ -28,6 +28,11 @@ export interface RadicleService {
   isAvailable(): Promise<boolean>;
 
   /**
+   * Check if Radicle node is currently running
+   */
+  isNodeRunning(): Promise<boolean>;
+
+  /**
    * Initialize a DreamNode repository with Radicle
    * @param passphrase Optional passphrase (uses ssh-agent if not provided)
    */
@@ -254,7 +259,7 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Check if Radicle node is running
    */
-  private async isNodeRunning(): Promise<boolean> {
+  async isNodeRunning(): Promise<boolean> {
     try {
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" node status`);

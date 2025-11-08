@@ -680,16 +680,20 @@ export class InterBrainSettingTab extends PluginSettingTab {
 
 			await execAsync(`"${radCmd}" node start`, { env });
 
-			// Wait a moment for node to fully start
-			await new Promise(resolve => setTimeout(resolve, 2000));
+			// Wait longer for node to fully start, then retry status check up to 3 times
+			let isRunning = false;
+			for (let i = 0; i < 3; i++) {
+				await new Promise(resolve => setTimeout(resolve, 2000));
+				isRunning = await radicleService.isNodeRunning();
+				if (isRunning) break;
+			}
 
-			// Check if it's actually running
-			const isRunning = await radicleService.isNodeRunning();
 			if (isRunning) {
 				validationEl.innerHTML = '<span class="status-ready">✅ Passphrase correct! Node started successfully.</span>';
 				await this.updateNodeStatus(nodeStatusDiv, radicleService);
 			} else {
-				validationEl.innerHTML = '<span class="status-warning">⚠️ Node started but not responding. Try again.</span>';
+				validationEl.innerHTML = '<span class="status-warning">⚠️ Node start command succeeded but status check failed. Check console.</span>';
+				await this.updateNodeStatus(nodeStatusDiv, radicleService);
 			}
 		} catch (error: any) {
 			const errorMsg = error.message || error.stdout || error.stderr || 'Unknown error';
@@ -732,9 +736,20 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			env.PATH = `${radBinDir}:${env.PATH}`;
 
 			await execAsync(`"${radCmd}" node start`, { env });
-			await new Promise(resolve => setTimeout(resolve, 2000));
 
-			validationEl.innerHTML = '<span class="status-ready">✅ Node started</span>';
+			// Wait and retry status check to confirm node started
+			let isRunning = false;
+			for (let i = 0; i < 3; i++) {
+				await new Promise(resolve => setTimeout(resolve, 2000));
+				isRunning = await radicleService.isNodeRunning();
+				if (isRunning) break;
+			}
+
+			if (isRunning) {
+				validationEl.innerHTML = '<span class="status-ready">✅ Node started successfully</span>';
+			} else {
+				validationEl.innerHTML = '<span class="status-ready">✅ Start command sent (status pending)</span>';
+			}
 			await this.updateNodeStatus(nodeStatusDiv, radicleService);
 		} catch (error: any) {
 			const errorMsg = error.message || error.stdout || error.stderr || 'Unknown error';
