@@ -395,6 +395,20 @@ export class GitService {
         throw fetchError;
       }
 
+      // Check current branch and upstream
+      const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: fullPath });
+      const currentBranch = branchOutput.trim();
+      console.log(`[GitService] Current branch: ${currentBranch}`);
+
+      // Check upstream tracking branch
+      try {
+        const { stdout: upstreamOutput } = await execAsync(`git rev-parse --abbrev-ref ${currentBranch}@{upstream}`, { cwd: fullPath });
+        const upstream = upstreamOutput.trim();
+        console.log(`[GitService] Upstream tracking: ${upstream}`);
+      } catch (upstreamError) {
+        console.log(`[GitService] No upstream tracking branch configured`);
+      }
+
       // Check if there are new commits (compare HEAD with @{upstream})
       // Use %x00 (null byte) as delimiter to handle multiline commit messages
       const { stdout: logOutput } = await execAsync(
