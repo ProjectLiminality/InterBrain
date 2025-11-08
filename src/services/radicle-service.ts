@@ -183,7 +183,7 @@ export class RadicleServiceImpl implements RadicleService {
     console.log(`RadicleService: Running '${command}'`);
 
     // Prepare environment with passphrase if provided
-    const env = { ...process.env };
+    const env = { ...(globalThis as any).process.env };
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
       console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
@@ -207,6 +207,7 @@ export class RadicleServiceImpl implements RadicleService {
     try {
       const result = await execAsync(command, {
         env: env,
+        cwd: dreamNodePath,  // Run from the repo directory
       });
 
       console.log('RadicleService: rad init output:', result.stdout);
