@@ -782,25 +782,27 @@ export function registerRadicleCommands(
 
         console.log(`🔄 [Radicle Peer Sync] Found ${dreamersWithDids.length} Dreamers with DIDs`);
 
-        // Query existing follows once at the start
+        // Helper to query existing follows for a specific repo
         const { exec } = require('child_process');
         const { promisify } = require('util');
         const execAsync = promisify(exec);
 
-        let existingFollows = new Set<string>();
-        try {
-          const { stdout } = await execAsync('rad follow');
-          // Parse output to extract DIDs (format: "did:key:..." or just the key part)
-          const lines = stdout.split('\n');
-          for (const line of lines) {
-            const match = line.match(/did:key:[\w]+/);
-            if (match) {
-              existingFollows.add(match[0]);
+        async function getExistingFollowsForRepo(repoPath: string): Promise<Set<string>> {
+          const follows = new Set<string>();
+          try {
+            const { stdout } = await execAsync('rad follow', { cwd: repoPath });
+            // Parse output to extract DIDs (format: "did:key:..." or just the key part)
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+              const match = line.match(/did:key:[\w]+/);
+              if (match) {
+                follows.add(match[0]);
+              }
             }
+          } catch (error) {
+            console.warn(`⚠️ [Radicle Peer Sync] Could not query follows for ${repoPath}:`, error);
           }
-          console.log(`🔄 [Radicle Peer Sync] Found ${existingFollows.size} existing follows`);
-        } catch (error) {
-          console.warn(`⚠️ [Radicle Peer Sync] Could not query existing follows:`, error);
+          return follows;
         }
 
         let totalRelationships = 0;
@@ -830,19 +832,21 @@ export function registerRadicleCommands(
                 totalRelationships++;
                 console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is a Radicle repo: ${radicleId}`);
 
-                // Check if already following this peer
-                if (existingFollows.has(did)) {
+                // Query existing follows for this specific repo
+                const repoFollows = await getExistingFollowsForRepo(relatedData.dirPath);
+
+                // Check if already following this peer in this repo
+                if (repoFollows.has(did)) {
                   alreadyFollowing++;
-                  console.log(`✅ [Radicle Peer Sync] Already following ${did}`);
+                  console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${relatedData.dirName}`);
                 } else {
-                  // Attempt to follow this peer
+                  // Attempt to follow this peer (must be run from within the repo)
                   try {
-                    await radicleService.followPeer(did, passphrase);
+                    await radicleService.followPeer(did, passphrase, relatedData.dirPath);
                     newFollows++;
-                    existingFollows.add(did); // Update local cache
-                    console.log(`✅ [Radicle Peer Sync] Now following ${did}`);
+                    console.log(`✅ [Radicle Peer Sync] Now following ${did} for repo ${relatedData.dirName}`);
                   } catch (followError: any) {
-                    console.error(`❌ [Radicle Peer Sync] Failed to follow ${did}:`, followError);
+                    console.error(`❌ [Radicle Peer Sync] Failed to follow ${did} for repo ${relatedData.dirName}:`, followError);
                     errors++;
                   }
                 }

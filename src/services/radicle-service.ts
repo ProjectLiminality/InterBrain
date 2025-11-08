@@ -326,7 +326,7 @@ export class RadicleServiceImpl implements RadicleService {
    * Follow a peer's Radicle DID to receive their updates
    * This is ESSENTIAL for bidirectional collaboration
    */
-  async followPeer(peerDid: string, passphrase?: string): Promise<void> {
+  async followPeer(peerDid: string, passphrase?: string, repoPath?: string): Promise<void> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
@@ -339,9 +339,18 @@ export class RadicleServiceImpl implements RadicleService {
       env.RAD_PASSPHRASE = passphrase;
     }
 
+    // Prepare execution options - run from repo directory if provided
+    const execOptions: any = { env };
+    if (repoPath) {
+      const fullPath = this.getFullPath(repoPath);
+      execOptions.cwd = fullPath;
+      console.log(`RadicleService: Following peer ${peerDid} in repo ${repoPath}...`);
+    } else {
+      console.log(`RadicleService: Following peer ${peerDid} globally...`);
+    }
+
     try {
-      console.log(`RadicleService: Following peer ${peerDid}...`);
-      await execAsync(`"${radCmd}" follow ${peerDid}`, { env });
+      await execAsync(`"${radCmd}" follow ${peerDid}`, execOptions);
       console.log(`RadicleService: ✅ Now following ${peerDid} - will receive their updates`);
     } catch (error: any) {
       const errorOutput = error.stderr || error.stdout || error.message || '';
