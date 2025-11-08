@@ -414,9 +414,29 @@ export class InterBrainSettingTab extends PluginSettingTab {
 					const identityDiv = containerEl.createDiv({ cls: 'interbrain-radicle-identity' });
 					identityDiv.createEl('p', { text: 'Your Identity:' });
 
-					const didDiv = identityDiv.createDiv();
-					didDiv.createSpan({ text: 'DID: ' });
-					didDiv.createEl('code', { text: identity.did });
+					const didContainer = identityDiv.createDiv({ cls: 'did-container' });
+					didContainer.createSpan({ text: 'DID: ' });
+					didContainer.createEl('code', { text: identity.did });
+
+					// Add copy button
+					const copyButton = didContainer.createEl('button', {
+						text: '📋 Copy',
+						cls: 'did-copy-button'
+					});
+					copyButton.addEventListener('click', () => {
+						navigator.clipboard.writeText(identity.did).then(() => {
+							copyButton.textContent = '✅ Copied!';
+							setTimeout(() => {
+								copyButton.textContent = '📋 Copy';
+							}, 2000);
+						}).catch((err) => {
+							console.error('Failed to copy DID:', err);
+							copyButton.textContent = '❌ Failed';
+							setTimeout(() => {
+								copyButton.textContent = '📋 Copy';
+							}, 2000);
+						});
+					});
 
 					if (identity.alias) {
 						identityDiv.createEl('p', { text: `Alias: ${identity.alias}` });

@@ -284,6 +284,13 @@
   margin: 8px 0;
 }
 
+.did-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+
 .interbrain-radicle-identity code {
   background: rgba(0, 0, 0, 0.3);
   padding: 4px 8px;
@@ -291,6 +298,25 @@
   font-size: 0.9em;
   color: #00A2FF;
   word-break: break-all;
+  flex: 1;
+}
+
+.did-copy-button {
+  padding: 4px 12px;
+  background: rgba(0, 162, 255, 0.2);
+  border: 1px solid rgba(0, 162, 255, 0.4);
+  border-radius: 4px;
+  color: #00A2FF;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.did-copy-button:hover {
+  background: rgba(0, 162, 255, 0.3);
+  border-color: rgba(0, 162, 255, 0.6);
+  transform: translateY(-1px);
 }
 
 /* Hotkey List */
