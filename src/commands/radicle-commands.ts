@@ -782,8 +782,30 @@ export function registerRadicleCommands(
 
         console.log(`🔄 [Radicle Peer Sync] Found ${dreamersWithDids.length} Dreamers with DIDs`);
 
+        // Query existing follows once at the start
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+
+        let existingFollows = new Set<string>();
+        try {
+          const { stdout } = await execAsync('rad follow');
+          // Parse output to extract DIDs (format: "did:key:..." or just the key part)
+          const lines = stdout.split('\n');
+          for (const line of lines) {
+            const match = line.match(/did:key:[\w]+/);
+            if (match) {
+              existingFollows.add(match[0]);
+            }
+          }
+          console.log(`🔄 [Radicle Peer Sync] Found ${existingFollows.size} existing follows`);
+        } catch (error) {
+          console.warn(`⚠️ [Radicle Peer Sync] Could not query existing follows:`, error);
+        }
+
         let totalRelationships = 0;
-        let followsEnsured = 0;
+        let alreadyFollowing = 0;
+        let newFollows = 0;
         let errors = 0;
 
         // For each Dreamer with a DID, check their related nodes
@@ -808,17 +830,18 @@ export function registerRadicleCommands(
                 totalRelationships++;
                 console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is a Radicle repo: ${radicleId}`);
 
-                // Ensure we're following this peer for this repo
-                try {
-                  await radicleService.followPeer(did, passphrase);
-                  followsEnsured++;
-                  console.log(`✅ [Radicle Peer Sync] Ensured following ${did} for repo ${radicleId}`);
-                } catch (followError: any) {
-                  // Non-destructive: if already following, that's fine
-                  if (followError.message?.includes('already') || followError.message?.includes('exists')) {
-                    followsEnsured++;
-                    console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${radicleId}`);
-                  } else {
+                // Check if already following this peer
+                if (existingFollows.has(did)) {
+                  alreadyFollowing++;
+                  console.log(`✅ [Radicle Peer Sync] Already following ${did}`);
+                } else {
+                  // Attempt to follow this peer
+                  try {
+                    await radicleService.followPeer(did, passphrase);
+                    newFollows++;
+                    existingFollows.add(did); // Update local cache
+                    console.log(`✅ [Radicle Peer Sync] Now following ${did}`);
+                  } catch (followError: any) {
                     console.error(`❌ [Radicle Peer Sync] Failed to follow ${did}:`, followError);
                     errors++;
                   }
@@ -832,11 +855,19 @@ export function registerRadicleCommands(
           }
         }
 
-        const summary = `Synced ${followsEnsured}/${totalRelationships} peer follows for ${dreamersWithDids.length} Dreamers` +
-                       (errors > 0 ? ` (${errors} errors)` : '');
+        // Build summary message
+        let summary: string;
+        if (totalRelationships === 0) {
+          summary = 'No Radicle relationships found';
+        } else if (newFollows === 0 && errors === 0) {
+          summary = `✓ All ${totalRelationships} peer follow${totalRelationships > 1 ? 's' : ''} already established!`;
+        } else {
+          summary = `Created ${newFollows} new follow${newFollows !== 1 ? 's' : ''}, ${alreadyFollowing} already established` +
+                   (errors > 0 ? ` (${errors} error${errors !== 1 ? 's' : ''})` : '');
+        }
 
         console.log(`✅ [Radicle Peer Sync] ${summary}`);
-        new Notice(`✓ ${summary}`);
+        new Notice(summary);
 
       } catch (error) {
         console.error('❌ [Radicle Peer Sync] Maintenance sync failed:', error);
