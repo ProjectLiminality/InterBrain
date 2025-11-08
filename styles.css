@@ -375,6 +375,75 @@
   box-shadow: 0 2px 8px rgba(0, 162, 255, 0.3);
 }
 
+/* Radicle Node Status Display */
+.interbrain-node-status {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border-left: 3px solid rgba(0, 162, 255, 0.5);
+}
+
+.node-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95em;
+  color: var(--text-normal);
+}
+
+.node-status-line strong {
+  font-weight: 600;
+}
+
+/* Passphrase Validation Feedback */
+.passphrase-validation {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  font-weight: 500;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.passphrase-validation.status-ready {
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  color: #00FF00;
+}
+
+.passphrase-validation.status-error {
+  background: rgba(255, 100, 78, 0.1);
+  border: 1px solid rgba(255, 100, 78, 0.3);
+  color: #FF644E;
+}
+
+.passphrase-validation.status-info {
+  background: rgba(0, 162, 255, 0.1);
+  border: 1px solid rgba(0, 162, 255, 0.3);
+  color: #00A2FF;
+}
+
+/* Status Icons Animation */
+.status-ready,
+.status-error,
+.status-info,
+.status-warning {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .interbrain-status-grid {

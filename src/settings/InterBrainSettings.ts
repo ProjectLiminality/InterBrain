@@ -427,10 +427,15 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			});
 		}
 
-		// Passphrase setting
-		new Setting(containerEl)
+		// Node status display
+		const nodeStatusDiv = containerEl.createDiv({ cls: 'interbrain-node-status' });
+		nodeStatusDiv.id = 'radicle-node-status';
+		this.updateNodeStatus(nodeStatusDiv, radicleService);
+
+		// Passphrase setting with validation
+		const passphraseSetting = new Setting(containerEl)
 			.setName('Radicle Passphrase')
-			.setDesc('Enables seamless DreamNode sharing without password prompts')
+			.setDesc('Enables automatic node startup for seamless DreamNode sharing')
 			.addText(text => {
 				text
 					.setPlaceholder('Enter passphrase...')
@@ -438,10 +443,40 @@ export class InterBrainSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.radiclePassphrase = value;
 						await this.plugin.saveSettings();
+						// Clear validation state when passphrase changes
+						const validationEl = document.getElementById('passphrase-validation');
+						if (validationEl) {
+							validationEl.textContent = '';
+						}
 					});
 				text.inputEl.type = 'password';
 				return text;
-			});
+			})
+			.addButton(button => button
+				.setButtonText('Test Passphrase')
+				.setTooltip('Validate passphrase by starting the node')
+				.onClick(async () => {
+					await this.testRadiclePassphrase(radicleService, nodeStatusDiv);
+				}));
+
+		// Validation feedback element
+		const validationEl = containerEl.createDiv({ cls: 'passphrase-validation' });
+		validationEl.id = 'passphrase-validation';
+
+		// Node control buttons
+		new Setting(containerEl)
+			.setName('Node Control')
+			.setDesc('Manually start or stop the Radicle node')
+			.addButton(button => button
+				.setButtonText('Start Node')
+				.onClick(async () => {
+					await this.startRadicleNode(radicleService, nodeStatusDiv);
+				}))
+			.addButton(button => button
+				.setButtonText('Stop Node')
+				.onClick(async () => {
+					await this.stopRadicleNode(radicleService, nodeStatusDiv);
+				}));
 
 		// Installation instructions
 		const platform = (window as any).process?.platform || 'unknown';
@@ -575,6 +610,165 @@ export class InterBrainSettingTab extends PluginSettingTab {
 				text: status.details,
 				cls: 'interbrain-status-details'
 			});
+		}
+	}
+
+	/**
+	 * Update Radicle node status display
+	 */
+	private async updateNodeStatus(containerEl: HTMLElement, radicleService: any): Promise<void> {
+		containerEl.empty();
+
+		if (!radicleService) {
+			containerEl.createEl('p', { text: '⚠️ Radicle service not available', cls: 'status-warning' });
+			return;
+		}
+
+		try {
+			const isRunning = await radicleService.isNodeRunning();
+			const isAvailable = await radicleService.isAvailable();
+
+			if (!isAvailable) {
+				containerEl.createEl('p', { text: '❌ Radicle not installed', cls: 'status-error' });
+				return;
+			}
+
+			const statusEl = containerEl.createEl('p', { cls: 'node-status-line' });
+			if (isRunning) {
+				statusEl.createSpan({ text: '✅ Node Status: ', cls: 'status-label' });
+				statusEl.createEl('strong', { text: 'Running', cls: 'status-ready' });
+			} else {
+				statusEl.createSpan({ text: '⚠️ Node Status: ', cls: 'status-label' });
+				statusEl.createEl('strong', { text: 'Stopped', cls: 'status-warning' });
+			}
+		} catch (error) {
+			containerEl.createEl('p', {
+				text: `❌ Error checking node status: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				cls: 'status-error'
+			});
+		}
+	}
+
+	/**
+	 * Test Radicle passphrase by attempting to start the node
+	 */
+	private async testRadiclePassphrase(radicleService: any, nodeStatusDiv: HTMLElement): Promise<void> {
+		const validationEl = document.getElementById('passphrase-validation');
+		if (!validationEl) return;
+
+		const passphrase = this.plugin.settings.radiclePassphrase;
+		if (!passphrase || passphrase.trim() === '') {
+			validationEl.innerHTML = '<span class="status-error">❌ Please enter a passphrase first</span>';
+			return;
+		}
+
+		validationEl.innerHTML = '<span class="status-info">⏳ Testing passphrase...</span>';
+
+		try {
+			// Try to start the node with the passphrase
+			const { exec } = require('child_process');
+			const { promisify } = require('util');
+			const execAsync = promisify(exec);
+
+			const env = { ...process.env, RAD_PASSPHRASE: passphrase };
+
+			// Add Radicle bin to PATH
+			const radCmd = await radicleService.getRadCommand();
+			const path = require('path');
+			const radBinDir = path.dirname(radCmd);
+			env.PATH = `${radBinDir}:${env.PATH}`;
+
+			await execAsync(`"${radCmd}" node start`, { env });
+
+			// Wait a moment for node to fully start
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			// Check if it's actually running
+			const isRunning = await radicleService.isNodeRunning();
+			if (isRunning) {
+				validationEl.innerHTML = '<span class="status-ready">✅ Passphrase correct! Node started successfully.</span>';
+				await this.updateNodeStatus(nodeStatusDiv, radicleService);
+			} else {
+				validationEl.innerHTML = '<span class="status-warning">⚠️ Node started but not responding. Try again.</span>';
+			}
+		} catch (error: any) {
+			const errorMsg = error.message || error.stdout || error.stderr || 'Unknown error';
+			if (errorMsg.includes('passphrase') || errorMsg.includes('Passphrase')) {
+				validationEl.innerHTML = '<span class="status-error">❌ Incorrect passphrase</span>';
+			} else if (errorMsg.includes('already running') || errorMsg.includes('Already running')) {
+				validationEl.innerHTML = '<span class="status-ready">✅ Node already running (passphrase likely correct)</span>';
+				await this.updateNodeStatus(nodeStatusDiv, radicleService);
+			} else {
+				validationEl.innerHTML = `<span class="status-error">❌ Error: ${errorMsg}</span>`;
+			}
+		}
+	}
+
+	/**
+	 * Start Radicle node
+	 */
+	private async startRadicleNode(radicleService: any, nodeStatusDiv: HTMLElement): Promise<void> {
+		const validationEl = document.getElementById('passphrase-validation');
+		if (!validationEl) return;
+
+		const passphrase = this.plugin.settings.radiclePassphrase;
+		if (!passphrase || passphrase.trim() === '') {
+			validationEl.innerHTML = '<span class="status-error">❌ Please configure passphrase first</span>';
+			return;
+		}
+
+		validationEl.innerHTML = '<span class="status-info">⏳ Starting node...</span>';
+
+		try {
+			const { exec } = require('child_process');
+			const { promisify } = require('util');
+			const execAsync = promisify(exec);
+
+			const env = { ...process.env, RAD_PASSPHRASE: passphrase };
+
+			const radCmd = await radicleService.getRadCommand();
+			const path = require('path');
+			const radBinDir = path.dirname(radCmd);
+			env.PATH = `${radBinDir}:${env.PATH}`;
+
+			await execAsync(`"${radCmd}" node start`, { env });
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			validationEl.innerHTML = '<span class="status-ready">✅ Node started</span>';
+			await this.updateNodeStatus(nodeStatusDiv, radicleService);
+		} catch (error: any) {
+			const errorMsg = error.message || error.stdout || error.stderr || 'Unknown error';
+			if (errorMsg.includes('already running') || errorMsg.includes('Already running')) {
+				validationEl.innerHTML = '<span class="status-ready">✅ Node already running</span>';
+				await this.updateNodeStatus(nodeStatusDiv, radicleService);
+			} else {
+				validationEl.innerHTML = `<span class="status-error">❌ Failed to start: ${errorMsg}</span>`;
+			}
+		}
+	}
+
+	/**
+	 * Stop Radicle node
+	 */
+	private async stopRadicleNode(radicleService: any, nodeStatusDiv: HTMLElement): Promise<void> {
+		const validationEl = document.getElementById('passphrase-validation');
+		if (!validationEl) return;
+
+		validationEl.innerHTML = '<span class="status-info">⏳ Stopping node...</span>';
+
+		try {
+			const { exec } = require('child_process');
+			const { promisify } = require('util');
+			const execAsync = promisify(exec);
+
+			const radCmd = await radicleService.getRadCommand();
+			await execAsync(`"${radCmd}" node stop`);
+			await new Promise(resolve => setTimeout(resolve, 1000));
+
+			validationEl.innerHTML = '<span class="status-info">✓ Node stopped</span>';
+			await this.updateNodeStatus(nodeStatusDiv, radicleService);
+		} catch (error: any) {
+			validationEl.innerHTML = `<span class="status-error">❌ Failed to stop: ${error.message}</span>`;
 		}
 	}
 }
