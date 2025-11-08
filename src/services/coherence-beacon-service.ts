@@ -372,17 +372,33 @@ export class CoherenceBeaconService {
 
         // STEP 2: Clone into nested submodule path for media file resolution
         const nestedSubmodulePath = path.join(clonedNodePath, submodulePath);
+
+        // Check if it's a valid git repository, not just an empty directory
+        let needsClone = true;
         try {
-          await fs.access(nestedSubmodulePath);
+          const gitDir = path.join(nestedSubmodulePath, '.git');
+          await fs.access(gitDir);
           console.log(`CoherenceBeaconService: ${submoduleName} already exists in nested path - skipping nested clone`);
+          needsClone = false;
         } catch {
+          // Either doesn't exist or is an empty directory - need to clone
+        }
+
+        if (needsClone) {
           console.log(`CoherenceBeaconService: Cloning ${submoduleName} to nested submodule path...`);
+
+          // Remove empty directory if it exists
+          try {
+            await fs.rm(nestedSubmodulePath, { recursive: true, force: true });
+          } catch {
+            // Directory might not exist - that's fine
+          }
 
           // Use rad clone directly into the submodule path
           const RadicleService = (await import('./radicle-service')).RadicleService;
           const radicleService = new RadicleService(this.app);
 
-          // Clone to parent directory, then move to correct submodule path
+          // Clone to parent directory (rad clone will create the submodule directory)
           const parentDir = path.dirname(nestedSubmodulePath);
           await radicleService.clone(radicleId, parentDir);
         }
@@ -478,18 +494,40 @@ export class CoherenceBeaconService {
         return;
       }
 
-      // Add relationship from root node to Dreamer
-      const rootNodePath = path.join(this.vaultPath, rootNodeName);
-      const rootUDD = await UDDService.readUDD(rootNodePath);
+      // Collect all nodes that were cloned (root + all submodules)
+      const nodesToRelate: string[] = [rootNodeName];
 
-      if (!rootUDD.liminalWebRelationships.includes(dreamerUUID)) {
-        rootUDD.liminalWebRelationships.push(dreamerUUID);
-        await UDDService.writeUDD(rootNodePath, rootUDD);
-        console.log(`CoherenceBeaconService: ✓ Added relationship: ${rootNodeName} → Dreamer`);
+      // Parse .gitmodules to find all submodules
+      const rootNodePath = path.join(this.vaultPath, rootNodeName);
+      const gitmodulesPath = path.join(rootNodePath, '.gitmodules');
+      try {
+        const fs = require('fs').promises;
+        await fs.access(gitmodulesPath);
+        const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
+        const submodulePattern = /\[submodule "([^"]+)"\]/g;
+        let match;
+        while ((match = submodulePattern.exec(gitmodulesContent)) !== null) {
+          nodesToRelate.push(match[1]);
+        }
+      } catch {
+        // No .gitmodules - just root node
       }
 
-      // TODO: Recursively add relationships for all submodules that were cloned
-      // For now, just handling the root node
+      // Add relationships for all collected nodes
+      for (const nodeName of nodesToRelate) {
+        const nodePath = path.join(this.vaultPath, nodeName);
+        try {
+          const udd = await UDDService.readUDD(nodePath);
+
+          if (!udd.liminalWebRelationships.includes(dreamerUUID)) {
+            udd.liminalWebRelationships.push(dreamerUUID);
+            await UDDService.writeUDD(nodePath, udd);
+            console.log(`CoherenceBeaconService: ✓ Added relationship: ${nodeName} → Dreamer`);
+          }
+        } catch (error) {
+          console.warn(`CoherenceBeaconService: Could not relate ${nodeName} to Dreamer:`, error);
+        }
+      }
 
     } catch (error) {
       console.error(`CoherenceBeaconService: Error establishing peer relationships:`, error);
