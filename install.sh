@@ -1009,13 +1009,16 @@ if [ "$RADICLE_AVAILABLE" = true ] && rad self --did >/dev/null 2>&1; then
             # Interactive mode - start node (will prompt for passphrase)
             if rad node start; then
                 success "Radicle node started successfully"
-                echo ""
-                info "💡 Tip: You can configure the passphrase in InterBrain settings"
-                info "   to avoid entering it every time (Settings → InterBrain → Radicle Passphrase)"
+
+                # Verify node is running
+                if rad node status >/dev/null 2>&1; then
+                    success "Radicle node is running and ready"
+                else
+                    warning "Node started but status check failed - this is usually OK"
+                fi
             else
                 warning "Failed to start Radicle node"
                 info "You can start it manually later with: rad node start"
-                info "Or configure passphrase in InterBrain settings for automatic startup"
             fi
         else
             # Non-interactive mode - cannot start node interactively
@@ -1238,12 +1241,13 @@ EOF
     if [ -n "$CLONE_URI" ]; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        info "📋 ACTION REQUIRED: Trust Author and Enable Plugins"
+        info "📋 ACTION REQUIRED: Enable Plugins & Configure Radicle"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
         echo "Obsidian has opened with your new vault."
         echo ""
-        echo "You should see a popup asking:"
+        echo "STEP 1: Trust the vault"
+        echo "  You should see a popup asking:"
         echo "  \"Do you trust the author of this vault?\""
         echo ""
         echo "  👉 Click: \"Trust author and enable plugins\""
@@ -1251,11 +1255,31 @@ EOF
 
         # Only prompt if interactive terminal
         if [ -t 0 ]; then
-            read -p "Press ENTER after you've clicked the button to continue... "
+            read -p "Press ENTER after you've enabled plugins... "
         else
             # Non-interactive mode - just wait a reasonable time
             echo "Waiting 10 seconds for plugin activation..."
             sleep 10
+        fi
+
+        echo ""
+        echo "STEP 2: Configure Radicle Passphrase (REQUIRED for cloning)"
+        echo "  1. Open Settings (⌘+,) or click gear icon"
+        echo "  2. Go to: Community Plugins → InterBrain"
+        echo "  3. Scroll to: Radicle Settings"
+        echo "  4. Enter your Radicle passphrase in the 'Radicle Passphrase' field"
+        echo "     (This is the passphrase you just entered for 'rad node start')"
+        echo "  5. Close Settings"
+        echo ""
+        info "⚠️  IMPORTANT: The passphrase is required for InterBrain to automatically"
+        info "   start the Radicle node when cloning peer-to-peer repositories."
+        echo ""
+
+        if [ -t 0 ]; then
+            read -p "Press ENTER after configuring the passphrase... "
+        else
+            echo "Waiting 15 seconds for configuration..."
+            sleep 15
         fi
 
         echo ""
