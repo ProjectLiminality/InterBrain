@@ -787,10 +787,36 @@ export function registerRadicleCommands(
         const { promisify } = require('util');
         const execAsync = promisify(exec);
 
+        // Find rad command path (same pattern as npm/node finding)
+        let radPath = 'rad';
+        try {
+          const { stdout } = await execAsync('which rad');
+          radPath = stdout.trim() || 'rad';
+        } catch {
+          // Fallback to common locations if 'which' fails
+          const commonRadPaths = [
+            '/usr/local/bin/rad',
+            '/opt/homebrew/bin/rad',
+            `${(globalThis as any).process?.env?.HOME}/.radicle/bin/rad`
+          ];
+
+          for (const testPath of commonRadPaths) {
+            try {
+              await execAsync(`test -f ${testPath}`);
+              radPath = testPath;
+              break;
+            } catch {
+              continue;
+            }
+          }
+        }
+
+        console.log(`🔄 [Radicle Peer Sync] Using rad at: ${radPath}`);
+
         async function getExistingFollowsForRepo(repoPath: string): Promise<Set<string>> {
           const follows = new Set<string>();
           try {
-            const { stdout } = await execAsync('rad follow', { cwd: repoPath });
+            const { stdout } = await execAsync(`"${radPath}" follow`, { cwd: repoPath });
             // Parse output to extract DIDs (format: "did:key:..." or just the key part)
             const lines = stdout.split('\n');
             for (const line of lines) {
