@@ -325,6 +325,8 @@ export class CoherenceBeaconService {
 
   /**
    * Initialize submodules and recursively clone them as sovereign DreamNodes
+   *
+   * Option A approach: Clone both nested AND sovereign for maximum compatibility
    */
   private async initializeAndCloneSubmodules(clonedNodePath: string, nodeName: string): Promise<void> {
     console.log(`CoherenceBeaconService: Initializing submodules in ${nodeName}...`);
@@ -342,63 +344,47 @@ export class CoherenceBeaconService {
         return;
       }
 
-      // Initialize all submodules (allow rad:// transport protocol)
-      console.log(`CoherenceBeaconService: Running git submodule update --init --recursive...`);
-
-      // Enhance PATH to include Radicle bin directory for git-remote-rad helper
-      const os = require('os');
-      const homedir = os.homedir();
-      const radiclePathAdditions = [
-        `${homedir}/.radicle/bin`,
-        '/usr/local/bin',
-        '/opt/homebrew/bin'
-      ];
-      const enhancedPath = `${radiclePathAdditions.join(':')}:${process.env.PATH}`;
-
-      await execAsync('git -c protocol.rad.allow=always submodule update --init --recursive', {
-        cwd: clonedNodePath,
-        env: { ...process.env, PATH: enhancedPath }
-      });
-      console.log(`CoherenceBeaconService: ✓ Submodules initialized`);
-
       // Parse .gitmodules to find submodule Radicle IDs
       const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
-      const submodulePattern = /\[submodule "([^"]+)"\]\s+path = ([^\n]+)\s+url = ([^\n]+)/g;
+      const submodulePattern = /\[submodule "([^"]+)"\]\s+path = ([^\n]+)\s+url = rad:\/\/([^\n]+)/g;
       let match;
 
       while ((match = submodulePattern.exec(gitmodulesContent)) !== null) {
         const submoduleName = match[1];
-        const submodulePath = path.join(clonedNodePath, match[2].trim());
+        const submodulePath = match[2].trim();
+        const radicleId = `rad:${match[3].trim()}`; // Re-add 'rad:' prefix
 
-        console.log(`CoherenceBeaconService: Found submodule: ${submoduleName}`);
+        console.log(`CoherenceBeaconService: Found submodule: ${submoduleName} (${radicleId})`);
 
-        // Get the Radicle ID from the submodule's .udd file
-        const { UDDService } = await import('./udd-service');
+        // STEP 1: Clone as sovereign DreamNode to vault root
+        const vaultRootPath = path.join(this.vaultPath, submoduleName);
         try {
-          const submoduleUDD = await UDDService.readUDD(submodulePath);
-          const submoduleRadicleId = submoduleUDD.radicleId;
+          await fs.access(vaultRootPath);
+          console.log(`CoherenceBeaconService: ${submoduleName} already exists at vault root - skipping sovereign clone`);
+        } catch {
+          console.log(`CoherenceBeaconService: Cloning ${submoduleName} as sovereign DreamNode...`);
+          const uriHandler = getURIHandlerService();
+          await uriHandler.cloneFromRadicle(radicleId, false);
 
-          if (submoduleRadicleId) {
-            console.log(`CoherenceBeaconService: Submodule ${submoduleName} has Radicle ID: ${submoduleRadicleId}`);
+          // Recursively handle ITS submodules
+          await this.initializeAndCloneSubmodules(vaultRootPath, submoduleName);
+        }
 
-            // Check if this DreamNode already exists at vault root
-            const vaultRootPath = path.join(this.vaultPath, submoduleName);
-            try {
-              await fs.access(vaultRootPath);
-              console.log(`CoherenceBeaconService: ${submoduleName} already exists at vault root - skipping clone`);
-            } catch {
-              // Doesn't exist - clone it as a sovereign DreamNode
-              console.log(`CoherenceBeaconService: Cloning submodule ${submoduleName} as sovereign DreamNode...`);
-              const uriHandler = getURIHandlerService();
-              await uriHandler.cloneFromRadicle(submoduleRadicleId, false);
+        // STEP 2: Clone into nested submodule path for media file resolution
+        const nestedSubmodulePath = path.join(clonedNodePath, submodulePath);
+        try {
+          await fs.access(nestedSubmodulePath);
+          console.log(`CoherenceBeaconService: ${submoduleName} already exists in nested path - skipping nested clone`);
+        } catch {
+          console.log(`CoherenceBeaconService: Cloning ${submoduleName} to nested submodule path...`);
 
-              // Recursively handle ITS submodules
-              const submoduleVaultPath = path.join(this.vaultPath, submoduleName);
-              await this.initializeAndCloneSubmodules(submoduleVaultPath, submoduleName);
-            }
-          }
-        } catch (error) {
-          console.warn(`CoherenceBeaconService: Could not read .udd from submodule ${submoduleName}:`, error);
+          // Use rad clone directly into the submodule path
+          const RadicleService = (await import('./radicle-service')).RadicleService;
+          const radicleService = new RadicleService(this.app);
+
+          // Clone to parent directory, then move to correct submodule path
+          const parentDir = path.dirname(nestedSubmodulePath);
+          await radicleService.clone(radicleId, parentDir);
         }
       }
 
