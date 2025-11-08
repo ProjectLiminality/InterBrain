@@ -160,14 +160,16 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
               // If it's the InterBrain node, run build and reload
               if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
-                uiService.showLoading('Building InterBrain...');
+                const buildNotice = uiService.showLoading('Building InterBrain...');
                 await gitService.buildDreamNode(selectedNode.repoPath);
+                buildNotice.hide();
 
                 // Auto-reload plugin after build using lightweight reload
-                uiService.showLoading('Reloading plugin...');
+                const reloadNotice = uiService.showLoading('Reloading plugin...');
                 const plugins = (plugin.app as any).plugins;
                 await plugins.disablePlugin('interbrain');
                 await plugins.enablePlugin('interbrain');
+                reloadNotice.hide();
                 uiService.showSuccess(`InterBrain updated and reloaded!`);
               } else {
                 uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
@@ -237,8 +239,9 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
         // If it's the InterBrain node, run build
         if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
-          uiService.showLoading('Building InterBrain...');
+          const buildNotice = uiService.showLoading('Building InterBrain...');
           await gitService.buildDreamNode(selectedNode.repoPath);
+          buildNotice.hide();
         }
 
         // Clear update status

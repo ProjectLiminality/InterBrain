@@ -128,11 +128,12 @@ async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: stri
     // Pull updates
     await gitService.pullUpdates(repoPath);
 
-    new Notice('Building InterBrain plugin...');
+    const buildNotice = new Notice('Building InterBrain plugin...', 0);
 
     // Build the plugin
     await gitService.buildDreamNode(repoPath);
 
+    buildNotice.hide();
     new Notice('✅ InterBrain updated and rebuilt! Reload plugin to see changes.');
 
     // Show helpful instruction
