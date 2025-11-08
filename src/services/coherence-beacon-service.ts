@@ -292,17 +292,208 @@ export class CoherenceBeaconService {
       const uriHandler = getURIHandlerService();
       const cloneResult = await uriHandler.cloneFromRadicle(beacon.radicleId, false);
 
+      let clonedNodePath: string | null = null;
+
       if (cloneResult === 'success') {
         console.log(`CoherenceBeaconService: Successfully accepted beacon and cloned ${beacon.title}`);
+        clonedNodePath = path.join(this.vaultPath, beacon.title);
       } else if (cloneResult === 'skipped') {
         console.log(`CoherenceBeaconService: Supermodule ${beacon.title} already existed - beacon accepted`);
+        clonedNodePath = path.join(this.vaultPath, beacon.title);
       } else {
         console.error(`CoherenceBeaconService: Failed to clone supermodule ${beacon.title}`);
+        return;
+      }
+
+      // STEP 2: Initialize and recursively clone submodules
+      if (clonedNodePath) {
+        await this.initializeAndCloneSubmodules(clonedNodePath, beacon.title);
+      }
+
+      // STEP 3: Establish peer relationships for all cloned nodes
+      // Find the peer who sent this beacon (the delegate of the source repo we cloned FROM)
+      const sourcePeerDID = await this.getSourcePeerDID(fullPath);
+      if (sourcePeerDID) {
+        await this.establishPeerRelationships(beacon.title, sourcePeerDID);
       }
 
     } catch (error) {
       console.error(`CoherenceBeaconService: Error accepting beacon:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Initialize submodules and recursively clone them as sovereign DreamNodes
+   */
+  private async initializeAndCloneSubmodules(clonedNodePath: string, nodeName: string): Promise<void> {
+    console.log(`CoherenceBeaconService: Initializing submodules in ${nodeName}...`);
+
+    try {
+      // Check if .gitmodules exists
+      const path = require('path');
+      const fs = require('fs').promises;
+      const gitmodulesPath = path.join(clonedNodePath, '.gitmodules');
+
+      try {
+        await fs.access(gitmodulesPath);
+      } catch {
+        console.log(`CoherenceBeaconService: No .gitmodules found in ${nodeName} - no submodules to initialize`);
+        return;
+      }
+
+      // Initialize all submodules
+      console.log(`CoherenceBeaconService: Running git submodule update --init --recursive...`);
+      await execAsync('git submodule update --init --recursive', { cwd: clonedNodePath });
+      console.log(`CoherenceBeaconService: ✓ Submodules initialized`);
+
+      // Parse .gitmodules to find submodule Radicle IDs
+      const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
+      const submodulePattern = /\[submodule "([^"]+)"\]\s+path = ([^\n]+)\s+url = ([^\n]+)/g;
+      let match;
+
+      while ((match = submodulePattern.exec(gitmodulesContent)) !== null) {
+        const submoduleName = match[1];
+        const submodulePath = path.join(clonedNodePath, match[2].trim());
+
+        console.log(`CoherenceBeaconService: Found submodule: ${submoduleName}`);
+
+        // Get the Radicle ID from the submodule's .udd file
+        const { UDDService } = await import('./udd-service');
+        try {
+          const submoduleUDD = await UDDService.readUDD(submodulePath);
+          const submoduleRadicleId = submoduleUDD.radicleId;
+
+          if (submoduleRadicleId) {
+            console.log(`CoherenceBeaconService: Submodule ${submoduleName} has Radicle ID: ${submoduleRadicleId}`);
+
+            // Check if this DreamNode already exists at vault root
+            const vaultRootPath = path.join(this.vaultPath, submoduleName);
+            try {
+              await fs.access(vaultRootPath);
+              console.log(`CoherenceBeaconService: ${submoduleName} already exists at vault root - skipping clone`);
+            } catch {
+              // Doesn't exist - clone it as a sovereign DreamNode
+              console.log(`CoherenceBeaconService: Cloning submodule ${submoduleName} as sovereign DreamNode...`);
+              const uriHandler = getURIHandlerService();
+              await uriHandler.cloneFromRadicle(submoduleRadicleId, false);
+
+              // Recursively handle ITS submodules
+              const submoduleVaultPath = path.join(this.vaultPath, submoduleName);
+              await this.initializeAndCloneSubmodules(submoduleVaultPath, submoduleName);
+            }
+          }
+        } catch (error) {
+          console.warn(`CoherenceBeaconService: Could not read .udd from submodule ${submoduleName}:`, error);
+        }
+      }
+
+    } catch (error) {
+      console.error(`CoherenceBeaconService: Error initializing submodules:`, error);
+      // Don't throw - submodule initialization is not critical
+    }
+  }
+
+  /**
+   * Get the DID of the peer who owns the source repository
+   */
+  private async getSourcePeerDID(fullPath: string): Promise<string | null> {
+    try {
+      // Get the canonical remote (rad)
+      const { stdout: remoteUrl } = await execAsync('git remote get-url rad', { cwd: fullPath });
+      // Extract DID from rad://RID/DID format
+      const didMatch = remoteUrl.match(/rad:\/\/[^\/]+\/(did:key:\S+)/);
+      if (didMatch) {
+        return didMatch[1];
+      }
+
+      // Fallback: check for peer remotes
+      const { stdout: remotes } = await execAsync('git remote -v', { cwd: fullPath });
+      const peerMatch = remotes.match(/rad:\/\/[^\/]+\/(did:key:\S+)/);
+      if (peerMatch) {
+        return peerMatch[1];
+      }
+
+      return null;
+    } catch (error) {
+      console.warn(`CoherenceBeaconService: Could not determine source peer DID:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Establish liminal web relationships between all cloned nodes and the source peer's Dreamer node
+   */
+  private async establishPeerRelationships(rootNodeName: string, peerDID: string): Promise<void> {
+    console.log(`CoherenceBeaconService: Establishing peer relationships for ${rootNodeName} with ${peerDID}...`);
+
+    try {
+      const { UDDService } = await import('./udd-service');
+      const path = require('path');
+
+      // Find all DreamNodes at vault root (including the one we just cloned and its submodules)
+      const fs = require('fs').promises;
+      const vaultEntries = await fs.readdir(this.vaultPath, { withFileTypes: true });
+
+      const dreamNodes: string[] = [];
+      for (const entry of vaultEntries) {
+        if (entry.isDirectory()) {
+          const uddPath = path.join(this.vaultPath, entry.name, '.udd');
+          try {
+            await fs.access(uddPath);
+            dreamNodes.push(entry.name);
+          } catch {
+            // Not a DreamNode
+          }
+        }
+      }
+
+      // Find the Dreamer node for this peer DID
+      let dreamerNodePath: string | null = null;
+      for (const nodeName of dreamNodes) {
+        const nodePath = path.join(this.vaultPath, nodeName);
+        try {
+          const udd = await UDDService.readUDD(nodePath);
+          if (udd.type === 'dreamer' && udd.radicleId === peerDID) {
+            dreamerNodePath = nodePath;
+            console.log(`CoherenceBeaconService: Found Dreamer node: ${nodeName}`);
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      if (!dreamerNodePath) {
+        console.log(`CoherenceBeaconService: No Dreamer node found for peer ${peerDID} - skipping relationship creation`);
+        return;
+      }
+
+      // Get Dreamer UUID
+      const dreamerUDD = await UDDService.readUDD(dreamerNodePath);
+      const dreamerUUID = dreamerUDD.uuid;
+
+      if (!dreamerUUID) {
+        console.warn(`CoherenceBeaconService: Dreamer node has no UUID`);
+        return;
+      }
+
+      // Add relationship from root node to Dreamer
+      const rootNodePath = path.join(this.vaultPath, rootNodeName);
+      const rootUDD = await UDDService.readUDD(rootNodePath);
+
+      if (!rootUDD.liminalWebRelationships.includes(dreamerUUID)) {
+        rootUDD.liminalWebRelationships.push(dreamerUUID);
+        await UDDService.writeUDD(rootNodePath, rootUDD);
+        console.log(`CoherenceBeaconService: ✓ Added relationship: ${rootNodeName} → Dreamer`);
+      }
+
+      // TODO: Recursively add relationships for all submodules that were cloned
+      // For now, just handling the root node
+
+    } catch (error) {
+      console.error(`CoherenceBeaconService: Error establishing peer relationships:`, error);
+      // Don't throw - relationship creation is not critical
     }
   }
 
