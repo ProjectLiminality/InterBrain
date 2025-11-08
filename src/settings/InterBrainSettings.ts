@@ -407,7 +407,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		}
 
 		// Show identity if available
-		const radicleService = (this.plugin as any).radicleService;
+		const radicleService = serviceManager.getRadicleService();
 		if (radicleService && status?.available) {
 			radicleService.getIdentity().then((identity: any) => {
 				if (identity) {
