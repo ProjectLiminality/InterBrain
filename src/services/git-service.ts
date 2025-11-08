@@ -574,6 +574,30 @@ export class GitService {
     try {
       console.log(`GitService: Running build for ${fullPath}`);
 
+      // Find node path first (npm requires node in PATH)
+      let nodePath = 'node';
+      try {
+        const { stdout } = await execAsync('which node');
+        nodePath = stdout.trim() || 'node';
+      } catch {
+        // Fallback to common locations if 'which' fails
+        const commonNodePaths = [
+          '/usr/local/bin/node',
+          '/opt/homebrew/bin/node',
+          `${(globalThis as any).process?.env?.HOME}/.nvm/versions/node/*/bin/node`
+        ];
+
+        for (const testPath of commonNodePaths) {
+          try {
+            await execAsync(`test -f ${testPath}`);
+            nodePath = testPath;
+            break;
+          } catch {
+            continue;
+          }
+        }
+      }
+
       // Find npm path (needed because Electron/Obsidian doesn't inherit full shell PATH)
       let npmPath = 'npm';
       try {
@@ -598,8 +622,18 @@ export class GitService {
         }
       }
 
+      // Extract bin directory from node path to add to PATH
+      const nodeBinDir = nodePath.substring(0, nodePath.lastIndexOf('/'));
+      const enhancedEnv = {
+        ...(globalThis as any).process.env,
+        PATH: `${nodeBinDir}:${(globalThis as any).process.env.PATH || ''}`
+      };
+
+      console.log(`GitService: Using node at: ${nodePath}`);
       console.log(`GitService: Using npm at: ${npmPath}`);
-      await execAsync(`${npmPath} run build`, { cwd: fullPath });
+      console.log(`GitService: Enhanced PATH: ${enhancedEnv.PATH}`);
+
+      await execAsync(`${npmPath} run build`, { cwd: fullPath, env: enhancedEnv });
       console.log(`GitService: Successfully built: ${fullPath}`);
     } catch (error) {
       console.error('GitService: Failed to build:', error);
