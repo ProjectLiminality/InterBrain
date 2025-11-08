@@ -758,7 +758,42 @@ export class GitService {
       const remotes = remoteListOutput.trim().split('\n').filter((r: string) => r);
 
       if (remotes.length === 0) {
-        throw new Error('No git remotes configured. Please set up GitHub or Radicle first.');
+        console.log(`⚠️ [GitService] No remotes found - initializing Radicle...`);
+
+        // Auto-initialize with Radicle if no remotes exist
+        const serviceManager = await import('./service-manager');
+        const radicleService = serviceManager.serviceManager.getRadicleService();
+
+        if (!await radicleService.isAvailable()) {
+          throw new Error('No git remotes configured and Radicle CLI not available. Please install Radicle or set up GitHub.');
+        }
+
+        // Get passphrase (from parameter, settings, or prompt)
+        let passphrase = radiclePassphrase;
+        if (!passphrase) {
+          const settings = (this.app as any).settings;
+          passphrase = settings?.radiclePassphrase;
+        }
+        if (!passphrase) {
+          const { UIService } = await import('./ui-service');
+          const uiService = new UIService(this.app);
+          passphrase = await uiService.promptForText('Enter Radicle passphrase to initialize', '');
+          if (!passphrase) {
+            throw new Error('Radicle passphrase required to initialize repository');
+          }
+        }
+
+        // Initialize as Radicle repository
+        const path = require('path');
+        const dirName = path.basename(fullPath);
+        console.log(`🔧 [GitService] Initializing ${dirName} as Radicle repository...`);
+        await radicleService.init(fullPath, dirName, undefined, passphrase);
+        console.log(`✅ [GitService] Radicle initialized!`);
+
+        // Re-fetch remotes after initialization
+        const { stdout: newRemoteList } = await execAsync('git remote', { cwd: fullPath });
+        remotes.length = 0;
+        remotes.push(...newRemoteList.trim().split('\n').filter((r: string) => r));
       }
 
       const hasRadicle = remotes.includes('rad');
