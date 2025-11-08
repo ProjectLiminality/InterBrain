@@ -231,14 +231,22 @@ export class RadicleServiceImpl implements RadicleService {
         });
 
         child.on('close', (code) => {
+          console.log(`RadicleService: spawn closed with code ${code}`);
+          console.log(`RadicleService: stdout:`, stdout);
+          console.log(`RadicleService: stderr:`, stderr);
+
           if (code === 0) {
             resolve({ stdout, stderr });
           } else {
-            reject(new Error(`Command exited with code ${code}: ${stderr}`));
+            const error: any = new Error(`Command exited with code ${code}`);
+            error.stdout = stdout;
+            error.stderr = stderr;
+            reject(error);
           }
         });
 
         child.on('error', (error) => {
+          console.error(`RadicleService: spawn error:`, error);
           reject(error);
         });
 
