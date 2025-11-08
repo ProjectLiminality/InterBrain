@@ -157,7 +157,23 @@ export class GitDreamNodeService {
           console.error('Failed to create git repository:', error);
         }
       });
-    
+
+    // Auto-link dreamer nodes to InterBrain (bidirectional)
+    if (type === 'dreamer') {
+      const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+      console.log(`GitDreamNodeService: Auto-linking dreamer "${title}" to InterBrain...`);
+
+      // Add relationship asynchronously (non-blocking)
+      this.addRelationship(uuid, INTERBRAIN_UUID)
+        .then(() => {
+          console.log(`✅ GitDreamNodeService: Auto-linked dreamer "${title}" to InterBrain`);
+        })
+        .catch((error) => {
+          console.error(`Failed to auto-link dreamer "${title}" to InterBrain:`, error);
+          // Non-fatal - sync command will catch this later
+        });
+    }
+
     console.log(`GitDreamNodeService: Created ${type} "${title}" with ID ${uuid}`);
     return node;
   }

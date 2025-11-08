@@ -957,6 +957,10 @@ export default class InterBrainPlugin extends Plugin {
         (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
         console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
 
+        // Sync bidirectional relationships before reload (non-blocking background operation)
+        console.log(`[Refresh] Syncing bidirectional relationships in background...`);
+        this.app.commands.executeCommandById('interbrain:sync-bidirectional-relationships');
+
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs
         console.log(`[Refresh] Triggering lightweight plugin reload...`);
