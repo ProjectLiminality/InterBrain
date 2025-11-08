@@ -797,16 +797,46 @@ export class URIHandlerService {
 			console.log(`✅ [URIHandler] Saved DID to Dreamer node: ${did}`);
 
 			// CRITICAL: Commit the DID change to git (similar to how submodules are committed)
+			// Wait for initial git commit to complete, then commit DID change
 			const { exec } = require('child_process');
 			const { promisify } = require('util');
 			const execAsync = promisify(exec);
-			try {
-				const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
-				await execAsync('git add .udd', { cwd: dreamerRepoPath });
-				await execAsync(`git commit -m "Add Radicle DID: ${did}"`, { cwd: dreamerRepoPath });
-				console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
-			} catch (commitError) {
-				console.warn(`⚠️ [URIHandler] Could not commit DID to git:`, commitError);
+			const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
+
+			// Retry loop: wait for index.lock to be released (initial commit to finish)
+			let committed = false;
+			for (let attempt = 0; attempt < 10; attempt++) {
+				try {
+					// Check if there's an index.lock file
+					const lockPath = require('path').join(dreamerRepoPath, '.git', 'index.lock');
+					const lockExists = await fs.access(lockPath).then(() => true).catch(() => false);
+
+					if (lockExists) {
+						// Wait for lock to be released
+						await new Promise(resolve => setTimeout(resolve, 500));
+						continue;
+					}
+
+					// Try to commit
+					await execAsync('git add .udd', { cwd: dreamerRepoPath });
+					await execAsync(`git commit -m "Add Radicle DID: ${did}"`, { cwd: dreamerRepoPath });
+					console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
+					committed = true;
+					break;
+				} catch (commitError: any) {
+					// If it's a lock error and we have retries left, wait and retry
+					if (commitError.message?.includes('index.lock') && attempt < 9) {
+						await new Promise(resolve => setTimeout(resolve, 500));
+						continue;
+					}
+					// Other error or final attempt - log and give up
+					console.warn(`⚠️ [URIHandler] Could not commit DID to git (attempt ${attempt + 1}/10):`, commitError);
+					break;
+				}
+			}
+
+			if (!committed) {
+				console.warn(`⚠️ [URIHandler] DID saved to .udd file but not committed to git - will be committed on next user action`);
 			}
 
 			// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
