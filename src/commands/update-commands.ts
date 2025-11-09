@@ -52,28 +52,47 @@ async function checkSubmoduleUpdatesFromNetwork(
 
     console.log(`[SubmoduleUpdates] Checking ${submodules.length} submodules for updates...`);
 
-    // Check each submodule for updates from network
+    // Check each submodule for updates from standalone version
     for (const submodule of submodules) {
       const submodulePath = path.join(parentPath, submodule.path);
       const standalonePath = path.join(vaultPath, submodule.name);
 
-      // Check if standalone version exists
+      // Check if both standalone and submodule exist
       try {
         await fs.access(standalonePath);
+        await fs.access(submodulePath);
       } catch {
-        console.log(`[SubmoduleUpdates] Standalone ${submodule.name} not found - skipping`);
+        console.log(`[SubmoduleUpdates] Standalone or submodule ${submodule.name} not found - skipping`);
         continue;
       }
 
-      // Fetch updates for standalone version from network
+      // Compare commit hashes: standalone vs submodule
       try {
-        const standaloneResult = await gitService.fetchUpdates(submodule.name);
+        const standaloneHead = await execAsync('git rev-parse HEAD', { cwd: standalonePath });
+        const submoduleHead = await execAsync('git rev-parse HEAD', { cwd: submodulePath });
 
-        if (standaloneResult.hasUpdates) {
-          console.log(`[SubmoduleUpdates] ${submodule.name} has ${standaloneResult.commits.length} network updates`);
+        const standaloneCommit = standaloneHead.stdout.trim();
+        const submoduleCommit = submoduleHead.stdout.trim();
 
-          // Show notification about submodule update
-          uiService.showInfo(`${submodule.name} (submodule) has ${standaloneResult.commits.length} update(s) from network`);
+        if (standaloneCommit !== submoduleCommit) {
+          // Check if standalone is ahead of submodule
+          try {
+            const { stdout: commitsAhead } = await execAsync(
+              `git rev-list --count ${submoduleCommit}..${standaloneCommit}`,
+              { cwd: standalonePath }
+            );
+
+            const numCommitsAhead = parseInt(commitsAhead.trim());
+
+            if (numCommitsAhead > 0) {
+              console.log(`[SubmoduleUpdates] ${submodule.name} standalone is ${numCommitsAhead} commits ahead of submodule`);
+
+              // Show notification about submodule being behind
+              uiService.showInfo(`${submodule.name} (submodule) is ${numCommitsAhead} commit(s) behind standalone version`);
+            }
+          } catch (error) {
+            console.warn(`[SubmoduleUpdates] Could not compare commits for ${submodule.name}:`, error);
+          }
         }
       } catch (error) {
         console.warn(`[SubmoduleUpdates] Failed to check ${submodule.name}:`, error);
