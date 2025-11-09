@@ -411,9 +411,62 @@ export class CoherenceBeaconService {
         }
       }
 
+      // CRITICAL: Setup bidirectional local remotes for standalone ↔ submodule sync
+      // This enables quality control: Alice can commit locally, test in submodule, then share
+      await this.setupBidirectionalRemotes(clonedNodePath, gitmodules);
+
     } catch (error) {
       console.error(`CoherenceBeaconService: Error initializing submodules:`, error);
       // Don't throw - submodule initialization is not critical
+    }
+  }
+
+  /**
+   * Setup bidirectional local git remotes between standalone repos and their submodule instances
+   * This allows local commits to flow: Circle → Cylinder/Circle and Cylinder/Circle → Circle
+   * WITHOUT requiring network push first (preserves quality control)
+   */
+  private async setupBidirectionalRemotes(parentPath: string, gitmodules: Array<{path: string, url: string, name: string}>): Promise<void> {
+    const path = require('path');
+
+    for (const submodule of gitmodules) {
+      const submodulePath = path.join(parentPath, submodule.path);
+      const standalonePath = path.join(this.vaultPath, submodule.name);
+
+      try {
+        // Check if both paths exist
+        const fs = require('fs').promises;
+        await fs.access(submodulePath);
+        await fs.access(standalonePath);
+
+        // Setup: Submodule → Standalone (relative path)
+        const relativeStandalone = path.relative(submodulePath, standalonePath);
+        try {
+          await execAsync(`git remote add standalone ${relativeStandalone}`, { cwd: submodulePath });
+          console.log(`CoherenceBeaconService: Added local remote: ${submodule.name}/Circle → standalone Circle`);
+        } catch (error: any) {
+          // Remote might already exist - that's fine
+          if (!error.message?.includes('already exists')) {
+            console.warn(`CoherenceBeaconService: Could not add standalone remote to submodule:`, error);
+          }
+        }
+
+        // Setup: Standalone → Submodule (relative path)
+        const parentName = path.basename(parentPath);
+        const relativeSubmodule = path.relative(standalonePath, submodulePath);
+        const remoteName = `${parentName.toLowerCase()}-submodule`;
+        try {
+          await execAsync(`git remote add ${remoteName} ${relativeSubmodule}`, { cwd: standalonePath });
+          console.log(`CoherenceBeaconService: Added local remote: standalone Circle → ${parentName}/Circle`);
+        } catch (error: any) {
+          if (!error.message?.includes('already exists')) {
+            console.warn(`CoherenceBeaconService: Could not add submodule remote to standalone:`, error);
+          }
+        }
+
+      } catch (error) {
+        console.warn(`CoherenceBeaconService: Could not setup bidirectional remotes for ${submodule.name}:`, error);
+      }
     }
   }
 
