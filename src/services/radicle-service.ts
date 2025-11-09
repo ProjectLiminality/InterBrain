@@ -312,10 +312,12 @@ export class RadicleServiceImpl implements RadicleService {
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" node status`);
       const isRunning = stdout.includes('Running');
-      console.log(`RadicleService: Node status check: ${isRunning ? 'running' : 'not running'}`);
+      // Reduced logging - only log when NOT running (actionable)
+      if (!isRunning) {
+        console.log(`RadicleService: Node not running, will start it`);
+      }
       return isRunning;
     } catch {
-      console.log('RadicleService: Node status check failed, assuming not running');
       return false;
     }
   }
@@ -329,9 +331,6 @@ export class RadicleServiceImpl implements RadicleService {
 
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
-      console.log('RadicleService: Using passphrase for node start (length:', passphrase.length, ')');
-    } else {
-      console.log('RadicleService: No passphrase provided for node start');
     }
 
     // CRITICAL: Add Radicle bin to PATH so rad can find radicle-node binary
@@ -339,21 +338,15 @@ export class RadicleServiceImpl implements RadicleService {
     const radBinDir = path.dirname(radCmd);
     env.PATH = `${radBinDir}:${env.PATH}`;
 
-    console.log('RadicleService: Starting Radicle node...');
     try {
-      const result = await execAsync(`"${radCmd}" node start`, { env });
-      console.log('RadicleService: Radicle node started successfully');
-      if (result.stdout) console.log('RadicleService: node start stdout:', result.stdout);
-      if (result.stderr) console.log('RadicleService: node start stderr:', result.stderr);
+      await execAsync(`"${radCmd}" node start`, { env });
+      // Node start successful - no need to log (reduces noise)
     } catch (error: any) {
       console.error('RadicleService: node start failed:', error.message);
-      if (error.stdout) console.error('RadicleService: node start stdout:', error.stdout);
-      if (error.stderr) console.error('RadicleService: node start stderr:', error.stderr);
       throw error;
     }
 
-    // Wait for node to be fully ready
-    console.log('RadicleService: Waiting for node to be fully ready...');
+    // Wait for node to be fully ready (silent)
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
@@ -363,11 +356,9 @@ export class RadicleServiceImpl implements RadicleService {
   private async ensureNodeRunning(passphrase?: string): Promise<void> {
     const isRunning = await this.isNodeRunning();
     if (!isRunning) {
-      console.log('RadicleService: Node not running, starting it...');
       await this.startNode(passphrase);
-    } else {
-      console.log('RadicleService: Node already running');
     }
+    // Silent when already running (reduces log noise)
   }
 
   /**

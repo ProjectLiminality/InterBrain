@@ -422,21 +422,19 @@ export class CoherenceBeaconService {
    */
   private async getSourcePeerDID(fullPath: string): Promise<string | null> {
     try {
-      // Get the canonical remote (rad)
-      const { stdout: remoteUrl } = await execAsync('git remote get-url rad', { cwd: fullPath });
-      // Extract DID from rad://RID/DID format
-      const didMatch = remoteUrl.match(/rad:\/\/[^\/]+\/(did:key:\S+)/);
-      if (didMatch) {
-        return didMatch[1];
-      }
-
-      // Fallback: check for peer remotes
+      // List all remotes to see what we have
       const { stdout: remotes } = await execAsync('git remote -v', { cwd: fullPath });
+      console.log(`CoherenceBeaconService: All remotes for ${fullPath}:\n${remotes}`);
+
+      // Extract DID from ANY remote with format: rad://RID/DID
       const peerMatch = remotes.match(/rad:\/\/[^\/]+\/(did:key:\S+)/);
       if (peerMatch) {
-        return peerMatch[1];
+        const peerDID = peerMatch[1];
+        console.log(`CoherenceBeaconService: Found source peer DID: ${peerDID}`);
+        return peerDID;
       }
 
+      console.warn(`CoherenceBeaconService: No peer DID found in remotes`);
       return null;
     } catch (error) {
       console.warn(`CoherenceBeaconService: Could not determine source peer DID:`, error);
