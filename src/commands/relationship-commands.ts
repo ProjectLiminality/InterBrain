@@ -193,10 +193,65 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
 
     console.log(`[RelationshipSync] Complete - Fixed: ${fixedCount}, Errors: ${errorCount}`);
 
+    // PHASE 2: Commit any uncommitted .udd files (even if relationships are already correct)
+    // This ensures clean git state for future pulls/merges
+    console.log(`[RelationshipSync] Phase 2: Checking for uncommitted .udd files...`);
+
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
+    let committedCount = 0;
+
+    await Promise.all(
+      dreamNodeDirs.map(async (dir) => {
+        try {
+          const nodePath = dir.path;
+          const uddPath = path.join(nodePath, '.udd');
+
+          // Check if .udd exists and has uncommitted changes
+          try {
+            await fsPromises.access(uddPath);
+          } catch {
+            return; // No .udd file
+          }
+
+          // Check for uncommitted changes to .udd
+          const { stdout: diffOutput } = await execAsync('git diff --quiet .udd || echo "has-diff"', { cwd: nodePath });
+
+          if (diffOutput.trim() === 'has-diff') {
+            try {
+              await execAsync('git add .udd', { cwd: nodePath });
+              await execAsync(
+                `git commit -m "[metadata] Commit relationship metadata to history"`,
+                { cwd: nodePath }
+              );
+              committedCount++;
+              console.log(`[RelationshipSync] ✓ Committed uncommitted metadata for ${dir.name}`);
+            } catch (commitError: any) {
+              if (!commitError.message?.includes('nothing to commit')) {
+                console.warn(`[RelationshipSync] Could not commit metadata for ${dir.name}:`, commitError);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`[RelationshipSync] Error checking git state for ${dir.name}:`, error);
+        }
+      })
+    );
+
+    console.log(`[RelationshipSync] Phase 2 complete - Committed: ${committedCount} .udd files`);
+
     // Rescan vault to update UI
     await serviceManager.scanVault();
 
-    new Notice(`✓ Fixed ${fixedCount} DreamNode relationships! ${errorCount > 0 ? `(${errorCount} errors)` : ''}`);
+    const totalMessage = fixedCount > 0
+      ? `✓ Fixed ${fixedCount} relationships and committed ${committedCount} metadata files!`
+      : committedCount > 0
+      ? `✓ All relationships synced. Committed ${committedCount} metadata files to history.`
+      : '✓ All relationships are already bidirectional and committed!';
+
+    new Notice(totalMessage);
 
   } catch (error) {
     console.error('[RelationshipSync] Fatal error:', error);
