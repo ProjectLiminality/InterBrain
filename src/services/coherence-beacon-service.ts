@@ -427,12 +427,13 @@ export class CoherenceBeaconService {
       console.log(`CoherenceBeaconService: All remotes for ${fullPath}:\n${remotes}`);
 
       // Extract DID from ANY remote with format: rad://RID/DID
-      // DID format is z6Mks... (without did:key: prefix in git remotes)
+      // Git remotes store short format (z6Mks...), but .udd stores full format (did:key:z6Mks...)
       const peerMatch = remotes.match(/rad:\/\/[^\/]+\/(z6\w+)/);
       if (peerMatch) {
-        const peerDID = peerMatch[1];
-        console.log(`CoherenceBeaconService: Found source peer DID: ${peerDID}`);
-        return peerDID;
+        const shortDID = peerMatch[1];
+        const fullDID = `did:key:${shortDID}`;
+        console.log(`CoherenceBeaconService: Found source peer DID: ${fullDID}`);
+        return fullDID;
       }
 
       console.warn(`CoherenceBeaconService: No peer DID found in remotes`);
