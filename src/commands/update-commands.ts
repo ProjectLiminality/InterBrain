@@ -12,6 +12,127 @@ import { useInterBrainStore } from '../store/interbrain-store';
 import { GitService } from '../services/git-service';
 import { UpdatePreviewModal } from '../ui/update-preview-modal';
 
+const path = require('path');
+const fs = require('fs').promises;
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
+
+/**
+ * Check if submodules have updates from their standalone network versions
+ * Workflow: Alice updates Circle (standalone) → shares to network →
+ *           Alice runs "Check for Updates" on Cylinder → sees Circle submodule has updates
+ */
+async function checkSubmoduleUpdatesFromNetwork(
+  selectedNode: any,
+  gitService: GitService,
+  store: any,
+  uiService: UIService
+): Promise<void> {
+  try {
+    const adapter = (window as any).app.vault.adapter;
+    const vaultPath = adapter.basePath || '';
+    const parentPath = path.join(vaultPath, selectedNode.repoPath);
+
+    // Parse .gitmodules to find submodules
+    const gitmodulesPath = path.join(parentPath, '.gitmodules');
+    try {
+      await fs.access(gitmodulesPath);
+    } catch {
+      // No .gitmodules file - no submodules to check
+      return;
+    }
+
+    const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
+    const submodules = parseGitmodules(gitmodulesContent);
+
+    if (submodules.length === 0) {
+      return;
+    }
+
+    console.log(`[SubmoduleUpdates] Checking ${submodules.length} submodules for updates...`);
+
+    // Check each submodule for updates from network
+    for (const submodule of submodules) {
+      const submodulePath = path.join(parentPath, submodule.path);
+      const standalonePath = path.join(vaultPath, submodule.name);
+
+      // Check if standalone version exists
+      try {
+        await fs.access(standalonePath);
+      } catch {
+        console.log(`[SubmoduleUpdates] Standalone ${submodule.name} not found - skipping`);
+        continue;
+      }
+
+      // Fetch updates for standalone version from network
+      try {
+        const standaloneResult = await gitService.fetchUpdates(submodule.name);
+
+        if (standaloneResult.hasUpdates) {
+          console.log(`[SubmoduleUpdates] ${submodule.name} has ${standaloneResult.commits.length} network updates`);
+
+          // Show notification about submodule update
+          uiService.showInfo(`${submodule.name} (submodule) has ${standaloneResult.commits.length} update(s) from network`);
+        }
+      } catch (error) {
+        console.warn(`[SubmoduleUpdates] Failed to check ${submodule.name}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('[SubmoduleUpdates] Error checking submodules:', error);
+  }
+}
+
+/**
+ * Parse .gitmodules file to extract submodule information
+ */
+function parseGitmodules(content: string): Array<{path: string, url: string, name: string}> {
+  const submodules: Array<{path: string, url: string, name: string}> = [];
+  const lines = content.split('\n');
+
+  let currentSubmodule: any = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Start of new submodule section
+    if (trimmed.startsWith('[submodule ')) {
+      if (currentSubmodule && currentSubmodule.path && currentSubmodule.url) {
+        submodules.push(currentSubmodule);
+      }
+      const nameMatch = trimmed.match(/\[submodule "([^"]+)"\]/);
+      currentSubmodule = {
+        name: nameMatch ? nameMatch[1] : '',
+        path: '',
+        url: ''
+      };
+    }
+    // Path entry
+    else if (trimmed.startsWith('path = ') && currentSubmodule) {
+      currentSubmodule.path = trimmed.substring(7).trim();
+    }
+    // URL entry
+    else if (trimmed.startsWith('url = ') && currentSubmodule) {
+      currentSubmodule.url = trimmed.substring(6).trim();
+
+      // Extract name from Radicle URL if not already set
+      if (!currentSubmodule.name && currentSubmodule.url.includes('rad://')) {
+        // For Radicle URLs, the name should match the standalone repo name
+        // We'll infer it from the path since that's how we clone them
+        currentSubmodule.name = path.basename(currentSubmodule.path);
+      }
+    }
+  }
+
+  // Don't forget the last submodule
+  if (currentSubmodule && currentSubmodule.path && currentSubmodule.url) {
+    submodules.push(currentSubmodule);
+  }
+
+  return submodules;
+}
+
 export function registerUpdateCommands(plugin: Plugin, uiService: UIService): void {
   const gitService = new GitService(plugin.app);
 
@@ -59,15 +180,20 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       console.log('[UpdatePreview] Selected node:', selectedNode.name, selectedNode.id);
 
-      // Always fetch first to ensure we have latest update status
+      // Always fetch first to ensure we have latest update status (root + submodules)
       const fetchNotice = uiService.showLoading('Checking for updates...');
       try {
+        // Check root repo for updates
         const fetchResult = await gitService.fetchUpdates(selectedNode.repoPath);
         if (fetchResult.hasUpdates) {
           store.setNodeUpdateStatus(selectedNode.id, fetchResult);
         } else {
           store.clearNodeUpdateStatus(selectedNode.id);
         }
+
+        // NEW: Check submodules for updates from their standalone repos
+        await checkSubmoduleUpdatesFromNetwork(selectedNode, gitService, store, uiService);
+
       } catch (error) {
         console.error('[UpdatePreview] Fetch failed:', error);
         fetchNotice.hide();
