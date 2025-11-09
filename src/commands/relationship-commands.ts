@@ -153,6 +153,35 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
           // Write back to disk
           await fsPromises.writeFile(data.path, JSON.stringify(udd, null, 2));
 
+          // Commit metadata change if there's a diff (git will refuse if no diff)
+          // This ensures clean git state for future pulls/merges
+          try {
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+
+            const nodePath = path.dirname(data.path);
+
+            // Check if there's actually a diff to commit
+            const { stdout: diffOutput } = await execAsync('git diff --quiet .udd || echo "has-diff"', { cwd: nodePath });
+
+            if (diffOutput.trim() === 'has-diff') {
+              await execAsync('git add .udd', { cwd: nodePath });
+              await execAsync(
+                `git commit -m "[metadata] Sync bidirectional relationships"`,
+                { cwd: nodePath }
+              );
+              console.log(`[RelationshipSync] ✓ Committed metadata for ${data.dirName}`);
+            } else {
+              console.log(`[RelationshipSync] No git diff for ${data.dirName} - skipping commit`);
+            }
+          } catch (commitError: any) {
+            // Non-critical - relationship is already fixed on disk
+            if (!commitError.message?.includes('nothing to commit')) {
+              console.warn(`[RelationshipSync] Could not commit metadata (non-critical):`, commitError);
+            }
+          }
+
           fixedCount++;
           console.log(`[RelationshipSync] Fixed ${data.dirName} - added ${missingRelationships.size} relationships`);
         } catch (error) {

@@ -520,7 +520,7 @@ export class CoherenceBeaconService {
         // No .gitmodules - just root node
       }
 
-      // Add relationships for all collected nodes and commit changes
+      // Add relationships for all collected nodes
       for (const nodeName of nodesToRelate) {
         const nodePath = path.join(this.vaultPath, nodeName);
         try {
@@ -530,19 +530,6 @@ export class CoherenceBeaconService {
             udd.liminalWebRelationships.push(dreamerUUID);
             await UDDService.writeUDD(nodePath, udd);
             console.log(`CoherenceBeaconService: ✓ Added relationship: ${nodeName} → Dreamer`);
-
-            // Commit the metadata change to avoid merge conflicts
-            // This is local-only metadata (won't be pushed to peers)
-            try {
-              await execAsync('git add .udd', { cwd: nodePath });
-              await execAsync(
-                `git commit -m "[metadata] Add liminal web relationship to ${dreamerNodePath.split('/').pop()}"`,
-                { cwd: nodePath }
-              );
-              console.log(`CoherenceBeaconService: ✓ Committed relationship metadata for ${nodeName}`);
-            } catch (commitError) {
-              console.warn(`CoherenceBeaconService: Could not commit metadata (non-critical):`, commitError);
-            }
           }
         } catch (error) {
           console.warn(`CoherenceBeaconService: Could not relate ${nodeName} to Dreamer:`, error);
