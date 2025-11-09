@@ -299,7 +299,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       // Check if EITHER root has updates OR submodules have updates
       const hasRootUpdates = updateStatus && updateStatus.hasUpdates;
-      const hasSubmoduleUpdates = submoduleUpdates.length > 0;
+      const hasSubmoduleUpdates = submoduleUpdates && submoduleUpdates.length > 0;
 
       if (!hasRootUpdates && !hasSubmoduleUpdates) {
         console.log('[UpdatePreview] No updates available');
