@@ -123,12 +123,7 @@ async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise
 
     console.log(`[RelationshipSync] Found ${fixesNeeded.size} nodes needing relationship fixes`);
 
-    if (fixesNeeded.size === 0) {
-      new Notice('✓ All relationships are already bidirectional!');
-      return;
-    }
-
-    // Apply fixes in parallel
+    // Apply fixes in parallel (skip if no fixes needed)
     let fixedCount = 0;
     let errorCount = 0;
 
