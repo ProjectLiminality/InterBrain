@@ -18,17 +18,81 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 
+interface SubmoduleUpdate {
+  name: string;
+  path: string;
+  commitsAhead: number;
+}
+
+/**
+ * Update submodules by pulling from their standalone versions
+ */
+async function updateSubmodules(
+  selectedNode: any,
+  submoduleUpdates: SubmoduleUpdate[],
+  uiService: UIService
+): Promise<void> {
+  const adapter = (window as any).app.vault.adapter;
+  const vaultPath = adapter.basePath || '';
+  const parentPath = path.join(vaultPath, selectedNode.repoPath);
+
+  for (const submodule of submoduleUpdates) {
+    try {
+      const submodulePath = path.join(parentPath, submodule.path);
+      const standalonePath = path.join(vaultPath, submodule.name);
+
+      console.log(`[SubmoduleUpdate] Updating ${submodule.name} submodule from standalone...`);
+
+      // Pull standalone commits into submodule
+      // Use git pull with relative path to standalone
+      const relativePath = path.relative(submodulePath, standalonePath);
+      await execAsync(`git pull ${relativePath} main`, { cwd: submodulePath });
+
+      console.log(`[SubmoduleUpdate] ✓ Updated ${submodule.name} submodule`);
+    } catch (error) {
+      console.error(`[SubmoduleUpdate] Failed to update ${submodule.name}:`, error);
+      uiService.showError(`Failed to update ${submodule.name} submodule`);
+    }
+  }
+
+  // Update parent's submodule pointers and commit
+  try {
+    // Stage all submodule pointer updates
+    for (const submodule of submoduleUpdates) {
+      await execAsync(`git add ${submodule.path}`, { cwd: parentPath });
+    }
+
+    // Commit the submodule pointer updates
+    const submoduleNames = submoduleUpdates.map(s => s.name).join(', ');
+    await execAsync(
+      `git commit -m "[submodules] Update ${submoduleNames} from standalone versions"`,
+      { cwd: parentPath }
+    );
+
+    uiService.showSuccess(`Updated ${submoduleUpdates.length} submodule(s) and committed changes`);
+
+    // Trigger vault rescan to update UI
+    const { serviceManager } = await import('../services/service-manager');
+    await serviceManager.scanVault();
+  } catch (error) {
+    console.error('[SubmoduleUpdate] Failed to commit submodule updates:', error);
+    uiService.showError('Failed to commit submodule updates');
+  }
+}
+
 /**
  * Check if submodules have updates from their standalone network versions
  * Workflow: Alice updates Circle (standalone) → shares to network →
  *           Alice runs "Check for Updates" on Cylinder → sees Circle submodule has updates
+ * Returns array of submodules with updates
  */
 async function checkSubmoduleUpdatesFromNetwork(
   selectedNode: any,
   gitService: GitService,
   store: any,
   uiService: UIService
-): Promise<void> {
+): Promise<SubmoduleUpdate[]> {
+  const submoduleUpdates: SubmoduleUpdate[] = [];
   try {
     const adapter = (window as any).app.vault.adapter;
     const vaultPath = adapter.basePath || '';
@@ -87,8 +151,12 @@ async function checkSubmoduleUpdatesFromNetwork(
             if (numCommitsAhead > 0) {
               console.log(`[SubmoduleUpdates] ${submodule.name} standalone is ${numCommitsAhead} commits ahead of submodule`);
 
-              // Show notification about submodule being behind
-              uiService.showInfo(`${submodule.name} (submodule) is ${numCommitsAhead} commit(s) behind standalone version`);
+              // Add to submodule updates list
+              submoduleUpdates.push({
+                name: submodule.name,
+                path: submodule.path,
+                commitsAhead: numCommitsAhead
+              });
             }
           } catch (error) {
             console.warn(`[SubmoduleUpdates] Could not compare commits for ${submodule.name}:`, error);
@@ -101,6 +169,8 @@ async function checkSubmoduleUpdatesFromNetwork(
   } catch (error) {
     console.error('[SubmoduleUpdates] Error checking submodules:', error);
   }
+
+  return submoduleUpdates;
 }
 
 /**
@@ -201,6 +271,8 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       // Always fetch first to ensure we have latest update status (root + submodules)
       const fetchNotice = uiService.showLoading('Checking for updates...');
+      let submoduleUpdates: SubmoduleUpdate[] = [];
+
       try {
         // Check root repo for updates
         const fetchResult = await gitService.fetchUpdates(selectedNode.repoPath);
@@ -211,7 +283,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         }
 
         // NEW: Check submodules for updates from their standalone repos
-        await checkSubmoduleUpdatesFromNetwork(selectedNode, gitService, store, uiService);
+        submoduleUpdates = await checkSubmoduleUpdatesFromNetwork(selectedNode, gitService, store, uiService);
 
       } catch (error) {
         console.error('[UpdatePreview] Fetch failed:', error);
@@ -223,10 +295,31 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       const updateStatus = store.getNodeUpdateStatus(selectedNode.id);
       console.log('[UpdatePreview] Update status:', updateStatus);
+      console.log('[UpdatePreview] Submodule updates:', submoduleUpdates);
 
-      if (!updateStatus || !updateStatus.hasUpdates) {
+      // Check if EITHER root has updates OR submodules have updates
+      const hasRootUpdates = updateStatus && updateStatus.hasUpdates;
+      const hasSubmoduleUpdates = submoduleUpdates.length > 0;
+
+      if (!hasRootUpdates && !hasSubmoduleUpdates) {
         console.log('[UpdatePreview] No updates available');
         uiService.showInfo(`${selectedNode.name} is up to date`);
+        return;
+      }
+
+      // If only submodules have updates (no root updates), show simple dialog
+      if (!hasRootUpdates && hasSubmoduleUpdates) {
+        const submoduleList = submoduleUpdates.map(s => `  • ${s.name}: ${s.commitsAhead} commit(s)`).join('\n');
+        const confirmed = await uiService.showConfirmDialog(
+          'Submodule Updates Available',
+          `${selectedNode.name} has no direct updates, but these submodules have updates:\n\n${submoduleList}\n\nUpdate submodules now?`,
+          'Update Submodules',
+          'Cancel'
+        );
+
+        if (confirmed) {
+          await updateSubmodules(selectedNode, submoduleUpdates, uiService);
+        }
         return;
       }
 
