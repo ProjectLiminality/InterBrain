@@ -809,11 +809,20 @@ export class GitService {
           const gitService = new GitService(this.app);
           await gitService.commitWithAI(repoPath);
           console.log(`✅ [GitService] Changes committed with AI message`);
-        } catch {
+        } catch (aiError) {
           // Fallback: Simple commit message
-          const timestamp = new Date().toISOString();
-          await execAsync(`git commit -m "Auto-commit before push (${timestamp})"`, { cwd: fullPath });
-          console.log(`✅ [GitService] Changes committed with fallback message`);
+          console.log(`ℹ️ [GitService] AI commit failed, using fallback message`);
+          try {
+            const timestamp = new Date().toISOString();
+            const result = await execAsync(`git commit -m "Auto-commit before push (${timestamp})"`, { cwd: fullPath });
+            console.log(`✅ [GitService] Changes committed with fallback message`);
+            console.log(`   Commit output: ${result.stdout}`);
+          } catch (commitError: any) {
+            console.error(`❌ [GitService] Git commit failed:`, commitError);
+            console.error(`   stderr: ${commitError.stderr || 'none'}`);
+            console.error(`   stdout: ${commitError.stdout || 'none'}`);
+            throw new Error(`Failed to commit changes: ${commitError.message}`);
+          }
         }
       }
 
