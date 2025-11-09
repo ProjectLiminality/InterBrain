@@ -427,7 +427,8 @@ export class CoherenceBeaconService {
       console.log(`CoherenceBeaconService: All remotes for ${fullPath}:\n${remotes}`);
 
       // Extract DID from ANY remote with format: rad://RID/DID
-      const peerMatch = remotes.match(/rad:\/\/[^\/]+\/(did:key:\S+)/);
+      // DID format is z6Mks... (without did:key: prefix in git remotes)
+      const peerMatch = remotes.match(/rad:\/\/[^\/]+\/(z6\w+)/);
       if (peerMatch) {
         const peerDID = peerMatch[1];
         console.log(`CoherenceBeaconService: Found source peer DID: ${peerDID}`);
