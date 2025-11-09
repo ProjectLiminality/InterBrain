@@ -800,74 +800,71 @@ export class GitService {
         console.log(`⚠️ [GitService] Found uncommitted changes - committing before push...`);
 
         // FIRST: Check if any submodules have internal uncommitted changes
-        const submoduleChanges = statusOutput
+        // In --porcelain format, submodule changes show as " M <path>" (space + M)
+        // We need to verify these are actually submodules by checking .gitmodules
+        const potentialSubmoduleChanges = statusOutput
           .split('\n')
-          .filter(line => line.includes('M ') && line.includes('(modified content)'));
+          .filter(line => line.startsWith(' M '))
+          .map(line => line.trim().substring(2).trim()); // Extract path from " M Square"
 
-        if (submoduleChanges.length > 0) {
-          console.log(`📦 [GitService] Detected ${submoduleChanges.length} submodule(s) with internal changes`);
+        console.log(`🔍 [GitService] Found ${potentialSubmoduleChanges.length} potential submodule changes: ${potentialSubmoduleChanges.join(', ')}`);
 
-          // Get full git status to see submodule details
-          const { stdout: verboseStatus } = await execAsync('git status', { cwd: fullPath });
-          console.log(`📊 [GitService] Full git status:\n${verboseStatus}`);
-
-          // Parse .gitmodules to get submodule paths
+        if (potentialSubmoduleChanges.length > 0) {
+          // Parse .gitmodules to verify which paths are actually submodules
           const gitmodulesPath = path.join(fullPath, '.gitmodules');
-          let submodules: Array<{ path: string; name: string }> = [];
+          let submodulePaths: string[] = [];
 
           try {
             const fs = require('fs').promises;
             const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
 
-            // Simple parser for .gitmodules format
+            // Extract all submodule paths
             const lines = gitmodulesContent.split('\n');
-            let currentSubmodule: { path?: string; name?: string } = {};
-
             for (const line of lines) {
               const trimmed = line.trim();
-              if (trimmed.startsWith('[submodule')) {
-                if (currentSubmodule.path && currentSubmodule.name) {
-                  submodules.push({ path: currentSubmodule.path, name: currentSubmodule.name });
-                }
-                const match = trimmed.match(/\[submodule "(.+)"\]/);
-                currentSubmodule = { name: match?.[1] };
-              } else if (trimmed.startsWith('path =')) {
-                currentSubmodule.path = trimmed.split('=')[1].trim();
+              if (trimmed.startsWith('path =')) {
+                const submodulePath = trimmed.split('=')[1].trim();
+                submodulePaths.push(submodulePath);
               }
             }
 
-            // Add last submodule
-            if (currentSubmodule.path && currentSubmodule.name) {
-              submodules.push({ path: currentSubmodule.path, name: currentSubmodule.name });
-            }
+            console.log(`📦 [GitService] Submodule paths from .gitmodules: ${submodulePaths.join(', ')}`);
+          } catch (error: any) {
+            console.log(`⚠️ [GitService] No .gitmodules file found or couldn't read it`);
+          }
 
-            console.log(`📦 [GitService] Found ${submodules.length} submodule(s): ${submodules.map(s => s.name).join(', ')}`);
+          // Filter to only actual submodules
+          const submoduleChanges = potentialSubmoduleChanges.filter(path =>
+            submodulePaths.includes(path)
+          );
 
-            // For each submodule with changes, commit inside it first
-            for (const submodule of submodules) {
-              const submodulePath = path.join(fullPath, submodule.path);
+          console.log(`📦 [GitService] Confirmed ${submoduleChanges.length} submodule(s) with internal changes: ${submoduleChanges.join(', ')}`);
 
-              // Check if this submodule has uncommitted changes
-              const { stdout: subStatus } = await execAsync('git status --porcelain', { cwd: submodulePath });
+        if (submoduleChanges.length > 0) {
+          console.log(`📦 [GitService] Processing ${submoduleChanges.length} submodule commit(s)...`);
 
-              if (subStatus.trim()) {
-                console.log(`📦 [GitService] Committing changes in submodule: ${submodule.name}`);
+          try {
+            // For each confirmed submodule with changes, commit inside it first
+            for (const submodulePath of submoduleChanges) {
+              const fullSubmodulePath = path.join(fullPath, submodulePath);
 
-                // Stage all changes in submodule
-                await execAsync('git add -A', { cwd: submodulePath });
+              console.log(`📦 [GitService] Committing changes in submodule: ${submodulePath}`);
 
-                // Commit in submodule
-                const timestamp = new Date().toISOString();
-                await execAsync(`git commit -m "Auto-commit submodule changes (${timestamp})"`, { cwd: submodulePath });
+              // Stage all changes in submodule
+              await execAsync('git add -A', { cwd: fullSubmodulePath });
 
-                console.log(`✅ [GitService] Submodule ${submodule.name} committed`);
-              }
+              // Commit in submodule
+              const timestamp = new Date().toISOString();
+              await execAsync(`git commit -m "Auto-commit submodule changes (${timestamp})"`, { cwd: fullSubmodulePath });
+
+              console.log(`✅ [GitService] Submodule ${submodulePath} committed`);
             }
           } catch (submoduleError: any) {
             console.warn(`⚠️ [GitService] Could not process submodules: ${submoduleError.message}`);
             console.warn(`   Continuing with parent commit...`);
           }
         }
+        } // Close the outer if statement
 
         // Stage all changes (including updated submodule pointers)
         await execAsync('git add -A', { cwd: fullPath });
