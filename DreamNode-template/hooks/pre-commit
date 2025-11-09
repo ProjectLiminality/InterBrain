@@ -29,8 +29,18 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
         echo "  ✓ Moved .git/LICENSE to LICENSE" >&2
     fi
 
+    if [ -f ".git/.gitattributes" ]; then
+        mv .git/.gitattributes .gitattributes
+        echo "  ✓ Moved .git/.gitattributes to .gitattributes" >&2
+    fi
+
+    # Configure custom .udd merge driver
+    git config merge.udd-driver.name "Custom merge driver for .udd files"
+    git config merge.udd-driver.driver ".git/hooks/udd-merge-driver.js %O %A %B %L %P"
+    echo "  ✓ Configured custom .udd merge driver" >&2
+
     # Stage the moved files for this commit
-    git add .udd README.md LICENSE 2>/dev/null
+    git add .udd README.md LICENSE .gitattributes 2>/dev/null
 
     echo "  ✓ DreamNode initialization complete" >&2
 fi

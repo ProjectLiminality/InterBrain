@@ -1,0 +1,3 @@
+# Custom merge driver for .udd files
+# Keeps local liminalWebRelationships, accepts canonical content from peers
+.udd merge=udd-driver
