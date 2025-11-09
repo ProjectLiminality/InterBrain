@@ -400,7 +400,14 @@ export class CoherenceBeaconService {
 
           // Clone to parent directory (rad clone will create the submodule directory)
           const parentDir = path.dirname(nestedSubmodulePath);
-          await radicleService.clone(radicleId, parentDir);
+          const cloneResult = await radicleService.clone(radicleId, parentDir);
+
+          // If rad clone added a UUID suffix to avoid naming conflicts, rename to clean name
+          if (cloneResult.repoName !== submoduleName) {
+            console.log(`CoherenceBeaconService: Renaming "${cloneResult.repoName}" to "${submoduleName}" for nested submodule`);
+            const clonedPath = path.join(parentDir, cloneResult.repoName);
+            await fs.rename(clonedPath, nestedSubmodulePath);
+          }
         }
       }
 

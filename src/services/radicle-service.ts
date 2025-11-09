@@ -41,9 +41,10 @@ export interface RadicleService {
   /**
    * Clone a DreamNode from the Radicle network
    * @param passphrase Optional passphrase (uses ssh-agent if not provided)
+   * @param targetDirName Optional exact directory name (for nested submodules to avoid UUID prefix conflicts)
    * @returns Object with repo name and whether it was already cloned
    */
-  clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<{ repoName: string; alreadyExisted: boolean }>;
+  clone(radicleId: string, destinationPath: string, passphrase?: string, targetDirName?: string): Promise<{ repoName: string; alreadyExisted: boolean }>;
 
   /**
    * Share DreamNode to Radicle network (sync changes)
