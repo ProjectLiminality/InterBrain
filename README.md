@@ -160,6 +160,238 @@ Current development progress is tracked through [**GitHub Issues**](https://gith
 
 **What is Radicle?**: A peer-to-peer alternative to GitHub that enables decentralized code collaboration. Your DreamNodes sync directly with trusted peers instead of through centralized servers. Perfect for private knowledge sharing within friend/family networks.
 
+---
+
+## Radicle Architecture: Pure Peer-to-Peer Dreamweaving
+
+InterBrain is fundamentally a **specialized GUI client for Radicle**, implementing a constrained, extremely peer-to-peer subset of Radicle's capabilities optimized for trust-based knowledge sharing.
+
+### Core Design Principle: Radicle as Single Source of Truth
+
+**The Collapse**: Instead of maintaining parallel relationship graphs (UUID-based `.udd` files + Radicle network state), we collapse to a single source of truth: **Radicle IS the Liminal Web**.
+
+**Identity System**:
+- **Dream Nodes**: Identified by Radicle Repository ID (`rad:z2u...`)
+- **Dreamer Nodes**: Identified by Radicle DID (`did:key:z6Mks...`)
+- **Type Inference**: Format determines type (no mutable `type` field needed)
+- **No UUIDs**: Radicle identifiers replace all UUID-based tracking
+
+**Minimal `.udd` Schema**:
+```json
+{
+  "id": "rad:z2u2AB..." or "did:key:z6Mks...",
+  "title": "Square",
+  "dreamTalk": "Square.png",
+  "submodules": [],
+  "supermodules": []
+}
+```
+
+### The Three Constraints: Pure P2P Configuration
+
+Every InterBrain DreamNode is configured with these mandatory Radicle settings:
+
+1. **Equal Delegates** (`--threshold 1`):
+   - Every peer is equally authoritative
+   - Any delegate can push changes
+   - No hierarchy, pure peer-to-peer
+   - Command: `rad id update --delegate <DID> --threshold 1`
+
+2. **Followed Scope** (`--scope followed`):
+   - Only fetch from peers you explicitly trust
+   - Changes flow through social relationships
+   - No stranger contributions
+   - Command: `rad seed <RID> --scope followed`
+
+3. **Bidirectional Trust**:
+   - When Alice shares with Bob, both follow each other
+   - Mutual delegation (both can push)
+   - Symmetric collaboration by default
+   - Commands: `rad follow <DID>` (both directions)
+
+### Two-Layer Architecture: Global Trust + Local Collaboration
+
+**Layer 1: Global Following** (Radicle node config):
+```bash
+rad follow did:key:z6MksBob... --alias Bob
+rad follow did:key:z6MksCharlie... --alias Charlie
+```
+- Who you trust across ALL projects
+- Visible via: `rad follow --list`
+- Maps to: Dreamer nodes in DreamSpace (ring around InterBrain)
+
+**Layer 2: Per-Repo Delegation** (repo metadata):
+```bash
+rad id update --delegate did:key:z6MksBob... --threshold 1
+```
+- Who can push to THIS specific DreamNode
+- Visible via: `rad id show <RID>`
+- Maps to: Collaboration edges in Liminal Web UI
+
+**InterBrain Plugin Settings** (private, local):
+```json
+{
+  "liminalWebEdges": [
+    {
+      "dreamer": "did:key:z6MksAlice...",
+      "dreamNode": "rad:z2u2ABsquare...",
+      "relationship": "collaborator"
+    }
+  ]
+}
+```
+- Which delegated peers you CHOOSE to fetch from
+- Not in git (private preference, no merge conflicts)
+- Drives "Check for Updates" UI behavior
+
+### Data Flow: Bidirectional Sync
+
+**Radicle → InterBrain** (read from network):
+- `rad follow --list` → Populate Dreamer nodes in DreamSpace
+- `rad id show <RID>` → Discover who CAN push to a DreamNode
+- `rad sync` + `git fetch <peer>` → Get updates from collaborators
+
+**InterBrain → Radicle** (write to network):
+- UI edge creation → `rad follow <DID>` (if not already following)
+- UI edge creation → Update plugin settings (selective fetching)
+- User accepts update → `git merge <peer>/main` + `git push rad main`
+
+**Plugin Settings → Behavior** (private filtering):
+- Liminal Web edge → Determines who to fetch from
+- UI shows updates only from edges marked "collaborator"
+- Same repo, different fetch preferences per user (no conflicts)
+
+### Transitive Trust: Social Resonance Filter
+
+**Scenario**: Alice ↔ Bob ↔ Charlie (Alice doesn't follow Charlie)
+
+**How Changes Flow**:
+1. Charlie edits Square → `git push rad main`
+2. Bob fetches Charlie → `git fetch charlie`
+3. Bob reviews and merges → `git merge charlie/main`
+4. Bob pushes merged state → `git push rad main`
+5. Alice fetches Bob → `git fetch bob` (includes Charlie's work transitively)
+6. Alice merges Bob → Gets Charlie's ideas through Bob's curation
+
+**Key Insight**: Alice receives Charlie's contributions WITHOUT directly following Charlie. Bob acts as curator/bridge. Changes propagate through trust relationships, not broadcast.
+
+### Intentional Divergence: Curation as Feature
+
+**Rejection is Silent**:
+- Alice fetches Bob's changes: `git fetch bob`
+- Alice reviews: `git log HEAD..bob/main` (sees Bob added `controversial.pdf`)
+- Alice decides: "Not merging this" (no `git merge` command)
+- Result: Alice's fork doesn't include the file
+- Consequence: Alice's peers won't see it (transitive filtering)
+
+**Perspectives Coexist**:
+- Bob's fork: Has controversial.pdf ✅
+- Alice's fork: Doesn't have it ❌
+- Different truths coexist, filtered by social curation
+- No global consensus needed
+
+### Merge Conflicts: Rare and Manageable
+
+**Dreamweaving Conflict Reality**:
+- 🟢 **90%+ auto-merge**: Different files or different sections
+- 🟡 **5% trivial**: Canvas JSON (keep both nodes via union)
+- 🔴 **5% real**: Same text rewritten (requires human judgment)
+
+**Conflict Resolution Strategy**:
+1. **Preview First**: Show diff before merging (`git diff <peer>/main`)
+2. **Auto-Merge Safe Cases**: Different files, different sections
+3. **Canvas-Aware Merging**: Union of nodes/edges (structural merge)
+4. **LLM Assistance**: Future feature for synthesizing conflicting edits
+5. **User Approval**: Always human-in-loop for ambiguous cases
+
+**Git Remembers**: Merge commits establish "integrated up to this point." Same conflict never re-appears.
+
+### Scalability: O(1) Complexity Per Person
+
+**The Induction Proof**:
+- **Base case**: Alice ↔ Bob (2 people) = O(1) fetches each ✅
+- **Inductive step**: Add Charlie → Each person still O(1) fetches ✅
+- **Result**: Scales from 3 to 3 million people
+
+**Why It Scales**:
+- **Local Coherence**: Each person manages ~5-10 direct peers
+- **Transitive Integration**: Bob curates Charlie + Diana → Alice merges Bob once
+- **Git DAG**: Distributed by design (Linux kernel: 1000+ contributors, decades)
+- **No Global Consensus**: Different perspectives coexist peacefully
+
+**What Would Break Scalability**:
+- ❌ `--scope all` (fetch from everyone) → O(N) complexity
+- ❌ No curation (merge all peers directly) → O(N) operations
+- ❌ Single shared canvas (1000 people editing) → Frequent conflicts
+
+**InterBrain Avoids All Anti-Patterns** ✅
+
+### Implementation Patterns
+
+**DreamNode Creation** (Alice):
+```bash
+rad init --name "Square" --default-branch main
+git add . && git commit -m "Initial commit"
+git push rad main
+rad seed <RID> --scope followed
+```
+
+**Sharing via Obsidian URI** (Alice → Bob):
+```
+obsidian://interbrain-share?
+  rid=rad:z2u2ABsquare...&
+  did=did:key:z6MksAlice...&
+  name=Alice&
+  title=Square
+```
+
+**Receiving Share** (Bob, automatic):
+```bash
+rad clone <RID>                                  # Clone repo
+rad follow <Alice-DID> --alias Alice             # Global trust
+rad id update --delegate <Alice-DID> --threshold 1  # Alice can push
+rad seed <RID> --scope followed                  # Only followed peers
+git remote add alice rad://<RID>/<Alice-DID>    # Track Alice's fork
+# Create Alice Dreamer node in vault
+```
+
+**Check for Updates** (Bob from Alice):
+```bash
+rad sync                      # Fetch from seed nodes (all peers)
+git fetch alice               # Get Alice's specific fork
+git log HEAD..alice/main      # Preview new commits
+git merge alice/main          # Accept changes (user approval)
+git push rad main             # Share merged state
+```
+
+**Selective Fetching** (Bob from Alice only, not Charlie):
+```typescript
+// Query plugin settings (NOT Radicle)
+const collaborators = settings.getLiminalWebEdges(squareRID)
+  .filter(e => e.relationship === "collaborator")
+  .map(e => e.dreamer);
+
+// Only fetch from Alice (Charlie is delegate but not in edges)
+for (const did of collaborators) {
+  await git.fetch(getDreamerName(did).toLowerCase());
+}
+```
+
+### Key Architectural Insights
+
+1. **Identity Collapse**: rad:* + did:key:* replaces UUIDs entirely
+2. **Single Source of Truth**: Radicle metadata = Liminal Web state
+3. **Private Preferences**: Plugin settings (not git) for selective fetching
+4. **Transitive Curation**: Changes flow through social graph, not broadcast
+5. **Intentional Divergence**: Forks coexist, consensus unnecessary
+6. **O(1) Scalability**: Local coherence scales globally
+7. **Git Native**: All merge/conflict resolution via standard git
+8. **No Metadata Conflicts**: Private data stays out of git
+
+**InterBrain = Radicle GUI client for trust-based knowledge gardening** 🌱
+
+---
+
 ### Getting Started
 
 Once installed, try this simple exercise to build your first liminal web:
