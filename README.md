@@ -209,7 +209,7 @@ Every InterBrain DreamNode is configured with these mandatory Radicle settings:
    - Symmetric collaboration by default
    - Commands: `rad follow <DID>` (both directions)
 
-### Two-Layer Architecture: Global Trust + Local Collaboration
+### Two-Layer Architecture: Global Trust + Organic Collaboration
 
 **Layer 1: Global Following** (Radicle node config):
 ```bash
@@ -224,42 +224,55 @@ rad follow did:key:z6MksCharlie... --alias Charlie
 ```bash
 rad id update --delegate did:key:z6MksBob... --threshold 1
 ```
-- Who can push to THIS specific DreamNode
+- Who holds THIS specific DreamNode (can push)
 - Visible via: `rad id show <RID>`
-- Maps to: Collaboration edges in Liminal Web UI
+- **Share = Delegate** (one action, not separate concepts)
 
-**InterBrain Plugin Settings** (private, local):
-```json
-{
-  "liminalWebEdges": [
-    {
-      "dreamer": "did:key:z6MksAlice...",
-      "dreamNode": "rad:z2u2ABsquare...",
-      "relationship": "collaborator"
-    }
-  ]
-}
+**Liminal Web Edges = Pure Intersection:**
+```typescript
+// Collaboration edges emerge automatically from Radicle state
+const followed = await rad.getFollowedPeers();      // Global trust
+const delegates = await rad.getDelegates(dreamNodeRID); // Who holds this idea
+
+// Edges appear/disappear automatically
+const collaborators = followed.filter(p => delegates.includes(p.did));
 ```
-- Which delegated peers you CHOOSE to fetch from
-- Not in git (private preference, no merge conflicts)
-- Drives "Check for Updates" UI behavior
 
-### Data Flow: Bidirectional Sync
+**Zero custom state needed** - UI reflects Radicle reality directly.
 
-**Radicle → InterBrain** (read from network):
+### Data Flow: One-Directional (Radicle → UI)
+
+**Core Principle**: Radicle does what it does. InterBrain UI adapts to Radicle, never interferes.
+
+**Radicle → InterBrain** (read only):
 - `rad follow --list` → Populate Dreamer nodes in DreamSpace
-- `rad id show <RID>` → Discover who CAN push to a DreamNode
-- `rad sync` + `git fetch <peer>` → Get updates from collaborators
+- `rad id show <RID>` → Discover who holds this DreamNode
+- Intersection → Collaboration edges appear automatically in Liminal Web
+- `rad sync` + `git fetch <peer>` → Get updates from all followed delegates
 
-**InterBrain → Radicle** (write to network):
-- UI edge creation → `rad follow <DID>` (if not already following)
-- UI edge creation → Update plugin settings (selective fetching)
-- User accepts update → `git merge <peer>/main` + `git push rad main`
+**InterBrain Performance Cache** (ephemeral, not source of truth):
+```typescript
+// Cache Radicle queries for UI performance only
+interface CachedRadicleState {
+  followedPeers: Map<DID, DreamerMetadata>;     // from rad follow --list
+  delegatesByRepo: Map<RID, DID[]>;             // from rad id show
+  lastSyncTime: timestamp;
+}
+// Refresh periodically or on user action
+// Always treat Radicle CLI output as authoritative
+```
 
-**Plugin Settings → Behavior** (private filtering):
-- Liminal Web edge → Determines who to fetch from
-- UI shows updates only from edges marked "collaborator"
-- Same repo, different fetch preferences per user (no conflicts)
+**User Actions That Modify Radicle** (via standard rad/git commands):
+- Share DreamNode → `rad clone` + `rad follow` + `rad id update --delegate`
+- Accept update → `git merge <peer>/main` + `git push rad main`
+- Follow peer → `rad follow <DID>`
+
+**Emergent Behavior Example**:
+1. Alice follows Bob, Charlie, Diana (global trust)
+2. Alice shares Square with Bob → Bob becomes delegate
+3. Bob shares Square with Charlie → Charlie becomes delegate
+4. **Automatically**: Alice sees Square edge to Charlie in UI (she follows Charlie, Charlie is delegate)
+5. Diana is NOT delegate → No edge appears (even though Alice follows her)
 
 ### Transitive Trust: Social Resonance Filter
 
@@ -357,38 +370,42 @@ git remote add alice rad://<RID>/<Alice-DID>    # Track Alice's fork
 
 **Check for Updates** (Bob from Alice):
 ```bash
-rad sync                      # Fetch from seed nodes (all peers)
+rad sync                      # Fetch from seed nodes (all followed delegates)
 git fetch alice               # Get Alice's specific fork
 git log HEAD..alice/main      # Preview new commits
 git merge alice/main          # Accept changes (user approval)
 git push rad main             # Share merged state
 ```
 
-**Selective Fetching** (Bob from Alice only, not Charlie):
+**Discover Collaborators** (pure Radicle query):
 ```typescript
-// Query plugin settings (NOT Radicle)
-const collaborators = settings.getLiminalWebEdges(squareRID)
-  .filter(e => e.relationship === "collaborator")
-  .map(e => e.dreamer);
+// Who collaborates on Square? (intersection query)
+async function getCollaboratorsForDreamNode(dreamNodeRID: string) {
+  const followed = await rad.getFollowedPeers();      // Global trust
+  const delegates = await rad.getDelegates(dreamNodeRID); // Who holds Square
 
-// Only fetch from Alice (Charlie is delegate but not in edges)
-for (const did of collaborators) {
-  await git.fetch(getDreamerName(did).toLowerCase());
+  // Collaboration edges = intersection (automatic)
+  return followed.filter(peer => delegates.includes(peer.did));
+  // These edges appear in Liminal Web UI automatically
 }
 ```
 
 ### Key Architectural Insights
 
 1. **Identity Collapse**: rad:* + did:key:* replaces UUIDs entirely
-2. **Single Source of Truth**: Radicle metadata = Liminal Web state
-3. **Private Preferences**: Plugin settings (not git) for selective fetching
-4. **Transitive Curation**: Changes flow through social graph, not broadcast
-5. **Intentional Divergence**: Forks coexist, consensus unnecessary
-6. **O(1) Scalability**: Local coherence scales globally
-7. **Git Native**: All merge/conflict resolution via standard git
-8. **No Metadata Conflicts**: Private data stays out of git
+2. **Single Source of Truth**: Radicle IS the Liminal Web (no parallel graphs)
+3. **One-Directional Flow**: Radicle → UI (InterBrain adapts, never interferes)
+4. **Share = Delegate**: One action creates collaboration (not separate concepts)
+5. **Organic Emergence**: Edges appear automatically from `followed ∩ delegates`
+6. **Transitive Curation**: Changes flow through social graph, not broadcast
+7. **Intentional Divergence**: Forks coexist, consensus unnecessary
+8. **O(1) Scalability**: Local coherence scales globally
+9. **Git Native**: All merge/conflict resolution via standard git
+10. **Performance Cache Only**: InterBrain caches queries but Radicle CLI is authoritative
 
 **InterBrain = Radicle GUI client for trust-based knowledge gardening** 🌱
+
+**Design Philosophy**: Trust Radicle's architecture. Build a beautiful window into the peer-to-peer network, not a replacement for it.
 
 ---
 
