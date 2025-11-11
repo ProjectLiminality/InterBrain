@@ -1,9 +1,16 @@
-# Radicle-Centric Architecture Migration Plan (SIMPLIFIED)
+# Radicle-Centric Architecture Migration Plan (AI Context)
 
 **Status**: Planning Phase - Simplified Approach
 **Created**: 2025-01-10
-**Updated**: 2025-01-10 (Major simplification)
+**Updated**: 2025-01-10 (Major simplification + roadmap extraction)
 **Goal**: Refactor from dual Git/Radicle services to unified RadicleService with Radicle as single source of truth
+
+---
+
+## Document Purpose
+
+**For Humans**: See `MIGRATION-ROADMAP.md` (compact, actionable)
+**For AI**: This document (detailed implementation context, code examples, edge cases)
 
 ---
 
@@ -496,111 +503,101 @@ await this.autoFocusNode(result.repoName);
 
 ---
 
-## Incremental Migration Strategy (SIMPLIFIED)
+## Incremental Migration Strategy (Aligned with Roadmap)
 
-### Phase 0: Mock System Setup (1 day)
-**Goal**: Enable rapid testing without real network
+**See MIGRATION-ROADMAP.md for high-level overview**
 
-1. ✅ Create `scripts/setup-radicle-mock.sh`
-2. ✅ Implement mock detection in RadicleService (`RADICLE_MOCK=true`)
-3. ✅ Generate fake DIDs and repo metadata
-4. **Validation**: `rad follow --list` returns mock data
+This section provides detailed implementation notes for AI context.
 
 ---
 
-### Phase 1: New Nodes Use Radicle IDs (2 days)
-**Goal**: Start populating UUID field with Radicle IDs
+### Phase 1: Metadata Foundation (2-3 days)
+**Roadmap**: Update creation + migrate existing data
 
 **Step 1.1**: Update `createDreamNode()` in RadicleService
-- Replace UUID generation with `rad init` + get RID
-- Populate `uuid` field with Radicle ID
-- Keep `type` and `radicleId` fields (backward compat)
-- For Dreamer nodes: create `liminal-web.json`
-- **Validation**: New nodes have `uuid: "rad:*"`
+```typescript
+async createDreamNode(title: string, type: 'dream' | 'dreamer'): Promise<DreamNode> {
+  // 1. Create directory
+  const repoPath = path.join(vaultPath, title);
+  await fs.mkdir(repoPath);
 
-**Step 1.2**: Update node creation commands
-- Wire commands to use updated service method
-- Test Dream and Dreamer creation separately
-- **Validation**: UI shows new nodes with Radicle IDs
+  // 2. rad init (creates both Radicle + git)
+  await execAsync(`rad init --name "${title}" --public --default-branch main`, { cwd: repoPath });
 
-**Checkpoint**: All new nodes use Radicle IDs. Old nodes still work.
+  // 3. Get Radicle ID
+  const { stdout } = await execAsync('rad .', { cwd: repoPath });
+  const radicleId = stdout.trim(); // e.g., "rad:z2u2AB..."
 
----
+  // 4. Write .udd with RID as UUID
+  const udd = {
+    uuid: radicleId,        // ← KEY CHANGE: Use RID as UUID
+    type,
+    radicleId,             // Keep for backward compat
+    title,
+    dreamTalk: '',
+    submodules: [],
+    supermodules: []
+  };
+  await writeUDD(repoPath, udd);
 
-### Phase 2: Relationship Logic Refactor (3 days)
-**Goal**: Move relationships to `liminal-web.json` in Dreamer nodes
+  // 5. If Dreamer: create liminal-web.json
+  if (type === 'dreamer') {
+    await fs.writeFile(
+      path.join(repoPath, 'liminal-web.json'),
+      JSON.stringify({ relationships: [], lastSyncedFromRadicle: null }, null, 2)
+    );
+  }
 
-**Step 2.1**: Create `liminal-web.json` for existing Dreamer nodes
-- Migration script scans vault for Dreamer nodes
-- Creates `liminal-web.json` with current relationships
-- Commits changes
-- **Validation**: All Dreamer nodes have new file
+  // 6. Initial commit
+  await execAsync('git add .', { cwd: repoPath });
+  await execAsync(`git commit -m "Initialize ${type} node: ${title}"`, { cwd: repoPath });
 
-**Step 2.2**: Update relationship writing logic
-- `linkNodes()` now writes to `liminal-web.json` (not `.udd`)
-- Only Dreamer nodes hold pointers (unidirectional)
-- Git commit after each relationship change
-- **Validation**: UI link creation updates correct file
+  // 7. For Dream nodes: push to network
+  //    For Dreamer nodes: stay local
+  if (type === 'dream') {
+    await execAsync('git push rad main', { cwd: repoPath });
+  }
 
-**Step 2.3**: Update constellation reading logic
-- Read from `liminal-web.json` instead of `.udd`
-- Only read from Dreamer nodes (unidirectional edges)
-- **Validation**: Constellation shows correct edges
+  return { uuid: radicleId, type, title, repoPath };
+}
+```
 
-**Checkpoint**: Relationships stored in separate files. No merge conflicts possible.
+**Step 1.2**: Migration script for existing Dreamer nodes
+```typescript
+async function migrateExistingDreamerNodes(): Promise<void> {
+  const dreamNodes = await scanVault();
 
----
+  for (const node of dreamNodes) {
+    if (node.type !== 'dreamer') continue;
 
-### Phase 3: "Sync from Radicle" Command (2 days)
-**Goal**: Auto-populate relationships from Radicle network
+    const liminalWebPath = path.join(node.repoPath, 'liminal-web.json');
+    const exists = await fs.access(liminalWebPath).then(() => true).catch(() => false);
 
-**Step 3.1**: Implement `syncLiminalWebFromRadicle()`
-- For each Dreamer with DID: query delegates
-- Add discovered repos to `liminal-web.json`
-- NEVER remove existing relationships (non-destructive)
-- **Validation**: Mock mode populates relationships correctly
+    if (!exists) {
+      // Read old relationships from .udd
+      const udd = await readUDD(node.repoPath);
+      const oldRelationships = udd.liminalWebRelationships || [];
 
-**Step 3.2**: Add command to palette
-- "Sync Liminal Web from Radicle (Experimental)"
-- Wire to service method
-- Show success notice
-- **Validation**: Run command → relationships appear
+      // Create new liminal-web.json
+      await fs.writeFile(
+        liminalWebPath,
+        JSON.stringify({
+          relationships: oldRelationships,
+          lastSyncedFromRadicle: null
+        }, null, 2)
+      );
 
-**Step 3.3**: Test with real Radicle (multi-vault)
-- Setup 2-3 vaults with different identities
-- Share Dream node between vaults
-- Run sync command
-- **Validation**: Relationships auto-discovered
+      // Commit the change
+      await execAsync('git add liminal-web.json', { cwd: node.repoPath });
+      await execAsync('git commit -m "Migrate relationships to liminal-web.json"', { cwd: node.repoPath });
 
-**Checkpoint**: Radicle metadata drives liminal web (one-directional flow).
+      console.log(`Migrated ${node.title}`);
+    }
+  }
+}
+```
 
----
-
-### Phase 4: Command Refactoring (2 days)
-**Goal**: Rewire radial buttons to use new patterns
-
-**Step 4.1**: Update "Save Changes" command
-- Ensure works with Radicle IDs
-- Test with both Dream and Dreamer nodes
-- **Validation**: Button works identically
-
-**Step 4.2**: Update "Share Changes" command
-- Only pushes if type === 'dream' (Dreamers stay local)
-- **Validation**: Dream nodes push, Dreamers don't
-
-**Step 4.3**: Update "Check for Updates" command
-- Query Radicle for collaborators (followed ∩ delegates)
-- Fetch from peer remotes
-- **Validation**: Shows correct updates
-
-**Checkpoint**: All core buttons work with new system.
-
----
-
-### Phase 5: Legacy Support (1 day)
-**Goal**: Ensure old UUID nodes still work
-
-**Step 5.1**: Add UUID format detection
+**Step 1.3**: Add legacy UUID detection
 ```typescript
 function isRadicleId(uuid: string): boolean {
   return uuid.startsWith('rad:') || uuid.startsWith('did:key:');
@@ -619,49 +616,206 @@ async function getNodeIdentifier(node: DreamNode): Promise<string> {
 }
 ```
 
-**Step 5.2**: Update critical paths to use `getNodeIdentifier()`
-- Constellation layout
-- Link creation
-- Update checking
-- **Validation**: Old vaults load without errors
+**Validation**:
+- New nodes have `uuid: "rad:*"` or `uuid: "did:key:*"`
+- Existing Dreamer nodes gain `liminal-web.json`
+- Old UUID nodes still load without errors
 
-**Checkpoint**: Backward compatibility maintained.
-
----
-
-### Phase 6: Documentation & Cleanup (1 day)
-**Goal**: Document new patterns, clean up old code
-
-**Step 6.1**: Update documentation
-- README.md: Simplified schema section
-- CLAUDE.md: New creation patterns
-- Add `docs/liminal-web-relationships.md`
-
-**Step 6.2**: Deprecate old sync command
-- Mark "Sync Bidirectional Relationships" as deprecated
-- Add notice: "Use 'Sync from Radicle' instead"
-- Keep functional for transition period
-
-**Step 6.3**: Clean up redundant code
-- Remove unused liminalWebRelationships writes
-- Mark old patterns with `// TODO: Remove after migration`
-- **Validation**: All tests still pass
-
-**Checkpoint**: Migration complete. System uses Radicle-native patterns.
+**Checkpoint**: Metadata structure correct for both new and legacy data.
 
 ---
 
-## Timeline (Dramatically Reduced)
+### Phase 2: Mock Radicle System (1-2 days)
+**Roadmap**: In-codebase simulation for rapid iteration
 
-- **Phase 0**: Mock system (1 day) ✅
-- **Phase 1**: New nodes use RID as UUID (2 days) ✅
-- **Phase 2**: Move relationships to separate file (3 days) ✅
-- **Phase 3**: "Sync from Radicle" command (2 days) ✅
-- **Phase 4**: Command refactoring (2 days) ✅
-- **Phase 5**: Legacy support (1 day) ✅
-- **Phase 6**: Documentation & cleanup (1 day) ✅
+**Step 2.1**: Create `MockRadicleService`
+```typescript
+export class MockRadicleService {
+  private mockFollowed: Map<string, Peer> = new Map();
+  private mockDelegates: Map<string, string[]> = new Map();
 
-**Total: ~11 days** (was 15-18 days before simplification, now even faster!)
+  // Simulate rad follow --list
+  async getFollowedPeers(): Promise<Peer[]> {
+    return Array.from(this.mockFollowed.values());
+  }
+
+  // Simulate rad id show <RID>
+  async getDelegates(radicleId: string): Promise<string[]> {
+    return this.mockDelegates.get(radicleId) || [];
+  }
+
+  // Simulate rad init
+  async init(path: string, name: string): Promise<string> {
+    const fakeRID = `rad:z2${name.substring(0, 8)}MockRID`;
+    return fakeRID;
+  }
+
+  // Add mock data helpers
+  addMockPeer(did: string, name: string): void {
+    this.mockFollowed.set(did, { did, alias: name });
+  }
+
+  addMockDelegate(radicleId: string, did: string): void {
+    const delegates = this.mockDelegates.get(radicleId) || [];
+    delegates.push(did);
+    this.mockDelegates.set(radicleId, delegates);
+  }
+}
+```
+
+**Step 2.2**: Populate mock data matching real Radicle
+```typescript
+// In test setup or dev mode initialization
+const mock = new MockRadicleService();
+
+// Alice's identity
+const aliceDID = 'did:key:z6MksAliceMockDID...';
+mock.addMockPeer(aliceDID, 'Alice');
+
+// Bob's identity
+const bobDID = 'did:key:z6MksBobMockDID...';
+mock.addMockPeer(bobDID, 'Bob');
+
+// Square repo with both as delegates
+const squareRID = 'rad:z2SquareMockRID...';
+mock.addMockDelegate(squareRID, aliceDID);
+mock.addMockDelegate(squareRID, bobDID);
+```
+
+**Validation**:
+- Mock data structure matches real `rad` CLI output format
+- Queries return expected intersection (`followed ∩ delegates`)
+
+**Checkpoint**: Mock system enables fast UI iteration without network.
+
+---
+
+### Phase 3: UI Integration + Legacy Support (2-3 days)
+**Roadmap**: Wire UI to mock, handle old data gracefully
+
+**Step 3.1**: Update relationship reading logic
+```typescript
+async function getLiminalWebEdges(): Promise<Edge[]> {
+  const edges: Edge[] = [];
+  const dreamNodes = await scanVault();
+
+  for (const dreamer of dreamNodes.filter(n => n.type === 'dreamer')) {
+    const liminalWebPath = path.join(dreamer.repoPath, 'liminal-web.json');
+
+    try {
+      const data = await fs.readFile(liminalWebPath, 'utf-8');
+      const { relationships } = JSON.parse(data);
+
+      for (const dreamRID of relationships) {
+        edges.push({
+          dreamer: await getNodeIdentifier(dreamer),
+          dream: dreamRID
+        });
+      }
+    } catch (error) {
+      // Fallback to old .udd format
+      const udd = await readUDD(dreamer.repoPath);
+      const oldRelationships = udd.liminalWebRelationships || [];
+
+      for (const dreamUUID of oldRelationships) {
+        edges.push({
+          dreamer: await getNodeIdentifier(dreamer),
+          dream: dreamUUID
+        });
+      }
+    }
+  }
+
+  return edges;
+}
+```
+
+**Step 3.2**: Update relationship writing logic
+```typescript
+async function linkNodes(dreamerNode: DreamNode, dreamNode: DreamNode): Promise<void> {
+  const liminalWebPath = path.join(dreamerNode.repoPath, 'liminal-web.json');
+
+  // Read current relationships
+  const data = await fs.readFile(liminalWebPath, 'utf-8');
+  const liminalWeb = JSON.parse(data);
+
+  // Add new relationship
+  const dreamId = await getNodeIdentifier(dreamNode);
+  if (!liminalWeb.relationships.includes(dreamId)) {
+    liminalWeb.relationships.push(dreamId);
+
+    // Write and commit
+    await fs.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
+    await execAsync('git add liminal-web.json', { cwd: dreamerNode.repoPath });
+    await execAsync('git commit -m "Link to dream node"', { cwd: dreamerNode.repoPath });
+  }
+}
+```
+
+**Step 3.3**: Test with old vault data
+- Load vault with legacy UUID nodes
+- Verify constellation renders correctly
+- Test creating new links (should use new format)
+- Verify no errors or warnings
+
+**Validation**:
+- Mock service returns correct data
+- UI shows edges for both new and old formats
+- Old vaults load without errors
+- New relationships use Radicle IDs
+
+**Checkpoint**: UI works with mock data AND legacy vaults.
+
+---
+
+### Phase 4: Real Radicle Testing (2-3 days)
+**Roadmap**: Switch to real `rad` CLI, validate assumptions
+
+**Step 4.1**: Toggle to real RadicleService
+```typescript
+// Feature flag or environment variable
+const useRealRadicle = process.env.RADICLE_REAL === 'true';
+const radicleService = useRealRadicle
+  ? new RadicleService()
+  : new MockRadicleService();
+```
+
+**Step 4.2**: Test creation flow
+- Create new Dream node → verify `rad init` runs
+- Create new Dreamer node → verify local repo only
+- Check `.udd` files have `uuid: "rad:*"`
+
+**Step 4.3**: Test collaboration flow
+- Share Dream node from vault A
+- Clone into vault B via URI
+- Verify follow + delegate setup
+- Check for updates
+- Accept update → verify merge
+
+**Step 4.4**: Test with legacy data
+- Load old vault with UUID nodes
+- Verify reads work correctly
+- Create new node → verify uses new format
+- Link old node to new node → verify works
+
+**Validation**:
+- Real `rad` commands return expected output
+- Mock assumptions were correct (or fix discrepancies)
+- End-to-end collaboration works
+- Legacy data continues functioning
+
+**Checkpoint**: Real Radicle integration complete, tested with both new and old data.
+
+---
+
+## Timeline
+
+- **Phase 1**: Metadata foundation (2-3 days)
+- **Phase 2**: Mock system (1-2 days)
+- **Phase 3**: UI integration + legacy (2-3 days)
+- **Phase 4**: Real Radicle testing (2-3 days)
+
+**Total: ~7-11 days** (simplified from original 15-18 days)
 
 ---
 
