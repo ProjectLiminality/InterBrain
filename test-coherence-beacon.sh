@@ -6,7 +6,8 @@
 
 set -e  # Exit on error
 
-VAULT_PATH="/Users/davidrug/DreamVault"
+# Get vault path from environment or use default
+VAULT_PATH="${VAULT_PATH:-$HOME/DreamVault}"
 CYLINDER_PATH="$VAULT_PATH/Cylinder"
 CIRCLE_PATH="$VAULT_PATH/Circle"
 SQUARE_PATH="$VAULT_PATH/Square"

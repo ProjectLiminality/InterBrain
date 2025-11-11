@@ -166,8 +166,8 @@ fi
 # Remove Python virtual environment for transcription
 echo ""
 echo "4. Removing Python transcription environment..."
-DEFAULT_VAULT_NAME="DreamVault"
-DEFAULT_VAULT_PARENT="$HOME"
+DEFAULT_VAULT_NAME="DreamVault"  # Only the vault name, not a hardcoded username path
+DEFAULT_VAULT_PARENT="$HOME"     # Will resolve to current user's home directory
 
 # Try to find InterBrain installation
 POSSIBLE_PATHS=(

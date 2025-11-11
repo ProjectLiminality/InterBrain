@@ -62,8 +62,8 @@ NC='\033[0m' # No Color
 TOTAL_STEPS=15
 
 # Default vault name and location
-DEFAULT_VAULT_NAME="DreamVault"
-DEFAULT_VAULT_PARENT="$HOME"
+DEFAULT_VAULT_NAME="DreamVault"  # Only the vault name, not a hardcoded username path
+DEFAULT_VAULT_PARENT="$HOME"     # Will resolve to current user's home directory
 
 # Parse command-line arguments
 CLONE_URI=""
