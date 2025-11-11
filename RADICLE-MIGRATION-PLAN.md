@@ -1,7 +1,8 @@
-# Radicle-Centric Architecture Migration Plan
+# Radicle-Centric Architecture Migration Plan (SIMPLIFIED)
 
-**Status**: Planning Phase
+**Status**: Planning Phase - Simplified Approach
 **Created**: 2025-01-10
+**Updated**: 2025-01-10 (Major simplification)
 **Goal**: Refactor from dual Git/Radicle services to unified RadicleService with Radicle as single source of truth
 
 ---
@@ -11,14 +12,166 @@
 ### The Core Insight
 Radicle and Git are inseparable in our architecture. Every collaboration operation involves both. Stop treating them as separate concerns.
 
+### The Breakthrough Simplification 🎯
+**UUID is just a string.** Instead of complex schema restructuring, we simply:
+1. Replace UUID value with Radicle ID (string swap, not schema change)
+2. Keep existing fields (`type`, `radicleId`) for backward compatibility
+3. Move relationships to separate `liminal-web.json` in Dreamer nodes only
+4. Every node (Dream AND Dreamer) = Radicle repo from creation
+
+**Result**: ~70% reduction in migration complexity!
+
 ### The Vision
 - **One Service**: `RadicleService` (renamed from current, absorbing GitService)
 - **One Source of Truth**: Radicle metadata drives Liminal Web (no parallel UUID graphs)
 - **One-Directional Flow**: Radicle → UI (InterBrain adapts to Radicle, never interferes)
 - **Organic Emergence**: `followed ∩ delegates` = collaboration edges (automatic)
+- **Every Node is Radicle**: Dream AND Dreamer nodes both get `rad init` (local repos, no network needed)
 
 ### Current Problem
 Three services (GitService, RadicleService, CoherenceBeaconService) with overlapping responsibilities. URIHandlerService duplicates clone logic. Metadata divergence between `.udd` files and Radicle state.
+
+---
+
+## The Simplified Schema (Backward Compatible)
+
+### Before (Complex Migration):
+```json
+// Planned: Complete restructuring
+{
+  "id": "rad:z2u..." or "did:key:z6Mks...",  // New field
+  "title": "Square",
+  // Remove: uuid, radicleId, type, liminalWebRelationships
+}
+```
+❌ **Problem**: Breaking change, all code needs updates
+
+### After (Simple String Swap):
+```json
+// Actually: Just replace UUID value!
+{
+  "uuid": "rad:z2u2ABsquare...",         // ← Just swap the string!
+  "type": "dream",                       // Keep (doesn't hurt)
+  "radicleId": "rad:z2u2ABsquare...",   // Keep (redundant but safe)
+  "title": "Square",
+  "dreamTalk": "Square.png",
+  "submodules": [],
+  "supermodules": []
+  // NO liminalWebRelationships here (moved to separate file)
+}
+```
+✅ **Result**: All existing code that reads `node.uuid` continues working!
+
+### Dreamer Nodes with Optional DID:
+```json
+// Historical figure (no network identity)
+{
+  "uuid": "rad:z2KrishnamurtiABC...",   // Local Radicle repo ID
+  "type": "dreamer",
+  "title": "Jiddu Krishnamurti",
+  "did": null,                           // No peer DID (can't collaborate)
+  "email": null,
+  "birthYear": 1895
+}
+
+// Living peer (has network identity)
+{
+  "uuid": "rad:z2AliceXYZ...",          // Local Radicle repo ID
+  "type": "dreamer",
+  "title": "Alice",
+  "did": "did:key:z6MksAlice...",       // Peer DID for collaboration
+  "email": "alice@example.com"
+}
+```
+
+### New: Liminal Web Relationships (Separate File)
+
+**Structure for Dreamer nodes ONLY**:
+```
+DreamerNodes/Alice/
+├── .udd                          # Core metadata (no relationships)
+├── liminal-web.json              # ← NEW: Relationships only
+├── README.md
+└── .git/
+```
+
+**`liminal-web.json`**:
+```json
+{
+  "relationships": [
+    "rad:z2SquareABC...",          // Points to Square Dream
+    "rad:z2CircleDEF...",          // Points to Circle Dream
+    "rad:z2TriangleGHI..."         // Points to Triangle Dream
+  ],
+  "lastSyncedFromRadicle": "2025-01-10T12:34:56Z"
+}
+```
+
+**Why separate file**:
+- ✅ Can version control (git tracks changes)
+- ✅ Can `.gitignore` when sharing as submodule (privacy)
+- ✅ No merge conflicts (private to your perspective)
+- ✅ Radicle sync updates non-destructively (only adds, never removes)
+
+---
+
+## Key Architectural Decisions
+
+### 1. Every Node is a Radicle Repo (Dream AND Dreamer)
+
+**Both types get `rad init` on creation**:
+- ✅ No network needed (local Radicle repos)
+- ✅ Radicle ID = free unique identifier
+- ✅ Version control built-in
+- ✅ No UUID generation logic needed
+
+**Distinction via behavior, not structure**:
+- **Dream nodes**: `git push rad main` (shared via network)
+- **Dreamer nodes**: Stay local (private, no push)
+
+### 2. Unidirectional Relationships (No Merge Conflicts)
+
+**Old approach** (bidirectional in Dream nodes):
+```
+Square/.udd:  liminalWebRelationships: [Alice-UUID, Bob-UUID]
+Alice/.udd:   liminalWebRelationships: [Square-UUID]
+Bob/.udd:     liminalWebRelationships: [Square-UUID]
+```
+→ **Problem**: Merge conflicts when both add relationships
+
+**New approach** (unidirectional in Dreamer nodes):
+```
+Alice/liminal-web.json:  relationships: [Square-RID, Circle-RID]
+Bob/liminal-web.json:    relationships: [Square-RID, Triangle-RID]
+```
+→ **No conflicts**: Each person's relationships are private!
+
+**UI interpretation**:
+- If Alice points to Square → Edge appears (Alice ↔ Square)
+- No need for Square to "point back"
+
+### 3. Non-Destructive Radicle Sync
+
+**"Sync from Radicle" command**:
+- Queries Radicle for peer's delegations
+- ADDS newly discovered relationships to `liminal-web.json`
+- NEVER removes existing relationships (supports non-networked nodes like Krishnamurti)
+- Only processes Dreamer nodes with DIDs
+
+### 4. Support for Non-Networked Dreamer Nodes
+
+**Use cases**:
+- Historical figures (Krishnamurti, Alan Watts, etc.)
+- Fictional characters
+- Concepts personified
+- Future contacts (not yet onboarded)
+
+**Behavior**:
+- ✅ Appears in constellation
+- ✅ Can link to Dream nodes manually
+- ❌ Never appears in Radicle queries (no DID)
+- ❌ "Sync from Radicle" skips them
+- ✅ Relationships preserved (version controlled)
 
 ---
 
@@ -30,16 +183,54 @@ These are the **atomic operations** that the new RadicleService should expose:
 ```typescript
 async createDreamNode(title: string, type: 'dream' | 'dreamer'): Promise<DreamNode> {
   // 1. Create directory
-  // 2. rad init --name <title> --default-branch main (creates both Radicle + git)
-  // 3. Write .udd file with id = rad:* or did:key:*
-  // 4. git add .udd && git commit -m "Initialize DreamNode"
-  // 5. rad seed <RID> --scope followed
-  // 6. git push rad main
-  // 7. Return DreamNode
+  const repoPath = path.join(vaultPath, title);
+  await fs.mkdir(repoPath);
+
+  // 2. rad init (creates both Radicle + git)
+  await execAsync(`rad init --name "${title}" --public --default-branch main`, { cwd: repoPath });
+
+  // 3. Get Radicle ID
+  const { stdout } = await execAsync('rad .', { cwd: repoPath });
+  const radicleId = stdout.trim(); // e.g., "rad:z2u2AB..."
+
+  // 4. Write .udd with RID as UUID
+  const udd = {
+    uuid: radicleId,        // ← The key change!
+    type,
+    radicleId,             // Keep for now (redundant but safe)
+    title,
+    dreamTalk: '',
+    submodules: [],
+    supermodules: []
+  };
+  await writeUDD(repoPath, udd);
+
+  // 5. If Dreamer: create liminal-web.json
+  if (type === 'dreamer') {
+    await fs.writeFile(
+      path.join(repoPath, 'liminal-web.json'),
+      JSON.stringify({ relationships: [], lastSyncedFromRadicle: null }, null, 2)
+    );
+  }
+
+  // 6. Initial commit
+  await execAsync('git add .', { cwd: repoPath });
+  await execAsync(`git commit -m "Initialize ${type} node: ${title}"`, { cwd: repoPath });
+
+  // 7. For Dream nodes: push to network
+  //    For Dreamer nodes: stay local
+  if (type === 'dream') {
+    await execAsync('git push rad main', { cwd: repoPath });
+  }
+
+  return { uuid: radicleId, type, title, repoPath };
 }
 ```
 
-**Key Change**: No more `git init` followed by optional `rad init`. Radicle repos from day one.
+**Key Changes**:
+- No more `git init` followed by optional `rad init`
+- Radicle repos from day one (both types)
+- Dreamer nodes stay local (no network push)
 
 ### B. Saving Locally (Commit Without Sharing)
 ```typescript
@@ -305,161 +496,227 @@ await this.autoFocusNode(result.repoName);
 
 ---
 
-## Incremental Migration Strategy
+## Incremental Migration Strategy (SIMPLIFIED)
 
-### Phase 0: Preparation (No Breaking Changes)
-**Goal**: Set up new service without breaking existing functionality
+### Phase 0: Mock System Setup (1 day)
+**Goal**: Enable rapid testing without real network
 
-1. ✅ Create `RADICLE-MIGRATION-PLAN.md` (this document)
-2. ✅ Document current architecture (GitService, RadicleService, overlaps)
-3. Create `src/services/radicle-service-v2.ts` (new implementation)
-4. Implement core methods in parallel to existing services
-5. Add feature flag: `useNewRadicleService` (default: false)
-
-**Validation**: Run both services side-by-side, compare outputs
+1. ✅ Create `scripts/setup-radicle-mock.sh`
+2. ✅ Implement mock detection in RadicleService (`RADICLE_MOCK=true`)
+3. ✅ Generate fake DIDs and repo metadata
+4. **Validation**: `rad follow --list` returns mock data
 
 ---
 
-### Phase 1: Core Operations (Small, Testable)
-**Goal**: Implement fundamental operations with tests
+### Phase 1: New Nodes Use Radicle IDs (2 days)
+**Goal**: Start populating UUID field with Radicle IDs
 
-**Step 1.1**: Implement `createDreamNode()` in RadicleService v2
-- Write tests for `rad init` → `.udd` creation → commit flow
-- Add flag to use new creation flow
-- Test with fresh DreamNode creation
-- **Validation**: New nodes work identically to old nodes
+**Step 1.1**: Update `createDreamNode()` in RadicleService
+- Replace UUID generation with `rad init` + get RID
+- Populate `uuid` field with Radicle ID
+- Keep `type` and `radicleId` fields (backward compat)
+- For Dreamer nodes: create `liminal-web.json`
+- **Validation**: New nodes have `uuid: "rad:*"`
 
-**Step 1.2**: Implement `save()` and `share()`
-- Write tests for commit + push flows
-- Add flag to commands
-- **Validation**: Manual save/share works for v2 nodes
+**Step 1.2**: Update node creation commands
+- Wire commands to use updated service method
+- Test Dream and Dreamer creation separately
+- **Validation**: UI shows new nodes with Radicle IDs
 
-**Step 1.3**: Implement `getCollaborators()` (Radicle queries)
-- Test `rad follow --list` parsing
-- Test `rad id show` parsing
-- Test intersection logic
-- **Validation**: Returns same collaborators as current liminalWebRelationships
-
-**Checkpoint**: At this point, creation + local operations + queries work with v2.
+**Checkpoint**: All new nodes use Radicle IDs. Old nodes still work.
 
 ---
 
-### Phase 2: Clone & Collaboration (High Risk)
-**Goal**: Replace URIHandler clone logic with unified implementation
+### Phase 2: Relationship Logic Refactor (3 days)
+**Goal**: Move relationships to `liminal-web.json` in Dreamer nodes
 
-**Step 2.1**: Implement `cloneFromPeer()` in RadicleService v2
-- All steps: clone, follow, delegate, seed, remote, link
-- **Critical**: Ensure Dreamer node creation is atomic
-- Test with existing share links
-- **Validation**: Clone via URI works identically
+**Step 2.1**: Create `liminal-web.json` for existing Dreamer nodes
+- Migration script scans vault for Dreamer nodes
+- Creates `liminal-web.json` with current relationships
+- Commits changes
+- **Validation**: All Dreamer nodes have new file
 
-**Step 2.2**: Update URIHandlerService to use v2
-- Replace 130-line clone flow with single method call
-- Keep auto-focus, indexing, relationship scan logic
-- **Validation**: Share link → clone → focus flow unbroken
+**Step 2.2**: Update relationship writing logic
+- `linkNodes()` now writes to `liminal-web.json` (not `.udd`)
+- Only Dreamer nodes hold pointers (unidirectional)
+- Git commit after each relationship change
+- **Validation**: UI link creation updates correct file
 
-**Step 2.3**: Implement `checkForUpdates()` and `acceptUpdate()`
-- Fetch from peers
-- Parse git log
-- Merge with conflict handling
-- **Validation**: Update preview + acceptance works
+**Step 2.3**: Update constellation reading logic
+- Read from `liminal-web.json` instead of `.udd`
+- Only read from Dreamer nodes (unidirectional edges)
+- **Validation**: Constellation shows correct edges
 
-**Checkpoint**: Collaboration flows (clone, update) work with v2.
-
----
-
-### Phase 3: Metadata Migration (Breaking Change)
-**Goal**: Switch to new `.udd` schema
-
-**Step 3.1**: Add schema migration support
-- Implement `migrateUDDSchema(path: string)` utility
-- Converts `uuid` → `id`, removes `radicleId`, removes `liminalWebRelationships`
-- Add `rad .` call to populate `id` for existing Radicle repos
-- **Non-destructive**: Keep old fields as `_legacy_uuid` backup
-
-**Step 3.2**: Create migration command
-- "Migrate All DreamNodes to Radicle Schema"
-- Scans vault, converts all `.udd` files
-- Commits changes with clear message
-- **Validation**: Manual inspection of converted files
-
-**Step 3.3**: Update all code to use new schema
-- Search codebase for `node.uuid` → replace with `node.id`
-- Search for `liminalWebRelationships` → replace with Radicle queries
-- Update UDDService read/write methods
-- **Validation**: All tests pass with new schema
-
-**Checkpoint**: New schema is canonical, old schema deprecated.
+**Checkpoint**: Relationships stored in separate files. No merge conflicts possible.
 
 ---
 
-### Phase 4: Command Refactoring (Low Risk)
-**Goal**: Rewire commands to use RadicleService v2
+### Phase 3: "Sync from Radicle" Command (2 days)
+**Goal**: Auto-populate relationships from Radicle network
+
+**Step 3.1**: Implement `syncLiminalWebFromRadicle()`
+- For each Dreamer with DID: query delegates
+- Add discovered repos to `liminal-web.json`
+- NEVER remove existing relationships (non-destructive)
+- **Validation**: Mock mode populates relationships correctly
+
+**Step 3.2**: Add command to palette
+- "Sync Liminal Web from Radicle (Experimental)"
+- Wire to service method
+- Show success notice
+- **Validation**: Run command → relationships appear
+
+**Step 3.3**: Test with real Radicle (multi-vault)
+- Setup 2-3 vaults with different identities
+- Share Dream node between vaults
+- Run sync command
+- **Validation**: Relationships auto-discovered
+
+**Checkpoint**: Radicle metadata drives liminal web (one-directional flow).
+
+---
+
+### Phase 4: Command Refactoring (2 days)
+**Goal**: Rewire radial buttons to use new patterns
 
 **Step 4.1**: Update "Save Changes" command
-- Replace GitService calls with `RadicleService.save()`
-- Test with radial button
+- Ensure works with Radicle IDs
+- Test with both Dream and Dreamer nodes
 - **Validation**: Button works identically
 
 **Step 4.2**: Update "Share Changes" command
-- Replace GitService + RadicleService calls with `RadicleService.share()`
-- **Validation**: Push to network works
+- Only pushes if type === 'dream' (Dreamers stay local)
+- **Validation**: Dream nodes push, Dreamers don't
 
 **Step 4.3**: Update "Check for Updates" command
-- Replace custom git log logic with `RadicleService.checkForUpdates()`
-- **Validation**: Update preview shows correct commits
+- Query Radicle for collaborators (followed ∩ delegates)
+- Fetch from peer remotes
+- **Validation**: Shows correct updates
 
-**Step 4.4**: Update Dreamer-specific "Check All Projects" command
-- Query Radicle for all repos where dreamer is delegate
-- Use `RadicleService.checkForUpdates()` for each
-- **Validation**: Dreamer node button shows all updates
-
-**Checkpoint**: All radial buttons use v2 service exclusively.
+**Checkpoint**: All core buttons work with new system.
 
 ---
 
-### Phase 5: Legacy Cleanup (Breaking Change)
-**Goal**: Remove old services and obsolete commands
+### Phase 5: Legacy Support (1 day)
+**Goal**: Ensure old UUID nodes still work
 
-**Step 5.1**: Mark GitService as deprecated
-- Move to `src/services/legacy/git-service.ts`
-- Add deprecation warnings to all methods
-- Keep for advanced use cases (merge conflict tools, etc.)
+**Step 5.1**: Add UUID format detection
+```typescript
+function isRadicleId(uuid: string): boolean {
+  return uuid.startsWith('rad:') || uuid.startsWith('did:key:');
+}
 
-**Step 5.2**: Merge old RadicleService into new one
-- Copy any missing utility methods
-- Remove duplicated logic
-- Rename `radicle-service-v2.ts` → `radicle-service.ts`
+async function getNodeIdentifier(node: DreamNode): Promise<string> {
+  if (isRadicleId(node.uuid)) return node.uuid;
 
-**Step 5.3**: Remove obsolete commands
-- "Sync Bidirectional Relationships" → Delete or repurpose
-- Any UUID-specific commands → Delete
-- Update command palette
+  // Legacy: try to get RID from repo
+  try {
+    const { stdout } = await execAsync('rad .', { cwd: node.repoPath });
+    return stdout.trim();
+  } catch {
+    return node.uuid; // Fallback to old UUID
+  }
+}
+```
 
-**Step 5.4**: Update documentation
-- README.md: Update architecture section
-- CLAUDE.md: Remove old patterns, document new service
-- docs/: Update technical documentation
+**Step 5.2**: Update critical paths to use `getNodeIdentifier()`
+- Constellation layout
+- Link creation
+- Update checking
+- **Validation**: Old vaults load without errors
 
-**Checkpoint**: Codebase fully migrated to Radicle-centric architecture.
+**Checkpoint**: Backward compatibility maintained.
 
 ---
 
-### Phase 6: Coherence Beacon Integration (Optional Enhancement)
-**Goal**: Simplify Coherence Beacon to use RadicleService
+### Phase 6: Documentation & Cleanup (1 day)
+**Goal**: Document new patterns, clean up old code
 
-**Step 6.1**: Refactor beacon detection
-- Use `RadicleService.checkForUpdates()` instead of custom git log
-- Keep COHERENCE_BEACON parsing (still valuable metadata)
+**Step 6.1**: Update documentation
+- README.md: Simplified schema section
+- CLAUDE.md: New creation patterns
+- Add `docs/liminal-web-relationships.md`
 
-**Step 6.2**: Refactor beacon acceptance
-- Use `RadicleService.cloneFromPeer()` for submodule cloning
-- Use `RadicleService.acceptUpdate()` for cherry-pick
+**Step 6.2**: Deprecate old sync command
+- Mark "Sync Bidirectional Relationships" as deprecated
+- Add notice: "Use 'Sync from Radicle' instead"
+- Keep functional for transition period
 
-**Step 6.3**: Test beacon flow end-to-end
-- **Validation**: Supermodule updates work seamlessly
+**Step 6.3**: Clean up redundant code
+- Remove unused liminalWebRelationships writes
+- Mark old patterns with `// TODO: Remove after migration`
+- **Validation**: All tests still pass
 
-**Checkpoint**: Coherence Beacon uses RadicleService exclusively.
+**Checkpoint**: Migration complete. System uses Radicle-native patterns.
+
+---
+
+## Timeline (Dramatically Reduced)
+
+- **Phase 0**: Mock system (1 day) ✅
+- **Phase 1**: New nodes use RID as UUID (2 days) ✅
+- **Phase 2**: Move relationships to separate file (3 days) ✅
+- **Phase 3**: "Sync from Radicle" command (2 days) ✅
+- **Phase 4**: Command refactoring (2 days) ✅
+- **Phase 5**: Legacy support (1 day) ✅
+- **Phase 6**: Documentation & cleanup (1 day) ✅
+
+**Total: ~11 days** (was 15-18 days before simplification, now even faster!)
+
+---
+
+## What This Simplification Avoids
+
+### ❌ Complexity Eliminated (Original Plan):
+
+1. **Schema Restructuring**
+   - Renaming `uuid` → `id` field (breaking change)
+   - Removing `type` field (needs inference logic)
+   - Removing `radicleId` field (redundancy concerns)
+   - Removing `liminalWebRelationships` from all nodes
+   - → **Impact**: Every file read/write affected
+
+2. **Type Inference System**
+   - Parse ID format (`rad:*` vs `did:key:*`)
+   - Determine node type from identifier
+   - Handle edge cases (malformed IDs)
+   - → **Impact**: Complexity in every type check
+
+3. **Bidirectional Sync Complexity**
+   - Merge conflicts when both peers add relationships
+   - Conflict resolution UI needed
+   - Lost updates when perspectives diverge
+   - → **Impact**: Complex merge logic
+
+4. **Separate Dream/Dreamer Initialization**
+   - Different creation flows per type
+   - Conditional Radicle initialization
+   - → **Impact**: More code paths to test
+
+### ✅ What We Do Instead (Simplified):
+
+1. **String Value Swap**
+   - Just replace UUID value with Radicle ID
+   - Keep all existing fields (backward compat)
+   - → **Impact**: Minimal (one line change in creation)
+
+2. **Keep Type Field**
+   - No inference needed
+   - Explicit is better than implicit
+   - → **Impact**: Zero (already exists)
+
+3. **Unidirectional Relationships**
+   - Only Dreamer nodes hold pointers
+   - Separate file (`liminal-web.json`)
+   - No merge conflicts possible
+   - → **Impact**: Cleaner than bidirectional
+
+4. **Unified Initialization**
+   - Both types: `rad init` → get RID → use as UUID
+   - Differentiate via behavior (push vs stay local)
+   - → **Impact**: Less code, easier to maintain
+
+**Complexity Reduction: ~70%!** 🎯
 
 ---
 
