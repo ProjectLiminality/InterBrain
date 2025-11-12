@@ -68,6 +68,7 @@ DEFAULT_VAULT_PARENT="$HOME"     # Will resolve to current user's home directory
 # Parse command-line arguments
 CLONE_URI=""
 TEST_FAIL=""
+BRANCH="main"  # Default to main branch
 while [[ $# -gt 0 ]]; do
   case $1 in
     --uri)
@@ -76,6 +77,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-fail)
       TEST_FAIL="$2"
+      shift 2
+      ;;
+    --branch)
+      BRANCH="$2"
       shift 2
       ;;
     *)
@@ -609,8 +614,10 @@ if [ -d "$INTERBRAIN_PATH" ]; then
         REPO_URL=$(git config --get remote.origin.url 2>/dev/null || echo "")
 
         if [[ "$REPO_URL" == *"ProjectLiminality/InterBrain"* ]]; then
-            warning "InterBrain already exists. Updating..."
-            git pull origin main
+            warning "InterBrain already exists. Updating from branch '$BRANCH'..."
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH"
         else
             echo ""
             error "Directory '$INTERBRAIN_PATH' already exists but is a different repository."
@@ -630,9 +637,9 @@ if [ -d "$INTERBRAIN_PATH" ]; then
         exit 1
     fi
 else
-    echo "Cloning from GitHub..."
+    echo "Cloning from GitHub (branch: $BRANCH)..."
     cd "$VAULT_PATH"
-    git clone https://github.com/ProjectLiminality/InterBrain.git
+    git clone --branch "$BRANCH" https://github.com/ProjectLiminality/InterBrain.git
     cd InterBrain
 fi
 
