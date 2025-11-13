@@ -3,6 +3,7 @@
   "title": "TEMPLATE_TITLE_PLACEHOLDER",
   "type": "dream",
   "dreamTalk": "TEMPLATE_DREAMTALK_PLACEHOLDER",
+  "radicleId": "TEMPLATE_RADICLE_ID_PLACEHOLDER",
   "submodules": [],
   "supermodules": []
 }

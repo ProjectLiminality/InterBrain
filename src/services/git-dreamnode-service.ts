@@ -577,6 +577,41 @@ export class GitDreamNodeService {
       }
 
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
+
+      // Initialize Radicle repository (rad init --private)
+      console.log(`GitDreamNodeService: Initializing Radicle repository...`);
+      try {
+        const radInitResult = await execAsync('rad init --private --no-confirm', { cwd: repoPath });
+        console.log(`GitDreamNodeService: Radicle init result:`, radInitResult);
+
+        // Extract RID from rad init output
+        // Expected format: "Repository rad:z... created."
+        const ridMatch = radInitResult.stdout.match(/rad:z[a-zA-Z0-9]+/);
+        if (ridMatch) {
+          const radicleId = ridMatch[0];
+          console.log(`GitDreamNodeService: Captured Radicle ID: ${radicleId}`);
+
+          // Update .udd file with radicleId
+          const uddPath = path.join(repoPath, '.udd');
+          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+          udd.radicleId = radicleId;
+          await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
+          console.log(`GitDreamNodeService: Updated .udd with radicleId`);
+
+          // Commit the radicleId update
+          await execAsync('git add .udd', { cwd: repoPath });
+          await execAsync('git commit -m "Add Radicle ID to DreamNode metadata"', { cwd: repoPath });
+          console.log(`GitDreamNodeService: Committed radicleId update`);
+        } else {
+          console.warn(`GitDreamNodeService: Could not extract RID from rad init output`);
+        }
+      } catch (radError: any) {
+        console.error(`GitDreamNodeService: Radicle init failed:`, radError);
+        // Don't throw - allow node creation to proceed even if rad init fails
+        // This ensures the plugin works even without Radicle CLI installed
+      }
+
     } catch (error: any) {
       // Don't log error if repository was actually created successfully
       // (This can happen if earlier operations like git init had stderr output)
@@ -615,7 +650,8 @@ export class GitDreamNodeService {
       .replace('TEMPLATE_UUID_PLACEHOLDER', values.uuid)
       .replace('TEMPLATE_TITLE_PLACEHOLDER', values.title)
       .replace('"type": "dream"', `"type": "${values.type}"`)
-      .replace('TEMPLATE_DREAMTALK_PLACEHOLDER', values.dreamTalk);
+      .replace('TEMPLATE_DREAMTALK_PLACEHOLDER', values.dreamTalk)
+      .replace('TEMPLATE_RADICLE_ID_PLACEHOLDER', ''); // Empty initially, filled after rad init
     
     await fsPromises.writeFile(uddPath, uddContent);
     console.log(`GitDreamNodeService: Updated template metadata`);
