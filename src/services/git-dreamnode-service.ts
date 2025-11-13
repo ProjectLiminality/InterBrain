@@ -599,22 +599,8 @@ export class GitDreamNodeService {
           console.log('GitDreamNodeService: No passphrase in settings, relying on ssh-agent');
         }
 
-        // Ensure Radicle node is running (required for rad init)
-        try {
-          const nodeCheckResult = await execAsync('rad node status', { env });
-          console.log('GitDreamNodeService: Radicle node is running');
-        } catch (nodeError: any) {
-          console.log('GitDreamNodeService: Radicle node not running, attempting to start...');
-          try {
-            await execAsync('rad node start', { env });
-            console.log('GitDreamNodeService: Radicle node started');
-            // Wait a moment for node to fully initialize
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } catch (startError: any) {
-            console.error('GitDreamNodeService: Failed to start Radicle node:', startError.message);
-            throw new Error('Radicle node not running and failed to start');
-          }
-        }
+        // Note: Radicle node management is handled separately (Concern 2)
+        // We assume the node is already running if user has Radicle configured
 
         // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
         // IMPORTANT: --name is REQUIRED for non-TTY mode, otherwise rad init fails with TTY error
