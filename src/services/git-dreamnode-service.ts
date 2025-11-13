@@ -136,7 +136,7 @@ export class GitDreamNodeService {
     store.updateRealNode(uuid, nodeData);
     
     // Create git repository in parallel (non-blocking)
-    this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles)
+    const repoCreationPromise = this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles)
       .then(async () => {
         // Index the new node after git repository is created
         try {
@@ -163,15 +163,18 @@ export class GitDreamNodeService {
       const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
       console.log(`GitDreamNodeService: Auto-linking dreamer "${title}" to InterBrain...`);
 
-      // Add relationship asynchronously (non-blocking)
-      this.addRelationship(uuid, INTERBRAIN_UUID)
-        .then(() => {
-          console.log(`✅ GitDreamNodeService: Auto-linked dreamer "${title}" to InterBrain`);
-        })
-        .catch((error) => {
-          console.error(`Failed to auto-link dreamer "${title}" to InterBrain:`, error);
-          // Non-fatal - sync command will catch this later
-        });
+      // IMPORTANT: Wait for git repository creation to complete before adding relationships
+      // This ensures liminal-web.json exists and is ready to be updated
+      repoCreationPromise.then(() => {
+        this.addRelationship(uuid, INTERBRAIN_UUID)
+          .then(() => {
+            console.log(`✅ GitDreamNodeService: Auto-linked dreamer "${title}" to InterBrain`);
+          })
+          .catch((error) => {
+            console.error(`Failed to auto-link dreamer "${title}" to InterBrain:`, error);
+            // Non-fatal - sync command will catch this later
+          });
+      });
     }
 
     console.log(`GitDreamNodeService: Created ${type} "${title}" with ID ${uuid}`);
