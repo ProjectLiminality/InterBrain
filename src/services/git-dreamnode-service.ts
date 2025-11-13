@@ -581,7 +581,10 @@ export class GitDreamNodeService {
       // Initialize Radicle repository (rad init --private)
       console.log(`GitDreamNodeService: Initializing Radicle repository...`);
       try {
-        const radInitResult = await execAsync('rad init --private --no-confirm', { cwd: repoPath });
+        const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
+        const timestamp = new Date().toISOString();
+        const description = `${nodeTypeLabel} ${timestamp}`;
+        const radInitResult = await execAsync(`rad init --private --description "${description}" --no-confirm`, { cwd: repoPath });
         console.log(`GitDreamNodeService: Radicle init result:`, radInitResult);
 
         // Extract RID from rad init output
