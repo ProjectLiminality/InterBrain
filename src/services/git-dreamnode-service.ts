@@ -546,8 +546,20 @@ export class GitDreamNodeService {
         console.log(`GitDreamNodeService: Moved .git/LICENSE to LICENSE`);
       }
 
-      // Note: liminal-web.json is created on-demand by updateLiminalWebFile()
-      // when relationships are first added. No need to create empty file here.
+      // For Dreamer nodes: Create .gitignore and empty liminal-web.json BEFORE initial commit
+      if (type === 'dreamer') {
+        // Create .gitignore with liminal-web.json pattern
+        const gitignorePath = path.join(repoPath, '.gitignore');
+        const gitignoreContent = 'liminal-web.json\n';
+        await fsPromises.writeFile(gitignorePath, gitignoreContent);
+        console.log(`GitDreamNodeService: Created .gitignore for Dreamer node`);
+
+        // Create empty liminal-web.json (will be populated by updateLiminalWebFile later)
+        const liminalWebPath = path.join(repoPath, 'liminal-web.json');
+        const emptyLiminalWeb = { relationships: [] };
+        await fsPromises.writeFile(liminalWebPath, JSON.stringify(emptyLiminalWeb, null, 2));
+        console.log(`GitDreamNodeService: Created empty liminal-web.json for Dreamer node`);
+      }
 
       // Make initial commit
       console.log(`GitDreamNodeService: Starting git operations in ${repoPath}`);
@@ -992,7 +1004,7 @@ export class GitDreamNodeService {
       title: node.name,
       type: node.type,
       dreamTalk: node.dreamTalkMedia.length > 0 ? node.dreamTalkMedia[0].path : '',
-      liminalWebRelationships: node.liminalWebConnections || [],
+      // Note: liminalWebRelationships removed - relationships now only in liminal-web.json for Dreamers
       submodules: [],
       supermodules: []
     };
