@@ -584,8 +584,59 @@ export class GitDreamNodeService {
         const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
         const timestamp = new Date().toISOString();
         const description = `${nodeTypeLabel} ${timestamp}`;
-        const radInitResult = await execAsync(`rad init --private --description "${description}" --no-confirm`, { cwd: repoPath });
-        console.log(`GitDreamNodeService: Radicle init result:`, radInitResult);
+
+        // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
+        const { spawn } = require('child_process');
+        const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+          const child = spawn('rad', [
+            'init',
+            repoPath,
+            '--private',
+            '--default-branch', 'main',
+            '--description', description,
+            '--no-confirm'
+          ], {
+            cwd: repoPath,
+            stdio: ['pipe', 'pipe', 'pipe']  // Provide stdin pipe to bypass TTY
+          });
+
+          let stdout = '';
+          let stderr = '';
+
+          child.stdout?.on('data', (data) => {
+            stdout += data.toString();
+          });
+
+          child.stderr?.on('data', (data) => {
+            stderr += data.toString();
+          });
+
+          child.on('close', (code) => {
+            console.log(`GitDreamNodeService: rad init closed with code ${code}`);
+            console.log(`GitDreamNodeService: rad init stdout:`, stdout);
+            console.log(`GitDreamNodeService: rad init stderr:`, stderr);
+
+            if (code === 0) {
+              resolve({ stdout, stderr });
+            } else {
+              const error: any = new Error(`rad init exited with code ${code}`);
+              error.stdout = stdout;
+              error.stderr = stderr;
+              reject(error);
+            }
+          });
+
+          child.on('error', (error) => {
+            console.error(`GitDreamNodeService: rad init spawn error:`, error);
+            reject(error);
+          });
+
+          // Close stdin immediately since we're non-interactive
+          child.stdin?.end();
+        });
+
+        const radInitResult = await spawnPromise();
+        console.log(`GitDreamNodeService: Radicle init succeeded`);
 
         // Extract RID from rad init output
         // Expected format: "Repository rad:z... created."
