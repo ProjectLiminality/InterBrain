@@ -585,6 +585,37 @@ export class GitDreamNodeService {
         const timestamp = new Date().toISOString();
         const description = `${nodeTypeLabel} ${timestamp}`;
 
+        // Get passphrase from settings
+        const settings = (this.plugin as any).settings;
+        const passphrase = settings?.radiclePassphrase;
+
+        // Prepare environment with passphrase
+        const process = require('process');
+        const env = { ...process.env };
+        if (passphrase) {
+          env.RAD_PASSPHRASE = passphrase;
+          console.log('GitDreamNodeService: Using passphrase from settings via RAD_PASSPHRASE');
+        } else {
+          console.log('GitDreamNodeService: No passphrase in settings, relying on ssh-agent');
+        }
+
+        // Ensure Radicle node is running (required for rad init)
+        try {
+          const nodeCheckResult = await execAsync('rad node status', { env });
+          console.log('GitDreamNodeService: Radicle node is running');
+        } catch (nodeError: any) {
+          console.log('GitDreamNodeService: Radicle node not running, attempting to start...');
+          try {
+            await execAsync('rad node start', { env });
+            console.log('GitDreamNodeService: Radicle node started');
+            // Wait a moment for node to fully initialize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (startError: any) {
+            console.error('GitDreamNodeService: Failed to start Radicle node:', startError.message);
+            throw new Error('Radicle node not running and failed to start');
+          }
+        }
+
         // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
         const { spawn } = require('child_process');
         const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -596,6 +627,7 @@ export class GitDreamNodeService {
             '--description', description,
             '--no-confirm'
           ], {
+            env,  // Pass environment with RAD_PASSPHRASE
             cwd: repoPath,
             stdio: ['pipe', 'pipe', 'pipe']  // Provide stdin pipe to bypass TTY
           });
