@@ -546,15 +546,8 @@ export class GitDreamNodeService {
         console.log(`GitDreamNodeService: Moved .git/LICENSE to LICENSE`);
       }
 
-      // Create liminal-web.json for Dreamer nodes
-      if (type === 'dreamer') {
-        const liminalWebPath = path.join(repoPath, 'liminal-web.json');
-        const liminalWebContent = {
-          relationships: []
-        };
-        await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWebContent, null, 2));
-        console.log(`GitDreamNodeService: Created liminal-web.json for Dreamer node`);
-      }
+      // Note: liminal-web.json is created on-demand by updateLiminalWebFile()
+      // when relationships are first added. No need to create empty file here.
 
       // Make initial commit
       console.log(`GitDreamNodeService: Starting git operations in ${repoPath}`);
