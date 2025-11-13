@@ -525,6 +525,17 @@ export class GitDreamNodeService {
         console.log(`GitDreamNodeService: Moved .git/LICENSE to LICENSE`);
       }
 
+      // Create liminal-web.json for Dreamer nodes
+      if (type === 'dreamer') {
+        const liminalWebPath = path.join(repoPath, 'liminal-web.json');
+        const liminalWebContent = {
+          relationships: [],
+          lastSyncedFromRadicle: null
+        };
+        await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWebContent, null, 2));
+        console.log(`GitDreamNodeService: Created liminal-web.json for Dreamer node`);
+      }
+
       // Make initial commit
       console.log(`GitDreamNodeService: Starting git operations in ${repoPath}`);
 
@@ -660,6 +671,26 @@ export class GitDreamNodeService {
       // This prevents flickering when file system is temporarily inaccessible
     }
 
+    // Load relationships from liminal-web.json for Dreamer nodes, .udd for Dream nodes (legacy)
+    let relationships: string[] = [];
+    if (udd.type === 'dreamer') {
+      // NEW: Read from liminal-web.json
+      const liminalWebPath = path.join(dirPath, 'liminal-web.json');
+      try {
+        if (await this.fileExists(liminalWebPath)) {
+          const content = await fsPromises.readFile(liminalWebPath, 'utf-8');
+          const liminalWeb = JSON.parse(content);
+          relationships = liminalWeb.relationships || [];
+        }
+      } catch (error) {
+        console.warn(`Failed to read liminal-web.json for ${udd.title}, falling back to .udd:`, error);
+        relationships = udd.liminalWebRelationships || [];
+      }
+    } else {
+      // Dream nodes: Use .udd (legacy, will be migrated later)
+      relationships = udd.liminalWebRelationships || [];
+    }
+
     // Use cached constellation position if available, otherwise random
     const cachedPosition = store.constellationData.positions?.get(udd.uuid);
 
@@ -670,7 +701,7 @@ export class GitDreamNodeService {
       position: cachedPosition || this.calculateNewNodePosition(),
       dreamTalkMedia,
       dreamSongContent: [],
-      liminalWebConnections: udd.liminalWebRelationships || [],
+      liminalWebConnections: relationships,
       repoPath: repoName,
       hasUnsavedChanges: false,
       email: udd.email,
@@ -1362,6 +1393,18 @@ export class GitDreamNodeService {
       this.updateUDDFile(relatedNode)
     ]);
 
+    // Update liminal-web.json for Dreamer nodes
+    const updateTasks = [];
+    if (node.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(node));
+    }
+    if (relatedNode.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(relatedNode));
+    }
+    if (updateTasks.length > 0) {
+      await Promise.all(updateTasks);
+    }
+
     console.log(`GitDreamNodeService: Added bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
@@ -1393,6 +1436,9 @@ export class GitDreamNodeService {
       });
 
       await this.updateUDDFile(node);
+      if (node.type === 'dreamer') {
+        await this.updateLiminalWebFile(node);
+      }
       console.log(`GitDreamNodeService: Removed one-way relationship ${nodeId} -> ${relatedNodeId}`);
       return;
     }
@@ -1428,6 +1474,18 @@ export class GitDreamNodeService {
       this.updateUDDFile(node),
       this.updateUDDFile(relatedNode)
     ]);
+
+    // Update liminal-web.json for Dreamer nodes
+    const updateTasks = [];
+    if (node.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(node));
+    }
+    if (relatedNode.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(relatedNode));
+    }
+    if (updateTasks.length > 0) {
+      await Promise.all(updateTasks);
+    }
 
     console.log(`GitDreamNodeService: Removed bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
@@ -1589,5 +1647,37 @@ export class GitDreamNodeService {
   private async writeReadmeFile(repoPath: string, content: string): Promise<void> {
     const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
     await fsPromises.writeFile(readmePath, content);
+  }
+
+  /**
+   * Update liminal-web.json file for a Dreamer node with current relationships
+   */
+  private async updateLiminalWebFile(node: DreamNode): Promise<void> {
+    if (node.type !== 'dreamer') {
+      return; // Only Dreamer nodes have liminal-web.json
+    }
+
+    const liminalWebPath = path.join(this.vaultPath, node.repoPath, 'liminal-web.json');
+
+    try {
+      // Read current file or create structure
+      let liminalWeb;
+      try {
+        const content = await fsPromises.readFile(liminalWebPath, 'utf-8');
+        liminalWeb = JSON.parse(content);
+      } catch {
+        // File doesn't exist or invalid, create new structure
+        liminalWeb = { relationships: [], lastSyncedFromRadicle: null };
+      }
+
+      // Update relationships from node's liminalWebConnections
+      liminalWeb.relationships = node.liminalWebConnections || [];
+
+      // Write back
+      await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
+      console.log(`GitDreamNodeService: Updated liminal-web.json for ${node.name} with ${liminalWeb.relationships.length} relationships`);
+    } catch (error) {
+      console.error(`GitDreamNodeService: Failed to update liminal-web.json for ${node.name}:`, error);
+    }
   }
 }
