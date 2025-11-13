@@ -411,6 +411,27 @@ export class GitDreamNodeService {
         }
       }
 
+      // Build bidirectional relationships from Dreamer → Dream connections
+      // This is the ONLY source of truth for liminal web relationships
+      console.log('[VaultScan] Building bidirectional relationships from liminal-web.json files...');
+      for (const [dreamerId, dreamerData] of newRealNodes) {
+        if (dreamerData.node.type === 'dreamer') {
+          // For each Dream node this Dreamer points to
+          for (const dreamId of dreamerData.node.liminalWebConnections) {
+            const dreamData = newRealNodes.get(dreamId);
+            if (dreamData) {
+              // Add reverse connection: Dream → Dreamer
+              const dreamConnections = new Set(dreamData.node.liminalWebConnections || []);
+              dreamConnections.add(dreamerId);
+              dreamData.node.liminalWebConnections = Array.from(dreamConnections);
+            } else {
+              console.warn(`[VaultScan] Dreamer "${dreamerData.node.name}" references non-existent Dream: ${dreamId}`);
+            }
+          }
+        }
+      }
+      console.log('[VaultScan] Bidirectional relationships complete');
+
       // Extract and persist lightweight metadata for instant startup
       const nodeMetadata = new Map<string, { name: string; type: string; uuid: string }>();
       for (const [id, data] of newRealNodes) {
@@ -671,10 +692,10 @@ export class GitDreamNodeService {
       // This prevents flickering when file system is temporarily inaccessible
     }
 
-    // Load relationships from liminal-web.json for Dreamer nodes, .udd for Dream nodes (legacy)
+    // Load relationships ONLY from liminal-web.json in Dreamer nodes
+    // Dream nodes don't store relationships - they're discovered via Dreamer → Dream connections
     let relationships: string[] = [];
     if (udd.type === 'dreamer') {
-      // NEW: Read from liminal-web.json
       const liminalWebPath = path.join(dirPath, 'liminal-web.json');
       try {
         if (await this.fileExists(liminalWebPath)) {
@@ -683,13 +704,12 @@ export class GitDreamNodeService {
           relationships = liminalWeb.relationships || [];
         }
       } catch (error) {
-        console.warn(`Failed to read liminal-web.json for ${udd.title}, falling back to .udd:`, error);
-        relationships = udd.liminalWebRelationships || [];
+        console.warn(`Failed to read liminal-web.json for ${udd.title}:`, error);
+        // No fallback - Dreamer nodes MUST have liminal-web.json
       }
-    } else {
-      // Dream nodes: Use .udd (legacy, will be migrated later)
-      relationships = udd.liminalWebRelationships || [];
     }
+    // Dream nodes: relationships array stays empty here
+    // They get populated bidirectionally during vault scan by inverting Dreamer relationships
 
     // Use cached constellation position if available, otherwise random
     const cachedPosition = store.constellationData.positions?.get(udd.uuid);
