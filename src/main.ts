@@ -969,9 +969,8 @@ export default class InterBrainPlugin extends Plugin {
         (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
         console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
 
-        // Sync bidirectional relationships before reload (non-blocking background operation)
-        console.log(`[Refresh] Syncing bidirectional relationships in background...`);
-        this.app.commands.executeCommandById('interbrain:sync-bidirectional-relationships');
+        // Note: Bidirectional relationship sync is no longer needed with liminal-web.json architecture
+        // Relationships are computed from Dreamer → Dream pointers during vault scan
 
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs
