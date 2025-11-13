@@ -550,8 +550,7 @@ export class GitDreamNodeService {
       if (type === 'dreamer') {
         const liminalWebPath = path.join(repoPath, 'liminal-web.json');
         const liminalWebContent = {
-          relationships: [],
-          lastSyncedFromRadicle: null
+          relationships: []
         };
         await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWebContent, null, 2));
         console.log(`GitDreamNodeService: Created liminal-web.json for Dreamer node`);
@@ -1687,7 +1686,7 @@ export class GitDreamNodeService {
         liminalWeb = JSON.parse(content);
       } catch {
         // File doesn't exist or invalid, create new structure
-        liminalWeb = { relationships: [], lastSyncedFromRadicle: null };
+        liminalWeb = { relationships: [] };
       }
 
       // Update relationships from node's liminalWebConnections
