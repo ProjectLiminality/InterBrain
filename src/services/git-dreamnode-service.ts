@@ -611,6 +611,12 @@ export class GitDreamNodeService {
         }
       } catch (radError: any) {
         console.error(`GitDreamNodeService: Radicle init failed:`, radError);
+        if (radError.stderr) {
+          console.error(`GitDreamNodeService: Radicle stderr:`, radError.stderr);
+        }
+        if (radError.stdout) {
+          console.log(`GitDreamNodeService: Radicle stdout:`, radError.stdout);
+        }
         // Don't throw - allow node creation to proceed even if rad init fails
         // This ensures the plugin works even without Radicle CLI installed
       }
