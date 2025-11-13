@@ -632,13 +632,16 @@ export class GitDreamNodeService {
         // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
         // IMPORTANT: --name is REQUIRED for non-TTY mode, otherwise rad init fails with TTY error
         // IMPORTANT: --no-seed prevents automatic network seeding (user controls sharing via "Share" command)
+        // Use sanitized directory name (already cleaned by sanitizeTitleToPascalCase)
+        const repoName = path.basename(repoPath);
+
         const { spawn } = require('child_process');
         const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
           const child = spawn(radCommand, [
             'init',
             repoPath,
             '--private',
-            '--name', title,  // REQUIRED for non-TTY mode
+            '--name', repoName,  // REQUIRED for non-TTY mode, use sanitized dir name
             '--default-branch', 'main',
             '--description', description,
             '--no-confirm',
