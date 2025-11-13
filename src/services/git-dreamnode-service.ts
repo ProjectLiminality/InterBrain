@@ -602,12 +602,39 @@ export class GitDreamNodeService {
         // Note: Radicle node management is handled separately (Concern 2)
         // We assume the node is already running if user has Radicle configured
 
+        // Find rad command in common installation locations
+        const os = require('os');
+        const homeDir = os.homedir();
+        const possibleRadPaths = [
+          'rad', // Try PATH first
+          path.join(homeDir, '.radicle', 'bin', 'rad'), // Standard Radicle install location
+          '/usr/local/bin/rad', // Homebrew default
+          '/opt/homebrew/bin/rad', // Homebrew on Apple Silicon
+        ];
+
+        let radCommand: string | null = null;
+        for (const radPath of possibleRadPaths) {
+          try {
+            await execAsync(`"${radPath}" --version`);
+            radCommand = radPath;
+            console.log(`GitDreamNodeService: Found rad at ${radPath}`);
+            break;
+          } catch {
+            // Continue to next path
+          }
+        }
+
+        if (!radCommand) {
+          console.warn('GitDreamNodeService: rad command not found, skipping Radicle init');
+          throw new Error('rad command not found');
+        }
+
         // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
         // IMPORTANT: --name is REQUIRED for non-TTY mode, otherwise rad init fails with TTY error
         // IMPORTANT: --no-seed prevents automatic network seeding (user controls sharing via "Share" command)
         const { spawn } = require('child_process');
         const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-          const child = spawn('rad', [
+          const child = spawn(radCommand, [
             'init',
             repoPath,
             '--private',
