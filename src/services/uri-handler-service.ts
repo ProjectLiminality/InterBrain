@@ -763,94 +763,52 @@ export class URIHandlerService {
 			return existingDreamer;
 		}
 
-		// Create new Dreamer node
+		// Create new Dreamer node using standard creation flow
+		// Standard flow handles: git init, rad init, .udd creation, radicleId population
 		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name}...`);
-
 		const newDreamer = await this.dreamNodeService.create(name, 'dreamer');
 
-		// Wait for .udd file to be created by pre-commit hook
-		const uddPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
+		// Wait for standard creation flow to complete (git init, rad init, etc.)
+		await new Promise(resolve => setTimeout(resolve, 1000));
+
+		// Now just add the DID field to the .udd file
 		const fs = require('fs').promises;
+		const path = require('path');
+		const uddPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 
 		try {
-			// Retry loop: wait for pre-commit hook to move .udd file
-			let retries = 10;
-			let uddContent = null;
-			while (retries > 0) {
-				try {
-					uddContent = await fs.readFile(uddPath, 'utf-8');
-					break; // Success!
-				} catch (error) {
-					if (retries === 1) throw error; // Last attempt failed
-					await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
-					retries--;
-				}
-			}
-
-			if (!uddContent) {
-				throw new Error('Failed to read .udd file after retries');
-			}
-
+			// Read .udd file created by standard flow
+			const uddContent = await fs.readFile(uddPath, 'utf-8');
 			const udd = JSON.parse(uddContent);
-			// Get the Radicle RID of the Dreamer repo itself
-		const radicleService = serviceManager.getRadicleService();
-		const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
-		const dreamerRid = await radicleService.getRadicleId(dreamerRepoPath);
 
-		// Store both RID and DID in separate fields
-		udd.radicleId = dreamerRid; // RID of the Dreamer repo itself
-		udd.did = did; // DID of the peer's identity
+			// Add DID field (radicleId already populated by standard creation)
+			udd.did = did;
+
+			// Write back
 			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
-			console.log(`✅ [URIHandler] Saved RID (${dreamerRid}) and DID (${did}) to Dreamer node`);
+			console.log(`✅ [URIHandler] Added DID (${did}) to Dreamer node "${name}"`);
 
-			// CRITICAL: Commit the DID change to git (similar to how submodules are committed)
-			// Wait for initial git commit to complete, then commit DID change
+			// Commit the DID addition
 			const { exec } = require('child_process');
 			const { promisify } = require('util');
 			const execAsync = promisify(exec);
-			// dreamerRepoPath already declared above
+			const dreamerRepoPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath);
 
-			// Retry loop: wait for index.lock to be released (initial commit to finish)
-			let committed = false;
-			for (let attempt = 0; attempt < 10; attempt++) {
-				try {
-					// Check if there's an index.lock file
-					const lockPath = require('path').join(dreamerRepoPath, '.git', 'index.lock');
-					const lockExists = await fs.access(lockPath).then(() => true).catch(() => false);
-
-					if (lockExists) {
-						// Wait for lock to be released
-						await new Promise(resolve => setTimeout(resolve, 500));
-						continue;
-					}
-
-					// Try to commit
-					await execAsync('git add .udd', { cwd: dreamerRepoPath });
-					await execAsync(`git commit -m "Add Radicle RID and DID metadata"`, { cwd: dreamerRepoPath });
-					console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
-					committed = true;
-					break;
-				} catch (commitError: any) {
-					// If it's a lock error and we have retries left, wait and retry
-					if (commitError.message?.includes('index.lock') && attempt < 9) {
-						await new Promise(resolve => setTimeout(resolve, 500));
-						continue;
-					}
-					// Other error or final attempt - log and give up
-					console.warn(`⚠️ [URIHandler] Could not commit DID to git (attempt ${attempt + 1}/10):`, commitError);
-					break;
-				}
+			try {
+				await execAsync('git add .udd', { cwd: dreamerRepoPath });
+				await execAsync(`git commit -m "Add peer DID metadata"`, { cwd: dreamerRepoPath });
+				console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
+			} catch (commitError) {
+				console.warn(`⚠️ [URIHandler] Could not commit DID:`, commitError);
 			}
 
-			if (!committed) {
-				console.warn(`⚠️ [URIHandler] DID saved to .udd file but not committed to git - will be committed on next user action`);
-			}
-
-			// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
+			// Populate UUID for return
 			newDreamer.uuid = udd.uuid;
 			console.log(`✅ [URIHandler] Dreamer node UUID: ${newDreamer.uuid}`);
+
 		} catch (error) {
-			console.warn(`⚠️ [URIHandler] Could not save DID to .udd file:`, error);
+			console.error(`❌ [URIHandler] Failed to add DID to Dreamer node:`, error);
+			// Don't fail - Dreamer node was created successfully with standard flow
 		}
 
 		return newDreamer;
