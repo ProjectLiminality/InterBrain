@@ -264,10 +264,12 @@ export class URIHandlerService {
 					}
 				}
 
-				// FINAL UI REFRESH: Run comprehensive refresh and select the Dreamer node
+				// FINAL UI REFRESH: Rescan vault to pick up liminal-web.json changes, then refresh UI
 				try {
-					console.log(`🔄 [URIHandler] Running comprehensive refresh (DreamSong relationships + constellation)...`);
+					console.log(`🔄 [URIHandler] Rescanning vault to pick up relationship changes...`);
+					await this.dreamNodeService.scanVault();
 
+					console.log(`🔄 [URIHandler] Running comprehensive refresh (DreamSong relationships + constellation)...`);
 					const relationshipService = new DreamSongRelationshipService(this.plugin);
 					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
@@ -287,18 +289,6 @@ export class URIHandlerService {
 				} catch (refreshError) {
 					console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
 				}
-
-				// FINAL STEP: Trigger lightweight plugin reload with explicit Dreamer node UUID
-				if (dreamerNode?.id) {
-					console.log(`🔄 [URIHandler] Storing Dreamer node UUID for reload: ${dreamerNode.id}`);
-					(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
-				}
-
-				console.log(`🔄 [URIHandler] Triggering plugin reload to finalize batch clone...`);
-				const plugins = (this.app as any).plugins;
-				await plugins.disablePlugin('interbrain');
-				await plugins.enablePlugin('interbrain');
-				console.log(`✅ [URIHandler] Plugin reload complete - batch clone finalized`);
 			}
 
 		} catch (error) {
