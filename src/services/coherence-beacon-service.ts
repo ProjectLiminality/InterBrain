@@ -4,9 +4,10 @@ const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 
-import { App } from 'obsidian';
+import { App, Plugin } from 'obsidian';
 import { RadicleService } from './radicle-service';
 import { VaultService } from './vault-service';
+import { GitDreamNodeService } from './git-dreamnode-service';
 import { getURIHandlerService } from './uri-handler-service';
 
 export interface CoherenceBeacon {
@@ -19,13 +20,16 @@ export interface CoherenceBeacon {
 
 export class CoherenceBeaconService {
   private vaultPath: string = '';
+  private gitDreamNodeService: GitDreamNodeService;
 
   constructor(
     private app: App,
     private vaultService: VaultService,
-    private radicleService: RadicleService
+    private radicleService: RadicleService,
+    plugin: Plugin
   ) {
     this.initializeVaultPath(app);
+    this.gitDreamNodeService = new GitDreamNodeService(plugin);
   }
 
   private initializeVaultPath(app: App): void {
@@ -520,17 +524,21 @@ export class CoherenceBeaconService {
         // No .gitmodules - just root node
       }
 
-      // Add relationships for all collected nodes
+      // Add relationships for all collected nodes using proper relationship API
       for (const nodeName of nodesToRelate) {
         const nodePath = path.join(this.vaultPath, nodeName);
         try {
           const udd = await UDDService.readUDD(nodePath);
+          const nodeUUID = udd.uuid;
 
-          if (!udd.liminalWebRelationships.includes(dreamerUUID)) {
-            udd.liminalWebRelationships.push(dreamerUUID);
-            await UDDService.writeUDD(nodePath, udd);
-            console.log(`CoherenceBeaconService: ✓ Added relationship: ${nodeName} → Dreamer`);
+          if (!nodeUUID) {
+            console.warn(`CoherenceBeaconService: Node ${nodeName} has no UUID`);
+            continue;
           }
+
+          // Use GitDreamNodeService.addRelationship() for proper liminal-web.json handling
+          await this.gitDreamNodeService.addRelationship(nodeUUID, dreamerUUID);
+          console.log(`CoherenceBeaconService: ✓ Added relationship: ${nodeName} ↔ Dreamer`);
         } catch (error) {
           console.warn(`CoherenceBeaconService: Could not relate ${nodeName} to Dreamer:`, error);
         }

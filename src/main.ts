@@ -323,7 +323,8 @@ export default class InterBrainPlugin extends Plugin {
     this.coherenceBeaconService = new CoherenceBeaconService(
       this.app,
       this.vaultService,
-      serviceManager.getRadicleService()
+      serviceManager.getRadicleService(),
+      this
     );
     this.leafManagerService = new LeafManagerService(this.app);
     this.canvasObserverService = new CanvasObserverService(this.app);
