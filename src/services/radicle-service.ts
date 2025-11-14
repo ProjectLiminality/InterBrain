@@ -734,16 +734,26 @@ export class RadicleServiceImpl implements RadicleService {
 
     const radCmd = this.getRadCommand();
 
+    // Convert to absolute path if needed
+    const path = require('path');
+    const absoluteDreamNodePath = path.isAbsolute(dreamNodePath)
+      ? dreamNodePath
+      : path.resolve(dreamNodePath);
+    console.log(`RadicleService: [DEBUG] Original path: ${dreamNodePath}`);
+    console.log(`RadicleService: [DEBUG] Absolute path: ${absoluteDreamNodePath}`);
+
     // Prepare environment with passphrase and enhanced PATH for git-remote-rad helper
-    const homeDir = (globalThis as any).process?.env?.HOME || '';
+    const process = require('process');
+    const os = require('os');
+    const homeDir = os.homedir();
     const radicleGitHelperPaths = [
       `${homeDir}/.radicle/bin`,
       '/usr/local/bin',
       '/opt/homebrew/bin'
     ];
-    const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
+    const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
 
-    const env = { ...(globalThis as any).process.env };
+    const env = { ...process.env };
     env.PATH = enhancedPath;
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
@@ -753,64 +763,90 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      // STEP 1: Make repository public (changes visibility from private)
-      // This announces the repo to the network and makes it discoverable
-      console.log(`RadicleService: Making repository public...`);
-      try {
-        const visibilityResult = await execAsync(`"${radCmd}" id update --visibility public --no-confirm`, {
-          cwd: dreamNodePath,
-          env: env,
-        });
-        console.log('RadicleService: rad id update output:', visibilityResult.stdout);
-      } catch (visibilityError: any) {
-        // If already public, continue
-        console.warn('RadicleService: rad id update warning (continuing anyway):', visibilityError.message);
-      }
+      // STEP 1: Push commits to Radicle storage
+      console.log(`RadicleService: Pushing commits to Radicle storage...`);
+      console.log(`RadicleService: [DEBUG] absoluteDreamNodePath = ${absoluteDreamNodePath}`);
+      console.log(`RadicleService: [DEBUG] env.PATH = ${env.PATH}`);
 
-      // STEP 2: Push commits to Radicle remote
-      // rad sync alone doesn't push commits - need explicit git push
-      console.log(`RadicleService: Pushing commits to Radicle remote...`);
-      console.log(`RadicleService: Enhanced PATH for git-remote-rad: ${enhancedPath}`);
-      try {
-        const pushResult = await execAsync('git push rad main', {
-          cwd: dreamNodePath,
+      const { spawn } = require('child_process');
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn('git', ['push', 'rad', 'main'], {
           env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
         });
-        console.log('RadicleService: git push rad main output:', pushResult.stdout);
-        if (pushResult.stderr) {
-          console.log('RadicleService: git push rad main stderr:', pushResult.stderr);
-        }
-      } catch (pushError: any) {
-        // If push fails, log but continue - might be up to date
-        console.warn('RadicleService: git push warning (continuing anyway):', pushError.message);
-      }
 
-      // STEP 3: Seed the repository to public seeds for async sharing
-      // This ensures others can fetch your changes even when you're offline
-      console.log(`RadicleService: Seeding repository to enable async sharing...`);
-      try {
-        const seedResult = await execAsync(`"${radCmd}" seed`, {
-          cwd: dreamNodePath,
-          env: env,
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
         });
-        console.log('RadicleService: rad seed output:', seedResult.stdout);
-      } catch (seedError: any) {
-        // Seeding might fail if already seeded or network issues - not critical
-        console.warn('RadicleService: rad seed warning (continuing anyway):', seedError.message);
-      }
 
-      // STEP 4: Sync to announce changes to network
-      console.log(`RadicleService: Running '${radCmd} sync' in ${dreamNodePath}`);
-      const result = await execAsync(`"${radCmd}" sync`, {
-        cwd: dreamNodePath,
-        env: env,
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          console.log('RadicleService: git push output:', stdout);
+          if (stderr) console.log('RadicleService: git push stderr:', stderr);
+
+          if (code === 0 || stdout.includes('up to date')) {
+            resolve();
+          } else {
+            reject(new Error(`git push failed with code ${code}`));
+          }
+        });
+
+        child.on('error', (error) => {
+          console.error('RadicleService: git push spawn error:', error);
+          reject(error);
+        });
+
+        child.stdin?.end();
       });
-      console.log('RadicleService: rad sync output:', result.stdout);
-      if (result.stderr) {
-        console.warn('RadicleService: rad sync stderr:', result.stderr);
-      }
+
+      // STEP 2: Publish to network (makes public + announces + auto-seeds)
+      console.log(`RadicleService: Publishing to Radicle network (rad publish)...`);
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(radCmd, ['publish'], {
+          env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          console.log('RadicleService: rad publish output:', stdout);
+          if (stderr) console.log('RadicleService: rad publish stderr:', stderr);
+
+          if (code === 0) {
+            console.log('✅ RadicleService: Successfully published to network!');
+            resolve();
+          } else {
+            reject(new Error(`rad publish exited with code ${code}`));
+          }
+        });
+
+        child.on('error', (error) => {
+          console.error('RadicleService: rad publish spawn error:', error);
+          reject(error);
+        });
+
+        child.stdin?.end();
+      });
     } catch (error: any) {
-      console.error('RadicleService: rad sync failed:', error);
+      console.error('RadicleService: Failed to publish to network:', error);
 
       // Check if error is due to missing passphrase
       if (error.message && error.message.includes('RAD_PASSPHRASE')) {

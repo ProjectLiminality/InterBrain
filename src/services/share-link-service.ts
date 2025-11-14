@@ -95,7 +95,9 @@ export class ShareLinkService {
 						console.log(`📡 [ShareLink] Making public and publishing to Radicle network...`);
 
 						// Run the publish flow (RadicleService.share handles both visibility + publish)
-						radicleService.share(node.repoPath)
+						// Convert relative repoPath to absolute path using vault base path
+					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
+					radicleService.share(absoluteRepoPath)
 							.then(() => {
 								console.log(`✅ [ShareLink] Successfully published "${node.name}" to Radicle network`);
 								new Notice(`📡 "${node.name}" published to Radicle network!`);
