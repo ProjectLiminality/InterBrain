@@ -975,13 +975,34 @@ export class RadicleServiceImpl implements RadicleService {
 
   /**
    * Set repository seeding scope to 'followed' for private collaboration
+   * @returns true if scope was set, false if already correct
    */
-  async setSeedingScope(dreamNodePath: string, radicleId: string, scope: 'all' | 'followed' = 'followed'): Promise<void> {
+  async setSeedingScope(dreamNodePath: string, radicleId: string, scope: 'all' | 'followed' = 'followed'): Promise<boolean> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
     const radCmd = this.getRadCommand();
+
+    // IDEMPOTENCY CHECK: Check if seeding policy already exists with correct scope
+    try {
+      const { stdout: seedListOutput } = await execAsync(`"${radCmd}" seed list`, { cwd: dreamNodePath });
+
+      // Parse output to find this RID's seeding policy
+      // Format: "rad:z... all" or "rad:z... followed"
+      const lines = seedListOutput.split('\n');
+      for (const line of lines) {
+        if (line.includes(radicleId)) {
+          if (line.includes(`scope: ${scope}`)) {
+            console.log(`RadicleService: Seeding scope for ${radicleId} already set to '${scope}' - skipping`);
+            return false; // Already correct
+          }
+          break;
+        }
+      }
+    } catch (listError) {
+      console.warn(`RadicleService: Could not check existing seeding scope (will attempt to set):`, listError);
+    }
 
     try {
       const result = await execAsync(
@@ -989,6 +1010,7 @@ export class RadicleServiceImpl implements RadicleService {
         { cwd: dreamNodePath }
       );
       console.log(`RadicleService: Set seeding scope to '${scope}':`, result.stdout);
+      return true; // Successfully set
     } catch (error: any) {
       throw new Error(`Failed to set seeding scope: ${error.message}`);
     }
@@ -996,21 +1018,23 @@ export class RadicleServiceImpl implements RadicleService {
 
   /**
    * Add a peer's fork as a git remote
+   * @returns true if remote was added, false if already exists
    */
-  async addPeerRemote(dreamNodePath: string, peerName: string, radicleId: string, peerDID: string): Promise<void> {
+  async addPeerRemote(dreamNodePath: string, peerName: string, radicleId: string, peerDID: string): Promise<boolean> {
     const remoteUrl = `rad://${radicleId}/${peerDID}`;
 
     try {
-      // Check if remote already exists
+      // IDEMPOTENCY CHECK: Check if remote already exists
       const { stdout: existingRemotes } = await execAsync('git remote', { cwd: dreamNodePath });
       if (existingRemotes.split('\n').includes(peerName)) {
         console.log(`RadicleService: Remote '${peerName}' already exists, skipping`);
-        return;
+        return false; // Already exists
       }
 
       // Add the remote
       await execAsync(`git remote add "${peerName}" "${remoteUrl}"`, { cwd: dreamNodePath });
       console.log(`RadicleService: Added git remote '${peerName}' -> ${remoteUrl}`);
+      return true; // Successfully added
     } catch (error: any) {
       throw new Error(`Failed to add peer remote: ${error.message}`);
     }

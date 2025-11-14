@@ -857,6 +857,8 @@ export function registerRadicleCommands(
         let totalRelationships = 0;
         let alreadyFollowing = 0;
         let alreadyDelegates = 0;
+        let alreadyRemotes = 0;
+        let alreadyScopes = 0;
         let newFollows = 0;
         let newDelegates = 0;
         let newRemotes = 0;
@@ -920,20 +922,30 @@ export function registerRadicleCommands(
 
                 // STEP 3: Add peer's fork as git remote
                 try {
-                  await radicleService.addPeerRemote(relatedData.dirPath, dreamerData.dirName, radicleId, did);
-                  newRemotes++;
-                  console.log(`✅ [Radicle Peer Sync] Added git remote '${dreamerData.dirName}' for ${relatedData.dirName}`);
+                  const wasAdded = await radicleService.addPeerRemote(relatedData.dirPath, dreamerData.dirName, radicleId, did);
+                  if (wasAdded) {
+                    newRemotes++;
+                    console.log(`✅ [Radicle Peer Sync] Added git remote '${dreamerData.dirName}' for ${relatedData.dirName}`);
+                  } else {
+                    alreadyRemotes++;
+                    console.log(`✅ [Radicle Peer Sync] Remote '${dreamerData.dirName}' already exists for ${relatedData.dirName}`);
+                  }
                 } catch (remoteError: any) {
-                  // Remote might already exist - log but don't fail
-                  console.warn(`⚠️ [Radicle Peer Sync] Could not add remote (may already exist):`, remoteError.message);
+                  console.error(`❌ [Radicle Peer Sync] Failed to add remote for ${relatedData.dirName}:`, remoteError.message);
+                  errors++;
                 }
 
                 // STEP 4: Set seeding scope to 'followed' (only direct peers)
                 try {
                   console.log(`🔄 [Radicle Peer Sync] Setting seeding scope for ${relatedData.dirName}...`);
-                  await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
-                  scopeUpdates++;
-                  console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'followed' for ${relatedData.dirName}`);
+                  const wasSet = await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
+                  if (wasSet) {
+                    scopeUpdates++;
+                    console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'followed' for ${relatedData.dirName}`);
+                  } else {
+                    alreadyScopes++;
+                    console.log(`✅ [Radicle Peer Sync] Seeding scope already 'followed' for ${relatedData.dirName}`);
+                  }
                 } catch (scopeError: any) {
                   console.error(`❌ [Radicle Peer Sync] Could not set seeding scope for ${relatedData.dirName}:`, scopeError.message);
                   errors++;
@@ -962,7 +974,7 @@ export function registerRadicleCommands(
           if (updates.length === 0 && errors === 0) {
             summary = `✓ All ${totalRelationships} peer relationship${totalRelationships > 1 ? 's' : ''} already configured for pure p2p!`;
           } else {
-            const alreadyConfigured = alreadyFollowing + alreadyDelegates;
+            const alreadyConfigured = alreadyFollowing + alreadyDelegates + alreadyRemotes + alreadyScopes;
             summary = `Configured: ${updates.join(', ')}` +
                      (alreadyConfigured > 0 ? ` (${alreadyConfigured} already established)` : '') +
                      (errors > 0 ? ` ⚠️ ${errors} error${errors !== 1 ? 's' : ''}` : '');
