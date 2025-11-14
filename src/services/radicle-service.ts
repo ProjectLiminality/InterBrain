@@ -381,8 +381,7 @@ export class RadicleServiceImpl implements RadicleService {
     // Prepare execution options - run from repo directory if provided
     const execOptions: any = { env };
     if (repoPath) {
-      const fullPath = this.getFullPath(repoPath);
-      execOptions.cwd = fullPath;
+      execOptions.cwd = repoPath;
       console.log(`RadicleService: Following peer ${peerDid} in repo ${repoPath}...`);
     } else {
       console.log(`RadicleService: Following peer ${peerDid} globally...`);
