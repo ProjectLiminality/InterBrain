@@ -768,20 +768,45 @@ export class URIHandlerService {
 		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name}...`);
 		const newDreamer = await this.dreamNodeService.create(name, 'dreamer');
 
-		// Wait for standard creation flow to complete (git init, rad init, etc.)
-		await new Promise(resolve => setTimeout(resolve, 1000));
-
-		// Now just add the DID field to the .udd file
+		// Wait for standard creation flow to complete (git init, rad init, radicleId write)
+		// Need to wait for radicleId to be written to .udd before we add DID
 		const fs = require('fs').promises;
 		const path = require('path');
 		const uddPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 
+		let udd: any;
 		try {
-			// Read .udd file created by standard flow
-			const uddContent = await fs.readFile(uddPath, 'utf-8');
-			const udd = JSON.parse(uddContent);
+			// Retry loop: wait for radicleId to be written to .udd
+			let retries = 20; // 20 retries = 10 seconds max wait
+			while (retries > 0) {
+				await new Promise(resolve => setTimeout(resolve, 500));
 
-			// Add DID field (radicleId already populated by standard creation)
+				try {
+					const uddContent = await fs.readFile(uddPath, 'utf-8');
+					udd = JSON.parse(uddContent);
+
+					// Check if radicleId has been populated by standard creation
+					if (udd.radicleId) {
+						console.log(`✅ [URIHandler] radicleId populated: ${udd.radicleId}`);
+						break;
+					} else {
+						console.log(`⏳ [URIHandler] Waiting for radicleId... (${retries} retries left)`);
+					}
+				} catch (error) {
+					console.log(`⏳ [URIHandler] Waiting for .udd file... (${retries} retries left)`);
+				}
+
+				retries--;
+			}
+
+			if (!udd || !udd.radicleId) {
+				console.warn(`⚠️ [URIHandler] radicleId not populated after waiting - proceeding anyway`);
+				// Read one more time to get whatever is there
+				const uddContent = await fs.readFile(uddPath, 'utf-8');
+				udd = JSON.parse(uddContent);
+			}
+
+			// Add DID field
 			udd.did = did;
 
 			// Write back
