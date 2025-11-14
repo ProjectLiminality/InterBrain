@@ -714,18 +714,21 @@ export class GitDreamNodeService {
           const radicleId = ridMatch[0];
           console.log(`GitDreamNodeService: Captured Radicle ID: ${radicleId}`);
 
-          // Update .udd file with radicleId
+          // Update .udd file with radicleId AND preserve existing metadata (did, email, phone)
           const uddPath = path.join(repoPath, '.udd');
           const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
           const udd = JSON.parse(uddContent);
-          udd.radicleId = radicleId;
-          await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
-          console.log(`GitDreamNodeService: Updated .udd with radicleId`);
 
-          // Commit the radicleId update
+          // Add radicleId (preserves all existing fields like did, email, phone)
+          udd.radicleId = radicleId;
+
+          await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
+          console.log(`GitDreamNodeService: Updated .udd with radicleId (preserving existing metadata)`);
+
+          // Commit the radicleId + metadata update as single atomic commit
           await execAsync('git add .udd', { cwd: repoPath });
-          await execAsync('git commit -m "Add Radicle ID to DreamNode metadata"', { cwd: repoPath });
-          console.log(`GitDreamNodeService: Committed radicleId update`);
+          await execAsync('git commit -m "Add Radicle ID and metadata to DreamNode"', { cwd: repoPath });
+          console.log(`GitDreamNodeService: Committed radicleId + metadata in single commit`);
         } else {
           console.warn(`GitDreamNodeService: Could not extract RID from rad init output`);
         }
@@ -1013,18 +1016,30 @@ export class GitDreamNodeService {
   
   /**
    * Update .udd file with node data
+   * CRITICAL: Read-modify-write pattern to preserve fields that exist on disk but not in store
    */
   private async updateUDDFile(node: DreamNode): Promise<void> {
     const uddPath = path.join(this.vaultPath, node.repoPath, '.udd');
 
+    // Read existing .udd from disk first to preserve all fields
+    let existingUdd: Partial<UDDFile> = {};
+    try {
+      const existingContent = await fsPromises.readFile(uddPath, 'utf-8');
+      existingUdd = JSON.parse(existingContent);
+    } catch (error) {
+      console.log(`GitDreamNodeService: No existing .udd found, creating new one`);
+    }
+
+    // Build updated UDD, merging with existing fields
     const udd: UDDFile = {
+      ...existingUdd, // Start with all existing fields from disk
+      // Overwrite with current node data from store
       uuid: node.id,
       title: node.name,
       type: node.type,
       dreamTalk: node.dreamTalkMedia.length > 0 ? node.dreamTalkMedia[0].path : '',
-      // Note: liminalWebRelationships removed - relationships now only in liminal-web.json for Dreamers
-      submodules: [],
-      supermodules: []
+      submodules: existingUdd.submodules || [],
+      supermodules: existingUdd.supermodules || []
     };
 
     // Include contact fields only for dreamer nodes
@@ -1034,17 +1049,24 @@ export class GitDreamNodeService {
       if (node.did) udd.did = node.did;
     }
 
-    // CRITICAL: Preserve radicleId field if it exists
+    // CRITICAL: Preserve radicleId from node OR existing disk value
     if (node.radicleId) {
       udd.radicleId = node.radicleId;
+    } else if (existingUdd.radicleId) {
+      udd.radicleId = existingUdd.radicleId;
     }
 
-    // CRITICAL: Preserve GitHub URLs if they exist
+    // CRITICAL: Preserve GitHub URLs from node OR existing disk value
     if (node.githubRepoUrl) {
       udd.githubRepoUrl = node.githubRepoUrl;
+    } else if (existingUdd.githubRepoUrl) {
+      udd.githubRepoUrl = existingUdd.githubRepoUrl;
     }
+
     if (node.githubPagesUrl) {
       udd.githubPagesUrl = node.githubPagesUrl;
+    } else if (existingUdd.githubPagesUrl) {
+      udd.githubPagesUrl = existingUdd.githubPagesUrl;
     }
 
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
