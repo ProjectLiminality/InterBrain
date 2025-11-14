@@ -763,77 +763,25 @@ export class URIHandlerService {
 			return existingDreamer;
 		}
 
-		// Create new Dreamer node using standard creation flow
-		// Standard flow handles: git init, rad init, .udd creation, radicleId population
-		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name}...`);
-		const newDreamer = await this.dreamNodeService.create(name, 'dreamer');
+		// Create new Dreamer node with DID metadata using standard creation flow
+		// Standard flow handles: git init, rad init, .udd creation with all metadata
+		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name} with DID ${did}...`);
+		const newDreamer = await this.dreamNodeService.create(name, 'dreamer', undefined, undefined, undefined, { did });
 
-		// Wait for standard creation flow to complete (git init, rad init, radicleId write)
-		// Need to wait for radicleId to be written to .udd before we add DID
+		// Wait for creation to complete and populate UUID
+		await new Promise(resolve => setTimeout(resolve, 500));
+
 		const fs = require('fs').promises;
 		const path = require('path');
 		const uddPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 
-		let udd: any;
 		try {
-			// Retry loop: wait for radicleId to be written to .udd
-			let retries = 20; // 20 retries = 10 seconds max wait
-			while (retries > 0) {
-				await new Promise(resolve => setTimeout(resolve, 500));
-
-				try {
-					const uddContent = await fs.readFile(uddPath, 'utf-8');
-					udd = JSON.parse(uddContent);
-
-					// Check if radicleId has been populated by standard creation
-					if (udd.radicleId) {
-						console.log(`✅ [URIHandler] radicleId populated: ${udd.radicleId}`);
-						break;
-					} else {
-						console.log(`⏳ [URIHandler] Waiting for radicleId... (${retries} retries left)`);
-					}
-				} catch (error) {
-					console.log(`⏳ [URIHandler] Waiting for .udd file... (${retries} retries left)`);
-				}
-
-				retries--;
-			}
-
-			if (!udd || !udd.radicleId) {
-				console.warn(`⚠️ [URIHandler] radicleId not populated after waiting - proceeding anyway`);
-				// Read one more time to get whatever is there
-				const uddContent = await fs.readFile(uddPath, 'utf-8');
-				udd = JSON.parse(uddContent);
-			}
-
-			// Add DID field
-			udd.did = did;
-
-			// Write back
-			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
-			console.log(`✅ [URIHandler] Added DID (${did}) to Dreamer node "${name}"`);
-
-			// Commit the DID addition
-			const { exec } = require('child_process');
-			const { promisify } = require('util');
-			const execAsync = promisify(exec);
-			const dreamerRepoPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath);
-
-			try {
-				await execAsync('git add .udd', { cwd: dreamerRepoPath });
-				await execAsync(`git commit -m "Add peer DID metadata"`, { cwd: dreamerRepoPath });
-				console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
-			} catch (commitError) {
-				console.warn(`⚠️ [URIHandler] Could not commit DID:`, commitError);
-			}
-
-			// Populate UUID for return
+			const uddContent = await fs.readFile(uddPath, 'utf-8');
+			const udd = JSON.parse(uddContent);
 			newDreamer.uuid = udd.uuid;
-			console.log(`✅ [URIHandler] Dreamer node UUID: ${newDreamer.uuid}`);
-
+			console.log(`✅ [URIHandler] Dreamer node created with UUID: ${newDreamer.uuid}, DID: ${did}`);
 		} catch (error) {
-			console.error(`❌ [URIHandler] Failed to add DID to Dreamer node:`, error);
-			// Don't fail - Dreamer node was created successfully with standard flow
+			console.error(`❌ [URIHandler] Failed to read UUID from Dreamer node:`, error);
 		}
 
 		return newDreamer;

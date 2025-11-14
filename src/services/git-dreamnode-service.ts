@@ -80,7 +80,8 @@ export class GitDreamNodeService {
     type: 'dream' | 'dreamer',
     dreamTalk?: globalThis.File,
     position?: [number, number, number],
-    additionalFiles?: globalThis.File[]
+    additionalFiles?: globalThis.File[],
+    metadata?: { did?: string; email?: string; phone?: string }
   ): Promise<DreamNode> {
     // Generate unique ID and repo path
     const uuid = crypto.randomUUID();
@@ -136,7 +137,7 @@ export class GitDreamNodeService {
     store.updateRealNode(uuid, nodeData);
     
     // Create git repository in parallel (non-blocking)
-    const repoCreationPromise = this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles)
+    const repoCreationPromise = this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles, metadata)
       .then(async () => {
         // Index the new node after git repository is created
         try {
@@ -477,7 +478,8 @@ export class GitDreamNodeService {
     title: string,
     type: 'dream' | 'dreamer',
     dreamTalk?: globalThis.File,
-    additionalFiles?: globalThis.File[]
+    additionalFiles?: globalThis.File[],
+    metadata?: { did?: string; email?: string; phone?: string }
   ): Promise<void> {
     try {
       // Create directory
@@ -518,7 +520,7 @@ export class GitDreamNodeService {
         title,
         type,
         dreamTalk: dreamTalkPath ? dreamTalk!.name : ''
-      });
+      }, metadata);
 
       // Move template files from .git/ to working directory
       // (This is what the pre-commit hook used to do, but doing it here prevents timing issues)
@@ -764,22 +766,33 @@ export class GitDreamNodeService {
       title: string;
       type: string;
       dreamTalk: string;
-    }
+    },
+    metadata?: { did?: string; email?: string; phone?: string }
   ): Promise<void> {
     // Update the udd file while it's still in the .git directory
     // The pre-commit hook will move it to .udd in the working directory
     const uddPath = path.join(repoPath, '.git', 'udd');
     console.log(`GitDreamNodeService: Updating template file at ${uddPath}`);
-    
+
     let uddContent = await fsPromises.readFile(uddPath, 'utf-8');
-    
+
     uddContent = uddContent
       .replace('TEMPLATE_UUID_PLACEHOLDER', values.uuid)
       .replace('TEMPLATE_TITLE_PLACEHOLDER', values.title)
       .replace('"type": "dream"', `"type": "${values.type}"`)
       .replace('TEMPLATE_DREAMTALK_PLACEHOLDER', values.dreamTalk)
       .replace('TEMPLATE_RADICLE_ID_PLACEHOLDER', ''); // Empty initially, filled after rad init
-    
+
+    // Add optional metadata fields for Dreamer nodes
+    if (metadata) {
+      const udd = JSON.parse(uddContent);
+      if (metadata.did) udd.did = metadata.did;
+      if (metadata.email) udd.email = metadata.email;
+      if (metadata.phone) udd.phone = metadata.phone;
+      uddContent = JSON.stringify(udd, null, 2);
+      console.log(`GitDreamNodeService: Added metadata to .udd:`, Object.keys(metadata));
+    }
+
     await fsPromises.writeFile(uddPath, uddContent);
     console.log(`GitDreamNodeService: Updated template metadata`);
     
