@@ -918,38 +918,48 @@ export class URIHandlerService {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
 
-			// Add bidirectional relationship by updating .udd files
+			// Add bidirectional relationship using liminal-web.json files
 			// Source -> Target
-			const sourceUddPath = path.join(vaultPath, sourceNode.repoPath, '.udd');
-			const sourceUddContent = await fs.readFile(sourceUddPath, 'utf-8');
-			const sourceUdd = JSON.parse(sourceUddContent);
+			const sourceLiminalWebPath = path.join(vaultPath, sourceNode.repoPath, 'liminal-web.json');
+		let sourceLiminalWeb: any = { relationships: [] };
 
-			if (!sourceUdd.liminalWebRelationships) {
-				sourceUdd.liminalWebRelationships = [];
-			}
+		try {
+			const content = await fs.readFile(sourceLiminalWebPath, 'utf-8');
+			sourceLiminalWeb = JSON.parse(content);
+		} catch (error) {
+			console.log(`📝 [URIHandler] Creating liminal-web.json for "${sourceNode.name}"`);
+		}
 
-			// Add relationship if not already present
-			if (!sourceUdd.liminalWebRelationships.includes(targetNode.uuid)) {
-				sourceUdd.liminalWebRelationships.push(targetNode.uuid);
-				await fs.writeFile(sourceUddPath, JSON.stringify(sourceUdd, null, 2), 'utf-8');
-				console.log(`🔗 [URIHandler] Added relationship: "${sourceNode.name}" -> "${targetNode.name}"`);
-			}
+		if (!sourceLiminalWeb.relationships) {
+			sourceLiminalWeb.relationships = [];
+		}
 
-			// Target -> Source
-			const targetUddPath = path.join(vaultPath, targetNode.repoPath, '.udd');
-			const targetUddContent = await fs.readFile(targetUddPath, 'utf-8');
-			const targetUdd = JSON.parse(targetUddContent);
+		if (!sourceLiminalWeb.relationships.includes(targetNode.uuid)) {
+			sourceLiminalWeb.relationships.push(targetNode.uuid);
+			await fs.writeFile(sourceLiminalWebPath, JSON.stringify(sourceLiminalWeb, null, 2), 'utf-8');
+			console.log(`🔗 [URIHandler] Added relationship: "${sourceNode.name}" -> "${targetNode.name}"`);
+		}
 
-			if (!targetUdd.liminalWebRelationships) {
-				targetUdd.liminalWebRelationships = [];
-			}
+		const targetLiminalWebPath = path.join(vaultPath, targetNode.repoPath, 'liminal-web.json');
+		let targetLiminalWeb: any = { relationships: [] };
 
-			// Add relationship if not already present
-			if (!targetUdd.liminalWebRelationships.includes(sourceNode.uuid)) {
-				targetUdd.liminalWebRelationships.push(sourceNode.uuid);
-				await fs.writeFile(targetUddPath, JSON.stringify(targetUdd, null, 2), 'utf-8');
-				console.log(`🔗 [URIHandler] Added relationship: "${targetNode.name}" -> "${sourceNode.name}"`);
-			}
+		try {
+			const content2 = await fs.readFile(targetLiminalWebPath, 'utf-8');
+			targetLiminalWeb = JSON.parse(content2);
+		} catch (error) {
+			console.log(`📝 [URIHandler] Creating liminal-web.json for "${targetNode.name}"`);
+		}
+
+		if (!targetLiminalWeb.relationships) {
+			targetLiminalWeb.relationships = [];
+		}
+
+		if (!targetLiminalWeb.relationships.includes(sourceNode.uuid)) {
+			targetLiminalWeb.relationships.push(sourceNode.uuid);
+			await fs.writeFile(targetLiminalWebPath, JSON.stringify(targetLiminalWeb, null, 2), 'utf-8');
+			console.log(`🔗 [URIHandler] Added relationship: "${targetNode.name}" -> "${sourceNode.name}"`);
+		}
+
 
 			console.log(`✅ [URIHandler] Linked "${sourceNode.name}" <-> "${targetNode.name}"`);
 		} catch (error) {
