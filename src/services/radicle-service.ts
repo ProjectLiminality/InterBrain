@@ -944,12 +944,15 @@ export class RadicleServiceImpl implements RadicleService {
 
     // IDEMPOTENCY CHECK: Check if peer is already a delegate
     try {
-      const { stdout } = await execAsync(`"${radCmd}" inspect`, { cwd: dreamNodePath });
+      const { stdout } = await execAsync(`"${radCmd}" inspect --identity`, { cwd: dreamNodePath });
+      const identity = JSON.parse(stdout);
 
-      // Check if this DID is already in the delegates list
-      if (stdout.includes(peerDID)) {
-        console.log(`RadicleService: ${peerName} (${peerDID}) is already a delegate - skipping`);
-        return false; // Already exists
+      // Check if this DID is already in the delegates array
+      if (identity.delegates && Array.isArray(identity.delegates)) {
+        if (identity.delegates.includes(peerDID)) {
+          console.log(`RadicleService: ${peerName} (${peerDID}) is already a delegate - skipping`);
+          return false; // Already exists
+        }
       }
     } catch (inspectError) {
       console.warn(`RadicleService: Could not check existing delegates (will attempt to add):`, inspectError);
