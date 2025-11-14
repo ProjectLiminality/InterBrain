@@ -856,6 +856,7 @@ export function registerRadicleCommands(
 
         let totalRelationships = 0;
         let alreadyFollowing = 0;
+        let alreadyDelegates = 0;
         let newFollows = 0;
         let newDelegates = 0;
         let newRemotes = 0;
@@ -904,14 +905,17 @@ export function registerRadicleCommands(
 
                 // STEP 2: Add peer as equal delegate (threshold 1)
                 try {
-                  await radicleService.addDelegate(relatedData.dirPath, did, dreamerData.dirName, passphrase);
-                  newDelegates++;
-                  console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);
-                } catch (delegateError: any) {
-                  // Delegate might already exist - log but don't fail
-                  if (!delegateError.message?.includes('already')) {
-                    console.warn(`⚠️ [Radicle Peer Sync] Could not add delegate (may already exist):`, delegateError.message);
+                  const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, dreamerData.dirName, passphrase);
+                  if (wasAdded) {
+                    newDelegates++;
+                    console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);
+                  } else {
+                    alreadyDelegates++;
+                    console.log(`✅ [Radicle Peer Sync] ${dreamerData.dirName} already delegate for ${relatedData.dirName}`);
                   }
+                } catch (delegateError: any) {
+                  console.error(`❌ [Radicle Peer Sync] Failed to add delegate for ${relatedData.dirName}:`, delegateError.message);
+                  errors++;
                 }
 
                 // STEP 3: Add peer's fork as git remote
@@ -958,8 +962,9 @@ export function registerRadicleCommands(
           if (updates.length === 0 && errors === 0) {
             summary = `✓ All ${totalRelationships} peer relationship${totalRelationships > 1 ? 's' : ''} already configured for pure p2p!`;
           } else {
+            const alreadyConfigured = alreadyFollowing + alreadyDelegates;
             summary = `Configured: ${updates.join(', ')}` +
-                     (alreadyFollowing > 0 ? ` (${alreadyFollowing} already established)` : '') +
+                     (alreadyConfigured > 0 ? ` (${alreadyConfigured} already established)` : '') +
                      (errors > 0 ? ` ⚠️ ${errors} error${errors !== 1 ? 's' : ''}` : '');
           }
         }

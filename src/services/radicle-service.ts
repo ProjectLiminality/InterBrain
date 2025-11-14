@@ -931,8 +931,9 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Add a peer as an equal delegate to a repository
    * Sets threshold to 1 for true peer-to-peer equality
+   * @returns true if delegate was added, false if already exists
    */
-  async addDelegate(dreamNodePath: string, peerDID: string, peerName: string, passphrase?: string): Promise<void> {
+  async addDelegate(dreamNodePath: string, peerDID: string, peerName: string, passphrase?: string): Promise<boolean> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
@@ -940,6 +941,20 @@ export class RadicleServiceImpl implements RadicleService {
     await this.ensureNodeRunning(passphrase);
 
     const radCmd = this.getRadCommand();
+
+    // IDEMPOTENCY CHECK: Check if peer is already a delegate
+    try {
+      const { stdout } = await execAsync(`"${radCmd}" inspect`, { cwd: dreamNodePath });
+
+      // Check if this DID is already in the delegates list
+      if (stdout.includes(peerDID)) {
+        console.log(`RadicleService: ${peerName} (${peerDID}) is already a delegate - skipping`);
+        return false; // Already exists
+      }
+    } catch (inspectError) {
+      console.warn(`RadicleService: Could not check existing delegates (will attempt to add):`, inspectError);
+    }
+
     const title = `Add ${peerName} as equal collaborator`;
     const description = `Making ${peerName} an equal delegate for peer-to-peer collaboration`;
 
@@ -949,6 +964,7 @@ export class RadicleServiceImpl implements RadicleService {
         { cwd: dreamNodePath }
       );
       console.log(`RadicleService: Added ${peerName} as delegate:`, result.stdout);
+      return true; // Successfully added
     } catch (error: any) {
       throw new Error(`Failed to add delegate: ${error.message}`);
     }
