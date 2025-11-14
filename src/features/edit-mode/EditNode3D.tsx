@@ -36,7 +36,7 @@ export default function EditNode3D({
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
   const [localEmail, setLocalEmail] = useState('');
   const [localPhone, setLocalPhone] = useState('');
-  const [localRadicleId, setLocalRadicleId] = useState('');
+  const [localDid, setLocalDid] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -120,19 +120,19 @@ export default function EditNode3D({
   }, [editingNode?.name]);
 
   // Load contact info from editingNode (for dreamer nodes only)
-  // Only reload when node ID changes, not when email/phone/radicleId fields update
+  // Only reload when node ID changes, not when email/phone/did fields update
   useEffect(() => {
     if (!editingNode || editingNode.type !== 'dreamer') {
       setLocalEmail('');
       setLocalPhone('');
-      setLocalRadicleId('');
+      setLocalDid('');
       return;
     }
 
     // Load from the DreamNode which is already populated by the service layer
     setLocalEmail(editingNode.email || '');
     setLocalPhone(editingNode.phone || '');
-    setLocalRadicleId(editingNode.radicleId || '');
+    setLocalDid(editingNode.did || '');
   }, [editingNode?.id, editingNode?.type]); // Only depend on ID and type, not the whole object
   
   if (!editingNode) {
@@ -210,10 +210,10 @@ export default function EditNode3D({
     updateEditingNodeMetadata({ phone });
   };
 
-  const handleRadicleIdChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    const radicleId = e.target.value;
-    setLocalRadicleId(radicleId);
-    updateEditingNodeMetadata({ radicleId });
+  const handleDidChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const did = e.target.value;
+    setLocalDid(did);
+    updateEditingNodeMetadata({ did });
   };
   
   // File handling (same patterns as ProtoNode3D)
@@ -612,10 +612,10 @@ export default function EditNode3D({
               />
               <input
                 type="text"
-                value={localRadicleId}
-                onChange={handleRadicleIdChange}
-                placeholder="Radicle ID (optional)"
-                className="contact-field-radicle"
+                value={localDid}
+                onChange={handleDidChange}
+                placeholder="DID (optional)"
+                className="contact-field-did"
                 style={{
                   padding: '14px 16px',
                   background: 'rgba(0,0,0,0.6)',

@@ -882,6 +882,7 @@ export class GitDreamNodeService {
       email: udd.email,
       phone: udd.phone,
       radicleId: udd.radicleId,
+      did: udd.did,
       githubRepoUrl: udd.githubRepoUrl,
       githubPagesUrl: udd.githubPagesUrl
     };
@@ -940,14 +941,15 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // Check metadata changes (type, contact fields, radicleId, and GitHub URLs - name synced from .udd)
+    // Check metadata changes (type, contact fields, radicleId, did, and GitHub URLs - name synced from .udd)
     if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone ||
-        node.radicleId !== udd.radicleId || node.githubRepoUrl !== udd.githubRepoUrl ||
-        node.githubPagesUrl !== udd.githubPagesUrl) {
+        node.radicleId !== udd.radicleId || node.did !== udd.did ||
+        node.githubRepoUrl !== udd.githubRepoUrl || node.githubPagesUrl !== udd.githubPagesUrl) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
       node.radicleId = udd.radicleId;
+      node.did = udd.did;
       node.githubRepoUrl = udd.githubRepoUrl;
       node.githubPagesUrl = udd.githubPagesUrl;
       updated = true;

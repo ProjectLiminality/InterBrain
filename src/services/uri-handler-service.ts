@@ -739,7 +739,7 @@ export class URIHandlerService {
 		// Search for existing Dreamer node with this DID
 		const allNodes = await this.dreamNodeService.list();
 		const existingDreamer = allNodes.find((node: any) => {
-			return node.type === 'dreamer' && node.radicleId === did;
+			return node.type === 'dreamer' && node.did === did;
 		});
 
 		if (existingDreamer) {
@@ -792,16 +792,23 @@ export class URIHandlerService {
 			}
 
 			const udd = JSON.parse(uddContent);
-			udd.radicleId = did;
+			// Get the Radicle RID of the Dreamer repo itself
+		const radicleService = serviceManager.getRadicleService();
+		const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
+		const dreamerRid = await radicleService.getRadicleId(dreamerRepoPath);
+
+		// Store both RID and DID in separate fields
+		udd.radicleId = dreamerRid; // RID of the Dreamer repo itself
+		udd.did = did; // DID of the peer's identity
 			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
-			console.log(`✅ [URIHandler] Saved DID to Dreamer node: ${did}`);
+			console.log(`✅ [URIHandler] Saved RID (${dreamerRid}) and DID (${did}) to Dreamer node`);
 
 			// CRITICAL: Commit the DID change to git (similar to how submodules are committed)
 			// Wait for initial git commit to complete, then commit DID change
 			const { exec } = require('child_process');
 			const { promisify } = require('util');
 			const execAsync = promisify(exec);
-			const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
+			// dreamerRepoPath already declared above
 
 			// Retry loop: wait for index.lock to be released (initial commit to finish)
 			let committed = false;
@@ -819,7 +826,7 @@ export class URIHandlerService {
 
 					// Try to commit
 					await execAsync('git add .udd', { cwd: dreamerRepoPath });
-					await execAsync(`git commit -m "Add Radicle DID: ${did}"`, { cwd: dreamerRepoPath });
+					await execAsync(`git commit -m "Add Radicle RID and DID metadata"`, { cwd: dreamerRepoPath });
 					console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
 					committed = true;
 					break;
@@ -900,6 +907,8 @@ export class URIHandlerService {
 
 	/**
 	 * Link two nodes by adding relationship
+	 * CRITICAL: Only Dreamer nodes hold liminal-web.json (subjective relationship data)
+	 * DreamNodes don't have this file to avoid merge conflicts in collaboration
 	 */
 	private async linkNodes(sourceNode: any, targetNode: any): Promise<void> {
 		try {
@@ -918,48 +927,51 @@ export class URIHandlerService {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
 
-			// Add bidirectional relationship using liminal-web.json files
-			// Source -> Target
-			const sourceLiminalWebPath = path.join(vaultPath, sourceNode.repoPath, 'liminal-web.json');
-		let sourceLiminalWeb: any = { relationships: [] };
+			// Source -> Target (only if source is a Dreamer)
+			if (sourceNode.type === 'dreamer') {
+				const sourceLiminalWebPath = path.join(vaultPath, sourceNode.repoPath, 'liminal-web.json');
+				let sourceLiminalWeb: any = { relationships: [] };
 
-		try {
-			const content = await fs.readFile(sourceLiminalWebPath, 'utf-8');
-			sourceLiminalWeb = JSON.parse(content);
-		} catch (error) {
-			console.log(`📝 [URIHandler] Creating liminal-web.json for "${sourceNode.name}"`);
-		}
+				try {
+					const content = await fs.readFile(sourceLiminalWebPath, 'utf-8');
+					sourceLiminalWeb = JSON.parse(content);
+				} catch (error) {
+					console.log(`📝 [URIHandler] Creating liminal-web.json for Dreamer "${sourceNode.name}"`);
+				}
 
-		if (!sourceLiminalWeb.relationships) {
-			sourceLiminalWeb.relationships = [];
-		}
+				if (!sourceLiminalWeb.relationships) {
+					sourceLiminalWeb.relationships = [];
+				}
 
-		if (!sourceLiminalWeb.relationships.includes(targetNode.uuid)) {
-			sourceLiminalWeb.relationships.push(targetNode.uuid);
-			await fs.writeFile(sourceLiminalWebPath, JSON.stringify(sourceLiminalWeb, null, 2), 'utf-8');
-			console.log(`🔗 [URIHandler] Added relationship: "${sourceNode.name}" -> "${targetNode.name}"`);
-		}
+				if (!sourceLiminalWeb.relationships.includes(targetNode.uuid)) {
+					sourceLiminalWeb.relationships.push(targetNode.uuid);
+					await fs.writeFile(sourceLiminalWebPath, JSON.stringify(sourceLiminalWeb, null, 2), 'utf-8');
+					console.log(`🔗 [URIHandler] Added relationship: Dreamer "${sourceNode.name}" -> "${targetNode.name}"`);
+				}
+			}
 
-		const targetLiminalWebPath = path.join(vaultPath, targetNode.repoPath, 'liminal-web.json');
-		let targetLiminalWeb: any = { relationships: [] };
+			// Target -> Source (only if target is a Dreamer)
+			if (targetNode.type === 'dreamer') {
+				const targetLiminalWebPath = path.join(vaultPath, targetNode.repoPath, 'liminal-web.json');
+				let targetLiminalWeb: any = { relationships: [] };
 
-		try {
-			const content2 = await fs.readFile(targetLiminalWebPath, 'utf-8');
-			targetLiminalWeb = JSON.parse(content2);
-		} catch (error) {
-			console.log(`📝 [URIHandler] Creating liminal-web.json for "${targetNode.name}"`);
-		}
+				try {
+					const content2 = await fs.readFile(targetLiminalWebPath, 'utf-8');
+					targetLiminalWeb = JSON.parse(content2);
+				} catch (error) {
+					console.log(`📝 [URIHandler] Creating liminal-web.json for Dreamer "${targetNode.name}"`);
+				}
 
-		if (!targetLiminalWeb.relationships) {
-			targetLiminalWeb.relationships = [];
-		}
+				if (!targetLiminalWeb.relationships) {
+					targetLiminalWeb.relationships = [];
+				}
 
-		if (!targetLiminalWeb.relationships.includes(sourceNode.uuid)) {
-			targetLiminalWeb.relationships.push(sourceNode.uuid);
-			await fs.writeFile(targetLiminalWebPath, JSON.stringify(targetLiminalWeb, null, 2), 'utf-8');
-			console.log(`🔗 [URIHandler] Added relationship: "${targetNode.name}" -> "${sourceNode.name}"`);
-		}
-
+				if (!targetLiminalWeb.relationships.includes(sourceNode.uuid)) {
+					targetLiminalWeb.relationships.push(sourceNode.uuid);
+					await fs.writeFile(targetLiminalWebPath, JSON.stringify(targetLiminalWeb, null, 2), 'utf-8');
+					console.log(`🔗 [URIHandler] Added relationship: Dreamer "${targetNode.name}" -> "${sourceNode.name}"`);
+				}
+			}
 
 			console.log(`✅ [URIHandler] Linked "${sourceNode.name}" <-> "${targetNode.name}"`);
 		} catch (error) {
