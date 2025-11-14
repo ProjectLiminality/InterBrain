@@ -739,6 +739,7 @@ export function registerRadicleCommands(
         const uddDataMap = new Map<string, {
           uuid: string;
           type: string;
+          did?: string;
           radicleId?: string;
           relationships: string[];
           path: string;
@@ -753,17 +754,35 @@ export function registerRadicleCommands(
               const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
               const udd = JSON.parse(uddContent);
 
+              const nodeType = udd.type || 'dream';
+              console.log(`🔍 [Radicle Peer Sync] Scanning "${name}": type=${nodeType}, did=${udd.did || 'none'}, radicleId=${udd.radicleId || 'none'}`);
+
+              // For Dreamer nodes, read liminal-web.json for relationships
+              let relationships: string[] = [];
+              if (nodeType === 'dreamer') {
+                try {
+                  const liminalWebPath = path.join(dirPath, 'liminal-web.json');
+                  const liminalWebContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
+                  const liminalWeb = JSON.parse(liminalWebContent);
+                  relationships = liminalWeb.relationships || [];
+                  console.log(`🔍 [Radicle Peer Sync]   → Found liminal-web.json with ${relationships.length} relationships`);
+                } catch (liminalError) {
+                  console.log(`🔍 [Radicle Peer Sync]   → No liminal-web.json found (this is normal if no relationships yet)`);
+                }
+              }
+
               uddDataMap.set(udd.uuid, {
                 uuid: udd.uuid,
-                type: udd.type || 'dream',
+                type: nodeType,
+                did: udd.did,
                 radicleId: udd.radicleId,
-                relationships: udd.liminalWebRelationships || [],
+                relationships: relationships,
                 path: uddPath,
                 dirPath: dirPath,
                 dirName: name
               });
             } catch (error) {
-              console.error(`🔄 [Radicle Peer Sync] Error reading ${name}/.udd:`, error);
+              console.error(`❌ [Radicle Peer Sync] Error reading ${name}/.udd:`, error);
             }
           })
         );
@@ -774,9 +793,13 @@ export function registerRadicleCommands(
         const dreamersWithDids: Array<{ uuid: string; did: string; data: any }> = [];
 
         for (const [uuid, data] of uddDataMap) {
-          if (data.type === 'dreamer' && data.radicleId && data.radicleId.startsWith('did:key:')) {
-            dreamersWithDids.push({ uuid, did: data.radicleId, data });
-            console.log(`🔄 [Radicle Peer Sync] Found Dreamer with DID: ${data.dirName} (${data.radicleId})`);
+          if (data.type === 'dreamer') {
+            if (data.did && data.did.startsWith('did:key:')) {
+              dreamersWithDids.push({ uuid, did: data.did, data });
+              console.log(`✅ [Radicle Peer Sync] Found Dreamer with DID: "${data.dirName}" (${data.did}) with ${data.relationships.length} relationships`);
+            } else {
+              console.log(`⚠️ [Radicle Peer Sync] Dreamer "${data.dirName}" has no DID - skipping`);
+            }
           }
         }
 
