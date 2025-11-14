@@ -88,6 +88,19 @@ export class ShareLinkService {
 
 					if (radicleId) {
 						console.log(`✅ [ShareLink] Node has Radicle ID: ${radicleId}`);
+
+						// Publish to Radicle network (seeds to official nodes) - run in parallel
+						// This makes the repo available on the network for cloning
+						console.log(`📡 [ShareLink] Publishing to Radicle network...`);
+						radicleService.share(node.repoPath)
+							.then(() => {
+								console.log(`✅ [ShareLink] Successfully published "${node.name}" to Radicle network`);
+								new Notice(`📡 "${node.name}" published to Radicle network!`);
+							})
+							.catch((error) => {
+								console.error(`❌ [ShareLink] Failed to publish "${node.name}":`, error);
+								new Notice(`⚠️ Failed to publish "${node.name}" to network (link still works for direct connections)`);
+							});
 					}
 				} catch (error) {
 					console.error('❌ [ShareLink] Failed to ensure Radicle ID:', error);

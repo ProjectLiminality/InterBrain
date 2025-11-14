@@ -655,7 +655,7 @@ export class GitDreamNodeService {
           const child = spawn(radCommand, [
             'init',
             repoPath,
-            '--private',
+            '--public',  // Public visibility, but not seeded until rad publish
             '--name', repoName,  // REQUIRED for non-TTY mode, use sanitized dir name
             '--default-branch', 'main',
             '--description', description,
