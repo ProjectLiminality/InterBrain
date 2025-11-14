@@ -1006,9 +1006,7 @@ export class GitDreamNodeService {
         lastSynced: Date.now()
       });
 
-      // Write updated metadata back to .udd file (keeps file system in sync)
-      await this.updateUDDFile(node);
-      console.log(`💾 [GitDreamNodeService] Updated .udd file for ${node.name}`);
+      // No need to write back to .udd - we just read from it (disk is source of truth)
     }
 
     return updated;
