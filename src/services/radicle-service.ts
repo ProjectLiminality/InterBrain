@@ -702,24 +702,12 @@ export class RadicleServiceImpl implements RadicleService {
       // Don't fail the clone if .udd update fails
     }
 
-    // CRITICAL: Follow the repository delegate to receive their updates
-    // This is ESSENTIAL for the Radicle peer-to-peer collaboration model
-    try {
-      console.log(`RadicleService: Establishing peer following relationship...`);
-      const delegateDid = await this.getRepositoryDelegate(radicleId, passphrase);
-
-      if (delegateDid) {
-        await this.followPeer(delegateDid, passphrase);
-        console.log(`RadicleService: ✅ Collaboration handshake complete - following ${delegateDid}`);
-      } else {
-        console.warn(`RadicleService: ⚠️ Could not determine repository delegate - peer following skipped`);
-        console.warn(`RadicleService: ⚠️ You may not receive updates from this repository's owner`);
-      }
-    } catch (followError: any) {
-      // Don't fail the clone if following fails - log warning
-      console.warn(`RadicleService: ⚠️ Could not follow repository delegate (non-critical):`, followError.message);
-      console.warn(`RadicleService: ⚠️ You may not receive updates automatically. Run 'rad follow <DID>' manually if needed.`);
-    }
+    // NOTE: Peer relationship configuration (following, delegates, remotes, scope)
+    // is now handled by the comprehensive "Sync Radicle Peer Following" command
+    // which runs at the end of URI handler flows. This ensures:
+    // - Single source of truth for all peer configuration
+    // - Idempotent operations (safe to run multiple times)
+    // - Complete relationship setup (not just delegate following)
 
     return { repoName, alreadyExisted: false };
   }

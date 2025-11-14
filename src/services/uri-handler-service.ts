@@ -119,6 +119,17 @@ export class URIHandlerService {
 					await this.handleCollaborationHandshake(id, senderDid, senderName);
 				}
 
+				// STEP: Trigger comprehensive Radicle sync (configure all peer relationships)
+				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
+					try {
+						console.log(`🔄 [URIHandler] Triggering comprehensive Radicle network sync...`);
+						await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+						console.log(`✅ [URIHandler] Radicle network sync complete`);
+					} catch (syncError) {
+						console.warn(`⚠️ [URIHandler] Radicle sync failed (non-critical):`, syncError);
+					}
+				}
+
 				// FINAL STEP: Trigger lightweight plugin reload with cloned node as target
 				if (result === 'success' || result === 'skipped') {
 					// Single clone links should ALWAYS select the cloned node (not Dreamer)
@@ -262,6 +273,15 @@ export class URIHandlerService {
 							console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
 						}
 					}
+				}
+
+				// STEP: Trigger comprehensive Radicle sync (configure all peer relationships after all clones)
+				try {
+					console.log(`🔄 [URIHandler] Triggering comprehensive Radicle network sync...`);
+					await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+					console.log(`✅ [URIHandler] Radicle network sync complete`);
+				} catch (syncError) {
+					console.warn(`⚠️ [URIHandler] Radicle sync failed (non-critical):`, syncError);
 				}
 
 				// FINAL UI REFRESH: Rescan vault to pick up liminal-web.json changes, then refresh UI
