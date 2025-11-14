@@ -806,7 +806,41 @@ export class RadicleServiceImpl implements RadicleService {
         child.stdin?.end();
       });
 
-      // STEP 2: Publish to network (makes public + announces + auto-seeds)
+      // STEP 2: Check if already public before attempting to publish
+      console.log(`RadicleService: Checking if repository is already public...`);
+      const isAlreadyPublic = await new Promise<boolean>((resolve) => {
+        const child = spawn(radCmd, ['inspect'], {
+          env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.on('close', () => {
+          // Check if output contains "visibility: public"
+          const isPublic = stdout.toLowerCase().includes('visibility: public');
+          resolve(isPublic);
+        });
+
+        child.on('error', () => {
+          // If rad inspect fails, assume not public
+          resolve(false);
+        });
+
+        child.stdin?.end();
+      });
+
+      if (isAlreadyPublic) {
+        console.log(`ℹ️ RadicleService: Repository is already public - skipping rad publish`);
+        return; // Skip publish, exit successfully
+      }
+
+      // STEP 3: Publish to network (makes public + announces + auto-seeds)
       console.log(`RadicleService: Publishing to Radicle network (rad publish)...`);
       await new Promise<void>((resolve, reject) => {
         const child = spawn(radCmd, ['publish'], {

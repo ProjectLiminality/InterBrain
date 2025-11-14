@@ -744,22 +744,7 @@ export class URIHandlerService {
 
 		if (existingDreamer) {
 			console.log(`👤 [URIHandler] Found existing Dreamer node: "${existingDreamer.name}"`);
-
-			// Ensure UUID is populated (store object might not have it)
-			if (!existingDreamer.uuid) {
-				const fs = require('fs').promises;
-				const path = require('path');
-				try {
-					const uddPath = path.join(this.app.vault.adapter.basePath, existingDreamer.repoPath, '.udd');
-					const uddContent = await fs.readFile(uddPath, 'utf-8');
-					const udd = JSON.parse(uddContent);
-					existingDreamer.uuid = udd.uuid;
-					console.log(`✅ [URIHandler] Populated UUID for existing Dreamer: ${existingDreamer.uuid}`);
-				} catch (error) {
-					console.warn(`⚠️ [URIHandler] Could not read UUID for existing Dreamer:`, error);
-				}
-			}
-
+			// Store already has .id populated from .udd.uuid during scanVault
 			return existingDreamer;
 		}
 
