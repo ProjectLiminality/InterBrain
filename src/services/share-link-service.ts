@@ -103,8 +103,15 @@ export class ShareLinkService {
 								new Notice(`📡 "${node.name}" published to Radicle network!`);
 							})
 							.catch((error) => {
-								console.error(`❌ [ShareLink] Failed to publish "${node.name}":`, error);
-								new Notice(`⚠️ Failed to publish "${node.name}" to network (link still works for direct connections)`);
+								// Check if already published (not an error, just skip)
+								const errorMsg = error instanceof Error ? error.message : String(error);
+								if (errorMsg.includes('already public') || errorMsg.includes('rad publish exited with code 1')) {
+									console.log(`ℹ️ [ShareLink] "${node.name}" is already published to network`);
+									// Silently skip - this is expected for already-published nodes
+								} else {
+									console.error(`❌ [ShareLink] Failed to publish "${node.name}":`, error);
+									new Notice(`⚠️ Failed to publish "${node.name}" to network (link still works for direct connections)`);
+								}
 							});
 					}
 				} catch (error) {
