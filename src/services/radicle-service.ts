@@ -753,7 +753,21 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      // STEP 1: Push commits to Radicle remote
+      // STEP 1: Make repository public (changes visibility from private)
+      // This announces the repo to the network and makes it discoverable
+      console.log(`RadicleService: Making repository public...`);
+      try {
+        const visibilityResult = await execAsync(`"${radCmd}" id update --visibility public --no-confirm`, {
+          cwd: dreamNodePath,
+          env: env,
+        });
+        console.log('RadicleService: rad id update output:', visibilityResult.stdout);
+      } catch (visibilityError: any) {
+        // If already public, continue
+        console.warn('RadicleService: rad id update warning (continuing anyway):', visibilityError.message);
+      }
+
+      // STEP 2: Push commits to Radicle remote
       // rad sync alone doesn't push commits - need explicit git push
       console.log(`RadicleService: Pushing commits to Radicle remote...`);
       console.log(`RadicleService: Enhanced PATH for git-remote-rad: ${enhancedPath}`);
@@ -771,7 +785,7 @@ export class RadicleServiceImpl implements RadicleService {
         console.warn('RadicleService: git push warning (continuing anyway):', pushError.message);
       }
 
-      // STEP 2: Seed the repository to public seeds for async sharing
+      // STEP 3: Seed the repository to public seeds for async sharing
       // This ensures others can fetch your changes even when you're offline
       console.log(`RadicleService: Seeding repository to enable async sharing...`);
       try {
@@ -785,7 +799,7 @@ export class RadicleServiceImpl implements RadicleService {
         console.warn('RadicleService: rad seed warning (continuing anyway):', seedError.message);
       }
 
-      // STEP 3: Sync to announce changes to network
+      // STEP 4: Sync to announce changes to network
       console.log(`RadicleService: Running '${radCmd} sync' in ${dreamNodePath}`);
       const result = await execAsync(`"${radCmd}" sync`, {
         cwd: dreamNodePath,

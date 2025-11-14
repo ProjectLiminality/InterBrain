@@ -89,9 +89,12 @@ export class ShareLinkService {
 					if (radicleId) {
 						console.log(`✅ [ShareLink] Node has Radicle ID: ${radicleId}`);
 
-						// Publish to Radicle network (seeds to official nodes) - run in parallel
-						// This makes the repo available on the network for cloning
-						console.log(`📡 [ShareLink] Publishing to Radicle network...`);
+						// Change visibility to public and publish to network - run in parallel
+						// Step 1: Make public (announces to network)
+						// Step 2: rad publish (seeds to official nodes)
+						console.log(`📡 [ShareLink] Making public and publishing to Radicle network...`);
+
+						// Run the publish flow (RadicleService.share handles both visibility + publish)
 						radicleService.share(node.repoPath)
 							.then(() => {
 								console.log(`✅ [ShareLink] Successfully published "${node.name}" to Radicle network`);
