@@ -673,7 +673,7 @@ export function registerRadicleCommands(
   // Sync Radicle peer following with Liminal Web relationships
   plugin.addCommand({
     id: 'sync-radicle-peer-following',
-    name: 'Sync Radicle Peer Following (Maintenance)',
+    name: 'Sync Radicle Peer Following',
     callback: async () => {
       try {
         console.log('🔄 [Radicle Peer Sync] Starting maintenance sync...');
