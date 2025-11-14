@@ -926,11 +926,13 @@ export function registerRadicleCommands(
 
                 // STEP 4: Set seeding scope to 'followed' (only direct peers)
                 try {
+                  console.log(`🔄 [Radicle Peer Sync] Setting seeding scope for ${relatedData.dirName}...`);
                   await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
                   scopeUpdates++;
                   console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'followed' for ${relatedData.dirName}`);
                 } catch (scopeError: any) {
-                  console.warn(`⚠️ [Radicle Peer Sync] Could not set seeding scope:`, scopeError.message);
+                  console.error(`❌ [Radicle Peer Sync] Could not set seeding scope for ${relatedData.dirName}:`, scopeError.message);
+                  errors++;
                 }
 
               } else {
