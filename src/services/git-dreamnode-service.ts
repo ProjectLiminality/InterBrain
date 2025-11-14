@@ -1600,13 +1600,7 @@ export class GitDreamNodeService {
       lastSynced: Date.now()
     });
 
-    // Update both .udd files
-    await Promise.all([
-      this.updateUDDFile(node),
-      this.updateUDDFile(relatedNode)
-    ]);
-
-    // Update liminal-web.json for Dreamer nodes
+    // Update liminal-web.json for Dreamer nodes (relationships stored here, not in .udd)
     const updateTasks = [];
     if (node.type === 'dreamer') {
       updateTasks.push(this.updateLiminalWebFile(node));
@@ -1648,7 +1642,7 @@ export class GitDreamNodeService {
         lastSynced: Date.now()
       });
 
-      await this.updateUDDFile(node);
+      // Update liminal-web.json only (relationships not stored in .udd)
       if (node.type === 'dreamer') {
         await this.updateLiminalWebFile(node);
       }
@@ -1682,13 +1676,7 @@ export class GitDreamNodeService {
       lastSynced: Date.now()
     });
 
-    // Update both .udd files
-    await Promise.all([
-      this.updateUDDFile(node),
-      this.updateUDDFile(relatedNode)
-    ]);
-
-    // Update liminal-web.json for Dreamer nodes
+    // Update liminal-web.json for Dreamer nodes (relationships stored here, not in .udd)
     const updateTasks = [];
     if (node.type === 'dreamer') {
       updateTasks.push(this.updateLiminalWebFile(node));
