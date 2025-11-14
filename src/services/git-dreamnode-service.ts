@@ -1031,6 +1031,7 @@ export class GitDreamNodeService {
     if (node.type === 'dreamer') {
       if (node.email) udd.email = node.email;
       if (node.phone) udd.phone = node.phone;
+      if (node.did) udd.did = node.did;
     }
 
     // CRITICAL: Preserve radicleId field if it exists
