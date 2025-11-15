@@ -2,8 +2,7 @@ import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../../types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
-import { getRadicleBatchInitService } from '../../../services/radicle-batch-init-service';
-import { getGitHubBatchShareService } from '../../../services/github-batch-share-service';
+import { ShareLinkService } from '../../../services/share-link-service';
 import { serviceManager } from '../../../services/service-manager';
 import { useInterBrainStore } from '../../../store/interbrain-store';
 import { getPDFGeneratorService } from './pdf-generator-service';
@@ -39,47 +38,15 @@ export class EmailExportService {
 			// Get vault name for deep links
 			const vaultName = this.app.vault.getName();
 
-			// Check if Radicle is available on this machine FIRST
+			// Get recipient DID if available (for automatic delegation)
+			const recipientDid = conversationPartner.did;
+			console.log(`👤 [EmailExport] Recipient DID: ${recipientDid || 'none'}`);
+
+			// Get sender's identity for collaboration handshake
 			const radicleService = serviceManager.getRadicleService();
-			const radicleAvailable = await radicleService.isAvailable();
+			let senderDid: string | undefined;
+			let senderName: string | undefined;
 
-			let uuidToRadicleIdMap = new Map<string, string>();
-			let uuidToGitHubUrlMap = new Map<string, string>();
-
-			if (radicleAvailable) {
-				// CRITICAL: Ensure all invoked nodes have Radicle IDs before generating links
-				const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
-				console.log(`🔮 [EmailExport] Radicle available - ensuring ${nodeUUIDs.length} nodes have Radicle IDs...`);
-
-				try {
-					const batchInitService = getRadicleBatchInitService();
-					uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds(nodeUUIDs);
-					console.log(`✅ [EmailExport] ${uuidToRadicleIdMap.size}/${nodeUUIDs.length} nodes have Radicle IDs`);
-				} catch (error) {
-					console.error('❌ [EmailExport] Batch init failed, will use fallback:', error);
-					// Continue with fallback for all nodes
-				}
-			} else {
-				// FALLBACK: Ensure all invoked nodes have GitHub URLs before generating links
-				const nodeUUIDs = invocations.map(inv => inv.dreamUUID);
-				console.log(`🧪 [EmailExport] Radicle not available - ensuring ${nodeUUIDs.length} nodes have GitHub URLs...`);
-
-				try {
-					const batchShareService = getGitHubBatchShareService();
-					uuidToGitHubUrlMap = await batchShareService.ensureNodesHaveGitHubUrls(nodeUUIDs);
-					console.log(`✅ [EmailExport] ${uuidToGitHubUrlMap.size}/${nodeUUIDs.length} nodes have GitHub URLs`);
-				} catch (error) {
-					console.error('❌ [EmailExport] Batch GitHub share failed, will use UUID fallback:', error);
-					// Continue with UUID fallback for all nodes
-				}
-			}
-
-
-		// Get sender's identity for collaboration handshake
-		let senderDid: string | undefined;
-		let senderName: string | undefined;
-
-		if (radicleAvailable) {
 			try {
 				const identity = await radicleService.getIdentity();
 				senderDid = identity.did;
@@ -88,53 +55,59 @@ export class EmailExportService {
 			} catch (error) {
 				console.warn('⚠️ [EmailExport] Could not get Radicle identity:', error);
 			}
-		}
-			// Build email components (with Radicle IDs or GitHub URLs where available)
+
+			// Share each invoked node and collect URIs
+			const shareLinkService = new ShareLinkService(this.app);
+			const sharedLinks: Array<{ nodeName: string; uri: string; identifier: string }> = [];
+
+			console.log(`🔗 [EmailExport] Sharing ${invocations.length} invoked nodes...`);
+
+			for (const inv of invocations) {
+				try {
+					const nodeData = useInterBrainStore.getState().realNodes.get(inv.dreamUUID);
+					if (!nodeData?.node) {
+						console.warn(`⚠️ [EmailExport] Node not found in store: ${inv.dreamUUID} (${inv.nodeName})`);
+						continue;
+					}
+
+					// Share the node (init Radicle → publish → add delegate → generate URI)
+					const { uri, identifier } = await shareLinkService.generateShareLink(nodeData.node, recipientDid);
+
+					sharedLinks.push({
+						nodeName: inv.nodeName,
+						uri: uri,
+						identifier: identifier
+					});
+
+					console.log(`✅ [EmailExport] Shared "${inv.nodeName}": ${identifier}`);
+				} catch (error) {
+					console.error(`❌ [EmailExport] Failed to share "${inv.nodeName}":`, error);
+					// Continue with other nodes
+				}
+			}
+
+			console.log(`✅ [EmailExport] Successfully shared ${sharedLinks.length}/${invocations.length} nodes`);
+
+			// Build email components
 			const subject = this.buildSubject(conversationPartner, conversationStartTime);
 			const body = this.buildEmailBody(
 				conversationPartner,
 				conversationStartTime,
 				conversationEndTime,
-				invocations,
+				sharedLinks,
 				aiSummary,
-				vaultName,
-				uuidToRadicleIdMap,
-				uuidToGitHubUrlMap,
 				senderDid,
 				senderName
 			);
 
-			// Collect deep links for PDF (no image rendering)
-			const deepLinks: Array<{ nodeName: string; link: string }> = [];
-			const allIdentifiers: string[] = [];
+			// Collect deep links for PDF
+			const deepLinks = sharedLinks.map(link => ({
+				nodeName: link.nodeName,
+				link: link.uri
+			}));
 
-			// Build deep links for each invoked DreamNode
-			for (const inv of invocations) {
-				const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
-				const githubUrlFromBatch = uuidToGitHubUrlMap.get(inv.dreamUUID);
-				const nodeData = useInterBrainStore.getState().realNodes.get(inv.dreamUUID);
-				const node = nodeData?.node;
-
-				let link: string;
-				let identifier: string;
-
-				if (radicleId) {
-					link = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
-					identifier = radicleId;
-				} else if (githubUrlFromBatch) {
-					link = URIHandlerService.generateGitHubCloneLink(vaultName, githubUrlFromBatch);
-					identifier = githubUrlFromBatch.replace(/^https?:\/\//, '');
-				} else if (node?.githubRepoUrl) {
-					link = URIHandlerService.generateGitHubCloneLink(vaultName, node.githubRepoUrl);
-					identifier = node.githubRepoUrl.replace(/^https?:\/\//, '');
-				} else {
-					link = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID, senderDid, senderName);
-					identifier = inv.dreamUUID;
-				}
-
-				deepLinks.push({ nodeName: inv.nodeName, link });
-				allIdentifiers.push(identifier);
-			}
+			// Extract identifiers for batch link
+			const allIdentifiers = sharedLinks.map(link => link.identifier);
 
 			// Build install script links for PDF (using interactive mode with bash wrapper)
 			const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
@@ -199,11 +172,8 @@ export class EmailExportService {
 		conversationPartner: DreamNode,
 		startTime: Date,
 		endTime: Date,
-		invocations: InvocationEvent[],
+		sharedLinks: Array<{ nodeName: string; uri: string; identifier: string }>,
 		aiSummary: string,
-		vaultName: string,
-		uuidToRadicleIdMap: Map<string, string>,
-		uuidToGitHubUrlMap: Map<string, string>,
 		senderDid?: string,
 		senderName?: string
 	): string {
@@ -220,62 +190,21 @@ export class EmailExportService {
 			body += `${aiSummary}\n\n`;
 		}
 
-		// Track all identifiers for batch link (mixed Radicle/GitHub/UUID)
-		const allIdentifiers: string[] = [];
-
 		// Add invoked DreamNodes section if any
-		if (invocations.length > 0) {
+		if (sharedLinks.length > 0) {
 			body += `---\n\n`;
 			body += `## Shared DreamNodes\n\n`;
-			body += `During our conversation, I shared ${invocations.length} DreamNode${invocations.length > 1 ? 's' : ''}:\n\n`;
+			body += `During our conversation, I shared ${sharedLinks.length} DreamNode${sharedLinks.length > 1 ? 's' : ''}:\n\n`;
 
-			// Get store to access node metadata (for GitHub URLs)
-			const store = useInterBrainStore.getState();
-
-			invocations.forEach((inv, i) => {
-				const invTimeStr = inv.timestamp.toLocaleTimeString();
-
-				// Four-tier fallback: Radicle ID → Batch GitHub URL → Store GitHub URL → UUID
-				const radicleId = uuidToRadicleIdMap.get(inv.dreamUUID);
-				const githubUrlFromBatch = uuidToGitHubUrlMap.get(inv.dreamUUID);
-				const nodeData = store.realNodes.get(inv.dreamUUID);
-				const node = nodeData?.node;
-
-				let deepLink: string;
-				let identifier: string;
-
-				if (radicleId) {
-					// Primary: Radicle ID (peer-to-peer) with collaboration handshake
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
-					identifier = radicleId;
-				} else if (githubUrlFromBatch) {
-					// Fallback 1: GitHub URL from batch share (just pushed!)
-					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, githubUrlFromBatch);
-					// For batch link, store the repo path without protocol
-					identifier = githubUrlFromBatch.replace(/^https?:\/\//, '');
-					console.log(`📧 [EmailExport] Using batch GitHub URL for "${inv.nodeName}": ${githubUrlFromBatch}`);
-				} else if (node?.githubRepoUrl) {
-					// Fallback 2: GitHub URL from store (already existed)
-					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, node.githubRepoUrl);
-					// For batch link, store the repo path without protocol
-					identifier = node.githubRepoUrl.replace(/^https?:\/\//, '');
-					console.log(`📧 [EmailExport] Using stored GitHub URL for "${inv.nodeName}"`);
-				} else {
-					// Last resort: UUID (legacy, requires network broadcast)
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, inv.dreamUUID, senderDid, senderName);
-					identifier = inv.dreamUUID;
-					console.warn(`⚠️ [EmailExport] Node "${inv.nodeName}" has no Radicle ID or GitHub URL, using UUID fallback`);
-				}
-
-				allIdentifiers.push(identifier);
-
-				body += `${i + 1}. **${inv.nodeName}** (${invTimeStr})\n`;
-				body += `   → ${deepLink}\n\n`;
+			sharedLinks.forEach((link, i) => {
+				body += `${i + 1}. **${link.nodeName}**\n`;
+				body += `   → ${link.uri}\n\n`;
 			});
 
 			// Add batch clone link if multiple nodes shared
-			if (invocations.length > 1) {
-				const batchLink = URIHandlerService.generateBatchNodeLink(vaultName, allIdentifiers, senderDid, senderName);
+			if (sharedLinks.length > 1) {
+				const allIdentifiers = sharedLinks.map(l => l.identifier);
+				const batchLink = URIHandlerService.generateBatchNodeLink('', allIdentifiers, senderDid, senderName);
 				body += `\n📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
 			}
 		}
@@ -290,21 +219,21 @@ export class EmailExportService {
 
 		// Conservative install: Just InterBrain + sender connection (always included)
 		const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
-		const conservativeIdentifiers = [interbrainGitHub]; // Always include InterBrain itself
-		const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
+		const conservativeIdentifiers = [interbrainGitHub];
+		const conservativeUri = URIHandlerService.generateBatchNodeLink('', conservativeIdentifiers, senderDid, senderName);
 		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"`;
 
 		body += `**🌱 Minimal Install** (InterBrain + connection to ${senderName || 'me'}):\n\n`;
 		body += `\`\`\`\n${conservativeInstall}\n\`\`\`\n\n`;
 
 		// Full install: InterBrain + all shared nodes (if any were shared during call)
-		if (invocations.length > 0 && allIdentifiers.length > 0) {
-			// Include InterBrain in the batch link along with all shared nodes
+		if (sharedLinks.length > 0) {
+			const allIdentifiers = sharedLinks.map(l => l.identifier);
 			const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
-			const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName);
+			const fullUri = URIHandlerService.generateBatchNodeLink('', fullIdentifiers, senderDid, senderName);
 			const fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"`;
 
-			body += `**🚀 Full Install** (InterBrain + all ${invocations.length} shared DreamNode${invocations.length > 1 ? 's' : ''}):\n\n`;
+			body += `**🚀 Full Install** (InterBrain + all ${sharedLinks.length} shared DreamNode${sharedLinks.length > 1 ? 's' : ''}):\n\n`;
 			body += `\`\`\`\n${fullInstall}\n\`\`\`\n\n`;
 		}
 

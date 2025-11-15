@@ -865,13 +865,14 @@ export class URIHandlerService {
 	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
 	static generateSingleNodeLink(vaultName: string, identifier: string, senderDid?: string, senderName?: string): string {
+		// Unified schema: Use ?ids= for both single and batch clones
 		// Don't encode colons in Radicle IDs - they're part of the protocol
 		// rad:z... should stay as rad:z..., not rad%3Az...
 		const encodedIdentifier = identifier.startsWith('rad:')
 			? identifier // Keep Radicle ID as-is
 			: encodeURIComponent(identifier); // Encode other identifiers (UUIDs)
 
-		let uri = `obsidian://interbrain-clone?id=${encodedIdentifier}`;
+		let uri = `obsidian://interbrain-clone?ids=${encodedIdentifier}`;
 
 		// Add collaboration handshake parameters if provided
 		if (senderDid) {
@@ -885,7 +886,7 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Generate deep link URL for GitHub clone
+	 * Generate deep link URL for GitHub clone (uses unified ?ids= schema)
 	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
 	 * @param githubRepoUrl GitHub repository URL (e.g., "https://github.com/user/repo" or "github.com/user/repo")
 	 */
@@ -895,8 +896,8 @@ export class URIHandlerService {
 			.replace(/^https?:\/\//, '')  // Remove protocol
 			.replace(/\.git$/, '');       // Remove .git suffix
 
-		// Return clean URI without encoding (slashes must remain unencoded)
-		return `obsidian://interbrain-clone?repo=${repoPath}`;
+		// Use unified ?ids= schema (not ?repo=)
+		return `obsidian://interbrain-clone?ids=${repoPath}`;
 	}
 
 	/**
@@ -907,8 +908,9 @@ export class URIHandlerService {
 	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
 	static generateBatchNodeLink(vaultName: string, identifiers: string[], senderDid?: string, senderName?: string): string {
+		// Unified schema: Use ?ids= with comma-separated list
 		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
-		let uri = `obsidian://interbrain-clone-batch?ids=${encodedIdentifiers}`;
+		let uri = `obsidian://interbrain-clone?ids=${encodedIdentifiers}`;
 
 		// Add collaboration handshake parameters if provided
 		if (senderDid) {
