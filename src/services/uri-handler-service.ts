@@ -275,40 +275,32 @@ export class URIHandlerService {
 					}
 				}
 
-				// STEP: Trigger comprehensive Radicle sync (configure all peer relationships after all clones)
-				try {
-					console.log(`🔄 [URIHandler] Triggering comprehensive Radicle network sync...`);
-					await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-					console.log(`✅ [URIHandler] Radicle network sync complete`);
-				} catch (syncError) {
-					console.warn(`⚠️ [URIHandler] Radicle sync failed (non-critical):`, syncError);
-				}
+				// STEP 1: Trigger comprehensive Radicle sync (configure all peer relationships)
+				// TEMPORARILY COMMENTED OUT FOR DEBUGGING - TEST URI HANDLER IN ISOLATION
+				// try {
+				// 	console.log(`🔄 [URIHandler] Triggering comprehensive Radicle network sync...`);
+				// 	await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+				// 	console.log(`✅ [URIHandler] Radicle network sync complete`);
+				// } catch (syncError) {
+				// 	console.warn(`⚠️ [URIHandler] Radicle sync failed (non-critical):`, syncError);
+				// }
 
-				// FINAL UI REFRESH: Rescan vault to pick up liminal-web.json changes, then refresh UI
-				try {
-					console.log(`🔄 [URIHandler] Rescanning vault to pick up relationship changes...`);
-					await this.dreamNodeService.scanVault();
+				// STEP 2: Run comprehensive refresh at the very end (preserves DreamSong media + completes all setup)
+				// This uses the refresh-plugin command which does a lightweight plugin reload
+				// TEMPORARILY COMMENTED OUT FOR DEBUGGING
+				// try {
+				// 	console.log(`🔄 [URIHandler] Running comprehensive refresh (preserves DreamSong media)...`);
 
-					console.log(`🔄 [URIHandler] Running comprehensive refresh (DreamSong relationships + constellation)...`);
-					const relationshipService = new DreamSongRelationshipService(this.plugin);
-					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
+				// 	// Store Dreamer node UUID for reselection after refresh
+				// 	(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
 
-					if (scanResult.success) {
-						const canvasAPI = (globalThis as any).__interbrainCanvas;
-						if (canvasAPI?.applyConstellationLayout) {
-							await canvasAPI.applyConstellationLayout();
+				// 	await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
+				// 	console.log(`✅ [URIHandler] Batch clone complete - all setup finished`);
+				// } catch (refreshError) {
+				// 	console.error(`❌ [URIHandler] Refresh failed (non-critical):`, refreshError);
+				// }
 
-							// CRITICAL: Select the Dreamer node (not the cloned nodes)
-							const store = useInterBrainStore.getState();
-							store.setSelectedNode(dreamerNode);
-							store.setSpatialLayout('liminal-web');
-
-							console.log(`✅ [URIHandler] Batch clone complete - Dreamer node selected with all relationships visible`);
-						}
-					}
-				} catch (refreshError) {
-					console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
-				}
+				console.log(`✅ [URIHandler] Batch clone complete (Radicle sync and refresh temporarily disabled for debugging)`);
 			}
 
 		} catch (error) {

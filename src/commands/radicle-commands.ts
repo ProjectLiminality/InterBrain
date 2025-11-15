@@ -907,7 +907,7 @@ export function registerRadicleCommands(
 
                 // STEP 2: Add peer as equal delegate (threshold 1)
                 try {
-                  const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, dreamerData.dirName, passphrase);
+                  const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, passphrase);
                   if (wasAdded) {
                     newDelegates++;
                     console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);

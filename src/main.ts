@@ -825,7 +825,7 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Copy share link for selected DreamNode
+    // Copy share link for selected DreamNode (with optional recipient DID for delegation)
     this.addCommand({
       id: 'copy-share-link',
       name: 'Copy Share Link for Selected DreamNode',
@@ -838,9 +838,18 @@ export default class InterBrainPlugin extends Plugin {
         }
 
         try {
+          // Prompt for optional recipient DID (empty = just copy link without delegation)
+          const recipientDid = await this.uiService.promptForText(
+            'Enter recipient DID (or leave empty)',
+            'did:key:z6Mk... (optional)'
+          );
+
           const { ShareLinkService } = await import('./services/share-link-service');
           const shareLinkService = new ShareLinkService(this.app);
-          await shareLinkService.copyShareLink(currentNode);
+
+          // Pass recipientDid if provided (will be undefined if empty string)
+          const effectiveRecipientDid = recipientDid && recipientDid.trim() !== '' ? recipientDid.trim() : undefined;
+          await shareLinkService.copyShareLink(currentNode, effectiveRecipientDid);
         } catch (error) {
           console.error('Failed to copy share link:', error);
           this.uiService.showError(`Failed to copy share link: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -310,8 +310,9 @@ export class RadicleServiceImpl implements RadicleService {
   async isNodeRunning(): Promise<boolean> {
     try {
       const radCmd = this.getRadCommand();
-      const { stdout } = await execAsync(`"${radCmd}" node status`);
-      const isRunning = stdout.includes('Running');
+      const { stdout } = await execAsync(`"${radCmd}" node`);
+      // Output format: "✓ Node is running." when running
+      const isRunning = stdout.includes('Node is running');
       // Reduced logging - only log when NOT running (actionable)
       if (!isRunning) {
         console.log(`RadicleService: Node not running, will start it`);
@@ -711,13 +712,14 @@ export class RadicleServiceImpl implements RadicleService {
     return { repoName, alreadyExisted: false };
   }
 
-  async share(dreamNodePath: string, passphrase?: string): Promise<void> {
+  async share(dreamNodePath: string, passphrase?: string, recipientDid?: string): Promise<void> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
-    // Ensure Radicle node is running before attempting to share
-    await this.ensureNodeRunning(passphrase);
+    if (recipientDid) {
+      console.log(`RadicleService: Will add ${recipientDid} as delegate after publishing`);
+    }
 
     const radCmd = this.getRadCommand();
 
@@ -824,6 +826,11 @@ export class RadicleServiceImpl implements RadicleService {
 
       if (isAlreadyPublic) {
         console.log(`ℹ️ RadicleService: Repository is already public - skipping rad publish`);
+        // Still add delegate if recipient specified
+        if (recipientDid) {
+          console.log(`RadicleService: Adding ${recipientDid} as delegate (repo already public)...`);
+          await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
+        }
         return; // Skip publish, exit successfully
       }
 
@@ -854,6 +861,9 @@ export class RadicleServiceImpl implements RadicleService {
           if (code === 0) {
             console.log('✅ RadicleService: Successfully published to network!');
             resolve();
+          } else if (stdout.includes('already public') || stderr.includes('already public')) {
+            console.log('ℹ️ RadicleService: Repository already public (detected in publish output)');
+            resolve(); // Not an error
           } else {
             reject(new Error(`rad publish exited with code ${code}`));
           }
@@ -866,6 +876,12 @@ export class RadicleServiceImpl implements RadicleService {
 
         child.stdin?.end();
       });
+
+      // STEP 4: Add recipient as delegate if specified
+      if (recipientDid) {
+        console.log(`RadicleService: Adding ${recipientDid} as delegate after successful publish...`);
+        await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
+      }
     } catch (error: any) {
       console.error('RadicleService: Failed to publish to network:', error);
 
@@ -933,12 +949,10 @@ export class RadicleServiceImpl implements RadicleService {
    * Sets threshold to 1 for true peer-to-peer equality
    * @returns true if delegate was added, false if already exists
    */
-  async addDelegate(dreamNodePath: string, peerDID: string, peerName: string, passphrase?: string): Promise<boolean> {
+  async addDelegate(dreamNodePath: string, peerDID: string, passphrase?: string): Promise<boolean> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
-
-    await this.ensureNodeRunning(passphrase);
 
     const radCmd = this.getRadCommand();
 
@@ -950,7 +964,7 @@ export class RadicleServiceImpl implements RadicleService {
       // Check if this DID is already in the delegates array
       if (identity.delegates && Array.isArray(identity.delegates)) {
         if (identity.delegates.includes(peerDID)) {
-          console.log(`RadicleService: ${peerName} (${peerDID}) is already a delegate - skipping`);
+          console.log(`RadicleService: ${peerDID} is already a delegate - skipping`);
           return false; // Already exists
         }
       }
@@ -958,18 +972,28 @@ export class RadicleServiceImpl implements RadicleService {
       console.warn(`RadicleService: Could not check existing delegates (will attempt to add):`, inspectError);
     }
 
-    const title = `Add ${peerName} as equal collaborator`;
-    const description = `Making ${peerName} an equal delegate for peer-to-peer collaboration`;
+    const title = `Add peer as equal collaborator`;
+    const description = `Adding ${peerDID} as equal delegate for peer-to-peer collaboration`;
+
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+    }
 
     try {
       const result = await execAsync(
         `"${radCmd}" id update --delegate "${peerDID}" --threshold 1 --title "${title}" --description "${description}"`,
-        { cwd: dreamNodePath }
+        { cwd: dreamNodePath, env }
       );
-      console.log(`RadicleService: Added ${peerName} as delegate:`, result.stdout);
+      console.log(`RadicleService: Added ${peerDID} as delegate:`, result.stdout);
       return true; // Successfully added
     } catch (error: any) {
-      throw new Error(`Failed to add delegate: ${error.message}`);
+      // Log full error details for debugging
+      console.error(`RadicleService: rad id update failed:`, error);
+      console.error(`RadicleService: stderr:`, error.stderr);
+      console.error(`RadicleService: stdout:`, error.stdout);
+      throw new Error(`Failed to add delegate: ${error.stderr || error.message}`);
     }
   }
 
@@ -986,14 +1010,16 @@ export class RadicleServiceImpl implements RadicleService {
 
     // IDEMPOTENCY CHECK: Check if seeding policy already exists with correct scope
     try {
-      const { stdout: seedListOutput } = await execAsync(`"${radCmd}" seed list`, { cwd: dreamNodePath });
+      const { stdout: seedListOutput } = await execAsync(`"${radCmd}" seed`, { cwd: dreamNodePath });
 
-      // Parse output to find this RID's seeding policy
-      // Format: "rad:z... all" or "rad:z... followed"
+      // Parse table output to find this RID's seeding policy
+      // Format: "│ rad:z... Name  allow  followed │" or "│ rad:z... Name  allow  all │"
       const lines = seedListOutput.split('\n');
       for (const line of lines) {
         if (line.includes(radicleId)) {
-          if (line.includes(`scope: ${scope}`)) {
+          // Check if the scope in this line matches desired scope
+          const hasCorrectScope = line.trim().endsWith(`${scope}│`) || line.includes(`${scope} │`);
+          if (hasCorrectScope) {
             console.log(`RadicleService: Seeding scope for ${radicleId} already set to '${scope}' - skipping`);
             return false; // Already correct
           }

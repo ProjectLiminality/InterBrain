@@ -849,15 +849,25 @@ export class GitDreamNodeService {
       if (await this.fileExists(mediaPath)) {
         const stats = await fsPromises.stat(mediaPath);
         const mimeType = this.getMimeType(udd.dreamTalk);
-        // Skip loading media data during vault scan - will lazy load via MediaLoadingService
 
-        dreamTalkMedia = [{
-          path: udd.dreamTalk,
-          absolutePath: mediaPath,
-          type: mimeType,
-          data: '', // Empty - lazy load on demand
-          size: stats.size
-        }];
+        // CRITICAL: If we already have loaded media data for this file, preserve it
+        // Only create fresh entry if we don't have existing data
+        const existingMedia = existingData?.node.dreamTalkMedia?.[0];
+        const hasExistingData = existingMedia && existingMedia.data && existingMedia.data.length > 0;
+
+        if (hasExistingData && existingMedia.path === udd.dreamTalk) {
+          // Keep existing media with loaded data intact
+          dreamTalkMedia = existingData.node.dreamTalkMedia;
+        } else {
+          // Fresh media entry - will lazy load on demand
+          dreamTalkMedia = [{
+            path: udd.dreamTalk,
+            absolutePath: mediaPath,
+            type: mimeType,
+            data: '', // Empty - lazy load on demand
+            size: stats.size
+          }];
+        }
       }
       // If file doesn't exist but udd.dreamTalk is set, keep existing dreamTalkMedia
       // This prevents flickering when file system is temporarily inaccessible

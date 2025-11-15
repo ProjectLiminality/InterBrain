@@ -21,8 +21,11 @@ export class ShareLinkService {
 	/**
 	 * Generate and copy share link for a single DreamNode
 	 * Ensures node is properly initialized for Radicle/GitHub before generating link
+	 *
+	 * @param node - DreamNode to share
+	 * @param recipientDid - Optional recipient DID to add as delegate (only for Radicle)
 	 */
-	async copyShareLink(node: DreamNode): Promise<void> {
+	async copyShareLink(node: DreamNode, recipientDid?: string): Promise<void> {
 		try {
 			// Validate node has required fields
 			if (!node) {
@@ -95,12 +98,17 @@ export class ShareLinkService {
 						console.log(`📡 [ShareLink] Making public and publishing to Radicle network...`);
 
 						// Run the publish flow (RadicleService.share checks if already public)
+						// Pass recipientDid if provided to automatically add them as delegate
 						// Convert relative repoPath to absolute path using vault base path
 					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
-					radicleService.share(absoluteRepoPath)
+					radicleService.share(absoluteRepoPath, undefined, recipientDid)
 							.then(() => {
 								console.log(`✅ [ShareLink] Successfully published "${node.name}" to Radicle network`);
-								new Notice(`📡 "${node.name}" published to Radicle network!`);
+								if (recipientDid) {
+									new Notice(`📡 "${node.name}" published and shared with recipient!`);
+								} else {
+									new Notice(`📡 "${node.name}" published to Radicle network!`);
+								}
 							})
 							.catch((error) => {
 								console.error(`❌ [ShareLink] Failed to publish "${node.name}":`, error);
