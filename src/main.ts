@@ -990,6 +990,12 @@ export default class InterBrainPlugin extends Plugin {
         // Note: Bidirectional relationship sync is no longer needed with liminal-web.json architecture
         // Relationships are computed from Dreamer → Dream pointers during vault scan
 
+        // Clean up dangling relationships before reload
+        // This ensures deleted nodes are properly removed from relationship references
+        console.log(`[Refresh] Cleaning dangling relationships...`);
+        await (this.app as any).commands.executeCommandById('interbrain:clean-dangling-relationships');
+        console.log(`[Refresh] Dangling relationship cleanup complete`);
+
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs
         console.log(`[Refresh] Triggering lightweight plugin reload...`);
