@@ -275,6 +275,16 @@ export class URIHandlerService {
 					}
 				}
 
+				// Sync Radicle peer relationships (follow, delegate, remotes, seeding scope)
+				// This sets up trust-based collaboration for all cloned DreamNodes
+				try {
+					console.log(`🔄 [URIHandler] Syncing Radicle peer relationships for Dreamer "${dreamerNode.name}"...`);
+					await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peers');
+					console.log(`✅ [URIHandler] Radicle peer sync complete`);
+				} catch (syncError) {
+					console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+				}
+
 				// FINAL STEP: Refresh UI with Dreamer node auto-selected
 				try {
 					// CRITICAL: Set target UUID BEFORE calling refresh command
