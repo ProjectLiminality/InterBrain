@@ -146,9 +146,12 @@ export class URIHandlerService {
 					const store = useInterBrainStore.getState();
 					let targetNode: any;
 
+					// Convert Map to array for searching
+					const nodesArray = Array.from(store.realNodes.values()).map(nodeData => nodeData.node);
+
 					if (isSingleClone) {
 						// Single clone: Select the cloned Dream node
-						targetNode = store.nodes.find(n => {
+						targetNode = nodesArray.find(n => {
 							// Match by Radicle ID if available
 							if (identifiers[0].startsWith('rad:')) {
 								return n.radicleId === identifiers[0];
@@ -162,7 +165,7 @@ export class URIHandlerService {
 						console.log(`⚡ [URIHandler] Single clone - selecting Dream node: ${targetNode?.name}`);
 					} else {
 						// Batch clone: Select the Dreamer node
-						targetNode = store.nodes.find(n => n.type === 'dreamer' && n.did === senderDid);
+						targetNode = nodesArray.find(n => n.type === 'dreamer' && n.did === senderDid);
 						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${targetNode?.name}`);
 					}
 
