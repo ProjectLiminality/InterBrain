@@ -587,8 +587,10 @@ export class RadicleServiceImpl implements RadicleService {
     let cloneResult: any;
 
     try {
-      console.log(`RadicleService: Running 'rad clone ${radicleId}' in ${destinationPath}`);
-      cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
+      // CRITICAL: Use --scope followed for Liminal Web trust-based model
+      // This sets correct seeding policy from the start (no need to change later)
+      console.log(`RadicleService: Running 'rad clone ${radicleId} --scope followed' in ${destinationPath}`);
+      cloneResult = await execAsync(`"${radCmd}" clone ${radicleId} --scope followed`, {
         cwd: destinationPath,
         env: env,
       });
