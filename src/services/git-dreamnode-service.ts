@@ -112,6 +112,10 @@ export class GitDreamNodeService {
     }
     
     // Create DreamNode object
+    // Dreamer nodes start with InterBrain connection pre-populated
+    const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+    const initialConnections = type === 'dreamer' ? [INTERBRAIN_UUID] : [];
+
     const node: DreamNode = {
       id: uuid,
       type,
@@ -119,12 +123,13 @@ export class GitDreamNodeService {
       position: nodePosition,
       dreamTalkMedia,
       dreamSongContent: [],
-      liminalWebConnections: [],
+      liminalWebConnections: initialConnections,
       repoPath: repoName, // Relative to vault
       hasUnsavedChanges: false,
       gitStatus: await this.checkGitStatus(repoPath),
-      email: undefined,
-      phone: undefined
+      email: metadata?.email,
+      phone: metadata?.phone,
+      did: metadata?.did
     };
     
     // Update store immediately for snappy UI
@@ -159,24 +164,10 @@ export class GitDreamNodeService {
         }
       });
 
-    // Auto-link dreamer nodes to InterBrain (bidirectional)
-    if (type === 'dreamer') {
-      const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
-      console.log(`GitDreamNodeService: Auto-linking dreamer "${title}" to InterBrain...`);
-
-      // IMPORTANT: Wait for git repository creation to complete before adding relationships
-      // This ensures liminal-web.json exists and is ready to be updated
-      repoCreationPromise.then(() => {
-        this.addRelationship(uuid, INTERBRAIN_UUID)
-          .then(() => {
-            console.log(`✅ GitDreamNodeService: Auto-linked dreamer "${title}" to InterBrain`);
-          })
-          .catch((error) => {
-            console.error(`Failed to auto-link dreamer "${title}" to InterBrain:`, error);
-            // Non-fatal - sync command will catch this later
-          });
-      });
-    }
+    // InterBrain relationship is already set up for Dreamer nodes:
+    // 1. node.liminalWebConnections initialized with [INTERBRAIN_UUID]
+    // 2. liminal-web.json created with { relationships: [INTERBRAIN_UUID] }
+    // No need for separate auto-link - everything is atomic in initial creation
 
     console.log(`GitDreamNodeService: Created ${type} "${title}" with ID ${uuid}`);
     return node;
@@ -559,11 +550,13 @@ export class GitDreamNodeService {
         await fsPromises.writeFile(gitignorePath, gitignoreContent);
         console.log(`GitDreamNodeService: Created .gitignore for Dreamer node`);
 
-        // Create empty liminal-web.json (will be populated by updateLiminalWebFile later)
+        // Create liminal-web.json with InterBrain relationship pre-populated
+        // All Dreamer nodes should start connected to InterBrain
+        const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
         const liminalWebPath = path.join(repoPath, 'liminal-web.json');
-        const emptyLiminalWeb = { relationships: [] };
-        await fsPromises.writeFile(liminalWebPath, JSON.stringify(emptyLiminalWeb, null, 2));
-        console.log(`GitDreamNodeService: Created empty liminal-web.json for Dreamer node`);
+        const initialLiminalWeb = { relationships: [INTERBRAIN_UUID] };
+        await fsPromises.writeFile(liminalWebPath, JSON.stringify(initialLiminalWeb, null, 2));
+        console.log(`GitDreamNodeService: Created liminal-web.json with InterBrain connection for Dreamer node`);
       }
 
       // Make initial commit
