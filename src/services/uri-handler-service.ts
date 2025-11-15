@@ -275,32 +275,23 @@ export class URIHandlerService {
 					}
 				}
 
-				// STEP 1: Trigger comprehensive Radicle sync (configure all peer relationships)
-				// TEMPORARILY COMMENTED OUT FOR DEBUGGING - TEST URI HANDLER IN ISOLATION
-				// try {
-				// 	console.log(`🔄 [URIHandler] Triggering comprehensive Radicle network sync...`);
-				// 	await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-				// 	console.log(`✅ [URIHandler] Radicle network sync complete`);
-				// } catch (syncError) {
-				// 	console.warn(`⚠️ [URIHandler] Radicle sync failed (non-critical):`, syncError);
-				// }
+				// FINAL STEP: Auto-select Dreamer node and refresh to update all UI relationships
+				try {
+					console.log(`🔄 [URIHandler] Auto-selecting Dreamer node and refreshing UI...`);
 
-				// STEP 2: Run comprehensive refresh at the very end (preserves DreamSong media + completes all setup)
-				// This uses the refresh-plugin command which does a lightweight plugin reload
-				// TEMPORARILY COMMENTED OUT FOR DEBUGGING
-				// try {
-				// 	console.log(`🔄 [URIHandler] Running comprehensive refresh (preserves DreamSong media)...`);
+					// Store Dreamer node UUID for reselection after refresh
+					(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
 
-				// 	// Store Dreamer node UUID for reselection after refresh
-				// 	(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
-
-				// 	await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
-				// 	console.log(`✅ [URIHandler] Batch clone complete - all setup finished`);
-				// } catch (refreshError) {
-				// 	console.error(`❌ [URIHandler] Refresh failed (non-critical):`, refreshError);
-				// }
-
-				console.log(`✅ [URIHandler] Batch clone complete (Radicle sync and refresh temporarily disabled for debugging)`);
+					// Trigger refresh command which will:
+					// 1. Reload plugin (picks up all disk changes)
+					// 2. Rescan vault (builds all bidirectional relationships)
+					// 3. Reselect Dreamer node (from stored UUID)
+					// 4. Update constellation layout
+					await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
+					console.log(`✅ [URIHandler] Batch clone complete - Dreamer node selected with all relationships visible`);
+				} catch (refreshError) {
+					console.error(`❌ [URIHandler] Refresh failed (non-critical):`, refreshError);
+				}
 			}
 
 		} catch (error) {
