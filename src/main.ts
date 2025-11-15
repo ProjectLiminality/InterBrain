@@ -965,19 +965,27 @@ export default class InterBrainPlugin extends Plugin {
         const store = useInterBrainStore.getState();
         const currentNode = store.selectedNode;
 
-        // Store UUID for reselection after reload
-        let nodeUUID: string | undefined;
-        if (currentNode) {
-          nodeUUID = currentNode.id;
-          console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
-          console.log(`[Refresh] Storing UUID for reselection...`);
+        // CRITICAL: Only set UUID if not already set by another flow (e.g., URI handler)
+        // This prevents refresh command from overwriting explicit auto-selection targets
+        const existingUUID = (globalThis as any).__interbrainReloadTargetUUID;
+        if (existingUUID) {
+          console.log(`[Refresh] ℹ️ UUID already set externally: ${existingUUID}`);
+          console.log(`[Refresh] Preserving external auto-selection target (not using current node)`);
         } else {
-          console.log(`[Refresh] ℹ️ No node currently selected`);
-        }
+          // Store current node UUID for reselection after reload
+          let nodeUUID: string | undefined;
+          if (currentNode) {
+            nodeUUID = currentNode.id;
+            console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
+            console.log(`[Refresh] Storing UUID for reselection...`);
+          } else {
+            console.log(`[Refresh] ℹ️ No node currently selected`);
+          }
 
-        // Store UUID in a global variable that persists across plugin reload
-        (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
-        console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
+          // Store UUID in a global variable that persists across plugin reload
+          (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
+          console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
+        }
 
         // Note: Bidirectional relationship sync is no longer needed with liminal-web.json architecture
         // Relationships are computed from Dreamer → Dream pointers during vault scan
