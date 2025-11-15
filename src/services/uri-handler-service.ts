@@ -275,22 +275,24 @@ export class URIHandlerService {
 					}
 				}
 
-				// FINAL STEP: Auto-select Dreamer node and refresh to update all UI relationships
+				// FINAL STEP: Refresh UI with Dreamer node auto-selected
 				try {
-					console.log(`🔄 [URIHandler] Auto-selecting Dreamer node and refreshing UI...`);
-
-					// Store Dreamer node UUID for reselection after refresh
+					// CRITICAL: Set target UUID BEFORE calling refresh command
+					// The refresh command reads this global variable to determine which node to select
+					console.log(`🔄 [URIHandler] Setting Dreamer node for auto-selection: ${dreamerNode.name} (${dreamerNode.id})`);
 					(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
+					console.log(`✅ [URIHandler] Target UUID stored in globalThis.__interbrainReloadTargetUUID`);
 
 					// Trigger refresh command which will:
-					// 1. Reload plugin (picks up all disk changes)
+					// 1. Reload plugin (picks up all disk changes including liminal-web.json)
 					// 2. Rescan vault (builds all bidirectional relationships)
-					// 3. Reselect Dreamer node (from stored UUID)
-					// 4. Update constellation layout
+					// 3. Auto-select Dreamer node (reads UUID from globalThis)
+					// 4. Update constellation layout (shows all connected nodes)
+					console.log(`🔄 [URIHandler] Triggering plugin refresh...`);
 					await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
 					console.log(`✅ [URIHandler] Batch clone complete - Dreamer node selected with all relationships visible`);
 				} catch (refreshError) {
-					console.error(`❌ [URIHandler] Refresh failed (non-critical):`, refreshError);
+					console.error(`❌ [URIHandler] Refresh failed:`, refreshError);
 				}
 			}
 
