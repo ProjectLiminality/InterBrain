@@ -131,68 +131,116 @@ export class URIHandlerService {
 			const summary = parts.join(', ');
 			new Notice(`✅ Clone complete: ${summary}`);
 
+			// Determine if anything actually changed (new clones vs all already existed)
+			const allNodesAlreadyExisted = successCount === 0 && skipCount > 0;
+			console.log(`🔍 [URIHandler] All nodes already existed: ${allNodesAlreadyExisted} (${successCount} new, ${skipCount} skipped)`);
+
 			// If we have sender info, handle collaboration handshake
 			if (senderDid && senderName) {
-				// CRITICAL: Scan vault FIRST to ensure all cloned nodes are in the store
-				console.log(`🔄 [URIHandler] Scanning vault to register ${successCount + skipCount} cloned node(s)...`);
-				await this.dreamNodeService.scanVault();
+				if (allNodesAlreadyExisted) {
+					// FAST PATH: All nodes already exist - just select the appropriate node
+					// No need for: vault scan, linking, peer sync, or full refresh
+					console.log(`⚡ [URIHandler] Fast path - all nodes already existed, just selecting node...`);
 
-				// Find or create the Dreamer node
-				const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
-				await new Promise(resolve => setTimeout(resolve, 200));
-
-				// Link all successfully cloned nodes to the Dreamer node
-				for (const { result, identifier } of results) {
-					if (result === 'success' || result === 'skipped') {
-						try {
-							const clonedNode = await this.findNodeByIdentifier(identifier);
-							if (clonedNode) {
-								await this.linkNodes(clonedNode, dreamerNode);
-							} else {
-								console.warn(`⚠️ [URIHandler] Node not found after vault scan: ${identifier}`);
-							}
-						} catch (linkError) {
-							console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
-						}
-					}
-				}
-
-				// Sync Radicle peer relationships (follow, delegate, remotes, seeding scope)
-				try {
-					console.log(`🔄 [URIHandler] Syncing Radicle peer relationships for Dreamer "${dreamerNode.name}"...`);
-					await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-					console.log(`✅ [URIHandler] Radicle peer sync complete`);
-				} catch (syncError) {
-					console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
-				}
-
-				// FINAL STEP: Refresh UI with smart selection
-				try {
-					let targetUUID: string | undefined;
+					// Get current store state (nodes already loaded)
+					const store = useInterBrainStore.getState();
+					let targetNode: any;
 
 					if (isSingleClone) {
 						// Single clone: Select the cloned Dream node
-						const clonedNode = await this.findNodeByIdentifier(identifiers[0]);
-						targetUUID = clonedNode?.id;
-						console.log(`🔄 [URIHandler] Single clone - selecting Dream node: ${clonedNode?.name} (${targetUUID})`);
+						targetNode = store.nodes.find(n => {
+							// Match by Radicle ID if available
+							if (identifiers[0].startsWith('rad:')) {
+								return n.radicleId === identifiers[0];
+							}
+							// Match by GitHub URL if available
+							if (identifiers[0].includes('github.com/')) {
+								return n.githubRepoUrl?.includes(identifiers[0]);
+							}
+							return false;
+						});
+						console.log(`⚡ [URIHandler] Single clone - selecting Dream node: ${targetNode?.name}`);
 					} else {
 						// Batch clone: Select the Dreamer node
-						targetUUID = dreamerNode.id;
-						console.log(`🔄 [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode.name} (${targetUUID})`);
+						targetNode = store.nodes.find(n => n.type === 'dreamer' && n.did === senderDid);
+						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${targetNode?.name}`);
 					}
 
-					// CRITICAL: Set target UUID BEFORE calling refresh command
-					if (targetUUID) {
-						(globalThis as any).__interbrainReloadTargetUUID = targetUUID;
-						console.log(`✅ [URIHandler] Target UUID stored in globalThis.__interbrainReloadTargetUUID`);
+					if (targetNode) {
+						// Directly select the node in the store (no refresh needed)
+						store.selectNode(targetNode);
+						console.log(`✅ [URIHandler] Fast path complete - node selected instantly`);
+					} else {
+						console.warn(`⚠️ [URIHandler] Fast path failed - could not find target node, falling back to refresh`);
+						// Fall back to refresh if we can't find the node
+						await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
 					}
 
-					// Trigger refresh command
-					console.log(`🔄 [URIHandler] Triggering plugin refresh...`);
-					await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
-					console.log(`✅ [URIHandler] Clone complete - node selected with all relationships visible`);
-				} catch (refreshError) {
-					console.error(`❌ [URIHandler] Refresh failed:`, refreshError);
+				} else {
+					// FULL PATH: New nodes were cloned - run complete workflow
+					console.log(`🔄 [URIHandler] Full path - new nodes cloned, running complete workflow...`);
+
+					// CRITICAL: Scan vault FIRST to ensure all cloned nodes are in the store
+					console.log(`🔄 [URIHandler] Scanning vault to register ${successCount + skipCount} cloned node(s)...`);
+					await this.dreamNodeService.scanVault();
+
+					// Find or create the Dreamer node
+					const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
+					await new Promise(resolve => setTimeout(resolve, 200));
+
+					// Link all successfully cloned nodes to the Dreamer node
+					for (const { result, identifier } of results) {
+						if (result === 'success' || result === 'skipped') {
+							try {
+								const clonedNode = await this.findNodeByIdentifier(identifier);
+								if (clonedNode) {
+									await this.linkNodes(clonedNode, dreamerNode);
+								} else {
+									console.warn(`⚠️ [URIHandler] Node not found after vault scan: ${identifier}`);
+								}
+							} catch (linkError) {
+								console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
+							}
+						}
+					}
+
+					// Sync Radicle peer relationships (follow, delegate, remotes, seeding scope)
+					try {
+						console.log(`🔄 [URIHandler] Syncing Radicle peer relationships for Dreamer "${dreamerNode.name}"...`);
+						await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+						console.log(`✅ [URIHandler] Radicle peer sync complete`);
+					} catch (syncError) {
+						console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+					}
+
+					// FINAL STEP: Refresh UI with smart selection
+					try {
+						let targetUUID: string | undefined;
+
+						if (isSingleClone) {
+							// Single clone: Select the cloned Dream node
+							const clonedNode = await this.findNodeByIdentifier(identifiers[0]);
+							targetUUID = clonedNode?.id;
+							console.log(`🔄 [URIHandler] Single clone - selecting Dream node: ${clonedNode?.name} (${targetUUID})`);
+						} else {
+							// Batch clone: Select the Dreamer node
+							targetUUID = dreamerNode.id;
+							console.log(`🔄 [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode.name} (${targetUUID})`);
+						}
+
+						// CRITICAL: Set target UUID BEFORE calling refresh command
+						if (targetUUID) {
+							(globalThis as any).__interbrainReloadTargetUUID = targetUUID;
+							console.log(`✅ [URIHandler] Target UUID stored in globalThis.__interbrainReloadTargetUUID`);
+						}
+
+						// Trigger refresh command
+						console.log(`🔄 [URIHandler] Triggering plugin refresh...`);
+						await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
+						console.log(`✅ [URIHandler] Clone complete - node selected with all relationships visible`);
+					} catch (refreshError) {
+						console.error(`❌ [URIHandler] Refresh failed:`, refreshError);
+					}
 				}
 			}
 
