@@ -279,7 +279,7 @@ export class URIHandlerService {
 				// This sets up trust-based collaboration for all cloned DreamNodes
 				try {
 					console.log(`🔄 [URIHandler] Syncing Radicle peer relationships for Dreamer "${dreamerNode.name}"...`);
-					await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peers');
+					await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
 					console.log(`✅ [URIHandler] Radicle peer sync complete`);
 				} catch (syncError) {
 					console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
