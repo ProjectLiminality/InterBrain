@@ -1031,11 +1031,13 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
+      // Use --no-fetch to avoid blocking on seed node sync
+      // The Radicle node will naturally sync in the background later
       const result = await execAsync(
-        `"${radCmd}" seed "${radicleId}" --scope ${scope}`,
+        `"${radCmd}" seed "${radicleId}" --scope ${scope} --no-fetch`,
         { cwd: dreamNodePath }
       );
-      console.log(`RadicleService: Set seeding scope to '${scope}':`, result.stdout);
+      console.log(`RadicleService: Set seeding scope to '${scope}' (no-fetch):`, result.stdout);
       return true; // Successfully set
     } catch (error: any) {
       throw new Error(`Failed to set seeding scope: ${error.message}`);
