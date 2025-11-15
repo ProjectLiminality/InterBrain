@@ -171,7 +171,7 @@ export class URIHandlerService {
 
 					if (targetNode) {
 						// Directly select the node in the store (no refresh needed)
-						store.selectNode(targetNode);
+						store.setSelectedNode(targetNode);
 						console.log(`✅ [URIHandler] Fast path complete - node selected instantly`);
 					} else {
 						console.warn(`⚠️ [URIHandler] Fast path failed - could not find target node, falling back to refresh`);
