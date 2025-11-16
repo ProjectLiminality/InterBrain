@@ -46,12 +46,25 @@ export class EmailExportService {
 			const radicleService = serviceManager.getRadicleService();
 			let senderDid: string | undefined;
 			let senderName: string | undefined;
+			let senderUuid: string | undefined;
 
 			try {
 				const identity = await radicleService.getIdentity();
 				senderDid = identity.did;
 				senderName = identity.alias || 'Friend';
 				console.log(`👤 [EmailExport] Sender identity: ${senderName} (${senderDid})`);
+
+				// Find sender's Dreamer node by DID
+				const dreamNodeService = serviceManager.getDreamNodeService();
+				const allNodes = await dreamNodeService.list();
+				const senderDreamerNode = allNodes.find(node => node.type === 'dreamer' && node.did === senderDid);
+
+				if (senderDreamerNode) {
+					senderUuid = senderDreamerNode.id;
+					console.log(`👤 [EmailExport] Sender Dreamer node UUID: ${senderUuid}`);
+				} else {
+					console.warn('⚠️ [EmailExport] Could not find sender Dreamer node - DID backpropagation will be skipped');
+				}
 			} catch (error) {
 				console.warn('⚠️ [EmailExport] Could not get Radicle identity:', error);
 			}
@@ -97,7 +110,8 @@ export class EmailExportService {
 				sharedLinks,
 				aiSummary,
 				senderDid,
-				senderName
+				senderName,
+				senderUuid
 			);
 
 			// Collect deep links for PDF
@@ -114,13 +128,14 @@ export class EmailExportService {
 			const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 			const conservativeIdentifiers = [interbrainGitHub];
 			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
-			const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"`;
+			const dreamerUuidParam = senderUuid ? ` --dreamer-uuid "${senderUuid}"` : '';
+			const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
 
 			let fullInstall: string | undefined;
 			if (invocations.length > 0 && allIdentifiers.length > 0) {
 				const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
 				const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName);
-				fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"`;
+				fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"${dreamerUuidParam}`;
 			}
 
 			const installLinks = {
@@ -175,7 +190,8 @@ export class EmailExportService {
 		sharedLinks: Array<{ nodeName: string; uri: string; identifier: string }>,
 		aiSummary: string,
 		senderDid?: string,
-		senderName?: string
+		senderName?: string,
+		senderUuid?: string
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -221,7 +237,8 @@ export class EmailExportService {
 		const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 		const conservativeIdentifiers = [interbrainGitHub];
 		const conservativeUri = URIHandlerService.generateBatchNodeLink('', conservativeIdentifiers, senderDid, senderName);
-		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"`;
+		const dreamerUuidParam = senderUuid ? ` --dreamer-uuid "${senderUuid}"` : '';
+		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
 
 		body += `**🌱 Minimal Install** (InterBrain + connection to ${senderName || 'me'}):\n\n`;
 		body += `\`\`\`\n${conservativeInstall}\n\`\`\`\n\n`;
@@ -231,7 +248,7 @@ export class EmailExportService {
 			const allIdentifiers = sharedLinks.map(l => l.identifier);
 			const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
 			const fullUri = URIHandlerService.generateBatchNodeLink('', fullIdentifiers, senderDid, senderName);
-			const fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"`;
+			const fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"${dreamerUuidParam}`;
 
 			body += `**🚀 Full Install** (InterBrain + all ${sharedLinks.length} shared DreamNode${sharedLinks.length > 1 ? 's' : ''}):\n\n`;
 			body += `\`\`\`\n${fullInstall}\n\`\`\`\n\n`;

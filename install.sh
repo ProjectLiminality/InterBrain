@@ -11,7 +11,7 @@
 # With personalized clone URI + DID backpropagation:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh) \
 #     --uri "obsidian://interbrain-clone?..." \
-#     --sender-uuid "alice-dreamer-uuid"
+#     --dreamer-uuid "alice-dreamer-uuid"
 #
 # With specific branch (for testing):
 #   bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/feature/radicle-migration/install.sh) \
@@ -76,7 +76,7 @@ DEFAULT_VAULT_PARENT="$HOME"     # Will resolve to current user's home directory
 
 # Parse command-line arguments
 CLONE_URI=""
-SENDER_UUID=""
+DREAMER_UUID=""
 BRANCH="main"  # Default to main branch
 TEST_FAIL=""
 while [[ $# -gt 0 ]]; do
@@ -85,8 +85,8 @@ while [[ $# -gt 0 ]]; do
       CLONE_URI="$2"
       shift 2
       ;;
-    --sender-uuid)
-      SENDER_UUID="$2"
+    --dreamer-uuid)
+      DREAMER_UUID="$2"
       shift 2
       ;;
     --branch)
@@ -122,11 +122,11 @@ warning() {
 handle_did_backpropagation() {
     local RAD_DID="$1"
     local RAD_ALIAS="$2"
-    local SENDER_UUID="$3"
+    local DREAMER_UUID="$3"
     local CLONE_URI="$4"
 
-    if [ -z "$SENDER_UUID" ]; then
-        return  # No sender UUID provided, skip
+    if [ -z "$DREAMER_UUID" ]; then
+        return  # No dreamer UUID provided, skip
     fi
 
     echo ""
@@ -154,7 +154,7 @@ handle_did_backpropagation() {
     fi
 
     # Generate update-contact URI
-    UPDATE_URI="obsidian://interbrain-update-contact?did=$(echo "$RAD_DID" | sed 's/:/%3A/g')&uuid=$SENDER_UUID"
+    UPDATE_URI="obsidian://interbrain-update-contact?did=$(echo "$RAD_DID" | sed 's/:/%3A/g')&uuid=$DREAMER_UUID"
     if [ -n "$RAD_ALIAS" ] && [ "$RAD_ALIAS" != "Unknown" ]; then
         UPDATE_URI="${UPDATE_URI}&name=$(echo "$RAD_ALIAS" | sed 's/ /%20/g')"
     fi
@@ -1094,7 +1094,7 @@ elif rad self --did >/dev/null 2>&1; then
     echo "   Alias: $RAD_ALIAS"
 
     # DID Backpropagation (also handle existing identity case)
-    handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$SENDER_UUID" "$CLONE_URI"
+    handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$DREAMER_UUID" "$CLONE_URI"
 else
     # No identity - offer to create
     warning "No Radicle identity found"
@@ -1122,8 +1122,8 @@ else
                 echo "   DID: $RAD_DID"
                 echo "   Alias: $RAD_ALIAS"
 
-                # DID Backpropagation: Share DID with sender if sender-uuid provided
-                handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$SENDER_UUID" "$CLONE_URI"
+                # DID Backpropagation: Share DID with sender if dreamer-uuid provided
+                handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$DREAMER_UUID" "$CLONE_URI"
             else
                 warning "Identity creation incomplete"
                 info "You can create it later with: rad auth"
