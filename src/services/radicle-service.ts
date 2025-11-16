@@ -958,16 +958,38 @@ export class RadicleServiceImpl implements RadicleService {
 
     const radCmd = this.getRadCommand();
 
-    // IDEMPOTENCY CHECK: Check if peer is already a delegate
+    // IDEMPOTENCY CHECK: Check if peer is already a delegate (canonical or pending)
     try {
+      // Check canonical identity first
       const { stdout } = await execAsync(`"${radCmd}" inspect --identity`, { cwd: dreamNodePath });
       const identity = JSON.parse(stdout);
 
-      // Check if this DID is already in the delegates array
       if (identity.delegates && Array.isArray(identity.delegates)) {
         if (identity.delegates.includes(peerDID)) {
-          console.log(`RadicleService: ${peerDID} is already a delegate - skipping`);
-          return false; // Already exists
+          console.log(`RadicleService: ${peerDID} is already a delegate (canonical) - skipping`);
+          return false; // Already exists in canonical state
+        }
+      }
+
+      // Check pending revisions - see if there's already an active/accepted revision adding this delegate
+      const { stdout: idListOutput } = await execAsync(`"${radCmd}" id list`, { cwd: dreamNodePath });
+      const lines = idListOutput.split('\n');
+
+      for (const line of lines) {
+        // Look for active or accepted revisions (not redacted/rejected)
+        if ((line.includes('active') || line.includes('accepted')) &&
+            line.includes('Add peer as equal collaborator')) {
+          // Extract revision ID (first column after │)
+          const revisionMatch = line.match(/│\s+●\s+([a-f0-9]+)/);
+          if (revisionMatch) {
+            const revisionId = revisionMatch[1];
+            // Check if this revision is trying to add our peer
+            const { stdout: showOutput } = await execAsync(`"${radCmd}" id show ${revisionId}`, { cwd: dreamNodePath });
+            if (showOutput.includes(peerDID)) {
+              console.log(`RadicleService: ${peerDID} already has pending revision ${revisionId} - skipping`);
+              return false; // Already has a pending revision
+            }
+          }
         }
       }
     } catch (inspectError) {
@@ -990,26 +1012,10 @@ export class RadicleServiceImpl implements RadicleService {
       );
       console.log(`RadicleService: Added ${peerDID} as delegate:`, result.stdout);
 
-      // Extract revision ID from output and auto-accept it
-      // Output format: "✓ Identity revision <revision-id> created"
-      const revisionMatch = result.stdout.match(/revision\s+([a-f0-9]{40})\s+created/i);
-      if (revisionMatch) {
-        const revisionId = revisionMatch[1];
-        console.log(`RadicleService: Auto-accepting revision ${revisionId}...`);
-
-        try {
-          const acceptResult = await execAsync(
-            `"${radCmd}" id accept "${revisionId}"`,
-            { cwd: dreamNodePath, env }
-          );
-          console.log(`✅ RadicleService: Revision accepted:`, acceptResult.stdout);
-        } catch (acceptError: any) {
-          console.warn(`⚠️ RadicleService: Could not auto-accept revision (non-critical):`, acceptError.stderr || acceptError.message);
-          // Don't throw - the revision still exists and can be accepted manually
-        }
-      } else {
-        console.warn(`⚠️ RadicleService: Could not extract revision ID from output - skipping auto-accept`);
-      }
+      // Note: With threshold=1, the revision is implicitly accepted by the author
+      // Radicle automatically applies your verdict when you create the revision
+      // The revision will reach quorum and move to "accepted" state automatically
+      console.log(`ℹ️ RadicleService: Revision created and implicitly accepted (threshold=1, you are sole delegate)`);
 
       return true; // Successfully added
     } catch (error: any) {
