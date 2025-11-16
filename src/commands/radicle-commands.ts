@@ -857,20 +857,24 @@ export function registerRadicleCommands(
         let totalRelationships = 0;
         let alreadyFollowing = 0;
         let alreadyDelegates = 0;
-        let alreadyRemotes = 0;
         let alreadyScopes = 0;
         let newFollows = 0;
         let newDelegates = 0;
-        let newRemotes = 0;
         let scopeUpdates = 0;
+        let remotesAdded = 0;
+        let remotesUpdated = 0;
+        let remotesRemoved = 0;
+        let remotesUnchanged = 0;
         let errors = 0;
 
-        // For each Dreamer with a DID, check their related nodes
+        // PHASE 1: Build desired state for each DreamNode (which Dreamers should have remotes)
+        // Map: DreamNode dirPath -> Map<DreamerName, DreamerDID>
+        const desiredRemotesPerRepo = new Map<string, Map<string, string>>();
+
         for (const { uuid: dreamerUuid, did, data: dreamerData } of dreamersWithDids) {
           const relatedNodeUuids = dreamerData.relationships || [];
           console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamerData.dirName}" has ${relatedNodeUuids.length} relationships`);
 
-          // For each related node, check if it's a Radicle repo
           for (const relatedUuid of relatedNodeUuids) {
             const relatedData = uddDataMap.get(relatedUuid);
 
@@ -885,7 +889,13 @@ export function registerRadicleCommands(
 
               if (radicleId) {
                 totalRelationships++;
-                console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is a Radicle repo: ${radicleId}`);
+                console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamerData.dirName}" (${did}) → DreamNode "${relatedData.dirName}" (${radicleId})`);
+
+                // Add to desired state
+                if (!desiredRemotesPerRepo.has(relatedData.dirPath)) {
+                  desiredRemotesPerRepo.set(relatedData.dirPath, new Map());
+                }
+                desiredRemotesPerRepo.get(relatedData.dirPath)!.set(dreamerData.dirName, did);
 
                 // STEP 1: Ensure peer is followed (node-level)
                 const repoFollows = await getExistingFollowsForRepo(relatedData.dirPath);
@@ -920,22 +930,7 @@ export function registerRadicleCommands(
                   errors++;
                 }
 
-                // STEP 3: Add peer's fork as git remote
-                try {
-                  const wasAdded = await radicleService.addPeerRemote(relatedData.dirPath, dreamerData.dirName, radicleId, did);
-                  if (wasAdded) {
-                    newRemotes++;
-                    console.log(`✅ [Radicle Peer Sync] Added git remote '${dreamerData.dirName}' for ${relatedData.dirName}`);
-                  } else {
-                    alreadyRemotes++;
-                    console.log(`✅ [Radicle Peer Sync] Remote '${dreamerData.dirName}' already exists for ${relatedData.dirName}`);
-                  }
-                } catch (remoteError: any) {
-                  console.error(`❌ [Radicle Peer Sync] Failed to add remote for ${relatedData.dirName}:`, remoteError.message);
-                  errors++;
-                }
-
-                // STEP 4: Set seeding scope to 'followed' (only direct peers)
+                // STEP 3: Set seeding scope to 'followed' (only direct peers)
                 try {
                   console.log(`🔄 [Radicle Peer Sync] Setting seeding scope for ${relatedData.dirName}...`);
                   const wasSet = await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
@@ -960,6 +955,32 @@ export function registerRadicleCommands(
           }
         }
 
+        // PHASE 2: Reconcile git remotes for each DreamNode (declarative sync)
+        console.log(`🔄 [Radicle Peer Sync] Reconciling git remotes for ${desiredRemotesPerRepo.size} repos...`);
+
+        for (const [repoPath, desiredPeers] of desiredRemotesPerRepo) {
+          const repoData = Array.from(uddDataMap.values()).find(d => d.dirPath === repoPath);
+          if (!repoData) continue;
+
+          try {
+            const radicleId = await radicleService.getRadicleId(repoPath, passphrase);
+            if (!radicleId) continue;
+
+            console.log(`🔧 [Radicle Peer Sync] Reconciling remotes for "${repoData.dirName}" (${desiredPeers.size} peers)`);
+            const result = await radicleService.reconcileRemotes(repoPath, radicleId, desiredPeers);
+
+            remotesAdded += result.added;
+            remotesUpdated += result.updated;
+            remotesRemoved += result.removed;
+            remotesUnchanged += result.unchanged;
+
+            console.log(`✅ [Radicle Peer Sync] Reconciled "${repoData.dirName}": +${result.added} ~${result.updated} -${result.removed} ✓${result.unchanged}`);
+          } catch (reconcileError: any) {
+            console.error(`❌ [Radicle Peer Sync] Failed to reconcile remotes for ${repoData.dirName}:`, reconcileError.message);
+            errors++;
+          }
+        }
+
         // Build summary message
         let summary: string;
         if (totalRelationships === 0) {
@@ -968,13 +989,15 @@ export function registerRadicleCommands(
           const updates: string[] = [];
           if (newFollows > 0) updates.push(`${newFollows} follow${newFollows !== 1 ? 's' : ''}`);
           if (newDelegates > 0) updates.push(`${newDelegates} delegate${newDelegates !== 1 ? 's' : ''}`);
-          if (newRemotes > 0) updates.push(`${newRemotes} remote${newRemotes !== 1 ? 's' : ''}`);
+          if (remotesAdded > 0) updates.push(`${remotesAdded} remote${remotesAdded !== 1 ? 's' : ''} added`);
+          if (remotesUpdated > 0) updates.push(`${remotesUpdated} remote${remotesUpdated !== 1 ? 's' : ''} updated`);
+          if (remotesRemoved > 0) updates.push(`${remotesRemoved} remote${remotesRemoved !== 1 ? 's' : ''} removed`);
           if (scopeUpdates > 0) updates.push(`${scopeUpdates} scope update${scopeUpdates !== 1 ? 's' : ''}`);
 
           if (updates.length === 0 && errors === 0) {
             summary = `✓ All ${totalRelationships} peer relationship${totalRelationships > 1 ? 's' : ''} already configured for pure p2p!`;
           } else {
-            const alreadyConfigured = alreadyFollowing + alreadyDelegates + alreadyRemotes + alreadyScopes;
+            const alreadyConfigured = alreadyFollowing + alreadyDelegates + remotesUnchanged + alreadyScopes;
             summary = `Configured: ${updates.join(', ')}` +
                      (alreadyConfigured > 0 ? ` (${alreadyConfigured} already established)` : '') +
                      (errors > 0 ? ` ⚠️ ${errors} error${errors !== 1 ? 's' : ''}` : '');

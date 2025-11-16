@@ -1097,4 +1097,128 @@ export class RadicleServiceImpl implements RadicleService {
       throw new Error(`Failed to add peer remote: ${error.message}`);
     }
   }
+
+  /**
+   * Get all git remotes with their URLs
+   * @returns Map of remote name -> { fetch: url, push: url }
+   */
+  async getRemotes(dreamNodePath: string): Promise<Map<string, { fetch: string; push: string }>> {
+    try {
+      const { stdout } = await execAsync('git remote -v', { cwd: dreamNodePath });
+      const remotes = new Map<string, { fetch: string; push: string }>();
+
+      for (const line of stdout.split('\n')) {
+        const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+        if (match) {
+          const [, name, url, type] = match;
+          if (!remotes.has(name)) {
+            remotes.set(name, { fetch: '', push: '' });
+          }
+          const remote = remotes.get(name)!;
+          if (type === 'fetch') remote.fetch = url;
+          if (type === 'push') remote.push = url;
+        }
+      }
+
+      return remotes;
+    } catch (error: any) {
+      throw new Error(`Failed to get remotes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Remove a git remote
+   * @returns true if remote was removed, false if didn't exist
+   */
+  async removeRemote(dreamNodePath: string, remoteName: string): Promise<boolean> {
+    try {
+      const { stdout: existingRemotes } = await execAsync('git remote', { cwd: dreamNodePath });
+      if (!existingRemotes.split('\n').includes(remoteName)) {
+        console.log(`RadicleService: Remote '${remoteName}' doesn't exist, skipping removal`);
+        return false; // Doesn't exist
+      }
+
+      await execAsync(`git remote remove "${remoteName}"`, { cwd: dreamNodePath });
+      console.log(`RadicleService: Removed git remote '${remoteName}'`);
+      return true; // Successfully removed
+    } catch (error: any) {
+      throw new Error(`Failed to remove remote: ${error.message}`);
+    }
+  }
+
+  /**
+   * Reconcile git remotes to match desired state (declarative sync)
+   * @param dreamNodePath Path to the DreamNode repository
+   * @param radicleId RID of the repository
+   * @param desiredPeers Map of peer name -> DID for desired state
+   * @returns Summary of changes made
+   */
+  async reconcileRemotes(
+    dreamNodePath: string,
+    radicleId: string,
+    desiredPeers: Map<string, string>
+  ): Promise<{ added: number; updated: number; removed: number; unchanged: number }> {
+    const result = { added: 0, updated: 0, removed: 0, unchanged: 0 };
+
+    try {
+      // Get current remotes
+      const currentRemotes = await this.getRemotes(dreamNodePath);
+
+      // Build desired remote URLs
+      const desiredRemotes = new Map<string, string>();
+      for (const [peerName, peerDID] of desiredPeers) {
+        desiredRemotes.set(peerName, `rad://${radicleId}/${peerDID}`);
+      }
+
+      // Find remotes to add, update, or keep
+      for (const [peerName, desiredUrl] of desiredRemotes) {
+        const current = currentRemotes.get(peerName);
+
+        if (!current) {
+          // ADD: Remote doesn't exist
+          const did = desiredPeers.get(peerName)!;
+          await this.addPeerRemote(dreamNodePath, peerName, radicleId, did);
+          result.added++;
+          console.log(`🔧 [Reconcile] ADDED remote '${peerName}' -> ${desiredUrl}`);
+        } else if (current.fetch !== desiredUrl || current.push !== desiredUrl) {
+          // UPDATE: Remote exists but points to wrong DID
+          console.log(`🔧 [Reconcile] UPDATE remote '${peerName}': ${current.fetch} -> ${desiredUrl}`);
+          await this.removeRemote(dreamNodePath, peerName);
+          const did = desiredPeers.get(peerName)!;
+          await this.addPeerRemote(dreamNodePath, peerName, radicleId, did);
+          result.updated++;
+        } else {
+          // UNCHANGED: Remote exists and is correct
+          result.unchanged++;
+          console.log(`✅ [Reconcile] OK remote '${peerName}' -> ${desiredUrl}`);
+        }
+      }
+
+      // Find remotes to remove (exist but not in desired state)
+      for (const [remoteName, remote] of currentRemotes) {
+        // Skip 'rad' remote (default Radicle remote) and 'origin' (if exists)
+        if (remoteName === 'rad' || remoteName === 'origin') {
+          console.log(`✅ [Reconcile] SKIP system remote '${remoteName}'`);
+          continue;
+        }
+
+        // Skip remotes that don't look like Radicle peer remotes
+        if (!remote.fetch.startsWith('rad://')) {
+          console.log(`✅ [Reconcile] SKIP non-Radicle remote '${remoteName}'`);
+          continue;
+        }
+
+        if (!desiredRemotes.has(remoteName)) {
+          // REMOVE: Remote exists but not in desired state
+          console.log(`🔧 [Reconcile] REMOVE orphaned remote '${remoteName}' (not in liminal-web)`);
+          await this.removeRemote(dreamNodePath, remoteName);
+          result.removed++;
+        }
+      }
+
+      return result;
+    } catch (error: any) {
+      throw new Error(`Failed to reconcile remotes: ${error.message}`);
+    }
+  }
 }
