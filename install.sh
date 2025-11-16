@@ -140,17 +140,17 @@ handle_did_backpropagation() {
     # Extract sender email from clone URI if available
     SENDER_EMAIL=""
     if [ -n "$CLONE_URI" ]; then
-        # Try to extract email from URI parameters
-        SENDER_EMAIL=$(echo "$CLONE_URI" | grep -oP '(?<=senderEmail=)[^&]*' | head -1 || echo "")
+        # Try to extract email from URI parameters (BSD grep compatible)
+        SENDER_EMAIL=$(echo "$CLONE_URI" | sed -n 's/.*senderEmail=\([^&]*\).*/\1/p')
         if [ -z "$SENDER_EMAIL" ]; then
             # Fallback: extract from senderName if it looks like an email
-            SENDER_NAME=$(echo "$CLONE_URI" | grep -oP '(?<=senderName=)[^&]*' | head -1 || echo "")
+            SENDER_NAME=$(echo "$CLONE_URI" | sed -n 's/.*senderName=\([^&]*\).*/\1/p')
             if [[ "$SENDER_NAME" =~ @.+\..+ ]]; then
                 SENDER_EMAIL="$SENDER_NAME"
             fi
         fi
-        # URL decode the email
-        SENDER_EMAIL=$(echo "$SENDER_EMAIL" | sed 's/%40/@/g' | sed 's/%2E/./g')
+        # URL decode the email: %40 -> @, %2E -> ., %20 -> space
+        SENDER_EMAIL=$(echo "$SENDER_EMAIL" | sed 's/%40/@/g' | sed 's/%2E/./g' | sed 's/%20/ /g')
     fi
 
     # Generate update-contact URI
@@ -757,7 +757,12 @@ if [ -d "$INTERBRAIN_PATH" ]; then
 
         if [[ "$REPO_URL" == *"ProjectLiminality/InterBrain"* ]]; then
             warning "InterBrain already exists. Updating..."
-            git pull origin main
+            if [ "$BRANCH" != "main" ]; then
+                info "Pulling from branch: $BRANCH"
+            fi
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH"
         else
             echo ""
             error "Directory '$INTERBRAIN_PATH' already exists but is a different repository."
