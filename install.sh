@@ -13,6 +13,10 @@
 #     --uri "obsidian://interbrain-clone?..." \
 #     --sender-uuid "alice-dreamer-uuid"
 #
+# With specific branch (for testing):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/feature/radicle-migration/install.sh) \
+#     --branch "feature/radicle-migration"
+#
 # Testing flags:
 #   --test-fail before-gh   Simulate failure before GitHub CLI installed (no automatic issue creation available)
 #   --test-fail after-gh    Simulate failure after GitHub CLI installed (should offer automatic issue creation)
@@ -73,6 +77,7 @@ DEFAULT_VAULT_PARENT="$HOME"     # Will resolve to current user's home directory
 # Parse command-line arguments
 CLONE_URI=""
 SENDER_UUID=""
+BRANCH="main"  # Default to main branch
 TEST_FAIL=""
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -82,6 +87,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sender-uuid)
       SENDER_UUID="$2"
+      shift 2
+      ;;
+    --branch)
+      BRANCH="$2"
       shift 2
       ;;
     --test-fail)
@@ -769,8 +778,11 @@ if [ -d "$INTERBRAIN_PATH" ]; then
     fi
 else
     echo "Cloning from GitHub..."
+    if [ "$BRANCH" != "main" ]; then
+        info "Cloning branch: $BRANCH"
+    fi
     cd "$VAULT_PATH"
-    git clone https://github.com/ProjectLiminality/InterBrain.git
+    git clone --branch "$BRANCH" https://github.com/ProjectLiminality/InterBrain.git
     cd InterBrain
 fi
 
