@@ -287,9 +287,9 @@ export class EmailExportService {
 
 		try {
 			const childProcess = (window as any).require('child_process');
-			const fs = childProcess.require('fs');
-			const os = childProcess.require('os');
-			const path = childProcess.require('path');
+			const fs = (window as any).require('fs');
+			const os = (window as any).require('os');
+			const path = (window as any).require('path');
 			const { exec } = childProcess;
 
 			// Write AppleScript to temp file to avoid shell escaping issues
