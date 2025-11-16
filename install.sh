@@ -1390,6 +1390,25 @@ EOF
     fi
 
     # Now open Obsidian with the vault by name (now that it's registered)
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    warning "⚠️  IMPORTANT: Setup Not Complete Yet!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Obsidian will open automatically in a moment."
+    echo ""
+    echo "⚠️  Please DO NOT close this terminal window!"
+    echo "   You will still need to complete final setup steps guided"
+    echo "   by this install script after Obsidian opens."
+    echo ""
+
+    if [ -t 0 ]; then
+        read -p "Press ENTER to open Obsidian and continue setup... "
+    else
+        echo "Opening Obsidian in 3 seconds..."
+        sleep 3
+    fi
+
     info "Opening Obsidian with your vault..."
 
     # Extract vault name for URI
