@@ -286,42 +286,48 @@ export class EmailExportService {
 		console.log(`📧 [EmailExport] Recipient:`, to);
 
 		try {
-			// Escape strings for AppleScript (replace quotes, backslashes, and newlines)
-			const escapeAppleScript = (str: string): string => {
-				return str
-					.replace(/\\/g, '\\\\')  // Escape backslashes first
-					.replace(/"/g, '\\"')    // Escape quotes
-					.replace(/\n/g, '\\n')   // Escape newlines
-					.replace(/\r/g, '\\r');  // Escape carriage returns
+			const childProcess = (window as any).require('child_process');
+			const fs = childProcess.require('fs');
+			const os = childProcess.require('os');
+			const path = childProcess.require('path');
+			const { exec } = childProcess;
+
+			// Write AppleScript to temp file to avoid shell escaping issues
+			const tempScriptPath = path.join(os.tmpdir(), `interbrain-mail-${Date.now()}.scpt`);
+
+			// Build AppleScript with proper string escaping for AppleScript (not shell)
+			const escapeForAppleScript = (str: string): string => {
+				return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 			};
 
-			const escapedTo = escapeAppleScript(to);
-			const escapedSubject = escapeAppleScript(subject);
-			const escapedBody = escapeAppleScript(body);
-			const escapedPdfPath = escapeAppleScript(pdfPath);
-
-			// AppleScript to create Mail draft with all fields populated + PDF attachment
 			const appleScript = `
 tell application "Mail"
-	set newMessage to make new outgoing message with properties {subject:"${escapedSubject}", content:"${escapedBody}", visible:true}
+	set newMessage to make new outgoing message with properties {subject:"${escapeForAppleScript(subject)}", content:"${escapeForAppleScript(body)}", visible:true}
 
 	tell newMessage
-		make new to recipient with properties {address:"${escapedTo}"}
+		make new to recipient with properties {address:"${escapeForAppleScript(to)}"}
 
 		-- Attach PDF file
-		make new attachment with properties {file name:POSIX file "${escapedPdfPath}"} at after the last paragraph
+		make new attachment with properties {file name:POSIX file "${escapeForAppleScript(pdfPath)}"} at after the last paragraph
 	end tell
 
 	activate
 end tell
 `;
 
-			// Execute AppleScript
-			const childProcess = (window as any).require('child_process');
-			const { exec } = childProcess;
+			// Write script to temp file
+			fs.writeFileSync(tempScriptPath, appleScript, 'utf-8');
 
+			// Execute via temp file (no shell escaping needed!)
 			await new Promise<void>((resolve, reject) => {
-				exec(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`, (error: any, stdout: any, stderr: any) => {
+				exec(`osascript "${tempScriptPath}"`, (error: any, stdout: any, stderr: any) => {
+					// Clean up temp file
+					try {
+						fs.unlinkSync(tempScriptPath);
+					} catch (cleanupError) {
+						console.warn('⚠️ [EmailExport] Failed to clean up temp script:', cleanupError);
+					}
+
 					if (error) {
 						console.error('❌ [EmailExport] AppleScript failed:', error);
 						console.error('❌ [EmailExport] stderr:', stderr);
