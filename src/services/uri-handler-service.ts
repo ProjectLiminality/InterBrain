@@ -191,6 +191,20 @@ export class URIHandlerService {
 						// Dreamer exists - check if relationships are properly set up
 						console.log(`✅ [URIHandler] Dreamer node exists: "${dreamerNode.name}"`);
 
+						// CRITICAL: Load UUID from .udd file for linkNodes() compatibility
+						const fs = require('fs').promises;
+						const path = require('path');
+						const uddPath = path.join(this.app.vault.adapter.basePath, dreamerNode.repoPath, '.udd');
+
+						try {
+							const uddContent = await fs.readFile(uddPath, 'utf-8');
+							const udd = JSON.parse(uddContent);
+							dreamerNode.uuid = udd.uuid;
+							console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${dreamerNode.uuid}`);
+						} catch (error) {
+							console.error(`❌ [URIHandler] Failed to read UUID from existing Dreamer:`, error);
+						}
+
 						// Check if all cloned nodes are linked to this Dreamer
 						let missingLinks = false;
 						for (const identifier of identifiers) {
