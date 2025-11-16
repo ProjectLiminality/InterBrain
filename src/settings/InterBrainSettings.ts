@@ -515,9 +515,21 @@ export class InterBrainSettingTab extends PluginSettingTab {
 									const { exec } = require('child_process');
 									const { promisify } = require('util');
 									const execAsync = promisify(exec);
+									const fs = require('fs').promises;
 
-									// Update alias using rad self --alias
-									await execAsync(`"${radCmd}" self --alias "${newAlias}"`);
+									// Get config file path
+									const configPath = (await execAsync(`"${radCmd}" self --config`)).stdout.trim();
+
+									// Read current config
+									const configContent = await fs.readFile(configPath, 'utf8');
+									const config = JSON.parse(configContent);
+
+									// Update alias in config
+									if (!config.node) config.node = {};
+									config.node.alias = newAlias;
+
+									// Write updated config back
+									await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
 
 									// Update display
 									aliasText.textContent = `Alias: ${newAlias}`;
@@ -526,7 +538,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 									cleanup();
 
 									// Show success message
-									const successMsg = inputContainer.createSpan({ text: '✅ Alias updated!' });
+									const successMsg = aliasContainer.createSpan({ text: '✅ Alias updated!' });
 									successMsg.style.color = 'green';
 									successMsg.style.marginLeft = '8px';
 									setTimeout(() => successMsg.remove(), 3000);
@@ -844,9 +856,9 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		} catch (error: any) {
 			const errorMsg = error.message || error.stdout || error.stderr || 'Unknown error';
 			if (errorMsg.includes('passphrase') || errorMsg.includes('Passphrase')) {
-				validationEl.innerHTML = '<span class="status-error">❌ Incorrect passphrase</span>';
+				validationEl.innerHTML = '<span class="status-error">❌ Passphrase incorrect! Node start failed.</span>';
 			} else {
-				validationEl.innerHTML = `<span class="status-error">❌ Error: ${errorMsg}</span>`;
+				validationEl.innerHTML = `<span class="status-error">❌ Node start failed: ${errorMsg}</span>`;
 			}
 		}
 	}
