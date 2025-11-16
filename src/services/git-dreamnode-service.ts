@@ -80,7 +80,8 @@ export class GitDreamNodeService {
     type: 'dream' | 'dreamer',
     dreamTalk?: globalThis.File,
     position?: [number, number, number],
-    additionalFiles?: globalThis.File[]
+    additionalFiles?: globalThis.File[],
+    metadata?: { did?: string; email?: string; phone?: string }
   ): Promise<DreamNode> {
     // Generate unique ID and repo path
     const uuid = crypto.randomUUID();
@@ -111,6 +112,10 @@ export class GitDreamNodeService {
     }
     
     // Create DreamNode object
+    // Dreamer nodes start with InterBrain connection pre-populated
+    const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+    const initialConnections = type === 'dreamer' ? [INTERBRAIN_UUID] : [];
+
     const node: DreamNode = {
       id: uuid,
       type,
@@ -118,12 +123,13 @@ export class GitDreamNodeService {
       position: nodePosition,
       dreamTalkMedia,
       dreamSongContent: [],
-      liminalWebConnections: [],
+      liminalWebConnections: initialConnections,
       repoPath: repoName, // Relative to vault
       hasUnsavedChanges: false,
       gitStatus: await this.checkGitStatus(repoPath),
-      email: undefined,
-      phone: undefined
+      email: metadata?.email,
+      phone: metadata?.phone,
+      did: metadata?.did
     };
     
     // Update store immediately for snappy UI
@@ -136,7 +142,7 @@ export class GitDreamNodeService {
     store.updateRealNode(uuid, nodeData);
     
     // Create git repository in parallel (non-blocking)
-    this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles)
+    const repoCreationPromise = this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles, metadata)
       .then(async () => {
         // Index the new node after git repository is created
         try {
@@ -158,21 +164,10 @@ export class GitDreamNodeService {
         }
       });
 
-    // Auto-link dreamer nodes to InterBrain (bidirectional)
-    if (type === 'dreamer') {
-      const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
-      console.log(`GitDreamNodeService: Auto-linking dreamer "${title}" to InterBrain...`);
-
-      // Add relationship asynchronously (non-blocking)
-      this.addRelationship(uuid, INTERBRAIN_UUID)
-        .then(() => {
-          console.log(`✅ GitDreamNodeService: Auto-linked dreamer "${title}" to InterBrain`);
-        })
-        .catch((error) => {
-          console.error(`Failed to auto-link dreamer "${title}" to InterBrain:`, error);
-          // Non-fatal - sync command will catch this later
-        });
-    }
+    // InterBrain relationship is already set up for Dreamer nodes:
+    // 1. node.liminalWebConnections initialized with [INTERBRAIN_UUID]
+    // 2. liminal-web.json created with { relationships: [INTERBRAIN_UUID] }
+    // No need for separate auto-link - everything is atomic in initial creation
 
     console.log(`GitDreamNodeService: Created ${type} "${title}" with ID ${uuid}`);
     return node;
@@ -235,7 +230,7 @@ export class GitDreamNodeService {
     });
     
     // If metadata changed, update .udd file and auto-commit
-    if (changes.name || changes.type || changes.dreamTalkMedia || changes.email !== undefined || changes.phone !== undefined) {
+    if (changes.name || changes.type || changes.dreamTalkMedia || changes.email !== undefined || changes.phone !== undefined || changes.did !== undefined) {
       await this.updateUDDFile(updatedNode);
 
       // Auto-commit changes if enabled (only for actual file changes, not position)
@@ -411,6 +406,27 @@ export class GitDreamNodeService {
         }
       }
 
+      // Build bidirectional relationships from Dreamer → Dream connections
+      // This is the ONLY source of truth for liminal web relationships
+      console.log('[VaultScan] Building bidirectional relationships from liminal-web.json files...');
+      for (const [dreamerId, dreamerData] of newRealNodes) {
+        if (dreamerData.node.type === 'dreamer') {
+          // For each Dream node this Dreamer points to
+          for (const dreamId of dreamerData.node.liminalWebConnections) {
+            const dreamData = newRealNodes.get(dreamId);
+            if (dreamData) {
+              // Add reverse connection: Dream → Dreamer
+              const dreamConnections = new Set(dreamData.node.liminalWebConnections || []);
+              dreamConnections.add(dreamerId);
+              dreamData.node.liminalWebConnections = Array.from(dreamConnections);
+            } else {
+              console.warn(`[VaultScan] Dreamer "${dreamerData.node.name}" references non-existent Dream: ${dreamId}`);
+            }
+          }
+        }
+      }
+      console.log('[VaultScan] Bidirectional relationships complete');
+
       // Extract and persist lightweight metadata for instant startup
       const nodeMetadata = new Map<string, { name: string; type: string; uuid: string }>();
       for (const [id, data] of newRealNodes) {
@@ -453,7 +469,8 @@ export class GitDreamNodeService {
     title: string,
     type: 'dream' | 'dreamer',
     dreamTalk?: globalThis.File,
-    additionalFiles?: globalThis.File[]
+    additionalFiles?: globalThis.File[],
+    metadata?: { did?: string; email?: string; phone?: string }
   ): Promise<void> {
     try {
       // Create directory
@@ -494,7 +511,7 @@ export class GitDreamNodeService {
         title,
         type,
         dreamTalk: dreamTalkPath ? dreamTalk!.name : ''
-      });
+      }, metadata);
 
       // Move template files from .git/ to working directory
       // (This is what the pre-commit hook used to do, but doing it here prevents timing issues)
@@ -525,6 +542,39 @@ export class GitDreamNodeService {
         console.log(`GitDreamNodeService: Moved .git/LICENSE to LICENSE`);
       }
 
+      // For Dreamer nodes: Create .gitignore and empty liminal-web.json BEFORE initial commit
+      if (type === 'dreamer') {
+        // Create .gitignore with liminal-web.json pattern
+        const gitignorePath = path.join(repoPath, '.gitignore');
+        const gitignoreContent = 'liminal-web.json\n';
+        await fsPromises.writeFile(gitignorePath, gitignoreContent);
+        console.log(`GitDreamNodeService: Created .gitignore for Dreamer node`);
+
+        // Create/update liminal-web.json with InterBrain relationship
+        // All Dreamer nodes should start connected to InterBrain
+        const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+        const liminalWebPath = path.join(repoPath, 'liminal-web.json');
+
+        // Check if file already exists (from prior relationship additions)
+        let liminalWeb: { relationships: string[] };
+        try {
+          const existingContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
+          liminalWeb = JSON.parse(existingContent);
+          console.log(`GitDreamNodeService: Found existing liminal-web.json with ${liminalWeb.relationships.length} relationships`);
+        } catch {
+          // File doesn't exist, create new
+          liminalWeb = { relationships: [] };
+        }
+
+        // Add InterBrain UUID if not already present
+        if (!liminalWeb.relationships.includes(INTERBRAIN_UUID)) {
+          liminalWeb.relationships.push(INTERBRAIN_UUID);
+        }
+
+        await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
+        console.log(`GitDreamNodeService: Updated liminal-web.json with InterBrain connection (total: ${liminalWeb.relationships.length} relationships)`);
+      }
+
       // Make initial commit
       console.log(`GitDreamNodeService: Starting git operations in ${repoPath}`);
 
@@ -553,6 +603,156 @@ export class GitDreamNodeService {
       }
 
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
+
+      // Initialize Radicle repository (rad init --private)
+      console.log(`GitDreamNodeService: Initializing Radicle repository...`);
+      try {
+        const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
+        const timestamp = new Date().toISOString();
+        const description = `${nodeTypeLabel} ${timestamp}`;
+
+        // Get passphrase from settings
+        const settings = (this.plugin as any).settings;
+        const passphrase = settings?.radiclePassphrase;
+
+        // Prepare environment with passphrase
+        const process = require('process');
+        const env = { ...process.env };
+        if (passphrase) {
+          env.RAD_PASSPHRASE = passphrase;
+          console.log('GitDreamNodeService: Using passphrase from settings via RAD_PASSPHRASE');
+        } else {
+          console.log('GitDreamNodeService: No passphrase in settings, relying on ssh-agent');
+        }
+
+        // Note: Radicle node management is handled separately (Concern 2)
+        // We assume the node is already running if user has Radicle configured
+
+        // Find rad command in common installation locations
+        const os = require('os');
+        const homeDir = os.homedir();
+        const possibleRadPaths = [
+          'rad', // Try PATH first
+          path.join(homeDir, '.radicle', 'bin', 'rad'), // Standard Radicle install location
+          '/usr/local/bin/rad', // Homebrew default
+          '/opt/homebrew/bin/rad', // Homebrew on Apple Silicon
+        ];
+
+        let radCommand: string | null = null;
+        for (const radPath of possibleRadPaths) {
+          try {
+            await execAsync(`"${radPath}" --version`);
+            radCommand = radPath;
+            console.log(`GitDreamNodeService: Found rad at ${radPath}`);
+            break;
+          } catch {
+            // Continue to next path
+          }
+        }
+
+        if (!radCommand) {
+          console.warn('GitDreamNodeService: rad command not found, skipping Radicle init');
+          throw new Error('rad command not found');
+        }
+
+        // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
+        // IMPORTANT: --name is REQUIRED for non-TTY mode, otherwise rad init fails with TTY error
+        // IMPORTANT: --no-seed prevents automatic network seeding (user controls sharing via "Share" command)
+        // Use sanitized directory name (already cleaned by sanitizeTitleToPascalCase)
+        const repoName = path.basename(repoPath);
+
+        const { spawn } = require('child_process');
+        const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+          const child = spawn(radCommand, [
+            'init',
+            repoPath,
+            '--private',  // Private = not announced, stays local until share
+            '--name', repoName,  // REQUIRED for non-TTY mode, use sanitized dir name
+            '--default-branch', 'main',
+            '--description', description,
+            '--no-confirm',
+            '--no-seed'  // Don't seed until user explicitly shares (Concern 2)
+          ], {
+            env,  // Pass environment with RAD_PASSPHRASE
+            cwd: repoPath,
+            stdio: ['pipe', 'pipe', 'pipe']  // Provide stdin pipe to bypass TTY
+          });
+
+          let stdout = '';
+          let stderr = '';
+
+          child.stdout?.on('data', (data) => {
+            stdout += data.toString();
+          });
+
+          child.stderr?.on('data', (data) => {
+            stderr += data.toString();
+          });
+
+          child.on('close', (code) => {
+            console.log(`GitDreamNodeService: rad init closed with code ${code}`);
+            console.log(`GitDreamNodeService: rad init stdout:`, stdout);
+            console.log(`GitDreamNodeService: rad init stderr:`, stderr);
+
+            if (code === 0) {
+              resolve({ stdout, stderr });
+            } else {
+              const error: any = new Error(`rad init exited with code ${code}`);
+              error.stdout = stdout;
+              error.stderr = stderr;
+              reject(error);
+            }
+          });
+
+          child.on('error', (error) => {
+            console.error(`GitDreamNodeService: rad init spawn error:`, error);
+            reject(error);
+          });
+
+          // Close stdin immediately since we're non-interactive
+          child.stdin?.end();
+        });
+
+        const radInitResult = await spawnPromise();
+        console.log(`GitDreamNodeService: Radicle init succeeded`);
+
+        // Extract RID from rad init output
+        // Expected format: "Repository rad:z... created."
+        const ridMatch = radInitResult.stdout.match(/rad:z[a-zA-Z0-9]+/);
+        if (ridMatch) {
+          const radicleId = ridMatch[0];
+          console.log(`GitDreamNodeService: Captured Radicle ID: ${radicleId}`);
+
+          // Update .udd file with radicleId AND preserve existing metadata (did, email, phone)
+          const uddPath = path.join(repoPath, '.udd');
+          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+
+          // Add radicleId (preserves all existing fields like did, email, phone)
+          udd.radicleId = radicleId;
+
+          await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
+          console.log(`GitDreamNodeService: Updated .udd with radicleId (preserving existing metadata)`);
+
+          // Commit the radicleId + metadata update as single atomic commit
+          await execAsync('git add .udd', { cwd: repoPath });
+          await execAsync('git commit -m "Add Radicle ID and metadata to DreamNode"', { cwd: repoPath });
+          console.log(`GitDreamNodeService: Committed radicleId + metadata in single commit`);
+        } else {
+          console.warn(`GitDreamNodeService: Could not extract RID from rad init output`);
+        }
+      } catch (radError: any) {
+        console.error(`GitDreamNodeService: Radicle init failed:`, radError);
+        if (radError.stderr) {
+          console.error(`GitDreamNodeService: Radicle stderr:`, radError.stderr);
+        }
+        if (radError.stdout) {
+          console.log(`GitDreamNodeService: Radicle stdout:`, radError.stdout);
+        }
+        // Don't throw - allow node creation to proceed even if rad init fails
+        // This ensures the plugin works even without Radicle CLI installed
+      }
+
     } catch (error: any) {
       // Don't log error if repository was actually created successfully
       // (This can happen if earlier operations like git init had stderr output)
@@ -578,21 +778,33 @@ export class GitDreamNodeService {
       title: string;
       type: string;
       dreamTalk: string;
-    }
+    },
+    metadata?: { did?: string; email?: string; phone?: string }
   ): Promise<void> {
     // Update the udd file while it's still in the .git directory
     // The pre-commit hook will move it to .udd in the working directory
     const uddPath = path.join(repoPath, '.git', 'udd');
     console.log(`GitDreamNodeService: Updating template file at ${uddPath}`);
-    
+
     let uddContent = await fsPromises.readFile(uddPath, 'utf-8');
-    
+
     uddContent = uddContent
       .replace('TEMPLATE_UUID_PLACEHOLDER', values.uuid)
       .replace('TEMPLATE_TITLE_PLACEHOLDER', values.title)
       .replace('"type": "dream"', `"type": "${values.type}"`)
-      .replace('TEMPLATE_DREAMTALK_PLACEHOLDER', values.dreamTalk);
-    
+      .replace('TEMPLATE_DREAMTALK_PLACEHOLDER', values.dreamTalk)
+      .replace('TEMPLATE_RADICLE_ID_PLACEHOLDER', ''); // Empty initially, filled after rad init
+
+    // Add optional metadata fields for Dreamer nodes
+    if (metadata) {
+      const udd = JSON.parse(uddContent);
+      if (metadata.did) udd.did = metadata.did;
+      if (metadata.email) udd.email = metadata.email;
+      if (metadata.phone) udd.phone = metadata.phone;
+      uddContent = JSON.stringify(udd, null, 2);
+      console.log(`GitDreamNodeService: Added metadata to .udd:`, Object.keys(metadata));
+    }
+
     await fsPromises.writeFile(uddPath, uddContent);
     console.log(`GitDreamNodeService: Updated template metadata`);
     
@@ -646,19 +858,48 @@ export class GitDreamNodeService {
       if (await this.fileExists(mediaPath)) {
         const stats = await fsPromises.stat(mediaPath);
         const mimeType = this.getMimeType(udd.dreamTalk);
-        // Skip loading media data during vault scan - will lazy load via MediaLoadingService
 
-        dreamTalkMedia = [{
-          path: udd.dreamTalk,
-          absolutePath: mediaPath,
-          type: mimeType,
-          data: '', // Empty - lazy load on demand
-          size: stats.size
-        }];
+        // CRITICAL: If we already have loaded media data for this file, preserve it
+        // Only create fresh entry if we don't have existing data
+        const existingMedia = existingData?.node.dreamTalkMedia?.[0];
+        const hasExistingData = existingMedia && existingMedia.data && existingMedia.data.length > 0;
+
+        if (hasExistingData && existingMedia.path === udd.dreamTalk) {
+          // Keep existing media with loaded data intact
+          dreamTalkMedia = existingData.node.dreamTalkMedia;
+        } else {
+          // Fresh media entry - will lazy load on demand
+          dreamTalkMedia = [{
+            path: udd.dreamTalk,
+            absolutePath: mediaPath,
+            type: mimeType,
+            data: '', // Empty - lazy load on demand
+            size: stats.size
+          }];
+        }
       }
       // If file doesn't exist but udd.dreamTalk is set, keep existing dreamTalkMedia
       // This prevents flickering when file system is temporarily inaccessible
     }
+
+    // Load relationships ONLY from liminal-web.json in Dreamer nodes
+    // Dream nodes don't store relationships - they're discovered via Dreamer → Dream connections
+    let relationships: string[] = [];
+    if (udd.type === 'dreamer') {
+      const liminalWebPath = path.join(dirPath, 'liminal-web.json');
+      try {
+        if (await this.fileExists(liminalWebPath)) {
+          const content = await fsPromises.readFile(liminalWebPath, 'utf-8');
+          const liminalWeb = JSON.parse(content);
+          relationships = liminalWeb.relationships || [];
+        }
+      } catch (error) {
+        console.warn(`Failed to read liminal-web.json for ${udd.title}:`, error);
+        // No fallback - Dreamer nodes MUST have liminal-web.json
+      }
+    }
+    // Dream nodes: relationships array stays empty here
+    // They get populated bidirectionally during vault scan by inverting Dreamer relationships
 
     // Use cached constellation position if available, otherwise random
     const cachedPosition = store.constellationData.positions?.get(udd.uuid);
@@ -670,12 +911,13 @@ export class GitDreamNodeService {
       position: cachedPosition || this.calculateNewNodePosition(),
       dreamTalkMedia,
       dreamSongContent: [],
-      liminalWebConnections: udd.liminalWebRelationships || [],
+      liminalWebConnections: relationships,
       repoPath: repoName,
       hasUnsavedChanges: false,
       email: udd.email,
       phone: udd.phone,
       radicleId: udd.radicleId,
+      did: udd.did,
       githubRepoUrl: udd.githubRepoUrl,
       githubPagesUrl: udd.githubPagesUrl
     };
@@ -734,14 +976,15 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // Check metadata changes (type, contact fields, radicleId, and GitHub URLs - name synced from .udd)
+    // Check metadata changes (type, contact fields, radicleId, did, and GitHub URLs - name synced from .udd)
     if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone ||
-        node.radicleId !== udd.radicleId || node.githubRepoUrl !== udd.githubRepoUrl ||
-        node.githubPagesUrl !== udd.githubPagesUrl) {
+        node.radicleId !== udd.radicleId || node.did !== udd.did ||
+        node.githubRepoUrl !== udd.githubRepoUrl || node.githubPagesUrl !== udd.githubPagesUrl) {
       node.type = udd.type;
       node.email = udd.email;
       node.phone = udd.phone;
       node.radicleId = udd.radicleId;
+      node.did = udd.did;
       node.githubRepoUrl = udd.githubRepoUrl;
       node.githubPagesUrl = udd.githubPagesUrl;
       updated = true;
@@ -782,9 +1025,7 @@ export class GitDreamNodeService {
         lastSynced: Date.now()
       });
 
-      // Write updated metadata back to .udd file (keeps file system in sync)
-      await this.updateUDDFile(node);
-      console.log(`💾 [GitDreamNodeService] Updated .udd file for ${node.name}`);
+      // No need to write back to .udd - we just read from it (disk is source of truth)
     }
 
     return updated;
@@ -792,37 +1033,64 @@ export class GitDreamNodeService {
   
   /**
    * Update .udd file with node data
+   * CRITICAL: Read-modify-write pattern to preserve fields that exist on disk but not in store
    */
   private async updateUDDFile(node: DreamNode): Promise<void> {
     const uddPath = path.join(this.vaultPath, node.repoPath, '.udd');
 
+    // Read existing .udd from disk first to preserve all fields
+    let existingUdd: Partial<UDDFile> = {};
+    try {
+      const existingContent = await fsPromises.readFile(uddPath, 'utf-8');
+      existingUdd = JSON.parse(existingContent);
+    } catch (error) {
+      console.log(`GitDreamNodeService: No existing .udd found, creating new one`);
+    }
+
+    // Build updated UDD, merging with existing fields
     const udd: UDDFile = {
+      ...existingUdd, // Start with all existing fields from disk
+      // Overwrite with current node data from store
       uuid: node.id,
       title: node.name,
       type: node.type,
       dreamTalk: node.dreamTalkMedia.length > 0 ? node.dreamTalkMedia[0].path : '',
-      liminalWebRelationships: node.liminalWebConnections || [],
-      submodules: [],
-      supermodules: []
+      submodules: existingUdd.submodules || [],
+      supermodules: existingUdd.supermodules || []
     };
 
     // Include contact fields only for dreamer nodes
+    // IMPORTANT: Allow empty strings - check !== undefined, not truthiness
     if (node.type === 'dreamer') {
-      if (node.email) udd.email = node.email;
-      if (node.phone) udd.phone = node.phone;
+      if (node.email !== undefined) {
+        udd.email = node.email; // Preserve empty strings
+      }
+      if (node.phone !== undefined) {
+        udd.phone = node.phone; // Preserve empty strings
+      }
+      if (node.did !== undefined) {
+        udd.did = node.did; // Preserve empty strings
+      }
     }
 
-    // CRITICAL: Preserve radicleId field if it exists
+    // CRITICAL: Preserve radicleId from node OR existing disk value
     if (node.radicleId) {
       udd.radicleId = node.radicleId;
+    } else if (existingUdd.radicleId) {
+      udd.radicleId = existingUdd.radicleId;
     }
 
-    // CRITICAL: Preserve GitHub URLs if they exist
+    // CRITICAL: Preserve GitHub URLs from node OR existing disk value
     if (node.githubRepoUrl) {
       udd.githubRepoUrl = node.githubRepoUrl;
+    } else if (existingUdd.githubRepoUrl) {
+      udd.githubRepoUrl = existingUdd.githubRepoUrl;
     }
+
     if (node.githubPagesUrl) {
       udd.githubPagesUrl = node.githubPagesUrl;
+    } else if (existingUdd.githubPagesUrl) {
+      udd.githubPagesUrl = existingUdd.githubPagesUrl;
     }
 
     await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
@@ -1356,11 +1624,17 @@ export class GitDreamNodeService {
       lastSynced: Date.now()
     });
 
-    // Update both .udd files
-    await Promise.all([
-      this.updateUDDFile(node),
-      this.updateUDDFile(relatedNode)
-    ]);
+    // Update liminal-web.json for Dreamer nodes (relationships stored here, not in .udd)
+    const updateTasks = [];
+    if (node.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(node));
+    }
+    if (relatedNode.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(relatedNode));
+    }
+    if (updateTasks.length > 0) {
+      await Promise.all(updateTasks);
+    }
 
     console.log(`GitDreamNodeService: Added bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
@@ -1392,7 +1666,10 @@ export class GitDreamNodeService {
         lastSynced: Date.now()
       });
 
-      await this.updateUDDFile(node);
+      // Update liminal-web.json only (relationships not stored in .udd)
+      if (node.type === 'dreamer') {
+        await this.updateLiminalWebFile(node);
+      }
       console.log(`GitDreamNodeService: Removed one-way relationship ${nodeId} -> ${relatedNodeId}`);
       return;
     }
@@ -1423,11 +1700,17 @@ export class GitDreamNodeService {
       lastSynced: Date.now()
     });
 
-    // Update both .udd files
-    await Promise.all([
-      this.updateUDDFile(node),
-      this.updateUDDFile(relatedNode)
-    ]);
+    // Update liminal-web.json for Dreamer nodes (relationships stored here, not in .udd)
+    const updateTasks = [];
+    if (node.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(node));
+    }
+    if (relatedNode.type === 'dreamer') {
+      updateTasks.push(this.updateLiminalWebFile(relatedNode));
+    }
+    if (updateTasks.length > 0) {
+      await Promise.all(updateTasks);
+    }
 
     console.log(`GitDreamNodeService: Removed bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
@@ -1589,5 +1872,37 @@ export class GitDreamNodeService {
   private async writeReadmeFile(repoPath: string, content: string): Promise<void> {
     const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
     await fsPromises.writeFile(readmePath, content);
+  }
+
+  /**
+   * Update liminal-web.json file for a Dreamer node with current relationships
+   */
+  private async updateLiminalWebFile(node: DreamNode): Promise<void> {
+    if (node.type !== 'dreamer') {
+      return; // Only Dreamer nodes have liminal-web.json
+    }
+
+    const liminalWebPath = path.join(this.vaultPath, node.repoPath, 'liminal-web.json');
+
+    try {
+      // Read current file or create structure
+      let liminalWeb;
+      try {
+        const content = await fsPromises.readFile(liminalWebPath, 'utf-8');
+        liminalWeb = JSON.parse(content);
+      } catch {
+        // File doesn't exist or invalid, create new structure
+        liminalWeb = { relationships: [] };
+      }
+
+      // Update relationships from node's liminalWebConnections
+      liminalWeb.relationships = node.liminalWebConnections || [];
+
+      // Write back
+      await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
+      console.log(`GitDreamNodeService: Updated liminal-web.json for ${node.name} with ${liminalWeb.relationships.length} relationships`);
+    } catch (error) {
+      console.error(`GitDreamNodeService: Failed to update liminal-web.json for ${node.name}:`, error);
+    }
   }
 }

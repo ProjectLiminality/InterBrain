@@ -29,21 +29,23 @@ export class URIHandlerService {
 	 */
 	registerHandlers(): void {
 		try {
-			// Register single node clone handler
-			// Format: obsidian://interbrain-clone?vault=<vault>&uuid=<dreamUUID>
+			// Register unified clone handler (handles both single and batch clones)
+			// Format: obsidian://interbrain-clone?ids=<id1,id2,...>&senderDid=<did>&senderName=<name>
+			// Single: ids=rad:z1234 → selects cloned Dream node
+			// Batch:  ids=rad:z1234,rad:z5678 → selects Dreamer node
 			this.plugin.registerObsidianProtocolHandler(
 				'interbrain-clone',
-				this.handleSingleNodeClone.bind(this)
+				this.handleClone.bind(this)
 			);
 			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone`);
 
-			// Register batch clone handler
-			// Format: obsidian://interbrain-clone-batch?vault=<vault>&uuids=<uuid1,uuid2,uuid3>
+			// Register update-contact handler for DID backpropagation
+			// Format: obsidian://interbrain-update-contact?did=<did>&uuid=<dreamer-uuid>&name=<name>&email=<email>
 			this.plugin.registerObsidianProtocolHandler(
-				'interbrain-clone-batch',
-				this.handleBatchNodeClone.bind(this)
+				'interbrain-update-contact',
+				this.handleUpdateContact.bind(this)
 			);
-			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone-batch`);
+			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-update-contact`);
 		} catch (error) {
 			console.error('Failed to register URI handlers:', error);
 			console.warn(`⚠️ [URIHandler] Deep links will not be functional`);
@@ -51,135 +53,36 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Handle single DreamNode clone URI with collaboration handshake
-	 * Format: obsidian://interbrain-clone?id=<radicleId or uuid>&senderDid=<did>&senderName=<name>
-	 * Or: obsidian://interbrain-clone?repo=<github.com/user/repo>
+	 * Unified clone handler - handles both single and batch clones
+	 * Format: obsidian://interbrain-clone?ids=<id1,id2,...>&senderDid=<did>&senderName=<name>
+	 *
+	 * Selection logic:
+	 * - Single ID (ids=rad:z1234): Selects the cloned Dream node
+	 * - Multiple IDs (ids=rad:z1234,rad:z5678): Selects the Dreamer node
 	 */
-	private async handleSingleNodeClone(params: Record<string, string>): Promise<'success' | 'skipped' | 'error'> {
+	private async handleClone(params: Record<string, string>): Promise<void> {
 		try {
-			let id = params.id || params.uuid; // Support both 'id' (new) and 'uuid' (legacy)
-			const repo = params.repo; // GitHub repository path
+			const ids = params.ids || params.id || params.uuid || params.uuids; // Support all legacy formats
 			const senderDid = params.senderDid ? decodeURIComponent(params.senderDid) : undefined;
 			const senderName = params.senderName ? decodeURIComponent(params.senderName) : undefined;
 
-			console.log(`🔗 [URIHandler] Single clone request:`, { id, repo, senderDid, senderName });
-
-			// Check for GitHub repository
-			if (repo) {
-				const result = await this.cloneFromGitHub(repo);
-
-				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
-				// (but for single links, we still select the cloned node, not the Dreamer)
-				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
-					await this.handleCollaborationHandshake(repo, senderDid, senderName);
-				}
-
-				// FINAL STEP: Trigger lightweight plugin reload with cloned node as target
-				if (result === 'success' || result === 'skipped') {
-					// Single clone links should ALWAYS select the cloned node (not Dreamer)
-					const clonedNode = await this.findNodeByIdentifier(repo);
-					const targetNodeUUID = clonedNode?.id;
-
-					if (targetNodeUUID) {
-						console.log(`🔄 [URIHandler] Storing target UUID for reload (cloned node): ${targetNodeUUID}`);
-						(globalThis as any).__interbrainReloadTargetUUID = targetNodeUUID;
-					}
-
-					console.log(`🔄 [URIHandler] Triggering plugin reload to finalize single clone...`);
-					const plugins = (this.app as any).plugins;
-					await plugins.disablePlugin('interbrain');
-					await plugins.enablePlugin('interbrain');
-					console.log(`✅ [URIHandler] Plugin reload complete - single clone finalized`);
-				}
-
-				return result;
-			}
-
-			// Check for Radicle/UUID identifier
-			if (!id) {
-				new Notice('Invalid clone link: missing node identifier or repository');
-				console.error(`❌ [URIHandler] Single clone missing identifier parameter`);
-				return 'error';
-			}
-
-			// URL decode the ID (handles %3A -> : conversion)
-			id = decodeURIComponent(id);
-			console.log(`🔗 [URIHandler] Decoded ID: ${id}`);
-
-			// Determine if this is a Radicle ID or UUID
-			const isRadicleId = id.startsWith('rad:');
-
-			if (isRadicleId) {
-				// Clone from Radicle network with collaboration handshake
-				const result = await this.cloneFromRadicle(id);
-
-				// If clone successful OR already exists, and we have sender info, create/link Dreamer node
-				// (but for single links, we still select the cloned node, not the Dreamer)
-				if ((result === 'success' || result === 'skipped') && senderDid && senderName) {
-					await this.handleCollaborationHandshake(id, senderDid, senderName);
-				}
-
-				// FINAL STEP: Trigger lightweight plugin reload with cloned node as target
-				if (result === 'success' || result === 'skipped') {
-					// Single clone links should ALWAYS select the cloned node (not Dreamer)
-					const clonedNode = await this.findNodeByIdentifier(id);
-					const targetNodeUUID = clonedNode?.id;
-
-					if (targetNodeUUID) {
-						console.log(`🔄 [URIHandler] Storing target UUID for reload (cloned node): ${targetNodeUUID}`);
-						(globalThis as any).__interbrainReloadTargetUUID = targetNodeUUID;
-					}
-
-					console.log(`🔄 [URIHandler] Triggering plugin reload to finalize single clone...`);
-					const plugins = (this.app as any).plugins;
-					await plugins.disablePlugin('interbrain');
-					await plugins.enablePlugin('interbrain');
-					console.log(`✅ [URIHandler] Plugin reload complete - single clone finalized`);
-				}
-
-				return result;
-			} else {
-				// Legacy UUID fallback (for Windows users)
-				new Notice(`UUID-based links not yet implemented. Please ask sender to share via Radicle.`);
-				console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${id}`);
-				return 'error';
-			}
-
-		} catch (error) {
-			console.error('Failed to handle clone link:', error);
-			new Notice(`Failed to handle clone link: ${error instanceof Error ? error.message : 'Unknown error'}`);
-			return 'error';
-		}
-	}
-
-	/**
-	 * Handle batch DreamNode clone URI with collaboration handshake
-	 * Format: obsidian://interbrain-clone-batch?ids=<id1,id2,id3>&senderDid=<did>&senderName=<name>
-	 * Examples:
-	 *   - Pure Radicle: ids=rad:z1234,rad:z5678
-	 *   - Pure GitHub: ids=github.com/user/repo1,github.com/user/repo2
-	 *   - Mixed: ids=rad:z1234,github.com/user/repo,uuid-fallback
-	 */
-	private async handleBatchNodeClone(params: Record<string, string>): Promise<void> {
-		try {
-			const ids = params.ids || params.uuids; // Support both 'ids' (new) and 'uuids' (legacy)
-			const senderDid = params.senderDid ? decodeURIComponent(params.senderDid) : undefined;
-			const senderName = params.senderName ? decodeURIComponent(params.senderName) : undefined;
-
-			console.log(`🔗 [URIHandler] Batch clone request:`, { ids, senderDid, senderName });
+			console.log(`🔗 [URIHandler] Clone request:`, { ids, senderDid, senderName });
 
 			if (!ids) {
-				new Notice('Invalid batch clone link: missing node identifiers');
-				console.error(`❌ [URIHandler] Batch clone missing identifiers parameter`);
+				new Notice('Invalid clone link: missing node identifiers');
+				console.error(`❌ [URIHandler] Clone missing identifiers parameter`);
 				return;
 			}
 
 			const identifiers = ids.split(',').map(u => u.trim()).filter(Boolean);
 
 			if (identifiers.length === 0) {
-				new Notice('Invalid batch clone link: no valid identifiers');
+				new Notice('Invalid clone link: no valid identifiers');
 				return;
 			}
+
+			const isSingleClone = identifiers.length === 1;
+			console.log(`🔗 [URIHandler] ${isSingleClone ? 'Single' : 'Batch'} clone with ${identifiers.length} identifier(s)`);
 
 			// Classify each identifier
 			const classified = identifiers.map(id => ({
@@ -188,7 +91,7 @@ export class URIHandlerService {
 			}));
 
 			// Show progress notification
-			const notice = new Notice(`Cloning ${identifiers.length} DreamNodes in parallel...`, 0);
+			const notice = new Notice(`Cloning ${identifiers.length} DreamNode${identifiers.length > 1 ? 's' : ''} in parallel...`, 0);
 
 			// PARALLELIZED: Clone all nodes simultaneously
 			const clonePromises = classified.map(async ({ raw, type }) => {
@@ -234,81 +137,294 @@ export class URIHandlerService {
 			if (errorCount > 0) parts.push(`${errorCount} failed`);
 
 			const summary = parts.join(', ');
-			new Notice(`✅ Batch clone complete: ${summary}`);
+			new Notice(`✅ Clone complete: ${summary}`);
 
-			// If we have sender info, handle collaboration handshake ONCE at the end
+			// Determine if anything actually changed (new clones vs all already existed)
+			const allNodesAlreadyExisted = successCount === 0 && skipCount > 0;
+			console.log(`🔍 [URIHandler] All nodes already existed: ${allNodesAlreadyExisted} (${successCount} new, ${skipCount} skipped)`);
+
+			// If we have sender info, handle collaboration handshake
 			if (senderDid && senderName) {
-				// CRITICAL: Scan vault FIRST to ensure all cloned nodes are in the store
-				// before trying to link them (prevents dangling reference cleanup from removing them)
-				console.log(`🔄 [URIHandler] Scanning vault to register ${successCount + skipCount} cloned nodes...`);
-				await this.dreamNodeService.scanVault();
+				if (allNodesAlreadyExisted) {
+					// FAST PATH: All nodes already exist - but still need to ensure Dreamer + relationships are set up
+					console.log(`⚡ [URIHandler] Fast path - all DreamNodes existed, checking Dreamer and relationships...`);
 
-				// Find or create the Dreamer node
-				const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
-				await new Promise(resolve => setTimeout(resolve, 200));
+					// Get current store state (nodes already loaded)
+					const store = useInterBrainStore.getState();
 
-				// Now link all successfully cloned nodes to the Dreamer node
-				// (nodes are now guaranteed to exist in the store)
-				for (const { result, identifier } of results) {
-					if (result === 'success' || result === 'skipped') {
-						try {
-							const clonedNode = await this.findNodeByIdentifier(identifier);
-							if (clonedNode) {
-								await this.linkNodes(clonedNode, dreamerNode);
-							} else {
-								console.warn(`⚠️ [URIHandler] Node not found after vault scan: ${identifier}`);
+					// Convert Map to array for searching
+					const nodesArray = Array.from(store.realNodes.values()).map(nodeData => nodeData.node);
+
+					// Check if Dreamer node exists
+					let dreamerNode = nodesArray.find((n: any) => n.type === 'dreamer' && n.did === senderDid);
+
+					// Extract senderEmail from params if available
+					const senderEmail = params.senderEmail ? decodeURIComponent(params.senderEmail) : undefined;
+
+					if (!dreamerNode) {
+						console.log(`🔄 [URIHandler] Dreamer node doesn't exist - creating it...`);
+						// Need to create Dreamer node and link relationships
+						await this.dreamNodeService.scanVault();
+						dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName, senderEmail);
+						await new Promise(resolve => setTimeout(resolve, 200));
+
+						// Link all cloned nodes to the Dreamer
+						for (const identifier of identifiers) {
+							try {
+								const clonedNode = await this.findNodeByIdentifier(identifier);
+								if (clonedNode) {
+									await this.linkNodes(clonedNode, dreamerNode);
+								}
+							} catch (linkError) {
+								console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
 							}
-						} catch (linkError) {
-							console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
+						}
+
+						// Sync Radicle peer relationships
+						try {
+							console.log(`🔄 [URIHandler] Syncing Radicle peer relationships...`);
+							await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+						} catch (syncError) {
+							console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+						}
+					} else {
+						// Dreamer exists - check if relationships are properly set up
+						console.log(`✅ [URIHandler] Dreamer node exists: "${dreamerNode.name}"`);
+
+						// CRITICAL: Load UUID from .udd file for linkNodes() compatibility
+						const fs = require('fs').promises;
+						const path = require('path');
+						const uddPath = path.join(this.app.vault.adapter.basePath, dreamerNode.repoPath, '.udd');
+
+						try {
+							const uddContent = await fs.readFile(uddPath, 'utf-8');
+							const udd = JSON.parse(uddContent);
+							dreamerNode.uuid = udd.uuid;
+							console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${dreamerNode.uuid}`);
+						} catch (error) {
+							console.error(`❌ [URIHandler] Failed to read UUID from existing Dreamer:`, error);
+						}
+
+						// Check if all cloned nodes are linked to this Dreamer
+						let missingLinks = false;
+						for (const identifier of identifiers) {
+							const clonedNode = await this.findNodeByIdentifier(identifier);
+							if (clonedNode && !dreamerNode.liminalWebConnections?.includes(clonedNode.id)) {
+								console.log(`🔄 [URIHandler] Missing relationship: Dreamer "${dreamerNode.name}" ↔ "${clonedNode.name}"`);
+								missingLinks = true;
+								await this.linkNodes(clonedNode, dreamerNode);
+							}
+						}
+
+						if (missingLinks) {
+							// Refresh store to reflect new relationships in UI
+							console.log(`🔄 [URIHandler] Refreshing store with new relationships...`);
+							await this.dreamNodeService.scanVault();
+
+							// Re-sync Radicle relationships if we added any new links
+							try {
+								console.log(`🔄 [URIHandler] Re-syncing Radicle peer relationships...`);
+								await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+							} catch (syncError) {
+								console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+							}
 						}
 					}
-				}
 
-				// FINAL UI REFRESH: Run comprehensive refresh and select the Dreamer node
-				try {
-					console.log(`🔄 [URIHandler] Running comprehensive refresh (DreamSong relationships + constellation)...`);
+					// Select the appropriate target node
+					let targetNode: any;
+					if (isSingleClone) {
+						// Single clone: Select the cloned Dream node
+						targetNode = nodesArray.find(n => {
+							if (identifiers[0].startsWith('rad:')) {
+								return n.radicleId === identifiers[0];
+							}
+							if (identifiers[0].includes('github.com/')) {
+								return n.githubRepoUrl?.includes(identifiers[0]);
+							}
+							return false;
+						});
+						console.log(`⚡ [URIHandler] Single clone - selecting Dream node: ${targetNode?.name}`);
+					} else {
+						// Batch clone: Select the Dreamer node
+						targetNode = dreamerNode;
+						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode.name}`);
+					}
 
-					const relationshipService = new DreamSongRelationshipService(this.plugin);
-					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
+					if (targetNode) {
+						// Directly select the node in the store (no refresh needed)
+						store.setSelectedNode(targetNode);
+						console.log(`✅ [URIHandler] Fast path complete - node selected with relationships verified`);
+					} else {
+						console.warn(`⚠️ [URIHandler] Fast path failed - could not find target node, falling back to refresh`);
+						await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
+					}
 
-					if (scanResult.success) {
-						const canvasAPI = (globalThis as any).__interbrainCanvas;
-						if (canvasAPI?.applyConstellationLayout) {
-							await canvasAPI.applyConstellationLayout();
+				} else {
+					// FULL PATH: New nodes were cloned - run complete workflow
+					console.log(`🔄 [URIHandler] Full path - new nodes cloned, running complete workflow...`);
 
-							// CRITICAL: Select the Dreamer node (not the cloned nodes)
-							const store = useInterBrainStore.getState();
-							store.setSelectedNode(dreamerNode);
-							store.setSpatialLayout('liminal-web');
+					// CRITICAL: Scan vault FIRST to ensure all cloned nodes are in the store
+					console.log(`🔄 [URIHandler] Scanning vault to register ${successCount + skipCount} cloned node(s)...`);
+					await this.dreamNodeService.scanVault();
 
-							console.log(`✅ [URIHandler] Batch clone complete - Dreamer node selected with all relationships visible`);
+					// Extract senderEmail from params if available
+					const senderEmail = params.senderEmail ? decodeURIComponent(params.senderEmail) : undefined;
+
+					// Find or create the Dreamer node
+					const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName, senderEmail);
+					await new Promise(resolve => setTimeout(resolve, 200));
+
+					// Link all successfully cloned nodes to the Dreamer node
+					for (const { result, identifier } of results) {
+						if (result === 'success' || result === 'skipped') {
+							try {
+								const clonedNode = await this.findNodeByIdentifier(identifier);
+								if (clonedNode) {
+									await this.linkNodes(clonedNode, dreamerNode);
+								} else {
+									console.warn(`⚠️ [URIHandler] Node not found after vault scan: ${identifier}`);
+								}
+							} catch (linkError) {
+								console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
+							}
 						}
 					}
-				} catch (refreshError) {
-					console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
-				}
 
-				// FINAL STEP: Trigger lightweight plugin reload with explicit Dreamer node UUID
-				if (dreamerNode?.id) {
-					console.log(`🔄 [URIHandler] Storing Dreamer node UUID for reload: ${dreamerNode.id}`);
-					(globalThis as any).__interbrainReloadTargetUUID = dreamerNode.id;
-				}
+					// Sync Radicle peer relationships (follow, delegate, remotes, seeding scope)
+					try {
+						console.log(`🔄 [URIHandler] Syncing Radicle peer relationships for Dreamer "${dreamerNode.name}"...`);
+						await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+						console.log(`✅ [URIHandler] Radicle peer sync complete`);
+					} catch (syncError) {
+						console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+					}
 
-				console.log(`🔄 [URIHandler] Triggering plugin reload to finalize batch clone...`);
-				const plugins = (this.app as any).plugins;
-				await plugins.disablePlugin('interbrain');
-				await plugins.enablePlugin('interbrain');
-				console.log(`✅ [URIHandler] Plugin reload complete - batch clone finalized`);
+					// FINAL STEP: Refresh UI with smart selection
+					try {
+						let targetUUID: string | undefined;
+
+						if (isSingleClone) {
+							// Single clone: Select the cloned Dream node
+							const clonedNode = await this.findNodeByIdentifier(identifiers[0]);
+							targetUUID = clonedNode?.id;
+							console.log(`🔄 [URIHandler] Single clone - selecting Dream node: ${clonedNode?.name} (${targetUUID})`);
+						} else {
+							// Batch clone: Select the Dreamer node
+							targetUUID = dreamerNode.id;
+							console.log(`🔄 [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode.name} (${targetUUID})`);
+						}
+
+						// CRITICAL: Set target UUID BEFORE calling refresh command
+						if (targetUUID) {
+							(globalThis as any).__interbrainReloadTargetUUID = targetUUID;
+							console.log(`✅ [URIHandler] Target UUID stored in globalThis.__interbrainReloadTargetUUID`);
+						}
+
+						// Trigger refresh command
+						console.log(`🔄 [URIHandler] Triggering plugin refresh...`);
+						await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
+						console.log(`✅ [URIHandler] Clone complete - node selected with all relationships visible`);
+					} catch (refreshError) {
+						console.error(`❌ [URIHandler] Refresh failed:`, refreshError);
+					}
+				}
 			}
 
 		} catch (error) {
-			console.error('Failed to handle batch clone link:', error);
-			new Notice(`Failed to handle batch clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			console.error('Failed to handle clone link:', error);
+			new Notice(`Failed to handle clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 
 	/**
-	 * Classify identifier type for universal batch clone support
+	 * Handle contact update (DID backpropagation from Bob → Alice)
+	 * Format: obsidian://interbrain-update-contact?did=<did>&uuid=<dreamer-uuid>&name=<name>&email=<email>
+	 *
+	 * This enables the collaboration handshake completion:
+	 * 1. Alice shares with Bob → Bob installs → Bob gets Alice's DID
+	 * 2. Bob shares DID back to Alice via this URI
+	 * 3. Alice's Dreamer node for Bob gets updated with his DID
+	 * 4. Sync command auto-triggers → mutual delegation established
+	 */
+	private async handleUpdateContact(params: Record<string, string>): Promise<void> {
+		try {
+			const did = params.did ? decodeURIComponent(params.did) : undefined;
+			const uuid = params.uuid ? decodeURIComponent(params.uuid) : undefined;
+			const name = params.name ? decodeURIComponent(params.name) : undefined;
+			const email = params.email ? decodeURIComponent(params.email) : undefined;
+
+			console.log(`🔄 [URIHandler] Update contact request:`, { did, uuid, name, email });
+
+			if (!did) {
+				new Notice('Invalid update link: missing DID');
+				console.error(`❌ [URIHandler] Update contact missing DID parameter`);
+				return;
+			}
+
+			if (!uuid) {
+				new Notice('Invalid update link: missing Dreamer UUID');
+				console.error(`❌ [URIHandler] Update contact missing UUID parameter`);
+				return;
+			}
+
+			// Find the Dreamer node by UUID
+			const allNodes = await this.dreamNodeService.list();
+			const dreamerNode = allNodes.find((node: any) => node.id === uuid && node.type === 'dreamer');
+
+			if (!dreamerNode) {
+				new Notice(`Dreamer node not found (UUID: ${uuid.slice(0, 8)}...)`);
+				console.error(`❌ [URIHandler] Dreamer node not found: ${uuid}`);
+				return;
+			}
+
+			console.log(`👤 [URIHandler] Found Dreamer node: "${dreamerNode.name}" (${uuid})`);
+
+			// Prepare updates
+			const updates: Partial<DreamNode> = { did };
+			if (name) updates.name = name;
+			if (email) updates.email = email;
+
+			// Update the Dreamer node with new contact info
+			await this.dreamNodeService.update(uuid, updates);
+
+			console.log(`✅ [URIHandler] Updated "${dreamerNode.name}" with DID: ${did}`);
+			new Notice(`Contact updated: ${name || dreamerNode.name}'s DID received`);
+
+			// Auto-trigger sync command to establish mutual delegation
+			console.log(`🔄 [URIHandler] Triggering Radicle peer sync for mutual delegation...`);
+			try {
+				// Execute the sync command via Obsidian's command API
+				// This runs the "Sync Radicle Peer Following" command which handles:
+				// - rad follow <DID>
+				// - rad id update --delegate <DID> --threshold 1
+				// - git remote add <Peer> rad://<RID>/<DID>
+				// - rad seed <RID> --scope followed
+				const executed = (this.plugin.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+
+				if (executed) {
+					console.log(`✅ [URIHandler] Radicle sync triggered - mutual delegation will be established`);
+					new Notice('Collaboration setup complete! Syncing peer configuration...');
+				} else {
+					console.warn(`⚠️ [URIHandler] Sync command not found - may need manual sync`);
+					new Notice('Contact updated. Run "Sync Radicle Peer Following" to complete setup.');
+				}
+			} catch (syncError) {
+				console.error(`❌ [URIHandler] Radicle sync failed (non-critical):`, syncError);
+				new Notice('Contact updated, but auto-sync failed. Run "Sync Radicle Peer Following" manually.');
+			}
+
+			// Refresh UI to show updated node
+			await this.dreamNodeService.scanVault();
+
+		} catch (error) {
+			console.error('Failed to handle update contact:', error);
+			new Notice(`Failed to update contact: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
+	/**
+	 * Classify identifier type for universal clone support
 	 */
 	private classifyIdentifier(id: string): 'radicle' | 'github' | 'uuid' {
 		if (id.startsWith('rad:')) return 'radicle';
@@ -735,115 +851,57 @@ export class URIHandlerService {
 	/**
 	 * Find existing Dreamer node by DID, or create new one
 	 */
-	private async findOrCreateDreamerNode(did: string, name: string): Promise<any> {
+	private async findOrCreateDreamerNode(did: string, name: string, email?: string): Promise<any> {
 		// Search for existing Dreamer node with this DID
 		const allNodes = await this.dreamNodeService.list();
 		const existingDreamer = allNodes.find((node: any) => {
-			return node.type === 'dreamer' && node.radicleId === did;
+			return node.type === 'dreamer' && node.did === did;
 		});
 
 		if (existingDreamer) {
 			console.log(`👤 [URIHandler] Found existing Dreamer node: "${existingDreamer.name}"`);
 
-			// Ensure UUID is populated (store object might not have it)
-			if (!existingDreamer.uuid) {
-				const fs = require('fs').promises;
-				const path = require('path');
-				try {
-					const uddPath = path.join(this.app.vault.adapter.basePath, existingDreamer.repoPath, '.udd');
-					const uddContent = await fs.readFile(uddPath, 'utf-8');
-					const udd = JSON.parse(uddContent);
-					existingDreamer.uuid = udd.uuid;
-					console.log(`✅ [URIHandler] Populated UUID for existing Dreamer: ${existingDreamer.uuid}`);
-				} catch (error) {
-					console.warn(`⚠️ [URIHandler] Could not read UUID for existing Dreamer:`, error);
-				}
+			// CRITICAL: Read UUID from .udd file for linkNodes() compatibility
+			// linkNodes() expects .uuid property, not .id
+			const fs = require('fs').promises;
+			const path = require('path');
+			const uddPath = path.join(this.app.vault.adapter.basePath, existingDreamer.repoPath, '.udd');
+
+			try {
+				const uddContent = await fs.readFile(uddPath, 'utf-8');
+				const udd = JSON.parse(uddContent);
+				existingDreamer.uuid = udd.uuid;
+				console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${existingDreamer.uuid}`);
+			} catch (error) {
+				console.error(`❌ [URIHandler] Failed to read UUID from existing Dreamer:`, error);
 			}
 
 			return existingDreamer;
 		}
 
-		// Create new Dreamer node
-		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name}...`);
+		// Create new Dreamer node with DID metadata using standard creation flow
+		// Standard flow handles: git init, rad init, .udd creation with all metadata
+		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name} with DID ${did}${email ? ` and email ${email}` : ''}...`);
+		const metadata: any = { did };
+		if (email) {
+			metadata.email = email;
+		}
+		const newDreamer = await this.dreamNodeService.create(name, 'dreamer', undefined, undefined, undefined, metadata);
 
-		const newDreamer = await this.dreamNodeService.create(name, 'dreamer');
+		// Wait for creation to complete and populate UUID
+		await new Promise(resolve => setTimeout(resolve, 500));
 
-		// Wait for .udd file to be created by pre-commit hook
-		const uddPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 		const fs = require('fs').promises;
+		const path = require('path');
+		const uddPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
 
 		try {
-			// Retry loop: wait for pre-commit hook to move .udd file
-			let retries = 10;
-			let uddContent = null;
-			while (retries > 0) {
-				try {
-					uddContent = await fs.readFile(uddPath, 'utf-8');
-					break; // Success!
-				} catch (error) {
-					if (retries === 1) throw error; // Last attempt failed
-					await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
-					retries--;
-				}
-			}
-
-			if (!uddContent) {
-				throw new Error('Failed to read .udd file after retries');
-			}
-
+			const uddContent = await fs.readFile(uddPath, 'utf-8');
 			const udd = JSON.parse(uddContent);
-			udd.radicleId = did;
-			await fs.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
-			console.log(`✅ [URIHandler] Saved DID to Dreamer node: ${did}`);
-
-			// CRITICAL: Commit the DID change to git (similar to how submodules are committed)
-			// Wait for initial git commit to complete, then commit DID change
-			const { exec } = require('child_process');
-			const { promisify } = require('util');
-			const execAsync = promisify(exec);
-			const dreamerRepoPath = require('path').join(this.app.vault.adapter.basePath, newDreamer.repoPath);
-
-			// Retry loop: wait for index.lock to be released (initial commit to finish)
-			let committed = false;
-			for (let attempt = 0; attempt < 10; attempt++) {
-				try {
-					// Check if there's an index.lock file
-					const lockPath = require('path').join(dreamerRepoPath, '.git', 'index.lock');
-					const lockExists = await fs.access(lockPath).then(() => true).catch(() => false);
-
-					if (lockExists) {
-						// Wait for lock to be released
-						await new Promise(resolve => setTimeout(resolve, 500));
-						continue;
-					}
-
-					// Try to commit
-					await execAsync('git add .udd', { cwd: dreamerRepoPath });
-					await execAsync(`git commit -m "Add Radicle DID: ${did}"`, { cwd: dreamerRepoPath });
-					console.log(`✅ [URIHandler] Committed DID to Dreamer node git history`);
-					committed = true;
-					break;
-				} catch (commitError: any) {
-					// If it's a lock error and we have retries left, wait and retry
-					if (commitError.message?.includes('index.lock') && attempt < 9) {
-						await new Promise(resolve => setTimeout(resolve, 500));
-						continue;
-					}
-					// Other error or final attempt - log and give up
-					console.warn(`⚠️ [URIHandler] Could not commit DID to git (attempt ${attempt + 1}/10):`, commitError);
-					break;
-				}
-			}
-
-			if (!committed) {
-				console.warn(`⚠️ [URIHandler] DID saved to .udd file but not committed to git - will be committed on next user action`);
-			}
-
-			// CRITICAL: Populate UUID from .udd file (store object doesn't have it)
 			newDreamer.uuid = udd.uuid;
-			console.log(`✅ [URIHandler] Dreamer node UUID: ${newDreamer.uuid}`);
+			console.log(`✅ [URIHandler] Dreamer node created with UUID: ${newDreamer.uuid}, DID: ${did}`);
 		} catch (error) {
-			console.warn(`⚠️ [URIHandler] Could not save DID to .udd file:`, error);
+			console.error(`❌ [URIHandler] Failed to read UUID from Dreamer node:`, error);
 		}
 
 		return newDreamer;
@@ -900,6 +958,8 @@ export class URIHandlerService {
 
 	/**
 	 * Link two nodes by adding relationship
+	 * CRITICAL: Only Dreamer nodes hold liminal-web.json (subjective relationship data)
+	 * DreamNodes don't have this file to avoid merge conflicts in collaboration
 	 */
 	private async linkNodes(sourceNode: any, targetNode: any): Promise<void> {
 		try {
@@ -918,37 +978,50 @@ export class URIHandlerService {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
 
-			// Add bidirectional relationship by updating .udd files
-			// Source -> Target
-			const sourceUddPath = path.join(vaultPath, sourceNode.repoPath, '.udd');
-			const sourceUddContent = await fs.readFile(sourceUddPath, 'utf-8');
-			const sourceUdd = JSON.parse(sourceUddContent);
+			// Source -> Target (only if source is a Dreamer)
+			if (sourceNode.type === 'dreamer') {
+				const sourceLiminalWebPath = path.join(vaultPath, sourceNode.repoPath, 'liminal-web.json');
+				let sourceLiminalWeb: any = { relationships: [] };
 
-			if (!sourceUdd.liminalWebRelationships) {
-				sourceUdd.liminalWebRelationships = [];
+				try {
+					const content = await fs.readFile(sourceLiminalWebPath, 'utf-8');
+					sourceLiminalWeb = JSON.parse(content);
+				} catch (error) {
+					console.log(`📝 [URIHandler] Creating liminal-web.json for Dreamer "${sourceNode.name}"`);
+				}
+
+				if (!sourceLiminalWeb.relationships) {
+					sourceLiminalWeb.relationships = [];
+				}
+
+				if (!sourceLiminalWeb.relationships.includes(targetNode.uuid)) {
+					sourceLiminalWeb.relationships.push(targetNode.uuid);
+					await fs.writeFile(sourceLiminalWebPath, JSON.stringify(sourceLiminalWeb, null, 2), 'utf-8');
+					console.log(`🔗 [URIHandler] Added relationship: Dreamer "${sourceNode.name}" -> "${targetNode.name}"`);
+				}
 			}
 
-			// Add relationship if not already present
-			if (!sourceUdd.liminalWebRelationships.includes(targetNode.uuid)) {
-				sourceUdd.liminalWebRelationships.push(targetNode.uuid);
-				await fs.writeFile(sourceUddPath, JSON.stringify(sourceUdd, null, 2), 'utf-8');
-				console.log(`🔗 [URIHandler] Added relationship: "${sourceNode.name}" -> "${targetNode.name}"`);
-			}
+			// Target -> Source (only if target is a Dreamer)
+			if (targetNode.type === 'dreamer') {
+				const targetLiminalWebPath = path.join(vaultPath, targetNode.repoPath, 'liminal-web.json');
+				let targetLiminalWeb: any = { relationships: [] };
 
-			// Target -> Source
-			const targetUddPath = path.join(vaultPath, targetNode.repoPath, '.udd');
-			const targetUddContent = await fs.readFile(targetUddPath, 'utf-8');
-			const targetUdd = JSON.parse(targetUddContent);
+				try {
+					const content2 = await fs.readFile(targetLiminalWebPath, 'utf-8');
+					targetLiminalWeb = JSON.parse(content2);
+				} catch (error) {
+					console.log(`📝 [URIHandler] Creating liminal-web.json for Dreamer "${targetNode.name}"`);
+				}
 
-			if (!targetUdd.liminalWebRelationships) {
-				targetUdd.liminalWebRelationships = [];
-			}
+				if (!targetLiminalWeb.relationships) {
+					targetLiminalWeb.relationships = [];
+				}
 
-			// Add relationship if not already present
-			if (!targetUdd.liminalWebRelationships.includes(sourceNode.uuid)) {
-				targetUdd.liminalWebRelationships.push(sourceNode.uuid);
-				await fs.writeFile(targetUddPath, JSON.stringify(targetUdd, null, 2), 'utf-8');
-				console.log(`🔗 [URIHandler] Added relationship: "${targetNode.name}" -> "${sourceNode.name}"`);
+				if (!targetLiminalWeb.relationships.includes(sourceNode.uuid)) {
+					targetLiminalWeb.relationships.push(sourceNode.uuid);
+					await fs.writeFile(targetLiminalWebPath, JSON.stringify(targetLiminalWeb, null, 2), 'utf-8');
+					console.log(`🔗 [URIHandler] Added relationship: Dreamer "${targetNode.name}" -> "${sourceNode.name}"`);
+				}
 			}
 
 			console.log(`✅ [URIHandler] Linked "${sourceNode.name}" <-> "${targetNode.name}"`);
@@ -966,13 +1039,14 @@ export class URIHandlerService {
 	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
 	static generateSingleNodeLink(vaultName: string, identifier: string, senderDid?: string, senderName?: string): string {
+		// Unified schema: Use ?ids= for both single and batch clones
 		// Don't encode colons in Radicle IDs - they're part of the protocol
 		// rad:z... should stay as rad:z..., not rad%3Az...
 		const encodedIdentifier = identifier.startsWith('rad:')
 			? identifier // Keep Radicle ID as-is
 			: encodeURIComponent(identifier); // Encode other identifiers (UUIDs)
 
-		let uri = `obsidian://interbrain-clone?id=${encodedIdentifier}`;
+		let uri = `obsidian://interbrain-clone?ids=${encodedIdentifier}`;
 
 		// Add collaboration handshake parameters if provided
 		if (senderDid) {
@@ -986,7 +1060,7 @@ export class URIHandlerService {
 	}
 
 	/**
-	 * Generate deep link URL for GitHub clone
+	 * Generate deep link URL for GitHub clone (uses unified ?ids= schema)
 	 * @param vaultName The Obsidian vault name (unused, kept for API compatibility)
 	 * @param githubRepoUrl GitHub repository URL (e.g., "https://github.com/user/repo" or "github.com/user/repo")
 	 */
@@ -996,8 +1070,8 @@ export class URIHandlerService {
 			.replace(/^https?:\/\//, '')  // Remove protocol
 			.replace(/\.git$/, '');       // Remove .git suffix
 
-		// Return clean URI without encoding (slashes must remain unencoded)
-		return `obsidian://interbrain-clone?repo=${repoPath}`;
+		// Use unified ?ids= schema (not ?repo=)
+		return `obsidian://interbrain-clone?ids=${repoPath}`;
 	}
 
 	/**
@@ -1008,8 +1082,9 @@ export class URIHandlerService {
 	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
 	static generateBatchNodeLink(vaultName: string, identifiers: string[], senderDid?: string, senderName?: string): string {
+		// Unified schema: Use ?ids= with comma-separated list
 		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
-		let uri = `obsidian://interbrain-clone-batch?ids=${encodedIdentifiers}`;
+		let uri = `obsidian://interbrain-clone?ids=${encodedIdentifiers}`;
 
 		// Add collaboration handshake parameters if provided
 		if (senderDid) {
@@ -1017,6 +1092,32 @@ export class URIHandlerService {
 		}
 		if (senderName) {
 			uri += `&senderName=${encodeURIComponent(senderName)}`;
+		}
+
+		return uri;
+	}
+
+	/**
+	 * Generate update-contact URI for DID backpropagation
+	 * @param did Sender's Radicle DID
+	 * @param dreamerUuid UUID of the recipient's Dreamer node (for the sender)
+	 * @param name Optional sender's name
+	 * @param email Optional sender's email
+	 *
+	 * Example: Bob installs InterBrain and wants to share his DID with Alice
+	 * - did: Bob's newly created Radicle DID
+	 * - dreamerUuid: Alice's UUID for her Dreamer node representing Bob
+	 * - name: "Bob" (optional, for display)
+	 * - email: "bob@example.com" (optional, for additional contact info)
+	 */
+	static generateUpdateContactLink(did: string, dreamerUuid: string, name?: string, email?: string): string {
+		let uri = `obsidian://interbrain-update-contact?did=${encodeURIComponent(did)}&uuid=${encodeURIComponent(dreamerUuid)}`;
+
+		if (name) {
+			uri += `&name=${encodeURIComponent(name)}`;
+		}
+		if (email) {
+			uri += `&email=${encodeURIComponent(email)}`;
 		}
 
 		return uri;

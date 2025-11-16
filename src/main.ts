@@ -323,7 +323,8 @@ export default class InterBrainPlugin extends Plugin {
     this.coherenceBeaconService = new CoherenceBeaconService(
       this.app,
       this.vaultService,
-      serviceManager.getRadicleService()
+      serviceManager.getRadicleService(),
+      this
     );
     this.leafManagerService = new LeafManagerService(this.app);
     this.canvasObserverService = new CanvasObserverService(this.app);
@@ -824,7 +825,7 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Copy share link for selected DreamNode
+    // Copy share link for selected DreamNode (with optional recipient DID for delegation)
     this.addCommand({
       id: 'copy-share-link',
       name: 'Copy Share Link for Selected DreamNode',
@@ -837,9 +838,18 @@ export default class InterBrainPlugin extends Plugin {
         }
 
         try {
+          // Prompt for optional recipient DID (empty = just copy link without delegation)
+          const recipientDid = await this.uiService.promptForText(
+            'Enter recipient DID (or leave empty)',
+            'did:key:z6Mk... (optional)'
+          );
+
           const { ShareLinkService } = await import('./services/share-link-service');
           const shareLinkService = new ShareLinkService(this.app);
-          await shareLinkService.copyShareLink(currentNode);
+
+          // Pass recipientDid if provided (will be undefined if empty string)
+          const effectiveRecipientDid = recipientDid && recipientDid.trim() !== '' ? recipientDid.trim() : undefined;
+          await shareLinkService.copyShareLink(currentNode, effectiveRecipientDid);
         } catch (error) {
           console.error('Failed to copy share link:', error);
           this.uiService.showError(`Failed to copy share link: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -955,23 +965,36 @@ export default class InterBrainPlugin extends Plugin {
         const store = useInterBrainStore.getState();
         const currentNode = store.selectedNode;
 
-        // Store UUID for reselection after reload
-        let nodeUUID: string | undefined;
-        if (currentNode) {
-          nodeUUID = currentNode.id;
-          console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
-          console.log(`[Refresh] Storing UUID for reselection...`);
+        // CRITICAL: Only set UUID if not already set by another flow (e.g., URI handler)
+        // This prevents refresh command from overwriting explicit auto-selection targets
+        const existingUUID = (globalThis as any).__interbrainReloadTargetUUID;
+        if (existingUUID) {
+          console.log(`[Refresh] ℹ️ UUID already set externally: ${existingUUID}`);
+          console.log(`[Refresh] Preserving external auto-selection target (not using current node)`);
         } else {
-          console.log(`[Refresh] ℹ️ No node currently selected`);
+          // Store current node UUID for reselection after reload
+          let nodeUUID: string | undefined;
+          if (currentNode) {
+            nodeUUID = currentNode.id;
+            console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
+            console.log(`[Refresh] Storing UUID for reselection...`);
+          } else {
+            console.log(`[Refresh] ℹ️ No node currently selected`);
+          }
+
+          // Store UUID in a global variable that persists across plugin reload
+          (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
+          console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
         }
 
-        // Store UUID in a global variable that persists across plugin reload
-        (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
-        console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
+        // Note: Bidirectional relationship sync is no longer needed with liminal-web.json architecture
+        // Relationships are computed from Dreamer → Dream pointers during vault scan
 
-        // Sync bidirectional relationships before reload (non-blocking background operation)
-        console.log(`[Refresh] Syncing bidirectional relationships in background...`);
-        this.app.commands.executeCommandById('interbrain:sync-bidirectional-relationships');
+        // Clean up dangling relationships before reload
+        // This ensures deleted nodes are properly removed from relationship references
+        console.log(`[Refresh] Cleaning dangling relationships...`);
+        await (this.app as any).commands.executeCommandById('interbrain:clean-dangling-relationships');
+        console.log(`[Refresh] Dangling relationship cleanup complete`);
 
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs

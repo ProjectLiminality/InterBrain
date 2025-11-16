@@ -297,6 +297,56 @@ export function registerMigrationCommands(plugin: Plugin) {
     }
   });
 
+  // Command: Migrate to liminal-web.json
+  plugin.addCommand({
+    id: 'migrate-to-liminal-web-json',
+    name: 'Migrate Relationships to liminal-web.json',
+    callback: async () => {
+      try {
+        console.log('MigrationCommands: Starting liminal-web.json migration...');
+
+        // Show progress notice
+        const notice = new Notice('Migrating relationships to liminal-web.json...', 0);
+
+        try {
+          // Perform migration
+          const summary = await migrationService.migrateToLiminalWebJson();
+
+          notice.hide();
+
+          // Show summary
+          if (summary.errors.length === 0) {
+            new Notice(
+              `✅ Migrated ${summary.dreamerNodesProcessed} Dreamer nodes! Created ${summary.filesCreated} liminal-web.json files.`,
+              5000
+            );
+          } else {
+            new Notice(
+              `⚠️ Migration completed with ${summary.errors.length} errors. Check console for details.`,
+              8000
+            );
+          }
+
+          // Log detailed results
+          console.log('MigrationCommands: liminal-web.json migration complete:', summary);
+          if (summary.errors.length > 0) {
+            console.error('Migration errors:', summary.errors);
+          }
+
+        } catch (error) {
+          notice.hide();
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error('MigrationCommands: Migration error:', error);
+          new Notice(`Migration failed: ${errorMessage}`, 5000);
+        }
+
+      } catch (error) {
+        console.error('MigrationCommands: Unexpected error:', error);
+        new Notice('An unexpected error occurred');
+      }
+    }
+  });
+
   // Command: Migrate All DreamNodes
   plugin.addCommand({
     id: 'migrate-all-dreamnodes',

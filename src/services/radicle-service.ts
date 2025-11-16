@@ -310,8 +310,9 @@ export class RadicleServiceImpl implements RadicleService {
   async isNodeRunning(): Promise<boolean> {
     try {
       const radCmd = this.getRadCommand();
-      const { stdout } = await execAsync(`"${radCmd}" node status`);
-      const isRunning = stdout.includes('Running');
+      const { stdout } = await execAsync(`"${radCmd}" node`);
+      // Output format: "✓ Node is running." when running
+      const isRunning = stdout.includes('Node is running');
       // Reduced logging - only log when NOT running (actionable)
       if (!isRunning) {
         console.log(`RadicleService: Node not running, will start it`);
@@ -381,8 +382,7 @@ export class RadicleServiceImpl implements RadicleService {
     // Prepare execution options - run from repo directory if provided
     const execOptions: any = { env };
     if (repoPath) {
-      const fullPath = this.getFullPath(repoPath);
-      execOptions.cwd = fullPath;
+      execOptions.cwd = repoPath;
       console.log(`RadicleService: Following peer ${peerDid} in repo ${repoPath}...`);
     } else {
       console.log(`RadicleService: Following peer ${peerDid} globally...`);
@@ -587,8 +587,10 @@ export class RadicleServiceImpl implements RadicleService {
     let cloneResult: any;
 
     try {
-      console.log(`RadicleService: Running 'rad clone ${radicleId}' in ${destinationPath}`);
-      cloneResult = await execAsync(`"${radCmd}" clone ${radicleId}`, {
+      // CRITICAL: Use --scope followed for Liminal Web trust-based model
+      // This sets correct seeding policy from the start (no need to change later)
+      console.log(`RadicleService: Running 'rad clone ${radicleId} --scope followed' in ${destinationPath}`);
+      cloneResult = await execAsync(`"${radCmd}" clone ${radicleId} --scope followed`, {
         cwd: destinationPath,
         env: env,
       });
@@ -702,48 +704,47 @@ export class RadicleServiceImpl implements RadicleService {
       // Don't fail the clone if .udd update fails
     }
 
-    // CRITICAL: Follow the repository delegate to receive their updates
-    // This is ESSENTIAL for the Radicle peer-to-peer collaboration model
-    try {
-      console.log(`RadicleService: Establishing peer following relationship...`);
-      const delegateDid = await this.getRepositoryDelegate(radicleId, passphrase);
-
-      if (delegateDid) {
-        await this.followPeer(delegateDid, passphrase);
-        console.log(`RadicleService: ✅ Collaboration handshake complete - following ${delegateDid}`);
-      } else {
-        console.warn(`RadicleService: ⚠️ Could not determine repository delegate - peer following skipped`);
-        console.warn(`RadicleService: ⚠️ You may not receive updates from this repository's owner`);
-      }
-    } catch (followError: any) {
-      // Don't fail the clone if following fails - log warning
-      console.warn(`RadicleService: ⚠️ Could not follow repository delegate (non-critical):`, followError.message);
-      console.warn(`RadicleService: ⚠️ You may not receive updates automatically. Run 'rad follow <DID>' manually if needed.`);
-    }
+    // NOTE: Peer relationship configuration (following, delegates, remotes, scope)
+    // is now handled by the comprehensive "Sync Radicle Peer Following" command
+    // which runs at the end of URI handler flows. This ensures:
+    // - Single source of truth for all peer configuration
+    // - Idempotent operations (safe to run multiple times)
+    // - Complete relationship setup (not just delegate following)
 
     return { repoName, alreadyExisted: false };
   }
 
-  async share(dreamNodePath: string, passphrase?: string): Promise<void> {
+  async share(dreamNodePath: string, passphrase?: string, recipientDid?: string): Promise<void> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
-    // Ensure Radicle node is running before attempting to share
-    await this.ensureNodeRunning(passphrase);
+    if (recipientDid) {
+      console.log(`RadicleService: Will add ${recipientDid} as delegate after publishing`);
+    }
 
     const radCmd = this.getRadCommand();
 
+    // Convert to absolute path if needed
+    const path = require('path');
+    const absoluteDreamNodePath = path.isAbsolute(dreamNodePath)
+      ? dreamNodePath
+      : path.resolve(dreamNodePath);
+    console.log(`RadicleService: [DEBUG] Original path: ${dreamNodePath}`);
+    console.log(`RadicleService: [DEBUG] Absolute path: ${absoluteDreamNodePath}`);
+
     // Prepare environment with passphrase and enhanced PATH for git-remote-rad helper
-    const homeDir = (globalThis as any).process?.env?.HOME || '';
+    const process = require('process');
+    const os = require('os');
+    const homeDir = os.homedir();
     const radicleGitHelperPaths = [
       `${homeDir}/.radicle/bin`,
       '/usr/local/bin',
       '/opt/homebrew/bin'
     ];
-    const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
+    const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
 
-    const env = { ...(globalThis as any).process.env };
+    const env = { ...process.env };
     env.PATH = enhancedPath;
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
@@ -753,50 +754,138 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      // STEP 1: Push commits to Radicle remote
-      // rad sync alone doesn't push commits - need explicit git push
-      console.log(`RadicleService: Pushing commits to Radicle remote...`);
-      console.log(`RadicleService: Enhanced PATH for git-remote-rad: ${enhancedPath}`);
-      try {
-        const pushResult = await execAsync('git push rad main', {
-          cwd: dreamNodePath,
-          env: env,
-        });
-        console.log('RadicleService: git push rad main output:', pushResult.stdout);
-        if (pushResult.stderr) {
-          console.log('RadicleService: git push rad main stderr:', pushResult.stderr);
-        }
-      } catch (pushError: any) {
-        // If push fails, log but continue - might be up to date
-        console.warn('RadicleService: git push warning (continuing anyway):', pushError.message);
-      }
+      // STEP 1: Push commits to Radicle storage
+      console.log(`RadicleService: Pushing commits to Radicle storage...`);
+      console.log(`RadicleService: [DEBUG] absoluteDreamNodePath = ${absoluteDreamNodePath}`);
+      console.log(`RadicleService: [DEBUG] env.PATH = ${env.PATH}`);
 
-      // STEP 2: Seed the repository to public seeds for async sharing
-      // This ensures others can fetch your changes even when you're offline
-      console.log(`RadicleService: Seeding repository to enable async sharing...`);
-      try {
-        const seedResult = await execAsync(`"${radCmd}" seed`, {
-          cwd: dreamNodePath,
+      const { spawn } = require('child_process');
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn('git', ['push', 'rad', 'main'], {
           env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
         });
-        console.log('RadicleService: rad seed output:', seedResult.stdout);
-      } catch (seedError: any) {
-        // Seeding might fail if already seeded or network issues - not critical
-        console.warn('RadicleService: rad seed warning (continuing anyway):', seedError.message);
-      }
 
-      // STEP 3: Sync to announce changes to network
-      console.log(`RadicleService: Running '${radCmd} sync' in ${dreamNodePath}`);
-      const result = await execAsync(`"${radCmd}" sync`, {
-        cwd: dreamNodePath,
-        env: env,
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          console.log('RadicleService: git push output:', stdout);
+          if (stderr) console.log('RadicleService: git push stderr:', stderr);
+
+          if (code === 0 || stdout.includes('up to date')) {
+            resolve();
+          } else {
+            reject(new Error(`git push failed with code ${code}`));
+          }
+        });
+
+        child.on('error', (error) => {
+          console.error('RadicleService: git push spawn error:', error);
+          reject(error);
+        });
+
+        child.stdin?.end();
       });
-      console.log('RadicleService: rad sync output:', result.stdout);
-      if (result.stderr) {
-        console.warn('RadicleService: rad sync stderr:', result.stderr);
+
+      // STEP 2: Check if already public before attempting to publish
+      console.log(`RadicleService: Checking if repository is already public...`);
+      const isAlreadyPublic = await new Promise<boolean>((resolve) => {
+        const child = spawn(radCmd, ['inspect'], {
+          env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.on('close', () => {
+          // Check if output contains "visibility: public"
+          const isPublic = stdout.toLowerCase().includes('visibility: public');
+          resolve(isPublic);
+        });
+
+        child.on('error', () => {
+          // If rad inspect fails, assume not public
+          resolve(false);
+        });
+
+        child.stdin?.end();
+      });
+
+      if (isAlreadyPublic) {
+        console.log(`ℹ️ RadicleService: Repository is already public - skipping rad publish`);
+        // Still add delegate if recipient specified
+        if (recipientDid) {
+          console.log(`RadicleService: Adding ${recipientDid} as delegate (repo already public)...`);
+          await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
+        }
+        return; // Skip publish, exit successfully
+      }
+
+      // STEP 3: Publish to network (makes public + announces + auto-seeds)
+      console.log(`RadicleService: Publishing to Radicle network (rad publish)...`);
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(radCmd, ['publish'], {
+          env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          console.log('RadicleService: rad publish output:', stdout);
+          if (stderr) console.log('RadicleService: rad publish stderr:', stderr);
+
+          if (code === 0) {
+            console.log('✅ RadicleService: Successfully published to network!');
+            resolve();
+          } else if (stdout.includes('already public') || stderr.includes('already public')) {
+            console.log('ℹ️ RadicleService: Repository already public (detected in publish output)');
+            resolve(); // Not an error
+          } else {
+            reject(new Error(`rad publish exited with code ${code}`));
+          }
+        });
+
+        child.on('error', (error) => {
+          console.error('RadicleService: rad publish spawn error:', error);
+          reject(error);
+        });
+
+        child.stdin?.end();
+      });
+
+      // STEP 4: Add recipient as delegate if specified
+      if (recipientDid) {
+        console.log(`RadicleService: Adding ${recipientDid} as delegate after successful publish...`);
+        await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
       }
     } catch (error: any) {
-      console.error('RadicleService: rad sync failed:', error);
+      console.error('RadicleService: Failed to publish to network:', error);
 
       // Check if error is due to missing passphrase
       if (error.message && error.message.includes('RAD_PASSPHRASE')) {
@@ -860,45 +949,126 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Add a peer as an equal delegate to a repository
    * Sets threshold to 1 for true peer-to-peer equality
+   * @returns true if delegate was added, false if already exists
    */
-  async addDelegate(dreamNodePath: string, peerDID: string, peerName: string, passphrase?: string): Promise<void> {
+  async addDelegate(dreamNodePath: string, peerDID: string, passphrase?: string): Promise<boolean> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
-    await this.ensureNodeRunning(passphrase);
-
     const radCmd = this.getRadCommand();
-    const title = `Add ${peerName} as equal collaborator`;
-    const description = `Making ${peerName} an equal delegate for peer-to-peer collaboration`;
+
+    // IDEMPOTENCY CHECK: Check if peer is already a delegate (canonical or pending)
+    try {
+      // Check canonical identity first
+      const { stdout } = await execAsync(`"${radCmd}" inspect --identity`, { cwd: dreamNodePath });
+      const identity = JSON.parse(stdout);
+
+      if (identity.delegates && Array.isArray(identity.delegates)) {
+        if (identity.delegates.includes(peerDID)) {
+          console.log(`RadicleService: ${peerDID} is already a delegate (canonical) - skipping`);
+          return false; // Already exists in canonical state
+        }
+      }
+
+      // Check pending revisions - see if there's already an active/accepted revision adding this delegate
+      const { stdout: idListOutput } = await execAsync(`"${radCmd}" id list`, { cwd: dreamNodePath });
+      const lines = idListOutput.split('\n');
+
+      for (const line of lines) {
+        // Look for active or accepted revisions (not redacted/rejected)
+        if ((line.includes('active') || line.includes('accepted')) &&
+            line.includes('Add peer as equal collaborator')) {
+          // Extract revision ID (first column after │)
+          const revisionMatch = line.match(/│\s+●\s+([a-f0-9]+)/);
+          if (revisionMatch) {
+            const revisionId = revisionMatch[1];
+            // Check if this revision is trying to add our peer
+            const { stdout: showOutput } = await execAsync(`"${radCmd}" id show ${revisionId}`, { cwd: dreamNodePath });
+            if (showOutput.includes(peerDID)) {
+              console.log(`RadicleService: ${peerDID} already has pending revision ${revisionId} - skipping`);
+              return false; // Already has a pending revision
+            }
+          }
+        }
+      }
+    } catch (inspectError) {
+      console.warn(`RadicleService: Could not check existing delegates (will attempt to add):`, inspectError);
+    }
+
+    const title = `Add peer as equal collaborator`;
+    const description = `Adding ${peerDID} as equal delegate for peer-to-peer collaboration`;
+
+    // Prepare environment with passphrase if provided
+    const env = { ...process.env };
+    if (passphrase) {
+      env.RAD_PASSPHRASE = passphrase;
+    }
 
     try {
       const result = await execAsync(
         `"${radCmd}" id update --delegate "${peerDID}" --threshold 1 --title "${title}" --description "${description}"`,
-        { cwd: dreamNodePath }
+        { cwd: dreamNodePath, env }
       );
-      console.log(`RadicleService: Added ${peerName} as delegate:`, result.stdout);
+      console.log(`RadicleService: Added ${peerDID} as delegate:`, result.stdout);
+
+      // Note: With threshold=1, the revision is implicitly accepted by the author
+      // Radicle automatically applies your verdict when you create the revision
+      // The revision will reach quorum and move to "accepted" state automatically
+      console.log(`ℹ️ RadicleService: Revision created and implicitly accepted (threshold=1, you are sole delegate)`);
+
+      return true; // Successfully added
     } catch (error: any) {
-      throw new Error(`Failed to add delegate: ${error.message}`);
+      // Log full error details for debugging
+      console.error(`RadicleService: rad id update failed:`, error);
+      console.error(`RadicleService: stderr:`, error.stderr);
+      console.error(`RadicleService: stdout:`, error.stdout);
+      throw new Error(`Failed to add delegate: ${error.stderr || error.message}`);
     }
   }
 
   /**
    * Set repository seeding scope to 'followed' for private collaboration
+   * @returns true if scope was set, false if already correct
    */
-  async setSeedingScope(dreamNodePath: string, radicleId: string, scope: 'all' | 'followed' = 'followed'): Promise<void> {
+  async setSeedingScope(dreamNodePath: string, radicleId: string, scope: 'all' | 'followed' = 'followed'): Promise<boolean> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
     const radCmd = this.getRadCommand();
 
+    // IDEMPOTENCY CHECK: Check if seeding policy already exists with correct scope
     try {
+      const { stdout: seedListOutput } = await execAsync(`"${radCmd}" seed`, { cwd: dreamNodePath });
+
+      // Parse table output to find this RID's seeding policy
+      // Format: "│ rad:z... Name  allow  followed │" or "│ rad:z... Name  allow  all │"
+      const lines = seedListOutput.split('\n');
+      for (const line of lines) {
+        if (line.includes(radicleId)) {
+          // Check if the scope in this line matches desired scope
+          const hasCorrectScope = line.trim().endsWith(`${scope}│`) || line.includes(`${scope} │`);
+          if (hasCorrectScope) {
+            console.log(`RadicleService: Seeding scope for ${radicleId} already set to '${scope}' - skipping`);
+            return false; // Already correct
+          }
+          break;
+        }
+      }
+    } catch (listError) {
+      console.warn(`RadicleService: Could not check existing seeding scope (will attempt to set):`, listError);
+    }
+
+    try {
+      // Use --no-fetch to avoid blocking on seed node sync
+      // The Radicle node will naturally sync in the background later
       const result = await execAsync(
-        `"${radCmd}" seed "${radicleId}" --scope ${scope}`,
+        `"${radCmd}" seed "${radicleId}" --scope ${scope} --no-fetch`,
         { cwd: dreamNodePath }
       );
-      console.log(`RadicleService: Set seeding scope to '${scope}':`, result.stdout);
+      console.log(`RadicleService: Set seeding scope to '${scope}' (no-fetch):`, result.stdout);
+      return true; // Successfully set
     } catch (error: any) {
       throw new Error(`Failed to set seeding scope: ${error.message}`);
     }
@@ -906,23 +1076,149 @@ export class RadicleServiceImpl implements RadicleService {
 
   /**
    * Add a peer's fork as a git remote
+   * @returns true if remote was added, false if already exists
    */
-  async addPeerRemote(dreamNodePath: string, peerName: string, radicleId: string, peerDID: string): Promise<void> {
+  async addPeerRemote(dreamNodePath: string, peerName: string, radicleId: string, peerDID: string): Promise<boolean> {
     const remoteUrl = `rad://${radicleId}/${peerDID}`;
 
     try {
-      // Check if remote already exists
+      // IDEMPOTENCY CHECK: Check if remote already exists
       const { stdout: existingRemotes } = await execAsync('git remote', { cwd: dreamNodePath });
       if (existingRemotes.split('\n').includes(peerName)) {
         console.log(`RadicleService: Remote '${peerName}' already exists, skipping`);
-        return;
+        return false; // Already exists
       }
 
       // Add the remote
       await execAsync(`git remote add "${peerName}" "${remoteUrl}"`, { cwd: dreamNodePath });
       console.log(`RadicleService: Added git remote '${peerName}' -> ${remoteUrl}`);
+      return true; // Successfully added
     } catch (error: any) {
       throw new Error(`Failed to add peer remote: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get all git remotes with their URLs
+   * @returns Map of remote name -> { fetch: url, push: url }
+   */
+  async getRemotes(dreamNodePath: string): Promise<Map<string, { fetch: string; push: string }>> {
+    try {
+      const { stdout } = await execAsync('git remote -v', { cwd: dreamNodePath });
+      const remotes = new Map<string, { fetch: string; push: string }>();
+
+      for (const line of stdout.split('\n')) {
+        const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+        if (match) {
+          const [, name, url, type] = match;
+          if (!remotes.has(name)) {
+            remotes.set(name, { fetch: '', push: '' });
+          }
+          const remote = remotes.get(name)!;
+          if (type === 'fetch') remote.fetch = url;
+          if (type === 'push') remote.push = url;
+        }
+      }
+
+      return remotes;
+    } catch (error: any) {
+      throw new Error(`Failed to get remotes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Remove a git remote
+   * @returns true if remote was removed, false if didn't exist
+   */
+  async removeRemote(dreamNodePath: string, remoteName: string): Promise<boolean> {
+    try {
+      const { stdout: existingRemotes } = await execAsync('git remote', { cwd: dreamNodePath });
+      if (!existingRemotes.split('\n').includes(remoteName)) {
+        console.log(`RadicleService: Remote '${remoteName}' doesn't exist, skipping removal`);
+        return false; // Doesn't exist
+      }
+
+      await execAsync(`git remote remove "${remoteName}"`, { cwd: dreamNodePath });
+      console.log(`RadicleService: Removed git remote '${remoteName}'`);
+      return true; // Successfully removed
+    } catch (error: any) {
+      throw new Error(`Failed to remove remote: ${error.message}`);
+    }
+  }
+
+  /**
+   * Reconcile git remotes to match desired state (declarative sync)
+   * @param dreamNodePath Path to the DreamNode repository
+   * @param radicleId RID of the repository
+   * @param desiredPeers Map of peer name -> DID for desired state
+   * @returns Summary of changes made
+   */
+  async reconcileRemotes(
+    dreamNodePath: string,
+    radicleId: string,
+    desiredPeers: Map<string, string>
+  ): Promise<{ added: number; updated: number; removed: number; unchanged: number }> {
+    const result = { added: 0, updated: 0, removed: 0, unchanged: 0 };
+
+    try {
+      // Get current remotes
+      const currentRemotes = await this.getRemotes(dreamNodePath);
+
+      // Build desired remote URLs
+      const desiredRemotes = new Map<string, string>();
+      for (const [peerName, peerDID] of desiredPeers) {
+        desiredRemotes.set(peerName, `rad://${radicleId}/${peerDID}`);
+      }
+
+      // Find remotes to add, update, or keep
+      for (const [peerName, desiredUrl] of desiredRemotes) {
+        const current = currentRemotes.get(peerName);
+
+        if (!current) {
+          // ADD: Remote doesn't exist
+          const did = desiredPeers.get(peerName)!;
+          await this.addPeerRemote(dreamNodePath, peerName, radicleId, did);
+          result.added++;
+          console.log(`🔧 [Reconcile] ADDED remote '${peerName}' -> ${desiredUrl}`);
+        } else if (current.fetch !== desiredUrl || current.push !== desiredUrl) {
+          // UPDATE: Remote exists but points to wrong DID
+          console.log(`🔧 [Reconcile] UPDATE remote '${peerName}': ${current.fetch} -> ${desiredUrl}`);
+          await this.removeRemote(dreamNodePath, peerName);
+          const did = desiredPeers.get(peerName)!;
+          await this.addPeerRemote(dreamNodePath, peerName, radicleId, did);
+          result.updated++;
+        } else {
+          // UNCHANGED: Remote exists and is correct
+          result.unchanged++;
+          console.log(`✅ [Reconcile] OK remote '${peerName}' -> ${desiredUrl}`);
+        }
+      }
+
+      // Find remotes to remove (exist but not in desired state)
+      for (const [remoteName, remote] of currentRemotes) {
+        // Skip 'rad' remote (default Radicle remote) and 'origin' (if exists)
+        if (remoteName === 'rad' || remoteName === 'origin') {
+          console.log(`✅ [Reconcile] SKIP system remote '${remoteName}'`);
+          continue;
+        }
+
+        // Skip remotes that don't look like Radicle peer remotes
+        if (!remote.fetch.startsWith('rad://')) {
+          console.log(`✅ [Reconcile] SKIP non-Radicle remote '${remoteName}'`);
+          continue;
+        }
+
+        if (!desiredRemotes.has(remoteName)) {
+          // REMOVE: Remote exists but not in desired state
+          console.log(`🔧 [Reconcile] REMOVE orphaned remote '${remoteName}' (not in liminal-web)`);
+          await this.removeRemote(dreamNodePath, remoteName);
+          result.removed++;
+        }
+      }
+
+      return result;
+    } catch (error: any) {
+      throw new Error(`Failed to reconcile remotes: ${error.message}`);
     }
   }
 }

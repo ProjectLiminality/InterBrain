@@ -9,7 +9,6 @@ import { DreamNode } from '../types/dreamnode';
 import { URIHandlerService } from './uri-handler-service';
 import { serviceManager } from './service-manager';
 import { getRadicleBatchInitService } from './radicle-batch-init-service';
-import { getGitHubBatchShareService } from './github-batch-share-service';
 
 export class ShareLinkService {
 	private app: App;
@@ -19,10 +18,14 @@ export class ShareLinkService {
 	}
 
 	/**
-	 * Generate and copy share link for a single DreamNode
-	 * Ensures node is properly initialized for Radicle/GitHub before generating link
+	 * Generate share link for a single DreamNode (no clipboard copy)
+	 * Ensures node is properly initialized for Radicle before generating link
+	 *
+	 * @param node - DreamNode to share
+	 * @param recipientDid - Optional recipient DID to add as delegate
+	 * @returns Object with URI and identifier (Radicle ID or UUID fallback)
 	 */
-	async copyShareLink(node: DreamNode): Promise<void> {
+	async generateShareLink(node: DreamNode, recipientDid?: string): Promise<{ uri: string; identifier: string }> {
 		try {
 			// Validate node has required fields
 			if (!node) {
@@ -53,103 +56,103 @@ export class ShareLinkService {
 			console.log(`🔗 [ShareLink] Generating share link for "${node.name}" (UUID: ${nodeUuid})...`);
 
 			const vaultName = this.app.vault.getName();
-			console.log(`🔗 [ShareLink] Vault name: ${vaultName}`);
 
-			// Check if Radicle is available on this machine
+			// Get Radicle service
 			const radicleService = serviceManager.getRadicleService();
 			const radicleAvailable = await radicleService.isAvailable();
-			console.log(`🔗 [ShareLink] Radicle available: ${radicleAvailable}`);
 
-			let deepLink: string;
-			let identifier: string;
+			if (!radicleAvailable) {
+				throw new Error('Radicle is not available - InterBrain now requires Radicle for sharing');
+			}
+
 			let senderDid: string | undefined;
 			let senderName: string | undefined;
 
-			if (radicleAvailable) {
-				// Get sender's identity for collaboration handshake
-				try {
-					const identity = await radicleService.getIdentity();
-					senderDid = identity.did;
-					senderName = identity.alias || 'Friend';
-					console.log(`👤 [ShareLink] Sender identity: ${senderName} (${senderDid})`);
-				} catch (error) {
-					console.warn('⚠️ [ShareLink] Could not get Radicle identity:', error);
-				}
+			// Get sender's identity for collaboration handshake
+			try {
+				const identity = await radicleService.getIdentity();
+				senderDid = identity.did;
+				senderName = identity.alias || 'Friend';
+				console.log(`👤 [ShareLink] Sender identity: ${senderName} (${senderDid})`);
+			} catch (error) {
+				console.warn('⚠️ [ShareLink] Could not get Radicle identity:', error);
+			}
 
-				// Ensure node has Radicle ID (initialize if needed)
-				console.log(`🔮 [ShareLink] Ensuring node has Radicle ID...`);
+			// Ensure node has Radicle ID (initialize if needed)
+			console.log(`🔮 [ShareLink] Ensuring node has Radicle ID...`);
 
-				let radicleId: string | null = null;
+			let radicleId: string | null = null;
 
-				try {
-					const batchInitService = getRadicleBatchInitService();
-					const uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds([nodeUuid]);
-					radicleId = uuidToRadicleIdMap.get(nodeUuid) || null;
-
-					if (radicleId) {
-						console.log(`✅ [ShareLink] Node has Radicle ID: ${radicleId}`);
-					}
-				} catch (error) {
-					console.error('❌ [ShareLink] Failed to ensure Radicle ID:', error);
-					// Continue with fallback
-				}
+			try {
+				const batchInitService = getRadicleBatchInitService();
+				const uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds([nodeUuid]);
+				radicleId = uuidToRadicleIdMap.get(nodeUuid) || null;
 
 				if (radicleId) {
-					// Primary: Radicle ID (peer-to-peer) with collaboration handshake
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
-					identifier = radicleId;
-				} else {
-					// Fallback: UUID
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid, senderDid, senderName);
-					identifier = nodeUuid;
-					console.warn(`⚠️ [ShareLink] Using UUID fallback (Radicle init may have failed)`);
+					console.log(`✅ [ShareLink] Node has Radicle ID: ${radicleId}`);
+
+					// Publish to network and add delegate if recipient DID provided
+					console.log(`📡 [ShareLink] Publishing to Radicle network...`);
+					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
+
+					// Call share synchronously (wait for completion)
+					await radicleService.share(absoluteRepoPath, undefined, recipientDid);
+					console.log(`✅ [ShareLink] Successfully published "${node.name}" to Radicle network`);
 				}
+			} catch (error) {
+				console.error('❌ [ShareLink] Failed to ensure Radicle ID:', error);
+				throw error;
+			}
+
+			// Generate URI
+			let uri: string;
+			let identifier: string;
+
+			if (radicleId) {
+				// Primary: Radicle ID (peer-to-peer) with collaboration handshake
+				uri = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
+				identifier = radicleId;
 			} else {
-				// Radicle not available - use GitHub fallback
-				console.log(`🧪 [ShareLink] Radicle not available - ensuring node has GitHub URL...`);
-
-				let githubUrl: string | null = null;
-
-				try {
-					const batchShareService = getGitHubBatchShareService();
-					const uuidToGitHubUrlMap = await batchShareService.ensureNodesHaveGitHubUrls([nodeUuid]);
-					githubUrl = uuidToGitHubUrlMap.get(nodeUuid) || null;
-
-					if (githubUrl) {
-						console.log(`✅ [ShareLink] Node has GitHub URL: ${githubUrl}`);
-					}
-				} catch (error) {
-					console.error('❌ [ShareLink] Failed to ensure GitHub URL:', error);
-					// Continue with fallback
-				}
-
-				if (githubUrl) {
-					// GitHub fallback
-					deepLink = URIHandlerService.generateGitHubCloneLink(vaultName, githubUrl);
-					identifier = githubUrl.replace(/^https?:\/\//, '');
-				} else {
-					// Last resort: UUID
-					deepLink = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid);
-					identifier = nodeUuid;
-					console.warn(`⚠️ [ShareLink] Using UUID fallback (GitHub push may have failed)`);
-				}
+				// Fallback: UUID (if Radicle init somehow failed but didn't throw)
+				uri = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid, senderDid, senderName);
+				identifier = nodeUuid;
+				console.warn(`⚠️ [ShareLink] Using UUID fallback (Radicle init may have failed)`);
 			}
 
-			// Validate that we have a link
-			if (!deepLink || !identifier) {
-				throw new Error('Failed to generate share link: identifier or deepLink is undefined');
-			}
-
-			// Copy to clipboard
-			await navigator.clipboard.writeText(deepLink);
-
-			// Show success notification
-			new Notice(`📋 Share link copied to clipboard!`);
-			console.log(`✅ [ShareLink] Link copied: ${deepLink}`);
+			return { uri, identifier };
 
 		} catch (error) {
 			console.error('Failed to generate share link:', error);
 			throw new Error(`Share link generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
+	/**
+	 * Generate and copy share link for a single DreamNode
+	 * Ensures node is properly initialized for Radicle before generating link
+	 *
+	 * @param node - DreamNode to share
+	 * @param recipientDid - Optional recipient DID to add as delegate (only for Radicle)
+	 */
+	async copyShareLink(node: DreamNode, recipientDid?: string): Promise<void> {
+		try {
+			// Use the core generateShareLink method
+			const { uri } = await this.generateShareLink(node, recipientDid);
+
+			// Copy to clipboard
+			await navigator.clipboard.writeText(uri);
+
+			// Show success notification
+			if (recipientDid) {
+				new Notice(`📡 "${node.name}" shared with recipient! Link copied.`);
+			} else {
+				new Notice(`📋 Share link copied to clipboard!`);
+			}
+			console.log(`✅ [ShareLink] Link copied: ${uri}`);
+
+		} catch (error) {
+			console.error('Failed to copy share link:', error);
+			throw new Error(`Share link copy failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 }

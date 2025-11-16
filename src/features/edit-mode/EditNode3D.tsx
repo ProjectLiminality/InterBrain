@@ -36,6 +36,7 @@ export default function EditNode3D({
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
   const [localEmail, setLocalEmail] = useState('');
   const [localPhone, setLocalPhone] = useState('');
+  const [localDid, setLocalDid] = useState('');
   const [localRadicleId, setLocalRadicleId] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
@@ -120,11 +121,12 @@ export default function EditNode3D({
   }, [editingNode?.name]);
 
   // Load contact info from editingNode (for dreamer nodes only)
-  // Only reload when node ID changes, not when email/phone/radicleId fields update
+  // Only reload when node ID changes, not when email/phone/did/radicleId fields update
   useEffect(() => {
     if (!editingNode || editingNode.type !== 'dreamer') {
       setLocalEmail('');
       setLocalPhone('');
+      setLocalDid('');
       setLocalRadicleId('');
       return;
     }
@@ -132,6 +134,7 @@ export default function EditNode3D({
     // Load from the DreamNode which is already populated by the service layer
     setLocalEmail(editingNode.email || '');
     setLocalPhone(editingNode.phone || '');
+    setLocalDid(editingNode.did || '');
     setLocalRadicleId(editingNode.radicleId || '');
   }, [editingNode?.id, editingNode?.type]); // Only depend on ID and type, not the whole object
   
@@ -210,10 +213,10 @@ export default function EditNode3D({
     updateEditingNodeMetadata({ phone });
   };
 
-  const handleRadicleIdChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    const radicleId = e.target.value;
-    setLocalRadicleId(radicleId);
-    updateEditingNodeMetadata({ radicleId });
+  const handleDidChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    const did = e.target.value;
+    setLocalDid(did);
+    updateEditingNodeMetadata({ did });
   };
   
   // File handling (same patterns as ProtoNode3D)
@@ -612,10 +615,10 @@ export default function EditNode3D({
               />
               <input
                 type="text"
-                value={localRadicleId}
-                onChange={handleRadicleIdChange}
-                placeholder="Radicle ID (optional)"
-                className="contact-field-radicle"
+                value={localDid}
+                onChange={handleDidChange}
+                placeholder="DID (optional)"
+                className="contact-field-did"
                 style={{
                   padding: '14px 16px',
                   background: 'rgba(0,0,0,0.6)',
@@ -632,6 +635,29 @@ export default function EditNode3D({
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               />
+              <input
+                type="text"
+                value={localRadicleId}
+                disabled
+                placeholder="Radicle ID (auto-generated)"
+                className="contact-field-radicle-id"
+                style={{
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: '6px',
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '24px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box',
+                  cursor: 'not-allowed'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
             </div>
           )}
 
@@ -639,7 +665,7 @@ export default function EditNode3D({
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 300 : 280) : (validationErrors.title ? 120 : 100))}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 360 : 340) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',

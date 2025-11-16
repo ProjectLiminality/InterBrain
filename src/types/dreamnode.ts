@@ -23,8 +23,8 @@ export interface UDDFile {
   /** Single file reference path for DreamTalk symbol (relative to repo root) */
   dreamTalk: string;
 
-  /** Array of UUIDs for horizontal liminal web relationships */
-  liminalWebRelationships: string[];
+  /** @deprecated Legacy field - relationships now stored in liminal-web.json for Dreamer nodes */
+  liminalWebRelationships?: string[];
 
   /** Array of UUIDs for vertical holonic relationships - children */
   submodules: string[];
@@ -38,8 +38,11 @@ export interface UDDFile {
   /** Optional contact phone number (for dreamer-type nodes) */
   phone?: string;
 
-  /** Optional Radicle DID for peer-to-peer networking (for dreamer-type nodes) */
+  /** Optional Radicle ID (RID) of this DreamNode's repository */
   radicleId?: string;
+
+  /** Optional Radicle DID for peer identity (for dreamer-type nodes only) */
+  did?: string;
 
   /** Optional GitHub repository URL for fallback sharing */
   githubRepoUrl?: string;
@@ -89,8 +92,11 @@ export interface DreamNode {
   /** Optional contact phone number (for dreamer-type nodes) */
   phone?: string;
 
-  /** Optional Radicle DID for peer-to-peer networking (for dreamer-type nodes) */
+  /** Optional Radicle ID (RID) of this DreamNode's repository */
   radicleId?: string;
+
+  /** Optional Radicle DID for peer identity (for dreamer-type nodes only) */
+  did?: string;
 
   /** Optional GitHub repository URL for fallback sharing */
   githubRepoUrl?: string;

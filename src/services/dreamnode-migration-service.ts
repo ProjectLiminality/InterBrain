@@ -784,4 +784,97 @@ export class DreamNodeMigrationService {
     console.log(`    CanvasAudit: Result: ${originalPath} → ${result}`);
     return result;
   }
+
+  /**
+   * Migrate relationships to liminal-web.json for all Dreamer nodes
+   * Non-destructive: keeps liminalWebRelationships in .udd intact
+   */
+  async migrateToLiminalWebJson(): Promise<{
+    dreamerNodesProcessed: number;
+    filesCreated: number;
+    gitignoresUpdated: number;
+    errors: string[];
+  }> {
+    const summary = {
+      dreamerNodesProcessed: 0,
+      filesCreated: 0,
+      gitignoresUpdated: 0,
+      errors: [] as string[]
+    };
+
+    try {
+      // Get all DreamNode directories
+      const entries = await fsPromises.readdir(this.vaultPath, { withFileTypes: true });
+      const directories = entries.filter((entry: any) => entry.isDirectory());
+
+      for (const dir of directories) {
+        const dirPath = path.join(this.vaultPath, dir.name);
+
+        try {
+          // Check if it's a valid DreamNode
+          const uddPath = path.join(dirPath, '.udd');
+          if (!fs.existsSync(uddPath)) continue;
+
+          // Read .udd to check type
+          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+          const udd = JSON.parse(uddContent);
+
+          // Only process Dreamer nodes
+          if (udd.type !== 'dreamer') continue;
+
+          summary.dreamerNodesProcessed++;
+
+          // Check if liminal-web.json already exists
+          const liminalWebPath = path.join(dirPath, 'liminal-web.json');
+          if (fs.existsSync(liminalWebPath)) {
+            console.log(`Skipping ${udd.title} - liminal-web.json already exists`);
+            continue;
+          }
+
+          // Create liminal-web.json from .udd relationships
+          const relationships = udd.liminalWebRelationships || [];
+          const liminalWebContent = {
+            relationships
+          };
+
+          await fsPromises.writeFile(
+            liminalWebPath,
+            JSON.stringify(liminalWebContent, null, 2)
+          );
+          summary.filesCreated++;
+          console.log(`Created liminal-web.json for ${udd.title} with ${relationships.length} relationships`);
+
+          // Update or create .gitignore
+          const gitignorePath = path.join(dirPath, '.gitignore');
+          let gitignoreContent = '';
+
+          if (fs.existsSync(gitignorePath)) {
+            gitignoreContent = await fsPromises.readFile(gitignorePath, 'utf-8');
+          }
+
+          // Check if liminal-web.json is already in .gitignore
+          if (!gitignoreContent.includes('liminal-web.json')) {
+            // Add to .gitignore
+            const newLine = gitignoreContent.length > 0 && !gitignoreContent.endsWith('\n') ? '\n' : '';
+            gitignoreContent += `${newLine}liminal-web.json\n`;
+            await fsPromises.writeFile(gitignorePath, gitignoreContent);
+            summary.gitignoresUpdated++;
+            console.log(`Updated .gitignore for ${udd.title}`);
+          }
+
+        } catch (error) {
+          const errorMsg = `Error processing ${dir.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          summary.errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+    } catch (error) {
+      const errorMsg = `Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      summary.errors.push(errorMsg);
+      console.error(errorMsg);
+    }
+
+    return summary;
+  }
 }
