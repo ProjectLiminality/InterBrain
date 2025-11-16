@@ -109,6 +109,134 @@ warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
+# Function to handle DID backpropagation prompt
+handle_did_backpropagation() {
+    local RAD_DID="$1"
+    local RAD_ALIAS="$2"
+    local SENDER_UUID="$3"
+    local CLONE_URI="$4"
+
+    if [ -z "$SENDER_UUID" ]; then
+        return  # No sender UUID provided, skip
+    fi
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🤝 Complete the Collaboration Handshake"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Your collaborator needs your DID to enable mutual collaboration."
+    echo ""
+
+    # Extract sender email from clone URI if available
+    SENDER_EMAIL=""
+    if [ -n "$CLONE_URI" ]; then
+        # Try to extract email from URI parameters
+        SENDER_EMAIL=$(echo "$CLONE_URI" | grep -oP '(?<=senderEmail=)[^&]*' | head -1 || echo "")
+        if [ -z "$SENDER_EMAIL" ]; then
+            # Fallback: extract from senderName if it looks like an email
+            SENDER_NAME=$(echo "$CLONE_URI" | grep -oP '(?<=senderName=)[^&]*' | head -1 || echo "")
+            if [[ "$SENDER_NAME" =~ @.+\..+ ]]; then
+                SENDER_EMAIL="$SENDER_NAME"
+            fi
+        fi
+        # URL decode the email
+        SENDER_EMAIL=$(echo "$SENDER_EMAIL" | sed 's/%40/@/g' | sed 's/%2E/./g')
+    fi
+
+    # Generate update-contact URI
+    UPDATE_URI="obsidian://interbrain-update-contact?did=$(echo "$RAD_DID" | sed 's/:/%3A/g')&uuid=$SENDER_UUID"
+    if [ -n "$RAD_ALIAS" ] && [ "$RAD_ALIAS" != "Unknown" ]; then
+        UPDATE_URI="${UPDATE_URI}&name=$(echo "$RAD_ALIAS" | sed 's/ /%20/g')"
+    fi
+
+    echo "How would you like to share your DID?"
+    echo ""
+    echo "  1) Email (auto-draft)"
+    echo "  2) Copy to clipboard"
+    echo "  3) Skip - I'll share it later"
+    echo ""
+    read -p "Choose option (1-3): " DID_SHARE_CHOICE
+
+    case $DID_SHARE_CHOICE in
+        1)
+            echo ""
+            info "Creating email draft..."
+
+            # Build email subject and body
+            EMAIL_SUBJECT="My InterBrain DID - Complete Collaboration Setup"
+            EMAIL_BODY="Hi!
+
+I've installed InterBrain and here's my DID for mutual collaboration.
+
+Click this link to complete the setup:
+$UPDATE_URI
+
+This will enable us to collaborate on shared DreamNodes with full peer-to-peer sync.
+
+Looking forward to working together!
+$RAD_ALIAS"
+
+            # Create AppleScript for email draft
+            APPLESCRIPT="tell application \"Mail\"
+    set newMessage to make new outgoing message with properties {subject:\"$EMAIL_SUBJECT\", content:\"$EMAIL_BODY\", visible:true}
+    tell newMessage"
+
+            # Add recipient if email available
+            if [ -n "$SENDER_EMAIL" ]; then
+                APPLESCRIPT="$APPLESCRIPT
+        make new to recipient with properties {address:\"$SENDER_EMAIL\"}"
+            fi
+
+            APPLESCRIPT="$APPLESCRIPT
+    end tell
+    activate
+end tell"
+
+            # Execute AppleScript
+            if osascript -e "$APPLESCRIPT" 2>/dev/null; then
+                success "Email draft created in Apple Mail"
+                if [ -n "$SENDER_EMAIL" ]; then
+                    echo "   Recipient: $SENDER_EMAIL"
+                fi
+            else
+                warning "Failed to create email draft"
+                echo "   Copy this URI manually:"
+                echo "   $UPDATE_URI"
+            fi
+            ;;
+        2)
+            echo ""
+            info "Copying URI to clipboard..."
+            if echo "$UPDATE_URI" | pbcopy 2>/dev/null; then
+                success "URI copied to clipboard"
+                echo "   Share this with your collaborator"
+            else
+                warning "Failed to copy to clipboard"
+                echo "   Copy this URI manually:"
+                echo "   $UPDATE_URI"
+            fi
+            ;;
+        3)
+            echo ""
+            info "Skipped DID sharing"
+            echo ""
+            echo "You can share your DID later using this URI:"
+            echo "$UPDATE_URI"
+            ;;
+        *)
+            warning "Invalid choice - skipping DID sharing"
+            echo ""
+            echo "Share this URI with your collaborator later:"
+            echo "$UPDATE_URI"
+            ;;
+    esac
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
 # Function to print error
 error() {
     echo -e "${RED}❌ $1${NC}"
@@ -947,6 +1075,9 @@ elif rad self --did >/dev/null 2>&1; then
     RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "Unknown")
     echo "   DID: $RAD_DID"
     echo "   Alias: $RAD_ALIAS"
+
+    # DID Backpropagation (also handle existing identity case)
+    handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$SENDER_UUID" "$CLONE_URI"
 else
     # No identity - offer to create
     warning "No Radicle identity found"
@@ -975,123 +1106,7 @@ else
                 echo "   Alias: $RAD_ALIAS"
 
                 # DID Backpropagation: Share DID with sender if sender-uuid provided
-                if [ -n "$SENDER_UUID" ]; then
-                    echo ""
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "🤝 Complete the Collaboration Handshake"
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo ""
-                    echo "Your collaborator needs your DID to enable mutual collaboration."
-                    echo ""
-
-                    # Extract sender email from clone URI if available
-                    SENDER_EMAIL=""
-                    if [ -n "$CLONE_URI" ]; then
-                        # Try to extract email from URI parameters
-                        SENDER_EMAIL=$(echo "$CLONE_URI" | grep -oP '(?<=senderEmail=)[^&]*' | head -1 || echo "")
-                        if [ -z "$SENDER_EMAIL" ]; then
-                            # Fallback: extract from senderName if it looks like an email
-                            SENDER_NAME=$(echo "$CLONE_URI" | grep -oP '(?<=senderName=)[^&]*' | head -1 || echo "")
-                            if [[ "$SENDER_NAME" =~ @.+\..+ ]]; then
-                                SENDER_EMAIL="$SENDER_NAME"
-                            fi
-                        fi
-                        # URL decode the email
-                        SENDER_EMAIL=$(echo "$SENDER_EMAIL" | sed 's/%40/@/g' | sed 's/%2E/./g')
-                    fi
-
-                    # Generate update-contact URI
-                    UPDATE_URI="obsidian://interbrain-update-contact?did=$(echo "$RAD_DID" | sed 's/:/%3A/g')&uuid=$SENDER_UUID"
-                    if [ -n "$RAD_ALIAS" ] && [ "$RAD_ALIAS" != "Unknown" ]; then
-                        UPDATE_URI="${UPDATE_URI}&name=$(echo "$RAD_ALIAS" | sed 's/ /%20/g')"
-                    fi
-
-                    echo "How would you like to share your DID?"
-                    echo ""
-                    echo "  1) Email (auto-draft)"
-                    echo "  2) Copy to clipboard"
-                    echo "  3) Skip - I'll share it later"
-                    echo ""
-                    read -p "Choose option (1-3): " DID_SHARE_CHOICE
-
-                    case $DID_SHARE_CHOICE in
-                        1)
-                            echo ""
-                            info "Creating email draft..."
-
-                            # Build email subject and body
-                            EMAIL_SUBJECT="My InterBrain DID - Complete Collaboration Setup"
-                            EMAIL_BODY="Hi!
-
-I've installed InterBrain and here's my DID for mutual collaboration.
-
-Click this link to complete the setup:
-$UPDATE_URI
-
-This will enable us to collaborate on shared DreamNodes with full peer-to-peer sync.
-
-Looking forward to working together!
-$RAD_ALIAS"
-
-                            # Create AppleScript for email draft
-                            APPLESCRIPT="tell application \"Mail\"
-    set newMessage to make new outgoing message with properties {subject:\"$EMAIL_SUBJECT\", content:\"$EMAIL_BODY\", visible:true}
-    tell newMessage"
-
-                            # Add recipient if email available
-                            if [ -n "$SENDER_EMAIL" ]; then
-                                APPLESCRIPT="$APPLESCRIPT
-        make new to recipient with properties {address:\"$SENDER_EMAIL\"}"
-                            fi
-
-                            APPLESCRIPT="$APPLESCRIPT
-    end tell
-    activate
-end tell"
-
-                            # Execute AppleScript
-                            if osascript -e "$APPLESCRIPT" 2>/dev/null; then
-                                success "Email draft created in Apple Mail"
-                                if [ -n "$SENDER_EMAIL" ]; then
-                                    echo "   Recipient: $SENDER_EMAIL"
-                                fi
-                            else
-                                warning "Failed to create email draft"
-                                echo "   Copy this URI manually:"
-                                echo "   $UPDATE_URI"
-                            fi
-                            ;;
-                        2)
-                            echo ""
-                            info "Copying URI to clipboard..."
-                            if echo "$UPDATE_URI" | pbcopy 2>/dev/null; then
-                                success "URI copied to clipboard"
-                                echo "   Share this with your collaborator"
-                            else
-                                warning "Failed to copy to clipboard"
-                                echo "   Copy this URI manually:"
-                                echo "   $UPDATE_URI"
-                            fi
-                            ;;
-                        3)
-                            echo ""
-                            info "Skipped DID sharing"
-                            echo ""
-                            echo "You can share your DID later using this URI:"
-                            echo "$UPDATE_URI"
-                            ;;
-                        *)
-                            warning "Invalid choice - skipping DID sharing"
-                            echo ""
-                            echo "Share this URI with your collaborator later:"
-                            echo "$UPDATE_URI"
-                            ;;
-                    esac
-
-                    echo ""
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo ""
-                fi
+                handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$SENDER_UUID" "$CLONE_URI"
             else
                 warning "Identity creation incomplete"
                 info "You can create it later with: rad auth"
