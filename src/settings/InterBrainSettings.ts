@@ -446,7 +446,107 @@ export class InterBrainSettingTab extends PluginSettingTab {
 					});
 
 					if (identity.alias) {
-						identityPlaceholder.createEl('p', { text: `Alias: ${identity.alias}` });
+						const aliasContainer = identityPlaceholder.createDiv({ cls: 'alias-container' });
+						aliasContainer.style.display = 'flex';
+						aliasContainer.style.alignItems = 'center';
+						aliasContainer.style.gap = '8px';
+						aliasContainer.style.marginTop = '8px';
+
+						const aliasText = aliasContainer.createEl('p', {
+							text: `Alias: ${identity.alias}`,
+							cls: 'alias-display'
+						});
+						aliasText.style.margin = '0';
+
+						const editButton = aliasContainer.createEl('button', {
+							text: '✏️ Edit',
+							cls: 'alias-edit-button'
+						});
+						editButton.addEventListener('click', async () => {
+							// Create input field
+							const inputContainer = aliasContainer.createDiv({ cls: 'alias-input-container' });
+							inputContainer.style.display = 'flex';
+							inputContainer.style.gap = '4px';
+							inputContainer.style.width = '100%';
+
+							const input = inputContainer.createEl('input', {
+								type: 'text',
+								value: identity.alias,
+								cls: 'alias-input'
+							});
+							input.style.flex = '1';
+							input.focus();
+							input.select();
+
+							const saveButton = inputContainer.createEl('button', {
+								text: '✅ Save',
+								cls: 'alias-save-button'
+							});
+
+							const cancelButton = inputContainer.createEl('button', {
+								text: '❌ Cancel',
+								cls: 'alias-cancel-button'
+							});
+
+							// Hide display elements
+							aliasText.style.display = 'none';
+							editButton.style.display = 'none';
+
+							const cleanup = () => {
+								inputContainer.remove();
+								aliasText.style.display = 'block';
+								editButton.style.display = 'block';
+							};
+
+							cancelButton.addEventListener('click', cleanup);
+
+							saveButton.addEventListener('click', async () => {
+								const newAlias = input.value.trim();
+								if (!newAlias) {
+									alert('Alias cannot be empty');
+									return;
+								}
+
+								try {
+									saveButton.disabled = true;
+									saveButton.textContent = '⏳ Saving...';
+
+									const radCmd = await radicleService.getRadCommand();
+									const { exec } = require('child_process');
+									const { promisify } = require('util');
+									const execAsync = promisify(exec);
+
+									// Update alias using rad self --alias
+									await execAsync(`"${radCmd}" self --alias "${newAlias}"`);
+
+									// Update display
+									aliasText.textContent = `Alias: ${newAlias}`;
+									identity.alias = newAlias;
+
+									cleanup();
+
+									// Show success message
+									const successMsg = inputContainer.createSpan({ text: '✅ Alias updated!' });
+									successMsg.style.color = 'green';
+									successMsg.style.marginLeft = '8px';
+									setTimeout(() => successMsg.remove(), 3000);
+
+								} catch (error: any) {
+									alert(`Failed to update alias: ${error.message}`);
+									saveButton.disabled = false;
+									saveButton.textContent = '✅ Save';
+								}
+							});
+
+							// Allow Enter to save
+							input.addEventListener('keydown', (e) => {
+								if (e.key === 'Enter') {
+									saveButton.click();
+								} else if (e.key === 'Escape') {
+									cleanup();
+								}
+							});
+						});
 					}
 				}
 			}).catch(() => {
@@ -693,7 +793,6 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		validationEl.innerHTML = '<span class="status-info">⏳ Testing passphrase...</span>';
 
 		try {
-			// Try to start the node with the passphrase
 			const { exec } = require('child_process');
 			const { promisify } = require('util');
 			const execAsync = promisify(exec);
@@ -706,6 +805,25 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			const radBinDir = path.dirname(radCmd);
 			env.PATH = `${radBinDir}:${env.PATH}`;
 
+			// Check if node is already running
+			const wasRunning = await radicleService.isNodeRunning();
+
+			if (wasRunning) {
+				// Node already running - need to restart it to properly test passphrase
+				validationEl.innerHTML = '<span class="status-info">⏳ Node running - restarting to test passphrase...</span>';
+
+				try {
+					// Stop the node first
+					await execAsync(`"${radCmd}" node stop`, { env });
+					// Wait for node to fully stop
+					await new Promise(resolve => setTimeout(resolve, 2000));
+				} catch (stopError) {
+					// Ignore stop errors - node might not have been running
+					console.log('Node stop completed (or was not running)');
+				}
+			}
+
+			// Now start the node with the passphrase
 			await execAsync(`"${radCmd}" node start`, { env });
 
 			// Wait longer for node to fully start, then retry status check up to 3 times
@@ -727,9 +845,6 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			const errorMsg = error.message || error.stdout || error.stderr || 'Unknown error';
 			if (errorMsg.includes('passphrase') || errorMsg.includes('Passphrase')) {
 				validationEl.innerHTML = '<span class="status-error">❌ Incorrect passphrase</span>';
-			} else if (errorMsg.includes('already running') || errorMsg.includes('Already running')) {
-				validationEl.innerHTML = '<span class="status-ready">✅ Node already running (passphrase likely correct)</span>';
-				await this.updateNodeStatus(nodeStatusDiv, radicleService);
 			} else {
 				validationEl.innerHTML = `<span class="status-error">❌ Error: ${errorMsg}</span>`;
 			}
