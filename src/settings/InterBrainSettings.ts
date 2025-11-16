@@ -858,7 +858,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			if (errorMsg.includes('passphrase') || errorMsg.includes('Passphrase')) {
 				validationEl.innerHTML = '<span class="status-error">❌ Passphrase incorrect! Node start failed.</span>';
 			} else {
-				validationEl.innerHTML = `<span class="status-error">❌ Node start failed: ${errorMsg}</span>`;
+				validationEl.innerHTML = '<span class="status-error">❌ Passphrase incorrect! Node start failed.</span>';
 			}
 		}
 	}
