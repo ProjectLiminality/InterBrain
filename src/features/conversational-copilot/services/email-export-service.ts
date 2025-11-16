@@ -286,11 +286,13 @@ export class EmailExportService {
 		console.log(`📧 [EmailExport] Recipient:`, to);
 
 		try {
-			// Escape strings for AppleScript (replace quotes and backslashes)
+			// Escape strings for AppleScript (replace quotes, backslashes, and newlines)
 			const escapeAppleScript = (str: string): string => {
 				return str
-					.replace(/\\/g, '\\\\')  // Escape backslashes
-					.replace(/"/g, '\\"');   // Escape quotes
+					.replace(/\\/g, '\\\\')  // Escape backslashes first
+					.replace(/"/g, '\\"')    // Escape quotes
+					.replace(/\n/g, '\\n')   // Escape newlines
+					.replace(/\r/g, '\\r');  // Escape carriage returns
 			};
 
 			const escapedTo = escapeAppleScript(to);
