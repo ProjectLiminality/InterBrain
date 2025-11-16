@@ -1044,28 +1044,16 @@ export class GitDreamNodeService {
     };
 
     // Include contact fields only for dreamer nodes
-    // IMPORTANT: Allow empty strings to delete fields - check !== undefined, not truthiness
+    // IMPORTANT: Allow empty strings - check !== undefined, not truthiness
     if (node.type === 'dreamer') {
       if (node.email !== undefined) {
-        if (node.email === '') {
-          delete udd.email; // Remove field if empty
-        } else {
-          udd.email = node.email;
-        }
+        udd.email = node.email; // Preserve empty strings
       }
       if (node.phone !== undefined) {
-        if (node.phone === '') {
-          delete udd.phone; // Remove field if empty
-        } else {
-          udd.phone = node.phone;
-        }
+        udd.phone = node.phone; // Preserve empty strings
       }
       if (node.did !== undefined) {
-        if (node.did === '') {
-          delete udd.did; // Remove field if empty
-        } else {
-          udd.did = node.did;
-        }
+        udd.did = node.did; // Preserve empty strings
       }
     }
 
