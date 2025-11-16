@@ -146,25 +146,81 @@ export class URIHandlerService {
 			// If we have sender info, handle collaboration handshake
 			if (senderDid && senderName) {
 				if (allNodesAlreadyExisted) {
-					// FAST PATH: All nodes already exist - just select the appropriate node
-					// No need for: vault scan, linking, peer sync, or full refresh
-					console.log(`⚡ [URIHandler] Fast path - all nodes already existed, just selecting node...`);
+					// FAST PATH: All nodes already exist - but still need to ensure Dreamer + relationships are set up
+					console.log(`⚡ [URIHandler] Fast path - all DreamNodes existed, checking Dreamer and relationships...`);
 
 					// Get current store state (nodes already loaded)
 					const store = useInterBrainStore.getState();
-					let targetNode: any;
 
 					// Convert Map to array for searching
 					const nodesArray = Array.from(store.realNodes.values()).map(nodeData => nodeData.node);
 
+					// Check if Dreamer node exists
+					let dreamerNode = nodesArray.find((n: any) => n.type === 'dreamer' && n.did === senderDid);
+
+					// Extract senderEmail from params if available
+					const senderEmail = params.senderEmail ? decodeURIComponent(params.senderEmail) : undefined;
+
+					if (!dreamerNode) {
+						console.log(`🔄 [URIHandler] Dreamer node doesn't exist - creating it...`);
+						// Need to create Dreamer node and link relationships
+						await this.dreamNodeService.scanVault();
+						dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName, senderEmail);
+						await new Promise(resolve => setTimeout(resolve, 200));
+
+						// Link all cloned nodes to the Dreamer
+						for (const identifier of identifiers) {
+							try {
+								const clonedNode = await this.findNodeByIdentifier(identifier);
+								if (clonedNode) {
+									await this.linkNodes(clonedNode, dreamerNode);
+								}
+							} catch (linkError) {
+								console.error(`❌ [URIHandler] Failed to link ${identifier}:`, linkError);
+							}
+						}
+
+						// Sync Radicle peer relationships
+						try {
+							console.log(`🔄 [URIHandler] Syncing Radicle peer relationships...`);
+							await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+						} catch (syncError) {
+							console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+						}
+					} else {
+						// Dreamer exists - check if relationships are properly set up
+						console.log(`✅ [URIHandler] Dreamer node exists: "${dreamerNode.name}"`);
+
+						// Check if all cloned nodes are linked to this Dreamer
+						let missingLinks = false;
+						for (const identifier of identifiers) {
+							const clonedNode = await this.findNodeByIdentifier(identifier);
+							if (clonedNode && !dreamerNode.liminalWebConnections?.includes(clonedNode.id)) {
+								console.log(`🔄 [URIHandler] Missing relationship: Dreamer "${dreamerNode.name}" ↔ "${clonedNode.name}"`);
+								missingLinks = true;
+								await this.linkNodes(clonedNode, dreamerNode);
+							}
+						}
+
+						if (missingLinks) {
+							// Re-sync Radicle relationships if we added any new links
+							try {
+								console.log(`🔄 [URIHandler] Re-syncing Radicle peer relationships...`);
+								await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+							} catch (syncError) {
+								console.error(`❌ [URIHandler] Radicle peer sync failed (non-critical):`, syncError);
+							}
+						}
+					}
+
+					// Select the appropriate target node
+					let targetNode: any;
 					if (isSingleClone) {
 						// Single clone: Select the cloned Dream node
 						targetNode = nodesArray.find(n => {
-							// Match by Radicle ID if available
 							if (identifiers[0].startsWith('rad:')) {
 								return n.radicleId === identifiers[0];
 							}
-							// Match by GitHub URL if available
 							if (identifiers[0].includes('github.com/')) {
 								return n.githubRepoUrl?.includes(identifiers[0]);
 							}
@@ -173,17 +229,16 @@ export class URIHandlerService {
 						console.log(`⚡ [URIHandler] Single clone - selecting Dream node: ${targetNode?.name}`);
 					} else {
 						// Batch clone: Select the Dreamer node
-						targetNode = nodesArray.find(n => n.type === 'dreamer' && n.did === senderDid);
-						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${targetNode?.name}`);
+						targetNode = dreamerNode;
+						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode.name}`);
 					}
 
 					if (targetNode) {
 						// Directly select the node in the store (no refresh needed)
 						store.setSelectedNode(targetNode);
-						console.log(`✅ [URIHandler] Fast path complete - node selected instantly`);
+						console.log(`✅ [URIHandler] Fast path complete - node selected with relationships verified`);
 					} else {
 						console.warn(`⚠️ [URIHandler] Fast path failed - could not find target node, falling back to refresh`);
-						// Fall back to refresh if we can't find the node
 						await (this.app as any).commands.executeCommandById('interbrain:refresh-plugin');
 					}
 
@@ -195,8 +250,11 @@ export class URIHandlerService {
 					console.log(`🔄 [URIHandler] Scanning vault to register ${successCount + skipCount} cloned node(s)...`);
 					await this.dreamNodeService.scanVault();
 
+					// Extract senderEmail from params if available
+					const senderEmail = params.senderEmail ? decodeURIComponent(params.senderEmail) : undefined;
+
 					// Find or create the Dreamer node
-					const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName);
+					const dreamerNode = await this.findOrCreateDreamerNode(senderDid, senderName, senderEmail);
 					await new Promise(resolve => setTimeout(resolve, 200));
 
 					// Link all successfully cloned nodes to the Dreamer node
@@ -775,7 +833,7 @@ export class URIHandlerService {
 	/**
 	 * Find existing Dreamer node by DID, or create new one
 	 */
-	private async findOrCreateDreamerNode(did: string, name: string): Promise<any> {
+	private async findOrCreateDreamerNode(did: string, name: string, email?: string): Promise<any> {
 		// Search for existing Dreamer node with this DID
 		const allNodes = await this.dreamNodeService.list();
 		const existingDreamer = allNodes.find((node: any) => {
@@ -805,8 +863,12 @@ export class URIHandlerService {
 
 		// Create new Dreamer node with DID metadata using standard creation flow
 		// Standard flow handles: git init, rad init, .udd creation with all metadata
-		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name} with DID ${did}...`);
-		const newDreamer = await this.dreamNodeService.create(name, 'dreamer', undefined, undefined, undefined, { did });
+		console.log(`👤 [URIHandler] Creating new Dreamer node for ${name} with DID ${did}${email ? ` and email ${email}` : ''}...`);
+		const metadata: any = { did };
+		if (email) {
+			metadata.email = email;
+		}
+		const newDreamer = await this.dreamNodeService.create(name, 'dreamer', undefined, undefined, undefined, metadata);
 
 		// Wait for creation to complete and populate UUID
 		await new Promise(resolve => setTimeout(resolve, 500));
