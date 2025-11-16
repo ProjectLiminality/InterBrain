@@ -372,13 +372,13 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
       try {
         console.log('📧 [MockEmail] Starting mock email export...');
 
-        // Create mock conversation data using REAL InterfaceGuy DreamNode
-        // Note: This is a test command that uses a placeholder path - replace with actual vault path if testing
+        // Create mock conversation partner: Bob with his DID
         const mockPartner: DreamNode = {
-          id: 'e1ef8db5-a534-42d8-adcb-fc3dc84f805d', // InterfaceGuy UUID
-          name: 'InterfaceGuy',
+          id: 'bob-dreamer-uuid', // Mock UUID for Bob
+          name: 'Bob',
           type: 'dreamer' as const,
-          repoPath: 'Interfaceguy', // Relative path within vault
+          repoPath: 'Bob', // Relative path within vault (adjust if different)
+          did: 'did:key:z6MksAEMTumQbRK1dvFqt7Xt5YHMRPsmhhS2jfhxzbsDUWX6', // Bob's DID
           liminalWebConnections: [],
           position: [0, 0, 0],
           dreamTalkMedia: [],
@@ -387,42 +387,37 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         };
 
         const now = new Date();
-        const startTime = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes ago
+        const startTime = new Date(now.getTime() - 15 * 60 * 1000); // 15 minutes ago (short call)
         const endTime = now;
 
-        // Mock invocations with REAL DreamNodes from vault
+        // Mock invocations: Circle and Square (real UUIDs from vault)
         const mockInvocations = [
           {
-            dreamUUID: '550e8400-e29b-41d4-a716-446655440000', // InterBrain UUID (has GitHub)
-            nodeName: 'InterBrain',
+            dreamUUID: '8f19880e-2f91-4db8-aff3-cb98ff6485f3', // Circle UUID
+            nodeName: 'Circle',
             timestamp: new Date(startTime.getTime() + 5 * 60 * 1000),
             searchQuery: ''
           },
           {
-            dreamUUID: 'ab6052dc-94bf-497b-8a56-f69edc7b41cb', // Implosion Vortex Engine UUID (has Radicle)
-            nodeName: 'Implosion Vortex Engine',
-            timestamp: new Date(startTime.getTime() + 15 * 60 * 1000),
-            searchQuery: ''
-          },
-          {
-            dreamUUID: '69d834f3-c187-4c22-a067-0bc6211e5a56', // The Vortex UUID (has Radicle)
-            nodeName: 'The Vortex',
-            timestamp: new Date(startTime.getTime() + 20 * 60 * 1000),
+            dreamUUID: 'c0993d1b-1a0f-4394-8d0b-fddac57698f0', // Square UUID
+            nodeName: 'Square',
+            timestamp: new Date(startTime.getTime() + 10 * 60 * 1000),
             searchQuery: ''
           }
         ];
 
-        const mockSummary = `We had an amazing conversation about the future of InterBrain and decentralized knowledge sharing.
+        const mockSummary = `Quick call with Bob about geometric DreamNodes.
 
 Key points discussed:
-- The vision for DreamOS as a decentralized operating system for collective sensemaking
-- How DreamNodes enable peer-to-peer sharing of ideas without centralized servers
-- The importance of local-first architecture and user data sovereignty
-- Potential collaboration opportunities on the coherence beacon system
+- Circle's properties and applications
+- Square's relationship to other shapes
+- Potential for collaboration on shape-based metaphors
 
-This was a highly productive session that revealed exciting possibilities for the project!`;
+Short but productive conversation!`;
 
         console.log('📧 [MockEmail] Mock data created, generating email...');
+        console.log(`📧 [MockEmail] Conversation partner: ${mockPartner.name} (DID: ${mockPartner.did})`);
+        console.log(`📧 [MockEmail] Invoked nodes: ${mockInvocations.map(inv => inv.nodeName).join(', ')}`);
 
         // Use the email export service
         const emailService = getEmailExportService();
@@ -432,7 +427,7 @@ This was a highly productive session that revealed exciting possibilities for th
           endTime,
           mockInvocations,
           mockSummary,
-          'david.rug98@icloud.com' // Test recipient
+          'bob@example.com' // Bob's email
         );
 
         console.log('✅ [MockEmail] Mock email export completed successfully');
