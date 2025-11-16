@@ -1044,10 +1044,29 @@ export class GitDreamNodeService {
     };
 
     // Include contact fields only for dreamer nodes
+    // IMPORTANT: Allow empty strings to delete fields - check !== undefined, not truthiness
     if (node.type === 'dreamer') {
-      if (node.email) udd.email = node.email;
-      if (node.phone) udd.phone = node.phone;
-      if (node.did) udd.did = node.did;
+      if (node.email !== undefined) {
+        if (node.email === '') {
+          delete udd.email; // Remove field if empty
+        } else {
+          udd.email = node.email;
+        }
+      }
+      if (node.phone !== undefined) {
+        if (node.phone === '') {
+          delete udd.phone; // Remove field if empty
+        } else {
+          udd.phone = node.phone;
+        }
+      }
+      if (node.did !== undefined) {
+        if (node.did === '') {
+          delete udd.did; // Remove field if empty
+        } else {
+          udd.did = node.did;
+        }
+      }
     }
 
     // CRITICAL: Preserve radicleId from node OR existing disk value
