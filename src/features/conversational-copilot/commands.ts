@@ -390,16 +390,16 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const startTime = new Date(now.getTime() - 15 * 60 * 1000); // 15 minutes ago (short call)
         const endTime = now;
 
-        // Mock invocations: Circle and Square (real UUIDs from vault)
+        // Mock invocations: Circle and Square (fresh UUIDs from vault)
         const mockInvocations = [
           {
-            dreamUUID: '8f19880e-2f91-4db8-aff3-cb98ff6485f3', // Circle UUID
+            dreamUUID: 'f472dbb2-517d-41f9-8043-7fabc6decd4e', // Circle UUID (fresh)
             nodeName: 'Circle',
             timestamp: new Date(startTime.getTime() + 5 * 60 * 1000),
             searchQuery: ''
           },
           {
-            dreamUUID: 'c0993d1b-1a0f-4394-8d0b-fddac57698f0', // Square UUID
+            dreamUUID: '7016a06d-35f5-4c16-a1d0-064def8a87f5', // Square UUID (fresh)
             nodeName: 'Square',
             timestamp: new Date(startTime.getTime() + 10 * 60 * 1000),
             searchQuery: ''
