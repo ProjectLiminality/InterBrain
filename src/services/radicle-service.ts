@@ -989,6 +989,28 @@ export class RadicleServiceImpl implements RadicleService {
         { cwd: dreamNodePath, env }
       );
       console.log(`RadicleService: Added ${peerDID} as delegate:`, result.stdout);
+
+      // Extract revision ID from output and auto-accept it
+      // Output format: "✓ Identity revision <revision-id> created"
+      const revisionMatch = result.stdout.match(/revision\s+([a-f0-9]{40})\s+created/i);
+      if (revisionMatch) {
+        const revisionId = revisionMatch[1];
+        console.log(`RadicleService: Auto-accepting revision ${revisionId}...`);
+
+        try {
+          const acceptResult = await execAsync(
+            `"${radCmd}" id accept "${revisionId}"`,
+            { cwd: dreamNodePath, env }
+          );
+          console.log(`✅ RadicleService: Revision accepted:`, acceptResult.stdout);
+        } catch (acceptError: any) {
+          console.warn(`⚠️ RadicleService: Could not auto-accept revision (non-critical):`, acceptError.stderr || acceptError.message);
+          // Don't throw - the revision still exists and can be accepted manually
+        }
+      } else {
+        console.warn(`⚠️ RadicleService: Could not extract revision ID from output - skipping auto-accept`);
+      }
+
       return true; // Successfully added
     } catch (error: any) {
       // Log full error details for debugging
