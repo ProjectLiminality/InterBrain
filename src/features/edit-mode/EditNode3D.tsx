@@ -37,6 +37,7 @@ export default function EditNode3D({
   const [localEmail, setLocalEmail] = useState('');
   const [localPhone, setLocalPhone] = useState('');
   const [localDid, setLocalDid] = useState('');
+  const [localRadicleId, setLocalRadicleId] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -120,12 +121,13 @@ export default function EditNode3D({
   }, [editingNode?.name]);
 
   // Load contact info from editingNode (for dreamer nodes only)
-  // Only reload when node ID changes, not when email/phone/did fields update
+  // Only reload when node ID changes, not when email/phone/did/radicleId fields update
   useEffect(() => {
     if (!editingNode || editingNode.type !== 'dreamer') {
       setLocalEmail('');
       setLocalPhone('');
       setLocalDid('');
+      setLocalRadicleId('');
       return;
     }
 
@@ -133,6 +135,7 @@ export default function EditNode3D({
     setLocalEmail(editingNode.email || '');
     setLocalPhone(editingNode.phone || '');
     setLocalDid(editingNode.did || '');
+    setLocalRadicleId(editingNode.radicleId || '');
   }, [editingNode?.id, editingNode?.type]); // Only depend on ID and type, not the whole object
   
   if (!editingNode) {
@@ -632,6 +635,29 @@ export default function EditNode3D({
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               />
+              <input
+                type="text"
+                value={localRadicleId}
+                disabled
+                placeholder="Radicle ID (auto-generated)"
+                className="contact-field-radicle-id"
+                style={{
+                  padding: '14px 16px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: '6px',
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '24px',
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  textAlign: 'center',
+                  outline: 'none',
+                  height: '48px',
+                  boxSizing: 'border-box',
+                  cursor: 'not-allowed'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
             </div>
           )}
 
@@ -639,7 +665,7 @@ export default function EditNode3D({
           <div
             style={{
               position: 'absolute',
-              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 300 : 280) : (validationErrors.title ? 120 : 100))}px`,
+              top: `${nodeSize + (editingNode.type === 'dreamer' ? (validationErrors.title ? 360 : 340) : (validationErrors.title ? 120 : 100))}px`,
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',

@@ -230,7 +230,7 @@ export class GitDreamNodeService {
     });
     
     // If metadata changed, update .udd file and auto-commit
-    if (changes.name || changes.type || changes.dreamTalkMedia || changes.email !== undefined || changes.phone !== undefined) {
+    if (changes.name || changes.type || changes.dreamTalkMedia || changes.email !== undefined || changes.phone !== undefined || changes.did !== undefined) {
       await this.updateUDDFile(updatedNode);
 
       // Auto-commit changes if enabled (only for actual file changes, not position)

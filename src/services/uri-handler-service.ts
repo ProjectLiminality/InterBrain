@@ -38,6 +38,14 @@ export class URIHandlerService {
 				this.handleClone.bind(this)
 			);
 			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-clone`);
+
+			// Register update-contact handler for DID backpropagation
+			// Format: obsidian://interbrain-update-contact?did=<did>&uuid=<dreamer-uuid>&name=<name>&email=<email>
+			this.plugin.registerObsidianProtocolHandler(
+				'interbrain-update-contact',
+				this.handleUpdateContact.bind(this)
+			);
+			console.log(`🔗 [URIHandler] Registered: obsidian://interbrain-update-contact`);
 		} catch (error) {
 			console.error('Failed to register URI handlers:', error);
 			console.warn(`⚠️ [URIHandler] Deep links will not be functional`);
@@ -250,6 +258,92 @@ export class URIHandlerService {
 		} catch (error) {
 			console.error('Failed to handle clone link:', error);
 			new Notice(`Failed to handle clone: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
+	/**
+	 * Handle contact update (DID backpropagation from Bob → Alice)
+	 * Format: obsidian://interbrain-update-contact?did=<did>&uuid=<dreamer-uuid>&name=<name>&email=<email>
+	 *
+	 * This enables the collaboration handshake completion:
+	 * 1. Alice shares with Bob → Bob installs → Bob gets Alice's DID
+	 * 2. Bob shares DID back to Alice via this URI
+	 * 3. Alice's Dreamer node for Bob gets updated with his DID
+	 * 4. Sync command auto-triggers → mutual delegation established
+	 */
+	private async handleUpdateContact(params: Record<string, string>): Promise<void> {
+		try {
+			const did = params.did ? decodeURIComponent(params.did) : undefined;
+			const uuid = params.uuid ? decodeURIComponent(params.uuid) : undefined;
+			const name = params.name ? decodeURIComponent(params.name) : undefined;
+			const email = params.email ? decodeURIComponent(params.email) : undefined;
+
+			console.log(`🔄 [URIHandler] Update contact request:`, { did, uuid, name, email });
+
+			if (!did) {
+				new Notice('Invalid update link: missing DID');
+				console.error(`❌ [URIHandler] Update contact missing DID parameter`);
+				return;
+			}
+
+			if (!uuid) {
+				new Notice('Invalid update link: missing Dreamer UUID');
+				console.error(`❌ [URIHandler] Update contact missing UUID parameter`);
+				return;
+			}
+
+			// Find the Dreamer node by UUID
+			const allNodes = await this.dreamNodeService.list();
+			const dreamerNode = allNodes.find((node: any) => node.id === uuid && node.type === 'dreamer');
+
+			if (!dreamerNode) {
+				new Notice(`Dreamer node not found (UUID: ${uuid.slice(0, 8)}...)`);
+				console.error(`❌ [URIHandler] Dreamer node not found: ${uuid}`);
+				return;
+			}
+
+			console.log(`👤 [URIHandler] Found Dreamer node: "${dreamerNode.name}" (${uuid})`);
+
+			// Prepare updates
+			const updates: Partial<DreamNode> = { did };
+			if (name) updates.name = name;
+			if (email) updates.email = email;
+
+			// Update the Dreamer node with new contact info
+			await this.dreamNodeService.update(uuid, updates);
+
+			console.log(`✅ [URIHandler] Updated "${dreamerNode.name}" with DID: ${did}`);
+			new Notice(`Contact updated: ${name || dreamerNode.name}'s DID received`);
+
+			// Auto-trigger sync command to establish mutual delegation
+			console.log(`🔄 [URIHandler] Triggering Radicle peer sync for mutual delegation...`);
+			try {
+				// Execute the sync command via Obsidian's command API
+				// This runs the "Sync Radicle Peer Following" command which handles:
+				// - rad follow <DID>
+				// - rad id update --delegate <DID> --threshold 1
+				// - git remote add <Peer> rad://<RID>/<DID>
+				// - rad seed <RID> --scope followed
+				const executed = (this.plugin.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+
+				if (executed) {
+					console.log(`✅ [URIHandler] Radicle sync triggered - mutual delegation will be established`);
+					new Notice('Collaboration setup complete! Syncing peer configuration...');
+				} else {
+					console.warn(`⚠️ [URIHandler] Sync command not found - may need manual sync`);
+					new Notice('Contact updated. Run "Sync Radicle Peer Following" to complete setup.');
+				}
+			} catch (syncError) {
+				console.error(`❌ [URIHandler] Radicle sync failed (non-critical):`, syncError);
+				new Notice('Contact updated, but auto-sync failed. Run "Sync Radicle Peer Following" manually.');
+			}
+
+			// Refresh UI to show updated node
+			await this.dreamNodeService.scanVault();
+
+		} catch (error) {
+			console.error('Failed to handle update contact:', error);
+			new Notice(`Failed to update contact: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 
@@ -918,6 +1012,32 @@ export class URIHandlerService {
 		}
 		if (senderName) {
 			uri += `&senderName=${encodeURIComponent(senderName)}`;
+		}
+
+		return uri;
+	}
+
+	/**
+	 * Generate update-contact URI for DID backpropagation
+	 * @param did Sender's Radicle DID
+	 * @param dreamerUuid UUID of the recipient's Dreamer node (for the sender)
+	 * @param name Optional sender's name
+	 * @param email Optional sender's email
+	 *
+	 * Example: Bob installs InterBrain and wants to share his DID with Alice
+	 * - did: Bob's newly created Radicle DID
+	 * - dreamerUuid: Alice's UUID for her Dreamer node representing Bob
+	 * - name: "Bob" (optional, for display)
+	 * - email: "bob@example.com" (optional, for additional contact info)
+	 */
+	static generateUpdateContactLink(did: string, dreamerUuid: string, name?: string, email?: string): string {
+		let uri = `obsidian://interbrain-update-contact?did=${encodeURIComponent(did)}&uuid=${encodeURIComponent(dreamerUuid)}`;
+
+		if (name) {
+			uri += `&name=${encodeURIComponent(name)}`;
+		}
+		if (email) {
+			uri += `&email=${encodeURIComponent(email)}`;
 		}
 
 		return uri;
