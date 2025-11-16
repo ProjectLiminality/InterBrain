@@ -217,6 +217,10 @@ export class URIHandlerService {
 						}
 
 						if (missingLinks) {
+							// Refresh store to reflect new relationships in UI
+							console.log(`🔄 [URIHandler] Refreshing store with new relationships...`);
+							await this.dreamNodeService.scanVault();
+
 							// Re-sync Radicle relationships if we added any new links
 							try {
 								console.log(`🔄 [URIHandler] Re-syncing Radicle peer relationships...`);
