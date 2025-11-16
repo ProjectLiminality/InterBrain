@@ -550,13 +550,29 @@ export class GitDreamNodeService {
         await fsPromises.writeFile(gitignorePath, gitignoreContent);
         console.log(`GitDreamNodeService: Created .gitignore for Dreamer node`);
 
-        // Create liminal-web.json with InterBrain relationship pre-populated
+        // Create/update liminal-web.json with InterBrain relationship
         // All Dreamer nodes should start connected to InterBrain
         const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
         const liminalWebPath = path.join(repoPath, 'liminal-web.json');
-        const initialLiminalWeb = { relationships: [INTERBRAIN_UUID] };
-        await fsPromises.writeFile(liminalWebPath, JSON.stringify(initialLiminalWeb, null, 2));
-        console.log(`GitDreamNodeService: Created liminal-web.json with InterBrain connection for Dreamer node`);
+
+        // Check if file already exists (from prior relationship additions)
+        let liminalWeb: { relationships: string[] };
+        try {
+          const existingContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
+          liminalWeb = JSON.parse(existingContent);
+          console.log(`GitDreamNodeService: Found existing liminal-web.json with ${liminalWeb.relationships.length} relationships`);
+        } catch {
+          // File doesn't exist, create new
+          liminalWeb = { relationships: [] };
+        }
+
+        // Add InterBrain UUID if not already present
+        if (!liminalWeb.relationships.includes(INTERBRAIN_UUID)) {
+          liminalWeb.relationships.push(INTERBRAIN_UUID);
+        }
+
+        await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
+        console.log(`GitDreamNodeService: Updated liminal-web.json with InterBrain connection (total: ${liminalWeb.relationships.length} relationships)`);
       }
 
       // Make initial commit
