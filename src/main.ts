@@ -274,7 +274,7 @@ export default class InterBrainPlugin extends Plugin {
       initializeConversationRecordingService(this.app);
       initializeConversationSummaryService(this.app);
       initializePDFGeneratorService();
-      initializeEmailExportService(this.app);
+      initializeEmailExportService(this.app, this);
       initializeAudioRecordingService(this);
       initializePerspectiveService(this);
       initializeConversationsService(this);
@@ -845,7 +845,7 @@ export default class InterBrainPlugin extends Plugin {
           );
 
           const { ShareLinkService } = await import('./services/share-link-service');
-          const shareLinkService = new ShareLinkService(this.app);
+          const shareLinkService = new ShareLinkService(this.app, this);
 
           // Pass recipientDid if provided (will be undefined if empty string)
           const effectiveRecipientDid = recipientDid && recipientDid.trim() !== '' ? recipientDid.trim() : undefined;

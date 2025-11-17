@@ -79,98 +79,26 @@ export class SubmoduleManagerService {
   }
 
   /**
-   * Get or initialize Radicle ID for a DreamNode repository
-   * Pattern from RadicleBatchInitService: Check .udd first, then git, then initialize if needed
+   * Get Radicle ID from a DreamNode's .udd file
+   * ASSUMPTION: All DreamNodes are guaranteed to have Radicle IDs (initialized on creation)
    */
-  private async getOrInitializeRadicleId(repoPath: string): Promise<string | null> {
+  private async getRadicleIdFromUDD(repoPath: string): Promise<string | null> {
     const fs = require('fs').promises;
     const uddPath = path.join(repoPath, '.udd');
 
     try {
-      // STEP 1: Try reading Radicle ID from .udd file first
-      try {
-        const uddContent = await fs.readFile(uddPath, 'utf-8');
-        const udd = JSON.parse(uddContent);
+      const uddContent = await fs.readFile(uddPath, 'utf-8');
+      const udd = JSON.parse(uddContent);
 
-        if (udd.radicleId) {
-          console.log(`SubmoduleManagerService: Found existing Radicle ID in .udd: ${udd.radicleId}`);
-          return udd.radicleId;
-        }
-      } catch (error) {
-        console.warn(`SubmoduleManagerService: Could not read .udd at ${uddPath}:`, error);
+      if (udd.radicleId) {
+        console.log(`SubmoduleManagerService: Found Radicle ID in .udd: ${udd.radicleId}`);
+        return udd.radicleId;
       }
 
-      // STEP 2: No Radicle ID in .udd - check if repository is initialized anyway
-      const radicleId = await this.radicleService.getRadicleId(repoPath);
-      if (radicleId) {
-        // GAP DETECTED: Repository initialized but .udd doesn't have the ID - sync it
-        console.log(`SubmoduleManagerService: Found Radicle ID in git: ${radicleId}, writing to .udd...`);
-        try {
-          const uddContent = await fs.readFile(uddPath, 'utf-8');
-          const udd = JSON.parse(uddContent);
-          udd.radicleId = radicleId;
-          await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-          console.log(`SubmoduleManagerService: Successfully synced Radicle ID to .udd`);
-          return radicleId;
-        } catch (writeError) {
-          console.warn(`SubmoduleManagerService: Could not write Radicle ID to .udd:`, writeError);
-          return radicleId; // Still return the ID even if write failed
-        }
-      }
-
-      // STEP 3: Repository not initialized - initialize it now
-      console.log(`SubmoduleManagerService: No Radicle ID found, initializing repository...`);
-
-      try {
-        // Get DreamNode directory name (PascalCase, no spaces) and UUID
-        const uddContent = await fs.readFile(uddPath, 'utf-8');
-        const udd = JSON.parse(uddContent);
-        const directoryName = path.basename(repoPath); // Already PascalCase from existing system
-        const uuid = udd.uuid;
-
-        // Use UUID suffix to ensure uniqueness (avoids collision with deleted repos)
-        // Format: "DirectoryName-abc123" (first 7 chars of UUID)
-        const uniqueName = uuid ? `${directoryName}-${uuid.substring(0, 7)}` : directoryName;
-
-        console.log(`SubmoduleManagerService: Initializing with unique name: ${uniqueName}`);
-
-        // Initialize with rad init
-        await this.radicleService.init(
-          repoPath,
-          uniqueName, // name with UUID suffix for uniqueness
-          'DreamNode repository' // description
-        );
-
-        // Get the newly created Radicle ID
-        const newRadicleId = await this.radicleService.getRadicleId(repoPath);
-
-        if (newRadicleId) {
-          console.log(`SubmoduleManagerService: Successfully initialized Radicle ID: ${newRadicleId}`);
-
-          // Write to .udd immediately
-          udd.radicleId = newRadicleId;
-          await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-          console.log(`SubmoduleManagerService: Wrote Radicle ID to .udd`);
-
-          return newRadicleId;
-        }
-
-        console.warn(`SubmoduleManagerService: Radicle init succeeded but could not retrieve ID`);
-        return null;
-      } catch (initError) {
-        // With unique names (Title-UUID), storage collisions should not occur
-        // If they do, it indicates a bug or external modification
-        if (initError instanceof Error && initError.message.startsWith('RADICLE_STORAGE_EXISTS:')) {
-          console.error(`SubmoduleManagerService: Unexpected storage collision despite unique naming!`);
-          console.error(`SubmoduleManagerService: This may indicate external Radicle modifications or a bug.`);
-        }
-
-        console.warn(`SubmoduleManagerService: Failed to initialize Radicle repository:`, initError);
-        return null;
-      }
-
+      console.warn(`SubmoduleManagerService: No Radicle ID in .udd at ${uddPath} - this should not happen!`);
+      return null;
     } catch (error) {
-      console.error(`SubmoduleManagerService: Error getting/initializing Radicle ID:`, error);
+      console.error(`SubmoduleManagerService: Could not read .udd at ${uddPath}:`, error);
       return null;
     }
   }
@@ -690,22 +618,16 @@ export class SubmoduleManagerService {
       const parentUDD = await UDDService.readUDD(fullParentPath);
       const parentTitle = parentUDD.title;
 
-      // Get parent's Radicle ID (skip if disabled for performance)
-      let parentRadicleId: string | null = null;
-      if (!skipRadicle) {
-        parentRadicleId = await this.getOrInitializeRadicleId(fullParentPath);
+      // Get parent's Radicle ID from .udd
+      // All DreamNodes are guaranteed to have Radicle IDs (initialized on creation)
+      const parentRadicleId = await this.getRadicleIdFromUDD(fullParentPath);
 
-        if (!parentRadicleId) {
-          console.error('SubmoduleManagerService: Could not get/initialize parent Radicle ID - skipping relationship tracking');
-          return;
-        }
-
-        console.log(`SubmoduleManagerService: Parent Radicle ID: ${parentRadicleId}`);
-      } else {
-        console.log(`SubmoduleManagerService: Radicle initialization SKIPPED for fast local-only save`);
-        // Still get existing Radicle ID from .udd if it exists (no network calls)
-        parentRadicleId = parentUDD.radicleId || null;
+      if (!parentRadicleId) {
+        console.error('SubmoduleManagerService: Parent has no Radicle ID - this should not happen!');
+        return;
       }
+
+      console.log(`SubmoduleManagerService: Parent Radicle ID: ${parentRadicleId}`);
 
       let parentModified = false;
 
@@ -732,48 +654,32 @@ export class SubmoduleManagerService {
 
           // STEP 1: Work in sovereign repo ONLY - update all metadata before importing submodule
 
-          // Get child's Radicle ID (skip if disabled for performance)
-          let childRadicleId: string | null = null;
-          let childUDD = await UDDService.readUDD(sovereignPath);
+          // Get child's Radicle ID from .udd
+          // All DreamNodes are guaranteed to have Radicle IDs (initialized on creation)
+          const childUDD = await UDDService.readUDD(sovereignPath);
           const childTitle = childUDD.title;
+          const childRadicleId = await this.getRadicleIdFromUDD(sovereignPath);
 
-          if (!skipRadicle) {
-            childRadicleId = await this.getOrInitializeRadicleId(sovereignPath);
-
-            if (!childRadicleId) {
-              console.warn(`SubmoduleManagerService: Could not get/initialize Radicle ID for ${result.submoduleName} - skipping`);
-              continue;
-            }
-
-            console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
-          } else {
-            // Still get existing Radicle ID from .udd if it exists (no network calls)
-            childRadicleId = childUDD.radicleId || null;
-            console.log(`SubmoduleManagerService: Radicle initialization SKIPPED for child ${result.submoduleName}`);
+          if (!childRadicleId) {
+            console.warn(`SubmoduleManagerService: Child ${result.submoduleName} has no Radicle ID - skipping`);
+            continue;
           }
+
+          console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
 
           let sovereignModified = false;
 
-          // Ensure sovereign's .udd has its own Radicle ID (may have been just initialized)
-          if (!childUDD.radicleId || childUDD.radicleId !== childRadicleId) {
-            console.log(`SubmoduleManagerService: Adding Radicle ID to sovereign ${childTitle}'s .udd...`);
-            childUDD.radicleId = childRadicleId || undefined;
-            await UDDService.writeUDD(sovereignPath, childUDD);
-            sovereignModified = true;
-          }
-
           // Add parent's Radicle ID to sovereign's supermodules array (source of truth)
-          // Skip if Radicle is disabled (no parent Radicle ID available)
-          if (parentRadicleId && await UDDService.addSupermodule(sovereignPath, parentRadicleId)) {
+          // All DreamNodes are guaranteed to have Radicle IDs, so this should always succeed
+          if (await UDDService.addSupermodule(sovereignPath, parentRadicleId)) {
             console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentRadicleId}) to sovereign ${childTitle}'s supermodules`);
             sovereignModified = true;
-          } else if (!parentRadicleId && !skipRadicle) {
-            console.warn(`SubmoduleManagerService: No parent Radicle ID - skipping supermodule tracking`);
           }
 
           // Commit all sovereign changes at once (only if there are actual changes)
-          // Skip coherence beacon if Radicle is disabled
-          if (sovereignModified && !skipRadicle) {
+          // IMPORTANT: Always create COHERENCE_BEACON commits, even in skipRadicle mode
+          // The skipRadicle flag only affects network operations, not local commits
+          if (sovereignModified) {
             try {
               await execAsync('git add .udd', { cwd: sovereignPath });
 
@@ -781,26 +687,33 @@ export class SubmoduleManagerService {
               const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: sovereignPath });
 
               if (statusOutput.trim()) {
-                // Commit with COHERENCE_BEACON metadata for network discovery
-                const beaconData = JSON.stringify({
-                  type: 'supermodule',
-                  radicleId: parentRadicleId,
-                  title: parentTitle
-                });
+                // Only create COHERENCE_BEACON if we have a parent Radicle ID
+                if (!parentRadicleId) {
+                  console.warn(`SubmoduleManagerService: Cannot create COHERENCE_BEACON - parent Radicle ID not available`);
+                  console.warn(`SubmoduleManagerService: Committing .udd changes without beacon metadata`);
+                  await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
+                } else {
+                  // Commit with COHERENCE_BEACON metadata for network discovery
+                  const beaconData = JSON.stringify({
+                    type: 'supermodule',
+                    radicleId: parentRadicleId,
+                    title: parentTitle
+                  });
 
-                const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
+                  const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
 
-                console.log(`SubmoduleManagerService: 🎯 Creating COHERENCE_BEACON commit in sovereign ${childTitle}`);
-                console.log(`SubmoduleManagerService: Beacon metadata:`, beaconData);
-                console.log(`SubmoduleManagerService: Full commit message:\n${commitMessage}`);
+                  console.log(`SubmoduleManagerService: 🎯 Creating COHERENCE_BEACON commit in sovereign ${childTitle}`);
+                  console.log(`SubmoduleManagerService: Beacon metadata:`, beaconData);
+                  console.log(`SubmoduleManagerService: Full commit message:\n${commitMessage}`);
 
-                const { stdout: commitOutput } = await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
-                console.log(`SubmoduleManagerService: Commit output:`, commitOutput);
+                  const { stdout: commitOutput } = await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
+                  console.log(`SubmoduleManagerService: Commit output:`, commitOutput);
 
-                // Get the commit hash
-                const { stdout: commitHash } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
-                console.log(`SubmoduleManagerService: ✓ COHERENCE_BEACON commit created: ${commitHash.trim()}`);
-                console.log(`SubmoduleManagerService: This commit will be detected when other vaults run "Check for Updates"`)
+                  // Get the commit hash
+                  const { stdout: commitHash } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+                  console.log(`SubmoduleManagerService: ✓ COHERENCE_BEACON commit created: ${commitHash.trim()}`);
+                  console.log(`SubmoduleManagerService: This commit will be detected when other vaults run "Check for Updates"`)
+                }
               } else {
                 console.log(`SubmoduleManagerService: No changes to commit in sovereign ${childTitle} (metadata already up to date)`);
               }
@@ -849,10 +762,11 @@ export class SubmoduleManagerService {
           }
 
           // Get child's Radicle ID from sovereign repo
-          const childRadicleId = await this.getOrInitializeRadicleId(sovereignPath);
+          // All DreamNodes are guaranteed to have Radicle IDs (initialized on creation)
+          const childRadicleId = await this.getRadicleIdFromUDD(sovereignPath);
 
           if (!childRadicleId) {
-            console.warn(`SubmoduleManagerService: Could not get Radicle ID for removed submodule ${submoduleName} - skipping cleanup`);
+            console.warn(`SubmoduleManagerService: Removed submodule ${submoduleName} has no Radicle ID - skipping cleanup`);
             continue;
           }
 

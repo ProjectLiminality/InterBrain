@@ -12,9 +12,11 @@ import { getRadicleBatchInitService } from './radicle-batch-init-service';
 
 export class ShareLinkService {
 	private app: App;
+	private plugin: any;
 
-	constructor(app: App) {
+	constructor(app: App, plugin: any) {
 		this.app = app;
+		this.plugin = plugin;
 	}
 
 	/**
@@ -67,6 +69,7 @@ export class ShareLinkService {
 
 			let senderDid: string | undefined;
 			let senderName: string | undefined;
+			let senderEmail: string | undefined;
 
 			// Get sender's identity for collaboration handshake
 			try {
@@ -76,6 +79,12 @@ export class ShareLinkService {
 				console.log(`👤 [ShareLink] Sender identity: ${senderName} (${senderDid})`);
 			} catch (error) {
 				console.warn('⚠️ [ShareLink] Could not get Radicle identity:', error);
+			}
+
+			// Get sender's email from settings (optional)
+			senderEmail = this.plugin.settings?.userEmail || undefined;
+			if (senderEmail) {
+				console.log(`📧 [ShareLink] Sender email: ${senderEmail}`);
 			}
 
 			// Ensure node has Radicle ID (initialize if needed)
@@ -110,11 +119,11 @@ export class ShareLinkService {
 
 			if (radicleId) {
 				// Primary: Radicle ID (peer-to-peer) with collaboration handshake
-				uri = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName);
+				uri = URIHandlerService.generateSingleNodeLink(vaultName, radicleId, senderDid, senderName, senderEmail);
 				identifier = radicleId;
 			} else {
 				// Fallback: UUID (if Radicle init somehow failed but didn't throw)
-				uri = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid, senderDid, senderName);
+				uri = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid, senderDid, senderName, senderEmail);
 				identifier = nodeUuid;
 				console.warn(`⚠️ [ShareLink] Using UUID fallback (Radicle init may have failed)`);
 			}

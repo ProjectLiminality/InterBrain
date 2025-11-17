@@ -8,6 +8,7 @@ import { serviceManager } from '../services/service-manager';
 export interface InterBrainSettings {
 	claudeApiKey: string;
 	radiclePassphrase: string;
+	userEmail: string;
 	hasLaunchedBefore: boolean;
 	transcriptionEnabled: boolean;
 	transcriptionSetupComplete: boolean;
@@ -16,6 +17,7 @@ export interface InterBrainSettings {
 export const DEFAULT_SETTINGS: InterBrainSettings = {
 	claudeApiKey: '',
 	radiclePassphrase: '',
+	userEmail: '',
 	hasLaunchedBefore: false,
 	transcriptionEnabled: true,  // Auto-enabled on first launch
 	transcriptionSetupComplete: false
@@ -602,6 +604,18 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		// Validation feedback element
 		const validationEl = containerEl.createDiv({ cls: 'passphrase-validation' });
 		validationEl.id = 'passphrase-validation';
+
+		// User email setting (for collaboration handshake)
+		new Setting(containerEl)
+			.setName('Email Address')
+			.setDesc('Used for collaboration handshake (FaceTime-compatible recommended). Auto-populated in DID backpropagation emails.')
+			.addText(text => text
+				.setPlaceholder('your.email@example.com')
+				.setValue(this.plugin.settings.userEmail)
+				.onChange(async (value) => {
+					this.plugin.settings.userEmail = value;
+					await this.plugin.saveSettings();
+				}));
 
 		// Node control buttons
 		new Setting(containerEl)
