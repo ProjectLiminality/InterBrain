@@ -350,6 +350,28 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                       dreamerNodeName: partnerToFocus.name
                     });
 
+                    // STEP 3: Auto-commit the new perspective
+                    try {
+                      const { exec } = require('child_process');
+                      const { promisify } = require('util');
+                      const execAsync = promisify(exec);
+                      const dreamNodePath = path.join(vaultPath, dreamNode.repoPath);
+
+                      // Add perspectives.json and the audio clip
+                      await execAsync('git add perspectives.json perspectives/', { cwd: dreamNodePath });
+
+                      // Check if there are changes to commit
+                      const { stdout: status } = await execAsync('git status --porcelain', { cwd: dreamNodePath });
+                      if (status.trim()) {
+                        const commitMsg = `Add perspective: ${partnerToFocus.name} on ${dreamNode.name}`;
+                        await execAsync(`git commit -m "${commitMsg}"`, { cwd: dreamNodePath });
+                        console.log(`✅ [Songline] Auto-committed perspective in ${dreamNode.name}`);
+                      }
+                    } catch (commitError) {
+                      console.warn(`⚠️ [Songline] Failed to auto-commit perspective (non-critical):`, commitError);
+                      // Don't fail the entire operation if commit fails
+                    }
+
                     successCount++;
                     console.log(`✅ [Songline] Created sovereign perspective ${successCount}/${clipSuggestions.length} for ${dreamNode.name}`);
                   } catch (error) {
