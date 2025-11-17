@@ -309,7 +309,7 @@ export default class InterBrainPlugin extends Plugin {
     this.gitService = new GitService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
-    this.passphraseManager = new PassphraseManager(this.uiService);
+    this.passphraseManager = new PassphraseManager(this.uiService, this);
     this.faceTimeService = new FaceTimeService();
 
     // Initialize dreamweaving services

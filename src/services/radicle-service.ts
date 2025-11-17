@@ -879,7 +879,50 @@ export class RadicleServiceImpl implements RadicleService {
         child.stdin?.end();
       });
 
-      // STEP 4: Add recipient as delegate if specified
+      // STEP 4: Announce to network for immediate peer discovery
+      // This ensures other nodes can find this repository right away
+      console.log(`RadicleService: Announcing repository to network (rad sync --announce)...`);
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(radCmd, ['sync', '--announce'], {
+          env: env,
+          cwd: absoluteDreamNodePath,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          console.log('RadicleService: rad sync --announce output:', stdout);
+          if (stderr) console.log('RadicleService: rad sync --announce stderr:', stderr);
+
+          // Announce can fail if no seeds found (not critical)
+          if (code === 0 || stdout.includes('No seeds found')) {
+            console.log('✅ RadicleService: Repository announced to network');
+            resolve();
+          } else {
+            console.warn(`⚠️ RadicleService: rad sync --announce exited with code ${code} (not critical)`);
+            resolve(); // Don't fail the whole operation
+          }
+        });
+
+        child.on('error', (error) => {
+          console.warn('RadicleService: rad sync --announce spawn error (not critical):', error);
+          resolve(); // Don't fail the whole operation
+        });
+
+        child.stdin?.end();
+      });
+
+      // STEP 5: Add recipient as delegate if specified
       if (recipientDid) {
         console.log(`RadicleService: Adding ${recipientDid} as delegate after successful publish...`);
         await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
