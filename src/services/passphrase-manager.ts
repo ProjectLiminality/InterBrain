@@ -88,13 +88,12 @@ export class PassphraseManager {
    * This ensures the settings panel shows the passphrase immediately after it's entered via prompt
    */
   private updateSettingsUIField(passphrase: string): void {
-    // Access the settings tab through the plugin instance
-    const settingTab = (this.plugin as any).settingTab;
-    if (settingTab && typeof settingTab.updatePassphraseField === 'function') {
-      settingTab.updatePassphraseField(passphrase);
-      console.log('PassphraseManager: Updated settings UI via settings tab component reference');
+    const inputElement = document.getElementById('radicle-passphrase-input') as HTMLInputElement | null;
+    if (inputElement) {
+      inputElement.value = passphrase;
+      console.log('PassphraseManager: Updated settings UI input field');
     } else {
-      console.log('PassphraseManager: Settings tab not available (may not be open)');
+      console.log('PassphraseManager: Settings UI input field not found (settings tab may not be open)');
     }
   }
 }
