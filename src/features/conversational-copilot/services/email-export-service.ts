@@ -46,28 +46,19 @@ export class EmailExportService {
 			const radicleService = serviceManager.getRadicleService();
 			let senderDid: string | undefined;
 			let senderName: string | undefined;
-			let dreamerUuid: string | undefined;
-
+	
 			try {
 				const identity = await radicleService.getIdentity();
 				senderDid = identity.did;
 				senderName = identity.alias || 'Friend';
 				console.log(`👤 [EmailExport] Sender identity: ${senderName} (${senderDid})`);
-
-				// Find sender's Dreamer node by DID
-				const dreamNodeService = serviceManager.getActive();
-				const allNodes = await dreamNodeService.list();
-				const senderDreamerNode = allNodes.find(node => node.type === 'dreamer' && node.did === senderDid);
-
-				if (senderDreamerNode) {
-					dreamerUuid = senderDreamerNode.id;
-					console.log(`👤 [EmailExport] Sender Dreamer node UUID: ${dreamerUuid}`);
-				} else {
-					console.warn('⚠️ [EmailExport] Could not find sender Dreamer node - DID backpropagation will be skipped');
-				}
 			} catch (error) {
 				console.warn('⚠️ [EmailExport] Could not get Radicle identity:', error);
 			}
+
+			// Get peer's Dreamer node UUID (for DID backpropagation)
+			const dreamerUuid = conversationPartner.id;
+			console.log(`👤 [EmailExport] Peer Dreamer node UUID: ${dreamerUuid} (${conversationPartner.name})`);
 
 			// Share each invoked node and collect URIs
 			const shareLinkService = new ShareLinkService(this.app);
