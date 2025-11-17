@@ -529,6 +529,57 @@ export class URIHandlerService {
 	}
 
 	/**
+	 * Ensure Radicle node is running before clone operations
+	 * Checks if node is running, and if not, prompts for passphrase to start it
+	 *
+	 * @returns Passphrase string (from settings or user input), or null if user cancelled
+	 */
+	private async ensureRadicleNodeRunning(): Promise<string | null> {
+		// Import PassphraseManager to access passphrase prompt logic
+		const { PassphraseManager } = await import('./passphrase-manager');
+		const { UIService } = await import('./ui-service');
+
+		// Create temporary instances for passphrase management
+		const uiService = new UIService(this.app, this.plugin);
+		const passphraseManager = new PassphraseManager(uiService, this.plugin);
+
+		// Check if node is already running
+		const nodeRunning = await (this.radicleService as any).isNodeRunning();
+
+		if (nodeRunning) {
+			console.log('🔄 [URIHandler] Radicle node already running');
+			// Return passphrase from settings if available (for clone operations)
+			return (this.plugin as any).settings?.radiclePassphrase || '';
+		}
+
+		// Node not running - need passphrase to start it
+		console.log('🔄 [URIHandler] Radicle node not running, checking for passphrase...');
+
+		// Try to get passphrase (from settings or prompt user)
+		const passphrase = await passphraseManager.getPassphrase(
+			'Enter your Radicle passphrase to start the node (will be saved for future use)'
+		);
+
+		if (!passphrase) {
+			console.warn('⚠️ [URIHandler] No passphrase provided - cannot start Radicle node');
+			return null;
+		}
+
+		// Start the node with the passphrase
+		console.log('🔄 [URIHandler] Starting Radicle node...');
+		try {
+			await (this.radicleService as any).startNode(passphrase);
+			console.log('✅ [URIHandler] Radicle node started successfully');
+			new Notice('Radicle node started');
+			return passphrase;
+		} catch (error) {
+			console.error('❌ [URIHandler] Failed to start Radicle node:', error);
+			new Notice(`Failed to start Radicle node: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			throw error;
+		}
+	}
+
+	/**
 	 * Clone a DreamNode from Radicle network
 	 * Public method to allow reuse by CoherenceBeaconService and other features
 	 */
@@ -542,13 +593,19 @@ export class URIHandlerService {
 				throw new Error('Could not determine vault path');
 			}
 
+			// CRITICAL: Ensure Radicle node is running before attempting clone
+			// This handles fresh installs where passphrase might not be set
+			const passphrase = await this.ensureRadicleNodeRunning();
+			if (passphrase === null) {
+				// User cancelled passphrase prompt
+				throw new Error('Radicle node requires passphrase to start. Operation cancelled.');
+			}
+
 			// Clone the repository (handles duplicate detection internally)
 			if (!silent) {
 				new Notice(`Cloning from Radicle network...`, 3000);
 			}
 
-			// Get Radicle passphrase from settings for automatic node start
-			const passphrase = (this.plugin as any).settings?.radiclePassphrase || undefined;
 			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase);
 			let finalRepoName = cloneResult.repoName;
 
