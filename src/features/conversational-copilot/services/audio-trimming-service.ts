@@ -21,6 +21,59 @@ export interface AudioTrimOptions {
 }
 
 export class AudioTrimmingService {
+  private ffmpegPath: string | null = null;
+
+  /**
+   * Find ffmpeg executable path
+   * Checks common locations since Electron doesn't inherit full shell PATH
+   */
+  private async findFfmpegPath(): Promise<string | null> {
+    if (this.ffmpegPath) {
+      return this.ffmpegPath;
+    }
+
+    // Common ffmpeg locations
+    const possiblePaths = [
+      'ffmpeg', // Try PATH first
+      '/opt/homebrew/bin/ffmpeg', // Homebrew on Apple Silicon
+      '/usr/local/bin/ffmpeg',    // Homebrew on Intel Mac
+      '/usr/bin/ffmpeg',           // Linux
+      'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe', // Windows
+      'C:\\ffmpeg\\bin\\ffmpeg.exe'  // Windows alternate
+    ];
+
+    for (const ffmpegPath of possiblePaths) {
+      try {
+        // Test if this path works
+        const result = await new Promise<boolean>((resolve) => {
+          const test = spawn(ffmpegPath, ['-version'], {
+            stdio: 'ignore'
+          });
+
+          test.on('close', (code) => resolve(code === 0));
+          test.on('error', () => resolve(false));
+
+          setTimeout(() => {
+            test.kill();
+            resolve(false);
+          }, 1000);
+        });
+
+        if (result) {
+          console.log(`[AudioTrim] Found ffmpeg at: ${ffmpegPath}`);
+          this.ffmpegPath = ffmpegPath;
+          return ffmpegPath;
+        }
+      } catch (error) {
+        // Try next path
+        continue;
+      }
+    }
+
+    console.log('[AudioTrim] ffmpeg not found in any common location');
+    return null;
+  }
+
   /**
    * Trim an audio file to create a sovereign clip
    * Uses ffmpeg for fast, accurate audio extraction
@@ -30,6 +83,12 @@ export class AudioTrimmingService {
    */
   async trimAudio(options: AudioTrimOptions): Promise<void> {
     const { sourceAudioPath, outputAudioPath, startTime, endTime } = options;
+
+    // Find ffmpeg executable
+    const ffmpegPath = await this.findFfmpegPath();
+    if (!ffmpegPath) {
+      throw new Error('ffmpeg not found. Please install ffmpeg and try again.');
+    }
 
     // Validate inputs
     if (startTime < 0 || endTime <= startTime) {
@@ -70,7 +129,7 @@ export class AudioTrimmingService {
     ];
 
     return new Promise((resolve, reject) => {
-      const ffmpeg = spawn('ffmpeg', ffmpegArgs, {
+      const ffmpeg = spawn(ffmpegPath, ffmpegArgs, {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
@@ -114,19 +173,17 @@ export class AudioTrimmingService {
    * Check if ffmpeg is available on the system
    */
   async checkFfmpegAvailable(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const ffmpeg = spawn('ffmpeg', ['-version'], {
-        stdio: 'ignore'
-      });
+    console.log('[AudioTrim] Checking for ffmpeg availability...');
+    const ffmpegPath = await this.findFfmpegPath();
+    const available = ffmpegPath !== null;
 
-      ffmpeg.on('close', (code) => {
-        resolve(code === 0);
-      });
+    if (available) {
+      console.log(`[AudioTrim] ✓ ffmpeg available at: ${ffmpegPath}`);
+    } else {
+      console.log('[AudioTrim] ✗ ffmpeg not found');
+    }
 
-      ffmpeg.on('error', () => {
-        resolve(false);
-      });
-    });
+    return available;
   }
 }
 
