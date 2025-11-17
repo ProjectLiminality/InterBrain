@@ -772,8 +772,9 @@ export class SubmoduleManagerService {
           }
 
           // Commit all sovereign changes at once (only if there are actual changes)
-          // Skip coherence beacon if Radicle is disabled
-          if (sovereignModified && !skipRadicle) {
+          // IMPORTANT: Always create COHERENCE_BEACON commits, even in skipRadicle mode
+          // The skipRadicle flag only affects network operations, not local commits
+          if (sovereignModified) {
             try {
               await execAsync('git add .udd', { cwd: sovereignPath });
 
@@ -781,26 +782,33 @@ export class SubmoduleManagerService {
               const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: sovereignPath });
 
               if (statusOutput.trim()) {
-                // Commit with COHERENCE_BEACON metadata for network discovery
-                const beaconData = JSON.stringify({
-                  type: 'supermodule',
-                  radicleId: parentRadicleId,
-                  title: parentTitle
-                });
+                // Only create COHERENCE_BEACON if we have a parent Radicle ID
+                if (!parentRadicleId) {
+                  console.warn(`SubmoduleManagerService: Cannot create COHERENCE_BEACON - parent Radicle ID not available`);
+                  console.warn(`SubmoduleManagerService: Committing .udd changes without beacon metadata`);
+                  await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
+                } else {
+                  // Commit with COHERENCE_BEACON metadata for network discovery
+                  const beaconData = JSON.stringify({
+                    type: 'supermodule',
+                    radicleId: parentRadicleId,
+                    title: parentTitle
+                  });
 
-                const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
+                  const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
 
-                console.log(`SubmoduleManagerService: 🎯 Creating COHERENCE_BEACON commit in sovereign ${childTitle}`);
-                console.log(`SubmoduleManagerService: Beacon metadata:`, beaconData);
-                console.log(`SubmoduleManagerService: Full commit message:\n${commitMessage}`);
+                  console.log(`SubmoduleManagerService: 🎯 Creating COHERENCE_BEACON commit in sovereign ${childTitle}`);
+                  console.log(`SubmoduleManagerService: Beacon metadata:`, beaconData);
+                  console.log(`SubmoduleManagerService: Full commit message:\n${commitMessage}`);
 
-                const { stdout: commitOutput } = await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
-                console.log(`SubmoduleManagerService: Commit output:`, commitOutput);
+                  const { stdout: commitOutput } = await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
+                  console.log(`SubmoduleManagerService: Commit output:`, commitOutput);
 
-                // Get the commit hash
-                const { stdout: commitHash } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
-                console.log(`SubmoduleManagerService: ✓ COHERENCE_BEACON commit created: ${commitHash.trim()}`);
-                console.log(`SubmoduleManagerService: This commit will be detected when other vaults run "Check for Updates"`)
+                  // Get the commit hash
+                  const { stdout: commitHash } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+                  console.log(`SubmoduleManagerService: ✓ COHERENCE_BEACON commit created: ${commitHash.trim()}`);
+                  console.log(`SubmoduleManagerService: This commit will be detected when other vaults run "Check for Updates"`)
+                }
               } else {
                 console.log(`SubmoduleManagerService: No changes to commit in sovereign ${childTitle} (metadata already up to date)`);
               }
