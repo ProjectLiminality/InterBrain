@@ -1081,7 +1081,7 @@ export class URIHandlerService {
 	 * @param senderDid Optional sender's Radicle DID for peer following
 	 * @param senderName Optional sender's human-readable name for Dreamer node creation
 	 */
-	static generateBatchNodeLink(vaultName: string, identifiers: string[], senderDid?: string, senderName?: string): string {
+	static generateBatchNodeLink(vaultName: string, identifiers: string[], senderDid?: string, senderName?: string, senderEmail?: string): string {
 		// Unified schema: Use ?ids= with comma-separated list
 		const encodedIdentifiers = encodeURIComponent(identifiers.join(','));
 		let uri = `obsidian://interbrain-clone?ids=${encodedIdentifiers}`;
@@ -1092,6 +1092,9 @@ export class URIHandlerService {
 		}
 		if (senderName) {
 			uri += `&senderName=${encodeURIComponent(senderName)}`;
+		}
+		if (senderEmail) {
+			uri += `&senderEmail=${encodeURIComponent(senderEmail)}`;
 		}
 
 		return uri;

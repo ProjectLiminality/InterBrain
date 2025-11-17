@@ -56,6 +56,12 @@ export class EmailExportService {
 				console.warn('⚠️ [EmailExport] Could not get Radicle identity:', error);
 			}
 
+			// Get sender's email from settings (optional)
+			const senderEmail = (this.app as any).plugins?.plugins?.InterBrain?.settings?.userEmail || undefined;
+			if (senderEmail) {
+				console.log(`📧 [EmailExport] Sender email: ${senderEmail}`);
+			}
+
 			// Get peer's Dreamer node UUID (for DID backpropagation)
 			const dreamerUuid = conversationPartner.id;
 			console.log(`👤 [EmailExport] Peer Dreamer node UUID: ${dreamerUuid} (${conversationPartner.name})`);
@@ -102,7 +108,8 @@ export class EmailExportService {
 				aiSummary,
 				senderDid,
 				senderName,
-				dreamerUuid
+				dreamerUuid,
+				senderEmail
 			);
 
 			// Collect deep links for PDF
@@ -118,14 +125,14 @@ export class EmailExportService {
 			const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
 			const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 			const conservativeIdentifiers = [interbrainGitHub];
-			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
+			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName, senderEmail);
 			const dreamerUuidParam = dreamerUuid ? ` --dreamer-uuid "${dreamerUuid}"` : '';
 			const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
 
 			let fullInstall: string | undefined;
 			if (invocations.length > 0 && allIdentifiers.length > 0) {
 				const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
-				const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName);
+				const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName, senderEmail);
 				fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"${dreamerUuidParam}`;
 			}
 
@@ -182,7 +189,8 @@ export class EmailExportService {
 		aiSummary: string,
 		senderDid?: string,
 		senderName?: string,
-		dreamerUuid?: string
+		dreamerUuid?: string,
+		senderEmail?: string
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -211,7 +219,7 @@ export class EmailExportService {
 			// Add batch clone link if multiple nodes shared
 			if (sharedLinks.length > 1) {
 				const allIdentifiers = sharedLinks.map(l => l.identifier);
-				const batchLink = URIHandlerService.generateBatchNodeLink('', allIdentifiers, senderDid, senderName);
+				const batchLink = URIHandlerService.generateBatchNodeLink('', allIdentifiers, senderDid, senderName, senderEmail);
 				body += `\n📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
 			}
 		}
@@ -227,7 +235,7 @@ export class EmailExportService {
 		// Conservative install: Just InterBrain + sender connection (always included)
 		const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 		const conservativeIdentifiers = [interbrainGitHub];
-		const conservativeUri = URIHandlerService.generateBatchNodeLink('', conservativeIdentifiers, senderDid, senderName);
+		const conservativeUri = URIHandlerService.generateBatchNodeLink('', conservativeIdentifiers, senderDid, senderName, senderEmail);
 		const dreamerUuidParam = dreamerUuid ? ` --dreamer-uuid "${dreamerUuid}"` : '';
 		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
 
@@ -238,7 +246,7 @@ export class EmailExportService {
 		if (sharedLinks.length > 0) {
 			const allIdentifiers = sharedLinks.map(l => l.identifier);
 			const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
-			const fullUri = URIHandlerService.generateBatchNodeLink('', fullIdentifiers, senderDid, senderName);
+			const fullUri = URIHandlerService.generateBatchNodeLink('', fullIdentifiers, senderDid, senderName, senderEmail);
 			const fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"${dreamerUuidParam}`;
 
 			body += `**🚀 Full Install** (InterBrain + all ${sharedLinks.length} shared DreamNode${sharedLinks.length > 1 ? 's' : ''}):\n\n`;
