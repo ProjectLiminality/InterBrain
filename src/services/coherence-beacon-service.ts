@@ -87,21 +87,7 @@ export class CoherenceBeaconService {
     console.log(`CoherenceBeaconService: Checking ${dreamNodePath} for beacons...`);
 
     try {
-      // First verify this is actually a Radicle repository
-      // Check if rad remote exists (rad:// URL pattern)
-      try {
-        const { stdout: remotes } = await execAsync('git remote -v', { cwd: fullPath });
-        const hasRadicleRemote = remotes.includes('rad://');
-
-        if (!hasRadicleRemote) {
-          console.log(`CoherenceBeaconService: ${dreamNodePath} is not a Radicle repository (no rad:// remotes), skipping`);
-          return [];
-        }
-      } catch (error) {
-        console.log(`CoherenceBeaconService: Could not check remotes for ${dreamNodePath}:`, error);
-        return [];
-      }
-
+      // All DreamNodes are guaranteed to be Radicle repositories (initialized on creation)
       // Fetch latest from Radicle network using rad sync --fetch
       console.log(`CoherenceBeaconService: Fetching from Radicle network...`);
       const radCmd = await this.getRadCommand();
