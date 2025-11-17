@@ -1037,8 +1037,9 @@ export class URIHandlerService {
 	 * @param identifier Radicle ID (preferred) or UUID (fallback)
 	 * @param senderDid Optional sender's Radicle DID for peer following
 	 * @param senderName Optional sender's human-readable name for Dreamer node creation
+	 * @param senderEmail Optional sender's email address for contact info
 	 */
-	static generateSingleNodeLink(vaultName: string, identifier: string, senderDid?: string, senderName?: string): string {
+	static generateSingleNodeLink(vaultName: string, identifier: string, senderDid?: string, senderName?: string, senderEmail?: string): string {
 		// Unified schema: Use ?ids= for both single and batch clones
 		// Don't encode colons in Radicle IDs - they're part of the protocol
 		// rad:z... should stay as rad:z..., not rad%3Az...
@@ -1054,6 +1055,9 @@ export class URIHandlerService {
 		}
 		if (senderName) {
 			uri += `&senderName=${encodeURIComponent(senderName)}`;
+		}
+		if (senderEmail) {
+			uri += `&senderEmail=${encodeURIComponent(senderEmail)}`;
 		}
 
 		return uri;
