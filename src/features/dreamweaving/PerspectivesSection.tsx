@@ -7,6 +7,7 @@ import styles from './dreamsong.module.css';
 interface PerspectivesSectionProps {
 	perspectives: Perspective[];
 	vaultPath: string;
+	dreamNodeRepoPath: string; // Path to the DreamNode that owns these perspectives
 	onDreamerNodeClick: (dreamerNodeId: string) => void;
 }
 
@@ -19,6 +20,7 @@ interface PerspectivesSectionProps {
 export const PerspectivesSection: React.FC<PerspectivesSectionProps> = ({
 	perspectives,
 	vaultPath,
+	dreamNodeRepoPath,
 	onDreamerNodeClick
 }) => {
 	if (perspectives.length === 0) {
@@ -44,6 +46,7 @@ export const PerspectivesSection: React.FC<PerspectivesSectionProps> = ({
 						key={perspective.uuid}
 						perspective={perspective}
 						vaultPath={vaultPath}
+						dreamNodeRepoPath={dreamNodeRepoPath}
 						onLabelClick={() => onDreamerNodeClick(perspective.dreamerNodeId)}
 					/>
 				))}

@@ -5,6 +5,7 @@ import { getAudioStreamingService } from './services/audio-streaming-service';
 interface AudioClipPlayerProps {
 	perspective: Perspective;
 	vaultPath: string;
+	dreamNodeRepoPath: string; // Path to the DreamNode that owns this perspective
 	onLabelClick: () => void;
 }
 
@@ -15,6 +16,7 @@ interface AudioClipPlayerProps {
 export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 	perspective,
 	vaultPath,
+	dreamNodeRepoPath,
 	onLabelClick
 }) => {
 	// eslint-disable-next-line no-undef
@@ -32,7 +34,9 @@ export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 			const audioStreamingService = getAudioStreamingService();
 
 			try {
-				const audioPath = path.join(vaultPath, perspective.sourceAudioPath);
+				// Perspective sourceAudioPath is relative to DreamNode (e.g., "perspectives/clip-{uuid}.mp3")
+				// We need to prepend the DreamNode's repoPath
+				const audioPath = path.join(vaultPath, dreamNodeRepoPath, perspective.sourceAudioPath);
 				const dataUrl = await audioStreamingService.loadAudioAsDataUrl(audioPath);
 				setAudioUrl(dataUrl);
 			} catch (error) {
@@ -41,7 +45,7 @@ export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 		};
 
 		loadAudio();
-	}, [vaultPath, perspective.sourceAudioPath]);
+	}, [vaultPath, dreamNodeRepoPath, perspective.sourceAudioPath]);
 
 	// Duration of the clip (sovereign clip, so endTime is the full duration)
 	const clipDuration = perspective.endTime - perspective.startTime;

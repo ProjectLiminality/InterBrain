@@ -137,10 +137,11 @@ export const DreamSongWithExtensions: React.FC<DreamSongWithExtensionsProps> = (
                   </p>
                 </div>
               )}
-              {!isLoadingPerspectives && perspectives.length > 0 && vaultPath && onDreamerNodeClick && (
+              {!isLoadingPerspectives && perspectives.length > 0 && vaultPath && onDreamerNodeClick && dreamNode && (
                 <PerspectivesSection
                   perspectives={perspectives}
                   vaultPath={vaultPath}
+                  dreamNodeRepoPath={dreamNode.repoPath}
                   onDreamerNodeClick={onDreamerNodeClick}
                 />
               )}
