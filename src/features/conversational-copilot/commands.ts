@@ -270,6 +270,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                 const perspectiveService = getPerspectiveService();
                 const audioTrimmingService = getAudioTrimmingService();
                 const dreamNodeService = serviceManager.getActive();
+                const radicleService = serviceManager.getRadicleService();
 
                 // Check if ffmpeg is available
                 const ffmpegAvailable = await audioTrimmingService.checkFfmpegAvailable();
@@ -286,6 +287,20 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                   // Don't fail the entire copilot exit - just skip perspective creation
                   console.log('⚠️ [Songline] Skipping perspective creation - ffmpeg not available');
                 } else {
+                  // Get my Radicle alias for filename generation
+                  let myAlias = 'Me'; // Fallback
+                  try {
+                    const identity = await radicleService.getIdentity();
+                    if (identity?.alias) {
+                      myAlias = identity.alias;
+                      console.log(`🎵 [Songline] Using Radicle alias: ${myAlias}`);
+                    } else {
+                      console.warn(`⚠️ [Songline] No Radicle alias found, using fallback: ${myAlias}`);
+                    }
+                  } catch (error) {
+                    console.warn(`⚠️ [Songline] Could not get Radicle identity, using fallback: ${myAlias}`);
+                  }
+
                   // Process each clip suggestion
                   let successCount = 0;
                   for (const clip of clipSuggestions) {
@@ -306,9 +321,13 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                     console.log(`   - Source audio: ${relativeAudioPath}`);
 
                     // STEP 1: Create sovereign audio clip by trimming source audio
-                    const clipUuid = uuidv4();
                     const sourceExtension = path.extname(audioPath);
-                    const clipFilename = audioTrimmingService.generateClipFilename(clipUuid, sourceExtension);
+                    const clipFilename = audioTrimmingService.generateClipFilename(
+                      partnerToFocus.name,    // Peer name (Dreamer node title)
+                      myAlias,                 // My name (Radicle alias)
+                      conversationStartTime,   // Timestamp
+                      sourceExtension          // Audio file extension
+                    );
                     const clipPath = path.join(vaultPath, dreamNode.repoPath, clipFilename);
 
                     console.log(`🎵 [Songline] Trimming audio clip: ${clipFilename}`);
@@ -326,7 +345,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                       endTime: endSeconds - startSeconds, // Duration of clip
                       transcript: clip.transcript,
                       conversationDate: conversationStartTime.toISOString(),
-                      participants: [partnerToFocus.name, 'Me'],  // TODO: Get user's name from settings
+                      participants: [partnerToFocus.name, myAlias],
                       dreamerNodeId: partnerToFocus.id,
                       dreamerNodeName: partnerToFocus.name
                     });

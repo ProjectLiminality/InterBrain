@@ -162,11 +162,30 @@ export class AudioTrimmingService {
   }
 
   /**
-   * Generate a unique filename for a trimmed audio clip
-   * Format: perspectives/clip-{uuid}.{ext}
+   * Generate a descriptive filename for a trimmed audio clip
+   * Format: perspectives/{peerName}~{myName}-{timestamp}.{ext}
+   * Example: perspectives/Alice~Bob-2025-11-17-1430.mp3
    */
-  generateClipFilename(uuid: string, sourceExtension: string): string {
-    return `perspectives/clip-${uuid}${sourceExtension}`;
+  generateClipFilename(
+    peerName: string,
+    myName: string,
+    timestamp: Date,
+    sourceExtension: string
+  ): string {
+    // Sanitize names for filesystem (remove invalid characters)
+    const sanitizeName = (name: string) => name.replace(/[<>:"/\\|?*]/g, '-');
+    const cleanPeerName = sanitizeName(peerName);
+    const cleanMyName = sanitizeName(myName);
+
+    // Format timestamp: YYYY-MM-DD-HHMM
+    const year = timestamp.getFullYear();
+    const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+    const day = String(timestamp.getDate()).padStart(2, '0');
+    const hours = String(timestamp.getHours()).padStart(2, '0');
+    const minutes = String(timestamp.getMinutes()).padStart(2, '0');
+    const timestampStr = `${year}-${month}-${day}-${hours}${minutes}`;
+
+    return `perspectives/${cleanPeerName}~${cleanMyName}-${timestampStr}${sourceExtension}`;
   }
 
   /**
