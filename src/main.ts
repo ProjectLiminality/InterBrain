@@ -78,13 +78,15 @@ export default class InterBrainPlugin extends Plugin {
   private constellationCommands!: ConstellationCommands;
   private radialButtonCommands!: RadialButtonCommands;
   private canvasObserverService!: CanvasObserverService;
+  settingTab!: any; // Public reference for PassphraseManager to update UI
 
   async onload() {
     // Load settings
     await this.loadSettings();
 
-    // Add settings tab
-    this.addSettingTab(new InterBrainSettingTab(this.app, this));
+    // Add settings tab and store reference
+    this.settingTab = new InterBrainSettingTab(this.app, this);
+    this.addSettingTab(this.settingTab);
 
     // Initialize core services first (triggers vault scan)
     this.initializeServices();

@@ -27,10 +27,21 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	plugin: InterBrainPlugin;
 	private statusService: SettingsStatusService | null = null;
 	private systemStatus: SystemStatus | null = null;
+	private passphraseTextComponent: any = null; // Reference to passphrase input component
 
 	constructor(app: App, plugin: InterBrainPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	/**
+	 * Update the passphrase input field - called externally by PassphraseManager
+	 */
+	updatePassphraseField(passphrase: string): void {
+		if (this.passphraseTextComponent) {
+			this.passphraseTextComponent.setValue(passphrase);
+			console.log('InterBrainSettingTab: Updated passphrase field via component reference');
+		}
 	}
 
 	async display(): Promise<void> {
@@ -579,6 +590,9 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			.setName('Radicle Passphrase')
 			.setDesc('Enables automatic node startup for seamless DreamNode sharing')
 			.addText(text => {
+				// Store component reference for external updates
+				this.passphraseTextComponent = text;
+
 				text
 					.setPlaceholder('Enter passphrase...')
 					.setValue(this.plugin.settings.radiclePassphrase)
@@ -592,7 +606,6 @@ export class InterBrainSettingTab extends PluginSettingTab {
 						}
 					});
 				text.inputEl.type = 'password';
-				text.inputEl.id = 'radicle-passphrase-input'; // Add ID for external updates
 				return text;
 			})
 			.addButton(button => button
