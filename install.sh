@@ -1484,6 +1484,11 @@ EOF
             fi
         fi
 
+        # DID Backpropagation: Prompt user to share DID with sender (if dreamer-uuid provided)
+        if [ -n "$DREAMER_UUID" ] && [ -n "$RAD_DID" ] && [ "$RAD_DID" != "[Not created]" ] && [ "$RAD_DID" != "[Run 'rad auth' to create]" ] && [ "$RAD_DID" != "[Open new terminal and rerun installer]" ]; then
+            handle_did_backpropagation "$RAD_DID" "$RAD_ALIAS" "$DREAMER_UUID" "$CLONE_URI"
+        fi
+
         echo ""
         info "Great! Now triggering the personalized installation..."
         echo ""
