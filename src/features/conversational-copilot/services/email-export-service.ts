@@ -46,7 +46,7 @@ export class EmailExportService {
 			const radicleService = serviceManager.getRadicleService();
 			let senderDid: string | undefined;
 			let senderName: string | undefined;
-			let senderUuid: string | undefined;
+			let dreamerUuid: string | undefined;
 
 			try {
 				const identity = await radicleService.getIdentity();
@@ -55,13 +55,13 @@ export class EmailExportService {
 				console.log(`👤 [EmailExport] Sender identity: ${senderName} (${senderDid})`);
 
 				// Find sender's Dreamer node by DID
-				const dreamNodeService = serviceManager.getDreamNodeService();
+				const dreamNodeService = serviceManager.getActive();
 				const allNodes = await dreamNodeService.list();
 				const senderDreamerNode = allNodes.find(node => node.type === 'dreamer' && node.did === senderDid);
 
 				if (senderDreamerNode) {
-					senderUuid = senderDreamerNode.id;
-					console.log(`👤 [EmailExport] Sender Dreamer node UUID: ${senderUuid}`);
+					dreamerUuid = senderDreamerNode.id;
+					console.log(`👤 [EmailExport] Sender Dreamer node UUID: ${dreamerUuid}`);
 				} else {
 					console.warn('⚠️ [EmailExport] Could not find sender Dreamer node - DID backpropagation will be skipped');
 				}
@@ -111,7 +111,7 @@ export class EmailExportService {
 				aiSummary,
 				senderDid,
 				senderName,
-				senderUuid
+				dreamerUuid
 			);
 
 			// Collect deep links for PDF
@@ -128,7 +128,7 @@ export class EmailExportService {
 			const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 			const conservativeIdentifiers = [interbrainGitHub];
 			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName);
-			const dreamerUuidParam = senderUuid ? ` --dreamer-uuid "${senderUuid}"` : '';
+			const dreamerUuidParam = dreamerUuid ? ` --dreamer-uuid "${dreamerUuid}"` : '';
 			const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
 
 			let fullInstall: string | undefined;
@@ -191,7 +191,7 @@ export class EmailExportService {
 		aiSummary: string,
 		senderDid?: string,
 		senderName?: string,
-		senderUuid?: string
+		dreamerUuid?: string
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
 		const dateStr = startTime.toLocaleDateString();
@@ -237,7 +237,7 @@ export class EmailExportService {
 		const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
 		const conservativeIdentifiers = [interbrainGitHub];
 		const conservativeUri = URIHandlerService.generateBatchNodeLink('', conservativeIdentifiers, senderDid, senderName);
-		const dreamerUuidParam = senderUuid ? ` --dreamer-uuid "${senderUuid}"` : '';
+		const dreamerUuidParam = dreamerUuid ? ` --dreamer-uuid "${dreamerUuid}"` : '';
 		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
 
 		body += `**🌱 Minimal Install** (InterBrain + connection to ${senderName || 'me'}):\n\n`;

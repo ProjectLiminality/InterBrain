@@ -833,6 +833,12 @@ export default function DreamspaceCanvas() {
 
     // Handle copilot mode invoke interaction
     if (store.spatialLayout === 'copilot' && store.copilotMode.isActive) {
+      // IMPORTANT: Prevent clicking the conversation partner itself
+      if (store.copilotMode.conversationPartner?.id === node.id) {
+        console.log(`❌ [Copilot] Cannot invoke conversation partner node: ${node.name}`);
+        return; // Do nothing when clicking the conversation partner
+      }
+
       console.log(`🤖 [Copilot] Invoking node via CLICK: ${node.name}`);
 
       // CRITICAL: Record invocation for conversation export
