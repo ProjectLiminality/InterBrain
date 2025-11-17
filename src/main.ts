@@ -52,6 +52,7 @@ import { initializeEmailExportService } from './features/conversational-copilot/
 import { initializePDFGeneratorService } from './features/conversational-copilot/services/pdf-generator-service';
 import { initializeAudioRecordingService } from './features/conversational-copilot/services/audio-recording-service';
 import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
+import { initializeAudioTrimmingService } from './features/conversational-copilot/services/audio-trimming-service';
 import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeMediaLoadingService } from './services/media-loading-service';
@@ -277,6 +278,7 @@ export default class InterBrainPlugin extends Plugin {
       initializeEmailExportService(this.app, this);
       initializeAudioRecordingService(this);
       initializePerspectiveService(this);
+      initializeAudioTrimmingService();
       initializeConversationsService(this);
       initializeAudioStreamingService(this);
       console.log('[Plugin] Background services initialized');

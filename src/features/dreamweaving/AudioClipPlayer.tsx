@@ -9,8 +9,8 @@ interface AudioClipPlayerProps {
 }
 
 /**
- * Audio clip player with temporal masking for Songline perspectives.
- * Plays a specific segment of a conversation recording.
+ * Audio clip player for Songline perspectives.
+ * Plays sovereign audio clips (already trimmed, no temporal masking needed).
  */
 export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 	perspective,
@@ -43,16 +43,8 @@ export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 		loadAudio();
 	}, [vaultPath, perspective.sourceAudioPath]);
 
-	// Duration of the clip
+	// Duration of the clip (sovereign clip, so endTime is the full duration)
 	const clipDuration = perspective.endTime - perspective.startTime;
-
-	// Initialize audio to start position
-	useEffect(() => {
-		const audio = audioRef.current;
-		if (audio) {
-			audio.currentTime = perspective.startTime;
-		}
-	}, [perspective.startTime]);
 
 	// Handle play/pause
 	const togglePlay = () => {
@@ -62,29 +54,16 @@ export const AudioClipPlayer: React.FC<AudioClipPlayerProps> = ({
 		if (isPlaying) {
 			audio.pause();
 		} else {
-			// Ensure we start at the clip start time
-			if (audio.currentTime < perspective.startTime || audio.currentTime >= perspective.endTime) {
-				audio.currentTime = perspective.startTime;
-			}
 			audio.play();
 		}
 	};
 
-	// Handle time updates - implement temporal masking
+	// Handle time updates (no temporal masking needed - clip is already trimmed)
 	const handleTimeUpdate = () => {
 		const audio = audioRef.current;
 		if (!audio) return;
 
-		const clipTime = audio.currentTime - perspective.startTime;
-		setCurrentTime(clipTime);
-
-		// Temporal mask: Stop and reset when reaching end of clip
-		if (audio.currentTime >= perspective.endTime) {
-			audio.pause();
-			audio.currentTime = perspective.startTime;
-			setIsPlaying(false);
-			setCurrentTime(0);
-		}
+		setCurrentTime(audio.currentTime);
 	};
 
 	// Handle play/pause state changes

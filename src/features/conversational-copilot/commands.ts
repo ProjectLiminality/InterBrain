@@ -9,6 +9,8 @@ import { getEmailExportService } from './services/email-export-service';
 import { getRealtimeTranscriptionService } from '../realtime-transcription';
 import { getAudioRecordingService } from './services/audio-recording-service';
 import { getPerspectiveService } from './services/perspective-service';
+import { getAudioTrimmingService } from './services/audio-trimming-service';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -264,8 +266,9 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                   console.log(`✅ [Songline] Audio recording found: ${audioPath}`);
                 }
 
-                // Get perspective service and dream node service
+                // Get perspective service, audio trimming service, and dream node service
                 const perspectiveService = getPerspectiveService();
+                const audioTrimmingService = getAudioTrimmingService();
                 const dreamNodeService = serviceManager.getActive();
 
                 // Process each clip suggestion
@@ -285,13 +288,27 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
 
                     console.log(`🎵 [Songline] Creating perspective for ${dreamNode.name}:`);
                     console.log(`   - Time: ${clip.startTime} → ${clip.endTime} (${startSeconds}s → ${endSeconds}s)`);
-                    console.log(`   - Audio: ${relativeAudioPath}`);
+                    console.log(`   - Source audio: ${relativeAudioPath}`);
 
-                    // Create perspective (works with or without audio file)
-                    await perspectiveService.addPerspective(dreamNode, {
-                      sourceAudioPath: relativeAudioPath,
+                    // STEP 1: Create sovereign audio clip by trimming source audio
+                    const clipUuid = uuidv4();
+                    const sourceExtension = path.extname(audioPath);
+                    const clipFilename = audioTrimmingService.generateClipFilename(clipUuid, sourceExtension);
+                    const clipPath = path.join(vaultPath, dreamNode.repoPath, clipFilename);
+
+                    console.log(`🎵 [Songline] Trimming audio clip: ${clipFilename}`);
+                    await audioTrimmingService.trimAudio({
+                      sourceAudioPath: audioPath,
+                      outputAudioPath: clipPath,
                       startTime: startSeconds,
-                      endTime: endSeconds,
+                      endTime: endSeconds
+                    });
+
+                    // STEP 2: Create perspective with sovereign clip (no temporal masking needed)
+                    await perspectiveService.addPerspective(dreamNode, {
+                      sourceAudioPath: clipFilename, // Relative path within DreamNode (sovereign)
+                      startTime: 0,                   // Clip starts at 0 (already trimmed)
+                      endTime: endSeconds - startSeconds, // Duration of clip
                       transcript: clip.transcript,
                       conversationDate: conversationStartTime.toISOString(),
                       participants: [partnerToFocus.name, 'Me'],  // TODO: Get user's name from settings
@@ -300,7 +317,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                     });
 
                     successCount++;
-                    console.log(`✅ [Songline] Created perspective ${successCount}/${clipSuggestions.length} for ${dreamNode.name}`);
+                    console.log(`✅ [Songline] Created sovereign perspective ${successCount}/${clipSuggestions.length} for ${dreamNode.name}`);
                   } catch (error) {
                     console.error(`❌ [Songline] Failed to create perspective for ${clip.nodeName}:`, error);
                   }
