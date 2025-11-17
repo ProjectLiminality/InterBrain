@@ -1075,11 +1075,27 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
+   * Strip rad: or did:key: prefix from Radicle identifiers for git URL construction
+   */
+  private stripRadiclePrefix(id: string): string {
+    if (id.startsWith('rad:')) {
+      return id.slice(4); // Remove 'rad:'
+    }
+    if (id.startsWith('did:key:')) {
+      return id.slice(8); // Remove 'did:key:'
+    }
+    return id;
+  }
+
+  /**
    * Add a peer's fork as a git remote
    * @returns true if remote was added, false if already exists
    */
   async addPeerRemote(dreamNodePath: string, peerName: string, radicleId: string, peerDID: string): Promise<boolean> {
-    const remoteUrl = `rad://${radicleId}/${peerDID}`;
+    // Strip prefixes for git remote URL construction
+    const cleanRid = this.stripRadiclePrefix(radicleId);
+    const cleanDid = this.stripRadiclePrefix(peerDID);
+    const remoteUrl = `rad://${cleanRid}/${cleanDid}`;
 
     try {
       // IDEMPOTENCY CHECK: Check if remote already exists
@@ -1164,10 +1180,12 @@ export class RadicleServiceImpl implements RadicleService {
       // Get current remotes
       const currentRemotes = await this.getRemotes(dreamNodePath);
 
-      // Build desired remote URLs
+      // Build desired remote URLs (strip prefixes)
       const desiredRemotes = new Map<string, string>();
+      const cleanRid = this.stripRadiclePrefix(radicleId);
       for (const [peerName, peerDID] of desiredPeers) {
-        desiredRemotes.set(peerName, `rad://${radicleId}/${peerDID}`);
+        const cleanDid = this.stripRadiclePrefix(peerDID);
+        desiredRemotes.set(peerName, `rad://${cleanRid}/${cleanDid}`);
       }
 
       // Find remotes to add, update, or keep
