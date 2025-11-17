@@ -1,0 +1,383 @@
+/* DreamSpace - Edge-to-edge black space styling */
+
+.dreamspace-container {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000000;
+  position: relative;
+}
+
+.dreamspace-canvas-container {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #000000;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Ensure the view container fills the workspace */
+.workspace-leaf-content[data-type="dreamspace-view"] {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.workspace-leaf-content[data-type="dreamspace-view"] .view-content {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 100%;
+  background: #000000;
+}
+
+/* Remove any default Obsidian styling that might interfere */
+.workspace-leaf-content[data-type="dreamspace-view"] .view-header {
+  background: #000000;
+  border-bottom: none;
+}
+
+/* Contact field placeholder styling for edit mode */
+.contact-field-email::placeholder,
+.contact-field-phone::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+  opacity: 1 !important;
+}
+
+/* Coherence Beacon Modal */
+.coherence-beacon-modal {
+  padding: 20px;
+}
+
+.coherence-beacon-modal h2 {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.beacon-description {
+  margin-bottom: 20px;
+}
+
+.beacon-info {
+  background: var(--background-secondary);
+  padding: 15px;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.beacon-title {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.beacon-radicle-id {
+  font-family: monospace;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.beacon-question {
+  font-weight: bold;
+  margin: 15px 0;
+}
+
+.beacon-explanation {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  margin-top: 15px;
+}
+
+.beacon-explanation .explanation-header {
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.beacon-explanation ul {
+  margin-left: 20px;
+  margin-bottom: 10px;
+}
+
+.beacon-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* ============================================================
+ * InterBrain Settings Panel Styling
+ * Beautiful system status dashboard matching install script aesthetic
+ * ============================================================ */
+
+.interbrain-settings {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header with Logo */
+.interbrain-settings-header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding: 30px 20px;
+  background: rgba(0, 162, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 162, 255, 0.2);
+}
+
+.interbrain-logo {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 162, 255, 0.3);
+}
+
+.interbrain-settings-title {
+  font-size: 2em;
+  margin: 16px 0 8px;
+  color: var(--text-normal);
+}
+
+.interbrain-settings-subtitle {
+  font-size: 1.1em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Status Overview Grid */
+.interbrain-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 20px 0 40px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.status-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 162, 255, 0.3);
+}
+
+.status-label {
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.status-message {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Status Colors */
+.status-ready {
+  color: #00FF00;
+}
+
+.status-warning {
+  color: #FFB800;
+}
+
+.status-error,
+.status-not-installed {
+  color: #FF644E;
+}
+
+.status-unknown {
+  color: var(--text-muted);
+}
+
+/* Feature Status Display */
+.interbrain-status-display {
+  margin: 16px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid rgba(0, 162, 255, 0.5);
+}
+
+.interbrain-status-text {
+  font-size: 1em;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.interbrain-status-details {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  margin: 0;
+  font-style: italic;
+}
+
+/* Installation Instructions */
+.interbrain-install-instructions {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(255, 100, 78, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 100, 78, 0.2);
+}
+
+.interbrain-install-instructions p {
+  margin: 8px 0;
+  font-size: 0.95em;
+}
+
+.interbrain-install-instructions ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.interbrain-install-instructions li {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.interbrain-install-instructions a {
+  color: #00A2FF;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.interbrain-install-instructions a:hover {
+  text-decoration: underline;
+}
+
+/* Radicle Identity Display */
+.interbrain-radicle-identity {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(0, 162, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 162, 255, 0.2);
+}
+
+.interbrain-radicle-identity p {
+  margin: 8px 0;
+}
+
+.interbrain-radicle-identity code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #00A2FF;
+  word-break: break-all;
+}
+
+/* Hotkey List */
+.interbrain-hotkey-list {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.interbrain-hotkey-list h4 {
+  margin: 0 0 12px 0;
+  font-size: 1.1em;
+  color: var(--text-normal);
+}
+
+.interbrain-hotkey-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.interbrain-hotkey-list li {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  font-size: 0.95em;
+}
+
+.interbrain-hotkey-list code {
+  background: rgba(0, 162, 255, 0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: #00A2FF;
+  margin-right: 8px;
+}
+
+/* Section Headers */
+.interbrain-settings h2 {
+  margin: 40px 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(0, 162, 255, 0.3);
+  color: var(--text-normal);
+  font-size: 1.5em;
+}
+
+.interbrain-settings h2:first-of-type {
+  margin-top: 20px;
+}
+
+/* Setting Items */
+.interbrain-settings .setting-item {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.interbrain-settings .setting-item:last-child {
+  border-bottom: none;
+}
+
+/* Links */
+.interbrain-settings a {
+  color: #00A2FF;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.interbrain-settings a:hover {
+  color: #0088cc;
+  text-decoration: underline;
+}
+
+/* Button Styling */
+.interbrain-settings button {
+  transition: all 0.2s ease;
+}
+
+.interbrain-settings button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 162, 255, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .interbrain-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .status-message {
+    text-align: left;
+  }
+}.dreamsong-module__dreamSongContainer___tg13a{width:100%;max-width:2600px;margin:0 auto;min-height:100vh;overflow-y:auto;position:relative;background:#000;color:#fff;font-family:TeX Gyre Termes,Georgia,serif;display:flex;flex-direction:column;padding:20px;box-sizing:border-box}.dreamsong-module__dreamSongContainer___tg13a.dreamsong-module__embedded___luwrQ{height:auto!important;min-height:100%;background:transparent;overflow:visible;backface-visibility:hidden}.dreamsong-module__dreamSongContainer___tg13a.dreamsong-module__embedded___luwrQ .dreamsong-module__dreamSongContent___l8OBo{padding:8px}.dreamsong-module__dreamSongContainer___tg13a.dreamsong-module__embedded___luwrQ .dreamsong-module__dreamSongHeader___gUU9x{padding:8px 12px;font-size:12px}.dreamsong-module__dreamSongHeader___gUU9x{text-align:center;margin-bottom:2rem;display:flex;flex-direction:column;align-items:center;position:relative}.dreamsong-module__dreamSongTitle___tro0g{font-size:4rem;font-weight:600;color:#fff;margin-bottom:2rem;text-align:center}.dreamsong-module__dreamSongSeparator___Tx0h-{width:90%;height:auto;display:block;max-width:2600px;margin:0 auto}.dreamsong-module__viewOnWebButton___nWV0s{position:absolute;top:20px;right:40px;cursor:pointer;transition:all .2s ease;z-index:10;color:#fff9;display:block}.dreamsong-module__viewOnWebButton___nWV0s:hover{transform:scale(1.1);color:#fff;filter:drop-shadow(0 0 8px rgba(255,255,255,.5))}.dreamsong-module__viewOnWebButton___nWV0s:active{transform:scale(1.05)}.dreamsong-module__dreamTalkSection___FL-w6{display:flex;justify-content:center;align-items:center;margin-bottom:2rem;padding:1rem;max-width:800px;margin-left:auto;margin-right:auto}.dreamsong-module__dreamTalkSection___FL-w6 img,.dreamsong-module__dreamTalkSection___FL-w6 video,.dreamsong-module__dreamTalkSection___FL-w6 audio{box-shadow:0 4px 12px #0000004d;transition:transform .2s ease}.dreamsong-module__dreamTalkSection___FL-w6 img:hover,.dreamsong-module__dreamTalkSection___FL-w6 video:hover{transform:scale(1.02)}@media (max-width: 1200px){.dreamsong-module__dreamTalkSection___FL-w6{padding:.5rem;margin-bottom:1rem;max-width:90%}}.dreamsong-module__dreamSongContent___l8OBo{flex:1;overflow-y:auto;scroll-behavior:smooth}.dreamsong-module__dreamSongContent___l8OBo::-webkit-scrollbar{width:4px}.dreamsong-module__dreamSongContent___l8OBo::-webkit-scrollbar-track{background:#ffffff1a;border-radius:2px}.dreamsong-module__dreamSongContent___l8OBo::-webkit-scrollbar-thumb{background:#ffffff4d;border-radius:2px}.dreamsong-module__dreamSongContent___l8OBo::-webkit-scrollbar-thumb:hover{background:#ffffff80}.dreamsong-module__dreamSongEmptyState___lPijW{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:32px 16px}.dreamsong-module__emptyStateIcon___AEvGP{font-size:48px;margin-bottom:16px;opacity:.6}.dreamsong-module__emptyStateText___43hWJ{font-size:16px;font-weight:500;color:#fff;margin-bottom:8px}.dreamsong-module__emptyStateSubtitle___dVM-d{font-size:12px;color:#fff9;line-height:1.4}.dreamsong-module__dreamSongBlock___PDZlT{margin-bottom:75px;position:relative;animation:dreamsong-module__fade-in___Q6-NP .4s ease-out;display:flex;justify-content:center;align-items:center;max-width:95%;margin-left:auto;margin-right:auto}.dreamsong-module__dreamSongBlock___PDZlT:last-child{margin-bottom:0}@keyframes dreamsong-module__fade-in___Q6-NP{0%{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}.dreamsong-module__dreamSongBlockText___FhS6T{flex-direction:column}.dreamsong-module__dreamSongBlockText___FhS6T .dreamsong-module__dreamSongTextOnly___IPnlV{max-width:90%;margin:0 auto;text-align:left}.dreamsong-module__dreamSongBlockMedia___ez30l{flex-direction:column}.dreamsong-module__dreamSongBlockMedia___ez30l .dreamsong-module__dreamSongMediaOnly___H8rWg{max-width:1000px;margin:0 auto;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px #0000004d}.dreamsong-module__dreamSongBlockMediaText___8doa5{flex-direction:row}.dreamsong-module__dreamSongBlockMediaText___8doa5 .dreamsong-module__dreamSongMediaText___zdts2{display:flex;justify-content:center;align-items:flex-start;width:100%;max-width:95%;margin:0 auto;gap:20px}.dreamsong-module__dreamSongBlockLeftAligned___KNuso .dreamsong-module__dreamSongMediaText___zdts2{flex-direction:row}.dreamsong-module__dreamSongBlockRightAligned___WUgHh .dreamsong-module__dreamSongMediaText___zdts2{flex-direction:row-reverse}.dreamsong-module__dreamSongMediaContainer___S95Qd{flex:2;max-width:60%;margin:0}.dreamsong-module__dreamSongTextContainer___uL3hl{flex:1;max-width:30%;padding:10px;text-align:left;margin:0;display:flex;align-items:center}.dreamsong-module__dreamSongMedia___H7Daq{width:100%;height:auto;border-radius:8px;box-shadow:0 2px 8px #0003;transition:transform .2s ease}.dreamsong-module__dreamSongMedia___H7Daq:hover{transform:scale(1.02)}.dreamsong-module__dreamSongMedia___H7Daq[data-type=video]{max-height:200px}.dreamsong-module__dreamSongMedia___H7Daq[data-type=audio]{width:100%}.dreamsong-module__dreamSongAudioContainer___FVeEq{background:#ffffff0d;padding:12px;border-radius:8px}.dreamsong-module__dreamSongAudioLabel___mMGlO{font-size:12px;color:#fffc;margin-bottom:8px;font-weight:500}.dreamsong-module__dreamSongText___RG4sj{line-height:1.5;font-size:30px!important;color:#fff}.dreamsong-module__dreamSongText___RG4sj p{margin:0 0 12px}.dreamsong-module__dreamSongText___RG4sj p:last-child{margin-bottom:0}.dreamsong-module__dreamSongText___RG4sj h1,.dreamsong-module__dreamSongText___RG4sj h2,.dreamsong-module__dreamSongText___RG4sj h3,.dreamsong-module__dreamSongText___RG4sj h4,.dreamsong-module__dreamSongText___RG4sj h5,.dreamsong-module__dreamSongText___RG4sj h6{color:#fff;margin:0 0 8px;font-weight:600}.dreamsong-module__dreamSongText___RG4sj strong{color:#fff;font-weight:600}.dreamsong-module__dreamSongText___RG4sj em{color:#fffc;font-style:italic}.dreamsong-module__dreamSongText___RG4sj code{background:#ffffff1a;padding:2px 6px;border-radius:4px;font-family:Monaco,Menlo,monospace;font-size:12px}.dreamsong-module__dreamSongText___RG4sj blockquote{border-left:3px solid rgba(255,255,255,.3);padding-left:12px;margin:0;color:#ffffffb3;font-style:italic}.dreamsong-module__dreamSongText___RG4sj ul,.dreamsong-module__dreamSongText___RG4sj ol{margin:0 0 12px;padding-left:20px}.dreamsong-module__dreamSongText___RG4sj li{margin-bottom:4px}.dreamsong-module__dreamSongMediaError___bohnS{padding:16px;background:#ff00001a;border:1px solid rgba(255,0,0,.3);border-radius:8px;color:#ff6464;font-size:12px;text-align:center}@media (max-width: 1200px){.dreamsong-module__dreamSongBlockMediaText___8doa5 .dreamsong-module__dreamSongMediaText___zdts2{flex-direction:column!important;margin-bottom:0}.dreamsong-module__dreamSongMediaContainer___S95Qd{flex:1;max-width:90%;margin:0;order:1}.dreamsong-module__dreamSongTextContainer___uL3hl{flex:1;max-width:90%;margin:0;order:2}.dreamsong-module__dreamSongTitle___tro0g{font-size:2rem}.dreamsong-module__dreamSongText___RG4sj{font-size:20px}.dreamsong-module__dreamsong-container___zYJEM{padding:10px}}.dreamsong-module__dreamSongContainer___tg13a.dreamsong-module__flipEnter___2q0ck{animation:dreamsong-module__flipIn___qILx- .6s ease-out}@keyframes dreamsong-module__flipIn___qILx-{0%{transform:rotateY(-90deg);opacity:0}to{transform:rotateY(0);opacity:1}}@keyframes dreamnode-pulse{0%,to{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.05);filter:brightness(1.3)}}@keyframes dreamnode-pulse-webkit{0%,to{-webkit-filter:brightness(1) drop-shadow(0 0 10px currentColor)}50%{-webkit-filter:brightness(1.2) drop-shadow(0 0 20px currentColor)}}
