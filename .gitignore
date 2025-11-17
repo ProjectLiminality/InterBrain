@@ -124,4 +124,7 @@ __pycache__/
 
 # Sensitive data files
 data.json
-copilot-transcription-*.mdviewer-bundle/
+copilot-transcription-*.md
+
+# GitHub sharing viewer bundle (build artifacts)
+viewer-bundle/
