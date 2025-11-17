@@ -271,9 +271,24 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                 const audioTrimmingService = getAudioTrimmingService();
                 const dreamNodeService = serviceManager.getActive();
 
-                // Process each clip suggestion
-                let successCount = 0;
-                for (const clip of clipSuggestions) {
+                // Check if ffmpeg is available
+                const ffmpegAvailable = await audioTrimmingService.checkFfmpegAvailable();
+                if (!ffmpegAvailable) {
+                  console.error('❌ [Songline] ffmpeg not found - cannot create audio clips');
+                  uiService.showError(
+                    'ffmpeg is required for Songlines feature.\n\n' +
+                    'Install ffmpeg:\n' +
+                    '• macOS: brew install ffmpeg\n' +
+                    '• Ubuntu/Debian: sudo apt install ffmpeg\n' +
+                    '• Windows: Download from ffmpeg.org\n\n' +
+                    'Perspectives were not created - please install ffmpeg and try again.'
+                  );
+                  // Don't fail the entire copilot exit - just skip perspective creation
+                  console.log('⚠️ [Songline] Skipping perspective creation - ffmpeg not available');
+                } else {
+                  // Process each clip suggestion
+                  let successCount = 0;
+                  for (const clip of clipSuggestions) {
                   try {
                     // Find the DreamNode for this clip
                     const dreamNode = await dreamNodeService.get(clip.nodeUuid);
@@ -321,11 +336,12 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                   } catch (error) {
                     console.error(`❌ [Songline] Failed to create perspective for ${clip.nodeName}:`, error);
                   }
-                }
+                  }
 
-                console.log(`✅ [Songline] Finished processing: ${successCount}/${clipSuggestions.length} perspectives created`);
-                if (successCount > 0) {
-                  uiService.showSuccess(`Created ${successCount} conversation perspective${successCount > 1 ? 's' : ''}`);
+                  console.log(`✅ [Songline] Finished processing: ${successCount}/${clipSuggestions.length} perspectives created`);
+                  if (successCount > 0) {
+                    uiService.showSuccess(`Created ${successCount} conversation perspective${successCount > 1 ? 's' : ''}`);
+                  }
                 }
               } catch (error) {
                 console.error('❌ [Songline] Failed to process perspectives:', error);
