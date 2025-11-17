@@ -12,9 +12,11 @@ import { getRadicleBatchInitService } from './radicle-batch-init-service';
 
 export class ShareLinkService {
 	private app: App;
+	private plugin: any;
 
-	constructor(app: App) {
+	constructor(app: App, plugin: any) {
 		this.app = app;
+		this.plugin = plugin;
 	}
 
 	/**
@@ -80,7 +82,7 @@ export class ShareLinkService {
 			}
 
 			// Get sender's email from settings (optional)
-			senderEmail = (this.app as any).plugins?.plugins?.InterBrain?.settings?.userEmail || undefined;
+			senderEmail = this.plugin.settings?.userEmail || undefined;
 			if (senderEmail) {
 				console.log(`📧 [ShareLink] Sender email: ${senderEmail}`);
 			}

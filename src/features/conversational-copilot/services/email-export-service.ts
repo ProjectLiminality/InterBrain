@@ -16,9 +16,11 @@ import * as path from 'path';
  */
 export class EmailExportService {
 	private app: App;
+	private plugin: any;
 
-	constructor(app: App) {
+	constructor(app: App, plugin: any) {
 		this.app = app;
+		this.plugin = plugin;
 	}
 
 	/**
@@ -57,7 +59,7 @@ export class EmailExportService {
 			}
 
 			// Get sender's email from settings (optional)
-			const senderEmail = (this.app as any).plugins?.plugins?.InterBrain?.settings?.userEmail || undefined;
+			const senderEmail = this.plugin.settings?.userEmail || undefined;
 			if (senderEmail) {
 				console.log(`📧 [EmailExport] Sender email: ${senderEmail}`);
 			}
@@ -67,7 +69,7 @@ export class EmailExportService {
 			console.log(`👤 [EmailExport] Peer Dreamer node UUID: ${dreamerUuid} (${conversationPartner.name})`);
 
 			// Share each invoked node and collect URIs
-			const shareLinkService = new ShareLinkService(this.app);
+			const shareLinkService = new ShareLinkService(this.app, this.plugin);
 			const sharedLinks: Array<{ nodeName: string; uri: string; identifier: string }> = [];
 
 			console.log(`🔗 [EmailExport] Sharing ${invocations.length} invoked nodes...`);
@@ -366,8 +368,8 @@ end tell
 // Singleton instance
 let _emailExportService: EmailExportService | null = null;
 
-export function initializeEmailExportService(app: App): void {
-	_emailExportService = new EmailExportService(app);
+export function initializeEmailExportService(app: App, plugin: any): void {
+	_emailExportService = new EmailExportService(app, plugin);
 	console.log(`📧 [EmailExport] Service initialized`);
 }
 
