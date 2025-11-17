@@ -48,9 +48,6 @@ export class PassphraseManager {
     await (this.plugin as any).saveSettings();
     console.log('PassphraseManager: Passphrase saved to settings');
 
-    // Update the settings UI input field if the settings tab is currently open
-    this.updateSettingsUIField(trimmedPassphrase);
-
     return trimmedPassphrase;
   }
 
@@ -80,20 +77,5 @@ export class PassphraseManager {
     console.log('PassphraseManager: Setting passphrase in settings');
     (this.plugin as any).settings.radiclePassphrase = passphrase;
     await (this.plugin as any).saveSettings();
-    this.updateSettingsUIField(passphrase);
-  }
-
-  /**
-   * Update the passphrase input field in the settings UI if it's currently displayed
-   * This ensures the settings panel shows the passphrase immediately after it's entered via prompt
-   */
-  private updateSettingsUIField(passphrase: string): void {
-    const inputElement = document.getElementById('radicle-passphrase-input') as HTMLInputElement | null;
-    if (inputElement) {
-      inputElement.value = passphrase;
-      console.log('PassphraseManager: Updated settings UI input field');
-    } else {
-      console.log('PassphraseManager: Settings UI input field not found (settings tab may not be open)');
-    }
   }
 }

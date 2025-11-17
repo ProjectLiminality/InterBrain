@@ -592,7 +592,6 @@ export class InterBrainSettingTab extends PluginSettingTab {
 						}
 					});
 				text.inputEl.type = 'password';
-				text.inputEl.id = 'radicle-passphrase-input'; // Add ID for external updates
 				return text;
 			})
 			.addButton(button => button
