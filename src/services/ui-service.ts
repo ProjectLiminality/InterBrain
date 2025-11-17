@@ -48,39 +48,39 @@ export class UIService {
       // Create a simple input modal using Obsidian's modal system
       const modal = new Modal(this.app);
       modal.titleEl.setText(title);
-      
+
       const inputEl = modal.contentEl.createEl('input', {
         type: 'text',
         placeholder: placeholder
       });
-      
+
       const buttonContainer = modal.contentEl.createDiv('modal-button-container');
-      
+
       const submitBtn = buttonContainer.createEl('button', {
         text: 'OK',
         cls: 'mod-cta'
       });
-      
+
       const cancelBtn = buttonContainer.createEl('button', {
         text: 'Cancel'
       });
-      
+
       // Focus the input
       inputEl.focus();
-      
+
       // Handle submit
       const handleSubmit = () => {
         const value = inputEl.value.trim();
         modal.close();
         resolve(value || null);
       };
-      
+
       // Handle cancel
       const handleCancel = () => {
         modal.close();
         resolve(null);
       };
-      
+
       // Event listeners
       submitBtn.onclick = handleSubmit;
       cancelBtn.onclick = handleCancel;
@@ -93,7 +93,66 @@ export class UIService {
           handleCancel();
         }
       };
-      
+
+      modal.open();
+    });
+  }
+
+  async promptForPassword(title: string, placeholder: string = ''): Promise<string | null> {
+    return new Promise((resolve) => {
+      if (!this.app) {
+        resolve(null);
+        return;
+      }
+      // Create a password input modal using Obsidian's modal system
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(title);
+
+      const inputEl = modal.contentEl.createEl('input', {
+        type: 'password',
+        placeholder: placeholder
+      });
+
+      const buttonContainer = modal.contentEl.createDiv('modal-button-container');
+
+      const submitBtn = buttonContainer.createEl('button', {
+        text: 'OK',
+        cls: 'mod-cta'
+      });
+
+      const cancelBtn = buttonContainer.createEl('button', {
+        text: 'Cancel'
+      });
+
+      // Focus the input
+      inputEl.focus();
+
+      // Handle submit
+      const handleSubmit = () => {
+        const value = inputEl.value.trim();
+        modal.close();
+        resolve(value || null);
+      };
+
+      // Handle cancel
+      const handleCancel = () => {
+        modal.close();
+        resolve(null);
+      };
+
+      // Event listeners
+      submitBtn.onclick = handleSubmit;
+      cancelBtn.onclick = handleCancel;
+      inputEl.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleSubmit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          handleCancel();
+        }
+      };
+
       modal.open();
     });
   }

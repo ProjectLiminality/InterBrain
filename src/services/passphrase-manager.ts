@@ -35,7 +35,7 @@ export class PassphraseManager {
     const message = prompt || 'Enter your Radicle passphrase (will be saved to settings for future use)';
     console.log('PassphraseManager: Prompting user for passphrase');
 
-    const userPassphrase = await this.uiService.promptForText(message, '');
+    const userPassphrase = await this.uiService.promptForPassword(message, '');
 
     if (!userPassphrase || userPassphrase.trim() === '') {
       console.log('PassphraseManager: User cancelled passphrase prompt');
