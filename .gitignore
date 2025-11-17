@@ -124,4 +124,4 @@ __pycache__/
 
 # Sensitive data files
 data.json
-copilot-transcription-*.md
+copilot-transcription-*.mdviewer-bundle/
