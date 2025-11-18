@@ -681,23 +681,26 @@ if ! command_exists rad; then
         fi
     fi
 
-    # Aggressively ensure rad is in PATH
-    export PATH="$HOME/.radicle/bin:$PATH"
-    hash -r 2>/dev/null || true
-    refresh_shell_env
+    # Only check PATH if installation actually succeeded
+    if [ "$RADICLE_AVAILABLE" != "false" ]; then
+        # Aggressively ensure rad is in PATH
+        export PATH="$HOME/.radicle/bin:$PATH"
+        hash -r 2>/dev/null || true
+        refresh_shell_env
 
-    # Verify it's actually available
-    if command_exists rad; then
-        if [ "$INSTALL_METHOD" = "github-source" ]; then
-            success "Radicle installed from GitHub and available ($(rad --version))"
+        # Verify it's actually available
+        if command_exists rad; then
+            if [ "$INSTALL_METHOD" = "github-source" ]; then
+                success "Radicle installed from GitHub and available ($(rad --version))"
+            else
+                success "Radicle installed and available ($(rad --version))"
+            fi
         else
-            success "Radicle installed and available ($(rad --version))"
+            warning "Radicle installed but not immediately available in PATH"
+            info "The 'rad' command will be available after restarting your terminal"
+            info "You can rerun this installer after restart to complete Radicle setup"
+            RADICLE_AVAILABLE=false
         fi
-    else
-        warning "Radicle installed but not immediately available in PATH"
-        info "The 'rad' command will be available after restarting your terminal"
-        info "You can rerun this installer after restart to complete Radicle setup"
-        RADICLE_AVAILABLE=false
     fi
 else
     success "Radicle found ($(rad --version))"
