@@ -7,6 +7,7 @@
 
 import { UIService } from './ui-service';
 import type { Plugin } from 'obsidian';
+import { serviceManager } from './service-manager';
 
 export class PassphraseManager {
   private uiService: UIService;
@@ -19,6 +20,7 @@ export class PassphraseManager {
 
   /**
    * Get passphrase from settings or show settings redirect if not set
+   * IMPORTANT: Only prompts for passphrase if Radicle node is NOT already running
    * @param prompt Optional custom prompt message
    * @returns Passphrase string or null if not configured
    */
@@ -30,7 +32,23 @@ export class PassphraseManager {
       return settingsPassphrase;
     }
 
-    // Show settings redirect dialog
+    // CRITICAL FIX: Check if node is already running BEFORE prompting for passphrase
+    // If node is running, we don't need a passphrase (ssh-agent is handling it)
+    const radicleService = serviceManager.getRadicleService();
+    if (radicleService) {
+      try {
+        const isRunning = await radicleService.isNodeRunning();
+        if (isRunning) {
+          console.log('PassphraseManager: Radicle node already running, no passphrase needed');
+          return null; // Return null but don't show prompt (node is running)
+        }
+      } catch (error) {
+        console.warn('PassphraseManager: Could not check node status:', error);
+        // Continue to show prompt if check fails
+      }
+    }
+
+    // Node is NOT running and no passphrase configured - show settings redirect dialog
     const message = 'Please configure your Radicle passphrase in the settings panel to enable Radicle operations.';
     console.log('PassphraseManager: Passphrase not configured, showing settings redirect');
 
