@@ -879,7 +879,7 @@ export function registerRadicleCommands(
 
         // Get passphrase (from settings or prompt)
         const settings = (plugin as any).settings;
-        let passphrase = settings?.radiclePassphrase || passphraseManager.getPassphrase();
+        let passphrase = settings?.radiclePassphrase || await passphraseManager.getPassphrase();
 
         if (!passphrase || passphrase.trim() === '') {
           passphrase = await uiService.promptForText(
