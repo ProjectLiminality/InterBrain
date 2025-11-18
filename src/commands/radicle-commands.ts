@@ -670,6 +670,193 @@ export function registerRadicleCommands(
     }
   });
 
+  // Discover Peer Acceptances - Check which peers are seeding DreamNodes (Radicle → Liminal Web)
+  plugin.addCommand({
+    id: 'discover-peer-acceptances',
+    name: 'Discover Peer Acceptances from Radicle Network',
+    callback: async () => {
+      try {
+        console.log('🔍 [Peer Discovery] Starting discovery of peer acceptances from Radicle network...');
+        new Notice('Discovering peer acceptances from Radicle network...');
+
+        const radicleService = serviceManager.getRadicleService();
+        if (!radicleService) {
+          throw new Error('Radicle service not available');
+        }
+
+        // Check if Radicle is available
+        const isAvailable = await radicleService.isAvailable();
+        if (!isAvailable) {
+          throw new Error('Radicle CLI not installed or not in PATH');
+        }
+
+        // Use the same pattern as sync command
+        const adapter = plugin.app.vault.adapter as any;
+        const vaultPath = adapter.basePath || '';
+        const path = require('path');
+        const fs = require('fs');
+        const fsPromises = fs.promises;
+
+        // Get all DreamNode directories
+        const entries = await fsPromises.readdir(vaultPath, { withFileTypes: true });
+        const dreamNodeDirs = [];
+
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+
+          const dirPath = path.join(vaultPath, entry.name);
+          const uddPath = path.join(dirPath, '.udd');
+          const gitPath = path.join(dirPath, '.git');
+
+          try {
+            await fsPromises.access(uddPath);
+            await fsPromises.access(gitPath);
+            dreamNodeDirs.push({ name: entry.name, path: dirPath });
+          } catch {
+            // Not a valid DreamNode, skip
+            continue;
+          }
+        }
+
+        console.log(`🔍 [Peer Discovery] Found ${dreamNodeDirs.length} DreamNodes to check`);
+
+        // Load all UDD files to build UUID→DID mapping
+        const uddDataMap = new Map<string, {
+          uuid: string;
+          type: string;
+          did?: string;
+          radicleId?: string;
+          path: string;
+          dirPath: string;
+          dirName: string
+        }>();
+
+        await Promise.all(
+          dreamNodeDirs.map(async ({ name, path: dirPath }) => {
+            try {
+              const uddPath = path.join(dirPath, '.udd');
+              const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+              const udd = JSON.parse(uddContent);
+
+              const nodeType = udd.type || 'dream';
+              console.log(`🔍 [Peer Discovery] Scanning "${name}": type=${nodeType}, did=${udd.did || 'none'}, radicleId=${udd.radicleId || 'none'}`);
+
+              uddDataMap.set(udd.uuid, {
+                uuid: udd.uuid,
+                type: nodeType,
+                did: udd.did,
+                radicleId: udd.radicleId,
+                path: uddPath,
+                dirPath: dirPath,
+                dirName: name
+              });
+            } catch (error) {
+              console.error(`❌ [Peer Discovery] Error reading ${name}/.udd:`, error);
+            }
+          })
+        );
+
+        console.log(`🔍 [Peer Discovery] Loaded ${uddDataMap.size} UDD files`);
+
+        // Build reverse mapping: DID → UUID (for discovered seeders)
+        const didToUuidMap = new Map<string, string>();
+        for (const [uuid, data] of uddDataMap) {
+          if (data.type === 'dreamer' && data.did) {
+            didToUuidMap.set(data.did, uuid);
+            console.log(`🗺️ [Peer Discovery] Mapped DID → UUID: ${data.did} → ${uuid} (${data.dirName})`);
+          }
+        }
+
+        let totalDreamNodes = 0;
+        let newRelationshipsFound = 0;
+        let errors = 0;
+
+        // For each DreamNode with Radicle ID, check who's seeding it
+        for (const [uuid, data] of uddDataMap) {
+          // Skip Dreamer nodes (only check Dream nodes)
+          if (data.type === 'dreamer') continue;
+
+          // Skip nodes without Radicle ID
+          if (!data.radicleId) continue;
+
+          totalDreamNodes++;
+          console.log(`🔍 [Peer Discovery] Checking seeders for "${data.dirName}" (${data.radicleId})...`);
+
+          try {
+            // Call getSeeders() to discover who's seeding this DreamNode
+            const seederDIDs = await radicleService.getSeeders(data.dirPath);
+            console.log(`🔍 [Peer Discovery]   → Found ${seederDIDs.length} seeder(s): ${seederDIDs.join(', ')}`);
+
+            // For each seeder, check if they're a known Dreamer
+            for (const seederDID of seederDIDs) {
+              const dreamerUuid = didToUuidMap.get(seederDID);
+
+              if (!dreamerUuid) {
+                console.log(`🔍 [Peer Discovery]   → Seeder ${seederDID} not found in vault (unknown Dreamer)`);
+                continue;
+              }
+
+              const dreamerData = uddDataMap.get(dreamerUuid);
+              if (!dreamerData) continue;
+
+              console.log(`🔍 [Peer Discovery]   → Seeder is known Dreamer: "${dreamerData.dirName}" (${dreamerUuid})`);
+
+              // Check if relationship already exists in liminal-web.json
+              const liminalWebPath = path.join(dreamerData.dirPath, 'liminal-web.json');
+
+              try {
+                const liminalWebContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
+                const liminalWeb = JSON.parse(liminalWebContent);
+                const relationships: string[] = liminalWeb.relationships || [];
+
+                if (relationships.includes(uuid)) {
+                  console.log(`✅ [Peer Discovery]   → Relationship already exists: ${dreamerData.dirName} ↔ ${data.dirName}`);
+                } else {
+                  // NEW RELATIONSHIP DISCOVERED!
+                  console.log(`🎯 [Peer Discovery]   → NEW DISCOVERY: ${dreamerData.dirName} now seeds ${data.dirName}!`);
+
+                  relationships.push(uuid);
+                  liminalWeb.relationships = relationships;
+
+                  await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2), 'utf-8');
+                  newRelationshipsFound++;
+
+                  console.log(`✅ [Peer Discovery]   → Added relationship to ${dreamerData.dirName}/liminal-web.json`);
+                }
+              } catch (liminalError) {
+                console.warn(`⚠️ [Peer Discovery]   → Could not read/update liminal-web.json for ${dreamerData.dirName}:`, liminalError);
+                errors++;
+              }
+            }
+          } catch (error: any) {
+            console.error(`❌ [Peer Discovery] Failed to check seeders for ${data.dirName}:`, error.message);
+            errors++;
+          }
+        }
+
+        // Build summary message
+        let summary: string;
+        if (totalDreamNodes === 0) {
+          summary = 'No Radicle-enabled DreamNodes found to check';
+        } else if (newRelationshipsFound === 0 && errors === 0) {
+          summary = `✓ Checked ${totalDreamNodes} DreamNodes - all relationships already known`;
+        } else {
+          const parts: string[] = [];
+          if (newRelationshipsFound > 0) parts.push(`🎯 ${newRelationshipsFound} new relationship${newRelationshipsFound > 1 ? 's' : ''} discovered!`);
+          if (errors > 0) parts.push(`⚠️ ${errors} error${errors > 1 ? 's' : ''}`);
+          summary = parts.join(' ');
+        }
+
+        console.log(`✅ [Peer Discovery] ${summary}`);
+        new Notice(summary);
+
+      } catch (error) {
+        console.error('❌ [Peer Discovery] Discovery failed:', error);
+        new Notice(`Failed to discover peer acceptances: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  });
+
   // Sync Radicle peer following with Liminal Web relationships
   plugin.addCommand({
     id: 'sync-radicle-peer-following',

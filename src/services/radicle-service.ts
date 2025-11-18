@@ -67,6 +67,14 @@ export interface RadicleService {
    * Get current user's Radicle identity
    */
   getIdentity(): Promise<RadicleIdentity>;
+
+  /**
+   * Get list of peer DIDs seeding a repository (from Radicle routing table)
+   * This enables transitive discovery: Alice can discover that Bob/Charlie accepted coherence beacon
+   * @param repoPath Path to DreamNode repository
+   * @returns Array of peer DIDs currently seeding this repo (discovered via inventory announcements)
+   */
+  getSeeders(repoPath: string): Promise<string[]>;
 }
 
 export class RadicleServiceImpl implements RadicleService {
@@ -1280,6 +1288,63 @@ export class RadicleServiceImpl implements RadicleService {
       return result;
     } catch (error: any) {
       throw new Error(`Failed to reconcile remotes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get list of peer DIDs seeding a repository (discovered via Radicle routing table)
+   * Enables transitive discovery: Alice discovers Bob/Charlie accepted coherence beacon
+   * @param repoPath Path to DreamNode repository
+   * @returns Array of peer DIDs currently seeding this repo
+   */
+  async getSeeders(repoPath: string): Promise<string[]> {
+    if (!await this.isAvailable()) {
+      console.warn('RadicleService: Radicle CLI not available for getSeeders()');
+      return [];
+    }
+
+    try {
+      const radCmd = this.getRadCommand();
+
+      // Run `rad sync status` to get seeding information
+      // Output format (example):
+      // ╭────────────────────────────────────────────────────────────────────────╮
+      // │ Node             SigRefs                                               │
+      // ├────────────────────────────────────────────────────────────────────────┤
+      // │ z6Mkk7o...       ✓ main                                                │
+      // │ z6MkpTH...       ✓ main                                                │
+      // ╰────────────────────────────────────────────────────────────────────────╯
+
+      const { stdout } = await execAsync(`"${radCmd}" sync status`, { cwd: repoPath });
+
+      // Parse DIDs from table output
+      const dids: string[] = [];
+      const lines = stdout.split('\n');
+
+      for (const line of lines) {
+        // Look for lines containing node IDs (format: │ z6Mk... or │ did:key:z6Mk...)
+        // Match DID format: did:key:z6Mk[alphanumeric] OR bare z6Mk[alphanumeric]
+        const didMatch = line.match(/(did:key:)?z6Mk[A-Za-z0-9]+/);
+
+        if (didMatch) {
+          let did = didMatch[0];
+
+          // Normalize to full did:key: format if bare
+          if (!did.startsWith('did:key:')) {
+            did = `did:key:${did}`;
+          }
+
+          dids.push(did);
+          console.log(`RadicleService: Found seeder: ${did}`);
+        }
+      }
+
+      console.log(`RadicleService: getSeeders() found ${dids.length} peer(s) seeding ${repoPath}`);
+      return dids;
+    } catch (error: any) {
+      // Non-critical error - repo may not be seeded yet or network issues
+      console.warn(`RadicleService: Could not get seeders for ${repoPath}:`, error.message);
+      return [];
     }
   }
 }
