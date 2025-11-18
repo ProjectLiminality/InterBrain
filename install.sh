@@ -18,8 +18,9 @@
 #     --branch "feature/radicle-migration"
 #
 # Testing flags:
-#   --test-fail before-gh   Simulate failure before GitHub CLI installed (no automatic issue creation available)
-#   --test-fail after-gh    Simulate failure after GitHub CLI installed (should offer automatic issue creation)
+#   --test-fail before-gh         Simulate failure before GitHub CLI installed (no automatic issue creation available)
+#   --test-fail after-gh          Simulate failure after GitHub CLI installed (should offer automatic issue creation)
+#   --test-radicle-fallback       Force GitHub source fallback for Radicle installation (simulates server outage)
 
 # Create log file FIRST (before anything else)
 LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
@@ -79,6 +80,7 @@ CLONE_URI=""
 DREAMER_UUID=""
 BRANCH="main"  # Default to main branch
 TEST_FAIL=""
+TEST_RADICLE_FALLBACK=false
 while [[ $# -gt 0 ]]; do
   case $1 in
     --uri)
@@ -96,6 +98,10 @@ while [[ $# -gt 0 ]]; do
     --test-fail)
       TEST_FAIL="$2"
       shift 2
+      ;;
+    --test-radicle-fallback)
+      TEST_RADICLE_FALLBACK=true
+      shift
       ;;
     *)
       shift
@@ -630,8 +636,18 @@ if ! command_exists rad; then
     # Try official install script first (disable error trap for intentional failure handling)
     set +e
     echo "[DEBUG] Attempting to download Radicle install script from radicle.xyz..." >> "$LOG_FILE"
-    INSTALL_SCRIPT=$(curl -sSf https://radicle.xyz/install 2>&1)
-    CURL_EXIT_CODE=$?
+
+    # Allow testing of fallback logic
+    if [ "$TEST_RADICLE_FALLBACK" = true ]; then
+        echo "[DEBUG] TEST MODE: Forcing fallback by simulating curl failure" >> "$LOG_FILE"
+        warning "TEST MODE: Simulating Radicle server failure to test GitHub fallback"
+        CURL_EXIT_CODE=22
+        INSTALL_SCRIPT="curl: (22) The requested URL returned error: 500"
+    else
+        INSTALL_SCRIPT=$(curl -sSf https://radicle.xyz/install 2>&1)
+        CURL_EXIT_CODE=$?
+    fi
+
     echo "[DEBUG] Curl exit code: $CURL_EXIT_CODE" >> "$LOG_FILE"
     if [ $CURL_EXIT_CODE -ne 0 ]; then
         echo "[DEBUG] Curl output: $INSTALL_SCRIPT" >> "$LOG_FILE"
