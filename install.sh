@@ -666,7 +666,12 @@ if ! command_exists rad; then
 
             # Clone Heartwood repository to temp directory
             TEMP_DIR=$(mktemp -d)
-            if git clone --depth 1 https://github.com/radicle-dev/heartwood.git "$TEMP_DIR/heartwood" 2>&1 | grep -v "Cloning into"; then
+            set +e  # Disable error trap for git clone
+            git clone --depth 1 https://github.com/radicle-dev/heartwood.git "$TEMP_DIR/heartwood" > /dev/null 2>&1
+            CLONE_SUCCESS=$?
+            set -e
+
+            if [ $CLONE_SUCCESS -eq 0 ]; then
                 cd "$TEMP_DIR/heartwood"
 
                 # Build and install with spinner
