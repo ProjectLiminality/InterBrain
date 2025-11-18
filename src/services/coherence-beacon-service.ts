@@ -278,16 +278,18 @@ export class CoherenceBeaconService {
         console.log(`CoherenceBeaconService: ✓ Supermodule ${beacon.title} already exists`);
         clonedNodePath = path.join(this.vaultPath, beacon.title);
       } else {
-        // Clone failed - abort entire operation (commit remains unmerged)
+        // Clone failed - abort entire operation (commit remains unmerged for retry)
         const errorMsg = `Failed to clone supermodule "${beacon.title}" from Radicle network.\n\n` +
                         `NETWORK DELAY: This often occurs when repositories were recently published.\n` +
                         `Radicle seed nodes may take 2-5 minutes to propagate new repos.\n\n` +
                         `WHAT TO DO:\n` +
-                        `• Wait a few minutes and check for beacons again\n` +
-                        `• The beacon commit remains unmerged so you can retry later\n` +
+                        `• Wait a few minutes and run "Check for Updates" again\n` +
+                        `• The beacon commit remains UNMERGED - you can safely retry\n` +
+                        `• Partially cloned nodes (if any) will not cause issues on retry\n` +
                         `• Check your Radicle connection: rad sync --fetch\n\n` +
                         `Radicle ID: ${beacon.radicleId}`;
 
+        console.error(`CoherenceBeaconService: ❌ CLONE FAILED - Beacon commit NOT cherry-picked`);
         console.error(`CoherenceBeaconService: ${errorMsg}`);
         throw new Error(errorMsg);
       }
@@ -299,16 +301,18 @@ export class CoherenceBeaconService {
           await this.initializeAndCloneSubmodules(clonedNodePath, beacon.title);
           console.log(`CoherenceBeaconService: ✓ All submodules cloned successfully`);
         } catch (submoduleError: any) {
-          // Submodule clone failed - abort entire operation (commit remains unmerged)
+          // Submodule clone failed - abort entire operation (commit remains unmerged for retry)
           const errorMsg = `Failed to clone submodules for "${beacon.title}".\n\n` +
                           `NETWORK DELAY: Some nested repositories may not be available yet.\n` +
                           `Radicle seed nodes may take 2-5 minutes to propagate new repos.\n\n` +
                           `WHAT TO DO:\n` +
-                          `• Wait a few minutes and check for beacons again\n` +
-                          `• The beacon commit remains unmerged so you can retry later\n` +
+                          `• Wait a few minutes and run "Check for Updates" again\n` +
+                          `• The beacon commit remains UNMERGED - you can safely retry\n` +
+                          `• Partially cloned nodes (if any) will not cause issues on retry\n` +
                           `• Check submodule availability: rad sync --fetch\n\n` +
                           `Error details: ${submoduleError.message}`;
 
+          console.error(`CoherenceBeaconService: ❌ SUBMODULE CLONE FAILED - Beacon commit NOT cherry-picked`);
           console.error(`CoherenceBeaconService: ${errorMsg}`);
           throw new Error(errorMsg);
         }
