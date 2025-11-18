@@ -631,11 +631,18 @@ if ! command_exists rad; then
     set +e
     INSTALL_SCRIPT=$(curl -sSf https://radicle.xyz/install 2>&1)
     CURL_EXIT_CODE=$?
+
+    INSTALL_SUCCESS=false
+    if [ $CURL_EXIT_CODE -eq 0 ]; then
+        echo "$INSTALL_SCRIPT" | sh
+        if [ $? -eq 0 ]; then
+            INSTALL_METHOD="official"
+            INSTALL_SUCCESS=true
+        fi
+    fi
     set -e
 
-    if [ $CURL_EXIT_CODE -eq 0 ] && echo "$INSTALL_SCRIPT" | sh; then
-        INSTALL_METHOD="official"
-    else
+    if [ "$INSTALL_SUCCESS" = "false" ]; then
         # Official install failed - try GitHub source build as fallback
         warning "Official Radicle install script failed (server may be down)"
         echo ""
