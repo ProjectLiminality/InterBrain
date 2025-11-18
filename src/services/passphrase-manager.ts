@@ -37,7 +37,7 @@ export class PassphraseManager {
 
     const userPassphrase = await this.uiService.promptForPassword(message, '');
 
-    if (!userPassphrase || userPassphrase.trim() === '') {
+    if (!userPassphrase) {
       console.log('PassphraseManager: User cancelled passphrase prompt');
       return null;
     }
