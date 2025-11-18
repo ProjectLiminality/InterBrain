@@ -1306,36 +1306,33 @@ export class RadicleServiceImpl implements RadicleService {
     try {
       const radCmd = this.getRadCommand();
 
-      // Run `rad sync status` to get seeding information
-      // Output format (example):
-      // ╭────────────────────────────────────────────────────────────────────────╮
-      // │ Node             SigRefs                                               │
-      // ├────────────────────────────────────────────────────────────────────────┤
-      // │ z6Mkk7o...       ✓ main                                                │
-      // │ z6MkpTH...       ✓ main                                                │
-      // ╰────────────────────────────────────────────────────────────────────────╯
+      // First, get the RID for this repository
+      const radicleId = await this.getRadicleId(repoPath);
+      if (!radicleId) {
+        console.warn(`RadicleService: Could not get Radicle ID for ${repoPath}`);
+        return [];
+      }
 
-      const { stdout } = await execAsync(`"${radCmd}" sync status`, { cwd: repoPath });
+      // Query the routing table for this RID in JSON format
+      // Output format: {"rid":"rad:z...","nid":"z6Mk..."}
+      // One JSON object per line, nid is the peer DID (without did:key: prefix)
+      const { stdout } = await execAsync(`"${radCmd}" node routing --rid ${radicleId} --json`);
 
-      // Parse DIDs from table output
+      // Parse JSON lines
       const dids: string[] = [];
-      const lines = stdout.split('\n');
+      const lines = stdout.split('\n').filter(line => line.trim().length > 0);
 
       for (const line of lines) {
-        // Look for lines containing node IDs (format: │ z6Mk... or │ did:key:z6Mk...)
-        // Match DID format: did:key:z6Mk[alphanumeric] OR bare z6Mk[alphanumeric]
-        const didMatch = line.match(/(did:key:)?z6Mk[A-Za-z0-9]+/);
-
-        if (didMatch) {
-          let did = didMatch[0];
-
-          // Normalize to full did:key: format if bare
-          if (!did.startsWith('did:key:')) {
-            did = `did:key:${did}`;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.nid && entry.nid.startsWith('z6Mk')) {
+            // Normalize to full did:key: format
+            const did = `did:key:${entry.nid}`;
+            dids.push(did);
+            console.log(`RadicleService: Found seeder: ${did}`);
           }
-
-          dids.push(did);
-          console.log(`RadicleService: Found seeder: ${did}`);
+        } catch (parseError) {
+          console.warn(`RadicleService: Could not parse routing table entry: ${line}`);
         }
       }
 
