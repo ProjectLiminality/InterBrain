@@ -629,13 +629,21 @@ if ! command_exists rad; then
 
     # Try official install script first (disable error trap for intentional failure handling)
     set +e
+    echo "[DEBUG] Attempting to download Radicle install script from radicle.xyz..." >> "$LOG_FILE"
     INSTALL_SCRIPT=$(curl -sSf https://radicle.xyz/install 2>&1)
     CURL_EXIT_CODE=$?
+    echo "[DEBUG] Curl exit code: $CURL_EXIT_CODE" >> "$LOG_FILE"
+    if [ $CURL_EXIT_CODE -ne 0 ]; then
+        echo "[DEBUG] Curl output: $INSTALL_SCRIPT" >> "$LOG_FILE"
+    fi
 
     INSTALL_SUCCESS=false
     if [ $CURL_EXIT_CODE -eq 0 ]; then
-        echo "$INSTALL_SCRIPT" | sh
-        if [ $? -eq 0 ]; then
+        echo "[DEBUG] Running official install script..." >> "$LOG_FILE"
+        echo "$INSTALL_SCRIPT" | sh 2>> "$LOG_FILE"
+        SCRIPT_EXIT_CODE=$?
+        echo "[DEBUG] Install script exit code: $SCRIPT_EXIT_CODE" >> "$LOG_FILE"
+        if [ $SCRIPT_EXIT_CODE -eq 0 ]; then
             INSTALL_METHOD="official"
             INSTALL_SUCCESS=true
         fi
@@ -652,12 +660,20 @@ if ! command_exists rad; then
         # Check if Rust/Cargo is available
         if ! command_exists cargo; then
             info "Installing Rust toolchain (required for building from source)..."
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "[DEBUG] Installing Rust via rustup..." >> "$LOG_FILE"
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y >> "$LOG_FILE" 2>&1
+            echo "[DEBUG] Rust install exit code: $?" >> "$LOG_FILE"
 
             # Source cargo env
             source "$HOME/.cargo/env" 2>/dev/null || true
             export PATH="$HOME/.cargo/bin:$PATH"
             refresh_shell_env
+
+            if command_exists cargo; then
+                echo "[DEBUG] Cargo now available: $(cargo --version)" >> "$LOG_FILE"
+            else
+                echo "[DEBUG] Cargo still not available after Rust install" >> "$LOG_FILE"
+            fi
         fi
 
         if command_exists cargo; then
@@ -666,25 +682,41 @@ if ! command_exists rad; then
 
             # Clone Heartwood repository to temp directory
             TEMP_DIR=$(mktemp -d)
+            echo "[DEBUG] Created temp directory: $TEMP_DIR" >> "$LOG_FILE"
+            echo "[DEBUG] Cloning Heartwood from GitHub..." >> "$LOG_FILE"
+
             set +e  # Disable error trap for git clone
-            git clone --depth 1 https://github.com/radicle-dev/heartwood.git "$TEMP_DIR/heartwood" > /dev/null 2>&1
+            git clone --depth 1 https://github.com/radicle-dev/heartwood.git "$TEMP_DIR/heartwood" >> "$LOG_FILE" 2>&1
             CLONE_SUCCESS=$?
             set -e
 
+            echo "[DEBUG] Git clone exit code: $CLONE_SUCCESS" >> "$LOG_FILE"
+
             if [ $CLONE_SUCCESS -eq 0 ]; then
                 cd "$TEMP_DIR/heartwood"
+                echo "[DEBUG] Changed to heartwood directory, building..." >> "$LOG_FILE"
 
-                # Build and install with spinner
-                (cargo install --path crates/radicle-cli --force --locked --root ~/.radicle) > /dev/null 2>&1 &
-                show_spinner $! "Building Radicle CLI from source..."
-                wait $!
+                # Build and install with spinner (but log errors)
+                (cargo install --path crates/radicle-cli --force --locked --root ~/.radicle 2>> "$LOG_FILE") > /dev/null &
+                BUILD_PID=$!
+                show_spinner $BUILD_PID "Building Radicle CLI from source..."
+                wait $BUILD_PID
+                BUILD_EXIT_CODE=$?
+
+                echo "[DEBUG] Cargo build exit code: $BUILD_EXIT_CODE" >> "$LOG_FILE"
 
                 # Clean up
                 cd - > /dev/null
                 rm -rf "$TEMP_DIR"
 
-                INSTALL_METHOD="github-source"
-                success "Radicle built and installed from GitHub source"
+                if [ $BUILD_EXIT_CODE -eq 0 ]; then
+                    INSTALL_METHOD="github-source"
+                    success "Radicle built and installed from GitHub source"
+                else
+                    error "Radicle build failed (check log for details)"
+                    info "Log: $LOG_FILE"
+                    RADICLE_AVAILABLE=false
+                fi
             else
                 error "Failed to clone Heartwood repository from GitHub"
                 info "You can try manual installation later: https://github.com/radicle-dev/heartwood"
