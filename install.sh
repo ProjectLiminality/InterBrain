@@ -628,7 +628,8 @@ if ! command_exists rad; then
     echo "Installing Radicle..."
 
     # Try official install script first
-    if curl -sSf https://radicle.xyz/install | sh; then
+    INSTALL_SCRIPT=$(curl -sSf https://radicle.xyz/install 2>&1)
+    if [ $? -eq 0 ] && echo "$INSTALL_SCRIPT" | sh; then
         INSTALL_METHOD="official"
     else
         # Official install failed - try GitHub source build as fallback
