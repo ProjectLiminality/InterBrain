@@ -18,10 +18,9 @@ export class PassphraseManager {
   }
 
   /**
-   * Get passphrase from settings or prompt user if not set
-   * When user enters passphrase via prompt, it's saved to settings (persistent)
+   * Get passphrase from settings or show settings redirect if not set
    * @param prompt Optional custom prompt message
-   * @returns Passphrase string or null if user cancels
+   * @returns Passphrase string or null if not configured
    */
   async getPassphrase(prompt?: string): Promise<string | null> {
     // Check settings first (persistent storage)
@@ -31,24 +30,20 @@ export class PassphraseManager {
       return settingsPassphrase;
     }
 
-    // Prompt user for passphrase (will save to settings)
-    const message = prompt || 'Enter your Radicle passphrase (will be saved to settings for future use)';
-    console.log('PassphraseManager: Prompting user for passphrase');
+    // Show settings redirect dialog
+    const message = 'Please configure your Radicle passphrase in the settings panel to enable Radicle operations.';
+    console.log('PassphraseManager: Passphrase not configured, showing settings redirect');
 
-    const userPassphrase = await this.uiService.promptForPassword(message, '');
+    await this.uiService.showSettingsPrompt(message, () => {
+      // Open settings panel
+      (this.plugin.app as any).setting.open();
+      // Try to focus the InterBrain tab (Obsidian will show it if it exists)
+      (this.plugin.app as any).setting.openTabById?.('interbrain-plugin');
+    });
 
-    if (!userPassphrase) {
-      console.log('PassphraseManager: User cancelled passphrase prompt');
-      return null;
-    }
-
-    // Save to settings (persistent)
-    const trimmedPassphrase = userPassphrase.trim();
-    (this.plugin as any).settings.radiclePassphrase = trimmedPassphrase;
-    await (this.plugin as any).saveSettings();
-    console.log('PassphraseManager: Passphrase saved to settings');
-
-    return trimmedPassphrase;
+    // Return null - user needs to configure and retry the operation
+    console.log('PassphraseManager: User needs to configure passphrase in settings');
+    return null;
   }
 
   /**

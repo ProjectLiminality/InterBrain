@@ -274,4 +274,67 @@ export class UIService {
       modal.open();
     });
   }
+
+  /**
+   * Show a dialog prompting user to configure settings with button to open settings panel
+   * @param message The message to display
+   * @param onOpenSettings Callback to open settings panel
+   * @returns Promise resolving to true if user clicked "Open Settings", false if "Not Now"
+   */
+  async showSettingsPrompt(
+    message: string,
+    onOpenSettings: () => void
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.app) {
+        resolve(false);
+        return;
+      }
+
+      const modal = new Modal(this.app);
+      modal.titleEl.setText('Passphrase Required');
+
+      // Add message
+      const messageEl = modal.contentEl.createDiv();
+      messageEl.style.whiteSpace = 'pre-wrap';
+      messageEl.style.marginBottom = '20px';
+      messageEl.setText(message);
+
+      const buttonContainer = modal.contentEl.createDiv('modal-button-container');
+
+      const openSettingsBtn = buttonContainer.createEl('button', {
+        text: 'Open Settings',
+        cls: 'mod-cta'
+      });
+
+      const notNowBtn = buttonContainer.createEl('button', {
+        text: 'Not Now'
+      });
+
+      // Handle open settings
+      const handleOpenSettings = () => {
+        modal.close();
+        onOpenSettings();
+        resolve(true);
+      };
+
+      // Handle not now
+      const handleNotNow = () => {
+        modal.close();
+        resolve(false);
+      };
+
+      // Event listeners
+      openSettingsBtn.onclick = handleOpenSettings;
+      notNowBtn.onclick = handleNotNow;
+
+      // Escape key closes with "Not Now"
+      modal.scope.register([], 'Escape', () => {
+        handleNotNow();
+        return false;
+      });
+
+      modal.open();
+    });
+  }
 }
