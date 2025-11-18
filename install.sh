@@ -626,7 +626,59 @@ fi
 RADICLE_AVAILABLE=true
 if ! command_exists rad; then
     echo "Installing Radicle..."
-    curl -sSf https://radicle.xyz/install | sh
+
+    # Try official install script first
+    if curl -sSf https://radicle.xyz/install | sh; then
+        INSTALL_METHOD="official"
+    else
+        # Official install failed - try GitHub source build as fallback
+        warning "Official Radicle install script failed (server may be down)"
+        echo ""
+        info "Attempting fallback installation from GitHub source..."
+        echo ""
+
+        # Check if Rust/Cargo is available
+        if ! command_exists cargo; then
+            info "Installing Rust toolchain (required for building from source)..."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+            # Source cargo env
+            source "$HOME/.cargo/env" 2>/dev/null || true
+            export PATH="$HOME/.cargo/bin:$PATH"
+            refresh_shell_env
+        fi
+
+        if command_exists cargo; then
+            info "Building Radicle from source (this may take 5-10 minutes)..."
+            echo ""
+
+            # Clone Heartwood repository to temp directory
+            TEMP_DIR=$(mktemp -d)
+            if git clone --depth 1 https://github.com/radicle-dev/heartwood.git "$TEMP_DIR/heartwood" 2>&1 | grep -v "Cloning into"; then
+                cd "$TEMP_DIR/heartwood"
+
+                # Build and install with spinner
+                (cargo install --path crates/radicle-cli --force --locked --root ~/.radicle) > /dev/null 2>&1 &
+                show_spinner $! "Building Radicle CLI from source..."
+                wait $!
+
+                # Clean up
+                cd - > /dev/null
+                rm -rf "$TEMP_DIR"
+
+                INSTALL_METHOD="github-source"
+                success "Radicle built and installed from GitHub source"
+            else
+                error "Failed to clone Heartwood repository from GitHub"
+                info "You can try manual installation later: https://github.com/radicle-dev/heartwood"
+                RADICLE_AVAILABLE=false
+            fi
+        else
+            error "Cargo/Rust not available - cannot build from source"
+            info "Manual installation: https://github.com/radicle-dev/heartwood"
+            RADICLE_AVAILABLE=false
+        fi
+    fi
 
     # Aggressively ensure rad is in PATH
     export PATH="$HOME/.radicle/bin:$PATH"
@@ -635,7 +687,11 @@ if ! command_exists rad; then
 
     # Verify it's actually available
     if command_exists rad; then
-        success "Radicle installed and available ($(rad --version))"
+        if [ "$INSTALL_METHOD" = "github-source" ]; then
+            success "Radicle installed from GitHub and available ($(rad --version))"
+        else
+            success "Radicle installed and available ($(rad --version))"
+        fi
     else
         warning "Radicle installed but not immediately available in PATH"
         info "The 'rad' command will be available after restarting your terminal"
