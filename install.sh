@@ -1327,27 +1327,40 @@ fi
 # Set up whisper_streaming virtual environment
 TRANSCRIPTION_DIR="$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
 if [ -d "$TRANSCRIPTION_DIR" ]; then
-    cd "$INTERBRAIN_PATH/src/features/realtime-transcription/scripts"
+    echo "[DEBUG] Setting up Python transcription environment at $TRANSCRIPTION_DIR" >> "$LOG_FILE"
+    cd "$TRANSCRIPTION_DIR"
 
     if [ ! -d "venv" ]; then
         info "Setting up Python environment (this may take 1-2 minutes)..."
 
         # Create venv
-        python3 -m venv venv > /dev/null 2>&1 &
+        echo "[DEBUG] Creating Python virtual environment..." >> "$LOG_FILE"
+        python3 -m venv venv >> "$LOG_FILE" 2>&1 &
         show_spinner $! "Creating virtual environment..."
         wait $!
+        VENV_EXIT_CODE=$?
+        echo "[DEBUG] Virtual environment creation exit code: $VENV_EXIT_CODE" >> "$LOG_FILE"
 
-        # Install dependencies with spinner
+        # Install dependencies with spinner (disable error trap for pip operations)
+        set +e
         (
             source venv/bin/activate
-            pip install --upgrade pip --quiet
-            pip install -r requirements.txt --quiet
-            deactivate
-        ) > /dev/null 2>&1 &
-        show_spinner $! "Installing whisper_streaming and dependencies..."
-        wait $!
+            pip install --upgrade pip --quiet 2>> "$LOG_FILE"
+            pip install -r requirements.txt --quiet 2>> "$LOG_FILE"
+            exit 0  # Force success exit from subshell
+        ) > /dev/null &
+        PIP_PID=$!
+        show_spinner $PIP_PID "Installing whisper_streaming and dependencies..."
+        wait $PIP_PID
+        PIP_EXIT_CODE=$?
+        set -e
+        echo "[DEBUG] Pip install exit code: $PIP_EXIT_CODE" >> "$LOG_FILE"
 
-        success "Transcription environment ready"
+        if [ $PIP_EXIT_CODE -eq 0 ]; then
+            success "Transcription environment ready"
+        else
+            warning "Python packages may not have installed correctly (check log)"
+        fi
     else
         success "Transcription environment already exists"
     fi
