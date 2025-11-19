@@ -1084,6 +1084,24 @@ export function registerRadicleCommands(
                 }
                 desiredRemotesPerRepo.get(relatedData.dirPath)!.set(dreamerData.dirName, did);
 
+                // STEP 0: Ensure repo is public BEFORE adding any delegates
+                // This prevents multi-delegate acceptance issues
+                try {
+                  console.log(`🔄 [Radicle Peer Sync] Publishing ${relatedData.dirName} (if not already public)...`);
+                  await radicleService.share(relatedData.dirPath, passphrase);
+                  console.log(`✅ [Radicle Peer Sync] Published ${relatedData.dirName} to network`);
+                } catch (publishError: any) {
+                  // Radicle already handles "already public" case gracefully
+                  const errorMsg = publishError.message || '';
+                  if (errorMsg.includes('already public') || errorMsg.includes('No identity updates')) {
+                    console.log(`ℹ️ [Radicle Peer Sync] ${relatedData.dirName} already public`);
+                  } else {
+                    console.error(`❌ [Radicle Peer Sync] Failed to publish ${relatedData.dirName}:`, errorMsg);
+                    errors++;
+                    continue; // Skip peer setup if publish fails
+                  }
+                }
+
                 // STEP 1: Ensure peer is followed (node-level)
                 const repoFollows = await getExistingFollowsForRepo(relatedData.dirPath);
 
