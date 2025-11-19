@@ -847,7 +847,13 @@ export class RadicleServiceImpl implements RadicleService {
       // STEP 3: Publish to network (use rad id update for multi-delegate support)
       console.log(`RadicleService: Publishing to Radicle network (rad id update --visibility public)...`);
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(radCmd, ['id', 'update', '--visibility', 'public', '--no-confirm'], {
+        const child = spawn(radCmd, [
+          'id', 'update',
+          '--title', 'Publish repository',
+          '--description', 'Make repository publicly accessible',
+          '--visibility', 'public',
+          '--no-confirm'
+        ], {
           env: env,
           cwd: absoluteDreamNodePath,
           stdio: ['pipe', 'pipe', 'pipe']
