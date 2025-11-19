@@ -130,7 +130,7 @@ export class SubmoduleManagerService {
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
 
       // Get Radicle ID for the submodule (network-based URL)
-      const radicleId = await this.getRadicleId(sourceFullPath);
+      const radicleId = await this.radicleService.getRadicleId(sourceFullPath);
       if (!radicleId) {
         throw new Error(`Cannot add submodule: ${actualSubmoduleName} does not have a Radicle ID. Initialize with Radicle first.`);
       }
