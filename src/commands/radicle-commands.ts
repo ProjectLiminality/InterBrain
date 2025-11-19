@@ -1117,16 +1117,16 @@ export function registerRadicleCommands(
                   errors++;
                 }
 
-                // STEP 3: Set seeding scope to 'followed' (only direct peers)
+                // STEP 3: Set seeding scope to 'all' (public seed infrastructure)
                 try {
                   console.log(`🔄 [Radicle Peer Sync] Setting seeding scope for ${relatedData.dirName}...`);
-                  const wasSet = await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
+                  const wasSet = await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'all');
                   if (wasSet) {
                     scopeUpdates++;
-                    console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'followed' for ${relatedData.dirName}`);
+                    console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'all' for ${relatedData.dirName}`);
                   } else {
                     alreadyScopes++;
-                    console.log(`✅ [Radicle Peer Sync] Seeding scope already 'followed' for ${relatedData.dirName}`);
+                    console.log(`✅ [Radicle Peer Sync] Seeding scope already 'all' for ${relatedData.dirName}`);
                   }
                 } catch (scopeError: any) {
                   console.error(`❌ [Radicle Peer Sync] Could not set seeding scope for ${relatedData.dirName}:`, scopeError.message);
