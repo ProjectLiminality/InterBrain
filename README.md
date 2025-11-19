@@ -14,8 +14,8 @@ The InterBrain is work-in-progress software with basic functionality now install
 
 ## Project Status & Roadmap
 
-> ⚡️ **Current Status: Coherence Beacon System Complete - 8 Foundation Epics Delivered**
-Epic 8 (Coherence Beacon System) is complete with automatic relationship discovery, bidirectional tracking, Radicle network integration, GitHub Pages publishing, and radial action buttons. All 8 foundation epics are now complete and the InterBrain provides comprehensive distributed knowledge management.
+> ⚡️ **Current Status: 7 Foundation Epics Complete, Epic 8 In Progress**
+Epics 1-7 are complete (plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot). Epic 8 (Coherence Beacon System) is currently in development with automatic relationship discovery, bidirectional tracking, and Radicle network integration.
 
 > 🔬 **Previous Exploration:**
 Earlier exploration work including screenshots and recordings can be found at [**InterBrain-Prototype**](https://github.com/ProjectLiminality/InterBrain-Prototype). This repository contains the conceptual foundation and visual demonstrations that inform the current development approach.
@@ -24,8 +24,8 @@ Earlier exploration work including screenshots and recordings can be found at [*
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
 
 > 💡 **Development Roadmap:**
-- ✅ Epics 1-8: Complete foundation (plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot, coherence beacon)
-- 📋 Epic 9: Ready for community input and prioritization
+- ✅ Epics 1-7: Complete foundation (plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot)
+- 🚧 Epic 8: Coherence Beacon System (in progress)
 - 🪐 DreamOS system (future evolution)
 
 Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2). For detailed achievement history, see [CHANGELOG.md](CHANGELOG.md).
@@ -44,11 +44,12 @@ Run the automated install script (macOS only):
 bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)
 ```
 
-The install script will guide you through:
-- Prerequisites verification (Obsidian, Git)
-- Plugin installation
-- Optional components (Ollama for semantic search, Radicle for peer-to-peer sharing)
-- Vault setup and configuration
+The install script will automatically install and configure all dependencies:
+- Obsidian (if not already installed)
+- Git (required for DreamNode versioning)
+- Ollama (for semantic search with local AI)
+- Radicle (for peer-to-peer sharing)
+- InterBrain plugin and vault setup
 
 > 💡 **Tip**: If the install script encounters issues, you can safely re-run it. It's designed to be idempotent and may resolve transient problems on subsequent runs.
 
@@ -56,22 +57,27 @@ The install script will guide you through:
 
 ## Getting Started
 
-Once installed, try this simple exercise to build your first liminal web:
+After successful installation, you'll see the **InterBrain DreamNode** itself in your DreamSpace. If you don't see it, press **Cmd+R** to refresh the plugin - this should reveal it and automatically select it.
 
-1. Open Obsidian and activate the InterBrain workspace via command palette
-2. **Run "Full Index"** command (required for semantic search functionality)
-3. Create a DreamNode for any project or idea you're working on
-4. Click that node to enter liminal web mode (focused layout)
-5. **Run "Enter Edit Mode"** command to edit nodes and relationships in 3D space
-6. Drag and drop pictures of collaborators (name files with their names)
-7. Click on any person to focus on them, then add shared projects/ideas
-8. Watch your personal knowledge network emerge through relationships
+> 💡 **Tip**: If you ever run into issues with the InterBrain, try pressing **Cmd+R** to refresh the plugin. This often resolves display or interaction problems.
 
-**Essential Commands:**
-- **"Ollama: Check Status"**: Verify if Ollama is properly set up for semantic search
-- **"Full Index"**: Index your DreamNodes for semantic search (required after Ollama setup)
-- **"Enter Edit Mode"**: Edit node content and relationships while in liminal web view
-- **"Activate Search Interface"**: Use semantic search to find and create nodes (requires Ollama + indexing)
+### Build Your First Liminal Web
+
+**1. Add the people you care about:**
+Think of 1-3 people you care about (who you'd like to have frequent video calls with is a good rule of thumb). Find image files representing them and name them appropriately:
+- `Alice.png`
+- `Bob.png`
+- `Charlie.png`
+
+Drag and drop these image files into the DreamSpace next to the InterBrain DreamNode. This automatically creates **Dreamer nodes** for these peers.
+
+**2. Add shared ideas:**
+Click on any person to select them. Now think of ideas, stories, or projects that connect you to them. Find image files representing these ideas, name them appropriately, and drag and drop them next to the selected person.
+
+This automatically creates the initial relationships in your Liminal Web - connecting you to people through the ideas you share.
+
+**3. Explore and grow:**
+Continue this simple pattern - drag and drop image files to add people and ideas, click to navigate relationships. Your personal knowledge network emerges organically through these connections.
 
 ### Important Notes
 
@@ -180,12 +186,6 @@ Easily open any given DreamNode in your favorite git client of your choice.
 The content within a DreamNode is visually accessible on the backside using the beautiful circle packing algorithm of D3. Instantly access files and folders directly from the InterBrain.
 
 ![](media/FileAccess.gif)
-
-### 📂 Finder Integration
-
-Reveal DreamNodes in your file system with just one click.
-
-![](media/FinderIntegration)
 
 ## Real-World Applications & Project Synergy
 
