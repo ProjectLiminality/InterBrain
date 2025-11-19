@@ -1272,6 +1272,24 @@ else
     fi
 fi
 
+# Configure git to allow rad:// protocol for submodules
+if [ "$RADICLE_AVAILABLE" = true ]; then
+    echo ""
+    echo "Configuring git to allow Radicle protocol..."
+
+    # Check if already configured
+    if git config --global --get protocol.rad.allow >/dev/null 2>&1; then
+        success "Git already configured to allow rad:// protocol"
+    else
+        git config --global protocol.rad.allow always
+        if [ $? -eq 0 ]; then
+            success "Git configured to allow rad:// protocol for submodules"
+        else
+            warning "Failed to configure git protocol (non-critical)"
+        fi
+    fi
+fi
+
 echo ""
 echo "Step 11/$TOTAL_STEPS: Starting Radicle node..."
 echo "-----------------------------------"

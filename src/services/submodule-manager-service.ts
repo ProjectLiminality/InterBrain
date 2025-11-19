@@ -137,6 +137,10 @@ export class SubmoduleManagerService {
 
       console.log(`SubmoduleManagerService: Using Radicle URL for submodule: ${radicleId}`);
 
+      // Convert rad:zABC... to rad://zABC... format for git submodule
+      const radicleUrl = radicleId.replace(/^rad:/, 'rad://');
+      console.log(`SubmoduleManagerService: Converted to git-compatible URL: ${radicleUrl}`);
+
       // Import the submodule using Radicle URL (use --force to handle previously-removed submodules)
       // CRITICAL: Add Radicle bin to PATH so git can find git-remote-rad helper
       const os = require('os');
@@ -148,7 +152,7 @@ export class SubmoduleManagerService {
       ];
       const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
 
-      const submoduleCommand = `git submodule add --force "${radicleId}" "${actualSubmoduleName}"`;
+      const submoduleCommand = `git submodule add --force "${radicleUrl}" "${actualSubmoduleName}"`;
       await execAsync(submoduleCommand, { cwd: parentFullPath, env: { ...process.env, PATH: enhancedPath } });
 
       console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName} with Radicle URL`);
