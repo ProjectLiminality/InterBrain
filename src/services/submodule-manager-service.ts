@@ -113,27 +113,35 @@ export class SubmoduleManagerService {
   ): Promise<SubmoduleImportResult> {
     const parentFullPath = this.getFullPath(parentDreamNodePath);
     const sourceFullPath = this.getFullPath(sourceDreamNodePath);
-    
+
     // Use directory name if submodule name not provided
     const actualSubmoduleName = submoduleName || path.basename(sourceDreamNodePath);
-    
+
     try {
       console.log(`SubmoduleManagerService: Importing ${sourceDreamNodePath} as submodule ${actualSubmoduleName} into ${parentDreamNodePath}`);
-      
+
       // Check if parent is a git repository
       await this.verifyGitRepository(parentFullPath);
-      
+
       // Check if source is a git repository
       await this.verifyGitRepository(sourceFullPath);
-      
+
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
-      
-      // Import the submodule (use --force to handle previously-removed submodules)
-      const submoduleCommand = `git submodule add --force "${sourceFullPath}" "${actualSubmoduleName}"`;
+
+      // Get Radicle ID for the submodule (network-based URL)
+      const radicleId = await this.getRadicleId(sourceFullPath);
+      if (!radicleId) {
+        throw new Error(`Cannot add submodule: ${actualSubmoduleName} does not have a Radicle ID. Initialize with Radicle first.`);
+      }
+
+      console.log(`SubmoduleManagerService: Using Radicle URL for submodule: ${radicleId}`);
+
+      // Import the submodule using Radicle URL (use --force to handle previously-removed submodules)
+      const submoduleCommand = `git submodule add --force "${radicleId}" "${actualSubmoduleName}"`;
       await execAsync(submoduleCommand, { cwd: parentFullPath });
-      
-      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName}`);
+
+      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName} with Radicle URL`);
       
       return {
         success: true,
