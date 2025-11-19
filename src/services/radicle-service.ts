@@ -844,10 +844,10 @@ export class RadicleServiceImpl implements RadicleService {
         return; // Skip publish, exit successfully
       }
 
-      // STEP 3: Publish to network (makes public + announces + auto-seeds)
-      console.log(`RadicleService: Publishing to Radicle network (rad publish)...`);
+      // STEP 3: Publish to network (use rad id update for multi-delegate support)
+      console.log(`RadicleService: Publishing to Radicle network (rad id update --visibility public)...`);
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(radCmd, ['publish'], {
+        const child = spawn(radCmd, ['id', 'update', '--visibility', 'public', '--no-confirm'], {
           env: env,
           cwd: absoluteDreamNodePath,
           stdio: ['pipe', 'pipe', 'pipe']
@@ -865,22 +865,22 @@ export class RadicleServiceImpl implements RadicleService {
         });
 
         child.on('close', (code) => {
-          console.log('RadicleService: rad publish output:', stdout);
-          if (stderr) console.log('RadicleService: rad publish stderr:', stderr);
+          console.log('RadicleService: rad id update output:', stdout);
+          if (stderr) console.log('RadicleService: rad id update stderr:', stderr);
 
           if (code === 0) {
             console.log('✅ RadicleService: Successfully published to network!');
             resolve();
-          } else if (stdout.includes('already public') || stderr.includes('already public')) {
-            console.log('ℹ️ RadicleService: Repository already public (detected in publish output)');
+          } else if (stderr.includes('already public') || stderr.includes('No identity updates')) {
+            console.log('ℹ️ RadicleService: Repository already public (no changes needed)');
             resolve(); // Not an error
           } else {
-            reject(new Error(`rad publish exited with code ${code}`));
+            reject(new Error(`rad id update exited with code ${code}`));
           }
         });
 
         child.on('error', (error) => {
-          console.error('RadicleService: rad publish spawn error:', error);
+          console.error('RadicleService: rad id update spawn error:', error);
           reject(error);
         });
 
