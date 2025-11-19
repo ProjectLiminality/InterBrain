@@ -868,10 +868,13 @@ export class RadicleServiceImpl implements RadicleService {
           console.log('RadicleService: rad publish output:', stdout);
           if (stderr) console.log('RadicleService: rad publish stderr:', stderr);
 
+          // Combine stdout and stderr for error checking
+          const output = stdout + stderr;
+
           if (code === 0) {
             console.log('✅ RadicleService: Successfully published to network!');
             resolve();
-          } else if (stderr.includes('already public') || stderr.includes('No identity updates')) {
+          } else if (output.includes('already public') || output.includes('No identity updates')) {
             console.log('ℹ️ RadicleService: Repository already public (no changes needed)');
             resolve(); // Not an error
           } else {
