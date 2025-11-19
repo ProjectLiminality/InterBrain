@@ -623,6 +623,12 @@ export class RadicleServiceImpl implements RadicleService {
         throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
       }
 
+      // Check if error is due to network propagation (no seeds found)
+      if (errorOutput.includes('no seeds found') || errorOutput.includes('Target not met')) {
+        // This is a temporary network issue - repository is being propagated to public seeds
+        throw new Error('NETWORK_PROPAGATION_DELAY');
+      }
+
       // Other error
       throw new Error(`Failed to clone from Radicle network: ${errorOutput || cloneError.message || 'Unknown error'}`);
     }

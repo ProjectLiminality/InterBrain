@@ -702,6 +702,20 @@ export class URIHandlerService {
 			return 'success';
 
 		} catch (error) {
+			// Handle network propagation delays gracefully
+			if (error instanceof Error && error.message === 'NETWORK_PROPAGATION_DELAY') {
+				console.log(`⏳ [URIHandler] Repository ${radicleId} is still propagating to network seeds`);
+
+				if (!silent) {
+					new Notice(
+						'Repository is being published to the network. This usually takes 1-2 minutes. Please try again shortly.',
+						8000 // Show for 8 seconds
+					);
+				}
+
+				return 'error';
+			}
+
 			console.error(`❌ [URIHandler] Clone failed for ${radicleId}:`, error);
 
 			if (!silent) {
