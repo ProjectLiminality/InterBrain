@@ -747,15 +747,39 @@ export class SubmoduleManagerService {
           // STEP 2: NOW update submodule to point to latest sovereign commit with all metadata
           console.log(`SubmoduleManagerService: Updating submodule to latest sovereign state...`);
 
-          // Initialize submodule first (if not already)
-          await execAsync(`git submodule update --init "${result.submoduleName}"`, { cwd: fullParentPath });
+          try {
+            // Initialize submodule first (if not already)
+            // CRITICAL: Add Radicle bin to PATH for git-remote-rad helper
+            const os = require('os');
+            const homeDir = os.homedir();
+            const radicleGitHelperPaths = [
+              `${homeDir}/.radicle/bin`,
+              '/usr/local/bin',
+              '/opt/homebrew/bin'
+            ];
+            const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
 
-          // Update submodule to point to latest commit from sovereign (remote origin/main)
-          const submodulePath = path.join(fullParentPath, result.submoduleName);
-          await execAsync(`git fetch origin`, { cwd: submodulePath });
-          await execAsync(`git checkout origin/main`, { cwd: submodulePath });
+            await execAsync(`git submodule update --init "${result.submoduleName}"`, {
+              cwd: fullParentPath,
+              env: { ...process.env, PATH: enhancedPath }
+            });
 
-          console.log(`SubmoduleManagerService: Submodule ${childTitle} updated to latest with complete metadata`);
+            // Update submodule to point to latest commit from sovereign (remote origin/main)
+            const submodulePath = path.join(fullParentPath, result.submoduleName);
+            await execAsync(`git fetch origin`, {
+              cwd: submodulePath,
+              env: { ...process.env, PATH: enhancedPath }
+            });
+            await execAsync(`git checkout origin/main`, {
+              cwd: submodulePath,
+              env: { ...process.env, PATH: enhancedPath }
+            });
+
+            console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest with complete metadata`);
+          } catch (error) {
+            console.warn(`SubmoduleManagerService: Could not update submodule ${result.submoduleName} (non-fatal):`, error instanceof Error ? error.message : 'Unknown error');
+            console.warn(`SubmoduleManagerService: Continuing with relationship tracking...`);
+          }
 
           // Update parent's .udd (add child's Radicle ID to submodules array if missing)
           if (childRadicleId && await UDDService.addSubmodule(fullParentPath, childRadicleId)) {
@@ -836,9 +860,98 @@ export class SubmoduleManagerService {
 
       console.log('SubmoduleManagerService: Bidirectional relationship tracking complete');
 
+      // FINAL STEP: Sync .gitmodules to .udd submodules array (idempotent robustness)
+      // This ensures .udd always reflects actual git submodules, even if relationship tracking failed
+      await this.syncGitmodulesToUDD(fullParentPath);
+
     } catch (error) {
       console.error(`SubmoduleManagerService: Fatal error in bidirectional tracking: ${error instanceof Error ? error.message : 'Unknown error'}`);
       // Don't throw - this is a non-critical enhancement
+    }
+  }
+
+  /**
+   * Idempotent sync: Parse .gitmodules and ensure all submodule RIDs are in .udd array
+   * This provides robustness if relationship tracking fails partway through
+   */
+  private async syncGitmodulesToUDD(parentPath: string): Promise<void> {
+    console.log('SubmoduleManagerService: Syncing .gitmodules → .udd submodules array...');
+
+    try {
+      const fs = require('fs');
+      const gitmodulesPath = path.join(parentPath, '.gitmodules');
+
+      // Check if .gitmodules exists
+      if (!fs.existsSync(gitmodulesPath)) {
+        console.log('SubmoduleManagerService: No .gitmodules file - skipping sync');
+        return;
+      }
+
+      // Parse .gitmodules to get all submodule names
+      const gitmodulesContent = fs.readFileSync(gitmodulesPath, 'utf-8');
+      const submoduleNames: string[] = [];
+
+      // Match [submodule "name"] sections
+      const submoduleRegex = /\[submodule "([^"]+)"\]/g;
+      let match;
+      while ((match = submoduleRegex.exec(gitmodulesContent)) !== null) {
+        submoduleNames.push(match[1]);
+      }
+
+      console.log(`SubmoduleManagerService: Found ${submoduleNames.length} submodules in .gitmodules:`, submoduleNames);
+
+      if (submoduleNames.length === 0) {
+        console.log('SubmoduleManagerService: No submodules in .gitmodules - nothing to sync');
+        return;
+      }
+
+      // For each submodule, get RID from sovereign repo and ensure it's in .udd
+      let addedCount = 0;
+      for (const submoduleName of submoduleNames) {
+        const sovereignPath = path.join(this.vaultPath, submoduleName);
+        const sovereignExists = fs.existsSync(path.join(sovereignPath, '.git'));
+
+        if (!sovereignExists) {
+          console.log(`SubmoduleManagerService: No sovereign repo for ${submoduleName} - skipping .udd sync`);
+          continue;
+        }
+
+        // Get RID from sovereign .udd
+        const childRadicleId = await this.getRadicleIdFromUDD(sovereignPath);
+        if (!childRadicleId) {
+          console.warn(`SubmoduleManagerService: ${submoduleName} has no Radicle ID - skipping .udd sync`);
+          continue;
+        }
+
+        // Add to parent's .udd (idempotent - only adds if missing)
+        if (await UDDService.addSubmodule(parentPath, childRadicleId)) {
+          console.log(`SubmoduleManagerService: ✓ Added ${submoduleName} (${childRadicleId}) to .udd submodules`);
+          addedCount++;
+        }
+      }
+
+      if (addedCount > 0) {
+        console.log(`SubmoduleManagerService: Added ${addedCount} missing RID(s) to .udd submodules array`);
+
+        // Commit the .udd update
+        try {
+          await execAsync('git add .udd', { cwd: parentPath });
+
+          // Check if there are staged changes
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: parentPath });
+          if (statusOutput.trim()) {
+            await execAsync('git commit -m "Sync .gitmodules to .udd submodules array"', { cwd: parentPath });
+            console.log('SubmoduleManagerService: ✓ Committed .udd sync changes');
+          }
+        } catch (error) {
+          console.warn('SubmoduleManagerService: Could not commit .udd sync (non-fatal):', error instanceof Error ? error.message : 'Unknown error');
+        }
+      } else {
+        console.log('SubmoduleManagerService: .udd submodules array already up to date with .gitmodules');
+      }
+
+    } catch (error) {
+      console.error('SubmoduleManagerService: Error syncing .gitmodules to .udd (non-fatal):', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
