@@ -255,27 +255,42 @@ export class CoherenceBeaconService {
     console.log(`CoherenceBeaconService: Accepting beacon for ${beacon.title}...`);
 
     try {
-      // Check if the commit is already applied (look for the beacon metadata in current HEAD)
+      // Check if the commit is already applied AND the DreamNode actually exists
       const { stdout: currentCommitMsg } = await execAsync('git log -1 --format="%b"', { cwd: fullPath });
-      const alreadyApplied = currentCommitMsg.includes(`COHERENCE_BEACON: {"type":"supermodule","radicleId":"${beacon.radicleId}"`);
+      const commitHasBeacon = currentCommitMsg.includes(`COHERENCE_BEACON: {"type":"supermodule","radicleId":"${beacon.radicleId}"`);
 
-      if (alreadyApplied) {
-        console.log(`CoherenceBeaconService: Beacon already applied to this branch - operation complete`);
-        return;
+      if (commitHasBeacon) {
+        console.log(`CoherenceBeaconService: Beacon commit is in branch history - checking if DreamNode exists...`);
+
+        // Verify the DreamNode actually exists on disk
+        const fs = require('fs').promises;
+        const dreamNodePath = path.join(this.vaultPath, beacon.title);
+        const dreamNodeUddPath = path.join(dreamNodePath, '.udd');
+
+        try {
+          await fs.access(dreamNodeUddPath);
+          console.log(`CoherenceBeaconService: ✓ DreamNode ${beacon.title} exists - beacon fully applied`);
+          return;
+        } catch {
+          console.warn(`CoherenceBeaconService: ⚠️ Beacon commit exists but DreamNode ${beacon.title} NOT cloned - will clone now`);
+          // Fall through to cloning logic
+        }
       }
 
       // PHASE 1: Clone supermodule (BEFORE merging commit)
       console.log(`CoherenceBeaconService: PHASE 1 - Cloning supermodule ${beacon.title}...`);
+      console.log(`CoherenceBeaconService: Target RID: ${beacon.radicleId}`);
       const uriHandler = getURIHandlerService();
       const cloneResult = await uriHandler.cloneFromRadicle(beacon.radicleId, false);
+      console.log(`CoherenceBeaconService: Clone result: ${cloneResult}`);
 
       let clonedNodePath: string | null = null;
 
       if (cloneResult === 'success') {
-        console.log(`CoherenceBeaconService: ✓ Supermodule ${beacon.title} cloned successfully`);
+        console.log(`CoherenceBeaconService: ✅ Supermodule ${beacon.title} cloned successfully`);
         clonedNodePath = path.join(this.vaultPath, beacon.title);
       } else if (cloneResult === 'skipped') {
-        console.log(`CoherenceBeaconService: ✓ Supermodule ${beacon.title} already exists`);
+        console.log(`CoherenceBeaconService: ℹ️ Supermodule ${beacon.title} already exists (skipped clone)`);
         clonedNodePath = path.join(this.vaultPath, beacon.title);
       } else {
         // Clone failed - abort entire operation (commit remains unmerged for retry)
@@ -299,8 +314,9 @@ export class CoherenceBeaconService {
       if (clonedNodePath) {
         try {
           await this.initializeAndCloneSubmodules(clonedNodePath, beacon.title);
-          console.log(`CoherenceBeaconService: ✓ All submodules cloned successfully`);
+          console.log(`CoherenceBeaconService: ✅ All submodules cloned successfully`);
         } catch (submoduleError: any) {
+          console.error(`CoherenceBeaconService: ❌ Submodule cloning failed:`, submoduleError);
           // Submodule clone failed - abort entire operation (commit remains unmerged for retry)
           const errorMsg = `Failed to clone submodules for "${beacon.title}".\n\n` +
                           `NETWORK DELAY: Some nested repositories may not be available yet.\n` +
