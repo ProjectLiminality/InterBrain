@@ -896,11 +896,11 @@ export class RadicleServiceImpl implements RadicleService {
         child.stdin?.end();
       });
 
-      // STEP 4: Announce to network for immediate peer discovery
-      // This ensures other nodes can find this repository right away
-      console.log(`RadicleService: Announcing repository to network (rad sync --announce)...`);
+      // STEP 4: Announce to network with inventory for immediate seed discovery
+      // --inventory forces full announcement including routing table updates
+      console.log(`RadicleService: Announcing repository to network (rad sync --inventory)...`);
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(radCmd, ['sync', '--announce'], {
+        const child = spawn(radCmd, ['sync', '--inventory'], {
           env: env,
           cwd: absoluteDreamNodePath,
           stdio: ['pipe', 'pipe', 'pipe']

@@ -490,13 +490,15 @@ export class CoherenceBeaconService {
       }
     }
 
-    // If any clones failed, throw error with details
+    // Log any clone failures as warnings (non-fatal)
+    // Nested submodule clones are for media file resolution - not critical for relationship tracking
     if (failedClones.length > 0) {
       const failureDetails = failedClones.map(f => `  • ${f.name} (${f.radicleId}): ${f.error}`).join('\n');
-      throw new Error(`Failed to clone ${failedClones.length} submodule(s):\n${failureDetails}`);
+      console.warn(`CoherenceBeaconService: ⚠️ Some nested submodule clones failed (non-fatal):\n${failureDetails}`);
+      console.warn(`CoherenceBeaconService: Sovereign clones may already exist - this is expected. Media files may not resolve until submodules are synced.`);
+    } else {
+      console.log(`CoherenceBeaconService: ✓ All submodules initialized successfully`);
     }
-
-    console.log(`CoherenceBeaconService: ✓ All submodules initialized successfully`);
   }
 
   /**
