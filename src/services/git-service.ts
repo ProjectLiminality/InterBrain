@@ -549,15 +549,16 @@ export class GitService {
   }
 
   /**
-   * Pull updates from remote (merge fetched changes)
-   * Uses regular git pull (fetch + merge) to support Radicle's peer-to-peer workflow
-   * In Radicle, divergent branches are normal and should be merged, not rejected
+   * Pull updates from remote (cherry-pick or merge fetched changes)
+   * For peer updates: cherry-picks specific commits to preserve attribution
+   * For regular updates: uses git pull for fast-forward/merge
+   *
+   * @param repoPath Path to the repository
+   * @param commits Optional array of commit hashes to cherry-pick (for peer updates)
    */
-  async pullUpdates(repoPath: string): Promise<void> {
+  async pullUpdates(repoPath: string, commits?: string[]): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitService: Pulling updates for ${fullPath}`);
-
       // Enhance PATH for Radicle git-remote-rad helper
       const homeDir = (globalThis as any).process?.env?.HOME || '';
       const radicleGitHelperPaths = [
@@ -575,10 +576,30 @@ export class GitService {
         }
       };
 
-      // Use git pull with --no-rebase to support Radicle's merge-based collaboration
-      // This explicitly tells git to merge (not rebase) when branches diverge
-      await execAsync('git pull --no-rebase', execOptions);
-      console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
+      if (commits && commits.length > 0) {
+        // Cherry-pick specific commits from peer (preserves attribution and commit history)
+        console.log(`GitService: Cherry-picking ${commits.length} commit(s) from peer:`, commits);
+        for (const commitHash of commits) {
+          try {
+            await execAsync(`git cherry-pick ${commitHash}`, execOptions);
+            console.log(`GitService: ✓ Cherry-picked ${commitHash}`);
+          } catch (error: any) {
+            // Check if error is "already applied" (commit exists in history)
+            if (error.message && error.message.includes('now empty')) {
+              console.log(`GitService: Commit ${commitHash} already applied - skipping`);
+              await execAsync('git cherry-pick --skip', execOptions);
+            } else {
+              throw error;
+            }
+          }
+        }
+        console.log(`GitService: Successfully cherry-picked all commits`);
+      } else {
+        // Use git pull with --no-rebase for regular upstream updates
+        console.log(`GitService: Pulling updates from upstream`);
+        await execAsync('git pull --no-rebase', execOptions);
+        console.log(`GitService: Successfully pulled updates in: ${fullPath}`);
+      }
     } catch (error) {
       console.error('GitService: Failed to pull updates:', error);
       throw new Error(`Failed to pull updates: ${error instanceof Error ? error.message : 'Unknown error'}`);

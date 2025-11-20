@@ -393,8 +393,10 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
             const applyNotice = uiService.showLoading(`Updating ${selectedNode.name}...`);
             try {
-              // Pull updates (will be fast-forward only now)
-              await gitService.pullUpdates(selectedNode.repoPath);
+              // Pull updates - cherry-pick peer commits or fast-forward from upstream
+              // Extract commit hashes from updateStatus for cherry-picking
+              const commitHashes = updateStatus.commits.map(c => c.hash);
+              await gitService.pullUpdates(selectedNode.repoPath, commitHashes);
 
               // Check for coherence beacons in the commits we just pulled
               applyNotice.hide();
