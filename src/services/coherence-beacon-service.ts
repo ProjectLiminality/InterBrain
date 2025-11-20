@@ -407,9 +407,15 @@ export class CoherenceBeaconService {
       ];
       const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
 
+      // IMPORTANT: Set GIT_ALLOW_PROTOCOL to explicitly allow rad:// and file:// for submodules
+      // This overrides git's security restrictions for custom protocols
       await execAsync('git submodule update --init --recursive', {
         cwd: clonedNodePath,
-        env: { ...process.env, PATH: enhancedPath }
+        env: {
+          ...process.env,
+          PATH: enhancedPath,
+          GIT_ALLOW_PROTOCOL: 'file:rad'
+        }
       });
       console.log(`CoherenceBeaconService: ✓ Git submodules initialized successfully`);
     } catch (error: any) {

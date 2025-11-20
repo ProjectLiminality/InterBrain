@@ -1277,7 +1277,7 @@ if [ "$RADICLE_AVAILABLE" = true ]; then
     echo ""
     echo "Configuring git to allow Radicle protocol..."
 
-    # Check if already configured
+    # Configure rad:// protocol
     if git config --global --get protocol.rad.allow >/dev/null 2>&1; then
         success "Git already configured to allow rad:// protocol"
     else
@@ -1286,6 +1286,18 @@ if [ "$RADICLE_AVAILABLE" = true ]; then
             success "Git configured to allow rad:// protocol for submodules"
         else
             warning "Failed to configure git protocol (non-critical)"
+        fi
+    fi
+
+    # Configure file:// protocol (needed for git submodule operations with custom protocols)
+    if git config --global --get protocol.file.allow >/dev/null 2>&1; then
+        success "Git already configured to allow file:// protocol"
+    else
+        git config --global protocol.file.allow always
+        if [ $? -eq 0 ]; then
+            success "Git configured to allow file:// protocol for submodules"
+        else
+            warning "Failed to configure git file protocol (non-critical)"
         fi
     fi
 fi
