@@ -382,11 +382,11 @@ export class CoherenceBeaconService {
   private async initializeAndCloneSubmodules(clonedNodePath: string, nodeName: string): Promise<void> {
     console.log(`CoherenceBeaconService: Initializing submodules in ${nodeName}...`);
 
-    // Check if .gitmodules exists
     const path = require('path');
     const fs = require('fs').promises;
     const gitmodulesPath = path.join(clonedNodePath, '.gitmodules');
 
+    // Check if .gitmodules exists
     try {
       await fs.access(gitmodulesPath);
     } catch {
@@ -394,110 +394,99 @@ export class CoherenceBeaconService {
       return;
     }
 
-    // Parse .gitmodules to find submodule Radicle IDs
+    // STEP 1: Git-native submodule initialization (let git/radicle do their thing!)
+    console.log(`CoherenceBeaconService: Running git-native submodule initialization...`);
+    try {
+      // Add enhanced PATH for git-remote-rad helper
+      const os = require('os');
+      const homeDir = os.homedir();
+      const radicleGitHelperPaths = [
+        `${homeDir}/.radicle/bin`,
+        '/usr/local/bin',
+        '/opt/homebrew/bin'
+      ];
+      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
+
+      await execAsync('git submodule update --init --recursive', {
+        cwd: clonedNodePath,
+        env: { ...process.env, PATH: enhancedPath }
+      });
+      console.log(`CoherenceBeaconService: ✓ Git submodules initialized successfully`);
+    } catch (error: any) {
+      console.warn(`CoherenceBeaconService: Git submodule init had issues (non-fatal):`, error.message);
+      console.warn(`CoherenceBeaconService: Will proceed with sovereign clone gap-filling...`);
+    }
+
+    // STEP 2: Parse .gitmodules to find which submodules need sovereign clones at vault root
+    console.log(`CoherenceBeaconService: Checking for missing sovereign repos at vault root...`);
     const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
     const submodulePattern = /\[submodule "([^"]+)"\]\s+path = ([^\n]+)\s+url = rad:\/\/([^\n]+)/g;
     let match;
 
-    const failedClones: Array<{ name: string; radicleId: string; error: string }> = [];
+    const missingSovereigns: Array<{ name: string; radicleId: string }> = [];
 
     while ((match = submodulePattern.exec(gitmodulesContent)) !== null) {
       const submoduleName = match[1];
-      const submodulePath = match[2].trim();
       const radicleId = `rad:${match[3].trim()}`; // Re-add 'rad:' prefix
 
-      console.log(`CoherenceBeaconService: Found submodule: ${submoduleName} (${radicleId})`);
-
-      // STEP 1: Clone as sovereign DreamNode to vault root
+      // Check if sovereign repo exists at vault root
       const vaultRootPath = path.join(this.vaultPath, submoduleName);
       try {
-        await fs.access(vaultRootPath);
-        console.log(`CoherenceBeaconService: ${submoduleName} already exists at vault root - skipping sovereign clone`);
+        await fs.access(path.join(vaultRootPath, '.git'));
+        console.log(`CoherenceBeaconService: ✓ ${submoduleName} already exists as sovereign at vault root`);
       } catch {
-        console.log(`CoherenceBeaconService: Cloning ${submoduleName} as sovereign DreamNode...`);
-        const uriHandler = getURIHandlerService();
-        const sovereignCloneResult = await uriHandler.cloneFromRadicle(radicleId, false);
-
-        if (sovereignCloneResult === 'failed') {
-          failedClones.push({
-            name: submoduleName,
-            radicleId: radicleId,
-            error: 'Failed to clone as sovereign DreamNode'
-          });
-          continue; // Skip nested clone if sovereign failed
-        }
-
-        // Recursively handle ITS submodules
-        try {
-          await this.initializeAndCloneSubmodules(vaultRootPath, submoduleName);
-        } catch (recursiveError: any) {
-          failedClones.push({
-            name: submoduleName,
-            radicleId: radicleId,
-            error: `Failed to clone nested submodules: ${recursiveError.message}`
-          });
-          continue; // Skip nested clone if recursive failed
-        }
+        console.log(`CoherenceBeaconService: Missing sovereign: ${submoduleName} (${radicleId})`);
+        missingSovereigns.push({ name: submoduleName, radicleId });
       }
+    }
 
-      // STEP 2: Clone into nested submodule path for media file resolution
-      const nestedSubmodulePath = path.join(clonedNodePath, submodulePath);
+    // STEP 3: Clone missing sovereigns to vault root
+    if (missingSovereigns.length === 0) {
+      console.log(`CoherenceBeaconService: ✓ All submodules already exist as sovereigns at vault root`);
+      return;
+    }
 
-      // Check if it's a valid git repository, not just an empty directory
-      let needsClone = true;
+    console.log(`CoherenceBeaconService: Cloning ${missingSovereigns.length} missing sovereign(s) to vault root...`);
+    const failedClones: Array<{ name: string; radicleId: string; error: string }> = [];
+
+    for (const { name, radicleId } of missingSovereigns) {
       try {
-        const gitDir = path.join(nestedSubmodulePath, '.git');
-        await fs.access(gitDir);
-        console.log(`CoherenceBeaconService: ${submoduleName} already exists in nested path - skipping nested clone`);
-        needsClone = false;
-      } catch {
-        // Either doesn't exist or is an empty directory - need to clone
-      }
+        console.log(`CoherenceBeaconService: Cloning ${name} as sovereign DreamNode...`);
+        const uriHandler = getURIHandlerService();
+        const cloneResult = await uriHandler.cloneFromRadicle(radicleId, false);
 
-      if (needsClone) {
-        console.log(`CoherenceBeaconService: Cloning ${submoduleName} to nested submodule path...`);
-
-        // Remove empty directory if it exists
-        try {
-          await fs.rm(nestedSubmodulePath, { recursive: true, force: true });
-        } catch {
-          // Directory might not exist - that's fine
-        }
-
-        // Use rad clone directly into the submodule path
-        const { RadicleServiceImpl } = await import('./radicle-service');
-        const radicleService = new RadicleServiceImpl(this.app);
-
-        // Clone to parent directory (rad clone will create the submodule directory)
-        const parentDir = path.dirname(nestedSubmodulePath);
-        const cloneResult = await radicleService.clone(radicleId, parentDir);
-
-        if (!cloneResult.success) {
+        if (cloneResult === 'failed') {
           failedClones.push({
-            name: submoduleName,
-            radicleId: radicleId,
-            error: 'Failed to clone to nested submodule path'
+            name,
+            radicleId,
+            error: 'Failed to clone as sovereign DreamNode'
           });
           continue;
         }
 
-        // If rad clone added a UUID suffix to avoid naming conflicts, rename to clean name
-        if (cloneResult.repoName !== submoduleName) {
-          console.log(`CoherenceBeaconService: Renaming "${cloneResult.repoName}" to "${submoduleName}" for nested submodule`);
-          const clonedPath = path.join(parentDir, cloneResult.repoName);
-          await fs.rename(clonedPath, nestedSubmodulePath);
+        // Recursively handle nested submodules
+        const vaultRootPath = path.join(this.vaultPath, name);
+        try {
+          await this.initializeAndCloneSubmodules(vaultRootPath, name);
+        } catch (recursiveError: any) {
+          console.warn(`CoherenceBeaconService: Could not initialize nested submodules for ${name} (non-fatal):`, recursiveError.message);
         }
+
+      } catch (error: any) {
+        failedClones.push({
+          name,
+          radicleId,
+          error: error.message || 'Unknown error'
+        });
       }
     }
 
-    // Log any clone failures as warnings (non-fatal)
-    // Nested submodule clones are for media file resolution - not critical for relationship tracking
+    // Report results
     if (failedClones.length > 0) {
       const failureDetails = failedClones.map(f => `  • ${f.name} (${f.radicleId}): ${f.error}`).join('\n');
-      console.warn(`CoherenceBeaconService: ⚠️ Some nested submodule clones failed (non-fatal):\n${failureDetails}`);
-      console.warn(`CoherenceBeaconService: Sovereign clones may already exist - this is expected. Media files may not resolve until submodules are synced.`);
+      console.warn(`CoherenceBeaconService: ⚠️ Some sovereign clones failed (non-fatal):\n${failureDetails}`);
     } else {
-      console.log(`CoherenceBeaconService: ✓ All submodules initialized successfully`);
+      console.log(`CoherenceBeaconService: ✓ All missing sovereigns cloned successfully`);
     }
   }
 
