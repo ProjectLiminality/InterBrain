@@ -396,13 +396,15 @@ export class GitService {
       }
 
       // ALSO fetch from peer remotes (for pure p2p collaboration)
-      // Peer remotes have URLs like rad://RID/DID (with DID suffix)
+      // Peer remotes have URLs like rad://RID/z6Mks... (DID without 'did:key:' prefix)
       console.log(`GitService: Checking for peer remotes...`);
       const { stdout: remoteVerbose } = await execAsync('git remote -v', { cwd: fullPath });
       const peerRemotes = new Set<string>();
 
       for (const line of remoteVerbose.split('\n')) {
-        const match = line.match(/^(\S+)\s+rad:\/\/\S+\/did:key:\S+/);
+        // Match remotes with DID suffix: rad://RID/z6Mks...
+        // Git stores DIDs without the 'did:key:' prefix
+        const match = line.match(/^(\S+)\s+rad:\/\/\S+\/(z6\w+)/);
         if (match) {
           const peerName = match[1];
           peerRemotes.add(peerName);
