@@ -545,14 +545,15 @@ export class CoherenceBeaconService {
       }
 
       // Find the Dreamer node for this peer DID
+      // Dreamer nodes store the DID in the separate 'did' field, not 'radicleId'
       let dreamerNodePath: string | null = null;
       for (const nodeName of dreamNodes) {
         const nodePath = path.join(this.vaultPath, nodeName);
         try {
           const udd = await UDDService.readUDD(nodePath);
-          if (udd.type === 'dreamer' && udd.radicleId === peerDID) {
+          if (udd.type === 'dreamer' && udd.did === peerDID) {
             dreamerNodePath = nodePath;
-            console.log(`CoherenceBeaconService: Found Dreamer node: ${nodeName}`);
+            console.log(`CoherenceBeaconService: Found Dreamer node: ${nodeName} (DID: ${peerDID})`);
             break;
           }
         } catch {
