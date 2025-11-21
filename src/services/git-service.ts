@@ -559,6 +559,22 @@ export class GitService {
   async pullUpdates(repoPath: string, commits?: string[]): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
+      // SPECIAL CASE: InterBrain node (550e8400-e29b-41d4-a716-446655440000)
+      // Check if this is the InterBrain repo by reading .udd
+      const fs = require('fs');
+      const path = require('path');
+      const uddPath = path.join(fullPath, '.udd');
+      let isInterBrainNode = false;
+
+      try {
+        const uddContent = fs.readFileSync(uddPath, 'utf-8');
+        const udd = JSON.parse(uddContent);
+        isInterBrainNode = udd.uuid === '550e8400-e29b-41d4-a716-446655440000';
+      } catch {
+        // If we can't read .udd, assume not InterBrain
+        isInterBrainNode = false;
+      }
+
       // Enhance PATH for Radicle git-remote-rad helper
       const homeDir = (globalThis as any).process?.env?.HOME || '';
       const radicleGitHelperPaths = [
@@ -575,6 +591,25 @@ export class GitService {
           PATH: enhancedPath
         }
       };
+
+      // InterBrain node: Always use simple pull (GitHub-only, no Radicle p2p)
+      if (isInterBrainNode) {
+        console.log(`GitService: InterBrain node detected - using simple pull strategy`);
+
+        // Reset any in-progress cherry-pick
+        try {
+          await execAsync('git cherry-pick --abort', execOptions);
+        } catch {
+          // No cherry-pick in progress, that's fine
+        }
+
+        // Reset to remote state to avoid conflicts (GitHub is canonical source)
+        console.log(`GitService: Resetting local state to match remote (GitHub canonical)`);
+        await execAsync('git fetch origin', execOptions);
+        await execAsync('git reset --hard origin/main', execOptions);
+        console.log(`GitService: Successfully updated InterBrain node from GitHub`);
+        return;
+      }
 
       if (commits && commits.length > 0) {
         // Cherry-pick specific commits from peer (preserves attribution and commit history)
