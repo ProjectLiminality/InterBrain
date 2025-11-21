@@ -939,7 +939,61 @@ export class RadicleServiceImpl implements RadicleService {
         child.stdin?.end();
       });
 
-      // STEP 5: Add recipient as delegate if specified
+      // STEP 5: Explicitly register repository with local node for seeding
+      // CRITICAL: This ensures the repo is immediately discoverable by peers
+      // Without this, propagation to seed nodes can take 10+ hours
+      console.log(`RadicleService: Registering repository with local node (rad seed)...`);
+      try {
+        const radicleId = await this.getRadicleId(absoluteDreamNodePath);
+        if (radicleId) {
+          await new Promise<void>((resolve, reject) => {
+            const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all'], {
+              env: env,
+              cwd: absoluteDreamNodePath,
+              stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout?.on('data', (data) => {
+              stdout += data.toString();
+            });
+
+            child.stderr?.on('data', (data) => {
+              stderr += data.toString();
+            });
+
+            child.on('close', (code) => {
+              console.log('RadicleService: rad seed output:', stdout);
+              if (stderr) console.log('RadicleService: rad seed stderr:', stderr);
+
+              // Success cases: exit code 0 OR "already seeding" message
+              if (code === 0 || stdout.includes('already seeding') || stderr.includes('already seeding')) {
+                console.log('✅ RadicleService: Repository registered with local node for seeding');
+                resolve();
+              } else {
+                console.warn(`⚠️ RadicleService: rad seed exited with code ${code} (not critical)`);
+                resolve(); // Don't fail the whole operation
+              }
+            });
+
+            child.on('error', (error) => {
+              console.warn('RadicleService: rad seed spawn error (not critical):', error);
+              resolve(); // Don't fail the whole operation
+            });
+
+            child.stdin?.end();
+          });
+        } else {
+          console.warn(`⚠️ RadicleService: Could not get Radicle ID for seeding (skipping rad seed)`);
+        }
+      } catch (seedError) {
+        console.warn(`⚠️ RadicleService: rad seed failed (not critical):`, seedError);
+        // Don't fail the whole operation if seeding fails
+      }
+
+      // STEP 6: Add recipient as delegate if specified
       if (recipientDid) {
         console.log(`RadicleService: Adding ${recipientDid} as delegate after successful publish...`);
         await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
