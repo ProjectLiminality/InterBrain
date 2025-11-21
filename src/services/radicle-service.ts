@@ -1164,15 +1164,22 @@ export class RadicleServiceImpl implements RadicleService {
       const { stdout: seedListOutput } = await execAsync(`"${radCmd}" seed`, { cwd: dreamNodePath });
 
       // Parse table output to find this RID's seeding policy
-      // Format: "│ rad:z... Name  allow  followed │" or "│ rad:z... Name  allow  all │"
+      // Format: "│ rad:z...    Name    allow    all      │"
+      // Note: Multiple spaces between columns, ends with scope then spaces then │
       const lines = seedListOutput.split('\n');
       for (const line of lines) {
-        if (line.includes(radicleId)) {
-          // Check if the scope in this line matches desired scope
-          const hasCorrectScope = line.trim().endsWith(`${scope}│`) || line.includes(`${scope} │`);
-          if (hasCorrectScope) {
+        // Match lines that START with │ and contain the exact radicleId
+        if (line.startsWith('│') && line.includes(radicleId)) {
+          // Split by whitespace and get the last meaningful column before │
+          const columns = line.trim().replace(/│/g, '').trim().split(/\s+/);
+          // Format: [radicleId, Name, allow, scope]
+          const currentScope = columns[columns.length - 1];
+
+          if (currentScope === scope) {
             console.log(`RadicleService: Seeding scope for ${radicleId} already set to '${scope}' - skipping`);
             return false; // Already correct
+          } else {
+            console.log(`RadicleService: Seeding scope for ${radicleId} is '${currentScope}', updating to '${scope}'`);
           }
           break;
         }
