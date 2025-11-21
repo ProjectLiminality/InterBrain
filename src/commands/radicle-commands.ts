@@ -98,13 +98,21 @@ export function registerRadicleCommands(
         console.log(`RadicleCommands: Repository not initialized with Radicle, initializing...`);
         const notice = new Notice('Initializing Radicle for DreamNode...', 0);
 
+        // Get passphrase using simplified flow (checks if node is running, shows settings prompt if needed)
+        const passphrase = await passphraseManager.getPassphrase();
+        if (passphrase === null) {
+          notice.hide();
+          console.log('RadicleCommands: User needs to configure passphrase in settings');
+          return;
+        }
+
         try {
-          // Try without passphrase first (ssh-agent)
           // Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
-          await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`);
+          // Pass passphrase (which may be empty string if node is already running)
+          await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`, passphrase || undefined);
 
           // Get the Radicle ID and save to .udd file
-          const radicleId = await radicleService.getRadicleId(fullRepoPath);
+          const radicleId = await radicleService.getRadicleId(fullRepoPath, passphrase || undefined);
           if (radicleId) {
             try {
               const uddContent = await fs.readFile(uddPath, 'utf-8');
@@ -122,13 +130,13 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name}`);
           uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
         } catch (error: any) {
+          notice.hide();
+
           // Check if repository exists in Radicle storage but working directory not linked
           if (error.message && error.message.startsWith('RADICLE_STORAGE_EXISTS:')) {
-            notice.hide();
-            const radicleId = error.message.replace('RADICLE_STORAGE_EXISTS:', ''); // Extract rad:z... from error
+            const radicleId = error.message.replace('RADICLE_STORAGE_EXISTS:', '');
             console.log(`RadicleCommands: ${selectedNode.name} exists in storage with ID ${radicleId}, linking to .udd...`);
 
-            // Save the Radicle ID to .udd file
             try {
               const uddContent = await fs.readFile(uddPath, 'utf-8');
               const udd = JSON.parse(uddContent);
@@ -143,13 +151,11 @@ export function registerRadicleCommands(
             return;
           }
 
-          // Check if already initialized - race condition where it was initialized between Step 2 and Step 3
+          // Check if already initialized
           if (error.message && (error.message.includes('already initialized') || error.message.includes('reinitialize'))) {
-            notice.hide();
-            console.log(`RadicleCommands: ${selectedNode.name} was initialized during gap check, retrieving ID...`);
+            console.log(`RadicleCommands: ${selectedNode.name} already initialized, retrieving ID...`);
 
-            // Get and save the Radicle ID to .udd file
-            const radicleId = await radicleService.getRadicleId(fullRepoPath);
+            const radicleId = await radicleService.getRadicleId(fullRepoPath, passphrase || undefined);
             if (radicleId) {
               try {
                 const uddContent = await fs.readFile(uddPath, 'utf-8');
@@ -166,72 +172,9 @@ export function registerRadicleCommands(
             return;
           }
 
-          // If passphrase is needed, prompt and retry
-          if (error.message && error.message.includes('passphrase')) {
-            notice.hide();
-            console.log('RadicleCommands: Passphrase required, prompting user...');
-
-            const passphrase = await passphraseManager.getPassphrase();
-            if (!passphrase) {
-              console.log('RadicleCommands: User cancelled passphrase prompt');
-              return;
-            }
-
-            // Retry with passphrase
-            const retryNotice = new Notice('Initializing Radicle for DreamNode...', 0);
-            try {
-              // Use repoPath (directory name) as Radicle name - already sanitized to PascalCase
-              await radicleService.init(fullRepoPath, selectedNode.repoPath, `DreamNode: ${selectedNode.name}`, passphrase);
-
-              // Get the Radicle ID and save to .udd file
-              const radicleId = await radicleService.getRadicleId(fullRepoPath);
-              if (radicleId) {
-                try {
-                  const uddContent = await fs.readFile(uddPath, 'utf-8');
-                  const udd = JSON.parse(uddContent);
-                  udd.radicleId = radicleId;
-                  await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-                  console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
-                } catch (error) {
-                  console.error('RadicleCommands: Failed to save Radicle ID to .udd:', error);
-                }
-              }
-
-              retryNotice.hide();
-              console.log(`RadicleCommands: Successfully initialized Radicle for ${selectedNode.name} with passphrase`);
-              uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
-            } catch (retryError: any) {
-              // Check if already initialized in retry path too
-              if (retryError.message && (retryError.message.includes('already initialized') || retryError.message.includes('reinitialize'))) {
-                retryNotice.hide();
-                console.log(`RadicleCommands: ${selectedNode.name} already initialized, retrieving ID...`);
-
-                const radicleId = await radicleService.getRadicleId(fullRepoPath);
-                if (radicleId) {
-                  try {
-                    const uddContent = await fs.readFile(uddPath, 'utf-8');
-                    const udd = JSON.parse(uddContent);
-                    udd.radicleId = radicleId;
-                    await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-                    console.log(`RadicleCommands: Saved Radicle ID ${radicleId} to .udd file`);
-                  } catch (writeError) {
-                    console.warn('RadicleCommands: Failed to save Radicle ID to .udd:', writeError);
-                  }
-                }
-
-                uiService.showSuccess(`${selectedNode.name} ready for peer-to-peer sharing!`);
-                return;
-              }
-
-              retryNotice.hide();
-              console.error('RadicleCommands: Failed to initialize with passphrase:', retryError);
-              uiService.showError(`Failed to initialize: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
-            }
-          } else {
-            notice.hide();
-            console.error('RadicleCommands: Failed to initialize DreamNode with Radicle:', error);
-            uiService.showError(`Failed to initialize: ${error.message || 'Unknown error'}`);
-          }
+          // Other errors
+          console.error('RadicleCommands: Failed to initialize DreamNode with Radicle:', error);
+          uiService.showError(`Failed to initialize: ${error.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('RadicleCommands: Initialize DreamNode with Radicle command failed:', error);
@@ -286,16 +229,23 @@ export function registerRadicleCommands(
           return;
         }
 
+        // Get passphrase using simplified flow (checks if node is running, shows settings prompt if needed)
+        const passphrase = await passphraseManager.getPassphrase();
+        if (passphrase === null) {
+          console.log('RadicleCommands: User needs to configure passphrase in settings');
+          return;
+        }
+
         // Show status indicator
         const notice = new Notice('Sharing to Radicle network...', 0);
         console.log(`RadicleCommands: Starting rad sync for ${selectedNode.name}...`);
 
         try {
-          // Try sharing without passphrase first (ssh-agent)
-          await radicleService.share(fullRepoPath);
+          // Pass passphrase (which may be empty string if node is already running)
+          await radicleService.share(fullRepoPath, passphrase || undefined);
 
           // Get Radicle ID and write to .udd
-          const radicleId = await radicleService.getRadicleId(fullRepoPath);
+          const radicleId = await radicleService.getRadicleId(fullRepoPath, passphrase || undefined);
           if (radicleId) {
             console.log(`RadicleCommands: Writing Radicle ID to .udd: ${radicleId}`);
             const UDDService = (await import('../services/udd-service')).UDDService;
@@ -309,45 +259,9 @@ export function registerRadicleCommands(
           console.log(`RadicleCommands: Successfully shared ${selectedNode.name} to Radicle network`);
           uiService.showSuccess(`${selectedNode.name} shared successfully!`);
         } catch (error: any) {
-          // If passphrase is needed, prompt and retry
-          if (error.message && error.message.includes('passphrase')) {
-            notice.hide();
-            console.log('RadicleCommands: Passphrase required, prompting user...');
-
-            const passphrase = await passphraseManager.getPassphrase();
-            if (!passphrase) {
-              console.log('RadicleCommands: User cancelled passphrase prompt');
-              return;
-            }
-
-            // Retry with passphrase
-            const retryNotice = new Notice('Sharing to Radicle network...', 0);
-            try {
-              await radicleService.share(fullRepoPath, passphrase);
-
-              // Get Radicle ID and write to .udd
-              const radicleId = await radicleService.getRadicleId(fullRepoPath);
-              if (radicleId) {
-                console.log(`RadicleCommands: Writing Radicle ID to .udd: ${radicleId}`);
-                const UDDService = (await import('../services/udd-service')).UDDService;
-                const udd = await UDDService.readUDD(fullRepoPath);
-                udd.radicleId = radicleId;
-                await UDDService.writeUDD(fullRepoPath, udd);
-              }
-
-              retryNotice.hide();
-              console.log(`RadicleCommands: Successfully shared ${selectedNode.name} with passphrase`);
-              uiService.showSuccess(`${selectedNode.name} shared successfully!`);
-            } catch (retryError) {
-              retryNotice.hide();
-              console.error('RadicleCommands: Failed to share with passphrase:', retryError);
-              uiService.showError(`Failed to share: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
-            }
-          } else {
-            notice.hide();
-            console.error('RadicleCommands: Failed to share DreamNode:', error);
-            uiService.showError(`Failed to share: ${error.message || 'Unknown error'}`);
-          }
+          notice.hide();
+          console.error('RadicleCommands: Failed to share DreamNode:', error);
+          uiService.showError(`Failed to share: ${error.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('RadicleCommands: Share DreamNode command failed:', error);
@@ -402,13 +316,20 @@ export function registerRadicleCommands(
           return;
         }
 
+        // Get passphrase using simplified flow (checks if node is running, shows settings prompt if needed)
+        const passphrase = await passphraseManager.getPassphrase();
+        if (passphrase === null) {
+          console.log('RadicleCommands: User needs to configure passphrase in settings');
+          return;
+        }
+
         // Show status indicator
         const notice = new Notice('Cloning from Radicle network...', 0);
         console.log('RadicleCommands: Starting rad clone...');
 
         try {
-          // Try cloning without passphrase first (ssh-agent)
-          const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath);
+          // Pass passphrase (which may be empty string if node is already running)
+          const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath, passphrase || undefined);
 
           // Success notification
           notice.hide();
@@ -434,7 +355,6 @@ export function registerRadicleCommands(
             }
 
             // Calculate default position at center of camera view
-            // TODO: Restore sphere rotation calculation if needed
             const position: [number, number, number] = [0, 0, -5000];
 
             // Load dreamTalk media if specified
@@ -509,121 +429,9 @@ export function registerRadicleCommands(
             uiService.showError('Cloned successfully but failed to load node data. Try "Scan DreamVault for Notes"');
           }
         } catch (error: any) {
-          // If passphrase is needed, prompt and retry
-          if (error.message && error.message.includes('passphrase')) {
-            notice.hide();
-            console.log('RadicleCommands: Passphrase required, prompting user...');
-
-            const passphrase = await passphraseManager.getPassphrase();
-            if (!passphrase) {
-              console.log('RadicleCommands: User cancelled passphrase prompt');
-              return;
-            }
-
-            // Retry with passphrase
-            const retryNotice = new Notice('Cloning from Radicle network...', 0);
-            try {
-              const { repoName } = await radicleService.clone(radicleId.trim(), vaultPath, passphrase);
-              retryNotice.hide();
-              console.log(`RadicleCommands: Successfully cloned ${repoName} with passphrase`);
-              uiService.showSuccess(`${repoName} cloned successfully!`);
-
-              // Read .udd file directly (same logic as above)
-              console.log('RadicleCommands: Reading .udd file from cloned repository...');
-              const path = require('path');
-              const fs = require('fs').promises;
-              const uddPath = path.join(vaultPath, repoName, '.udd');
-
-              try {
-                const uddContent = await fs.readFile(uddPath, 'utf-8');
-                const udd = JSON.parse(uddContent);
-
-                // CRITICAL: Add Radicle ID to .udd file for duplicate detection
-                if (!udd.radicleId) {
-                  udd.radicleId = radicleId.trim();
-                  await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-                  console.log(`RadicleCommands: Added Radicle ID to .udd file`);
-                }
-
-                // Calculate default position at center of camera view
-                // TODO: Restore sphere rotation calculation if needed
-                const position: [number, number, number] = [0, 0, -5000];
-
-                // Load dreamTalk media
-                let dreamTalkMedia: Array<{
-                  path: string;
-                  absolutePath: string;
-                  type: string;
-                  data: string;
-                  size: number;
-                }> = [];
-
-                if (udd.dreamTalk) {
-                  const mediaPath = path.join(vaultPath, repoName, udd.dreamTalk);
-                  try {
-                    const stats = await fs.stat(mediaPath);
-                    const buffer = await fs.readFile(mediaPath);
-                    const base64 = buffer.toString('base64');
-                    const mimeType = udd.dreamTalk.endsWith('.png') ? 'image/png' :
-                                   udd.dreamTalk.endsWith('.jpg') || udd.dreamTalk.endsWith('.jpeg') ? 'image/jpeg' :
-                                   udd.dreamTalk.endsWith('.gif') ? 'image/gif' :
-                                   udd.dreamTalk.endsWith('.mp4') ? 'video/mp4' :
-                                   udd.dreamTalk.endsWith('.webm') ? 'video/webm' :
-                                   udd.dreamTalk.endsWith('.mp3') ? 'audio/mpeg' :
-                                   udd.dreamTalk.endsWith('.wav') ? 'audio/wav' :
-                                   'application/octet-stream';
-                    dreamTalkMedia = [{
-                      path: udd.dreamTalk,
-                      absolutePath: mediaPath,
-                      type: mimeType,
-                      data: `data:${mimeType};base64,${base64}`,
-                      size: stats.size
-                    }];
-                  } catch (mediaError) {
-                    console.error('RadicleCommands: Failed to load dreamTalk media:', mediaError);
-                  }
-                }
-
-                // Create DreamNode with ALL required properties
-                const clonedNode: DreamNode = {
-                  id: udd.uuid,
-                  name: udd.title || repoName,
-                  type: udd.type || 'dream',
-                  repoPath: repoName,
-                  dreamTalkMedia: dreamTalkMedia,
-                  dreamSongContent: [],
-                  liminalWebConnections: udd.liminalWebRelationships || [],
-                  position: position,
-                  hasUnsavedChanges: false,
-                  email: udd.email,
-                  phone: udd.phone,
-                  radicleId: udd.radicleId
-                };
-
-                // Add to store
-                const retryStore = useInterBrainStore.getState();
-                const currentNodes = new Map(retryStore.realNodes);
-                currentNodes.set(clonedNode.id, {
-                  node: clonedNode,
-                  lastSynced: Date.now()
-                });
-                retryStore.setRealNodes(currentNodes);
-
-                uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);
-              } catch (readError) {
-                console.error('RadicleCommands: Failed to read .udd file:', readError);
-                uiService.showError('Cloned successfully but failed to load node data. Try "Scan DreamVault for Notes"');
-              }
-            } catch (retryError) {
-              retryNotice.hide();
-              console.error('RadicleCommands: Failed to clone with passphrase:', retryError);
-              uiService.showError(`Failed to clone: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
-            }
-          } else {
-            notice.hide();
-            console.error('RadicleCommands: Failed to clone DreamNode:', error);
-            uiService.showError(`Failed to clone: ${error.message || 'Unknown error'}`);
-          }
+          notice.hide();
+          console.error('RadicleCommands: Failed to clone DreamNode:', error);
+          uiService.showError(`Failed to clone: ${error.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('RadicleCommands: Clone from Radicle command failed:', error);
@@ -877,19 +685,11 @@ export function registerRadicleCommands(
           throw new Error('Radicle CLI not installed or not in PATH');
         }
 
-        // Get passphrase (from settings or prompt)
-        const settings = (plugin as any).settings;
-        let passphrase = settings?.radiclePassphrase || await passphraseManager.getPassphrase();
-
-        if (!passphrase || passphrase.trim() === '') {
-          passphrase = await uiService.promptForText(
-            'Enter your Radicle passphrase to sync peer following',
-            ''
-          );
-          if (!passphrase || passphrase.trim() === '') {
-            console.log('🔄 [Radicle Peer Sync] User cancelled - no passphrase provided');
-            return;
-          }
+        // Get passphrase using simplified flow (checks if node is running, shows settings prompt if needed)
+        const passphrase = await passphraseManager.getPassphrase();
+        if (passphrase === null) {
+          console.log('🔄 [Radicle Peer Sync] User needs to configure passphrase in settings');
+          return;
         }
 
         // Use the same pattern as relationship-commands.ts
@@ -1072,7 +872,8 @@ export function registerRadicleCommands(
 
             // Check if related node has a Radicle ID
             try {
-              const radicleId = await radicleService.getRadicleId(relatedData.dirPath, passphrase);
+              const passphraseOrUndefined = passphrase || undefined;
+              const radicleId = await radicleService.getRadicleId(relatedData.dirPath, passphraseOrUndefined);
 
               if (radicleId) {
                 totalRelationships++;
@@ -1088,7 +889,7 @@ export function registerRadicleCommands(
                 // This prevents multi-delegate acceptance issues
                 try {
                   console.log(`🔄 [Radicle Peer Sync] Publishing ${relatedData.dirName} (if not already public)...`);
-                  await radicleService.share(relatedData.dirPath, passphrase);
+                  await radicleService.share(relatedData.dirPath, passphraseOrUndefined);
                   console.log(`✅ [Radicle Peer Sync] Published ${relatedData.dirName} to network`);
                 } catch (publishError: any) {
                   // Radicle already handles "already public" case gracefully
@@ -1110,7 +911,7 @@ export function registerRadicleCommands(
                   console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${relatedData.dirName}`);
                 } else {
                   try {
-                    await radicleService.followPeer(did, passphrase, relatedData.dirPath);
+                    await radicleService.followPeer(did, passphraseOrUndefined, relatedData.dirPath);
                     newFollows++;
                     console.log(`✅ [Radicle Peer Sync] Now following ${did} for repo ${relatedData.dirName}`);
                   } catch (followError: any) {
@@ -1122,7 +923,7 @@ export function registerRadicleCommands(
 
                 // STEP 2: Add peer as equal delegate (threshold 1)
                 try {
-                  const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, passphrase);
+                  const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, passphraseOrUndefined);
                   if (wasAdded) {
                     newDelegates++;
                     console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);
@@ -1163,12 +964,13 @@ export function registerRadicleCommands(
         // PHASE 2: Reconcile git remotes for each DreamNode (declarative sync)
         console.log(`🔄 [Radicle Peer Sync] Reconciling git remotes for ${desiredRemotesPerRepo.size} repos...`);
 
+        const passphraseOrUndefined = passphrase || undefined;
         for (const [repoPath, desiredPeers] of desiredRemotesPerRepo) {
           const repoData = Array.from(uddDataMap.values()).find(d => d.dirPath === repoPath);
           if (!repoData) continue;
 
           try {
-            const radicleId = await radicleService.getRadicleId(repoPath, passphrase);
+            const radicleId = await radicleService.getRadicleId(repoPath, passphraseOrUndefined);
             if (!radicleId) continue;
 
             console.log(`🔧 [Radicle Peer Sync] Reconciling remotes for "${repoData.dirName}" (${desiredPeers.size} peers)`);

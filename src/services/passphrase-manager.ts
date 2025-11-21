@@ -19,37 +19,36 @@ export class PassphraseManager {
   }
 
   /**
-   * Get passphrase from settings or show settings redirect if not set
+   * Get passphrase from settings or gracefully abort if not configured
    * IMPORTANT: Only prompts for passphrase if Radicle node is NOT already running
-   * @param prompt Optional custom prompt message
-   * @returns Passphrase string or null if not configured
+   * @returns Passphrase string, empty string if node is running, or null if not configured
    */
-  async getPassphrase(prompt?: string): Promise<string | null> {
-    // Check settings first (persistent storage)
-    const settingsPassphrase = (this.plugin as any).settings?.radiclePassphrase;
-    if (settingsPassphrase) {
-      console.log('PassphraseManager: Using passphrase from settings');
-      return settingsPassphrase;
-    }
-
-    // CRITICAL FIX: Check if node is already running BEFORE prompting for passphrase
-    // If node is running, we don't need a passphrase (ssh-agent is handling it)
+  async getPassphrase(): Promise<string | null> {
+    // STEP 1: Check if node is already running FIRST
+    // If running, we don't need a passphrase at all
     const radicleService = serviceManager.getRadicleService();
     if (radicleService) {
       try {
         const isRunning = await radicleService.isNodeRunning();
         if (isRunning) {
           console.log('PassphraseManager: Radicle node already running, no passphrase needed');
-          return null; // Return null but don't show prompt (node is running)
+          return ''; // Return empty string to indicate "node running, proceed"
         }
       } catch (error) {
         console.warn('PassphraseManager: Could not check node status:', error);
-        // Continue to show prompt if check fails
+        // Continue to check settings
       }
     }
 
-    // Node is NOT running and no passphrase configured - show settings redirect dialog
-    const message = 'Please configure your Radicle passphrase in the settings panel to enable Radicle operations.';
+    // STEP 2: Node is NOT running - check if passphrase is configured in settings
+    const settingsPassphrase = (this.plugin as any).settings?.radiclePassphrase;
+    if (settingsPassphrase) {
+      console.log('PassphraseManager: Using passphrase from settings to start node');
+      return settingsPassphrase;
+    }
+
+    // STEP 3: No passphrase configured - show settings redirect and abort gracefully
+    const message = 'Please configure your Radicle passphrase in the settings panel and try again.';
     console.log('PassphraseManager: Passphrase not configured, showing settings redirect');
 
     await this.uiService.showSettingsPrompt(message, () => {
@@ -59,8 +58,8 @@ export class PassphraseManager {
       (this.plugin.app as any).setting.openTabById?.('interbrain-plugin');
     });
 
-    // Return null - user needs to configure and retry the operation
-    console.log('PassphraseManager: User needs to configure passphrase in settings');
+    // Return null to indicate operation should abort
+    console.log('PassphraseManager: Operation aborted - user needs to configure passphrase in settings');
     return null;
   }
 

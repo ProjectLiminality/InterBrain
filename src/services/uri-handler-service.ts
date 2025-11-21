@@ -530,12 +530,12 @@ export class URIHandlerService {
 
 	/**
 	 * Ensure Radicle node is running before clone operations
-	 * Checks if node is running, and if not, prompts for passphrase to start it
+	 * Uses PassphraseManager for simplified, consistent passphrase flow
 	 *
-	 * @returns Passphrase string (from settings or user input), or null if user cancelled
+	 * @returns Passphrase string (from settings or empty if node running), or null if not configured
 	 */
 	private async ensureRadicleNodeRunning(): Promise<string | null> {
-		// Import PassphraseManager to access passphrase prompt logic
+		// Import PassphraseManager for consistent passphrase handling
 		const { PassphraseManager } = await import('./passphrase-manager');
 		const { UIService } = await import('./ui-service');
 
@@ -543,30 +543,24 @@ export class URIHandlerService {
 		const uiService = new UIService(this.app, this.plugin);
 		const passphraseManager = new PassphraseManager(uiService, this.plugin);
 
-		// Check if node is already running
-		const nodeRunning = await (this.radicleService as any).isNodeRunning();
+		// Get passphrase (checks node status internally, returns '' if already running)
+		const passphrase = await passphraseManager.getPassphrase();
 
-		if (nodeRunning) {
-			console.log('🔄 [URIHandler] Radicle node already running');
-			// Return passphrase from settings if available (for clone operations)
-			return (this.plugin as any).settings?.radiclePassphrase || '';
-		}
-
-		// Node not running - need passphrase to start it
-		console.log('🔄 [URIHandler] Radicle node not running, checking for passphrase...');
-
-		// Try to get passphrase (from settings or prompt user)
-		const passphrase = await passphraseManager.getPassphrase(
-			'Enter your Radicle passphrase to start the node (will be saved for future use)'
-		);
-
-		if (!passphrase) {
-			console.warn('⚠️ [URIHandler] No passphrase provided - cannot start Radicle node');
+		if (passphrase === null) {
+			// User needs to configure passphrase in settings
+			console.warn('⚠️ [URIHandler] No passphrase configured - operation aborted');
+			new Notice('Please configure your Radicle passphrase in settings and try again');
 			return null;
 		}
 
-		// Start the node with the passphrase
-		console.log('🔄 [URIHandler] Starting Radicle node...');
+		if (passphrase === '') {
+			// Node is already running, no passphrase needed
+			console.log('✅ [URIHandler] Radicle node already running');
+			return '';
+		}
+
+		// Node is not running, we have a passphrase - start the node
+		console.log('🔄 [URIHandler] Starting Radicle node with passphrase from settings...');
 		try {
 			await (this.radicleService as any).startNode(passphrase);
 			console.log('✅ [URIHandler] Radicle node started successfully');
