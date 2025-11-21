@@ -314,13 +314,18 @@ export class RadicleServiceImpl implements RadicleService {
 
   /**
    * Check if Radicle node is running
+   * Supports multiple Radicle versions (1.0 and 1.5+)
    */
   async isNodeRunning(): Promise<boolean> {
     try {
       const radCmd = this.getRadCommand();
       const { stdout } = await execAsync(`"${radCmd}" node`);
-      // Output format: "✓ Node is running." when running
+
+      // Check for multiple output formats for backwards compatibility:
+      // - Radicle 1.0: "✓ Node is running."
+      // - Radicle 1.5: "✓ Node is running with Node ID z6Mks..."
       const isRunning = stdout.includes('Node is running');
+
       // Reduced logging - only log when NOT running (actionable)
       if (!isRunning) {
         console.log(`RadicleService: Node not running, will start it`);

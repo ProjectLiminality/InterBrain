@@ -858,6 +858,10 @@ export function registerRadicleCommands(
         // Map: DreamNode dirPath -> Map<DreamerName, DreamerDID>
         const desiredRemotesPerRepo = new Map<string, Map<string, string>>();
 
+        // Collect all relationship operations to run in parallel
+        const passphraseOrUndefined = passphrase || undefined;
+        const relationshipOperations = [];
+
         for (const { uuid: dreamerUuid, did, data: dreamerData } of dreamersWithDids) {
           const relatedNodeUuids = dreamerData.relationships || [];
           console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamerData.dirName}" has ${relatedNodeUuids.length} relationships`);
@@ -870,108 +874,110 @@ export function registerRadicleCommands(
               continue;
             }
 
-            // Check if related node has a Radicle ID
-            try {
-              const passphraseOrUndefined = passphrase || undefined;
-              const radicleId = await radicleService.getRadicleId(relatedData.dirPath, passphraseOrUndefined);
+            // Create an async operation for this relationship
+            relationshipOperations.push((async () => {
+              try {
+                const radicleId = await radicleService.getRadicleId(relatedData.dirPath, passphraseOrUndefined);
 
-              if (radicleId) {
-                totalRelationships++;
-                console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamerData.dirName}" (${did}) → DreamNode "${relatedData.dirName}" (${radicleId})`);
+                if (radicleId) {
+                  totalRelationships++;
+                  console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamerData.dirName}" (${did}) → DreamNode "${relatedData.dirName}" (${radicleId})`);
 
-                // Add to desired state
-                if (!desiredRemotesPerRepo.has(relatedData.dirPath)) {
-                  desiredRemotesPerRepo.set(relatedData.dirPath, new Map());
-                }
-                desiredRemotesPerRepo.get(relatedData.dirPath)!.set(dreamerData.dirName, did);
-
-                // STEP 0: Ensure repo is public BEFORE adding any delegates
-                // This prevents multi-delegate acceptance issues
-                try {
-                  console.log(`🔄 [Radicle Peer Sync] Publishing ${relatedData.dirName} (if not already public)...`);
-                  await radicleService.share(relatedData.dirPath, passphraseOrUndefined);
-                  console.log(`✅ [Radicle Peer Sync] Published ${relatedData.dirName} to network`);
-                } catch (publishError: any) {
-                  // Radicle already handles "already public" case gracefully
-                  const errorMsg = publishError.message || '';
-                  if (errorMsg.includes('already public') || errorMsg.includes('No identity updates')) {
-                    console.log(`ℹ️ [Radicle Peer Sync] ${relatedData.dirName} already public`);
-                  } else {
-                    console.error(`❌ [Radicle Peer Sync] Failed to publish ${relatedData.dirName}:`, errorMsg);
-                    errors++;
-                    continue; // Skip peer setup if publish fails
+                  // Add to desired state
+                  if (!desiredRemotesPerRepo.has(relatedData.dirPath)) {
+                    desiredRemotesPerRepo.set(relatedData.dirPath, new Map());
                   }
-                }
+                  desiredRemotesPerRepo.get(relatedData.dirPath)!.set(dreamerData.dirName, did);
 
-                // STEP 1: Ensure peer is followed (node-level)
-                const repoFollows = await getExistingFollowsForRepo(relatedData.dirPath);
-
-                if (repoFollows.has(did)) {
-                  alreadyFollowing++;
-                  console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${relatedData.dirName}`);
-                } else {
+                  // STEP 0: Ensure repo is public BEFORE adding any delegates
                   try {
-                    await radicleService.followPeer(did, passphraseOrUndefined, relatedData.dirPath);
-                    newFollows++;
-                    console.log(`✅ [Radicle Peer Sync] Now following ${did} for repo ${relatedData.dirName}`);
-                  } catch (followError: any) {
-                    console.error(`❌ [Radicle Peer Sync] Failed to follow ${did} for repo ${relatedData.dirName}:`, followError);
+                    console.log(`🔄 [Radicle Peer Sync] Publishing ${relatedData.dirName} (if not already public)...`);
+                    await radicleService.share(relatedData.dirPath, passphraseOrUndefined);
+                    console.log(`✅ [Radicle Peer Sync] Published ${relatedData.dirName} to network`);
+                  } catch (publishError: any) {
+                    const errorMsg = publishError.message || '';
+                    if (errorMsg.includes('already public') || errorMsg.includes('No identity updates')) {
+                      console.log(`ℹ️ [Radicle Peer Sync] ${relatedData.dirName} already public`);
+                    } else {
+                      console.error(`❌ [Radicle Peer Sync] Failed to publish ${relatedData.dirName}:`, errorMsg);
+                      errors++;
+                      return; // Skip peer setup if publish fails
+                    }
+                  }
+
+                  // STEP 1: Ensure peer is followed (node-level)
+                  const repoFollows = await getExistingFollowsForRepo(relatedData.dirPath);
+
+                  if (repoFollows.has(did)) {
+                    alreadyFollowing++;
+                    console.log(`✅ [Radicle Peer Sync] Already following ${did} for repo ${relatedData.dirName}`);
+                  } else {
+                    try {
+                      await radicleService.followPeer(did, passphraseOrUndefined, relatedData.dirPath);
+                      newFollows++;
+                      console.log(`✅ [Radicle Peer Sync] Now following ${did} for repo ${relatedData.dirName}`);
+                    } catch (followError: any) {
+                      console.error(`❌ [Radicle Peer Sync] Failed to follow ${did} for repo ${relatedData.dirName}:`, followError);
+                      errors++;
+                      return; // Skip remaining steps if follow failed
+                    }
+                  }
+
+                  // STEP 2: Add peer as equal delegate (threshold 1)
+                  try {
+                    const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, passphraseOrUndefined);
+                    if (wasAdded) {
+                      newDelegates++;
+                      console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);
+                    } else {
+                      alreadyDelegates++;
+                      console.log(`✅ [Radicle Peer Sync] ${dreamerData.dirName} already delegate for ${relatedData.dirName}`);
+                    }
+                  } catch (delegateError: any) {
+                    console.error(`❌ [Radicle Peer Sync] Failed to add delegate for ${relatedData.dirName}:`, delegateError.message);
                     errors++;
-                    continue; // Skip remaining steps if follow failed
                   }
-                }
 
-                // STEP 2: Add peer as equal delegate (threshold 1)
-                try {
-                  const wasAdded = await radicleService.addDelegate(relatedData.dirPath, did, passphraseOrUndefined);
-                  if (wasAdded) {
-                    newDelegates++;
-                    console.log(`✅ [Radicle Peer Sync] Added ${dreamerData.dirName} as delegate for ${relatedData.dirName}`);
-                  } else {
-                    alreadyDelegates++;
-                    console.log(`✅ [Radicle Peer Sync] ${dreamerData.dirName} already delegate for ${relatedData.dirName}`);
+                  // STEP 3: Set seeding scope to 'all' (public seed infrastructure)
+                  try {
+                    console.log(`🔄 [Radicle Peer Sync] Setting seeding scope for ${relatedData.dirName}...`);
+                    const wasSet = await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'all');
+                    if (wasSet) {
+                      scopeUpdates++;
+                      console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'all' for ${relatedData.dirName}`);
+                    } else {
+                      alreadyScopes++;
+                      console.log(`✅ [Radicle Peer Sync] Seeding scope already 'all' for ${relatedData.dirName}`);
+                    }
+                  } catch (scopeError: any) {
+                    console.error(`❌ [Radicle Peer Sync] Could not set seeding scope for ${relatedData.dirName}:`, scopeError.message);
+                    errors++;
                   }
-                } catch (delegateError: any) {
-                  console.error(`❌ [Radicle Peer Sync] Failed to add delegate for ${relatedData.dirName}:`, delegateError.message);
-                  errors++;
-                }
 
-                // STEP 3: Set seeding scope to 'all' (public seed infrastructure)
-                try {
-                  console.log(`🔄 [Radicle Peer Sync] Setting seeding scope for ${relatedData.dirName}...`);
-                  const wasSet = await radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'all');
-                  if (wasSet) {
-                    scopeUpdates++;
-                    console.log(`✅ [Radicle Peer Sync] Set seeding scope to 'all' for ${relatedData.dirName}`);
-                  } else {
-                    alreadyScopes++;
-                    console.log(`✅ [Radicle Peer Sync] Seeding scope already 'all' for ${relatedData.dirName}`);
-                  }
-                } catch (scopeError: any) {
-                  console.error(`❌ [Radicle Peer Sync] Could not set seeding scope for ${relatedData.dirName}:`, scopeError.message);
-                  errors++;
+                } else {
+                  console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is not a Radicle repo, skipping`);
                 }
-
-              } else {
-                console.log(`🔄 [Radicle Peer Sync] Related node "${relatedData.dirName}" is not a Radicle repo, skipping`);
+              } catch (error) {
+                console.warn(`⚠️ [Radicle Peer Sync] Could not check Radicle status for "${relatedData.dirName}":`, error);
               }
-            } catch (error) {
-              console.warn(`⚠️ [Radicle Peer Sync] Could not check Radicle status for "${relatedData.dirName}":`, error);
-            }
+            })());
           }
         }
 
-        // PHASE 2: Reconcile git remotes for each DreamNode (declarative sync)
-        console.log(`🔄 [Radicle Peer Sync] Reconciling git remotes for ${desiredRemotesPerRepo.size} repos...`);
+        // Execute all relationship operations in parallel
+        console.log(`🔄 [Radicle Peer Sync] Processing ${relationshipOperations.length} relationships in parallel...`);
+        await Promise.all(relationshipOperations);
 
-        const passphraseOrUndefined = passphrase || undefined;
-        for (const [repoPath, desiredPeers] of desiredRemotesPerRepo) {
+        // PHASE 2: Reconcile git remotes for each DreamNode (declarative sync)
+        console.log(`🔄 [Radicle Peer Sync] Reconciling git remotes for ${desiredRemotesPerRepo.size} repos in parallel...`);
+
+        const remoteReconciliationOperations = Array.from(desiredRemotesPerRepo.entries()).map(([repoPath, desiredPeers]) => (async () => {
           const repoData = Array.from(uddDataMap.values()).find(d => d.dirPath === repoPath);
-          if (!repoData) continue;
+          if (!repoData) return;
 
           try {
             const radicleId = await radicleService.getRadicleId(repoPath, passphraseOrUndefined);
-            if (!radicleId) continue;
+            if (!radicleId) return;
 
             console.log(`🔧 [Radicle Peer Sync] Reconciling remotes for "${repoData.dirName}" (${desiredPeers.size} peers)`);
             const result = await radicleService.reconcileRemotes(repoPath, radicleId, desiredPeers);
@@ -986,7 +992,9 @@ export function registerRadicleCommands(
             console.error(`❌ [Radicle Peer Sync] Failed to reconcile remotes for ${repoData.dirName}:`, reconcileError.message);
             errors++;
           }
-        }
+        })());
+
+        await Promise.all(remoteReconciliationOperations);
 
         // Build summary message
         let summary: string;
