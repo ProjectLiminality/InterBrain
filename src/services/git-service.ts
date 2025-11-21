@@ -464,6 +464,8 @@ export class GitService {
 
       // Check each ref for new commits and track source
       const commits: CommitInfo[] = [];
+      const seenHashes = new Set<string>(); // Deduplicate commits across refs
+
       for (const ref of refsToCheck) {
         try {
           const { stdout } = await execAsync(
@@ -485,6 +487,27 @@ export class GitService {
               const subject = parts[4] || 'No subject';
               const body = parts[5] || '';
 
+              // Skip if we've already seen this commit hash
+              if (seenHashes.has(hash)) {
+                console.log(`[GitService] Skipping duplicate commit ${hash.substring(0, 7)}`);
+                continue;
+              }
+
+              // Check if commit already exists in current branch (by hash)
+              // This handles case where commit was already cherry-picked
+              try {
+                await execAsync(`git cat-file -e ${hash}`, { cwd: fullPath });
+                // Commit exists, check if it's reachable from HEAD
+                const { stdout: mergeBase } = await execAsync(`git merge-base HEAD ${hash}`, { cwd: fullPath });
+                if (mergeBase.trim() === hash) {
+                  console.log(`[GitService] Commit ${hash.substring(0, 7)} already in history - skipping`);
+                  continue;
+                }
+              } catch {
+                // Commit doesn't exist locally or isn't reachable - include it
+              }
+
+              seenHashes.add(hash);
               commits.push({
                 hash,
                 author,
@@ -614,9 +637,20 @@ export class GitService {
       if (commits && commits.length > 0) {
         // Cherry-pick specific commits from peer (preserves attribution and commit history)
         console.log(`GitService: Cherry-picking ${commits.length} commit(s) from peer:`, commits);
+
+        // Reset any in-progress cherry-pick before starting
+        try {
+          await execAsync('git cherry-pick --abort', execOptions);
+          console.log(`GitService: Aborted previous cherry-pick session`);
+        } catch {
+          // No cherry-pick in progress, that's fine
+        }
+
         for (const commitHash of commits) {
           try {
-            await execAsync(`git cherry-pick ${commitHash}`, execOptions);
+            // Use --autostash to automatically stash/pop uncommitted changes
+            // This allows cherry-picking even with a dirty working tree
+            await execAsync(`git cherry-pick --autostash ${commitHash}`, execOptions);
             console.log(`GitService: ✓ Cherry-picked ${commitHash}`);
           } catch (error: any) {
             // Check if error is "already applied" (commit exists in history)
@@ -624,7 +658,21 @@ export class GitService {
               console.log(`GitService: Commit ${commitHash} already applied - skipping`);
               await execAsync('git cherry-pick --skip', execOptions);
             } else {
-              throw error;
+              // Cherry-pick failed (likely merge conflict)
+              console.error(`GitService: Cherry-pick conflict for ${commitHash}`);
+
+              // Abort the cherry-pick to restore working state
+              try {
+                await execAsync('git cherry-pick --abort', execOptions);
+                console.log(`GitService: Aborted cherry-pick, working tree restored`);
+              } catch (abortError) {
+                console.error(`GitService: Failed to abort cherry-pick:`, abortError);
+              }
+
+              throw new Error(
+                `Cherry-pick conflict: The peer's changes conflict with your local changes. ` +
+                `Please commit or stash your local changes first, then try again.`
+              );
             }
           }
         }
