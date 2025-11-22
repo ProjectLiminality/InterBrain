@@ -2314,7 +2314,7 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
 
       // Refresh the vault to pick up the new DreamNode
       console.log('[ConvertToDreamNode] Rescanning vault...');
-      await this.dreamNodeService.list();
+      await serviceManager.scanVault();
 
       this.uiService.showInfo(`Successfully converted "${title}" to DreamNode`);
       console.log('[ConvertToDreamNode] Conversion complete!');
