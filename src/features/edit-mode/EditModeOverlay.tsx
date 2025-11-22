@@ -24,8 +24,10 @@ export default function EditModeOverlay() {
     exitEditMode
   } = useInterBrainStore();
   
-  // Center position for the editing node (similar to ProtoNode spawn position)
-  const centerPosition: [number, number, number] = [0, 0, -50];
+  // Position EditNode3D at the same location as the center node in liminal-web mode
+  // But slightly offset towards camera (positive Z) so it renders on top of the regular DreamNode3D
+  // The regular node stays at [0, 0, 0], edit node is at [0, 0, 0.1]
+  const centerPosition: [number, number, number] = [0, 0, 0.1];
   
   // Handler functions defined before useEffect to maintain hook order
   const handleCancel = () => {

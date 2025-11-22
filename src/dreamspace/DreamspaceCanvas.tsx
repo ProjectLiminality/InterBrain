@@ -230,9 +230,6 @@ export default function DreamspaceCanvas() {
   // Radial button UI state
   const radialButtonUI = useInterBrainStore(state => state.radialButtonUI);
 
-  // Edit mode state - needed to hide the node being edited
-  const editMode = useInterBrainStore(state => state.editMode);
-
   // Track whether radial button component should be mounted (for exit animation)
   const [shouldMountRadialButtons, setShouldMountRadialButtons] = useState(false);
 
@@ -1516,18 +1513,13 @@ export default function DreamspaceCanvas() {
           {(() => {
             const shouldEnableDynamicScaling = spatialLayout === 'constellation';
 
-            // Filter out the node being edited (it's shown in EditNode3D instead)
-            const visibleNodes = editMode.isActive && editMode.editingNode
-              ? dreamNodes.filter(node => node.id !== editMode.editingNode!.id)
-              : dreamNodes;
-
             // DIAGNOSTIC: Only log when node count changes significantly
-            if (Math.abs(visibleNodes.length - prevRenderCountRef.current) > 2) {
-              console.log(`[DreamNodeRendering] 🎨 Rendering ${visibleNodes.length} nodes`);
-              prevRenderCountRef.current = visibleNodes.length;
+            if (Math.abs(dreamNodes.length - prevRenderCountRef.current) > 2) {
+              console.log(`[DreamNodeRendering] 🎨 Rendering ${dreamNodes.length} nodes`);
+              prevRenderCountRef.current = dreamNodes.length;
             }
 
-            const renderedNodes = visibleNodes.map((node) => (
+            const renderedNodes = dreamNodes.map((node) => (
               <React.Fragment key={node.id}>
                 {/* Star component - purely visual, positioned slightly closer than anchor */}
                 <Star3D
