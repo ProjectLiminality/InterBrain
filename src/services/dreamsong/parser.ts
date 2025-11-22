@@ -42,17 +42,17 @@ export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: 
     return [];
   }
 
-  // Process edges into directed and undirected categories
-  const processedEdges = processCanvasEdges(canvasData.edges);
-
   // Filter out isolated nodes (nodes with no edges at all)
-  const allEdges = [...processedEdges.directed, ...processedEdges.undirected];
+  // Use original edges to ensure we catch all relationships (both incoming and outgoing)
   const nodesWithEdges = new Set<string>();
-  for (const edge of allEdges) {
-    nodesWithEdges.add(edge.fromNodeId);
-    nodesWithEdges.add(edge.toNodeId);
+  for (const edge of canvasData.edges) {
+    nodesWithEdges.add(edge.fromNode);  // Node has outgoing edge
+    nodesWithEdges.add(edge.toNode);    // Node has incoming edge
   }
   const connectedNodes = canvasData.nodes.filter(node => nodesWithEdges.has(node.id));
+
+  // Process edges into directed and undirected categories
+  const processedEdges = processCanvasEdges(canvasData.edges);
 
   // Find media-text pairs from undirected edges (using only connected nodes)
   const mediaTextPairs = findMediaTextPairs(connectedNodes, processedEdges.undirected);
