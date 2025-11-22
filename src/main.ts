@@ -2101,6 +2101,11 @@ export default class InterBrainPlugin extends Plugin {
     const folderPath = path.join(vaultPath, folder.path);
     const folderName = path.basename(folder.path);
 
+    // Set up execAsync for git operations
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
     console.log('[ConvertToDreamNode] Starting conversion for:', folderPath);
 
     try {
