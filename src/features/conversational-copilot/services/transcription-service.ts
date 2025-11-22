@@ -40,10 +40,11 @@ export class TranscriptionService {
       await this.stopTranscription();
     }
 
-    // Clear any existing search results when starting new conversation session
+    // NOTE: We do NOT clear search results here anymore
+    // The store.startCopilotMode() already pre-populated them with related nodes
+    // They will be overwritten by the first semantic search when transcription begins
     const store = useInterBrainStore.getState();
-    store.setSearchResults([]);
-    console.log(`🧹 [TranscriptionService] Cleared search results for new conversation session`);
+    console.log(`🎯 [TranscriptionService] Starting with ${store.searchResults.length} pre-populated search results`);
 
     // Reset throttling for new session
     this.isSearchCooldownActive = false;

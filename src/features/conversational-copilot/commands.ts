@@ -72,11 +72,9 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         console.log(`🎯 [Copilot-Entry] Starting conversation mode with "${freshNode.name}" (${freshNode.id})`);
         store.startCopilotMode(freshNode);
 
-        // Trigger immediate fly-out by setting empty search results
-        // This will cause canvas useEffect to call showEditModeSearchResults with empty array
-        // which sends all nodes to sphere surface (copilot Option-key-not-held behavior)
-        store.setSearchResults([]);
-        console.log(`🌌 [Copilot-Entry] Set empty search results - triggering fly-out animation`);
+        // NOTE: searchResults are now pre-populated with conversation partner's related nodes
+        // This provides a non-empty initial array for better UX
+        // First semantic search will overwrite this with fresh results
 
         // Create transcript file in DreamNode folder (OLD service - creates file + semantic search monitoring)
         const oldTranscriptionService = getTranscriptionService();

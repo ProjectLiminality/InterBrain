@@ -1050,7 +1050,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   })),
 
   // Copilot mode actions
-  startCopilotMode: (conversationPartner) => set((_state) => {
+  startCopilotMode: (conversationPartner) => set((state) => {
     // Hide ribbon for cleaner video call interface
     try {
       const app = (globalThis as any).app;
@@ -1062,14 +1062,35 @@ export const useInterBrainStore = create<InterBrainState>()(
       console.warn('Failed to hide ribbon:', error);
     }
 
+    // Pre-populate search results with conversation partner's related DreamNodes
+    const relatedNodeIds = conversationPartner.liminalWebConnections || [];
+    console.log(`🎯 [Copilot-Entry] Conversation partner "${conversationPartner.name}" has ${relatedNodeIds.length} liminalWebConnections:`, relatedNodeIds);
+
+    const relatedNodes: DreamNode[] = [];
+
+    for (const nodeId of relatedNodeIds) {
+      const nodeData = state.realNodes.get(nodeId);
+      if (nodeData) {
+        relatedNodes.push(nodeData.node);
+        console.log(`🎯 [Copilot-Entry] ✓ Found node: ${nodeData.node.name} (${nodeId})`);
+      } else {
+        console.log(`🎯 [Copilot-Entry] ✗ Node not found in realNodes: ${nodeId}`);
+      }
+    }
+
+    console.log(`🎯 [Copilot-Entry] Pre-populated ${relatedNodes.length} related nodes from liminal-web`);
+    console.log(`🎯 [Copilot-Entry] Related node names:`, relatedNodes.map(n => n.name));
+    console.log(`🎯 [Copilot-Entry] Setting searchResults and frozenSearchResults to:`, relatedNodes);
+
     return {
       spatialLayout: 'copilot',
+      searchResults: relatedNodes, // Initial array with already related nodes
       copilotMode: {
         isActive: true,
         conversationPartner: { ...conversationPartner }, // Create a copy
         transcriptionFilePath: null,
         showSearchResults: false,
-        frozenSearchResults: [],
+        frozenSearchResults: relatedNodes, // Also pre-populate frozen results for Option key display
         sharedNodeIds: []
       }
     };

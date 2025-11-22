@@ -635,48 +635,81 @@ export class GitService {
       }
 
       if (commits && commits.length > 0) {
-        // Cherry-pick specific commits from peer (preserves attribution and commit history)
-        console.log(`GitService: Cherry-picking ${commits.length} commit(s) from peer:`, commits);
+        // Check if we can fast-forward instead of cherry-picking
+        // Fast-forward is cleaner when our HEAD is an ancestor of the peer's commits
+        const lastCommit = commits[commits.length - 1];
+        let canFastForward = false;
 
-        // Reset any in-progress cherry-pick before starting
         try {
-          await execAsync('git cherry-pick --abort', execOptions);
-          console.log(`GitService: Aborted previous cherry-pick session`);
-        } catch {
-          // No cherry-pick in progress, that's fine
+          // Check if current HEAD is ancestor of the last peer commit
+          const { stdout: mergeBaseOutput } = await execAsync(`git merge-base HEAD ${lastCommit}`, execOptions);
+          const mergeBase = mergeBaseOutput.trim();
+          const { stdout: headOutput } = await execAsync('git rev-parse HEAD', execOptions);
+          const currentHead = headOutput.trim();
+
+          if (mergeBase === currentHead) {
+            // Current HEAD is ancestor - we can fast-forward
+            canFastForward = true;
+            console.log(`GitService: Can fast-forward from ${currentHead} to ${lastCommit}`);
+          }
+        } catch (error) {
+          console.log(`GitService: Merge-base check failed, will use cherry-pick:`, error);
         }
 
-        for (const commitHash of commits) {
+        if (canFastForward) {
+          // Simple fast-forward merge
+          console.log(`GitService: Fast-forwarding to ${lastCommit}`);
           try {
-            // Use --autostash to automatically stash/pop uncommitted changes
-            // This allows cherry-picking even with a dirty working tree
-            await execAsync(`git cherry-pick --autostash ${commitHash}`, execOptions);
-            console.log(`GitService: ✓ Cherry-picked ${commitHash}`);
+            await execAsync(`git merge --ff-only ${lastCommit}`, execOptions);
+            console.log(`GitService: ✓ Fast-forwarded successfully`);
           } catch (error: any) {
-            // Check if error is "already applied" (commit exists in history)
-            if (error.message && error.message.includes('now empty')) {
-              console.log(`GitService: Commit ${commitHash} already applied - skipping`);
-              await execAsync('git cherry-pick --skip', execOptions);
-            } else {
-              // Cherry-pick failed (likely merge conflict)
-              console.error(`GitService: Cherry-pick conflict for ${commitHash}`);
+            console.error(`GitService: Fast-forward failed:`, error);
+            throw new Error(`Failed to fast-forward: ${error.message}`);
+          }
+        } else {
+          // Cherry-pick specific commits from peer (preserves attribution and commit history)
+          console.log(`GitService: Cherry-picking ${commits.length} commit(s) from peer:`, commits);
 
-              // Abort the cherry-pick to restore working state
-              try {
-                await execAsync('git cherry-pick --abort', execOptions);
-                console.log(`GitService: Aborted cherry-pick, working tree restored`);
-              } catch (abortError) {
-                console.error(`GitService: Failed to abort cherry-pick:`, abortError);
+          // Reset any in-progress cherry-pick before starting
+          try {
+            await execAsync('git cherry-pick --abort', execOptions);
+            console.log(`GitService: Aborted previous cherry-pick session`);
+          } catch {
+            // No cherry-pick in progress, that's fine
+          }
+
+          for (const commitHash of commits) {
+            try {
+              // Use --autostash to automatically stash/pop uncommitted changes
+              // This allows cherry-picking even with a dirty working tree
+              await execAsync(`git cherry-pick --autostash ${commitHash}`, execOptions);
+              console.log(`GitService: ✓ Cherry-picked ${commitHash}`);
+            } catch (error: any) {
+              // Check if error is "already applied" (commit exists in history)
+              if (error.message && error.message.includes('now empty')) {
+                console.log(`GitService: Commit ${commitHash} already applied - skipping`);
+                await execAsync('git cherry-pick --skip', execOptions);
+              } else {
+                // Cherry-pick failed (likely merge conflict)
+                console.error(`GitService: Cherry-pick conflict for ${commitHash}`);
+
+                // Abort the cherry-pick to restore working state
+                try {
+                  await execAsync('git cherry-pick --abort', execOptions);
+                  console.log(`GitService: Aborted cherry-pick, working tree restored`);
+                } catch (abortError) {
+                  console.error(`GitService: Failed to abort cherry-pick:`, abortError);
+                }
+
+                throw new Error(
+                  `Cherry-pick conflict: The peer's changes conflict with your local changes. ` +
+                  `Please commit or stash your local changes first, then try again.`
+                );
               }
-
-              throw new Error(
-                `Cherry-pick conflict: The peer's changes conflict with your local changes. ` +
-                `Please commit or stash your local changes first, then try again.`
-              );
             }
           }
+          console.log(`GitService: Successfully cherry-picked all commits`);
         }
-        console.log(`GitService: Successfully cherry-picked all commits`);
       } else {
         // Use git pull with --no-rebase for regular upstream updates
         console.log(`GitService: Pulling updates from upstream`);

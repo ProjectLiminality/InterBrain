@@ -251,6 +251,10 @@ export default function DreamspaceCanvas() {
         e.preventDefault();
         console.log('🔍 [Copilot] Option key pressed - showing search results');
         const store = useInterBrainStore.getState();
+
+        console.log('🔍 [Copilot] Current searchResults:', store.searchResults.length, store.searchResults.map(n => n.name));
+        console.log('🔍 [Copilot] Current frozenSearchResults BEFORE freeze:', store.copilotMode.frozenSearchResults.length, store.copilotMode.frozenSearchResults.map(n => n.name));
+
         store.freezeSearchResults(); // Capture latest search results
         store.setShowSearchResults(true);
 
@@ -261,6 +265,8 @@ export default function DreamspaceCanvas() {
           // Get fresh state after freezeSearchResults() was called
           const updatedStore = useInterBrainStore.getState();
           const frozenResults = updatedStore.copilotMode.frozenSearchResults;
+          console.log('🔍 [Copilot] frozenSearchResults AFTER freeze:', frozenResults.length, frozenResults.map(n => n.name));
+
           if (frozenResults && frozenResults.length > 0) {
             console.log(`🔍 [Copilot] Displaying ${frozenResults.length} frozen search results`);
             spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, frozenResults);
