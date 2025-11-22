@@ -146,9 +146,9 @@ export class ShareLinkService {
 	async copyShareLink(node: DreamNode, recipientDid?: string): Promise<void> {
 		try {
 			// Use the core generateShareLink method
-			const { uri } = await this.generateShareLink(node, recipientDid);
+			const { uri, identifier } = await this.generateShareLink(node, recipientDid);
 
-			// Copy to clipboard
+			// Copy to clipboard immediately (snappy UX)
 			await navigator.clipboard.writeText(uri);
 
 			// Show success notification
@@ -158,6 +158,19 @@ export class ShareLinkService {
 				new Notice(`📋 Share link copied to clipboard!`);
 			}
 			console.log(`✅ [ShareLink] Link copied: ${uri}`);
+
+			// FIRE-AND-FORGET: Trigger background seeding for public discoverability
+			// This runs async without blocking the clipboard copy operation
+			const radicleService = serviceManager.getRadicleService();
+			const radicleAvailable = await radicleService.isAvailable();
+
+			if (radicleAvailable && identifier.startsWith('rad:')) {
+				const path = require('path');
+				const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
+
+				console.log(`🌐 [ShareLink] Triggering background seeding for public network discoverability...`);
+				radicleService.seedInBackground(absoluteRepoPath, identifier);
+			}
 
 		} catch (error) {
 			console.error('Failed to copy share link:', error);

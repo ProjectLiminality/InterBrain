@@ -1203,6 +1203,26 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
+   * Trigger public seeding in the background (fire-and-forget)
+   * Does NOT wait for completion - returns immediately
+   * Used by "Copy Share Link" to make nodes discoverable without blocking UI
+   */
+  seedInBackground(dreamNodePath: string, radicleId: string): void {
+    // Fire-and-forget: don't await, don't block
+    this.setSeedingScope(dreamNodePath, radicleId, 'all')
+      .then((wasSet) => {
+        if (wasSet) {
+          console.log(`✅ [Background Seed] Successfully seeded ${radicleId} to public network`);
+        } else {
+          console.log(`ℹ️ [Background Seed] ${radicleId} already seeded to public network`);
+        }
+      })
+      .catch((error) => {
+        console.warn(`⚠️ [Background Seed] Failed to seed ${radicleId} (non-critical):`, error);
+      });
+  }
+
+  /**
    * Strip rad: or did:key: prefix from Radicle identifiers for git URL construction
    */
   private stripRadiclePrefix(id: string): string {
