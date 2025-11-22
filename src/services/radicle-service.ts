@@ -1203,29 +1203,27 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
-   * Trigger public seeding and gossip announcement in the background (fire-and-forget)
+   * Trigger public seeding and network sync in the background (fire-and-forget)
    * Does NOT wait for completion - returns immediately
    * Used by "Copy Share Link" to make nodes discoverable without blocking UI
+   *
+   * This runs the FULL `rad seed <RID> --scope all` command which:
+   * 1. Updates inventory (announces to network)
+   * 2. Sets seeding policy to 'all'
+   * 3. Fetches from network (completes bidirectional handshake with seeds)
    */
   seedInBackground(dreamNodePath: string, radicleId: string): void {
     // Fire-and-forget async operation
     (async () => {
       try {
-        // STEP 1: Register with local node for seeding
-        const wasSet = await this.setSeedingScope(dreamNodePath, radicleId, 'all');
-        if (wasSet) {
-          console.log(`✅ [Background Seed] Successfully seeded ${radicleId} to public network`);
-        } else {
-          console.log(`ℹ️ [Background Seed] ${radicleId} already seeded to public network`);
-        }
-
-        // STEP 2: Announce to network via gossip protocol (critical for discoverability!)
-        console.log(`🌐 [Background Seed] Announcing ${radicleId} to network via gossip protocol...`);
+        console.log(`🌐 [Background Seed] Starting full seed operation for ${radicleId}...`);
         const radCmd = this.getRadCommand();
         const { spawn } = require('child_process');
 
+        // Run FULL rad seed command (WITHOUT --no-fetch)
+        // This completes the bidirectional handshake with seed nodes
         await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['sync', '--inventory'], {
+          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all'], {
             cwd: dreamNodePath,
             stdio: ['pipe', 'pipe', 'pipe']
           });
@@ -1242,16 +1240,19 @@ export class RadicleServiceImpl implements RadicleService {
           });
 
           child.on('close', (code) => {
-            if (code === 0 || stdout.includes('No seeds found')) {
-              console.log(`✅ [Background Seed] Successfully announced ${radicleId} to network (gossip protocol)`);
+            console.log(`[Background Seed] rad seed output:`, stdout);
+            if (stderr) console.log(`[Background Seed] rad seed stderr:`, stderr);
+
+            if (code === 0 || stdout.includes('Inventory updated') || stdout.includes('already seeding')) {
+              console.log(`✅ [Background Seed] Successfully seeded ${radicleId} to public network with full sync`);
             } else {
-              console.warn(`⚠️ [Background Seed] Announcement exited with code ${code} (non-critical)`);
+              console.warn(`⚠️ [Background Seed] rad seed exited with code ${code} (non-critical)`);
             }
             resolve(); // Always resolve, never fail
           });
 
           child.on('error', (error) => {
-            console.warn(`⚠️ [Background Seed] Announcement error (non-critical):`, error);
+            console.warn(`⚠️ [Background Seed] rad seed error (non-critical):`, error);
             resolve(); // Always resolve, never fail
           });
 
