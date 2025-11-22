@@ -29,14 +29,16 @@ export default function EditModeOverlay() {
   
   // Handler functions defined before useEffect to maintain hook order
   const handleCancel = () => {
-    // Exit edit mode - original data is preserved in store
-    exitEditMode();
-    
-    // Return to liminal-web layout (edit mode requires a selected node)
     const store = useInterBrainStore.getState();
+
+    // IMPORTANT: Change spatial layout BEFORE exiting edit mode
+    // This ensures the regular DreamNode3D reappears seamlessly
     if (store.selectedNode) {
       store.setSpatialLayout('liminal-web');
     }
+
+    // Exit edit mode - original data is preserved in store
+    exitEditMode();
   };
   
   // Global escape key handling is now managed by DreamspaceCanvas for stability
@@ -102,8 +104,12 @@ export default function EditModeOverlay() {
         // Update the selectedNode to reflect the saved changes
         useInterBrainStore.getState().setSelectedNode(freshNode);
         
-        // Immediately trigger the special edit mode save transition
-        // This starts the parallel animations: UI fade + node movements
+        // IMPORTANT: Change spatial layout to liminal-web FIRST
+        // This ensures the regular DreamNode3D is ready to appear
+        useInterBrainStore.getState().setSpatialLayout('liminal-web');
+
+        // Then trigger the special edit mode save transition animation
+        // This animates the nodes into their liminal-web positions
         const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
         if (canvas) {
           const event = new globalThis.CustomEvent('edit-mode-save-transition', {
@@ -111,9 +117,8 @@ export default function EditModeOverlay() {
           });
           canvas.dispatchEvent(event);
         }
-        
+
         // Exit edit mode after animations complete
-        // Don't change spatial layout - it's already handled by the event
         globalThis.setTimeout(() => {
           exitEditMode();
         }, 1000);
