@@ -1942,6 +1942,18 @@ export default class InterBrainPlugin extends Plugin {
               await this.revealContainingDreamNode(file);
             });
         });
+
+        // Show "Convert to DreamNode" for folders only
+        if (file instanceof TFolder) {
+          menu.addItem((item) => {
+            item
+              .setTitle('Convert to DreamNode')
+              .setIcon('git-fork')
+              .onClick(async () => {
+                await this.convertToDreamNode(file);
+              });
+          });
+        }
       })
     );
   }
@@ -2078,6 +2090,234 @@ export default class InterBrainPlugin extends Plugin {
 
     console.log('[FindDreamNode] No .udd file found after', iterations, 'iterations');
     return null;
+  }
+
+  /**
+   * Convert a regular directory into a DreamNode (idempotent)
+   * Fills in any missing pieces: .git repo, .udd file, hooks, README, LICENSE
+   */
+  private async convertToDreamNode(folder: TFolder): Promise<void> {
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+    const folderPath = path.join(vaultPath, folder.path);
+    const folderName = path.basename(folder.path);
+
+    console.log('[ConvertToDreamNode] Starting conversion for:', folderPath);
+
+    try {
+      // Check what's already present
+      const hasGit = fs.existsSync(path.join(folderPath, '.git'));
+      const hasUdd = fs.existsSync(path.join(folderPath, '.udd'));
+      const hasReadme = fs.existsSync(path.join(folderPath, 'README.md'));
+      const hasLicense = fs.existsSync(path.join(folderPath, 'LICENSE'));
+
+      console.log('[ConvertToDreamNode] Current state:', { hasGit, hasUdd, hasReadme, hasLicense });
+
+      // Generate or read UUID
+      let uuid: string;
+      let title: string = folderName;
+      let type: 'dream' | 'dreamer' = 'dream';
+
+      if (hasUdd) {
+        // Read existing .udd file
+        const uddContent = fs.readFileSync(path.join(folderPath, '.udd'), 'utf-8');
+        const uddData = JSON.parse(uddContent);
+        uuid = uddData.uuid;
+        title = uddData.title || folderName;
+        type = uddData.type || 'dream';
+        console.log('[ConvertToDreamNode] Using existing UUID from .udd:', uuid);
+      } else {
+        // Generate new UUID
+        uuid = crypto.randomUUID();
+        console.log('[ConvertToDreamNode] Generated new UUID:', uuid);
+      }
+
+      // Initialize git if not present
+      if (!hasGit) {
+        console.log('[ConvertToDreamNode] Initializing git with template...');
+        const templatePath = path.join(vaultPath, '.obsidian', 'plugins', this.manifest.id, 'DreamNode-template');
+        await execAsync(`git init --template="${templatePath}" "${folderPath}"`);
+
+        // Make hooks executable
+        const hooksDir = path.join(folderPath, '.git', 'hooks');
+        if (fs.existsSync(hooksDir)) {
+          await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: folderPath });
+          await execAsync(`chmod +x "${path.join(hooksDir, 'post-commit')}"`, { cwd: folderPath });
+          console.log('[ConvertToDreamNode] Made hooks executable');
+        }
+      }
+
+      // Create/update .udd file
+      if (!hasUdd) {
+        console.log('[ConvertToDreamNode] Creating .udd file...');
+        const uddContent = {
+          uuid,
+          title,
+          type,
+          dreamTalk: '',
+          liminalWebRelationships: type === 'dreamer' ? ['550e8400-e29b-41d4-a716-446655440000'] : [],
+          submodules: [],
+          supermodules: []
+        };
+        fs.writeFileSync(path.join(folderPath, '.udd'), JSON.stringify(uddContent, null, 2));
+      } else {
+        // Validate existing .udd has all required fields
+        const uddPath = path.join(folderPath, '.udd');
+        const uddContent = JSON.parse(fs.readFileSync(uddPath, 'utf-8'));
+        let updated = false;
+
+        // Ensure all required fields exist
+        if (!uddContent.liminalWebRelationships) {
+          uddContent.liminalWebRelationships = type === 'dreamer' ? ['550e8400-e29b-41d4-a716-446655440000'] : [];
+          updated = true;
+        }
+        if (!uddContent.submodules) {
+          uddContent.submodules = [];
+          updated = true;
+        }
+        if (!uddContent.supermodules) {
+          uddContent.supermodules = [];
+          updated = true;
+        }
+        if (!uddContent.dreamTalk) {
+          uddContent.dreamTalk = '';
+          updated = true;
+        }
+
+        if (updated) {
+          fs.writeFileSync(uddPath, JSON.stringify(uddContent, null, 2));
+          console.log('[ConvertToDreamNode] Updated .udd with missing fields');
+        }
+      }
+
+      // Create README if not present
+      if (!hasReadme) {
+        console.log('[ConvertToDreamNode] Creating README.md...');
+        const readmeContent = `# ${title}\n\nA DreamNode in the InterBrain network.\n`;
+        fs.writeFileSync(path.join(folderPath, 'README.md'), readmeContent);
+      }
+
+      // Create LICENSE if not present
+      if (!hasLicense) {
+        console.log('[ConvertToDreamNode] Creating LICENSE...');
+        const licenseContent = `GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+This DreamNode is licensed under the GNU AGPL v3.
+See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
+`;
+        fs.writeFileSync(path.join(folderPath, 'LICENSE'), licenseContent);
+      }
+
+      // Commit changes if there are any uncommitted files
+      const gitStatus = await execAsync('git status --porcelain', { cwd: folderPath });
+      if (gitStatus.stdout.trim()) {
+        console.log('[ConvertToDreamNode] Committing DreamNode initialization...');
+        await execAsync('git add -A', { cwd: folderPath });
+        try {
+          await execAsync(`git commit -m "Convert to DreamNode: ${title}"`, { cwd: folderPath });
+        } catch (commitError: any) {
+          // Verify commit succeeded (hooks may output to stderr)
+          try {
+            await execAsync('git rev-parse HEAD', { cwd: folderPath });
+            console.log('[ConvertToDreamNode] Commit verified successful');
+          } catch {
+            throw commitError;
+          }
+        }
+      } else {
+        console.log('[ConvertToDreamNode] No uncommitted changes, skipping commit');
+      }
+
+      // Initialize Radicle if not already initialized
+      const hasRadicle = fs.existsSync(path.join(folderPath, '.rad'));
+      if (!hasRadicle) {
+        console.log('[ConvertToDreamNode] Initializing Radicle repository...');
+        try {
+          const settings = (this as any).settings;
+          const passphrase = settings?.radiclePassphrase;
+          const process = require('process');
+          const env = { ...process.env };
+          if (passphrase) {
+            env.RAD_PASSPHRASE = passphrase;
+          }
+
+          const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
+          const timestamp = new Date().toISOString();
+          const description = `${nodeTypeLabel} ${timestamp}`;
+
+          const { spawn } = require('child_process');
+          const radCommand = 'rad'; // Assume rad is in PATH
+
+          const radInitPromise = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+            const child = spawn(radCommand, [
+              'init',
+              folderPath,
+              '--private',
+              '--name', folderName,
+              '--default-branch', 'main',
+              '--description', description,
+              '--no-confirm',
+              '--no-seed'
+            ], {
+              env,
+              cwd: folderPath,
+              stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout?.on('data', (data: any) => {
+              stdout += data.toString();
+            });
+
+            child.stderr?.on('data', (data: any) => {
+              stderr += data.toString();
+            });
+
+            child.on('close', (code: number) => {
+              if (code === 0) {
+                resolve({ stdout, stderr });
+              } else {
+                reject(new Error(`rad init exited with code ${code}`));
+              }
+            });
+
+            child.on('error', reject);
+            child.stdin?.end();
+          });
+
+          const radResult = await radInitPromise;
+
+          // Extract and save RID
+          const ridMatch = radResult.stdout.match(/rad:z[a-zA-Z0-9]+/);
+          if (ridMatch) {
+            const radicleId = ridMatch[0];
+            const uddPath = path.join(folderPath, '.udd');
+            const uddContent = JSON.parse(fs.readFileSync(uddPath, 'utf-8'));
+            uddContent.radicleId = radicleId;
+            fs.writeFileSync(uddPath, JSON.stringify(uddContent, null, 2));
+
+            await execAsync('git add .udd', { cwd: folderPath });
+            await execAsync('git commit -m "Add Radicle ID to DreamNode"', { cwd: folderPath });
+            console.log('[ConvertToDreamNode] Added Radicle ID:', radicleId);
+          }
+        } catch (radError) {
+          console.warn('[ConvertToDreamNode] Radicle init failed (continuing anyway):', radError);
+        }
+      }
+
+      // Refresh the vault to pick up the new DreamNode
+      console.log('[ConvertToDreamNode] Rescanning vault...');
+      await this.dreamNodeService.list();
+
+      this.uiService.showInfo(`Successfully converted "${title}" to DreamNode`);
+      console.log('[ConvertToDreamNode] Conversion complete!');
+
+    } catch (error) {
+      console.error('[ConvertToDreamNode] Conversion failed:', error);
+      this.uiService.showError(`Failed to convert to DreamNode: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   // Helper method to get all available nodes (used by undo/redo)
