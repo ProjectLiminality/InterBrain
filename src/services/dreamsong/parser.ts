@@ -45,12 +45,21 @@ export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: 
   // Process edges into directed and undirected categories
   const processedEdges = processCanvasEdges(canvasData.edges);
 
-  // Find media-text pairs from undirected edges
-  const mediaTextPairs = findMediaTextPairs(canvasData.nodes, processedEdges.undirected);
+  // Filter out isolated nodes (nodes with no edges at all)
+  const allEdges = [...processedEdges.directed, ...processedEdges.undirected];
+  const nodesWithEdges = new Set<string>();
+  for (const edge of allEdges) {
+    nodesWithEdges.add(edge.fromNodeId);
+    nodesWithEdges.add(edge.toNodeId);
+  }
+  const connectedNodes = canvasData.nodes.filter(node => nodesWithEdges.has(node.id));
+
+  // Find media-text pairs from undirected edges (using only connected nodes)
+  const mediaTextPairs = findMediaTextPairs(connectedNodes, processedEdges.undirected);
 
   // Filter nodes for topological sort: exclude text nodes that are part of pairs
   const textNodesInPairs = new Set(mediaTextPairs.map(pair => pair.textNodeId));
-  const nodesForTopologicalSort = canvasData.nodes.filter(node => !textNodesInPairs.has(node.id));
+  const nodesForTopologicalSort = connectedNodes.filter(node => !textNodesInPairs.has(node.id));
 
 
   // Perform topological sort on directed edges only, using filtered nodes
@@ -62,9 +71,9 @@ export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: 
 
   // Create content blocks from sorted nodes
   // Note: sortResult.sortedNodeIds only contains media nodes from pairs + standalone nodes
-  // but createContentBlocks still has access to all original nodes via canvasData.nodes
+  // but createContentBlocks still has access to all connected nodes via connectedNodes
   const blocks = createContentBlocks(
-    canvasData.nodes,
+    connectedNodes,
     sortResult.sortedNodeIds,
     mediaTextPairs,
     sourceDreamNodeId
