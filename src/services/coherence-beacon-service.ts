@@ -394,36 +394,8 @@ export class CoherenceBeaconService {
       return;
     }
 
-    // STEP 1: Git-native submodule initialization (let git/radicle do their thing!)
-    console.log(`CoherenceBeaconService: Running git-native submodule initialization...`);
-    try {
-      // Add enhanced PATH for git-remote-rad helper
-      const os = require('os');
-      const homeDir = os.homedir();
-      const radicleGitHelperPaths = [
-        `${homeDir}/.radicle/bin`,
-        '/usr/local/bin',
-        '/opt/homebrew/bin'
-      ];
-      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
-
-      // IMPORTANT: Set GIT_ALLOW_PROTOCOL to explicitly allow rad:// and file:// for submodules
-      // This overrides git's security restrictions for custom protocols
-      await execAsync('git submodule update --init --recursive', {
-        cwd: clonedNodePath,
-        env: {
-          ...process.env,
-          PATH: enhancedPath,
-          GIT_ALLOW_PROTOCOL: 'file:rad'
-        }
-      });
-      console.log(`CoherenceBeaconService: ✓ Git submodules initialized successfully`);
-    } catch (error: any) {
-      console.warn(`CoherenceBeaconService: Git submodule init had issues (non-fatal):`, error.message);
-      console.warn(`CoherenceBeaconService: Will proceed with sovereign clone gap-filling...`);
-    }
-
-    // STEP 2: Parse .gitmodules to find which submodules need sovereign clones at vault root
+    // STEP 1: Parse .gitmodules to find which submodules need sovereign clones at vault root
+    // Do this FIRST so git submodule init can succeed on first try
     console.log(`CoherenceBeaconService: Checking for missing sovereign repos at vault root...`);
     const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
     const submodulePattern = /\[submodule "([^"]+)"\]\s+path = ([^\n]+)\s+url = rad:\/\/([^\n]+)/g;
@@ -446,14 +418,11 @@ export class CoherenceBeaconService {
       }
     }
 
-    // STEP 3: Clone missing sovereigns to vault root
-    if (missingSovereigns.length === 0) {
-      console.log(`CoherenceBeaconService: ✓ All submodules already exist as sovereigns at vault root`);
-      return;
-    }
-
-    console.log(`CoherenceBeaconService: Cloning ${missingSovereigns.length} missing sovereign(s) to vault root...`);
+    // STEP 2: Clone missing sovereigns to vault root (BEFORE git submodule init)
     const failedClones: Array<{ name: string; radicleId: string; error: string }> = [];
+
+    if (missingSovereigns.length > 0) {
+      console.log(`CoherenceBeaconService: Cloning ${missingSovereigns.length} missing sovereign(s) to vault root...`);
 
     for (const { name, radicleId } of missingSovereigns) {
       try {
@@ -487,12 +456,44 @@ export class CoherenceBeaconService {
       }
     }
 
-    // Report results
-    if (failedClones.length > 0) {
-      const failureDetails = failedClones.map(f => `  • ${f.name} (${f.radicleId}): ${f.error}`).join('\n');
-      console.warn(`CoherenceBeaconService: ⚠️ Some sovereign clones failed (non-fatal):\n${failureDetails}`);
+      // Report results
+      if (failedClones.length > 0) {
+        const failureDetails = failedClones.map(f => `  • ${f.name} (${f.radicleId}): ${f.error}`).join('\n');
+        console.warn(`CoherenceBeaconService: ⚠️ Some sovereign clones failed (non-fatal):\n${failureDetails}`);
+      } else {
+        console.log(`CoherenceBeaconService: ✓ All missing sovereigns cloned successfully`);
+      }
     } else {
-      console.log(`CoherenceBeaconService: ✓ All missing sovereigns cloned successfully`);
+      console.log(`CoherenceBeaconService: ✓ All submodules already exist as sovereigns at vault root`);
+    }
+
+    // STEP 3: Git-native submodule initialization (NOW that sovereigns exist in local storage)
+    console.log(`CoherenceBeaconService: Running git-native submodule initialization...`);
+    try {
+      // Add enhanced PATH for git-remote-rad helper
+      const os = require('os');
+      const homeDir = os.homedir();
+      const radicleGitHelperPaths = [
+        `${homeDir}/.radicle/bin`,
+        '/usr/local/bin',
+        '/opt/homebrew/bin'
+      ];
+      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
+
+      // IMPORTANT: Set GIT_ALLOW_PROTOCOL to explicitly allow rad:// and file:// for submodules
+      // This overrides git's security restrictions for custom protocols
+      await execAsync('git submodule update --init --recursive', {
+        cwd: clonedNodePath,
+        env: {
+          ...process.env,
+          PATH: enhancedPath,
+          GIT_ALLOW_PROTOCOL: 'file:rad'
+        }
+      });
+      console.log(`CoherenceBeaconService: ✓ Git submodules initialized successfully`);
+    } catch (error: any) {
+      console.warn(`CoherenceBeaconService: ⚠️ Git submodule init failed (non-fatal):`, error.message);
+      console.warn(`CoherenceBeaconService: Sovereigns were cloned successfully, submodule links may be stale`);
     }
   }
 
