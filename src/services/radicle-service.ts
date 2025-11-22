@@ -1203,23 +1203,65 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
-   * Trigger public seeding in the background (fire-and-forget)
+   * Trigger public seeding and gossip announcement in the background (fire-and-forget)
    * Does NOT wait for completion - returns immediately
    * Used by "Copy Share Link" to make nodes discoverable without blocking UI
    */
   seedInBackground(dreamNodePath: string, radicleId: string): void {
-    // Fire-and-forget: don't await, don't block
-    this.setSeedingScope(dreamNodePath, radicleId, 'all')
-      .then((wasSet) => {
+    // Fire-and-forget async operation
+    (async () => {
+      try {
+        // STEP 1: Register with local node for seeding
+        const wasSet = await this.setSeedingScope(dreamNodePath, radicleId, 'all');
         if (wasSet) {
           console.log(`✅ [Background Seed] Successfully seeded ${radicleId} to public network`);
         } else {
           console.log(`ℹ️ [Background Seed] ${radicleId} already seeded to public network`);
         }
-      })
-      .catch((error) => {
+
+        // STEP 2: Announce to network via gossip protocol (critical for discoverability!)
+        console.log(`🌐 [Background Seed] Announcing ${radicleId} to network via gossip protocol...`);
+        const radCmd = this.getRadCommand();
+        const { spawn } = require('child_process');
+
+        await new Promise<void>((resolve) => {
+          const child = spawn(radCmd, ['sync', '--inventory'], {
+            cwd: dreamNodePath,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          let stdout = '';
+          let stderr = '';
+
+          child.stdout?.on('data', (data) => {
+            stdout += data.toString();
+          });
+
+          child.stderr?.on('data', (data) => {
+            stderr += data.toString();
+          });
+
+          child.on('close', (code) => {
+            if (code === 0 || stdout.includes('No seeds found')) {
+              console.log(`✅ [Background Seed] Successfully announced ${radicleId} to network (gossip protocol)`);
+            } else {
+              console.warn(`⚠️ [Background Seed] Announcement exited with code ${code} (non-critical)`);
+            }
+            resolve(); // Always resolve, never fail
+          });
+
+          child.on('error', (error) => {
+            console.warn(`⚠️ [Background Seed] Announcement error (non-critical):`, error);
+            resolve(); // Always resolve, never fail
+          });
+
+          child.stdin?.end();
+        });
+
+      } catch (error) {
         console.warn(`⚠️ [Background Seed] Failed to seed ${radicleId} (non-critical):`, error);
-      });
+      }
+    })();
   }
 
   /**
