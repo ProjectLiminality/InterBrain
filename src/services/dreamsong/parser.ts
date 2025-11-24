@@ -61,20 +61,33 @@ export function parseCanvasToBlocks(canvasData: CanvasData, sourceDreamNodeId?: 
   const textNodesInPairs = new Set(mediaTextPairs.map(pair => pair.textNodeId));
   const nodesForTopologicalSort = connectedNodes.filter(node => !textNodesInPairs.has(node.id));
 
+  // Find connected components (islands) using all edges (directed + undirected)
+  const islands = findConnectedComponents(nodesForTopologicalSort, [...processedEdges.directed, ...processedEdges.undirected]);
 
-  // Perform topological sort on directed edges only, using filtered nodes
-  const sortResult = topologicalSort(nodesForTopologicalSort, processedEdges.directed);
+  // Sort each island topologically and order islands by average y-coordinate
+  const sortedNodeIds: string[] = [];
+  const islandErrors: string[] = [];
 
-  if (sortResult.hasCycle) {
-    throw new Error(`Canvas contains circular dependencies: ${sortResult.nodesInCycle?.join(', ')}`);
+  for (const island of islands) {
+    const sortResult = topologicalSort(island.nodes, processedEdges.directed);
+
+    if (sortResult.hasCycle) {
+      islandErrors.push(`Island contains circular dependencies: ${sortResult.nodesInCycle?.join(', ')}`);
+    } else {
+      sortedNodeIds.push(...sortResult.sortedNodeIds);
+    }
+  }
+
+  if (islandErrors.length > 0) {
+    throw new Error(islandErrors.join('\n'));
   }
 
   // Create content blocks from sorted nodes
-  // Note: sortResult.sortedNodeIds only contains media nodes from pairs + standalone nodes
+  // Note: sortedNodeIds only contains media nodes from pairs + standalone nodes
   // but createContentBlocks still has access to all connected nodes via connectedNodes
   const blocks = createContentBlocks(
     connectedNodes,
-    sortResult.sortedNodeIds,
+    sortedNodeIds,
     mediaTextPairs,
     sourceDreamNodeId
   );
@@ -142,6 +155,80 @@ export function findMediaTextPairs(nodes: CanvasNode[], undirectedEdges: Process
   }
 
   return pairs;
+}
+
+/**
+ * Connected component (island) information
+ */
+export interface ConnectedComponent {
+  nodes: CanvasNode[];
+  averageY: number;
+}
+
+/**
+ * Find connected components (islands) in the graph using Union-Find algorithm
+ * Components are ordered by average y-coordinate (top to bottom)
+ */
+export function findConnectedComponents(nodes: CanvasNode[], edges: ProcessedCanvasEdge[]): ConnectedComponent[] {
+  // Build adjacency list using all edges (treats directed edges as undirected for connectivity)
+  const adjacency = new Map<string, Set<string>>();
+
+  for (const node of nodes) {
+    adjacency.set(node.id, new Set());
+  }
+
+  for (const edge of edges) {
+    const fromSet = adjacency.get(edge.fromNodeId);
+    const toSet = adjacency.get(edge.toNodeId);
+
+    if (fromSet && toSet) {
+      fromSet.add(edge.toNodeId);
+      toSet.add(edge.fromNodeId); // Treat as undirected for component detection
+    }
+  }
+
+  // DFS to find connected components
+  const visited = new Set<string>();
+  const components: CanvasNode[][] = [];
+
+  function dfs(nodeId: string, component: Set<string>) {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
+    component.add(nodeId);
+
+    const neighbors = adjacency.get(nodeId);
+    if (neighbors) {
+      for (const neighbor of neighbors) {
+        dfs(neighbor, component);
+      }
+    }
+  }
+
+  // Find all components
+  for (const node of nodes) {
+    if (!visited.has(node.id)) {
+      const component = new Set<string>();
+      dfs(node.id, component);
+
+      // Convert node IDs to actual nodes
+      const componentNodes = nodes.filter(n => component.has(n.id));
+      components.push(componentNodes);
+    }
+  }
+
+  // Calculate average y-coordinate for each component and create result objects
+  const componentsWithY: ConnectedComponent[] = components.map(componentNodes => {
+    const averageY = componentNodes.reduce((sum, node) => sum + node.y, 0) / componentNodes.length;
+    return {
+      nodes: componentNodes,
+      averageY
+    };
+  });
+
+  // Sort components by average y-coordinate (top to bottom)
+  componentsWithY.sort((a, b) => a.averageY - b.averageY);
+
+  return componentsWithY;
 }
 
 /**
