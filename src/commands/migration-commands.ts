@@ -314,12 +314,31 @@ export function registerMigrationCommands(plugin: Plugin) {
 
           notice.hide();
 
+          // Build summary message
+          const parts: string[] = [];
+          if (summary.filesCreated > 0) {
+            parts.push(`created ${summary.filesCreated} files`);
+          }
+          if (summary.filesUpdated > 0) {
+            parts.push(`updated ${summary.filesUpdated} files`);
+          }
+          if (summary.interbrainRelationshipsAdded > 0) {
+            parts.push(`added ${summary.interbrainRelationshipsAdded} InterBrain relationships`);
+          }
+
           // Show summary
           if (summary.errors.length === 0) {
-            new Notice(
-              `✅ Migrated ${summary.dreamerNodesProcessed} Dreamer nodes! Created ${summary.filesCreated} liminal-web.json files.`,
-              5000
-            );
+            if (parts.length === 0) {
+              new Notice(
+                `✅ All ${summary.dreamerNodesProcessed} Dreamer nodes already migrated!`,
+                5000
+              );
+            } else {
+              new Notice(
+                `✅ Processed ${summary.dreamerNodesProcessed} Dreamer nodes: ${parts.join(', ')}.`,
+                5000
+              );
+            }
           } else {
             new Notice(
               `⚠️ Migration completed with ${summary.errors.length} errors. Check console for details.`,

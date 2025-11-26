@@ -787,18 +787,27 @@ export class DreamNodeMigrationService {
 
   /**
    * Migrate relationships to liminal-web.json for all Dreamer nodes
+   * Also ensures all Dreamer nodes are related to the InterBrain root DreamNode
    * Non-destructive: keeps liminalWebRelationships in .udd intact
+   * Idempotent: safe to run multiple times
    */
   async migrateToLiminalWebJson(): Promise<{
     dreamerNodesProcessed: number;
     filesCreated: number;
+    filesUpdated: number;
     gitignoresUpdated: number;
+    interbrainRelationshipsAdded: number;
     errors: string[];
   }> {
+    // InterBrain root DreamNode UUID - all Dreamer nodes should be related to this
+    const INTERBRAIN_ROOT_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
     const summary = {
       dreamerNodesProcessed: 0,
       filesCreated: 0,
+      filesUpdated: 0,
       gitignoresUpdated: 0,
+      interbrainRelationshipsAdded: 0,
       errors: [] as string[]
     };
 
@@ -824,25 +833,52 @@ export class DreamNodeMigrationService {
 
           summary.dreamerNodesProcessed++;
 
+          // Get existing relationships from .udd
+          const uddRelationships: string[] = udd.liminalWebRelationships || [];
+
           // Check if liminal-web.json already exists
           const liminalWebPath = path.join(dirPath, 'liminal-web.json');
+          let liminalWebContent: { relationships: string[] };
+          let fileExists = false;
+
           if (fs.existsSync(liminalWebPath)) {
-            console.log(`Skipping ${udd.title} - liminal-web.json already exists`);
-            continue;
+            fileExists = true;
+            const existingContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
+            liminalWebContent = JSON.parse(existingContent);
+          } else {
+            // Create new liminal-web.json from .udd relationships
+            liminalWebContent = {
+              relationships: [...uddRelationships]
+            };
           }
 
-          // Create liminal-web.json from .udd relationships
-          const relationships = udd.liminalWebRelationships || [];
-          const liminalWebContent = {
-            relationships
-          };
+          // Ensure InterBrain root UUID is in relationships (idempotent)
+          let relationshipsModified = false;
+          if (!liminalWebContent.relationships.includes(INTERBRAIN_ROOT_UUID)) {
+            liminalWebContent.relationships.push(INTERBRAIN_ROOT_UUID);
+            relationshipsModified = true;
+            summary.interbrainRelationshipsAdded++;
+            console.log(`Added InterBrain root relationship to ${udd.title}`);
+          }
 
-          await fsPromises.writeFile(
-            liminalWebPath,
-            JSON.stringify(liminalWebContent, null, 2)
-          );
-          summary.filesCreated++;
-          console.log(`Created liminal-web.json for ${udd.title} with ${relationships.length} relationships`);
+          // Write liminal-web.json if new or modified
+          if (!fileExists) {
+            await fsPromises.writeFile(
+              liminalWebPath,
+              JSON.stringify(liminalWebContent, null, 2)
+            );
+            summary.filesCreated++;
+            console.log(`Created liminal-web.json for ${udd.title} with ${liminalWebContent.relationships.length} relationships`);
+          } else if (relationshipsModified) {
+            await fsPromises.writeFile(
+              liminalWebPath,
+              JSON.stringify(liminalWebContent, null, 2)
+            );
+            summary.filesUpdated++;
+            console.log(`Updated liminal-web.json for ${udd.title} - added InterBrain root relationship`);
+          } else {
+            console.log(`Skipping ${udd.title} - liminal-web.json already has InterBrain root relationship`);
+          }
 
           // Update or create .gitignore
           const gitignorePath = path.join(dirPath, '.gitignore');
