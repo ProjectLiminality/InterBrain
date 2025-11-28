@@ -1327,8 +1327,10 @@ export default function DreamspaceCanvas() {
       // Create the DreamNode with URL as the "dreamTalk" (stored in metadata)
       // For website URLs, use AI-powered analysis if API key is available
       let newNode: DreamNode;
+      console.log(`🔗 URL type: ${urlMetadata.type}, has createFromWebsiteUrl: ${!!service.createFromWebsiteUrl}`);
       if (urlMetadata.type === 'website' && service.createFromWebsiteUrl) {
         const apiKey = serviceManager.getClaudeApiKey();
+        console.log(`🔗 Using AI analysis, API key configured: ${!!apiKey}`);
         newNode = await service.createFromWebsiteUrl(
           urlMetadata.title || urlMetadata.url,
           nodeType,
