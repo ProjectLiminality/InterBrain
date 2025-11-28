@@ -5,9 +5,17 @@
  * tailored to the user's profile from ~/.claude/CLAUDE.md
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { Notice } from 'obsidian';
 import { useInterBrainStore } from '../store/interbrain-store';
+
+// Use dynamic require for Anthropic SDK to avoid plugin load failure
+// if the SDK is not installed - error will only occur when feature is used
+let Anthropic: any = null;
+try {
+  Anthropic = require('@anthropic-ai/sdk').default;
+} catch (e) {
+  console.warn('WebLinkAnalyzerService: @anthropic-ai/sdk not available, AI summarization disabled');
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -215,6 +223,9 @@ class WebLinkAnalyzerService {
     userProfile: string,
     apiKey: string
   ): Promise<AnalysisResult> {
+    if (!Anthropic) {
+      throw new Error('Anthropic SDK not available. Please run: npm install @anthropic-ai/sdk');
+    }
     const anthropic = new Anthropic({ apiKey });
 
     const systemPrompt = `You are analyzing a web page to create a personalized summary for a knowledge management system called InterBrain.
@@ -265,7 +276,7 @@ Choose the best representative image (prefer logos for organizations, infographi
 
     // Extract text content from response
     const responseText = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .filter((block: any) => block.type === 'text')
       .map(block => block.text)
       .join('');
 
