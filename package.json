@@ -50,6 +50,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
     "@react-three/drei": "^10.5.0",
     "@react-three/fiber": "^9.2.0",
     "@types/react": "^19.1.8",

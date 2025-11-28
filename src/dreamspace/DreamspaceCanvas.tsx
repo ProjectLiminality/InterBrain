@@ -1325,12 +1325,25 @@ export default function DreamspaceCanvas() {
       }
 
       // Create the DreamNode with URL as the "dreamTalk" (stored in metadata)
-      const newNode = await service.createFromUrl(
-        urlMetadata.title || urlMetadata.url,
-        nodeType,
-        urlMetadata,
-        position
-      );
+      // For website URLs, use AI-powered analysis if API key is available
+      let newNode: DreamNode;
+      if (urlMetadata.type === 'website' && service.createFromWebsiteUrl) {
+        const apiKey = serviceManager.getClaudeApiKey();
+        newNode = await service.createFromWebsiteUrl(
+          urlMetadata.title || urlMetadata.url,
+          nodeType,
+          urlMetadata,
+          position,
+          apiKey || undefined
+        );
+      } else {
+        newNode = await service.createFromUrl(
+          urlMetadata.title || urlMetadata.url,
+          nodeType,
+          urlMetadata,
+          position
+        );
+      }
 
       // Auto-create relationship if in liminal-web mode
       if (shouldAutoRelate && focusedNodeId && newNode) {

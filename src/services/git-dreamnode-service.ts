@@ -5,6 +5,7 @@ import { indexingService } from '../features/semantic-search/services/indexing-s
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
+import { webLinkAnalyzerService } from './web-link-analyzer-service';
 
 // Access Node.js modules directly in Electron context
  
@@ -1768,6 +1769,46 @@ export class GitDreamNodeService {
     console.log(`GitDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type})`);
     console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
     console.log(`GitDreamNodeService: URL: ${urlMetadata.url}`);
+    return node;
+  }
+
+  /**
+   * Create a DreamNode from a website URL with AI-powered analysis
+   *
+   * Creates the node immediately using createFromUrl(), then spawns
+   * the WebLinkAnalyzerService in background to enrich the node with:
+   * - Personalized summary based on user profile
+   * - Representative image download
+   * - Rich README content
+   */
+  async createFromWebsiteUrl(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number],
+    apiKey?: string
+  ): Promise<DreamNode> {
+    // Create node immediately using existing method for instant feedback
+    const node = await this.createFromUrl(title, type, urlMetadata, position);
+
+    // Set up the analyzer service if API key provided
+    if (apiKey) {
+      webLinkAnalyzerService.setApiKey(apiKey);
+    }
+    webLinkAnalyzerService.initialize(this.vaultPath);
+
+    // Spawn AI analysis in background (non-blocking)
+    // This will update the node's README and DreamTalk when complete
+    webLinkAnalyzerService.analyzeWebLink(
+      node.id,
+      urlMetadata.url,
+      node.repoPath
+    ).catch(error => {
+      console.error('GitDreamNodeService: Background web analysis failed:', error);
+      // Node still exists with basic content - user can retry later
+    });
+
+    console.log(`GitDreamNodeService: Created website node "${title}" - AI analysis running in background`);
     return node;
   }
 

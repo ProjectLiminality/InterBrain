@@ -48,6 +48,13 @@ export interface IDreamNodeService {
     urlMetadata: UrlMetadata,
     position?: [number, number, number]
   ): Promise<DreamNode>;
+  createFromWebsiteUrl?(
+    title: string,
+    type: 'dream' | 'dreamer',
+    urlMetadata: UrlMetadata,
+    position?: [number, number, number],
+    apiKey?: string
+  ): Promise<DreamNode>;
   addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void>;
 }
 
@@ -240,6 +247,20 @@ export class ServiceManager {
    */
   getApp() {
     return this.plugin?.app || null;
+  }
+
+  /**
+   * Get the Claude API key from plugin settings
+   */
+  getClaudeApiKey(): string | null {
+    if (!this.plugin) {
+      return null;
+    }
+    // Access the settings property on the plugin
+    const pluginWithSettings = this.plugin as Plugin & {
+      settings: { claudeApiKey?: string };
+    };
+    return pluginWithSettings.settings?.claudeApiKey || null;
   }
 
   /**
