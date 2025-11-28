@@ -29,7 +29,8 @@ export default defineConfig({
         'buffer',
         'crypto',
         'stream',
-        'os'
+        'os',
+        '@anthropic-ai/sdk'
       ],
       output: {
         globals: {
