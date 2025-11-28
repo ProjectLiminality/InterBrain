@@ -1791,24 +1791,30 @@ export class GitDreamNodeService {
     // Create node immediately using existing method for instant feedback
     const node = await this.createFromUrl(title, type, urlMetadata, position);
 
-    // Set up the analyzer service if API key provided
+    // Get plugin directory path for Python script location
+    const pluginPath = path.join(this.vaultPath, '.obsidian', 'plugins', this.plugin.manifest.id);
+
+    // Initialize the analyzer service with vault and plugin paths
+    webLinkAnalyzerService.initialize(this.vaultPath, pluginPath);
+
+    // Only run AI analysis if API key is provided
     if (apiKey) {
-      webLinkAnalyzerService.setApiKey(apiKey);
+      // Spawn AI analysis in background (non-blocking)
+      // This will update the node's README and DreamTalk when complete
+      webLinkAnalyzerService.analyzeWebLink(
+        node.id,
+        urlMetadata.url,
+        node.repoPath,
+        apiKey
+      ).catch(error => {
+        console.error('GitDreamNodeService: Background web analysis failed:', error);
+        // Node still exists with basic content - user can retry later
+      });
+      console.log(`GitDreamNodeService: Created website node "${title}" - AI analysis running in background`);
+    } else {
+      console.log(`GitDreamNodeService: Created website node "${title}" - No API key, skipping AI analysis`);
     }
-    webLinkAnalyzerService.initialize(this.vaultPath);
 
-    // Spawn AI analysis in background (non-blocking)
-    // This will update the node's README and DreamTalk when complete
-    webLinkAnalyzerService.analyzeWebLink(
-      node.id,
-      urlMetadata.url,
-      node.repoPath
-    ).catch(error => {
-      console.error('GitDreamNodeService: Background web analysis failed:', error);
-      // Node still exists with basic content - user can retry later
-    });
-
-    console.log(`GitDreamNodeService: Created website node "${title}" - AI analysis running in background`);
     return node;
   }
 
