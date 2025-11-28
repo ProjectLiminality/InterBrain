@@ -2364,10 +2364,8 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
   onunload() {
     console.log('InterBrain plugin unloaded');
 
-    // Clear passphrase from memory for security
-    if (this.passphraseManager) {
-      this.passphraseManager.clearPassphrase();
-    }
+    // Note: Passphrase is stored in settings, not cleared on unload
+    // This preserves user's passphrase configuration across reloads
 
     // Stop canvas observer
     if (this.canvasObserverService) {

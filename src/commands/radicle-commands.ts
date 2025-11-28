@@ -440,44 +440,6 @@ export function registerRadicleCommands(
     }
   });
 
-  // Configure Radicle Passphrase - Optional command for users without ssh-agent
-  plugin.addCommand({
-    id: 'configure-radicle-passphrase',
-    name: 'Configure Radicle Passphrase',
-    callback: async () => {
-      try {
-        console.log('RadicleCommands: Configure Radicle Passphrase command initiated');
-        const radicleService = serviceManager.getRadicleService();
-
-        // Check if Radicle is available
-        const isAvailable = await radicleService.isAvailable();
-        if (!isAvailable) {
-          uiService.showError('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
-          return;
-        }
-
-        // Prompt for passphrase
-        const passphrase = await uiService.promptForText(
-          'Enter your Radicle passphrase (stored in memory for this session only)',
-          ''
-        );
-
-        if (!passphrase || passphrase.trim() === '') {
-          console.log('RadicleCommands: User cancelled passphrase configuration');
-          return;
-        }
-
-        // Store in PassphraseManager
-        passphraseManager.setPassphrase(passphrase.trim());
-        console.log('RadicleCommands: Passphrase configured successfully');
-        uiService.showSuccess('Radicle passphrase configured for this session');
-      } catch (error) {
-        console.error('RadicleCommands: Configure Radicle Passphrase command failed:', error);
-        uiService.showError('Failed to configure passphrase');
-      }
-    }
-  });
-
   // Discover Peer Acceptances - Check which peers are seeding DreamNodes (Radicle → Liminal Web)
   plugin.addCommand({
     id: 'discover-peer-acceptances',

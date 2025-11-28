@@ -69,25 +69,4 @@ export class PassphraseManager {
   isPassphraseSet(): boolean {
     return !!(this.plugin as any).settings?.radiclePassphrase;
   }
-
-  /**
-   * Clear the passphrase from settings
-   * Should be called when user wants to remove stored passphrase
-   */
-  async clearPassphrase(): Promise<void> {
-    if ((this.plugin as any).settings?.radiclePassphrase) {
-      console.log('PassphraseManager: Clearing passphrase from settings');
-      (this.plugin as any).settings.radiclePassphrase = '';
-      await (this.plugin as any).saveSettings();
-    }
-  }
-
-  /**
-   * Set passphrase directly and save to settings
-   */
-  async setPassphrase(passphrase: string): Promise<void> {
-    console.log('PassphraseManager: Setting passphrase in settings');
-    (this.plugin as any).settings.radiclePassphrase = passphrase;
-    await (this.plugin as any).saveSettings();
-  }
 }
