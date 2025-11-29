@@ -19,6 +19,7 @@ import urllib.error
 from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
+from typing import Optional, Dict, List, Any
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -214,7 +215,7 @@ Choose the best representative image (prefer logos for organizations, infographi
         raise Exception("Failed to parse AI response as JSON")
 
 
-def download_image(image_url: str, output_dir: Path) -> str | None:
+def download_image(image_url: str, output_dir: Path) -> Optional[str]:
     """Download image to output directory. Returns filename or None."""
     if not image_url:
         return None
@@ -252,7 +253,7 @@ def download_image(image_url: str, output_dir: Path) -> str | None:
         return None
 
 
-def generate_readme(analysis: dict, original_url: str, image_path: str | None) -> str:
+def generate_readme(analysis: Dict[str, Any], original_url: str, image_path: Optional[str]) -> str:
     """Generate README.md content from analysis."""
     content = f"# {analysis['title']}\n\n"
     content += f"> **Source**: [{original_url}]({original_url})\n\n"
@@ -276,7 +277,7 @@ def generate_readme(analysis: dict, original_url: str, image_path: str | None) -
     return content
 
 
-def update_udd_file(output_dir: Path, image_path: str | None):
+def update_udd_file(output_dir: Path, image_path: Optional[str]) -> None:
     """Update .udd file to reference the downloaded image as DreamTalk."""
     udd_path = output_dir / '.udd'
 
