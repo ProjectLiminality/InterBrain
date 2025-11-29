@@ -47,44 +47,38 @@ class WebLinkAnalyzerService {
   }
 
   /**
+   * Get the scripts directory path
+   * Uses vault-relative InterBrain folder to match where setup.sh creates the venv
+   */
+  private getScriptsDir(): string {
+    // Use vault-relative path: InterBrain/src/features/web-link-analyzer/scripts
+    // This matches where the settings panel runs setup.sh
+    return path.join(
+      this.vaultPath,
+      'InterBrain/src/features/web-link-analyzer/scripts'
+    );
+  }
+
+  /**
    * Get path to the Python script
    */
   private getScriptPath(): string {
-    // Resolve symlinks to get actual plugin source directory
-    let realPluginPath = this.pluginPath;
-    try {
-      realPluginPath = fs.realpathSync(this.pluginPath);
-    } catch {
-      // Use original path if symlink resolution fails
-    }
-
-    return path.join(
-      realPluginPath,
-      'src/features/web-link-analyzer/scripts/analyze-web-link.py'
-    );
+    return path.join(this.getScriptsDir(), 'analyze-web-link.py');
   }
 
   /**
    * Get path to the virtual environment Python
    */
   private getVenvPython(): string | null {
-    let realPluginPath = this.pluginPath;
-    try {
-      realPluginPath = fs.realpathSync(this.pluginPath);
-    } catch {
-      // Use original path if symlink resolution fails
-    }
-
-    const scriptsDir = path.join(
-      realPluginPath,
-      'src/features/web-link-analyzer/scripts'
-    );
+    const scriptsDir = this.getScriptsDir();
 
     // Platform-specific venv paths
     const isWindows = process.platform === 'win32';
     const venvPython = isWindows
       ? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
       : path.join(scriptsDir, 'venv', 'bin', 'python3');
+
+    console.log(`WebLinkAnalyzerService: Checking for venv at ${venvPython}`);
 
     if (fs.existsSync(venvPython)) {
       return venvPython;
