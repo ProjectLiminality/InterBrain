@@ -139,7 +139,7 @@ def read_user_profile(profile_path: str) -> str:
 
 
 def call_claude_api(api_key: str, page_content: dict, user_profile: str) -> dict:
-    """Call Claude API to generate personalized summary."""
+    """Call Claude API to generate a summary of the web page."""
     print("Calling Claude API...", file=sys.stderr)
 
     # Import anthropic here to provide clear error if not installed
@@ -150,24 +150,21 @@ def call_claude_api(api_key: str, page_content: dict, user_profile: str) -> dict
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    system_prompt = f"""You are analyzing a web page to create a personalized summary for a knowledge management system called InterBrain.
+    # Note: user_profile parameter kept for future use but not currently used
+    system_prompt = """You are analyzing a web page to create a clear, informative summary.
 
-USER PROFILE:
-{user_profile}
-
-Based on the user's interests, role, and philosophical framework described above, create a summary that:
-1. Highlights aspects most relevant to this specific user
-2. Uses language and framing that resonates with their values
-3. Extracts actionable insights aligned with their goals
+Create a summary that:
+1. Captures the main ideas and arguments of the content
+2. Extracts the key points in a concise manner
+3. Provides context on why this content might be valuable
 
 You must respond with ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
-{{
+{
   "title": "A clear, descriptive title for this content",
-  "summary": "2-3 paragraphs of personalized analysis",
+  "summary": "2-3 paragraphs summarizing the main content",
   "keyPoints": ["point 1", "point 2", "point 3"],
-  "relevance": "Why this matters for this user specifically",
   "representativeImageUrl": "URL of the best image from the available images, or null if none suitable"
-}}"""
+}"""
 
     user_prompt = f"""Analyze this web page:
 
@@ -206,7 +203,6 @@ Choose the best representative image (prefer logos for organizations, infographi
             'title': result.get('title', page_content['title']),
             'summary': result.get('summary', ''),
             'keyPoints': result.get('keyPoints', []),
-            'relevance': result.get('relevance', ''),
             'representativeImageUrl': result.get('representativeImageUrl'),
         }
     except json.JSONDecodeError as e:
@@ -263,14 +259,11 @@ def generate_readme(analysis: Dict[str, Any], original_url: str, image_path: Opt
 
     content += f"## Summary\n\n{analysis['summary']}\n\n"
 
-    if analysis['keyPoints']:
+    if analysis.get('keyPoints'):
         content += "## Key Points\n\n"
         for point in analysis['keyPoints']:
             content += f"- {point}\n"
         content += "\n"
-
-    if analysis['relevance']:
-        content += f"## Relevance\n\n{analysis['relevance']}\n\n"
 
     content += "---\n*AI-generated summary by InterBrain*\n"
 
