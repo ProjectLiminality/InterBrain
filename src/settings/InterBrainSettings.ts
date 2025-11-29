@@ -12,6 +12,8 @@ export interface InterBrainSettings {
 	hasLaunchedBefore: boolean;
 	transcriptionEnabled: boolean;
 	transcriptionSetupComplete: boolean;
+	webLinkAnalyzerEnabled: boolean;
+	webLinkAnalyzerSetupComplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: InterBrainSettings = {
@@ -20,7 +22,9 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	userEmail: '',
 	hasLaunchedBefore: false,
 	transcriptionEnabled: true,  // Auto-enabled on first launch
-	transcriptionSetupComplete: false
+	transcriptionSetupComplete: false,
+	webLinkAnalyzerEnabled: false,  // Requires manual setup (needs API key)
+	webLinkAnalyzerSetupComplete: false
 };
 
 export class InterBrainSettingTab extends PluginSettingTab {
@@ -78,6 +82,11 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		// Transcription Section
 		// ============================================================
 		this.createTranscriptionSection(containerEl);
+
+		// ============================================================
+		// Web Link Analyzer Section
+		// ============================================================
+		this.createWebLinkAnalyzerSection(containerEl);
 
 		// ============================================================
 		// Radicle Network Section
@@ -150,6 +159,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		const features = [
 			{ name: 'Semantic Search', status: this.systemStatus.semanticSearch, sectionId: 'semantic-search-section' },
 			{ name: 'Transcription', status: this.systemStatus.transcription, sectionId: 'transcription-section' },
+			{ name: 'Web Link Analyzer', status: this.systemStatus.webLinkAnalyzer, sectionId: 'web-link-analyzer-section' },
 			{ name: 'Radicle Network', status: this.systemStatus.radicle, sectionId: 'radicle-section' },
 			{ name: 'GitHub Sharing', status: this.systemStatus.github, sectionId: 'github-section' },
 			{ name: 'Claude API', status: this.systemStatus.claudeApi, sectionId: 'ai-section' }
@@ -388,6 +398,140 @@ export class InterBrainSettingTab extends PluginSettingTab {
 					console.log('✅ Transcription setup complete!');
 					console.log('Setup output:', stdout);
 					this.plugin.settings.transcriptionSetupComplete = true;
+					await this.plugin.saveSettings();
+					// Refresh status display
+					await this.display();
+				}
+			}
+		);
+	}
+
+	/**
+	 * Web Link Analyzer Section
+	 */
+	private createWebLinkAnalyzerSection(containerEl: HTMLElement): void {
+		const header = containerEl.createEl('h2', { text: '🔗 Web Link Analyzer (AI-Powered)' });
+		header.id = 'web-link-analyzer-section';
+
+		const status = this.systemStatus?.webLinkAnalyzer;
+		if (status) {
+			this.createStatusDisplay(containerEl, status);
+		}
+
+		// Enable/Disable Toggle
+		new Setting(containerEl)
+			.setName('Enable Web Link Analyzer')
+			.setDesc('Analyze dropped web links with Claude AI to generate personalized summaries')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.webLinkAnalyzerEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.webLinkAnalyzerEnabled = value;
+					await this.plugin.saveSettings();
+
+					// If enabled and not setup, trigger auto-setup
+					if (value && !this.plugin.settings.webLinkAnalyzerSetupComplete) {
+						// Check if API key is configured
+						if (!this.plugin.settings.claudeApiKey) {
+							window.alert('Please configure your Claude API key in the AI Integration section first.');
+							this.plugin.settings.webLinkAnalyzerEnabled = false;
+							await this.plugin.saveSettings();
+							await this.display();
+							return;
+						}
+						window.alert('Web Link Analyzer enabled! Setup will run automatically in the background.');
+						this.runWebLinkAnalyzerSetup();
+					}
+
+					// Refresh display
+					await this.display();
+				}));
+
+		// Feature description
+		containerEl.createEl('p', {
+			text: 'When enabled, dropping a web link creates a DreamNode with an AI-generated summary tailored to your profile from ~/.claude/CLAUDE.md.',
+			cls: 'setting-item-description'
+		});
+
+		// Action buttons (only show if enabled)
+		if (this.plugin.settings.webLinkAnalyzerEnabled) {
+			const buttonSetting = new Setting(containerEl)
+				.setName('Actions')
+				.setDesc('Set up the Python environment for web link analysis');
+
+			// Setup Environment button (if not ready)
+			if (status?.status !== 'ready') {
+				buttonSetting.addButton(button => button
+					.setButtonText('Setup Environment')
+					.onClick(async () => {
+						const vaultPath = (this.app.vault.adapter as any).basePath;
+
+						// Run setup script
+						const { exec } = require('child_process');
+						button.setButtonText('Setting up...');
+						button.setDisabled(true);
+
+						exec(`cd "${vaultPath}/InterBrain/src/features/web-link-analyzer/scripts" && bash setup.sh`,
+							(error: Error | null, stdout: string, stderr: string) => {
+								if (error) {
+									console.error('Setup error:', error);
+									console.error('stderr:', stderr);
+									window.alert(`Setup failed: ${error.message}\n\nCheck console for details.`);
+									button.setButtonText('Setup Environment');
+									button.setDisabled(false);
+								} else {
+									console.log('Setup output:', stdout);
+									window.alert('Setup complete! Python environment and anthropic package are ready.');
+									button.setButtonText('Setup Complete ✓');
+									this.plugin.settings.webLinkAnalyzerSetupComplete = true;
+									this.plugin.saveSettings();
+									// Refresh status
+									setTimeout(() => this.display(), 1000);
+								}
+							}
+						);
+					}));
+			}
+
+			// Installation instructions
+			if (status?.status !== 'ready') {
+				const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
+				installDiv.createEl('p', { text: '📦 Setup requirements:' });
+				const ol = installDiv.createEl('ol');
+				ol.createEl('li', { text: 'Python 3.9+ must be installed on your system' });
+				ol.createEl('li', { text: 'Claude API key must be configured (in AI Integration section above)' });
+				ol.createEl('li', { text: 'Click "Setup Environment" to create Python venv and install anthropic package' });
+				ol.createEl('li', { text: 'Once complete, drop any web link into DreamSpace for AI analysis' });
+			}
+		}
+
+		// Show what happens without the feature
+		if (!this.plugin.settings.webLinkAnalyzerEnabled || status?.status !== 'ready') {
+			containerEl.createEl('p', {
+				text: '💡 Without this feature, dropped web links still create DreamNodes with basic metadata.',
+				cls: 'setting-item-description'
+			});
+		}
+	}
+
+	/**
+	 * Run web link analyzer setup in background
+	 */
+	private async runWebLinkAnalyzerSetup(): Promise<void> {
+		const vaultPath = (this.app.vault.adapter as any).basePath;
+		const { exec } = require('child_process');
+
+		console.log('🔗 Running web link analyzer auto-setup...');
+
+		exec(`cd "${vaultPath}/InterBrain/src/features/web-link-analyzer/scripts" && bash setup.sh`,
+			async (error: Error | null, stdout: string, stderr: string) => {
+				if (error) {
+					console.error('Web link analyzer setup error:', error);
+					console.error('stderr:', stderr);
+					console.log('Setup will retry on manual trigger');
+				} else {
+					console.log('✅ Web link analyzer setup complete!');
+					console.log('Setup output:', stdout);
+					this.plugin.settings.webLinkAnalyzerSetupComplete = true;
 					await this.plugin.saveSettings();
 					// Refresh status display
 					await this.display();

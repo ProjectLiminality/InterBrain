@@ -264,6 +264,29 @@ export class ServiceManager {
   }
 
   /**
+   * Check if web link analyzer is enabled and ready
+   */
+  isWebLinkAnalyzerReady(): boolean {
+    if (!this.plugin) {
+      return false;
+    }
+    const pluginWithSettings = this.plugin as Plugin & {
+      settings: {
+        webLinkAnalyzerEnabled?: boolean;
+        webLinkAnalyzerSetupComplete?: boolean;
+        claudeApiKey?: string;
+      };
+    };
+    const settings = pluginWithSettings.settings;
+    // Analyzer is ready if enabled, setup complete, and API key configured
+    return !!(
+      settings?.webLinkAnalyzerEnabled &&
+      settings?.webLinkAnalyzerSetupComplete &&
+      settings?.claudeApiKey
+    );
+  }
+
+  /**
    * Generic service getter (for backwards compatibility and simpler access)
    */
   getService(serviceName: string) {

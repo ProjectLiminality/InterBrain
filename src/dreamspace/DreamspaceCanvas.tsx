@@ -1325,10 +1325,12 @@ export default function DreamspaceCanvas() {
       }
 
       // Create the DreamNode with URL as the "dreamTalk" (stored in metadata)
-      // For website URLs, use AI-powered analysis if API key is available
+      // For website URLs, use AI-powered analysis if enabled and set up in settings
       let newNode: DreamNode;
-      console.log(`🔗 URL type: ${urlMetadata.type}, has createFromWebsiteUrl: ${!!service.createFromWebsiteUrl}`);
-      if (urlMetadata.type === 'website' && service.createFromWebsiteUrl) {
+      const webLinkAnalyzerReady = serviceManager.isWebLinkAnalyzerReady();
+      console.log(`🔗 URL type: ${urlMetadata.type}, has createFromWebsiteUrl: ${!!service.createFromWebsiteUrl}, analyzer ready: ${webLinkAnalyzerReady}`);
+
+      if (urlMetadata.type === 'website' && service.createFromWebsiteUrl && webLinkAnalyzerReady) {
         const apiKey = serviceManager.getClaudeApiKey();
         console.log(`🔗 Using AI analysis, API key configured: ${!!apiKey}`);
         newNode = await service.createFromWebsiteUrl(
@@ -1339,6 +1341,10 @@ export default function DreamspaceCanvas() {
           apiKey || undefined
         );
       } else {
+        // Fallback: create basic node without AI analysis
+        if (urlMetadata.type === 'website' && !webLinkAnalyzerReady) {
+          console.log(`🔗 Web Link Analyzer not ready, using basic node creation`);
+        }
         newNode = await service.createFromUrl(
           urlMetadata.title || urlMetadata.url,
           nodeType,

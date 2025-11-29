@@ -22,6 +22,7 @@ export interface FeatureStatus {
 export interface SystemStatus {
 	semanticSearch: FeatureStatus;
 	transcription: FeatureStatus;
+	webLinkAnalyzer: FeatureStatus;
 	radicle: FeatureStatus;
 	github: FeatureStatus;
 	claudeApi: FeatureStatus;
@@ -39,9 +40,10 @@ export class SettingsStatusService {
 	 * Get comprehensive status of all InterBrain features
 	 */
 	async getSystemStatus(claudeApiKey: string, radiclePassphrase?: string): Promise<SystemStatus> {
-		const [semanticSearch, transcription, radicle, github, claudeApi] = await Promise.all([
+		const [semanticSearch, transcription, webLinkAnalyzer, radicle, github, claudeApi] = await Promise.all([
 			this.checkSemanticSearch(),
 			this.checkTranscription(),
+			this.checkWebLinkAnalyzer(claudeApiKey),
 			this.checkRadicle(radiclePassphrase),
 			this.checkGitHub(),
 			this.checkClaudeApi(claudeApiKey)
@@ -50,6 +52,7 @@ export class SettingsStatusService {
 		return {
 			semanticSearch,
 			transcription,
+			webLinkAnalyzer,
 			radicle,
 			github,
 			claudeApi
@@ -161,6 +164,74 @@ export class SettingsStatusService {
 				details: error instanceof Error ? error.message : 'Unknown error'
 			};
 		}
+	}
+
+	/**
+	 * Check Web Link Analyzer status
+	 */
+	private async checkWebLinkAnalyzer(claudeApiKey: string): Promise<FeatureStatus> {
+		try {
+			// Check if API key is configured
+			if (!claudeApiKey || claudeApiKey.trim() === '') {
+				return {
+					available: false,
+					status: 'warning',
+					message: 'Claude API key required',
+					details: 'Configure your Anthropic API key in the AI Integration section above'
+				};
+			}
+
+			// Check if Python is available
+			const pythonAvailable = await this.checkPythonAvailable();
+			if (!pythonAvailable) {
+				return {
+					available: false,
+					status: 'not-installed',
+					message: 'Python not installed',
+					details: 'Install Python 3.9+ to use AI-powered link analysis'
+				};
+			}
+
+			// Check if venv exists
+			const vaultPath = (this.app.vault.adapter as any).basePath;
+			const venvPath = path.join(vaultPath, 'InterBrain/src/features/web-link-analyzer/scripts/venv');
+			const venvExists = fs.existsSync(venvPath);
+
+			if (!venvExists) {
+				return {
+					available: false,
+					status: 'warning',
+					message: 'Python installed, environment needs setup',
+					details: 'Click "Setup Environment" button below to initialize'
+				};
+			}
+
+			return {
+				available: true,
+				status: 'ready',
+				message: 'Ready (Python + Claude API)',
+				details: 'AI-powered web link analysis available'
+			};
+		} catch (error) {
+			return {
+				available: false,
+				status: 'error',
+				message: 'Error checking web link analyzer',
+				details: error instanceof Error ? error.message : 'Unknown error'
+			};
+		}
+	}
+
+	/**
+	 * Helper: Check if Python 3 is available
+	 */
+	private async checkPythonAvailable(): Promise<boolean> {
+		const { exec } = require('child_process');
+		return new Promise((resolve) => {
+			exec('python3 --version', (error: Error | null) => {
+				resolve(!error);
+			});
+		});
 	}
 
 	/**
