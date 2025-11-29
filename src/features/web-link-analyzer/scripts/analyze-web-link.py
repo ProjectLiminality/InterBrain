@@ -211,24 +211,44 @@ Choose the best representative image (prefer logos for organizations, infographi
         raise Exception("Failed to parse AI response as JSON")
 
 
-def download_image(image_url: str, output_dir: Path) -> Optional[str]:
-    """Download image to output directory. Returns filename or None."""
+def download_image(image_url: str, output_dir: Path, title: str) -> Optional[str]:
+    """Download image to output directory with a meaningful filename. Returns filename or None."""
     if not image_url:
         return None
 
     print(f"Downloading image: {image_url}", file=sys.stderr)
 
     try:
-        # Extract filename from URL
+        # Get the file extension from the URL
         parsed = urlparse(image_url)
-        filename = os.path.basename(parsed.path) or 'featured-image'
+        url_path = parsed.path.lower()
 
-        # Ensure extension
-        if '.' not in filename:
-            filename += '.jpg'
+        # Determine extension from URL or content-type
+        extension = '.jpg'  # default
+        if url_path.endswith('.svg'):
+            extension = '.svg'
+        elif url_path.endswith('.webp'):
+            extension = '.webp'
+        elif url_path.endswith('.png'):
+            extension = '.png'
+        elif url_path.endswith('.gif'):
+            extension = '.gif'
+        elif url_path.endswith('.jpeg') or url_path.endswith('.jpg'):
+            extension = '.jpg'
 
-        # Sanitize filename
-        filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+        # Create a meaningful filename from the title
+        # Convert title to kebab-case: "My Cool Article" -> "my-cool-article"
+        base_name = title.lower()
+        # Replace non-alphanumeric with hyphens
+        base_name = re.sub(r'[^a-z0-9]+', '-', base_name)
+        # Remove leading/trailing hyphens
+        base_name = base_name.strip('-')
+        # Limit length
+        if len(base_name) > 50:
+            base_name = base_name[:50].rsplit('-', 1)[0]
+
+        # Use "dreamtalk" prefix for clarity
+        filename = f"dreamtalk-{base_name}{extension}"
 
         # Download
         headers = {
@@ -238,6 +258,18 @@ def download_image(image_url: str, output_dir: Path) -> Optional[str]:
 
         output_path = output_dir / filename
         with urllib.request.urlopen(req, timeout=30) as response:
+            # Check content-type header for better extension detection
+            content_type = response.headers.get('Content-Type', '').lower()
+            if 'svg' in content_type and extension != '.svg':
+                filename = f"dreamtalk-{base_name}.svg"
+                output_path = output_dir / filename
+            elif 'webp' in content_type and extension != '.webp':
+                filename = f"dreamtalk-{base_name}.webp"
+                output_path = output_dir / filename
+            elif 'png' in content_type and extension != '.png':
+                filename = f"dreamtalk-{base_name}.png"
+                output_path = output_dir / filename
+
             with open(output_path, 'wb') as f:
                 f.write(response.read())
 
@@ -328,7 +360,7 @@ def main():
 
         # Step 4: Download image
         print("Step 4: Downloading image...", file=sys.stderr)
-        image_path = download_image(analysis['representativeImageUrl'], output_dir)
+        image_path = download_image(analysis['representativeImageUrl'], output_dir, analysis['title'])
 
         # Step 5: Generate README
         print("Step 5: Writing README.md...", file=sys.stderr)

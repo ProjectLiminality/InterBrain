@@ -1228,6 +1228,7 @@ export class GitDreamNodeService {
       '.jpeg': 'image/jpeg',
       '.gif': 'image/gif',
       '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
       '.mp4': 'video/mp4',
       '.webm': 'video/webm',
       '.pdf': 'application/pdf'
@@ -1320,6 +1321,7 @@ export class GitDreamNodeService {
       'image/jpg',
       'image/gif',
       'image/webp',
+      'image/svg+xml',
       'video/mp4',
       'video/webm',
       'audio/mp3',
@@ -1331,9 +1333,9 @@ export class GitDreamNodeService {
       'application/octet-stream'
     ];
 
-    // Also check file extension for .link files since MIME detection is unreliable
+    // Also check file extension for special cases where MIME detection is unreliable
     const fileName = file.name.toLowerCase();
-    if (fileName.endsWith('.link')) {
+    if (fileName.endsWith('.link') || fileName.endsWith('.svg') || fileName.endsWith('.webp')) {
       return true;
     }
 
