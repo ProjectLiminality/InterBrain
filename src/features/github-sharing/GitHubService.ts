@@ -389,13 +389,15 @@ export class GitHubService {
 
   /**
    * Build static DreamSong site for GitHub Pages
-   * @param blocks - Pre-computed DreamSongBlocks from local rendering (already has media resolved)
+   * @param blocks - DreamSongBlocks with media._absolutePath for files to copy
+   * @param vaultPath - Path to vault for resolving relative media paths
    */
   async buildStaticSite(
     dreamNodePath: string,
     dreamNodeId: string,
     dreamNodeName: string,
-    blocks: any[] // DreamSongBlock[] from local cache
+    blocks: any[], // DreamSongBlock[] with _absolutePath metadata
+    vaultPath?: string
   ): Promise<string> {
     try {
       // Read .udd file to get metadata
@@ -407,12 +409,105 @@ export class GitHubService {
       const uddContent = fs.readFileSync(uddPath, 'utf-8');
       const udd = JSON.parse(uddContent);
 
-      // Get DreamTalk media if exists
-      const dreamTalkMedia = udd.dreamTalk
-        ? await this.loadDreamTalkMedia(path.join(dreamNodePath, udd.dreamTalk))
-        : undefined;
+      // Create output directory in system temp (outside the repo)
+      const tmpOs = require('os');
+      const buildDir = path.join(tmpOs.tmpdir(), `dreamsong-build-${dreamNodeId}-${Date.now()}`);
+      if (!fs.existsSync(buildDir)) {
+        fs.mkdirSync(buildDir, { recursive: true });
+      }
 
-      // Build link resolver map (will be populated when we integrate with DreamNodeService)
+      console.log(`GitHubService: Preparing static site at ${buildDir}`);
+
+      // Create media directory for copied files
+      const mediaDir = path.join(buildDir, 'media');
+      fs.mkdirSync(mediaDir, { recursive: true });
+
+      // Track used filenames to handle collisions
+      const usedFilenames = new Set<string>();
+
+      // Helper to get unique filename
+      const getUniqueFilename = (originalPath: string): string => {
+        const ext = path.extname(originalPath);
+        const base = path.basename(originalPath, ext);
+        let filename = `${base}${ext}`;
+        let counter = 1;
+
+        while (usedFilenames.has(filename.toLowerCase())) {
+          filename = `${base}-${counter}${ext}`;
+          counter++;
+        }
+
+        usedFilenames.add(filename.toLowerCase());
+        return filename;
+      };
+
+      // Copy media files and update block references
+      let mediaFilesCopied = 0;
+      for (const block of blocks) {
+        if (block.media && block.media._absolutePath) {
+          const absolutePath = block.media._absolutePath;
+
+          if (fs.existsSync(absolutePath)) {
+            const uniqueFilename = getUniqueFilename(absolutePath);
+            const destPath = path.join(mediaDir, uniqueFilename);
+
+            fs.copyFileSync(absolutePath, destPath);
+            mediaFilesCopied++;
+
+            // Update src to relative path (works in browser)
+            block.media.src = `./media/${uniqueFilename}`;
+
+            console.log(`GitHubService: Copied media ${path.basename(absolutePath)} → ${uniqueFilename}`);
+          } else {
+            console.warn(`GitHubService: Media file not found: ${absolutePath}`);
+          }
+
+          // Clean up internal metadata before serialization
+          delete block.media._absolutePath;
+        }
+      }
+
+      console.log(`GitHubService: Copied ${mediaFilesCopied} media files to build directory`);
+
+      // Handle DreamTalk media (copy file, not embed)
+      let dreamTalkMedia: any[] | undefined;
+      if (udd.dreamTalk) {
+        const dreamTalkPath = path.join(dreamNodePath, udd.dreamTalk);
+        if (fs.existsSync(dreamTalkPath)) {
+          const uniqueFilename = getUniqueFilename(dreamTalkPath);
+          const destPath = path.join(mediaDir, uniqueFilename);
+
+          fs.copyFileSync(dreamTalkPath, destPath);
+
+          // Determine MIME type from extension
+          const ext = path.extname(dreamTalkPath).toLowerCase();
+          const mimeTypes: Record<string, string> = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.ogg': 'audio/ogg'
+          };
+          const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
+          dreamTalkMedia = [{
+            path: path.basename(dreamTalkPath),
+            type: mimeType,
+            data: `./media/${uniqueFilename}`, // Relative path instead of data URL
+            size: fs.statSync(dreamTalkPath).size
+          }];
+
+          console.log(`GitHubService: Copied DreamTalk media → ${uniqueFilename}`);
+        }
+      }
+
+      // Build link resolver map
       const linkResolver = await this.buildLinkResolver(dreamNodePath);
 
       // Prepare data payload
@@ -446,15 +541,6 @@ export class GitHubService {
         .replace('{{DREAMNODE_NAME}}', dreamNodeName)
         .replace('{{DREAMSONG_DATA}}', JSON.stringify(dreamsongData));
 
-      // Create output directory in system temp (outside the repo)
-      const tmpOs = require('os');
-      const buildDir = path.join(tmpOs.tmpdir(), `dreamsong-build-${dreamNodeId}-${Date.now()}`);
-      if (!fs.existsSync(buildDir)) {
-        fs.mkdirSync(buildDir, { recursive: true });
-      }
-
-      console.log(`GitHubService: Preparing static site at ${buildDir}`);
-
       // Write processed HTML
       const indexPath = path.join(buildDir, 'index.html');
       fs.writeFileSync(indexPath, html);
@@ -474,7 +560,7 @@ export class GitHubService {
           const destPath = path.join(buildAssetsDir, file);
           fs.copyFileSync(srcPath, destPath);
         }
-        console.log(`GitHubService: Copied ${assetFiles.length} asset files`);
+        console.log(`GitHubService: Copied ${assetFiles.length} viewer asset files`);
       } else {
         console.warn(`GitHubService: Assets directory not found at ${viewerAssetsDir}`);
       }
@@ -499,44 +585,6 @@ export class GitHubService {
       }
       throw error;
     }
-  }
-
-  /**
-   * Load DreamTalk media file as data URL
-   */
-  private async loadDreamTalkMedia(mediaPath: string): Promise<any> {
-    if (!fs.existsSync(mediaPath)) {
-      return undefined;
-    }
-
-    // Read file and convert to data URL
-    const buffer = fs.readFileSync(mediaPath);
-    const base64 = buffer.toString('base64');
-
-    // Determine MIME type from extension
-    const ext = path.extname(mediaPath).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp',
-      '.mp4': 'video/mp4',
-      '.webm': 'video/webm',
-      '.mp3': 'audio/mpeg',
-      '.wav': 'audio/wav',
-      '.ogg': 'audio/ogg'
-    };
-
-    const mimeType = mimeTypes[ext] || 'application/octet-stream';
-
-    return [{
-      path: path.basename(mediaPath),
-      absolutePath: mediaPath,
-      type: mimeType,
-      data: `data:${mimeType};base64,${base64}`,
-      size: buffer.length
-    }];
   }
 
   /**
@@ -1068,6 +1116,7 @@ export class GitHubService {
 
             const vaultPath = path.dirname(dreamNodePath);
 
+            // Store absolute paths for media files (buildStaticSite will copy them)
             for (const block of blocks) {
               if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
                 try {
@@ -1077,47 +1126,25 @@ export class GitHubService {
                     console.log(`GitHubService: Resolved UUID for ${block.media.src} → ${resolvedUuid}`);
                   }
 
+                  // Store absolute path for later file copy (NOT base64 embedding)
                   const mediaPath = path.join(vaultPath, block.media.src);
-                  console.log(`GitHubService: Resolving media ${block.media.src} at ${mediaPath}`);
+                  console.log(`GitHubService: Preparing media ${block.media.src} at ${mediaPath}`);
 
                   if (fs.existsSync(mediaPath)) {
-                    const buffer = fs.readFileSync(mediaPath);
-                    const base64 = buffer.toString('base64');
-                    const mimeType = getMimeType(block.media.src);
-                    block.media.src = `data:${mimeType};base64,${base64}`;
-                    console.log(`GitHubService: Successfully loaded media ${block.media.src.slice(0, 50)}...`);
+                    block.media._absolutePath = mediaPath;
+                    console.log(`GitHubService: Queued media for copy: ${path.basename(mediaPath)}`);
                   } else {
                     console.warn(`GitHubService: Media file not found: ${mediaPath}`);
                   }
                 } catch (error) {
-                  console.warn(`GitHubService: Could not load media ${block.media.src}:`, error);
+                  console.warn(`GitHubService: Could not process media ${block.media.src}:`, error);
                 }
               }
             }
           } else if (udd.dreamTalk) {
-            console.log(`GitHubService: No DreamSong found, using DreamTalk media fallback`);
-            const dreamTalkPath = path.join(dreamNodePath, udd.dreamTalk);
-            if (fs.existsSync(dreamTalkPath)) {
-              const buffer = fs.readFileSync(dreamTalkPath);
-              const base64 = buffer.toString('base64');
-              const mimeType = getMimeType(udd.dreamTalk);
-              const dataUrl = `data:${mimeType};base64,${base64}`;
-
-              blocks = [{
-                id: 'dreamtalk-fallback',
-                type: 'media',
-                media: {
-                  src: dataUrl,
-                  type: mimeType.startsWith('video/') ? 'video' : 'image',
-                  alt: udd.title
-                },
-                text: '',
-                edges: []
-              }];
-              console.log(`GitHubService: Created DreamTalk fallback block`);
-            } else {
-              console.warn(`GitHubService: DreamTalk file not found: ${dreamTalkPath}`);
-            }
+            // DreamTalk media file - handled by buildStaticSite
+            console.log(`GitHubService: No DreamSong found, DreamTalk will be handled by buildStaticSite`);
+            blocks = [];
           } else {
             console.log(`GitHubService: No DreamSong or DreamTalk found, checking for README.md`);
             const readmePath = path.join(dreamNodePath, 'README.md');
@@ -1264,7 +1291,7 @@ export class GitHubService {
         // Canvas media paths are vault-relative, not DreamNode-relative
         const vaultPath = path.dirname(dreamNodePath);
 
-        // Resolve media paths to data URLs AND extract UUIDs from submodule .udd files
+        // Store absolute paths for media files (buildStaticSite will copy them)
         for (const block of blocks) {
           if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
             try {
@@ -1275,52 +1302,28 @@ export class GitHubService {
                 console.log(`GitHubService: Resolved UUID for ${block.media.src} → ${resolvedUuid}`);
               }
 
-              // Step 2: Resolve file path to data URL
+              // Step 2: Store absolute path for later file copy (NOT base64 embedding)
               // Canvas paths are vault-relative (e.g., "ArkCrystal/ARK Crystal.jpeg")
-              // Resolve relative to vault path, not DreamNode path
               const mediaPath = path.join(vaultPath, block.media.src);
-              console.log(`GitHubService: Resolving media ${block.media.src} at ${mediaPath}`);
+              console.log(`GitHubService: Preparing media ${block.media.src} at ${mediaPath}`);
 
               if (fs.existsSync(mediaPath)) {
-                const buffer = fs.readFileSync(mediaPath);
-                const base64 = buffer.toString('base64');
-                const mimeType = getMimeType(block.media.src);
-                block.media.src = `data:${mimeType};base64,${base64}`;
-                console.log(`GitHubService: Successfully loaded media ${block.media.src.slice(0, 50)}...`);
+                // Store absolute path - buildStaticSite will copy the file
+                block.media._absolutePath = mediaPath;
+                console.log(`GitHubService: Queued media for copy: ${path.basename(mediaPath)}`);
               } else {
                 console.warn(`GitHubService: Media file not found: ${mediaPath}`);
               }
             } catch (error) {
-              console.warn(`GitHubService: Could not load media ${block.media.src}:`, error);
+              console.warn(`GitHubService: Could not process media ${block.media.src}:`, error);
             }
           }
         }
       } else if (udd.dreamTalk) {
-        // FALLBACK 1: DreamTalk media file - Single image/video
-        console.log(`GitHubService: No DreamSong found, using DreamTalk media fallback`);
-        const dreamTalkPath = path.join(dreamNodePath, udd.dreamTalk);
-        if (fs.existsSync(dreamTalkPath)) {
-          const buffer = fs.readFileSync(dreamTalkPath);
-          const base64 = buffer.toString('base64');
-          const mimeType = getMimeType(udd.dreamTalk);
-          const dataUrl = `data:${mimeType};base64,${base64}`;
-
-          // Create a single media block with proper type field
-          blocks = [{
-            id: 'dreamtalk-fallback',
-            type: 'media', // IMPORTANT: Must set type for DreamSong component
-            media: {
-              src: dataUrl,
-              type: mimeType.startsWith('video/') ? 'video' : 'image',
-              alt: udd.title
-            },
-            text: '',
-            edges: []
-          }];
-          console.log(`GitHubService: Created DreamTalk fallback block`);
-        } else {
-          console.warn(`GitHubService: DreamTalk file not found: ${dreamTalkPath}`);
-        }
+        // FALLBACK 1: DreamTalk media file - handled by buildStaticSite
+        console.log(`GitHubService: No DreamSong found, DreamTalk will be handled by buildStaticSite`);
+        // Empty blocks - buildStaticSite reads dreamTalk from .udd and copies it
+        blocks = [];
       } else {
         // FALLBACK 2: README.md - Text content
         console.log(`GitHubService: No DreamSong or DreamTalk found, checking for README.md`);
