@@ -1047,13 +1047,138 @@ export class GitHubService {
         udd.githubRepoUrl = existingGitHubUrl;
         await this.writeUDD(dreamNodePath, udd);
 
-        // Try to get GitHub Pages URL
-        const match = existingGitHubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
-        if (match) {
-          const [, owner, repo] = match;
-          const cleanRepo = repo.replace(/\.git$/, '');
-          udd.githubPagesUrl = `https://${owner}.github.io/${cleanRepo}`;
-          await this.writeUDD(dreamNodePath, udd);
+        // Build and deploy static site (idempotent - safe to run multiple times)
+        let pagesUrl: string | undefined;
+        console.log(`GitHubService: Building static site for existing repo ${udd.title}...`);
+        try {
+          const { parseCanvasToBlocks, getMimeType } = await import('../../services/dreamsong');
+
+          const files = fs.readdirSync(dreamNodePath);
+          const canvasFiles = files.filter(f => f.endsWith('.canvas'));
+
+          let blocks: any[] = [];
+
+          if (canvasFiles.length > 0) {
+            console.log(`GitHubService: Using DreamSong (.canvas) for GitHub Pages`);
+            const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
+            const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
+            const canvasData = JSON.parse(canvasContent);
+
+            blocks = parseCanvasToBlocks(canvasData, dreamNodeUuid);
+
+            const vaultPath = path.dirname(dreamNodePath);
+
+            for (const block of blocks) {
+              if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
+                try {
+                  const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
+                  if (resolvedUuid) {
+                    block.media.sourceDreamNodeId = resolvedUuid;
+                    console.log(`GitHubService: Resolved UUID for ${block.media.src} → ${resolvedUuid}`);
+                  }
+
+                  const mediaPath = path.join(vaultPath, block.media.src);
+                  console.log(`GitHubService: Resolving media ${block.media.src} at ${mediaPath}`);
+
+                  if (fs.existsSync(mediaPath)) {
+                    const buffer = fs.readFileSync(mediaPath);
+                    const base64 = buffer.toString('base64');
+                    const mimeType = getMimeType(block.media.src);
+                    block.media.src = `data:${mimeType};base64,${base64}`;
+                    console.log(`GitHubService: Successfully loaded media ${block.media.src.slice(0, 50)}...`);
+                  } else {
+                    console.warn(`GitHubService: Media file not found: ${mediaPath}`);
+                  }
+                } catch (error) {
+                  console.warn(`GitHubService: Could not load media ${block.media.src}:`, error);
+                }
+              }
+            }
+          } else if (udd.dreamTalk) {
+            console.log(`GitHubService: No DreamSong found, using DreamTalk media fallback`);
+            const dreamTalkPath = path.join(dreamNodePath, udd.dreamTalk);
+            if (fs.existsSync(dreamTalkPath)) {
+              const buffer = fs.readFileSync(dreamTalkPath);
+              const base64 = buffer.toString('base64');
+              const mimeType = getMimeType(udd.dreamTalk);
+              const dataUrl = `data:${mimeType};base64,${base64}`;
+
+              blocks = [{
+                id: 'dreamtalk-fallback',
+                type: 'media',
+                media: {
+                  src: dataUrl,
+                  type: mimeType.startsWith('video/') ? 'video' : 'image',
+                  alt: udd.title
+                },
+                text: '',
+                edges: []
+              }];
+              console.log(`GitHubService: Created DreamTalk fallback block`);
+            } else {
+              console.warn(`GitHubService: DreamTalk file not found: ${dreamTalkPath}`);
+            }
+          } else {
+            console.log(`GitHubService: No DreamSong or DreamTalk found, checking for README.md`);
+            const readmePath = path.join(dreamNodePath, 'README.md');
+            if (fs.existsSync(readmePath)) {
+              const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+
+              let htmlContent = readmeContent
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+                .split('\n\n')
+                .map(para => para.trim() ? `<p>${para.replace(/\n/g, '<br>')}</p>` : '')
+                .join('');
+
+              blocks = [{
+                id: 'readme-fallback',
+                type: 'text',
+                text: htmlContent,
+                edges: []
+              }];
+              console.log(`GitHubService: Created README.md fallback block with HTML conversion`);
+            } else {
+              console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
+            }
+          }
+
+          await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title, blocks);
+          console.log(`GitHubService: Static site built and deployed to gh-pages branch`);
+
+          // Setup GitHub Pages (idempotent - will succeed even if already configured)
+          try {
+            pagesUrl = await this.setupPages(existingGitHubUrl);
+            console.log(`GitHubService: GitHub Pages configured: ${pagesUrl}`);
+
+            // Update .udd with actual Pages URL
+            udd.githubPagesUrl = pagesUrl;
+            await this.writeUDD(dreamNodePath, udd);
+          } catch (error) {
+            console.warn('GitHubService: Failed to enable GitHub Pages:', error);
+            // Fallback to predicted URL if API fails
+            const match = existingGitHubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+            if (match) {
+              const [, owner, repo] = match;
+              const cleanRepo = repo.replace(/\.git$/, '');
+              pagesUrl = `https://${owner}.github.io/${cleanRepo}`;
+              udd.githubPagesUrl = pagesUrl;
+              await this.writeUDD(dreamNodePath, udd);
+            }
+          }
+        } catch (error) {
+          console.warn(`GitHubService: Failed to build static site (will continue without Pages):`, error);
+          // Fallback to predicted URL
+          const match = existingGitHubUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/);
+          if (match) {
+            const [, owner, repo] = match;
+            const cleanRepo = repo.replace(/\.git$/, '');
+            pagesUrl = `https://${owner}.github.io/${cleanRepo}`;
+          }
         }
 
         // Generate Obsidian URI
@@ -1061,7 +1186,7 @@ export class GitHubService {
 
         return {
           repoUrl: existingGitHubUrl,
-          pagesUrl: udd.githubPagesUrl,
+          pagesUrl,
           obsidianUri
         };
       }
