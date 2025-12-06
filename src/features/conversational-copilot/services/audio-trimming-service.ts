@@ -50,7 +50,7 @@ export class AudioTrimmingService {
             stdio: 'ignore'
           });
 
-          test.on('close', (code) => resolve(code === 0));
+          test.on('close', (code: number | null) => resolve(code === 0));
           test.on('error', () => resolve(false));
 
           setTimeout(() => {
@@ -64,7 +64,7 @@ export class AudioTrimmingService {
           this.ffmpegPath = ffmpegPath;
           return ffmpegPath;
         }
-      } catch (error) {
+      } catch {
         // Try next path
         continue;
       }
@@ -98,7 +98,7 @@ export class AudioTrimmingService {
     // Check source file exists
     try {
       await fs.access(sourceAudioPath);
-    } catch (error) {
+    } catch {
       throw new Error(`Source audio file not found: ${sourceAudioPath}`);
     }
 
@@ -135,18 +135,18 @@ export class AudioTrimmingService {
 
       let stderr = '';
 
-      ffmpeg.stderr.on('data', (data) => {
+      ffmpeg.stderr.on('data', (data: any) => {
         stderr += data.toString();
       });
 
-      ffmpeg.on('close', async (code) => {
+      ffmpeg.on('close', async (code: number | null) => {
         if (code === 0) {
           // Verify output file was created
           try {
             await fs.access(outputAudioPath);
             console.log(`✅ [AudioTrim] Successfully created clip: ${path.basename(outputAudioPath)}`);
             resolve();
-          } catch (error) {
+          } catch {
             reject(new Error(`ffmpeg completed but output file not found: ${outputAudioPath}`));
           }
         } else {
@@ -155,7 +155,7 @@ export class AudioTrimmingService {
         }
       });
 
-      ffmpeg.on('error', (error) => {
+      ffmpeg.on('error', (error: Error) => {
         reject(new Error(`Failed to spawn ffmpeg: ${error.message}. Is ffmpeg installed?`));
       });
     });

@@ -76,25 +76,26 @@ async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; ha
       if (!error.message?.includes('gh') && !error.message?.includes('not found')) {
         console.error('Error checking repository ownership:', error);
       }
-      // If gh is not available or check fails, fall back to dry-run push
-      try {
-        await execAsyncPromise('git push --dry-run 2>&1', { cwd: fullPath });
-        return { isGitHubOnly: true, hasAccess: true };
-      } catch (pushError: any) {
-        // Check if error is permission-related
-        const errorOutput = pushError.stderr || pushError.stdout || pushError.message || '';
-        const isPermissionError = errorOutput.includes('Permission denied') ||
-                                  errorOutput.includes('403') ||
-                                  errorOutput.includes('fatal: unable to access') ||
-                                  errorOutput.includes('could not read Username');
+    }
 
-        if (isPermissionError) {
-          return { isGitHubOnly: true, hasAccess: false };
-        }
+    // If gh is not available or check fails, fall back to dry-run push
+    try {
+      await execAsyncPromise('git push --dry-run 2>&1', { cwd: fullPath });
+      return { isGitHubOnly: true, hasAccess: true };
+    } catch (pushError: any) {
+      // Check if error is permission-related
+      const errorOutput = pushError.stderr || pushError.stdout || pushError.message || '';
+      const isPermissionError = errorOutput.includes('Permission denied') ||
+                                errorOutput.includes('403') ||
+                                errorOutput.includes('fatal: unable to access') ||
+                                errorOutput.includes('could not read Username');
 
-        // Other errors (like "Everything up-to-date") mean we have access
-        return { isGitHubOnly: true, hasAccess: true };
+      if (isPermissionError) {
+        return { isGitHubOnly: true, hasAccess: false };
       }
+
+      // Other errors (like "Everything up-to-date") mean we have access
+      return { isGitHubOnly: true, hasAccess: true };
     }
   } catch (error) {
     console.error('Error checking GitHub access:', error);

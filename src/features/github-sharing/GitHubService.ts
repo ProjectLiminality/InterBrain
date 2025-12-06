@@ -397,7 +397,7 @@ export class GitHubService {
     dreamNodeId: string,
     dreamNodeName: string,
     blocks: any[], // DreamSongBlock[] with _absolutePath metadata
-    vaultPath?: string
+    _vaultPath?: string
   ): Promise<string> {
     try {
       // Read .udd file to get metadata
@@ -1099,7 +1099,7 @@ export class GitHubService {
         let pagesUrl: string | undefined;
         console.log(`GitHubService: Building static site for existing repo ${udd.title}...`);
         try {
-          const { parseCanvasToBlocks, getMimeType } = await import('../../services/dreamsong');
+          const { parseCanvasToBlocks } = await import('../../services/dreamsong');
 
           const files = fs.readdirSync(dreamNodePath);
           const canvasFiles = files.filter(f => f.endsWith('.canvas'));
@@ -1268,7 +1268,7 @@ export class GitHubService {
     try {
       // Use the same parsing pipeline as local rendering
       // This ensures GitHub Pages displays exactly what you see locally
-      const { parseCanvasToBlocks, getMimeType } = await import('../../services/dreamsong');
+      const { parseCanvasToBlocks } = await import('../../services/dreamsong');
 
       // Find and parse canvas file
       const files = fs.readdirSync(dreamNodePath);

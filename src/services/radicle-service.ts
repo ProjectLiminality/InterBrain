@@ -49,8 +49,9 @@ export interface RadicleService {
   /**
    * Share DreamNode to Radicle network (sync changes)
    * @param passphrase Optional passphrase (uses ssh-agent if not provided)
+   * @param recipientDid Optional recipient DID to add as delegate
    */
-  share(dreamNodePath: string, passphrase?: string): Promise<void>;
+  share(dreamNodePath: string, passphrase?: string, recipientDid?: string): Promise<void>;
 
   /**
    * Check if there are local commits to share
@@ -75,6 +76,50 @@ export interface RadicleService {
    * @returns Array of peer DIDs currently seeding this repo (discovered via inventory announcements)
    */
   getSeeders(repoPath: string): Promise<string[]>;
+
+  /**
+   * Follow a peer's Radicle DID to receive their updates
+   * This is ESSENTIAL for bidirectional collaboration
+   */
+  followPeer(peerDid: string, passphrase?: string, repoPath?: string): Promise<void>;
+
+  /**
+   * Add a peer as an equal delegate to a repository
+   * Sets threshold to 1 for true peer-to-peer equality
+   * @returns true if delegate was added, false if already exists
+   */
+  addDelegate(dreamNodePath: string, peerDID: string, passphrase?: string): Promise<boolean>;
+
+  /**
+   * Set repository seeding scope to 'followed' for private collaboration
+   * @returns true if scope was set, false if already correct
+   */
+  setSeedingScope(dreamNodePath: string, radicleId: string, scope?: 'all' | 'followed'): Promise<boolean>;
+
+  /**
+   * Reconcile git remotes to match desired state (declarative sync)
+   * @param dreamNodePath Path to the DreamNode repository
+   * @param radicleId RID of the repository
+   * @param desiredPeers Map of peer name -> DID for desired state
+   * @returns Summary of changes made
+   */
+  reconcileRemotes(
+    dreamNodePath: string,
+    radicleId: string,
+    desiredPeers: Map<string, string>
+  ): Promise<{ added: number; updated: number; removed: number; unchanged: number }>;
+
+  /**
+   * Trigger public seeding and network sync in the background (fire-and-forget)
+   * Does NOT wait for completion - returns immediately
+   * Used by "Copy Share Link" to make nodes discoverable without blocking UI
+   */
+  seedInBackground(dreamNodePath: string, radicleId: string): void;
+
+  /**
+   * Get the delegate (owner) DID for a repository
+   */
+  getRepositoryDelegate(radicleId: string, passphrase?: string): Promise<string | null>;
 }
 
 export class RadicleServiceImpl implements RadicleService {
@@ -219,7 +264,6 @@ export class RadicleServiceImpl implements RadicleService {
     try {
       // Use spawn instead of exec to provide proper stdin
       const { spawn } = require('child_process');
-      const { promisify } = require('util');
 
       const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
         const child = spawn(radCmd, ['init', dreamNodePath, '--public', '--default-branch', 'main', '--no-confirm', ...(name ? ['--name', name] : []), ...(description ? ['--description', description] : [])], {
@@ -231,15 +275,15 @@ export class RadicleServiceImpl implements RadicleService {
         let stdout = '';
         let stderr = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: any) => {
           stdout += data.toString();
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr?.on('data', (data: any) => {
           stderr += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
           console.log(`RadicleService: spawn closed with code ${code}`);
           console.log(`RadicleService: stdout:`, stdout);
           console.log(`RadicleService: stderr:`, stderr);
@@ -254,7 +298,7 @@ export class RadicleServiceImpl implements RadicleService {
           }
         });
 
-        child.on('error', (error) => {
+        child.on('error', (error: Error) => {
           console.error(`RadicleService: spawn error:`, error);
           reject(error);
         });
@@ -789,15 +833,15 @@ export class RadicleServiceImpl implements RadicleService {
         let stdout = '';
         let stderr = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: any) => {
           stdout += data.toString();
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr?.on('data', (data: any) => {
           stderr += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
           console.log('RadicleService: git push output:', stdout);
           if (stderr) console.log('RadicleService: git push stderr:', stderr);
 
@@ -808,7 +852,7 @@ export class RadicleServiceImpl implements RadicleService {
           }
         });
 
-        child.on('error', (error) => {
+        child.on('error', (error: Error) => {
           console.error('RadicleService: git push spawn error:', error);
           reject(error);
         });
@@ -827,7 +871,7 @@ export class RadicleServiceImpl implements RadicleService {
 
         let stdout = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: any) => {
           stdout += data.toString();
         });
 
@@ -867,15 +911,15 @@ export class RadicleServiceImpl implements RadicleService {
         let stdout = '';
         let stderr = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: any) => {
           stdout += data.toString();
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr?.on('data', (data: any) => {
           stderr += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
           console.log('RadicleService: rad publish output:', stdout);
           if (stderr) console.log('RadicleService: rad publish stderr:', stderr);
 
@@ -893,7 +937,7 @@ export class RadicleServiceImpl implements RadicleService {
           }
         });
 
-        child.on('error', (error) => {
+        child.on('error', (error: Error) => {
           console.error('RadicleService: rad publish spawn error:', error);
           reject(error);
         });
@@ -904,7 +948,7 @@ export class RadicleServiceImpl implements RadicleService {
       // STEP 4: Announce to network with inventory for immediate seed discovery
       // --inventory forces full announcement including routing table updates
       console.log(`RadicleService: Announcing repository to network (rad sync --inventory)...`);
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve) => {
         const child = spawn(radCmd, ['sync', '--inventory'], {
           env: env,
           cwd: absoluteDreamNodePath,
@@ -914,15 +958,15 @@ export class RadicleServiceImpl implements RadicleService {
         let stdout = '';
         let stderr = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: any) => {
           stdout += data.toString();
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr?.on('data', (data: any) => {
           stderr += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
           console.log('RadicleService: rad sync --announce output:', stdout);
           if (stderr) console.log('RadicleService: rad sync --announce stderr:', stderr);
 
@@ -936,7 +980,7 @@ export class RadicleServiceImpl implements RadicleService {
           }
         });
 
-        child.on('error', (error) => {
+        child.on('error', (error: Error) => {
           console.warn('RadicleService: rad sync --announce spawn error (not critical):', error);
           resolve(); // Don't fail the whole operation
         });
@@ -1231,15 +1275,15 @@ export class RadicleServiceImpl implements RadicleService {
           let stdout = '';
           let stderr = '';
 
-          child.stdout?.on('data', (data) => {
+          child.stdout?.on('data', (data: any) => {
             stdout += data.toString();
           });
 
-          child.stderr?.on('data', (data) => {
+          child.stderr?.on('data', (data: any) => {
             stderr += data.toString();
           });
 
-          child.on('close', (code) => {
+          child.on('close', (code: number | null) => {
             console.log(`[Background Seed] rad seed output:`, stdout);
             if (stderr) console.log(`[Background Seed] rad seed stderr:`, stderr);
 
@@ -1251,7 +1295,7 @@ export class RadicleServiceImpl implements RadicleService {
             resolve(); // Always resolve, never fail
           });
 
-          child.on('error', (error) => {
+          child.on('error', (error: Error) => {
             console.warn(`⚠️ [Background Seed] rad seed error (non-critical):`, error);
             resolve(); // Always resolve, never fail
           });
@@ -1460,7 +1504,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // Parse JSON lines
       const dids: string[] = [];
-      const lines = stdout.split('\n').filter(line => line.trim().length > 0);
+      const lines = stdout.split('\n').filter((line: string) => line.trim().length > 0);
 
       for (const line of lines) {
         try {
@@ -1471,7 +1515,7 @@ export class RadicleServiceImpl implements RadicleService {
             dids.push(did);
             console.log(`RadicleService: Found seeder: ${did}`);
           }
-        } catch (parseError) {
+        } catch {
           console.warn(`RadicleService: Could not parse routing table entry: ${line}`);
         }
       }

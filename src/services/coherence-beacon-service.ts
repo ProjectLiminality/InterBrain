@@ -430,7 +430,7 @@ export class CoherenceBeaconService {
         const uriHandler = getURIHandlerService();
         const cloneResult = await uriHandler.cloneFromRadicle(radicleId, false);
 
-        if (cloneResult === 'failed') {
+        if (cloneResult === 'error') {
           failedClones.push({
             name,
             radicleId,
@@ -478,14 +478,15 @@ export class CoherenceBeaconService {
         '/usr/local/bin',
         '/opt/homebrew/bin'
       ];
-      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
+      const nodeProcess = (globalThis as any).process;
+      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
 
       // IMPORTANT: Set GIT_ALLOW_PROTOCOL to explicitly allow rad:// and file:// for submodules
       // This overrides git's security restrictions for custom protocols
       await execAsync('git submodule update --init --recursive', {
         cwd: clonedNodePath,
         env: {
-          ...process.env,
+          ...nodeProcess?.env,
           PATH: enhancedPath,
           GIT_ALLOW_PROTOCOL: 'file:rad'
         }
@@ -508,7 +509,7 @@ export class CoherenceBeaconService {
 
       // Extract DID from ANY remote with format: rad://RID/DID
       // Git remotes store short format (z6Mks...), but .udd stores full format (did:key:z6Mks...)
-      const peerMatch = remotes.match(/rad:\/\/[^\/]+\/(z6\w+)/);
+      const peerMatch = remotes.match(/rad:\/\/[^\\/]+\/(z6\w+)/);
       if (peerMatch) {
         const shortDID = peerMatch[1];
         const fullDID = `did:key:${shortDID}`;

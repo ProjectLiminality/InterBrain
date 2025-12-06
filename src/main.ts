@@ -2132,6 +2132,7 @@ export default class InterBrainPlugin extends Plugin {
         console.log('[ConvertToDreamNode] Using existing UUID from .udd:', uuid);
       } else {
         // Generate new UUID
+        const crypto = require('crypto');
         uuid = crypto.randomUUID();
         console.log('[ConvertToDreamNode] Generated new UUID:', uuid);
       }

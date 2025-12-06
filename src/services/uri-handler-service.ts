@@ -194,13 +194,13 @@ export class URIHandlerService {
 						// CRITICAL: Load UUID from .udd file for linkNodes() compatibility
 						const fs = require('fs').promises;
 						const path = require('path');
-						const uddPath = path.join(this.app.vault.adapter.basePath, dreamerNode.repoPath, '.udd');
+						const uddPath = path.join((this.app.vault.adapter as any).basePath, dreamerNode.repoPath, '.udd');
 
 						try {
 							const uddContent = await fs.readFile(uddPath, 'utf-8');
 							const udd = JSON.parse(uddContent);
-							dreamerNode.uuid = udd.uuid;
-							console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${dreamerNode.uuid}`);
+							const dreamerUuid = udd.uuid;
+							console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${dreamerUuid}`);
 						} catch (error) {
 							console.error(`❌ [URIHandler] Failed to read UUID from existing Dreamer:`, error);
 						}
@@ -248,7 +248,7 @@ export class URIHandlerService {
 					} else {
 						// Batch clone: Select the Dreamer node
 						targetNode = dreamerNode;
-						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode.name}`);
+						console.log(`⚡ [URIHandler] Batch clone - selecting Dreamer node: ${dreamerNode?.name}`);
 					}
 
 					if (targetNode) {
@@ -540,7 +540,7 @@ export class URIHandlerService {
 		const { UIService } = await import('./ui-service');
 
 		// Create temporary instances for passphrase management
-		const uiService = new UIService(this.app, this.plugin);
+		const uiService = new UIService(this.app);
 		const passphraseManager = new PassphraseManager(uiService, this.plugin);
 
 		// Get passphrase (checks node status internally, returns '' if already running)
@@ -930,13 +930,13 @@ export class URIHandlerService {
 			// linkNodes() expects .uuid property, not .id
 			const fs = require('fs').promises;
 			const path = require('path');
-			const uddPath = path.join(this.app.vault.adapter.basePath, existingDreamer.repoPath, '.udd');
+			const uddPath = path.join((this.app.vault.adapter as any).basePath, existingDreamer.repoPath, '.udd');
 
 			try {
 				const uddContent = await fs.readFile(uddPath, 'utf-8');
 				const udd = JSON.parse(uddContent);
-				existingDreamer.uuid = udd.uuid;
-				console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${existingDreamer.uuid}`);
+				(existingDreamer as any).uuid = udd.uuid;
+				console.log(`✅ [URIHandler] Loaded UUID for existing Dreamer: ${(existingDreamer as any).uuid}`);
 			} catch (error) {
 				console.error(`❌ [URIHandler] Failed to read UUID from existing Dreamer:`, error);
 			}
@@ -958,13 +958,13 @@ export class URIHandlerService {
 
 		const fs = require('fs').promises;
 		const path = require('path');
-		const uddPath = path.join(this.app.vault.adapter.basePath, newDreamer.repoPath, '.udd');
+		const uddPath = path.join((this.app.vault.adapter as any).basePath, newDreamer.repoPath, '.udd');
 
 		try {
 			const uddContent = await fs.readFile(uddPath, 'utf-8');
 			const udd = JSON.parse(uddContent);
-			newDreamer.uuid = udd.uuid;
-			console.log(`✅ [URIHandler] Dreamer node created with UUID: ${newDreamer.uuid}, DID: ${did}`);
+			(newDreamer as any).uuid = udd.uuid;
+			console.log(`✅ [URIHandler] Dreamer node created with UUID: ${(newDreamer as any).uuid}, DID: ${did}`);
 		} catch (error) {
 			console.error(`❌ [URIHandler] Failed to read UUID from Dreamer node:`, error);
 		}
@@ -992,14 +992,14 @@ export class URIHandlerService {
 
 		for (const node of allNodes) {
 			try {
-				const uddPath = path.join(this.app.vault.adapter.basePath, node.repoPath, '.udd');
+				const uddPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath, '.udd');
 				const uddContent = await fs.readFile(uddPath, 'utf-8');
 				const udd = JSON.parse(uddContent);
 
 				// Check Radicle ID
 				if (isRadicleId && udd.radicleId === identifier) {
 					console.log(`🔍 [URIHandler] Found node by Radicle ID: "${node.name}"`);
-					node.uuid = udd.uuid;
+					(node as any).uuid = udd.uuid;
 					return node;
 				}
 
@@ -1008,7 +1008,7 @@ export class URIHandlerService {
 					const normalizedUddUrl = udd.githubRepoUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '');
 					if (normalizedUddUrl === normalizedGitHubUrl) {
 						console.log(`🔍 [URIHandler] Found node by GitHub URL: "${node.name}"`);
-						node.uuid = udd.uuid;
+						(node as any).uuid = udd.uuid;
 						return node;
 					}
 				}
@@ -1051,7 +1051,7 @@ export class URIHandlerService {
 				try {
 					const content = await fs.readFile(sourceLiminalWebPath, 'utf-8');
 					sourceLiminalWeb = JSON.parse(content);
-				} catch (error) {
+				} catch {
 					console.log(`📝 [URIHandler] Creating liminal-web.json for Dreamer "${sourceNode.name}"`);
 				}
 
@@ -1074,7 +1074,7 @@ export class URIHandlerService {
 				try {
 					const content2 = await fs.readFile(targetLiminalWebPath, 'utf-8');
 					targetLiminalWeb = JSON.parse(content2);
-				} catch (error) {
+				} catch {
 					console.log(`📝 [URIHandler] Creating liminal-web.json for Dreamer "${targetNode.name}"`);
 				}
 

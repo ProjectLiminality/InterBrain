@@ -10,7 +10,7 @@ import { getRealtimeTranscriptionService } from '../realtime-transcription';
 import { getAudioRecordingService } from './services/audio-recording-service';
 import { getPerspectiveService } from './services/perspective-service';
 import { getAudioTrimmingService } from './services/audio-trimming-service';
-import { v4 as uuidv4 } from 'uuid';
+import type { DreamNode } from '../../types/dreamnode';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -216,7 +216,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
 
               console.log(`✅ [Copilot-Exit] AI summary generated (length: ${aiSummary.length})`);
               console.log(`✅ [Copilot-Exit] ${clipSuggestions.length} clip suggestions generated`);
-              console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, 200)}..."`);
+              console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, Math.min(200, aiSummary.length))}..."`);
             }
 
             // Export to email (works with or without AI summary)
@@ -295,7 +295,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                     } else {
                       console.warn(`⚠️ [Songline] No Radicle alias found, using fallback: ${myAlias}`);
                     }
-                  } catch (error) {
+                  } catch {
                     console.warn(`⚠️ [Songline] Could not get Radicle identity, using fallback: ${myAlias}`);
                   }
 
@@ -318,32 +318,37 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
                     console.log(`   - Time: ${clip.startTime} → ${clip.endTime} (${startSeconds}s → ${endSeconds}s)`);
                     console.log(`   - Source audio: ${relativeAudioPath}`);
 
-                    // STEP 1: Create sovereign audio clip by trimming source audio
-                    const sourceExtension = path.extname(audioPath);
-                    const clipFilename = audioTrimmingService.generateClipFilename(
-                      partnerToFocus.name,    // Peer name (Dreamer node title)
-                      myAlias,                 // My name (Radicle alias)
-                      conversationStartTime,   // Timestamp
-                      sourceExtension          // Audio file extension
-                    );
-                    const clipPath = path.join(vaultPath, dreamNode.repoPath, clipFilename);
+                    // STEP 1: Create sovereign audio clip by trimming source audio (if audio exists)
+                    let clipFilename: string | undefined;
+                    if (audioPath) {
+                      const sourceExtension = path.extname(audioPath);
+                      clipFilename = audioTrimmingService.generateClipFilename(
+                        partnerToFocus.name,    // Peer name (Dreamer node title)
+                        myAlias || '',           // My name (Radicle alias)
+                        conversationStartTime,   // Timestamp
+                        sourceExtension          // Audio file extension
+                      );
+                      const clipPath = path.join(vaultPath, dreamNode.repoPath, clipFilename);
 
-                    console.log(`🎵 [Songline] Trimming audio clip: ${clipFilename}`);
-                    await audioTrimmingService.trimAudio({
-                      sourceAudioPath: audioPath,
-                      outputAudioPath: clipPath,
-                      startTime: startSeconds,
-                      endTime: endSeconds
-                    });
+                      console.log(`🎵 [Songline] Trimming audio clip: ${clipFilename}`);
+                      await audioTrimmingService.trimAudio({
+                        sourceAudioPath: audioPath,
+                        outputAudioPath: clipPath,
+                        startTime: startSeconds,
+                        endTime: endSeconds
+                      });
+                    } else {
+                      console.log(`⚠️ [Songline] Skipping audio trimming - no audio file`);
+                    }
 
                     // STEP 2: Create perspective with sovereign clip (no temporal masking needed)
                     await perspectiveService.addPerspective(dreamNode, {
-                      sourceAudioPath: clipFilename, // Relative path within DreamNode (sovereign)
+                      sourceAudioPath: clipFilename || '', // Relative path within DreamNode (sovereign, empty if no audio)
                       startTime: 0,                   // Clip starts at 0 (already trimmed)
                       endTime: endSeconds - startSeconds, // Duration of clip
                       transcript: clip.transcript,
                       conversationDate: conversationStartTime.toISOString(),
-                      participants: [partnerToFocus.name, myAlias],
+                      participants: [partnerToFocus.name, myAlias || ''],
                       dreamerNodeId: partnerToFocus.id,
                       dreamerNodeName: partnerToFocus.name
                     });

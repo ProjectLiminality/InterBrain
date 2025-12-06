@@ -649,7 +649,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 							saveButton.addEventListener('click', async () => {
 								const newAlias = input.value.trim();
 								if (!newAlias) {
-									alert('Alias cannot be empty');
+									const { Notice } = await import('obsidian');
+									new Notice('Alias cannot be empty');
 									return;
 								}
 
@@ -657,11 +658,13 @@ export class InterBrainSettingTab extends PluginSettingTab {
 									saveButton.disabled = true;
 									saveButton.textContent = '⏳ Saving...';
 
-									const radCmd = await radicleService.getRadCommand();
 									const { exec } = require('child_process');
 									const { promisify } = require('util');
 									const execAsync = promisify(exec);
 									const fs = require('fs').promises;
+
+									// Use 'rad' command directly - Radicle should be in PATH
+									const radCmd = 'rad';
 
 									// Get config file path
 									const configPath = (await execAsync(`"${radCmd}" self --config`)).stdout.trim();
@@ -690,7 +693,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 									setTimeout(() => successMsg.remove(), 3000);
 
 								} catch (error: any) {
-									alert(`Failed to update alias: ${error.message}`);
+									const { Notice } = await import('obsidian');
+									new Notice(`Failed to update alias: ${error.message}`);
 									saveButton.disabled = false;
 									saveButton.textContent = '✅ Save';
 								}
@@ -719,7 +723,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		this.updateNodeStatus(nodeStatusDiv, radicleService);
 
 		// Passphrase setting with validation
-		const passphraseSetting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName('Radicle Passphrase')
 			.setDesc('Enables automatic node startup for seamless DreamNode sharing')
 			.addText(text => {
@@ -967,7 +971,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			const { promisify } = require('util');
 			const execAsync = promisify(exec);
 
-			const env = { ...process.env, RAD_PASSPHRASE: passphrase };
+			const nodeProcess = (globalThis as any).process;
+			const env = { ...nodeProcess?.env, RAD_PASSPHRASE: passphrase };
 
 			// Add Radicle bin to PATH
 			const radCmd = await radicleService.getRadCommand();
@@ -987,7 +992,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 					await execAsync(`"${radCmd}" node stop`, { env });
 					// Wait for node to fully stop
 					await new Promise(resolve => setTimeout(resolve, 2000));
-				} catch (stopError) {
+				} catch {
 					// Ignore stop errors - node might not have been running
 					console.log('Node stop completed (or was not running)');
 				}
@@ -1041,7 +1046,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			const { promisify } = require('util');
 			const execAsync = promisify(exec);
 
-			const env = { ...process.env, RAD_PASSPHRASE: passphrase };
+			const nodeProcess = (globalThis as any).process;
+			const env = { ...nodeProcess?.env, RAD_PASSPHRASE: passphrase };
 
 			const radCmd = await radicleService.getRadCommand();
 			const path = require('path');

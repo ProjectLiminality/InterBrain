@@ -141,9 +141,9 @@ export class GitDreamNodeService {
       lastSynced: Date.now()
     };
     store.updateRealNode(uuid, nodeData);
-    
+
     // Create git repository in parallel (non-blocking)
-    const repoCreationPromise = this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles, metadata)
+    this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles, metadata)
       .then(async () => {
         // Index the new node after git repository is created
         try {
@@ -682,15 +682,15 @@ export class GitDreamNodeService {
           let stdout = '';
           let stderr = '';
 
-          child.stdout?.on('data', (data) => {
+          child.stdout?.on('data', (data: any) => {
             stdout += data.toString();
           });
 
-          child.stderr?.on('data', (data) => {
+          child.stderr?.on('data', (data: any) => {
             stderr += data.toString();
           });
 
-          child.on('close', (code) => {
+          child.on('close', (code: number | null) => {
             console.log(`GitDreamNodeService: rad init closed with code ${code}`);
             console.log(`GitDreamNodeService: rad init stdout:`, stdout);
             console.log(`GitDreamNodeService: rad init stderr:`, stderr);
@@ -705,7 +705,7 @@ export class GitDreamNodeService {
             }
           });
 
-          child.on('error', (error) => {
+          child.on('error', (error: Error) => {
             console.error(`GitDreamNodeService: rad init spawn error:`, error);
             reject(error);
           });
@@ -1044,7 +1044,7 @@ export class GitDreamNodeService {
     try {
       const existingContent = await fsPromises.readFile(uddPath, 'utf-8');
       existingUdd = JSON.parse(existingContent);
-    } catch (error) {
+    } catch {
       console.log(`GitDreamNodeService: No existing .udd found, creating new one`);
     }
 

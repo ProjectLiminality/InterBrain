@@ -88,9 +88,9 @@ async function updateSubmodules(
  */
 async function checkSubmoduleUpdatesFromNetwork(
   selectedNode: any,
-  gitService: GitService,
-  store: any,
-  uiService: UIService
+  _gitService: GitService,
+  _store: any,
+  _uiService: UIService
 ): Promise<SubmoduleUpdate[]> {
   const submoduleUpdates: SubmoduleUpdate[] = [];
   try {
@@ -104,14 +104,14 @@ async function checkSubmoduleUpdatesFromNetwork(
       await fs.access(gitmodulesPath);
     } catch {
       // No .gitmodules file - no submodules to check
-      return;
+      return submoduleUpdates;
     }
 
     const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
     const submodules = parseGitmodules(gitmodulesContent);
 
     if (submodules.length === 0) {
-      return;
+      return submoduleUpdates;
     }
 
     console.log(`[SubmoduleUpdates] Checking ${submodules.length} submodules for updates...`);
@@ -323,7 +323,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         return;
       }
 
-      console.log('[UpdatePreview] Found updates:', updateStatus.commits.length, 'commits');
+      console.log('[UpdatePreview] Found updates:', updateStatus?.commits?.length || 0, 'commits');
 
       const loadingNotice = uiService.showLoading('Generating update summary...');
       try {
@@ -338,7 +338,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
         const summaryService = getUpdateSummaryService();
         console.log('[UpdatePreview] Generating summary...');
-        const summary = await summaryService.generateUpdateSummary(updateStatus);
+        const summary = await summaryService.generateUpdateSummary(updateStatus!);
         console.log('[UpdatePreview] Summary generated:', summary);
 
         // Hide loading notice before showing modal
@@ -349,7 +349,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         const modal = new UpdatePreviewModal(
           plugin.app,
           selectedNode.name,
-          updateStatus,
+          updateStatus!,
           summary,
           // On Accept
           async () => {
@@ -395,7 +395,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
             try {
               // Pull updates - cherry-pick peer commits or fast-forward from upstream
               // Extract commit hashes from updateStatus for cherry-picking
-              const commitHashes = updateStatus.commits.map(c => c.hash);
+              const commitHashes = updateStatus!.commits.map(c => c.hash);
               await gitService.pullUpdates(selectedNode.repoPath, commitHashes);
 
               // Check for coherence beacons in the commits we just pulled
@@ -405,7 +405,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                 // Use the commits we already fetched (from updateStatus) instead of re-fetching
                 const beacons = await (plugin as any).coherenceBeaconService.checkCommitsForBeacons(
                   selectedNode.repoPath,
-                  updateStatus.commits
+                  updateStatus!.commits
                 );
                 checkingNotice.hide();
 
@@ -423,6 +423,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                         beacon,
                         // On Accept - clone the supermodule
                         async () => {
+                          const { Notice } = await import('obsidian');
                           try {
                             new Notice(`Cloning ${beacon.title}...`);
                             await (plugin as any).coherenceBeaconService.acceptBeacon(selectedNode.repoPath, beacon);
@@ -436,6 +437,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                         },
                         // On Reject - skip this supermodule
                         async () => {
+                          const { Notice } = await import('obsidian');
                           await (plugin as any).coherenceBeaconService.rejectBeacon(selectedNode.repoPath, beacon);
                           new Notice(`Skipped ${beacon.title}`);
                           resolve();

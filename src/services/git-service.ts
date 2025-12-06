@@ -949,8 +949,8 @@ export class GitService {
         // We need to verify these are actually submodules by checking .gitmodules
         const potentialSubmoduleChanges = statusOutput
           .split('\n')
-          .filter(line => line.startsWith(' M '))
-          .map(line => line.trim().substring(2).trim()); // Extract path from " M Square"
+          .filter((line: string) => line.startsWith(' M '))
+          .map((line: string) => line.trim().substring(2).trim()); // Extract path from " M Square"
 
         console.log(`🔍 [GitService] Found ${potentialSubmoduleChanges.length} potential submodule changes: ${potentialSubmoduleChanges.join(', ')}`);
 
@@ -974,12 +974,12 @@ export class GitService {
             }
 
             console.log(`📦 [GitService] Submodule paths from .gitmodules: ${submodulePaths.join(', ')}`);
-          } catch (error: any) {
+          } catch {
             console.log(`⚠️ [GitService] No .gitmodules file found or couldn't read it`);
           }
 
           // Filter to only actual submodules
-          const submoduleChanges = potentialSubmoduleChanges.filter(path =>
+          const submoduleChanges = potentialSubmoduleChanges.filter((path: string) =>
             submodulePaths.includes(path)
           );
 
@@ -1021,7 +1021,7 @@ export class GitService {
           const gitService = new GitService(this.app);
           await gitService.commitWithAI(repoPath);
           console.log(`✅ [GitService] Changes committed with AI message`);
-        } catch (aiError) {
+        } catch {
           // Fallback: Simple commit message
           console.log(`ℹ️ [GitService] AI commit failed, using fallback message`);
           try {

@@ -150,10 +150,11 @@ export class SubmoduleManagerService {
         '/usr/local/bin',
         '/opt/homebrew/bin'
       ];
-      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
+      const nodeProcess = (globalThis as any).process;
+      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
 
       const submoduleCommand = `git submodule add --force "${radicleUrl}" "${actualSubmoduleName}"`;
-      await execAsync(submoduleCommand, { cwd: parentFullPath, env: { ...process.env, PATH: enhancedPath } });
+      await execAsync(submoduleCommand, { cwd: parentFullPath, env: { ...nodeProcess?.env, PATH: enhancedPath } });
 
       console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName} with Radicle URL`);
       
@@ -757,22 +758,23 @@ export class SubmoduleManagerService {
               '/usr/local/bin',
               '/opt/homebrew/bin'
             ];
-            const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (process.env.PATH || '');
+            const nodeProcess = (globalThis as any).process;
+            const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
 
             await execAsync(`git submodule update --init "${result.submoduleName}"`, {
               cwd: fullParentPath,
-              env: { ...process.env, PATH: enhancedPath }
+              env: { ...nodeProcess?.env, PATH: enhancedPath }
             });
 
             // Update submodule to point to latest commit from sovereign (remote origin/main)
             const submodulePath = path.join(fullParentPath, result.submoduleName);
             await execAsync(`git fetch origin`, {
               cwd: submodulePath,
-              env: { ...process.env, PATH: enhancedPath }
+              env: { ...nodeProcess?.env, PATH: enhancedPath }
             });
             await execAsync(`git checkout origin/main`, {
               cwd: submodulePath,
-              env: { ...process.env, PATH: enhancedPath }
+              env: { ...nodeProcess?.env, PATH: enhancedPath }
             });
 
             console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest with complete metadata`);

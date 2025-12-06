@@ -593,7 +593,7 @@ export function registerRadicleCommands(
 
                   console.log(`✅ [Peer Discovery]   → Added relationship to ${dreamerData.dirName}/liminal-web.json`);
                 }
-              } catch (liminalError) {
+              } catch (liminalError: any) {
                 console.warn(`⚠️ [Peer Discovery]   → Could not read/update liminal-web.json for ${dreamerData.dirName}:`, liminalError);
                 errors++;
               }
@@ -715,7 +715,7 @@ export function registerRadicleCommands(
                   const liminalWeb = JSON.parse(liminalWebContent);
                   relationships = liminalWeb.relationships || [];
                   console.log(`🔍 [Radicle Peer Sync]   → Found liminal-web.json with ${relationships.length} relationships`);
-                } catch (liminalError) {
+                } catch {
                   console.log(`🔍 [Radicle Peer Sync]   → No liminal-web.json found (this is normal if no relationships yet)`);
                 }
               }
@@ -824,7 +824,7 @@ export function registerRadicleCommands(
         const passphraseOrUndefined = passphrase || undefined;
         const relationshipOperations = [];
 
-        for (const { uuid: dreamerUuid, did, data: dreamerData } of dreamersWithDids) {
+        for (const { did, data: dreamerData } of dreamersWithDids) {
           const relatedNodeUuids = dreamerData.relationships || [];
           console.log(`🔄 [Radicle Peer Sync] Dreamer "${dreamerData.dirName}" has ${relatedNodeUuids.length} relationships`);
 

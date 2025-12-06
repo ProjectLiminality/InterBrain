@@ -300,7 +300,7 @@ async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<voi
           if (udd.uuid) {
             validUuids.add(udd.uuid);
           }
-        } catch (error) {
+        } catch {
           // Skip invalid .udd files
         }
       })
