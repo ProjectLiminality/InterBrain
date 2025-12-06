@@ -32,7 +32,11 @@ export class VaultService {
     this.vaultPath = vaultPath;
   }
   
-  private getFullPath(filePath: string): string {
+  /**
+   * Convert a relative vault path to an absolute file system path.
+   * Useful for external code that needs to perform direct file operations.
+   */
+  getFullPath(filePath: string): string {
     if (!this.vaultPath) {
       console.warn('VaultService: Vault path not initialized, using relative path');
       return filePath;

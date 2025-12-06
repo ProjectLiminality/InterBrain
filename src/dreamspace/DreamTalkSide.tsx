@@ -4,6 +4,7 @@ import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaC
 import { setIcon } from 'obsidian';
 import { extractYouTubeVideoId } from '../utils/url-utils';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../utils/link-file-utils';
+import { PDFPreview } from '../components/PDFPreview';
 
 interface DreamTalkSideProps {
   dreamNode: DreamNode;
@@ -526,21 +527,21 @@ function MediaRenderer({ media }: { media: MediaFile }) {
   }
 
   if (media.type.startsWith('application/pdf')) {
+    // Use a larger width for better quality PDF rendering that fills the circle
+    // Render at 600px for crisp display and let CSS scale/clip to fit
     return (
-      <div style={{...mediaStyle, overflow: 'hidden'}}>
-        <iframe
-          src={media.data}
-          style={{
-            width: '200%',
-            height: '200%',
-            transform: 'scale(0.5) translate(-50%, -50%)',
-            transformOrigin: 'top left',
-            border: 'none',
-            pointerEvents: 'none'
-          }}
-          title="PDF preview"
-        />
-      </div>
+      <PDFPreview
+        src={media.data}
+        width={600}
+        thumbnailMode={true}
+        style={{
+          ...mediaStyle,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          borderRadius: mediaStyle.borderRadius
+        }}
+      />
     );
   }
 

@@ -73,7 +73,7 @@ export default function EditModeOverlay() {
           const buffer = await file.arrayBuffer();
           fileIsReadable = true;
           // Calculate hash of the dropped file
-          const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+          const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', buffer);
           fileHash = Array.from(new Uint8Array(hashBuffer))
             .map(b => b.toString(16).padStart(2, '0'))
             .join('');
@@ -124,7 +124,7 @@ export default function EditModeOverlay() {
               // File exists - compare hashes using Node.js fs
               const fullPath = vaultService.getFullPath(targetPath);
               const existingContent = fs.readFileSync(fullPath);
-              const existingHashBuffer = await crypto.subtle.digest('SHA-256', existingContent);
+              const existingHashBuffer = await globalThis.crypto.subtle.digest('SHA-256', existingContent);
               const existingHash = Array.from(new Uint8Array(existingHashBuffer))
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('');

@@ -488,7 +488,7 @@ export default function EditNode3D({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/*,video/*,application/pdf,.pdf"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
@@ -778,7 +778,7 @@ export default function EditNode3D({
 
 /**
  * Validate media file types for DreamTalk
- * Only allows actual visual media: images and videos (NOT PDFs or text files like .md)
+ * Allows images, videos, PDFs, and .link files
  */
 function isValidMediaFile(file: globalThis.File): boolean {
   const validTypes = [
@@ -789,12 +789,13 @@ function isValidMediaFile(file: globalThis.File): boolean {
     'image/webp',
     'image/svg+xml',
     'video/mp4',
-    'video/webm'
+    'video/webm',
+    'application/pdf'
   ];
 
-  // Check file extension for additional image/video types that might have unreliable MIME types
+  // Check file extension for additional types that might have unreliable MIME types
   const fileName = file.name.toLowerCase();
-  const validExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.mp4', '.webm', '.link'];
+  const validExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.mp4', '.webm', '.pdf', '.link'];
 
   // .link files are special case (URL references)
   if (fileName.endsWith('.link')) {
@@ -807,7 +808,6 @@ function isValidMediaFile(file: globalThis.File): boolean {
   }
 
   // Fallback: check extension for files with application/octet-stream MIME type
-  // Only allow known image/video extensions
   if (file.type === 'application/octet-stream') {
     return validExtensions.some(ext => fileName.endsWith(ext));
   }

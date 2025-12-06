@@ -452,7 +452,7 @@ export default function ProtoNode3D({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/*,video/*,application/pdf,.pdf"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
@@ -604,6 +604,7 @@ export default function ProtoNode3D({
 
 /**
  * Validate media file types for DreamTalk
+ * Allows images, videos, PDFs, and .link files
  */
 function isValidMediaFile(file: globalThis.File): boolean {
   const validTypes = [
@@ -614,6 +615,7 @@ function isValidMediaFile(file: globalThis.File): boolean {
     'image/webp',
     'video/mp4',
     'video/webm',
+    'application/pdf',
     // .link files may appear as text/plain or application/octet-stream
     'text/plain',
     'application/octet-stream'
@@ -621,7 +623,7 @@ function isValidMediaFile(file: globalThis.File): boolean {
 
   // Check file extension as fallback for unreliable MIME types
   const fileName = file.name.toLowerCase();
-  if (fileName.endsWith('.link')) {
+  if (fileName.endsWith('.link') || fileName.endsWith('.pdf')) {
     return true;
   }
 

@@ -642,6 +642,7 @@ export default function DreamspaceCanvas() {
 
   /**
    * Validate media file types for DreamTalk
+   * Allows images, videos, PDFs, and .link files
    */
   const isValidMediaFile = (file: globalThis.File): boolean => {
     const validTypes = [
@@ -652,14 +653,15 @@ export default function DreamspaceCanvas() {
       'image/webp',
       'video/mp4',
       'video/webm',
+      'application/pdf',
       // .link files appear as text/plain or application/octet-stream depending on system
       'text/plain',
       'application/octet-stream'
     ];
 
-    // Also check file extension for .link files since MIME detection is unreliable
+    // Also check file extension for .link and .pdf files since MIME detection is unreliable
     const fileName = file.name.toLowerCase();
-    if (fileName.endsWith('.link')) {
+    if (fileName.endsWith('.link') || fileName.endsWith('.pdf')) {
       return true;
     }
 

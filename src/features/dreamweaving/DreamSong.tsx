@@ -3,6 +3,7 @@ import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
 import { MediaFile } from '../../types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
+import { PDFPreview } from '../../components/PDFPreview';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -121,15 +122,17 @@ export const DreamSong: React.FC<DreamSongProps> = ({
           <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
             DreamTalk PDF
           </div>
-          <iframe
+          <PDFPreview
             src={primaryMedia.data}
+            width={600}
+            thumbnailMode={false}
             style={{
               width: '100%',
-              height: '400px',
-              border: 'none',
-              borderRadius: '8px'
+              maxHeight: '500px',
+              overflow: 'auto',
+              borderRadius: '8px',
+              backgroundColor: 'white'
             }}
-            title="PDF preview"
           />
         </div>
       );
@@ -425,11 +428,17 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
       case 'pdf':
         return (
           <div style={containerStyle} onClick={clickHandler}>
-            <iframe
+            <PDFPreview
               src={media.src}
-              className={styles.dreamSongMedia}
-              style={{width: '100%', height: '400px', border: 'none'}}
-              title={media.alt}
+              width={600}
+              thumbnailMode={false}
+              style={{
+                width: '100%',
+                maxHeight: '500px',
+                overflow: 'auto',
+                borderRadius: '8px',
+                backgroundColor: 'white'
+              }}
             />
           </div>
         );
