@@ -911,6 +911,12 @@ export class GitService {
       console.log(`GitService: Using npm at: ${npmPath}`);
       console.log(`GitService: Enhanced PATH: ${enhancedEnv.PATH}`);
 
+      // Run npm install first to ensure dependencies are up to date
+      console.log(`GitService: Running npm install for ${fullPath}...`);
+      await execAsync(`${npmPath} install`, { cwd: fullPath, env: enhancedEnv });
+      console.log(`GitService: npm install completed`);
+
+      // Then run the build
       await execAsync(`${npmPath} run build`, { cwd: fullPath, env: enhancedEnv });
       console.log(`GitService: Successfully built: ${fullPath}`);
     } catch (error) {
