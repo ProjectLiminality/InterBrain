@@ -256,24 +256,30 @@ export class GitService {
   }
 
   /**
-   * Open terminal at repository folder and run claude command
+   * Open terminal at repository folder and run claude --continue command
    */
   async openInTerminal(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitService: Opening terminal at ${fullPath} and running claude`);
+      console.log(`GitService: Opening terminal at ${fullPath} and running claude --continue`);
 
-      // Use osascript to open a new Terminal tab at the specified directory and run claude
+      // Use osascript to open Terminal at the specified directory, then run claude
+      // We capture the window reference to ensure the second command targets the correct window
+      // Using 'cd ... && claude' would work for execution order, but doesn't properly set
+      // the terminal's working directory for new tabs (Cmd+T)
+      // The "claude --continue || claude" pattern tries to continue an existing conversation,
+      // and falls back to starting a new one if no conversation exists
       const script = `
         tell application "Terminal"
-          do script "cd '${fullPath}' && claude"
+          set newWindow to do script "cd '${fullPath}'"
+          do script "claude --continue || claude" in newWindow
           activate
         end tell
       `;
 
       await execAsync(`osascript -e '${script}'`);
 
-      console.log(`GitService: Successfully opened terminal at ${fullPath} and started claude`);
+      console.log(`GitService: Successfully opened terminal at ${fullPath} and started claude --continue`);
     } catch (error) {
       console.error('GitService: Failed to open in Terminal:', error);
       throw new Error(`Failed to open in Terminal: ${error instanceof Error ? error.message : 'Unknown error'}`);

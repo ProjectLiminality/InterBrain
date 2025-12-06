@@ -750,9 +750,9 @@ export default class InterBrainPlugin extends Plugin {
         }
 
         try {
-          // Use git service to open terminal at the repository folder and run claude
+          // Use git service to open terminal at the repository folder and run claude --continue
           await this.gitService.openInTerminal(currentNode.repoPath);
-          this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude`);
+          this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude --continue`);
         } catch (error) {
           console.error('Failed to open in Terminal:', error);
           this.uiService.showError('Failed to open DreamNode in Terminal');
