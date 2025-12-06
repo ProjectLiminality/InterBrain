@@ -236,18 +236,39 @@ export default function EditNode3D({
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     const file = files[0];
-    
-    if (file && isValidMediaFile(file)) {
-      console.log(`[EditNode3D] New DreamTalk media dropped: ${file.name}`);
+
+    if (!file) {
+      return;
+    }
+
+    // Validate media file type first
+    if (!isValidMediaFile(file)) {
+      console.log(`[EditNode3D] Dropped file is not valid DreamTalk media: ${file.name} (${file.type})`);
+      return;
+    }
+
+    console.log(`[EditNode3D] New DreamTalk media dropped: ${file.name}`);
+
+    // Try to create preview URL - this works for both internal and external files
+    try {
       const previewUrl = globalThis.URL.createObjectURL(file);
       setPreviewMedia(previewUrl);
-      
-      // Store the new file in edit mode state for save processing
-      setEditModeNewDreamTalkFile(file);
+    } catch {
+      // If preview fails, try to use existing media data
+      if (editingNode) {
+        const existingMedia = editingNode.dreamTalkMedia.find(m => m.path === file.name);
+        if (existingMedia && existingMedia.data) {
+          setPreviewMedia(existingMedia.data);
+        }
+      }
     }
+
+    // Store the file reference - the save handler will detect if it's internal/external
+    // and handle hash comparison to avoid unnecessary file copies
+    setEditModeNewDreamTalkFile(file);
   };
   
   const handleFileSelect = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
@@ -756,7 +777,8 @@ export default function EditNode3D({
 }
 
 /**
- * Validate media file types for DreamTalk (same as ProtoNode3D)
+ * Validate media file types for DreamTalk
+ * Only allows actual visual media: images and videos (NOT PDFs or text files like .md)
  */
 function isValidMediaFile(file: globalThis.File): boolean {
   const validTypes = [
@@ -765,18 +787,30 @@ function isValidMediaFile(file: globalThis.File): boolean {
     'image/jpg',
     'image/gif',
     'image/webp',
+    'image/svg+xml',
     'video/mp4',
-    'video/webm',
-    // .link files may appear as text/plain or application/octet-stream
-    'text/plain',
-    'application/octet-stream'
+    'video/webm'
   ];
 
-  // Check file extension as fallback for unreliable MIME types
+  // Check file extension for additional image/video types that might have unreliable MIME types
   const fileName = file.name.toLowerCase();
+  const validExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.mp4', '.webm', '.link'];
+
+  // .link files are special case (URL references)
   if (fileName.endsWith('.link')) {
     return true;
   }
 
-  return validTypes.includes(file.type);
+  // Check MIME type first
+  if (validTypes.includes(file.type)) {
+    return true;
+  }
+
+  // Fallback: check extension for files with application/octet-stream MIME type
+  // Only allow known image/video extensions
+  if (file.type === 'application/octet-stream') {
+    return validExtensions.some(ext => fileName.endsWith(ext));
+  }
+
+  return false;
 }

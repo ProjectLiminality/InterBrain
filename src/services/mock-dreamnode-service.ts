@@ -192,6 +192,28 @@ export class MockDreamNodeService {
   }
 
   /**
+   * Add files to an existing DreamNode WITHOUT updating dreamTalk
+   * Used for regular mode file drops where files should just be added to the repo
+   */
+  async addFilesToNodeWithoutDreamTalkUpdate(nodeId: string, files: globalThis.File[]): Promise<void> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const existingFiles = this.repositoryFiles.get(nodeId) || [];
+
+    // Add all files to repository without updating dreamTalk
+    const updatedFiles = [...existingFiles, ...files];
+    this.repositoryFiles.set(nodeId, updatedFiles);
+
+    console.log(`MockDreamNodeService: Added ${files.length} files to ${nodeId} (without dreamTalk update):`, {
+      files: files.map(f => `${f.name} (${f.type})`).join(', '),
+      totalRepoFiles: updatedFiles.length
+    });
+  }
+
+  /**
    * Check if a file is a media file (image or video)
    */
   private isMediaFile(file: globalThis.File): boolean {

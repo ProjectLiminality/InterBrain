@@ -26,6 +26,7 @@ export interface IDreamNodeService {
   list(): Promise<DreamNode[]>;
   get(id: string): Promise<DreamNode | null>;
   addFilesToNode(nodeId: string, files: globalThis.File[]): Promise<void>;
+  addFilesToNodeWithoutDreamTalkUpdate?(nodeId: string, files: globalThis.File[]): Promise<void>;
   reset(): void;
   getStats(): {
     totalNodes: number;

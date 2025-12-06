@@ -1066,14 +1066,19 @@ export default function DreamspaceCanvas() {
 
   const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
     try {
-      
-      // Use service to add files to existing node
       const service = serviceManager.getActive();
-      await service.addFilesToNode(node.id, files);
-      
+
+      // In regular mode (not edit mode), just add files without updating dreamTalk
+      // This treats file drops like dropping files on a folder
+      if (service.addFilesToNodeWithoutDreamTalkUpdate) {
+        await service.addFilesToNodeWithoutDreamTalkUpdate(node.id, files);
+        uiService.showSuccess(`Added ${files.length} file(s) to "${node.name}"`);
+      } else {
+        // Fallback for services that don't support the new method
+        await service.addFilesToNode(node.id, files);
+      }
+
       // No need to manually refresh - event listener will handle it
-      
-      
     } catch (error) {
       console.error('Failed to add files to node:', error);
       uiService.showError(error instanceof Error ? error.message : 'Failed to add files to node');

@@ -1313,7 +1313,40 @@ export class GitDreamNodeService {
     
     console.log(`GitDreamNodeService: Added ${files.length} files to ${nodeId}`);
   }
-  
+
+  /**
+   * Add files to an existing DreamNode WITHOUT updating dreamTalk
+   * Used for regular mode file drops where files should just be added to the repo
+   */
+  async addFilesToNodeWithoutDreamTalkUpdate(nodeId: string, files: globalThis.File[]): Promise<void> {
+    const store = useInterBrainStore.getState();
+    const nodeData = store.realNodes.get(nodeId);
+
+    if (!nodeData) {
+      throw new Error(`DreamNode with ID ${nodeId} not found`);
+    }
+
+    const node = nodeData.node;
+    const repoPath = path.join(this.vaultPath, node.repoPath);
+
+    // Write all files to disk without updating dreamTalk
+    for (const file of files) {
+      const buffer = await file.arrayBuffer();
+      await fsPromises.writeFile(
+        path.join(repoPath, file.name),
+        globalThis.Buffer.from(buffer)
+      );
+    }
+
+    // Update last synced time (no UDD update needed since dreamTalk isn't changing)
+    store.updateRealNode(nodeId, {
+      ...nodeData,
+      lastSynced: Date.now()
+    });
+
+    console.log(`GitDreamNodeService: Added ${files.length} files to ${nodeId} (without dreamTalk update)`);
+  }
+
   private isMediaFile(file: globalThis.File): boolean {
     const validTypes = [
       'image/png',

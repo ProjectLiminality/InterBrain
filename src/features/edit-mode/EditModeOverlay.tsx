@@ -1,4 +1,5 @@
 import React from 'react';
+import fs from 'fs';
 import { useInterBrainStore } from '../../store/interbrain-store';
 import { serviceManager } from '../../services/service-manager';
 import { UIService } from '../../services/ui-service';
@@ -59,11 +60,113 @@ export default function EditModeOverlay() {
 
       // Get the active service for persistence
       const dreamNodeService = serviceManager.getActive();
-      
+
       // 1. Handle new DreamTalk media file if provided
       if (editMode.newDreamTalkFile) {
-        console.log(`EditModeOverlay: Saving new DreamTalk media: ${editMode.newDreamTalkFile.name}`);
-        await dreamNodeService.addFilesToNode(editMode.editingNode.id, [editMode.newDreamTalkFile]);
+        const file = editMode.newDreamTalkFile;
+
+        // Try to read the file - if it fails, it's likely an internal file already in the repo
+        let fileIsReadable = false;
+        let fileHash: string | null = null;
+
+        try {
+          const buffer = await file.arrayBuffer();
+          fileIsReadable = true;
+          // Calculate hash of the dropped file
+          const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+          fileHash = Array.from(new Uint8Array(hashBuffer))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+        } catch {
+          // File not readable - it's an internal file reference
+          fileIsReadable = false;
+        }
+
+        if (!fileIsReadable) {
+          // Internal file - just update the dreamTalk path in metadata, no file copy needed
+          console.log(`EditModeOverlay: File not readable, setting existing file as DreamTalk: ${file.name}`);
+
+          // Load the file data from disk for immediate display
+          const vaultService = serviceManager.getVaultService();
+          const targetPath = `${editMode.editingNode.repoPath}/${file.name}`;
+          let dataUrl = '';
+          let fileSize = 0;
+
+          if (vaultService) {
+            try {
+              dataUrl = await vaultService.readFileAsDataURL(targetPath);
+              const fullPath = vaultService.getFullPath(targetPath);
+              const stats = fs.statSync(fullPath);
+              fileSize = stats.size;
+            } catch (err) {
+              console.warn(`EditModeOverlay: Could not load file data for preview: ${err}`);
+            }
+          }
+
+          const updates: Partial<DreamNode> = {
+            dreamTalkMedia: [{
+              path: file.name,
+              absolutePath: targetPath,
+              type: file.type || 'application/octet-stream',
+              data: dataUrl,
+              size: fileSize
+            }]
+          };
+          await dreamNodeService.update(editMode.editingNode.id, updates);
+        } else if (fileHash) {
+          // File is readable - check if it already exists in the repo by comparing hashes
+          const vaultService = serviceManager.getVaultService();
+          if (vaultService) {
+            const targetPath = `${editMode.editingNode.repoPath}/${file.name}`;
+            const existingFileExists = await vaultService.fileExists(targetPath);
+
+            if (existingFileExists) {
+              // File exists - compare hashes using Node.js fs
+              const fullPath = vaultService.getFullPath(targetPath);
+              const existingContent = fs.readFileSync(fullPath);
+              const existingHashBuffer = await crypto.subtle.digest('SHA-256', existingContent);
+              const existingHash = Array.from(new Uint8Array(existingHashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+
+              if (existingHash === fileHash) {
+                // Same file - just update the metadata reference, no copy needed
+                console.log(`EditModeOverlay: File already exists with same hash, updating reference: ${file.name}`);
+
+                // Load the file data from disk for immediate display
+                let dataUrl = '';
+                try {
+                  dataUrl = await vaultService.readFileAsDataURL(targetPath);
+                } catch (err) {
+                  console.warn(`EditModeOverlay: Could not load file data for preview: ${err}`);
+                }
+
+                const updates: Partial<DreamNode> = {
+                  dreamTalkMedia: [{
+                    path: file.name,
+                    absolutePath: targetPath,
+                    type: file.type || 'application/octet-stream',
+                    data: dataUrl,
+                    size: file.size
+                  }]
+                };
+                await dreamNodeService.update(editMode.editingNode.id, updates);
+              } else {
+                // Different file with same name - copy and update
+                console.log(`EditModeOverlay: File exists but different hash, replacing: ${file.name}`);
+                await dreamNodeService.addFilesToNode(editMode.editingNode.id, [file]);
+              }
+            } else {
+              // File doesn't exist - copy to repo
+              console.log(`EditModeOverlay: Saving new DreamTalk media: ${file.name}`);
+              await dreamNodeService.addFilesToNode(editMode.editingNode.id, [file]);
+            }
+          } else {
+            // No vault service - fall back to direct save
+            console.log(`EditModeOverlay: Saving new DreamTalk media (no vault service): ${file.name}`);
+            await dreamNodeService.addFilesToNode(editMode.editingNode.id, [file]);
+          }
+        }
       }
       
       // 2. Save metadata changes (let service layer handle if no changes)
