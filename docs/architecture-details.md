@@ -493,3 +493,212 @@ Replace command stubs with real implementations:
 - After core functionality is stable
 - When ready for community use
 - No rush - "interbrain" namespace unlikely to be taken
+
+## Radicle Pure Peer-to-Peer Collaboration Model
+
+### Vision: Liminal Web Mapped to Radicle Architecture
+
+**Core Philosophy**: Millions collaborate on ideas, but you only see changes from direct peers. Updates flow through trust relationships (transitive trust), not broadcast.
+
+**Example**:
+- Alice ↔ Bob ↔ Charlie (but Alice ≠ Charlie)
+- Alice only sees Bob's updates
+- Charlie's ideas reach Alice through Bob's curation (Bob merges Charlie, then Alice merges Bob)
+- Changes ripple through the social graph organically
+
+### Essential Radicle Configuration for Pure P2P
+
+**1. Everyone is an Equal Delegate (threshold = 1)**
+```bash
+rad id update --delegate <peer-DID> --threshold 1
+```
+- **Effect**: Any single delegate can establish "canonical" state
+- **Result**: No hierarchy - Alice, Bob, Charlie all have equal push rights
+- **Note**: With threshold=1, "canonical" just means "whoever pushed last to seeds"
+- Not a single authority - each delegate's state is equally valid
+
+**2. Seeding Scope: `followed` (NEVER `all`)**
+```bash
+rad seed <rid> --scope followed
+```
+- **Effect**: Only fetch from people you explicitly `rad follow`
+- **Result**: No stranger updates, only direct Liminal Web relationships
+- **Why**: Prevents random internet contributions, ensures trust-based flow
+
+**3. Node-Level Following**
+```bash
+rad follow <peer-DID> --alias <Name>
+```
+- **Effect**: Global declaration of trust in this peer
+- **Scope**: Applies across all repos where seeding scope is `followed`
+- **Result**: Radicle knows to fetch this peer's changes when syncing
+
+**4. Git Remotes for Each Peer's Fork**
+```bash
+git remote add <PeerName> rad://<RID>/<PeerDID>
+```
+- **Effect**: Track each peer's fork as a separate branch
+- **Result**: `git fetch Bob` gets Bob's specific changes as `Bob/main`
+- **Attribution**: Always know exactly whose work you're seeing
+
+### The Collaboration Flow
+
+**Scenario**: Alice, Bob, and Charlie all share Square DreamNode
+
+**Setup Phase** (automatic via "Sync Radicle Peer Following"):
+1. All three are delegates of Square (threshold=1)
+2. All three follow each other (`rad follow`)
+3. Square seeding scope = `followed`
+4. Each has git remotes for the others
+
+**Charlie Makes Changes**:
+1. Charlie edits Square, commits locally
+2. Charlie pushes: `git push rad main`
+3. Charlie's changes go to Radicle seed servers as his "canonical" state
+4. Seeds replicate Charlie's fork (even when he's offline later)
+
+**Bob Integrates Charlie's Work**:
+1. Bob runs "Check for Updates" on Square
+2. InterBrain fetches: `git fetch Charlie`
+3. Bob sees: "Update from Charlie: 3 commits"
+4. Bob reviews and merges: `git merge Charlie/main`
+5. Bob pushes: `git push rad main`
+6. Bob's canonical now includes his work + Charlie's work
+
+**Alice Discovers Changes Through Bob**:
+1. Alice runs "Check for Updates" on Square
+2. InterBrain fetches from her peers: `git fetch Bob`, `git fetch Charlie`
+3. Alice sees:
+   - "Update from Bob: 5 commits (includes his + Charlie's merged work)"
+   - "Update from Charlie: 3 commits (Charlie's original work)"
+4. Alice can choose:
+   - Merge Bob (gets both Bob's and Charlie's ideas in one merge)
+   - Merge Charlie directly (if she wants attribution granularity)
+5. Alice merges Bob: `git merge Bob/main`
+6. Alice's state now = her work + Bob's work + Charlie's work (transitively)
+
+**Transitive Trust**: Alice never explicitly merged Charlie, but got his ideas through Bob's curation!
+
+### Critical Insight: Skip `rad/main`, Use Peer Branches Only
+
+**Why NOT fetch from `rad/main`?**
+- With threshold=1 and everyone as delegates, `rad/main` has no meaning
+- It's just "whichever delegate pushed to seeds most recently"
+- Could be Alice's state, Bob's state, or Charlie's state - unpredictable
+- Creates confusion and conflicts with explicit peer attribution
+
+**Pure P2P Approach**:
+```typescript
+// ONLY fetch from peer remotes
+git fetch Bob    // Get Bob's specific state
+git fetch Charlie // Get Charlie's specific state
+
+// SKIP rad/main entirely (it's ambiguous noise)
+```
+
+**Benefits**:
+- Explicit attribution: You know exactly whose changes you're reviewing
+- Trust-based: Only see updates from known Liminal Web relationships
+- True symmetry: Everyone equal, no implicit hierarchy
+- Radicle seeds still provide async (they cache each peer's fork)
+
+### Handling Multiple Peer Updates
+
+**Scenario**: Alice has Square, both Bob and Charlie made changes
+
+**What Happens**:
+1. `git fetch Bob` → Alice gets `Bob/main` (Bob's commits appear in his branch)
+2. `git fetch Charlie` → Alice gets `Charlie/main` (Charlie's commits appear in his branch)
+3. Alice's HEAD unchanged - she's still at her last state
+4. **No automatic merging!** Alice sees two separate update previews:
+   - "Update from Bob: 3 commits"
+   - "Update from Charlie: 2 commits"
+
+**Alice Chooses Integration Strategy**:
+
+**Option A: Merge Bob, then Charlie**
+```bash
+git merge Bob/main      # Alice's main now has Bob's changes
+git merge Charlie/main  # Alice's main now has Bob + Charlie
+git push rad main       # Alice's canonical = her + Bob + Charlie
+```
+
+**Option B: Merge Charlie, then Bob** (different merge order)
+```bash
+git merge Charlie/main
+git merge Bob/main
+git push rad main
+```
+
+**Git Handles Conflicts**:
+- Different files → automatic merge ✓
+- Same file, different parts → automatic merge ✓
+- Same file, same lines → **merge conflict** (Alice resolves manually)
+
+**Granularity Preserved**: Git commit history shows exactly what each peer contributed!
+
+### The Dual-Perspective UI (Key Innovation)
+
+**Perspective 1: Updates for a DreamNode**
+```
+Check for Updates → Square (DreamNode)
+├─ Bob: 3 commits (added analysis section)
+├─ Charlie: 2 commits (fixed typo in intro)
+└─ Shows all peers' contributions to ONE idea
+```
+
+**Perspective 2: Updates from a Peer**
+```
+Check for Updates → Bob (Dreamer)
+├─ Square: 3 commits
+├─ Circle: 1 commit
+├─ Cylinder: 5 commits
+└─ Shows one peer's contributions across ALL shared ideas
+```
+
+**Implementation**:
+- **DreamNode perspective** (current): Fetch all peers for selected node
+- **Dreamer perspective** (future): Fetch one peer for all shared nodes
+
+**Philosophical Mapping**:
+- DreamNode view = "How is this IDEA evolving across my network?"
+- Dreamer view = "What is this PERSON contributing to our shared space?"
+
+**Both preserve attribution!** You always know who contributed what.
+
+### Technical Implementation Summary
+
+**Sync Command** (runs periodically or on-demand):
+1. For each Liminal Web relationship (Dreamer → DreamNode):
+   - Follow peer: `rad follow <DID>`
+   - Add as delegate: `rad id update --delegate <DID> --threshold 1`
+   - Add git remote: `git remote add <Name> rad://<RID>/<DID>`
+   - Set scope: `rad seed <RID> --scope followed`
+
+**Update Check** (for DreamNode):
+1. Fetch from all peer remotes (skip `rad` remote)
+2. For each peer, check: `git log HEAD..<Peer>/main`
+3. Show update preview if peer has new commits
+4. User selects which peer updates to merge
+
+**Update Check** (for Dreamer - future feature):
+1. Find all DreamNodes shared with this Dreamer
+2. For each shared repo, fetch ONLY from this peer
+3. Show aggregated view of peer's contributions across all shared nodes
+
+**Merge and Share**:
+1. User accepts update: `git merge <Peer>/main`
+2. Push merged result: `git push rad main` (via RadicleService.share())
+3. Other peers fetch and see your merged state (includes their peer's work transitively)
+
+### Key Takeaways
+
+1. **Delegates ≠ Hierarchy**: With threshold=1, everyone is equally authoritative
+2. **Canonical is Noise**: Skip `rad/main`, fetch only from known peers
+3. **Transitive Trust**: Ideas flow through social relationships, not broadcast
+4. **Explicit Attribution**: Always know whose work you're reviewing
+5. **Async Works**: Radicle seeds cache peer forks even when peers are offline
+6. **Git Does the Work**: Merging, conflict resolution, attribution - all native Git
+7. **Dual Perspective**: View updates by idea OR by person - both preserve granularity
+
+This maps **perfectly** to the Liminal Web vision: trust-based knowledge flow through direct relationships!
