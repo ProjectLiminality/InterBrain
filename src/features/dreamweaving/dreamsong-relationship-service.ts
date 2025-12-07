@@ -3,8 +3,8 @@ import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
 import { DreamSongParserService } from './dreamsong-parser-service';
 import { VaultService } from '../../core/services/vault-service';
 import { CanvasParserService } from './services/canvas-parser-service';
-import { DreamNode } from '../core/types/dreamnode';
-import { DreamSongData, DreamSongBlock } from '../core/types/dreamsong';
+import { DreamNode } from '../../core/types/dreamnode';
+import { DreamSongData, DreamSongBlock } from '../../core/types/dreamsong';
 import {
   DreamSongRelationshipGraph,
   DreamSongNode,
@@ -13,7 +13,7 @@ import {
   DreamSongRelationshipConfig,
   DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG,
   serializeRelationshipGraph
-} from '../core/types/constellation';
+} from '../../core/types/constellation';
 
 // Access Node.js modules directly in Electron context
  
@@ -290,7 +290,7 @@ export class DreamSongRelationshipService {
     }
 
     console.log(`🔗 [DreamSong Relationships] Processing sequence of ${mediaBlocks.length} media blocks`);
-    console.log(`🔍 [DreamSong Relationships] Media blocks:`, mediaBlocks.map(b => ({
+    console.log(`🔍 [DreamSong Relationships] Media blocks:`, mediaBlocks.map((b: { sourceDreamNodeId: string | undefined; mediaPath: string }) => ({
       sourceDreamNodeId: b.sourceDreamNodeId,
       mediaPath: b.mediaPath.startsWith('data:') ? `[data URL: ${b.mediaPath.substring(0, 30)}...]` : b.mediaPath
     })));

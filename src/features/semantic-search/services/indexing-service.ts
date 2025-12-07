@@ -369,7 +369,7 @@ export class IndexingService implements IIndexingService {
     // Add README content if present and VaultService is available
     try {
       // Get VaultService from serviceManager when needed
-      const { serviceManager } = await import('../../../services/service-manager');
+      const { serviceManager } = await import('../../../core/services/service-manager');
       const vaultService = serviceManager.getVaultService();
 
       if (vaultService) {

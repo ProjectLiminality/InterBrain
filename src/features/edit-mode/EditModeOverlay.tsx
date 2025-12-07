@@ -199,8 +199,7 @@ export default function EditModeOverlay() {
       }
       
       console.log(`Edit mode changes saved for node ${editMode.editingNode.id}:`, {
-        relationships: editMode.pendingRelationships.length,
-        dataMode: serviceManager.getMode()
+        relationships: editMode.pendingRelationships.length
       });
       
       // Update the selected node in the main store with the latest data

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { DreamSongData } from '../types/dreamsong';
-import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../components/FibonacciSphereLayout';
+import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../layouts/FibonacciSphereLayout';
 import {
   OllamaConfigSlice,
   createOllamaConfigSlice,

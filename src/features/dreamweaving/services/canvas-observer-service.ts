@@ -1,5 +1,5 @@
 import { App, Vault, TFile } from 'obsidian';
-import { parseLinkFileContent, LinkFileMetadata, getLinkThumbnail } from '../../core/utils/link-file-utils';
+import { parseLinkFileContent, LinkFileMetadata, getLinkThumbnail } from '../../../core/utils/link-file-utils';
 
 /**
  * Service that observes canvas DOM changes and replaces .link file previews

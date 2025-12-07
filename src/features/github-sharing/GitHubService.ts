@@ -830,7 +830,8 @@ export class GitHubService {
 
       // Rebuild GitHub Pages with latest code (includes UUID resolution)
       try {
-        const { parseCanvasToBlocks, getMimeType } = await import('../../services/dreamsong');
+        const { parseCanvasToBlocks } = await import('../dreamweaving/dreamsong/index');
+        const { getMimeType } = await import('../dreamweaving/dreamsong/media-resolver');
         const files = fs.readdirSync(submodulePath);
         const canvasFiles = files.filter(f => f.endsWith('.canvas'));
         let blocks: any[] = [];
@@ -1099,7 +1100,7 @@ export class GitHubService {
         let pagesUrl: string | undefined;
         console.log(`GitHubService: Building static site for existing repo ${udd.title}...`);
         try {
-          const { parseCanvasToBlocks } = await import('../../services/dreamsong');
+          const { parseCanvasToBlocks } = await import('../dreamweaving/dreamsong/index');
 
           const files = fs.readdirSync(dreamNodePath);
           const canvasFiles = files.filter(f => f.endsWith('.canvas'));
@@ -1268,7 +1269,7 @@ export class GitHubService {
     try {
       // Use the same parsing pipeline as local rendering
       // This ensures GitHub Pages displays exactly what you see locally
-      const { parseCanvasToBlocks } = await import('../../services/dreamsong');
+      const { parseCanvasToBlocks } = await import('../dreamweaving/dreamsong/index');
 
       // Find and parse canvas file
       const files = fs.readdirSync(dreamNodePath);

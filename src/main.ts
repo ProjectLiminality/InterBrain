@@ -439,9 +439,7 @@ export default class InterBrainPlugin extends Plugin {
           const loadingNotice = this.uiService.showLoading('Exiting creator mode...');
           try {
             // Stash any uncommitted changes when exiting creator mode
-            if (serviceManager.getMode() === 'real') {
-              await this.gitService.stashChanges(selectedNode.repoPath);
-            }
+            await this.gitService.stashChanges(selectedNode.repoPath);
             store.setCreatorMode(false);
             this.uiService.showSuccess('Exited creator mode - changes stashed');
           } catch (error) {
@@ -457,9 +455,7 @@ export default class InterBrainPlugin extends Plugin {
           const loadingNotice = this.uiService.showLoading('Entering creator mode...');
           try {
             // Pop any existing stash when entering creator mode
-            if (serviceManager.getMode() === 'real') {
-              await this.gitService.popStash(selectedNode.repoPath);
-            }
+            await this.gitService.popStash(selectedNode.repoPath);
             store.setCreatorMode(true, selectedNode.id);
             this.uiService.showSuccess(`Creator mode active for: ${selectedNode.name}`);
           } catch (error) {

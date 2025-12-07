@@ -201,7 +201,7 @@ export function registerNavigationCommands(
         if (canvasExists) {
           try {
             // Use the new DreamSong service layer to parse blocks
-            const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/services/dreamsong');
+            const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/dreamsong/index');
             const canvasParserService = new (await import('../../features/dreamweaving/services/canvas-parser-service')).CanvasParserService(
               vaultService
             );

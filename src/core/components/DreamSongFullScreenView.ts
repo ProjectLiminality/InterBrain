@@ -97,7 +97,7 @@ export class DreamSongFullScreenView extends ItemView {
       const canvasPath = `${this.dreamNode.repoPath}/DreamSong.canvas`;
 
       // Use the same parsing logic as the fullscreen command
-      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/services/dreamsong');
+      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/dreamsong/index');
       const { CanvasParserService } = await import('../../features/dreamweaving/services/canvas-parser-service');
 
       const vaultService = serviceManager.getVaultService();

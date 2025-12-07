@@ -11,7 +11,7 @@ import SearchNode3D from '../../features/search/SearchNode3D';
 import SearchOrchestrator from '../../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../../features/edit-mode';
 import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
-import ConstellationEdges, { shouldShowConstellationEdges } from '../../features/constellation/ConstellationEdges';
+import ConstellationEdges, { shouldShowConstellationEdges } from '../../dreamspace/constellation/ConstellationEdges';
 import { RadialButtonRing3D } from '../../features/radial-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/radial-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../types/dreamnode';
@@ -732,7 +732,7 @@ export default function DreamspaceCanvas() {
 
         // Parse and open DreamSong (reuse existing pattern from fullscreen-commands.ts)
         const canvasData = await canvasParserService.parseCanvas(dreamSongPath);
-        const { parseCanvasToBlocks, resolveMediaPaths } = await import('../services/dreamsong');
+        const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/dreamsong/index');
         let blocks = parseCanvasToBlocks(canvasData, node.id);
         blocks = await resolveMediaPaths(blocks, node.repoPath, vaultService);
 
