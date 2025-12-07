@@ -4,7 +4,6 @@
   "description": "A revolutionary knowledge management system for Obsidian that transcends traditional Second Brain paradigms",
   "main": "main.js",
   "scripts": {
-    "dev": "vite --config vite.dev.config.ts",
     "build": "vite build && npm run build-github-viewer && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css && cp -r src/features/github-publishing/viewer-bundle .",
     "build-github-viewer": "cd src/features/github-publishing/dreamsong-standalone && vite build --config vite.config.ts --outDir ../viewer-bundle",
     "lint": "eslint src/",
