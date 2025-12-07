@@ -3,8 +3,8 @@ import { GitDreamNodeService } from './git-dreamnode-service';
 import { DreamSongParserService } from './dreamsong-parser-service';
 import { VaultService } from './vault-service';
 import { CanvasParserService } from './canvas-parser-service';
-import { DreamNode } from '../types/dreamnode';
-import { DreamSongData, DreamSongBlock } from '../types/dreamsong';
+import { DreamNode } from '../core/types/dreamnode';
+import { DreamSongData, DreamSongBlock } from '../core/types/dreamsong';
 import {
   DreamSongRelationshipGraph,
   DreamSongNode,
@@ -13,7 +13,7 @@ import {
   DreamSongRelationshipConfig,
   DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG,
   serializeRelationshipGraph
-} from '../types/constellation';
+} from '../core/types/constellation';
 
 // Access Node.js modules directly in Electron context
  

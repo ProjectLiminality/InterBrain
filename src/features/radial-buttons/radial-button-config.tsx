@@ -1,6 +1,6 @@
 import React from 'react';
 import { setIcon } from 'obsidian';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 /**
  * Check if a DreamNode is a GitHub-only repository where the user lacks push access

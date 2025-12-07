@@ -15,10 +15,10 @@ import { DreamSong } from './DreamSong';
 import { PerspectivesSection } from './PerspectivesSection';
 import { ConversationsSection } from './ConversationsSection';
 import { ReadmeSection } from './ReadmeSection';
-import { DreamSongBlock } from '../../types/dreamsong';
-import { MediaFile, DreamNode } from '../../types/dreamnode';
+import { DreamSongBlock } from '../../core/types/dreamsong';
+import { MediaFile, DreamNode } from '../../core/types/dreamnode';
 import { Perspective, getPerspectiveService } from '../conversational-copilot/services/perspective-service';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 interface DreamSongWithExtensionsProps {
   blocks: DreamSongBlock[];

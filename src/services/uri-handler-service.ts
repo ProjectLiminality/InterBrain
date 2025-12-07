@@ -2,8 +2,8 @@ import { App, Notice, Plugin } from 'obsidian';
 import { RadicleService } from './radicle-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { DreamSongRelationshipService } from './dreamsong-relationship-service';
-import { useInterBrainStore } from '../store/interbrain-store';
-import { DreamNode } from '../types/dreamnode';
+import { useInterBrainStore } from '../core/store/interbrain-store';
+import { DreamNode } from '../core/types/dreamnode';
 
 /**
  * URI Handler Service

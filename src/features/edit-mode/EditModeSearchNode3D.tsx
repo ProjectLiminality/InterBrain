@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Html } from '@react-three/drei';
-import { dreamNodeStyles, getNodeColors } from '../../dreamspace/dreamNodeStyles';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { dreamNodeStyles, getNodeColors } from '../../core/components/dreamNodeStyles';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
 
 interface EditModeSearchNode3DProps {

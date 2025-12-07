@@ -1,11 +1,11 @@
 import { Plugin, TFile } from 'obsidian';
-import { UIService } from '../services/ui-service';
-import { VaultService } from '../services/vault-service';
-import { CanvasParserService } from '../services/canvas-parser-service';
-import { CanvasLayoutService } from '../services/canvas-layout-service';
-import { SubmoduleManagerService } from '../services/submodule-manager-service';
-import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
+import { UIService } from '../core/services/ui-service';
+import { VaultService } from '../core/services/vault-service';
+import { CanvasParserService } from '../core/services/canvas-parser-service';
+import { CanvasLayoutService } from '../core/services/canvas-layout-service';
+import { SubmoduleManagerService } from '../core/services/submodule-manager-service';
+import { useInterBrainStore } from '../core/store/interbrain-store';
+import { serviceManager } from '../core/services/service-manager';
 
 /**
  * Dreamweaving commands for canvas analysis and submodule management
@@ -793,99 +793,6 @@ export function registerDreamweavingCommands(
         console.error('Auto-layout failed:', errorMessage);
         uiService.showError(`Auto-layout failed: ${errorMessage}`);
       }
-    }
-  });
-
-  // ========================================
-  // DreamNode Flip Animation Commands
-  // ========================================
-
-  // Flip Selected DreamNode - Toggle flip state
-  plugin.addCommand({
-    id: 'flip-selected-dreamnode',
-    name: 'Flip Selected DreamNode',
-    hotkeys: [{ modifiers: ['Ctrl'], key: 'j' }],
-    checkCallback: (checking: boolean) => {
-      const store = useInterBrainStore.getState();
-      const { selectedNode, spatialLayout, flipState } = store;
-      
-      // Only available in liminal web mode with a selected node
-      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
-      const canFlip = spatialLayout === 'liminal-web' && 
-                     selectedNode !== null && 
-                     !currentFlipState?.isFlipping;
-      
-      if (checking) {
-        return canFlip;
-      }
-      
-      if (canFlip && selectedNode) {
-        console.log(`🎬 [Command] Flip Selected DreamNode: ${selectedNode.name}`);
-        
-        // Determine flip direction based on current state
-        const isCurrentlyFlipped = currentFlipState?.isFlipped || false;
-        const direction = isCurrentlyFlipped ? 'back-to-front' : 'front-to-back';
-        
-        store.startFlipAnimation(selectedNode.id, direction);
-      }
-      
-      return true;
-    }
-  });
-
-  // Flip DreamNode to Front (DreamTalk)
-  plugin.addCommand({
-    id: 'flip-dreamnode-to-front',
-    name: 'Flip DreamNode to Front (DreamTalk)',
-    checkCallback: (checking: boolean) => {
-      const store = useInterBrainStore.getState();
-      const { selectedNode, spatialLayout, flipState } = store;
-      
-      // Only available if there's a selected node that's currently flipped
-      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
-      const canFlipToFront = spatialLayout === 'liminal-web' && 
-                            selectedNode !== null && 
-                            currentFlipState?.isFlipped === true &&
-                            !currentFlipState?.isFlipping;
-      
-      if (checking) {
-        return canFlipToFront;
-      }
-      
-      if (canFlipToFront && selectedNode) {
-        console.log(`🎬 [Command] Flip DreamNode to Front: ${selectedNode.name}`);
-        store.startFlipAnimation(selectedNode.id, 'back-to-front');
-      }
-      
-      return true;
-    }
-  });
-
-  // Flip DreamNode to Back (DreamSong)
-  plugin.addCommand({
-    id: 'flip-dreamnode-to-back',
-    name: 'Flip DreamNode to Back (DreamSong)',
-    checkCallback: (checking: boolean) => {
-      const store = useInterBrainStore.getState();
-      const { selectedNode, spatialLayout, flipState } = store;
-      
-      // Only available if there's a selected node that's not currently flipped
-      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
-      const canFlipToBack = spatialLayout === 'liminal-web' && 
-                           selectedNode !== null && 
-                           (currentFlipState?.isFlipped !== true) &&
-                           !currentFlipState?.isFlipping;
-      
-      if (checking) {
-        return canFlipToBack;
-      }
-      
-      if (canFlipToBack && selectedNode) {
-        console.log(`🎬 [Command] Flip DreamNode to Back: ${selectedNode.name}`);
-        store.startFlipAnimation(selectedNode.id, 'front-to-back');
-      }
-      
-      return true;
     }
   });
 

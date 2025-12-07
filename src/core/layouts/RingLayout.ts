@@ -5,8 +5,8 @@
  * Implements center + hexagonal ring pattern with scalable distribution up to 36 nodes.
  */
 
-import { RelationshipGraph } from '../../utils/relationship-graph';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { RelationshipGraph } from '../utils/relationship-graph';
+import { useInterBrainStore } from '../store/interbrain-store';
 
 /**
  * Configuration for ring layout positioning

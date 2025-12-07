@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
-import { useInterBrainStore, ProtoNode } from '../../store/interbrain-store';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../core/components/dreamNodeStyles';
+import { useInterBrainStore, ProtoNode } from '../../core/store/interbrain-store';
 // extractYouTubeVideoId used indirectly through urlMetadata.videoId
 
 interface ProtoNode3DProps {

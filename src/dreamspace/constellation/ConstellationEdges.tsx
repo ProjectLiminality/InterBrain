@@ -8,8 +8,8 @@
 
 import React, { useMemo } from 'react';
 import { Group } from 'three';
-import { useInterBrainStore } from '../../store/interbrain-store';
-import { DreamNode } from '../../types/dreamnode';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { DreamNode } from '../../core/types/dreamnode';
 import { detectConnectedComponents, getClusterColor } from './clustering';
 import DreamSongThread3D, { groupEdgesByDreamSong, sortEdgesBySequence } from './DreamSongThread3D';
 

@@ -1,23 +1,23 @@
 import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
-import { UIService } from './services/ui-service';
-import { GitService } from './services/git-service';
-import { VaultService } from './services/vault-service';
-import { GitTemplateService } from './services/git-template-service';
-import { PassphraseManager } from './services/passphrase-manager';
-import { serviceManager } from './services/service-manager';
-import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
-import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
-import { LinkFileView, LINK_FILE_VIEW_TYPE } from './views/LinkFileView';
-import { LeafManagerService } from './services/leaf-manager-service';
-import { useInterBrainStore } from './store/interbrain-store';
-import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
-import { DreamNode } from './types/dreamnode';
-import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
-import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './dreamspace/layouts/RingLayout';
+import { UIService } from './core/services/ui-service';
+import { GitService } from './core/services/git-service';
+import { VaultService } from './core/services/vault-service';
+import { GitTemplateService } from './core/services/git-template-service';
+import { PassphraseManager } from './core/services/passphrase-manager';
+import { serviceManager } from './core/services/service-manager';
+import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
+import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './core/components/DreamSongFullScreenView';
+import { LinkFileView, LINK_FILE_VIEW_TYPE } from './core/components/LinkFileView';
+import { LeafManagerService } from './core/services/leaf-manager-service';
+import { useInterBrainStore } from './core/store/interbrain-store';
+import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './core/layouts/FibonacciSphereLayout';
+import { DreamNode } from './core/types/dreamnode';
+import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './core/utils/relationship-graph';
+import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './core/layouts/RingLayout';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
-import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
+import { registerNavigationCommands } from './core/commands/navigation-commands';
 import { registerEditModeCommands } from './commands/edit-mode-commands';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
@@ -26,8 +26,7 @@ import { registerGitHubCommands } from './commands/github-commands';
 import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
 import { registerHousekeepingCommands } from './commands/housekeeping-commands';
 import { registerDreamerUpdateCommands } from './commands/dreamer-update-commands';
-import { registerFullScreenCommands } from './commands/fullscreen-commands';
-import { registerRelationshipCommands } from './commands/relationship-commands';
+import { registerRelationshipCommands } from './core/commands/relationship-commands';
 import { registerUpdateCommands } from './commands/update-commands';
 import {
 	registerTranscriptionCommands,
@@ -52,12 +51,12 @@ import { initializePerspectiveService } from './features/conversational-copilot/
 import { initializeAudioTrimmingService } from './features/conversational-copilot/services/audio-trimming-service';
 import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
-import { initializeMediaLoadingService } from './services/media-loading-service';
+import { initializeMediaLoadingService } from './core/services/media-loading-service';
 import { initializeURIHandlerService } from './services/uri-handler-service';
 import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
 import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
 import { initializeUpdateCheckerService } from './services/update-checker-service';
-import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
+import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './core/settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
@@ -338,8 +337,8 @@ export default class InterBrainPlugin extends Plugin {
     // Register semantic search commands
     registerSemanticSearchCommands(this, this.uiService);
 
-    // Register search interface commands (search-as-dreamnode UI)
-    registerSearchInterfaceCommands(this, this.uiService);
+    // Register navigation commands (flip animations, fullscreen views, search toggle)
+    registerNavigationCommands(this, this.uiService);
 
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
@@ -379,9 +378,6 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register update commands (auto-fetch and update management)
     registerUpdateCommands(this, this.uiService);
-
-    // Register full-screen commands
-    registerFullScreenCommands(this, this.uiService);
 
     // Register constellation commands (DreamSong relationship analysis)
     this.constellationCommands.registerCommands(this);

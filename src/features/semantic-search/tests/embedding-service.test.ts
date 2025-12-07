@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TextProcessor, VectorUtils } from '../services/embedding-service';
+import { TextProcessor, VectorUtils } from '../core/services/embedding-service';
 
 describe('TextProcessor', () => {
   describe('cleanText', () => {

@@ -5,7 +5,7 @@
  */
 
 import { App, Notice } from 'obsidian';
-import { DreamNode } from '../types/dreamnode';
+import { DreamNode } from '../core/types/dreamnode';
 import { URIHandlerService } from './uri-handler-service';
 import { serviceManager } from './service-manager';
 import { getRadicleBatchInitService } from './radicle-batch-init-service';

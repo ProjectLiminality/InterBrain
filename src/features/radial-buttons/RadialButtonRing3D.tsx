@@ -3,8 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import { Html, Billboard } from '@react-three/drei';
 import { Group } from 'three';
 import { RADIAL_BUTTON_CONFIGS, RadialButtonConfig, createIconElement } from './radial-button-config';
-import { serviceManager } from '../../services/service-manager';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 interface RadialButtonRing3DProps {
   /** Position of the center node around which buttons appear */

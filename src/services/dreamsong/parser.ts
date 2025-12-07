@@ -7,7 +7,7 @@
  */
 
 import { CanvasData, CanvasNode, CanvasEdge } from '../canvas-parser-service';
-import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
+import { DreamSongBlock, MediaInfo } from '../../core/types/dreamsong';
 import { marked } from 'marked';
 
 // Processed edge for topological sorting

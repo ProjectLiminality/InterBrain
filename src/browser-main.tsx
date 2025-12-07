@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { InterBrainApp } from './InterBrainApp'
+import { InterBrainApp } from './core/components/InterBrainApp'
 
 // Browser development entry point
 ReactDOM.createRoot(document.getElementById('root')!).render(

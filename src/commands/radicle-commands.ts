@@ -1,9 +1,9 @@
 import { Plugin, Notice } from 'obsidian';
-import { UIService } from '../services/ui-service';
-import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
-import { PassphraseManager } from '../services/passphrase-manager';
-import type { DreamNode } from '../types/dreamnode';
+import { UIService } from '../core/services/ui-service';
+import { useInterBrainStore } from '../core/store/interbrain-store';
+import { serviceManager } from '../core/services/service-manager';
+import { PassphraseManager } from '../core/services/passphrase-manager';
+import type { DreamNode } from '../core/types/dreamnode';
 
 /**
  * Radicle commands for peer-to-peer DreamNode sharing

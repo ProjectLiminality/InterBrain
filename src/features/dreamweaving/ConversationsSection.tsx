@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { DreamNode } from '../../types/dreamnode';
+import { DreamNode } from '../../core/types/dreamnode';
 import { getConversationsService, type Conversation } from '../conversational-copilot/services/conversations-service';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 interface ConversationsSectionProps {
 	dreamerNode: DreamNode;

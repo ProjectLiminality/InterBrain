@@ -1,5 +1,5 @@
 import type InterBrainPlugin from '../../../main';
-import { getRealtimeTranscriptionService } from '../services/transcription-service';
+import { getRealtimeTranscriptionService } from '../core/services/transcription-service';
 import { UIService } from '../../../services/ui-service';
 
 /**

@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Html, Billboard } from '@react-three/drei';
 import { Group } from 'three';
 import { createIconElement } from './radial-button-config';
-import { serviceManager } from '../../services/service-manager';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 /**
  * ActiveVideoCallButton - Persistent button during active video calls

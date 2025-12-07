@@ -7,8 +7,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { DreamSongEdge } from '../../types/constellation';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { DreamSongEdge } from '../../core/types/constellation';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 import Edge3D, { isValidEdge } from './Edge3D';
 
 export interface DreamSongThread3DProps {

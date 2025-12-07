@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'child_process';
 import type InterBrainPlugin from '../../../main';
 import { UIService } from '../../../services/ui-service';
-import type { ITranscriptionService, TranscriptionConfig } from '../types/transcription-types';
+import type { ITranscriptionService, TranscriptionConfig } from '../core/types/transcription-types';
 
 /**
  * Service for managing real-time transcription processes

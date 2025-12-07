@@ -1,5 +1,5 @@
 import { Notice } from 'obsidian';
-import type InterBrainPlugin from '../main';
+import type InterBrainPlugin from '../../main';
 import { serviceManager } from '../services/service-manager';
 
 const fs = require('fs');

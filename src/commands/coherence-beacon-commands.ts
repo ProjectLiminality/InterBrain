@@ -1,7 +1,7 @@
 import { Notice } from 'obsidian';
 import type InterBrainPlugin from '../main';
 import { CoherenceBeaconModal } from '../ui/coherence-beacon-modal';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { useInterBrainStore } from '../core/store/interbrain-store';
 
 // Removed unused imports
 

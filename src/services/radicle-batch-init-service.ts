@@ -1,5 +1,5 @@
 import { Notice, Plugin } from 'obsidian';
-import { DreamNode } from '../types/dreamnode';
+import { DreamNode } from '../core/types/dreamnode';
 import { RadicleService } from './radicle-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
 

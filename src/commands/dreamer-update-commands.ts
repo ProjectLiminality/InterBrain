@@ -6,9 +6,9 @@
  */
 
 import { Notice, Plugin } from 'obsidian';
-import { useInterBrainStore } from '../store/interbrain-store';
-import { DreamNode } from '../types/dreamnode';
-import { serviceManager } from '../services/service-manager';
+import { useInterBrainStore } from '../core/store/interbrain-store';
+import { DreamNode } from '../core/types/dreamnode';
+import { serviceManager } from '../core/services/service-manager';
 
 /**
  * Register Dreamer update commands

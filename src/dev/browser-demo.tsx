@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import DreamspaceCanvas from '../dreamspace/DreamspaceCanvas';
+import DreamspaceCanvas from '../core/components/DreamspaceCanvas';
 
 /**
  * Standalone browser demo for DreamSpace component

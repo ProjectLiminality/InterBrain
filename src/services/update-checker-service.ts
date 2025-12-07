@@ -8,7 +8,7 @@
 
 import { App } from 'obsidian';
 import { GitService, FetchResult } from './git-service';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { useInterBrainStore } from '../core/store/interbrain-store';
 
 export class UpdateCheckerService {
   private gitService: GitService;

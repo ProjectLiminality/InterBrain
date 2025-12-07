@@ -1,9 +1,9 @@
 import { Plugin } from 'obsidian';
-import { UIService } from '../services/ui-service';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { UIService } from '../core/services/ui-service';
+import { useInterBrainStore } from '../core/store/interbrain-store';
 import { semanticSearchService } from '../features/semantic-search/services/semantic-search-service';
-import { serviceManager } from '../services/service-manager';
-import { DreamNode } from '../types/dreamnode';
+import { serviceManager } from '../core/services/service-manager';
+import { DreamNode } from '../core/types/dreamnode';
 
 /**
  * Edit mode commands for unified node editing with relationship management

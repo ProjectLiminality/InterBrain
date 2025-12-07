@@ -1,9 +1,9 @@
 import React from 'react';
 import fs from 'fs';
-import { useInterBrainStore } from '../../store/interbrain-store';
-import { serviceManager } from '../../services/service-manager';
-import { UIService } from '../../services/ui-service';
-import { DreamNode } from '../../types/dreamnode';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
+import { UIService } from '../../core/services/ui-service';
+import { DreamNode } from '../../core/types/dreamnode';
 import EditNode3D from './EditNode3D';
 import EditModeSearchNode3D from './EditModeSearchNode3D';
 

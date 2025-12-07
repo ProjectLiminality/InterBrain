@@ -1,6 +1,6 @@
 import React from 'react';
-import { DreamSongBlock, MediaInfo } from '../../types/dreamsong';
-import { MediaFile } from '../../types/dreamnode';
+import { DreamSongBlock, MediaInfo } from '../../core/types/dreamsong';
+import { MediaFile } from '../../core/types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
 import { PDFPreview } from '../../components/PDFPreview';

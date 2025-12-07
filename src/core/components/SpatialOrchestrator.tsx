@@ -16,8 +16,8 @@ import { Vector3, Group } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { DreamNode3DRef } from './DreamNode3D';
 import { buildRelationshipGraph } from '../utils/relationship-graph';
-import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from './layouts/RingLayout';
-import { computeConstellationLayout, createFallbackLayout } from './constellation/ConstellationLayout';
+import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../layouts/RingLayout';
+import { computeConstellationLayout, createFallbackLayout } from '../../dreamspace/constellation/ConstellationLayout';
 import { useInterBrainStore } from '../store/interbrain-store';
 
 export interface SpatialOrchestratorRef {

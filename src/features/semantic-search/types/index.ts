@@ -9,20 +9,20 @@ export type {
   EmbeddingModelInfo,
   EmbeddingHealth,
   EmbeddingServiceError
-} from '../services/embedding-service';
+} from '../core/services/embedding-service';
 
 // Re-export indexing types
 export type {
   VectorData,
   IndexingProgress,
   IIndexingService
-} from '../services/indexing-service';
+} from '../core/services/indexing-service';
 
 // Re-export search types  
 export type {
   SearchResult,
   SearchOptions
-} from '../services/semantic-search-service';
+} from '../core/services/semantic-search-service';
 
 // Forward declaration for EmbeddingConfig - will be properly imported from services
 interface EmbeddingConfig {

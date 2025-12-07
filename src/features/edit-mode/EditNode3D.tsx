@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../dreamspace/dreamNodeStyles';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../core/components/dreamNodeStyles';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { setIcon } from 'obsidian';
 
 interface EditNode3DProps {

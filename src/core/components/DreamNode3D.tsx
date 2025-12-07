@@ -3,7 +3,7 @@ import { Html, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
-import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../dreamspace/DynamicViewScaling';
+import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../layouts/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { dreamNodeStyles } from './dreamNodeStyles';
 import { CanvasParserService } from '../services/canvas-parser-service';
@@ -11,7 +11,7 @@ import { VaultService } from '../services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
 import { getMediaLoadingService } from '../services/media-loading-service';
-import './dreamNodeAnimations.css';
+import '../../dreamspace/dreamNodeAnimations.css';
 
 // Universal Movement API interface
 export interface DreamNode3DRef {

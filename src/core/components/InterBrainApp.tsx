@@ -1,5 +1,5 @@
 import React from 'react'
-import DreamspaceCanvas from './dreamspace/DreamspaceCanvas'
+import DreamspaceCanvas from './DreamspaceCanvas'
 
 export function InterBrainApp() {
   return (

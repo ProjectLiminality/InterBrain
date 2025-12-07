@@ -6,7 +6,7 @@
  * Uses Node.js crypto module for proper hashing.
  */
 
-import { DreamSongBlock } from '../../types/dreamsong';
+import { DreamSongBlock } from '../../core/types/dreamsong';
 import { CanvasData, CanvasNode, CanvasEdge } from '../canvas-parser-service';
 
 // Access Node.js crypto module directly in Electron context

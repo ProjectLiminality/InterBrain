@@ -1,7 +1,7 @@
 import { Plugin } from 'obsidian';
-import { UIService } from '../../services/ui-service';
-import { useInterBrainStore } from '../../store/interbrain-store';
-import { serviceManager } from '../../services/service-manager';
+import { UIService } from '../../core/services/ui-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
 import { getTranscriptionService } from './services/transcription-service';
 import { getConversationRecordingService } from './services/conversation-recording-service';
 import { getConversationSummaryService } from './services/conversation-summary-service';

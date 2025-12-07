@@ -1,5 +1,5 @@
 // import React from 'react';
-import { useInterBrainStore } from '../../store/interbrain-store';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 /**
  * CopilotModeOverlay - Minimal coordinator for conversational copilot functionality
