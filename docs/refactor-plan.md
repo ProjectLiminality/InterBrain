@@ -369,13 +369,13 @@ src/
 **Goal:** Update `src/main.ts` to use new paths.
 
 ### 4.1 Update Imports
-- [ ] Update all import paths in `main.ts` to use new core/ and features/ locations
-- [ ] Update command registration to use new paths
-- [ ] Update service initialization to use new paths
+- [x] Update all import paths in `main.ts` to use new core/ and features/ locations
+- [x] Update command registration to use new paths
+- [x] Update service initialization to use new paths
 
 ### 4.2 Update Browser Entry Points
-- [ ] Update `src/browser-main.tsx` imports
-- [ ] Update `src/dev/browser-demo.tsx` imports
+- [x] Update `src/browser-main.tsx` imports
+- [x] Update `src/dev/browser-demo.tsx` imports
 
 **Checkpoint:** `npm run check-all` → Commit "Phase 4: Update main entry point"
 
@@ -386,18 +386,18 @@ src/
 **Goal:** Remove empty directories and verify structure.
 
 ### 5.1 Delete Empty Directories
-- [ ] Delete `src/commands/` (should be empty)
-- [ ] Delete `src/services/` (should be empty)
-- [ ] Delete `src/mock/` (should be empty)
-- [ ] Delete any other empty directories
+- [x] Delete `src/commands/` (should be empty)
+- [x] Delete `src/services/` (should be empty)
+- [x] Delete `src/mock/` (should be empty)
+- [x] Delete any other empty directories
 
 ### 5.2 Verify Structure
-- [ ] Run `find src -type d -empty` to check for empty directories
-- [ ] Verify all features have `index.ts` exports
-- [ ] Verify core has proper barrel exports
+- [x] Run `find src -type d -empty` to check for empty directories
+- [x] Verify all features have `index.ts` exports
+- [x] Verify core has proper barrel exports
 
 ### 5.3 Final Validation
-- [ ] Run `npm run check-all`
+- [x] Run `npm run check-all` (6 pre-existing test failures in indexing-service.test.ts, all type checks and linting passed)
 - [ ] Open Obsidian and verify:
   - [ ] DreamSpace opens correctly
   - [ ] Command palette shows expected commands
