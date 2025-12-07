@@ -10,12 +10,6 @@ vi.mock('../../src/core/store/interbrain-store', () => ({
   }
 }));
 
-// Mock the mock data import
-const mockGetMockDataForConfig = vi.fn();
-vi.mock('../../src/mock/dreamnode-mock-data', () => ({
-  getMockDataForConfig: mockGetMockDataForConfig
-}));
-
 describe('IndexingService', () => {
   let indexingService: IndexingService;
   let mockStore: any;
@@ -24,10 +18,10 @@ describe('IndexingService', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Create fresh service instance
     indexingService = new IndexingService();
-    
+
     // Create mock nodes
     mockNodes = [
       {
@@ -76,18 +70,20 @@ describe('IndexingService', () => {
         }
       }
     ];
-    
-    // Create mock store
+
+    // Create mock store with realNodes Map (no more mock data mode)
     mockStore = {
-      dataMode: 'mock',
-      mockDataConfig: 'small',
+      realNodes: new Map([
+        ['node-1', { node: mockNodes[0], lastSynced: Date.now() }],
+        ['node-2', { node: mockNodes[1], lastSynced: Date.now() }]
+      ]),
       vectorData: new Map<string, VectorData>(),
       updateVectorData: vi.fn(),
       deleteVectorData: vi.fn(),
       clearVectorData: vi.fn()
     };
-    
-    (useInterBrainStore.getState as unknown).mockReturnValue(mockStore);
+
+    (useInterBrainStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockStore);
   });
 
   afterEach(() => {
@@ -143,11 +139,6 @@ describe('IndexingService', () => {
   });
 
   describe('indexAllNodes', () => {
-    beforeEach(() => {
-      // Mock getMockDataForConfig
-      mockGetMockDataForConfig.mockReturnValue(mockNodes);
-    });
-
     it('should index all nodes and return correct stats', async () => {
       const result = await indexingService.indexAllNodes();
       
@@ -169,10 +160,6 @@ describe('IndexingService', () => {
   });
 
   describe('intelligentReindex', () => {
-    beforeEach(() => {
-      mockGetMockDataForConfig.mockReturnValue(mockNodes);
-    });
-
     it('should detect and add new nodes', async () => {
       // No existing vectors
       mockStore.vectorData = new Map();
@@ -465,19 +452,4 @@ describe('IndexingService', () => {
     });
   });
 
-  describe('real mode node access', () => {
-    it('should get nodes from real store when in real mode', async () => {
-      mockStore.dataMode = 'real';
-      mockStore.realNodes = new Map([
-        ['node-1', { node: mockNodes[0], lastSynced: Date.now() }],
-        ['node-2', { node: mockNodes[1], lastSynced: Date.now() }]
-      ]);
-      
-      // Access the private method via indexAllNodes to test node retrieval
-      const result = await indexingService.indexAllNodes();
-      
-      expect(result.indexed).toBe(2);
-      expect(mockStore.updateVectorData).toHaveBeenCalledTimes(2);
-    });
-  });
 });
