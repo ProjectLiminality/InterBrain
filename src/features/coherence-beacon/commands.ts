@@ -1,7 +1,7 @@
 import { Notice } from 'obsidian';
-import type InterBrainPlugin from '../main';
-import { CoherenceBeaconModal } from '../core/ui/coherence-beacon-modal';
-import { useInterBrainStore } from '../core/store/interbrain-store';
+import type InterBrainPlugin from '../../main';
+import { CoherenceBeaconModal } from '../../core/ui/coherence-beacon-modal';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 // Removed unused imports
 
@@ -23,7 +23,7 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
         new Notice(`📤 Detecting available remote for ${selectedNode.name}...`);
 
         // Use intelligent push that detects available remotes
-        const { GitService } = await import('../core/services/git-service');
+        const { GitService } = await import('../../core/services/git-service');
         const gitService = new GitService(plugin.app);
 
         // Get Radicle passphrase from settings for automatic node start
@@ -124,7 +124,7 @@ async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: stri
 
   try {
     // Use GitService for proper PATH handling
-    const { GitService } = await import('../core/services/git-service');
+    const { GitService } = await import('../../core/services/git-service');
     const gitService = new GitService(plugin.app);
 
     // Pull updates

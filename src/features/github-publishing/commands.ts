@@ -1,8 +1,8 @@
 import { Plugin, Notice, Modal, TFile } from 'obsidian';
-import { UIService } from '../core/services/ui-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { githubService } from '../features/github-sharing/GitHubService';
-import { serviceManager } from '../core/services/service-manager';
+import { UIService } from '../../core/services/ui-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { githubService } from './service';
+import { serviceManager } from '../../core/services/service-manager';
 
 /**
  * Show confirmation modal before sharing to GitHub

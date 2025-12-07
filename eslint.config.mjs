@@ -68,6 +68,7 @@ export default [
       '*.d.ts',
       'src/features/realtime-transcription/scripts/venv/**',
       'src/features/github-sharing/viewer-bundle/**',
+      'src/features/github-publishing/viewer-bundle/**',
       'dist/**'
     ]
   }

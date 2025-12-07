@@ -1,8 +1,8 @@
 import { Plugin } from 'obsidian';
-import { UIService } from '../core/services/ui-service';
-import { FaceTimeService } from '../services/facetime-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { VaultService } from '../core/services/vault-service';
+import { UIService } from '../../core/services/ui-service';
+import { FaceTimeService } from './service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { VaultService } from '../../core/services/vault-service';
 
 /**
  * FaceTime integration commands for video calling

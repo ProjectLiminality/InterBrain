@@ -5,12 +5,12 @@
  */
 
 import { Plugin } from 'obsidian';
-import { UIService } from '../core/services/ui-service';
-import { getUpdateCheckerService } from '../services/update-checker-service';
-import { getUpdateSummaryService, initializeUpdateSummaryService } from '../services/update-summary-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { GitService } from '../core/services/git-service';
-import { UpdatePreviewModal } from '../core/ui/update-preview-modal';
+import { UIService } from '../../core/services/ui-service';
+import { getUpdateCheckerService } from './update-checker-service';
+import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { GitService } from '../../core/services/git-service';
+import { UpdatePreviewModal } from '../../core/ui/update-preview-modal';
 
 const path = require('path');
 const fs = require('fs').promises;
@@ -72,7 +72,7 @@ async function updateSubmodules(
     uiService.showSuccess(`Updated ${submoduleUpdates.length} submodule(s) and committed changes`);
 
     // Trigger vault rescan to update UI
-    const { serviceManager } = await import('../core/services/service-manager');
+    const { serviceManager } = await import('../../core/services/service-manager');
     await serviceManager.scanVault();
   } catch (error) {
     console.error('[SubmoduleUpdate] Failed to commit submodule updates:', error);
@@ -413,7 +413,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                   console.log(`[UpdatePreview] Found ${beacons.length} coherence beacon(s)`);
 
                   // Import modal dynamically to avoid circular dependencies
-                  const { CoherenceBeaconModal } = await import('../core/ui/coherence-beacon-modal');
+                  const { CoherenceBeaconModal } = await import('../../core/ui/coherence-beacon-modal');
 
                   // Process each beacon sequentially
                   for (const beacon of beacons) {
@@ -582,8 +582,8 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function generateUpdatePreviewMarkdown(
   nodeName: string,
-  updateStatus: import('../core/services/git-service').FetchResult,
-  summary: import('../services/update-summary-service').UpdateSummary
+  updateStatus: import('../../core/services/git-service').FetchResult,
+  summary: import('./update-summary-service').UpdateSummary
 ): string {
   const { commits, filesChanged, insertions, deletions } = updateStatus;
 

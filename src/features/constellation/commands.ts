@@ -1,9 +1,9 @@
 import { Plugin } from 'obsidian';
-import { DreamSongRelationshipService } from '../features/dreamweaving/dreamsong-relationship-service';
-import { UIService } from '../core/services/ui-service';
-import { VaultService } from '../core/services/vault-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from '../core/types/constellation';
+import { DreamSongRelationshipService } from '../dreamweaving/dreamsong-relationship-service';
+import { UIService } from '../../core/services/ui-service';
+import { VaultService } from '../../core/services/vault-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from '../../core/types/constellation';
 
 /**
  * Constellation Commands - Obsidian commands for DreamSong relationship analysis

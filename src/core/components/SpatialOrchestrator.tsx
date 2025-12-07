@@ -17,7 +17,7 @@ import { DreamNode } from '../types/dreamnode';
 import { DreamNode3DRef } from './DreamNode3D';
 import { buildRelationshipGraph } from '../utils/relationship-graph';
 import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../layouts/RingLayout';
-import { computeConstellationLayout, createFallbackLayout } from '../../dreamspace/constellation/ConstellationLayout';
+import { computeConstellationLayout, createFallbackLayout } from '../../features/constellation/ConstellationLayout';
 import { useInterBrainStore } from '../store/interbrain-store';
 
 export interface SpatialOrchestratorRef {

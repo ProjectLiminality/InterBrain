@@ -21,25 +21,25 @@ import { registerNavigationCommands } from './core/commands/navigation-commands'
 import { registerEditModeCommands } from './features/edit-mode';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
-import { registerRadicleCommands } from './commands/radicle-commands';
-import { registerGitHubCommands } from './commands/github-commands';
-import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
-import { registerHousekeepingCommands } from './commands/housekeeping-commands';
-import { registerDreamerUpdateCommands } from './commands/dreamer-update-commands';
+import { registerRadicleCommands } from './features/social-resonance/commands';
+import { registerGitHubCommands } from './features/github-publishing/commands';
+import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
+import { registerHousekeepingCommands } from './features/social-resonance/housekeeping-commands';
+import { registerDreamerUpdateCommands } from './features/updates/dreamer-update-commands';
 import { registerRelationshipCommands } from './core/commands/relationship-commands';
-import { registerUpdateCommands } from './commands/update-commands';
+import { registerUpdateCommands } from './features/updates/commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
-import { ConstellationCommands } from './commands/constellation-commands';
-import { registerFaceTimeCommands } from './commands/facetime-commands';
-import { FaceTimeService } from './services/facetime-service';
+import { ConstellationCommands } from './features/constellation/commands';
+import { registerFaceTimeCommands } from './features/video-calling/commands';
+import { FaceTimeService } from './features/video-calling/service';
 import { CanvasParserService } from './features/dreamweaving/services/canvas-parser-service';
 import { SubmoduleManagerService } from './features/dreamweaving/services/submodule-manager-service';
 import { CanvasObserverService } from './features/dreamweaving/services/canvas-observer-service';
-import { CoherenceBeaconService } from './services/coherence-beacon-service';
+import { CoherenceBeaconService } from './features/coherence-beacon/service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
@@ -51,10 +51,10 @@ import { initializeAudioTrimmingService } from './features/conversational-copilo
 import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeMediaLoadingService } from './core/services/media-loading-service';
-import { initializeURIHandlerService } from './services/uri-handler-service';
-import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
-import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
-import { initializeUpdateCheckerService } from './services/update-checker-service';
+import { initializeURIHandlerService } from './features/social-resonance/uri-handler-service';
+import { initializeRadicleBatchInitService } from './features/social-resonance/batch-init-service';
+import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
+import { initializeUpdateCheckerService } from './features/updates/update-checker-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './core/settings/InterBrainSettings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -805,7 +805,7 @@ export default class InterBrainPlugin extends Plugin {
             'did:key:z6Mk... (optional)'
           );
 
-          const { ShareLinkService } = await import('./services/share-link-service');
+          const { ShareLinkService } = await import('./features/github-publishing/share-link-service');
           const shareLinkService = new ShareLinkService(this.app, this);
 
           // Pass recipientDid if provided (will be undefined if empty string)

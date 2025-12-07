@@ -5,7 +5,7 @@ import { indexingService } from '../../features/semantic-search/services/indexin
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
 import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
 import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
-import { webLinkAnalyzerService } from '../../services/web-link-analyzer-service';
+import { webLinkAnalyzerService } from '../../features/web-link-analyzer/service';
 
 // Access Node.js modules directly in Electron context
  

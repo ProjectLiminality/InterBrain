@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { OllamaEmbeddingService } from '../core/services/ollama-embedding-service';
+import { OllamaEmbeddingService } from '../services/ollama-embedding-service';
 
 // Mock global fetch
 const mockFetch = vi.fn();

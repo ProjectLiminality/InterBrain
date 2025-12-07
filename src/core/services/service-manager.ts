@@ -6,7 +6,7 @@ import { LeafManagerService } from './leaf-manager-service';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../utils/url-utils';
-import { RadicleService, RadicleServiceImpl } from '../../services/radicle-service';
+import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance/radicle-service';
 
 /**
  * Service interface that both mock and real implementations will follow

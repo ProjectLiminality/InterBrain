@@ -1,9 +1,9 @@
 import { App, Notice, Plugin } from 'obsidian';
 import { RadicleService } from './radicle-service';
-import { GitDreamNodeService } from '../core/services/git-dreamnode-service';
-import { DreamSongRelationshipService } from '../features/dreamweaving/dreamsong-relationship-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { DreamNode } from '../core/types/dreamnode';
+import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
+import { DreamSongRelationshipService } from '../dreamweaving/dreamsong-relationship-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { DreamNode } from '../../core/types/dreamnode';
 
 /**
  * URI Handler Service
@@ -481,7 +481,7 @@ export class URIHandlerService {
 			}
 
 			// Index the node using semantic search service
-			const { indexingService } = await import('../features/semantic-search/services/indexing-service');
+			const { indexingService } = await import('../semantic-search/services/indexing-service');
 			await indexingService.indexNode(targetNode);
 
 		} catch (error) {
@@ -501,7 +501,7 @@ export class URIHandlerService {
 	 * - Mixed: "Thunderstorm-Generator-UPDATED" → "Thunderstorm Generator Updated"
 	 */
 	private async normalizeRepoNameToTitle(repoName: string): Promise<string> {
-		const { isPascalCase, pascalCaseToTitle } = await import('../core/utils/title-sanitization');
+		const { isPascalCase, pascalCaseToTitle } = await import('../../core/utils/title-sanitization');
 
 		// If repo name contains hyphens, underscores, or periods as separators
 		if (/[-_.]+/.test(repoName)) {
@@ -536,8 +536,8 @@ export class URIHandlerService {
 	 */
 	private async ensureRadicleNodeRunning(): Promise<string | null> {
 		// Import PassphraseManager for consistent passphrase handling
-		const { PassphraseManager } = await import('../core/services/passphrase-manager');
-		const { UIService } = await import('../core/services/ui-service');
+		const { PassphraseManager } = await import('../../core/services/passphrase-manager');
+		const { UIService } = await import('../../core/services/ui-service');
 
 		// Create temporary instances for passphrase management
 		const uiService = new UIService(this.app);
@@ -760,7 +760,7 @@ export class URIHandlerService {
 			}
 
 			// Import GitHub service and clone
-			const { githubService } = await import('../features/github-sharing/GitHubService');
+			const { githubService } = await import('../github-publishing/service');
 			const githubUrl = `https://${repoPath}`;
 			await githubService.clone(githubUrl, destinationPath);
 

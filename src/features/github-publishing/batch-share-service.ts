@@ -1,7 +1,7 @@
 import { Notice, Plugin } from 'obsidian';
-import { DreamNode } from '../core/types/dreamnode';
-import { githubService } from '../features/github-sharing/GitHubService';
-import { GitDreamNodeService } from '../core/services/git-dreamnode-service';
+import { DreamNode } from '../../core/types/dreamnode';
+import { githubService } from './service';
+import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
 
 /**
  * GitHub Batch Share Service

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { SemanticSearchService } from '../core/services/semantic-search-service';
+import { SemanticSearchService } from '../services/semantic-search-service';
 import { DreamNode } from '../../../core/types/dreamnode';
-import { VectorData } from '../core/services/indexing-service';
+import { VectorData } from '../services/indexing-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
-import { ollamaEmbeddingService } from '../core/services/ollama-embedding-service';
+import { ollamaEmbeddingService } from '../services/ollama-embedding-service';
 
 // Mock dependencies
 vi.mock('../../../core/store/interbrain-store', () => ({

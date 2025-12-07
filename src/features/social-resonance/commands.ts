@@ -1,9 +1,9 @@
 import { Plugin, Notice } from 'obsidian';
-import { UIService } from '../core/services/ui-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { serviceManager } from '../core/services/service-manager';
-import { PassphraseManager } from '../core/services/passphrase-manager';
-import type { DreamNode } from '../core/types/dreamnode';
+import { UIService } from '../../core/services/ui-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
+import { PassphraseManager } from '../../core/services/passphrase-manager';
+import type { DreamNode } from '../../core/types/dreamnode';
 
 /**
  * Radicle commands for peer-to-peer DreamNode sharing
@@ -248,7 +248,7 @@ export function registerRadicleCommands(
           const radicleId = await radicleService.getRadicleId(fullRepoPath, passphrase || undefined);
           if (radicleId) {
             console.log(`RadicleCommands: Writing Radicle ID to .udd: ${radicleId}`);
-            const UDDService = (await import('../core/services/udd-service')).UDDService;
+            const UDDService = (await import('../../core/services/udd-service')).UDDService;
             const udd = await UDDService.readUDD(fullRepoPath);
             udd.radicleId = radicleId;
             await UDDService.writeUDD(fullRepoPath, udd);

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useInterBrainStore } from './interbrain-store'
-import { createMockDreamNode, createMockDreamerNode } from '../../tests/utils/test-utils'
+import { createMockDreamNode, createMockDreamerNode } from '../../../tests/utils/test-utils'
 
 describe('InterBrainStore', () => {
   beforeEach(() => {

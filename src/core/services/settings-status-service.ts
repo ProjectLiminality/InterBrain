@@ -10,7 +10,7 @@ import * as path from 'path';
 import { App } from 'obsidian';
 import type { OllamaEmbeddingService } from '../../features/semantic-search/services/ollama-embedding-service';
 import type { TranscriptionService } from '../../features/realtime-transcription/services/transcription-service';
-import type { RadicleService } from '../../services/radicle-service';
+import type { RadicleService } from '../../features/social-resonance/radicle-service';
 
 export interface FeatureStatus {
 	available: boolean;

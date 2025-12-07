@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, CanvasAnalysis } from './canvas-parser-service';
-import { RadicleService } from '../../../services/radicle-service';
+import { RadicleService } from '../../social-resonance/radicle-service';
 import { App } from 'obsidian';
 
 // Mock the global require for Node.js modules used by SubmoduleManagerService

@@ -6,9 +6,9 @@
  */
 
 import { Notice, Plugin } from 'obsidian';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { DreamNode } from '../core/types/dreamnode';
-import { serviceManager } from '../core/services/service-manager';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { DreamNode } from '../../core/types/dreamnode';
+import { serviceManager } from '../../core/services/service-manager';
 
 /**
  * Register Dreamer update commands
@@ -83,7 +83,7 @@ async function checkAllUpdatesFromDreamer(plugin: Plugin): Promise<void> {
           }
         } else {
           // Use Git fetch for GitHub or other remotes
-          const { GitService } = await import('../core/services/git-service');
+          const { GitService } = await import('../../core/services/git-service');
           const gitService = new GitService((plugin as any).app);
           const fetchResult = await gitService.fetchUpdates(dream.repoPath);
           if (fetchResult.hasUpdates) {

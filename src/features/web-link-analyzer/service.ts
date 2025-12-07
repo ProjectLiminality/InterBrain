@@ -10,7 +10,7 @@
  */
 
 import { Notice } from 'obsidian';
-import { useInterBrainStore } from '../core/store/interbrain-store';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { ChildProcess, spawn } from 'child_process';
 
 const fs = require('fs');

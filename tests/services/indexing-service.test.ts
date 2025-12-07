@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { IndexingService, VectorData } from '../../src/features/semantic-search/services/indexing-service';
-import { DreamNode } from '../../src/types/dreamnode';
-import { useInterBrainStore } from '../../src/store/interbrain-store';
+import { DreamNode } from '../../src/core/types/dreamnode';
+import { useInterBrainStore } from '../../src/core/store/interbrain-store';
 
 // Mock the store
-vi.mock('../../src/store/interbrain-store', () => ({
+vi.mock('../../src/core/store/interbrain-store', () => ({
   useInterBrainStore: {
     getState: vi.fn()
   }

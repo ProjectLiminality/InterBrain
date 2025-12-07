@@ -5,8 +5,8 @@
  * Translates technical commit messages into plain English focused on UX impact
  */
 
-import { ClaudeProvider, LLMMessage } from '../features/conversational-copilot/services/llm-provider';
-import { FetchResult } from '../core/services/git-service';
+import { ClaudeProvider, LLMMessage } from '../conversational-copilot/services/llm-provider';
+import { FetchResult } from '../../core/services/git-service';
 
 export interface UpdateSummary {
   userFacingChanges: string;
