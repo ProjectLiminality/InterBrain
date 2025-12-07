@@ -15,7 +15,6 @@ import { useInterBrainStore } from './store/interbrain-store';
 import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
 import { DreamNode } from './types/dreamnode';
 import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
-import { getMockDataForConfig } from './mock/dreamnode-mock-data';
 import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './dreamspace/layouts/RingLayout';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
@@ -28,7 +27,6 @@ import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-com
 import { registerHousekeepingCommands } from './commands/housekeeping-commands';
 import { registerDreamerUpdateCommands } from './commands/dreamer-update-commands';
 import { registerFullScreenCommands } from './commands/fullscreen-commands';
-import { registerMigrationCommands } from './commands/migration-commands';
 import { registerRelationshipCommands } from './commands/relationship-commands';
 import { registerUpdateCommands } from './commands/update-commands';
 import {
@@ -37,7 +35,6 @@ import {
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
 import { ConstellationCommands } from './commands/constellation-commands';
-import { RadialButtonCommands } from './commands/radial-button-commands';
 import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
 import { registerFaceTimeCommands } from './commands/facetime-commands';
 import { FaceTimeService } from './services/facetime-service';
@@ -77,7 +74,6 @@ export default class InterBrainPlugin extends Plugin {
   public coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
   private constellationCommands!: ConstellationCommands;
-  private radialButtonCommands!: RadialButtonCommands;
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
@@ -104,13 +100,6 @@ export default class InterBrainPlugin extends Plugin {
     // These will initialize in background after plugin loads
     this.initializeBackgroundServices();
 
-    // Auto-generate mock relationships if not present (ensures deterministic behavior)
-    const store = useInterBrainStore.getState();
-    if (!store.mockRelationshipData) {
-      console.log('Generating initial mock relationships for deterministic behavior...');
-      store.generateMockRelationships();
-    }
-    
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
@@ -334,9 +323,6 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize constellation commands
     this.constellationCommands = new ConstellationCommands(this);
 
-    // Initialize radial button commands
-    this.radialButtonCommands = new RadialButtonCommands(this);
-
     // Make services accessible to ServiceManager BEFORE initialization
     // Note: Using 'any' here is legitimate - we're extending the plugin with dynamic properties
     (this as any).vaultService = this.vaultService;
@@ -387,9 +373,6 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register Dreamer update commands (check all projects from peer)
     registerDreamerUpdateCommands(this);
-
-    // Register migration commands (PascalCase naming migration)
-    registerMigrationCommands(this);
 
     // Register relationship commands (bidirectional sync)
     registerRelationshipCommands(this);
@@ -713,12 +696,6 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        // Only available in real mode (mock nodes don't have file paths)
-        if (serviceManager.getMode() !== 'real') {
-          this.uiService.showError('Open in Finder only available in real mode');
-          return;
-        }
-
         try {
           // Use git service to open the repository folder in Finder
           await this.gitService.openInFinder(currentNode.repoPath);
@@ -740,12 +717,6 @@ export default class InterBrainPlugin extends Plugin {
         const currentNode = store.selectedNode;
         if (!currentNode) {
           this.uiService.showError('No DreamNode selected');
-          return;
-        }
-
-        // Only available in real mode (mock nodes don't have file paths)
-        if (serviceManager.getMode() !== 'real') {
-          this.uiService.showError('Open in Terminal only available in real mode');
           return;
         }
 
@@ -895,43 +866,11 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Toggle between mock and real data mode
-    this.addCommand({
-      id: 'toggle-data-mode',
-      name: 'Toggle Data Mode (Mock ↔ Real)',
-      callback: async () => {
-        const currentMode = serviceManager.getMode();
-        const newMode = currentMode === 'mock' ? 'real' : 'mock';
-        
-        const loadingNotice = this.uiService.showLoading(`Switching to ${newMode} mode...`);
-        try {
-          await serviceManager.setMode(newMode);
-          this.uiService.showSuccess(`Switched to ${newMode} mode`);
-          
-          // Trigger UI refresh
-          const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-          if (dreamspaceLeaf && dreamspaceLeaf.view instanceof DreamspaceView) {
-            // The view will automatically re-render based on store changes
-            console.log(`Data mode switched to ${newMode} - UI should update`);
-          }
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Failed to switch mode');
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
-    // Scan vault for DreamNodes (real mode only)
+    // Scan vault for DreamNodes
     this.addCommand({
       id: 'scan-vault',
       name: 'Scan Vault for DreamNodes',
       callback: async () => {
-        if (serviceManager.getMode() !== 'real') {
-          this.uiService.showError('Vault scan only available in real mode');
-          return;
-        }
-
         const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
         try {
           const stats = await serviceManager.scanVault();
@@ -1013,101 +952,12 @@ export default class InterBrainPlugin extends Plugin {
       id: 'reset-data-store',
       name: 'Reset Data Store',
       callback: () => {
-        const mode = serviceManager.getMode();
-        const confirmMsg = mode === 'mock' 
-          ? 'Reset all mock data?' 
-          : 'Clear real data store? (Vault files will remain unchanged)';
-        
+        const confirmMsg = 'Clear data store? (Vault files will remain unchanged)';
+
         if (globalThis.confirm(confirmMsg)) {
           serviceManager.resetData();
-          this.uiService.showSuccess(`${mode} data store reset`);
+          this.uiService.showSuccess('Data store reset');
         }
-      }
-    });
-
-    // Generate mock relationships command
-    this.addCommand({
-      id: 'generate-mock-relationships',
-      name: 'Generate Mock Relationships (Bidirectional)',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.generateMockRelationships();
-        
-        const relationships = store.mockRelationshipData;
-        if (relationships) {
-          const nodeCount = relationships.size;
-          const connectionCount = Array.from(relationships.values()).reduce((sum, conns) => sum + conns.length, 0);
-          this.uiService.showSuccess(`Generated relationships for ${nodeCount} nodes with ${connectionCount} total connections`);
-        }
-      }
-    });
-    
-    // Clear mock relationships command
-    this.addCommand({
-      id: 'clear-mock-relationships',
-      name: 'Clear Mock Relationships',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.clearMockRelationships();
-        this.uiService.showSuccess('Mock relationships cleared - using default generation');
-      }
-    });
-    
-    // Mock data: Cycle through single node, fibonacci-12, fibonacci-50, and fibonacci-100
-    this.addCommand({
-      id: 'toggle-mock-data',
-      name: 'Toggle Mock Data (Single → 12 → 50 → 100)',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentConfig = store.mockDataConfig;
-        let newConfig: 'single-node' | 'fibonacci-12' | 'fibonacci-50' | 'fibonacci-100';
-        let displayName: string;
-        
-        switch (currentConfig) {
-          case 'single-node':
-            newConfig = 'fibonacci-12';
-            displayName = 'Fibonacci 12 Nodes';
-            break;
-          case 'fibonacci-12':
-            newConfig = 'fibonacci-50';
-            displayName = 'Fibonacci 50 Nodes';
-            break;
-          case 'fibonacci-50':
-            newConfig = 'fibonacci-100';
-            displayName = 'Fibonacci 100 Nodes';
-            break;
-          case 'fibonacci-100':
-          default:
-            newConfig = 'single-node';
-            displayName = 'Single Node';
-            break;
-        }
-        
-        store.setMockDataConfig(newConfig);
-        this.uiService.showSuccess(`Mock data: ${displayName}`);
-      }
-    });
-
-    // Test command: Select mock DreamNode
-    this.addCommand({
-      id: 'select-mock-dreamnode',
-      name: '[TEST] Select Mock DreamNode',
-      callback: () => {
-        const mockNode: DreamNode = {
-          id: 'test-123',
-          name: 'Test DreamNode',
-          type: 'dream' as const,
-          position: [0, 0, 0],
-          dreamTalkMedia: [],
-          dreamSongContent: [],
-          liminalWebConnections: [],
-          repoPath: '/test/path',
-          hasUnsavedChanges: false
-        };
-        const store = useInterBrainStore.getState();
-        store.setSelectedNode(mockNode);
-        this.uiService.showSuccess(`Selected: ${mockNode.name}`);
-        console.log('Mock node selected - Zustand state should be updated');
       }
     });
 
@@ -1375,16 +1225,6 @@ export default class InterBrainPlugin extends Plugin {
           
           if (service.refreshGitStatus) {
             const result = await service.refreshGitStatus();
-            
-            if (serviceManager.getMode() === 'mock') {
-              // In mock mode, also trigger UI update
-              if (typeof globalThis.CustomEvent !== 'undefined') {
-                globalThis.dispatchEvent(new globalThis.CustomEvent('mock-nodes-changed', {
-                  detail: { source: 'git-status-refresh' }
-                }));
-              }
-            }
-            
             this.uiService.showSuccess(`Git status refreshed: ${result.updated} updated, ${result.errors} errors`);
             console.log('Git status refresh result:', result);
           } else {
@@ -1521,34 +1361,11 @@ export default class InterBrainPlugin extends Plugin {
         }
         
         try {
-          // Get all nodes using same method as DreamspaceCanvas
+          // Get all nodes from store
           const store = useInterBrainStore.getState();
-          const dataMode = store.dataMode;
-          const mockDataConfig = store.mockDataConfig;
-          
-          let allNodes: DreamNode[] = [];
-          if (dataMode === 'mock') {
-            // Get static mock data with persistent relationships
-            const mockRelationshipData = store.mockRelationshipData;
-            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-            const service = serviceManager.getActive();
-            const dynamicNodes = await service.list();
-            allNodes = [...staticNodes, ...dynamicNodes];
-          } else {
-            // Real mode - get from store
-            const realNodes = store.realNodes;
-            allNodes = Array.from(realNodes.values()).map(data => data.node);
-          }
-          
-          // console.log('DEBUG: Total nodes found:', allNodes.length); // Debug removed for production
-          // console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig); // Debug removed for production
-          // console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ // Debug removed for production
-          //   id: n.id,
-          //   type: n.type,
-          //   connections: n.liminalWebConnections.length,
-          //   connectionIds: n.liminalWebConnections.slice(0, 2)
-          // })));
-          
+          const realNodes = store.realNodes;
+          const allNodes = Array.from(realNodes.values()).map(data => data.node);
+
           // Build relationship graph
           const graph = buildRelationshipGraph(allNodes);
           
@@ -1586,22 +1403,10 @@ export default class InterBrainPlugin extends Plugin {
         }
         
         try {
-          // Get all nodes using same method as DreamspaceCanvas
-          const dataMode = store.dataMode;
-          const mockDataConfig = store.mockDataConfig;
-          
-          let allNodes: DreamNode[] = [];
-          if (dataMode === 'mock') {
-            const mockRelationshipData = store.mockRelationshipData;
-            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-            const service = serviceManager.getActive();
-            const dynamicNodes = await service.list();
-            allNodes = [...staticNodes, ...dynamicNodes];
-          } else {
-            const realNodes = store.realNodes;
-            allNodes = Array.from(realNodes.values()).map(data => data.node);
-          }
-          
+          // Get all nodes from store
+          const realNodes = store.realNodes;
+          const allNodes = Array.from(realNodes.values()).map(data => data.node);
+
           // Build relationship graph
           const graph = buildRelationshipGraph(allNodes);
           
@@ -1642,99 +1447,6 @@ export default class InterBrainPlugin extends Plugin {
         } catch (error) {
           console.error('Position calculation error:', error);
           this.uiService.showError(error instanceof Error ? error.message : 'Failed to calculate positions');
-        }
-      }
-    });
-
-    // Test Ring Layout with Dense Relationships
-    this.addCommand({
-      id: 'test-ring-layout-dense',
-      name: 'Test: Ring Layout with Dense Relationships (50 nodes)',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        
-        // Switch to mock mode with dense data
-        store.setDataMode('mock');
-        store.setMockDataConfig('fibonacci-50');
-        
-        // Wait a bit for state to update
-        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
-        
-        // Auto-select first dreamer node for testing
-        const mockNodes = getMockDataForConfig('fibonacci-50');
-        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
-        
-        if (firstDreamer) {
-          store.setSelectedNode(firstDreamer);
-          this.uiService.showSuccess(`Set up dense relationship test (50 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
-          console.log(`\n=== Ring Layout Test: Dense Relationships ===`);
-          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
-          console.log(`Total nodes: 50 with enhanced relationships (10-30 per node)`);
-          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
-        } else {
-          this.uiService.showError('No dreamer nodes found in mock data');
-        }
-      }
-    });
-
-    // Test Ring Layout with Medium Relationships  
-    this.addCommand({
-      id: 'test-ring-layout-medium',
-      name: 'Test: Ring Layout with Medium Relationships (12 nodes)',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        
-        // Switch to mock mode with medium data
-        store.setDataMode('mock');
-        store.setMockDataConfig('fibonacci-12');
-        
-        // Wait a bit for state to update
-        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
-        
-        // Auto-select first dreamer node for testing
-        const mockNodes = getMockDataForConfig('fibonacci-12');
-        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
-        
-        if (firstDreamer) {
-          store.setSelectedNode(firstDreamer);
-          this.uiService.showSuccess(`Set up medium relationship test (12 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
-          console.log(`\n=== Ring Layout Test: Medium Relationships ===`);
-          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
-          console.log(`Total nodes: 12 with enhanced relationships (5-15 per node)`);
-          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
-        } else {
-          this.uiService.showError('No dreamer nodes found in mock data');
-        }
-      }
-    });
-
-    // Test Ring Layout with Sparse Relationships
-    this.addCommand({
-      id: 'test-ring-layout-sparse',
-      name: 'Test: Ring Layout with Sparse Relationships (100 nodes)',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        
-        // Switch to mock mode with sparse data (many nodes, but still 10-30 relationships each)
-        store.setDataMode('mock');
-        store.setMockDataConfig('fibonacci-100');
-        
-        // Wait a bit for state to update
-        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
-        
-        // Auto-select first dreamer node for testing
-        const mockNodes = getMockDataForConfig('fibonacci-100');
-        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
-        
-        if (firstDreamer) {
-          store.setSelectedNode(firstDreamer);
-          this.uiService.showSuccess(`Set up sparse relationship test (100 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
-          console.log(`\n=== Ring Layout Test: Sparse Relationships ===`);
-          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
-          console.log(`Total nodes: 100 with enhanced relationships (10-30 per node)`);
-          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
-        } else {
-          this.uiService.showError('No dreamer nodes found in mock data');
         }
       }
     });
@@ -2330,23 +2042,8 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
   private async getAllAvailableNodes(): Promise<DreamNode[]> {
     try {
       const store = useInterBrainStore.getState();
-      const dataMode = store.dataMode;
-      const mockDataConfig = store.mockDataConfig;
-      
-      let allNodes: DreamNode[] = [];
-      if (dataMode === 'mock') {
-        // Get static mock data with persistent relationships
-        const mockRelationshipData = store.mockRelationshipData;
-        const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-        const service = serviceManager.getActive();
-        const dynamicNodes = await service.list();
-        allNodes = [...staticNodes, ...dynamicNodes];
-      } else {
-        // Real mode - get from store
-        const realNodes = store.realNodes;
-        allNodes = Array.from(realNodes.values()).map(data => data.node);
-      }
-      
+      const realNodes = store.realNodes;
+      const allNodes = Array.from(realNodes.values()).map(data => data.node);
       return allNodes;
     } catch (error) {
       console.error('Failed to get available nodes:', error);

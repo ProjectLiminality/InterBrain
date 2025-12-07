@@ -10,7 +10,6 @@ import { getRealtimeTranscriptionService } from '../realtime-transcription';
 import { getAudioRecordingService } from './services/audio-recording-service';
 import { getPerspectiveService } from './services/perspective-service';
 import { getAudioTrimmingService } from './services/audio-trimming-service';
-import type { DreamNode } from '../../types/dreamnode';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -437,82 +436,6 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
       } catch (error) {
         console.error('Failed to exit conversation mode:', error);
         uiService.showError('Failed to exit conversation mode');
-      }
-    }
-  });
-
-  // Mock Email Export (Testing)
-  plugin.addCommand({
-    id: 'mock-email-export',
-    name: 'Mock Email Export (Testing)',
-    callback: async () => {
-      try {
-        console.log('📧 [MockEmail] Starting mock email export...');
-
-        // Create mock conversation partner: Bob with his DID
-        const mockPartner: DreamNode = {
-          id: 'bob-dreamer-uuid', // Mock UUID for Bob
-          name: 'Bob',
-          type: 'dreamer' as const,
-          repoPath: 'Bob', // Relative path within vault (adjust if different)
-          did: 'did:key:z6MksAEMTumQbRK1dvFqt7Xt5YHMRPsmhhS2jfhxzbsDUWX6', // Bob's DID
-          liminalWebConnections: [],
-          position: [0, 0, 0],
-          dreamTalkMedia: [],
-          dreamSongContent: [],
-          hasUnsavedChanges: false
-        };
-
-        const now = new Date();
-        const startTime = new Date(now.getTime() - 15 * 60 * 1000); // 15 minutes ago (short call)
-        const endTime = now;
-
-        // Mock invocations: Circle and Square (fresh UUIDs from vault)
-        const mockInvocations = [
-          {
-            dreamUUID: 'f472dbb2-517d-41f9-8043-7fabc6decd4e', // Circle UUID (fresh)
-            nodeName: 'Circle',
-            timestamp: new Date(startTime.getTime() + 5 * 60 * 1000),
-            searchQuery: ''
-          },
-          {
-            dreamUUID: '7016a06d-35f5-4c16-a1d0-064def8a87f5', // Square UUID (fresh)
-            nodeName: 'Square',
-            timestamp: new Date(startTime.getTime() + 10 * 60 * 1000),
-            searchQuery: ''
-          }
-        ];
-
-        const mockSummary = `Quick call with Bob about geometric DreamNodes.
-
-Key points discussed:
-- Circle's properties and applications
-- Square's relationship to other shapes
-- Potential for collaboration on shape-based metaphors
-
-Short but productive conversation!`;
-
-        console.log('📧 [MockEmail] Mock data created, generating email...');
-        console.log(`📧 [MockEmail] Conversation partner: ${mockPartner.name} (DID: ${mockPartner.did})`);
-        console.log(`📧 [MockEmail] Invoked nodes: ${mockInvocations.map(inv => inv.nodeName).join(', ')}`);
-
-        // Use the email export service
-        const emailService = getEmailExportService();
-        await emailService.exportToEmail(
-          mockPartner,
-          startTime,
-          endTime,
-          mockInvocations,
-          mockSummary,
-          'bob@example.com' // Bob's email
-        );
-
-        console.log('✅ [MockEmail] Mock email export completed successfully');
-        uiService.showSuccess('Mock email draft created - check Apple Mail!');
-
-      } catch (error) {
-        console.error('❌ [MockEmail] Failed to create mock email:', error);
-        uiService.showError(`Mock email export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   });

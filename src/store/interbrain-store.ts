@@ -3,7 +3,6 @@ import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { DreamSongData } from '../types/dreamsong';
 import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
-import { MockDataConfig } from '../mock/dreamnode-mock-data';
 import {
   OllamaConfigSlice,
   createOllamaConfigSlice,
@@ -172,10 +171,6 @@ export interface DreamSongCacheEntry {
 // Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
 
 export interface InterBrainState extends OllamaConfigSlice {
-  // Data mode toggle
-  dataMode: 'mock' | 'real';
-  setDataMode: (mode: 'mock' | 'real') => void;
-  
   // Real nodes storage (persisted)
   realNodes: Map<string, RealNodeData>;
   setRealNodes: (nodes: Map<string, RealNodeData>) => void;
@@ -257,16 +252,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   // Debug flying camera controls toggle
   debugFlyingControls: boolean;
   setDebugFlyingControls: (enabled: boolean) => void;
-  
-  // Mock data configuration
-  mockDataConfig: MockDataConfig;
-  setMockDataConfig: (config: MockDataConfig) => void;
-  
-  // Persistent mock relationship data
-  mockRelationshipData: Map<string, string[]> | null;
-  generateMockRelationships: () => void;
-  clearMockRelationships: () => void;
-  
+
   // Drag state management (prevents hover interference during sphere rotation)
   isDragging: boolean;
   setIsDragging: (dragging: boolean) => void;
@@ -364,7 +350,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   persist(
     (set, get) => ({
   // Initial state
-  dataMode: 'real' as const, // Start in real mode by default
   realNodes: new Map<string, RealNodeData>(),
   
   // Initialize Ollama config slice
@@ -412,13 +397,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // Debug flying camera controls initial state (off by default)
   debugFlyingControls: false,
-  
-  // Mock data configuration initial state (single node for testing)
-  mockDataConfig: 'fibonacci-100',
-  
-  // Persistent mock relationship data initial state
-  mockRelationshipData: null,
-  
+
   // Drag state initial state (not dragging)
   isDragging: false,
   
@@ -489,7 +468,6 @@ export const useInterBrainStore = create<InterBrainState>()(
   },
 
   // Actions
-  setDataMode: (mode) => set({ dataMode: mode }),
   setRealNodes: (nodes) => set({ realNodes: nodes }),
   updateRealNode: (id, data) => set(state => {
     const newMap = new Map(state.realNodes);
@@ -762,104 +740,7 @@ export const useInterBrainStore = create<InterBrainState>()(
   
   // Debug flying camera controls actions
   setDebugFlyingControls: (enabled) => set({ debugFlyingControls: enabled }),
-  
-  // Mock data configuration actions
-  setMockDataConfig: (config) => set({ mockDataConfig: config }),
-  
-  // Mock relationship data actions
-  generateMockRelationships: () => set(state => {
-    const { mockDataConfig } = state;
-    const nodeCount = mockDataConfig === 'single-node' ? 1 : 
-                     mockDataConfig === 'fibonacci-12' ? 12 :
-                     mockDataConfig === 'fibonacci-50' ? 50 : 100;
-    
-    const relationships = new Map<string, string[]>();
-    
-    // First pass: Initialize all nodes in the map
-    for (let i = 0; i < nodeCount; i++) {
-      const nodeType = i % 3 !== 0 ? 'dream' : 'dreamer';
-      const nodeId = `mock-${nodeType}-${i}`;
-      relationships.set(nodeId, []);
-    }
-    
-    // Second pass: Generate bidirectional relationships between Dreams and Dreamers
-    for (let i = 0; i < nodeCount; i++) {
-      const sourceType = i % 3 !== 0 ? 'dream' : 'dreamer';
-      const sourceId = `mock-${sourceType}-${i}`;
-      
-      // Use deterministic pattern for consistent relationships with more variety
-      const stepSizes = [1, 2, 3, 5, 7, 11, 13, 17, 19];
-      
-      // Create more diversity in connection counts based on node index
-      const baseConnections = 2;
-      const variabilityFactor = ((i * 13) % 17) / 17; // 0 to 1, varies by node
-      const maxConnections = Math.min(
-        Math.floor(nodeCount * 0.8), // Up to 80% of opposite-type nodes
-        baseConnections + Math.floor(variabilityFactor * Math.min(25, nodeCount - baseConnections))
-      );
-      
-      for (let j = 0; j < Math.min(stepSizes.length, maxConnections); j++) {
-        const step = stepSizes[j];
-        const targetIndex = (i + step) % nodeCount;
-        const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
-        
-        // Only connect Dreams to Dreamers and vice versa
-        if (sourceType !== targetType) {
-          const targetId = `mock-${targetType}-${targetIndex}`;
-          
-          // Add forward connection if not already present
-          const sourceConnections = relationships.get(sourceId)!;
-          if (!sourceConnections.includes(targetId)) {
-            sourceConnections.push(targetId);
-          }
-          
-          // Add reverse connection if not already present
-          const targetConnections = relationships.get(targetId)!;
-          if (!targetConnections.includes(sourceId)) {
-            targetConnections.push(sourceId);
-          }
-        }
-      }
-      
-      // Ensure at least one connection if possible
-      const sourceConnections = relationships.get(sourceId)!;
-      if (sourceConnections.length === 0 && nodeCount > 1) {
-        for (let offset = 1; offset < nodeCount; offset++) {
-          const targetIndex = (i + offset) % nodeCount;
-          const targetType = targetIndex % 3 !== 0 ? 'dream' : 'dreamer';
-          
-          if (sourceType !== targetType) {
-            const targetId = `mock-${targetType}-${targetIndex}`;
-            
-            // Add forward connection
-            sourceConnections.push(targetId);
-            
-            // Add reverse connection
-            const targetConnections = relationships.get(targetId)!;
-            if (!targetConnections.includes(sourceId)) {
-              targetConnections.push(sourceId);
-            }
-            break;
-          }
-        }
-      }
-    }
-    
-    // Verify bidirectionality (basic check)
-    relationships.forEach((connections, sourceId) => {
-      connections.forEach(targetId => {
-        const targetConnections = relationships.get(targetId);
-        if (!targetConnections || !targetConnections.includes(sourceId)) {
-          // Skip tracking errors for now - just ensure basic structure
-        }
-      });
-    });
-    
-    return { mockRelationshipData: relationships };
-  }),
-  
-  clearMockRelationships: () => set({ mockRelationshipData: null }),
-  
+
   // Drag state actions
   setIsDragging: (dragging) => set({ isDragging: dragging }),
   
@@ -1509,13 +1390,11 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage', // Storage key
-      // Only persist real nodes data, data mode, vector data, mock relationships, constellation data, and Ollama config
+      // Only persist vector data, constellation data, and Ollama config
       partialize: (state) => ({
-        dataMode: state.dataMode,
         // Don't persist realNodes at all - they reload from vault on app start
         // This avoids localStorage quota issues entirely
         realNodes: [],
-        mockRelationshipData: state.mockRelationshipData ? mapToArray(state.mockRelationshipData) : null,
         constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions || state.constellationData.nodeMetadata) ? {
           ...state.constellationData,
           relationshipGraph: state.constellationData.relationshipGraph ?
@@ -1530,9 +1409,7 @@ export const useInterBrainStore = create<InterBrainState>()(
       // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as {
-          dataMode: 'mock' | 'real';
           realNodes: [string, RealNodeData][];
-          mockRelationshipData: [string, string[]][] | null;
           constellationData?: {
             relationshipGraph: SerializableDreamSongGraph | null;
             lastScanTimestamp: number | null;
@@ -1576,9 +1453,7 @@ export const useInterBrainStore = create<InterBrainState>()(
 
         return {
           ...current,
-          dataMode: persistedData.dataMode || 'mock',
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
-          mockRelationshipData: persistedData.mockRelationshipData ? arrayToMap(persistedData.mockRelationshipData) : null,
           constellationData,
           ...restoreOllamaPersistenceData(persistedData),
         };

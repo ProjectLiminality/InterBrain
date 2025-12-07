@@ -50,13 +50,6 @@ export class ConstellationCommands {
       name: 'Apply Constellation Layout',
       callback: () => this.applyConstellationLayout()
     });
-
-    // Debug: Check constellation data in store
-    plugin.addCommand({
-      id: 'debug-constellation-data',
-      name: 'Debug: Check Constellation Data in Store',
-      callback: () => this.debugConstellationData()
-    });
   }
 
   /**
@@ -317,53 +310,6 @@ export class ConstellationCommands {
 
     console.log('✓ [Relationship Diff] No changes detected');
     return false;
-  }
-
-  /**
-   * Debug: Check what constellation data is in the store
-   */
-  private async debugConstellationData(): Promise<void> {
-    console.log('🔍 [Constellation Debug] Checking store constellation data...');
-    const store = useInterBrainStore.getState();
-
-    const { constellationData } = store;
-    const { relationshipGraph, lastScanTimestamp, isScanning, positions, lastLayoutTimestamp, nodeMetadata } = constellationData;
-
-    console.log('📊 [Constellation Debug] Constellation Data State:');
-    console.log('  - relationshipGraph:', relationshipGraph ? {
-      nodesCount: relationshipGraph.nodes.size,
-      edgesCount: relationshipGraph.edges.length,
-      metadata: relationshipGraph.metadata
-    } : 'NULL');
-    console.log('  - lastScanTimestamp:', lastScanTimestamp ? new Date(lastScanTimestamp).toISOString() : 'NULL');
-    console.log('  - isScanning:', isScanning);
-    console.log('  - positions:', positions ? `Map with ${positions.size} entries` : 'NULL');
-    console.log('  - lastLayoutTimestamp:', lastLayoutTimestamp ? new Date(lastLayoutTimestamp).toISOString() : 'NULL');
-    console.log('  - nodeMetadata:', nodeMetadata ? `Map with ${nodeMetadata.size} entries` : 'NULL');
-
-    if (relationshipGraph && relationshipGraph.edges.length > 0) {
-      console.log('✅ [Constellation Debug] Relationship graph EXISTS with edges!');
-      console.log('   Sample edges (first 3):');
-      relationshipGraph.edges.slice(0, 3).forEach((edge, i) => {
-        console.log(`     ${i + 1}. ${edge.source} → ${edge.target} (${edge.dreamSongId})`);
-      });
-
-      this.uiService.showSuccess(
-        `✅ Constellation data found:\n\n` +
-        `• ${relationshipGraph.nodes.size} nodes\n` +
-        `• ${relationshipGraph.edges.length} edges\n` +
-        `• Last scan: ${lastScanTimestamp ? new Date(lastScanTimestamp).toLocaleString() : 'Never'}\n\n` +
-        `Check console for details`,
-        8000
-      );
-    } else {
-      console.warn('⚠️ [Constellation Debug] No relationship graph data found!');
-      this.uiService.showWarning(
-        `⚠️ No constellation data in store!\n\n` +
-        `Run "Scan Vault for DreamSong Relationships" to populate data.`,
-        5000
-      );
-    }
   }
 
   /**

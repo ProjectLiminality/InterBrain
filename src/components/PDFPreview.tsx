@@ -68,7 +68,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
         const base64Match = src.match(/^data:[^;]+;base64,(.+)$/);
         if (base64Match) {
           const base64 = base64Match[1];
-          const binaryString = atob(base64);
+          const binaryString = globalThis.atob(base64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
