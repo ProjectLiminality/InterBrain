@@ -214,8 +214,8 @@ export class ConstellationCommands {
         // Find most connected nodes
         const nodeArray = Array.from(nodes.values());
         const topNodes = nodeArray
-          .filter(node => !node.isStandalone)
-          .sort((a, b) => (b.incomingReferences + b.outgoingDreamSongs) - (a.incomingReferences + a.outgoingDreamSongs))
+          .filter((node: any) => !node.isStandalone)
+          .sort((a: any, b: any) => (b.incomingReferences + b.outgoingDreamSongs) - (a.incomingReferences + a.outgoingDreamSongs))
           .slice(0, 5);
 
         const statsMessage = [
@@ -234,7 +234,7 @@ export class ConstellationCommands {
           `• ${Math.round(result.stats.dreamSongsParsed / result.stats.dreamSongsFound * 100)}% successfully parsed`,
           ``,
           topNodes.length > 0 ? `🔗 Most Connected Nodes:` : '',
-          ...topNodes.map(node =>
+          ...topNodes.map((node: any) =>
             `• ${node.title}: ${node.incomingReferences} incoming, ${node.outgoingDreamSongs} outgoing`
           )
         ].filter(line => line !== '').join('\n');

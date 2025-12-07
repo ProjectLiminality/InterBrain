@@ -72,7 +72,7 @@ async function updateSubmodules(
     uiService.showSuccess(`Updated ${submoduleUpdates.length} submodule(s) and committed changes`);
 
     // Trigger vault rescan to update UI
-    const { serviceManager } = await import('../services/service-manager');
+    const { serviceManager } = await import('../core/services/service-manager');
     await serviceManager.scanVault();
   } catch (error) {
     console.error('[SubmoduleUpdate] Failed to commit submodule updates:', error);
@@ -413,7 +413,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                   console.log(`[UpdatePreview] Found ${beacons.length} coherence beacon(s)`);
 
                   // Import modal dynamically to avoid circular dependencies
-                  const { CoherenceBeaconModal } = await import('../ui/coherence-beacon-modal');
+                  const { CoherenceBeaconModal } = await import('../core/ui/coherence-beacon-modal');
 
                   // Process each beacon sequentially
                   for (const beacon of beacons) {
@@ -582,7 +582,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function generateUpdatePreviewMarkdown(
   nodeName: string,
-  updateStatus: import('../services/git-service').FetchResult,
+  updateStatus: import('../core/services/git-service').FetchResult,
   summary: import('../services/update-summary-service').UpdateSummary
 ): string {
   const { commits, filesChanged, insertions, deletions } = updateStatus;
@@ -610,7 +610,7 @@ ${summary.technicalImprovements}
 
 ## Commit History
 
-${commits.map((commit, i) => {
+${commits.map((commit: any, i: number) => {
   const date = new Date(commit.timestamp * 1000).toLocaleDateString();
   return `### ${i + 1}. ${commit.subject}
 

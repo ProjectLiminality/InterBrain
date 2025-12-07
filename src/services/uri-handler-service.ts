@@ -1,7 +1,7 @@
 import { App, Notice, Plugin } from 'obsidian';
 import { RadicleService } from './radicle-service';
-import { GitDreamNodeService } from './git-dreamnode-service';
-import { DreamSongRelationshipService } from './dreamsong-relationship-service';
+import { GitDreamNodeService } from '../core/services/git-dreamnode-service';
+import { DreamSongRelationshipService } from '../features/dreamweaving/services/dreamsong-relationship-service';
 import { useInterBrainStore } from '../core/store/interbrain-store';
 import { DreamNode } from '../core/types/dreamnode';
 
@@ -501,7 +501,7 @@ export class URIHandlerService {
 	 * - Mixed: "Thunderstorm-Generator-UPDATED" → "Thunderstorm Generator Updated"
 	 */
 	private async normalizeRepoNameToTitle(repoName: string): Promise<string> {
-		const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+		const { isPascalCase, pascalCaseToTitle } = await import('../core/utils/title-sanitization');
 
 		// If repo name contains hyphens, underscores, or periods as separators
 		if (/[-_.]+/.test(repoName)) {
@@ -536,8 +536,8 @@ export class URIHandlerService {
 	 */
 	private async ensureRadicleNodeRunning(): Promise<string | null> {
 		// Import PassphraseManager for consistent passphrase handling
-		const { PassphraseManager } = await import('./passphrase-manager');
-		const { UIService } = await import('./ui-service');
+		const { PassphraseManager } = await import('../core/services/passphrase-manager');
+		const { UIService } = await import('../core/services/ui-service');
 
 		// Create temporary instances for passphrase management
 		const uiService = new UIService(this.app);

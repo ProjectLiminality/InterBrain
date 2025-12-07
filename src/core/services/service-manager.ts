@@ -1,5 +1,4 @@
 import { DreamNode } from '../types/dreamnode';
-import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { VaultService } from './vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';

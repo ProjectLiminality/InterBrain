@@ -1,7 +1,7 @@
 import { Notice, Plugin } from 'obsidian';
 import { DreamNode } from '../core/types/dreamnode';
 import { RadicleService } from './radicle-service';
-import { GitDreamNodeService } from './git-dreamnode-service';
+import { GitDreamNodeService } from '../core/services/git-dreamnode-service';
 
 /**
  * Radicle Batch Initialization Service

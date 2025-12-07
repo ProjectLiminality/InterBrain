@@ -11,7 +11,7 @@ import { DreamSongBlock } from '../types/dreamsong';
 import { DreamNode } from '../types/dreamnode';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
-import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../../features/dreamweaving/dreamsong';
+import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../../features/dreamweaving/services/dreamsong';
 import { serviceManager } from '../services/service-manager';
 
 interface UseDreamSongDataOptions {

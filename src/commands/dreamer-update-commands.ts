@@ -83,7 +83,7 @@ async function checkAllUpdatesFromDreamer(plugin: Plugin): Promise<void> {
           }
         } else {
           // Use Git fetch for GitHub or other remotes
-          const { GitService } = await import('../services/git-service');
+          const { GitService } = await import('../core/services/git-service');
           const gitService = new GitService((plugin as any).app);
           const fetchResult = await gitService.fetchUpdates(dream.repoPath);
           if (fetchResult.hasUpdates) {

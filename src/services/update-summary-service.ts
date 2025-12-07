@@ -6,7 +6,7 @@
  */
 
 import { ClaudeProvider, LLMMessage } from '../features/conversational-copilot/services/llm-provider';
-import { FetchResult } from './git-service';
+import { FetchResult } from '../core/services/git-service';
 
 export interface UpdateSummary {
   userFacingChanges: string;
@@ -69,7 +69,7 @@ export class UpdateSummaryService {
    * Build the prompt for LLM
    */
   private buildPrompt(fetchResult: FetchResult): string {
-    const commitList = fetchResult.commits.map((commit, i) =>
+    const commitList = fetchResult.commits.map((commit: any, i: number) =>
       `${i + 1}. ${commit.subject}${commit.body ? '\n   ' + commit.body : ''}`
     ).join('\n\n');
 
@@ -122,16 +122,16 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
     const { commits, filesChanged, insertions, deletions } = fetchResult;
 
     // Categorize commits by keywords
-    const features = commits.filter(c =>
+    const features = commits.filter((c: any) =>
       /\b(add|feature|new|implement|create)\b/i.test(c.subject)
     );
-    const fixes = commits.filter(c =>
+    const fixes = commits.filter((c: any) =>
       /\b(fix|bug|issue|resolve|correct)\b/i.test(c.subject)
     );
-    const improvements = commits.filter(c =>
+    const improvements = commits.filter((c: any) =>
       /\b(improve|enhance|update|refactor|optimize|clean)\b/i.test(c.subject)
     );
-    const docs = commits.filter(c =>
+    const docs = commits.filter((c: any) =>
       /\b(doc|readme|comment)\b/i.test(c.subject)
     );
 
@@ -139,7 +139,7 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
     const userFacingParts: string[] = [];
 
     if (features.length > 0) {
-      const featureList = features.slice(0, 3).map(c =>
+      const featureList = features.slice(0, 3).map((c: any) =>
         c.subject.replace(/^(add|feature|new|implement|create)[:\s]*/i, '').trim()
       );
       if (features.length <= 2) {
@@ -150,7 +150,7 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
     }
 
     if (fixes.length > 0) {
-      const fixList = fixes.slice(0, 2).map(c =>
+      const fixList = fixes.slice(0, 2).map((c: any) =>
         c.subject.replace(/^(fix|bug|issue|resolve|correct)[:\s]*/i, '').trim()
       );
       if (fixes.length <= 2) {
@@ -161,7 +161,7 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
     }
 
     if (improvements.length > 0 && userFacingParts.length < 2) {
-      const improvementList = improvements.slice(0, 2).map(c =>
+      const improvementList = improvements.slice(0, 2).map((c: any) =>
         c.subject.replace(/^(improve|enhance|update|refactor|optimize|clean)[:\s]*/i, '').trim()
       );
       userFacingParts.push(`Improved: ${improvementList[0]}`);
@@ -193,7 +193,7 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
 
     // Determine overall impact
     const isMajor = commits.length > 10 || filesChanged > 20;
-    const hasCriticalFixes = fixes.some(c =>
+    const hasCriticalFixes = fixes.some((c: any) =>
       /\b(critical|urgent|security|crash|data loss)\b/i.test(c.subject + c.body)
     );
 

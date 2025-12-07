@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
-import { getMockDataForConfig } from '../mock/dreamnode-mock-data';
 import DreamNode3D, { DreamNode3DRef } from './DreamNode3D';
 import Star3D from './Star3D';
 import SphereRotationControls from './SphereRotationControls';
@@ -44,46 +43,9 @@ export default function DreamspaceCanvas() {
     }
   }, []); // Run once on mount
   
-  // Get data mode and mock data configuration from store
-  const dataMode = useInterBrainStore(state => state.dataMode);
-  const mockDataConfig = useInterBrainStore(state => state.mockDataConfig);
-  const mockRelationshipData = useInterBrainStore(state => state.mockRelationshipData);
   const realNodes = useInterBrainStore(state => state.realNodes);
-  
-  // State for dynamic nodes from mock service
-  const [dynamicNodes, setDynamicNodes] = useState<DreamNode[]>([]);
-  
-  // Effect to load initial mock nodes and listen for changes
-  useEffect(() => {
-    if (dataMode === 'mock') {
-      // Load initial nodes
-      const loadMockNodes = async () => {
-        const service = serviceManager.getActive();
-        const nodes = await service.list();
-        setDynamicNodes(nodes);
-      };
-      loadMockNodes();
-      
-      // Listen for mock node changes
-      const handleMockNodesChanged = async () => {
-        console.log('DreamspaceCanvas: Mock nodes changed, refreshing...');
-        const service = serviceManager.getActive();
-        const nodes = await service.list();
-        setDynamicNodes(nodes);
-      };
-      
-      if (typeof globalThis.addEventListener !== 'undefined') {
-        globalThis.addEventListener('mock-nodes-changed', handleMockNodesChanged);
-        
-        return () => {
-          globalThis.removeEventListener('mock-nodes-changed', handleMockNodesChanged);
-        };
-      }
-    }
-    
-    // Always return a cleanup function (even if it does nothing)
-    return () => {};
-  }, [dataMode]);
+
+  // No need to load initial nodes - they come from store.realNodes
 
   // Single, centralized escape key handler with debouncing for unified spatialLayout state
   useEffect(() => {
@@ -179,16 +141,8 @@ export default function DreamspaceCanvas() {
   const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
   
-  // Get nodes based on data mode
-  let dreamNodes: DreamNode[] = [];
-  if (dataMode === 'mock') {
-    // Combine static mock data with dynamic service nodes
-    const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-    dreamNodes = [...staticNodes, ...dynamicNodes];
-  } else {
-    // Real mode: use realNodes from store
-    dreamNodes = Array.from(realNodes.values()).map(data => data.node);
-  }
+  // Get nodes from store
+  const dreamNodes: DreamNode[] = Array.from(realNodes.values()).map(data => data.node);
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
@@ -454,29 +408,7 @@ export default function DreamspaceCanvas() {
       }
     };
   }, []);
-  
-  // Load dynamic nodes from service - only for mock mode
-  useEffect(() => {
-    const loadDynamicNodes = async () => {
-      // Only load dynamic nodes in mock mode
-      if (dataMode === 'mock') {
-        try {
-          const service = serviceManager.getActive();
-          const nodes = await service.list();
-          setDynamicNodes(nodes);
-        } catch (error) {
-          console.error('Failed to load dynamic nodes:', error);
-          uiService.showError(error instanceof Error ? error.message : 'Failed to load dynamic nodes');
-        }
-      } else {
-        // Clear dynamic nodes in real mode (using store data instead)
-        setDynamicNodes([]);
-      }
-    };
-    
-    loadDynamicNodes();
-  }, [dataMode]); // Re-run when data mode changes
-  
+
   // React to spatial layout changes and trigger appropriate orchestrator methods
   useEffect(() => {
     if (!spatialOrchestratorRef.current) return;
@@ -851,7 +783,7 @@ export default function DreamspaceCanvas() {
 
       // CRITICAL: Record invocation for conversation export
       try {
-        const { getConversationRecordingService } = await import('../features/conversational-copilot/services/conversation-recording-service');
+        const { getConversationRecordingService } = await import('../../features/conversational-copilot/services/conversation-recording-service');
         const recordingService = getConversationRecordingService();
         console.log(`🎙️ [Copilot-Click] About to record invocation for: ${node.name}`);
         await recordingService.recordInvocation(node);

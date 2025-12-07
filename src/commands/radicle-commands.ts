@@ -248,7 +248,7 @@ export function registerRadicleCommands(
           const radicleId = await radicleService.getRadicleId(fullRepoPath, passphrase || undefined);
           if (radicleId) {
             console.log(`RadicleCommands: Writing Radicle ID to .udd: ${radicleId}`);
-            const UDDService = (await import('../services/udd-service')).UDDService;
+            const UDDService = (await import('../core/services/udd-service')).UDDService;
             const udd = await UDDService.readUDD(fullRepoPath);
             udd.radicleId = radicleId;
             await UDDService.writeUDD(fullRepoPath, udd);

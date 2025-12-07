@@ -381,9 +381,6 @@ export default class InterBrainPlugin extends Plugin {
     // Register constellation commands (DreamSong relationship analysis)
     this.constellationCommands.registerCommands(this);
 
-    // Register radial button debug commands
-    this.radialButtonCommands.registerCommands(this);
-
     // Register link file commands (.link file support)
     registerLinkFileCommands(this, this.uiService);
 
@@ -876,7 +873,7 @@ export default class InterBrainPlugin extends Plugin {
 
             // Trigger two-phase media loading after vault scan
             try {
-              const { getMediaLoadingService } = await import('./services/media-loading-service');
+              const { getMediaLoadingService } = await import('./core/services/media-loading-service');
               const mediaLoadingService = getMediaLoadingService();
               mediaLoadingService.loadAllNodesByDistance();
             } catch (error) {
