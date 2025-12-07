@@ -5,7 +5,8 @@ import { vi } from 'vitest'
 global.window = global.window || {}
 
 // Mock the Notice class
-global.Notice = vi.fn().mockImplementation(() => ({
+const g = globalThis as Record<string, unknown>
+g.Notice = vi.fn().mockImplementation(() => ({
   hide: vi.fn(),
 }))
 

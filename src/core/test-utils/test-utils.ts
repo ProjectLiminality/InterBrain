@@ -1,12 +1,16 @@
 import { vi } from 'vitest'
-import type { DreamNode } from '../../src/services/dreamnode-service'
+import type { DreamNode } from '../types/dreamnode'
 
 // Test data factories
 export const createMockDreamNode = (overrides: Partial<DreamNode> = {}): DreamNode => ({
   id: 'test-123',
   name: 'Test DreamNode',
   type: 'dream',
-  path: '/test/path',
+  position: [0, 0, 0],
+  repoPath: '/test/path',
+  dreamTalkMedia: [],
+  dreamSongContent: [],
+  liminalWebConnections: [],
   hasUnsavedChanges: false,
   ...overrides,
 })
@@ -15,7 +19,11 @@ export const createMockDreamerNode = (overrides: Partial<DreamNode> = {}): Dream
   id: 'dreamer-456',
   name: 'Test Dreamer',
   type: 'dreamer',
-  path: '/dreamers/test-dreamer',
+  position: [0, 0, 0],
+  repoPath: '/dreamers/test-dreamer',
+  dreamTalkMedia: [],
+  dreamSongContent: [],
+  liminalWebConnections: [],
   hasUnsavedChanges: false,
   ...overrides,
 })
@@ -45,7 +53,7 @@ export const createMockVaultService = () => ({
 
 // Store test utilities
 export const resetStore = async () => {
-  const { useInterBrainStore } = await import('../../src/core/store/interbrain-store')
+  const { useInterBrainStore } = await import('../store/interbrain-store')
   const state = useInterBrainStore.getState()
   state.setSelectedNode(null)
   state.setSearchResults([])

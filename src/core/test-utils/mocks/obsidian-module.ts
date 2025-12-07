@@ -69,6 +69,7 @@ export class Plugin {
 }
 
 // Set globals for backward compatibility
-global.Notice = Notice
-global.TFile = TFile
-global.TFolder = TFolder
+const g = globalThis as Record<string, unknown>
+g.Notice = Notice
+g.TFile = TFile
+g.TFolder = TFolder

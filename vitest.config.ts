@@ -6,13 +6,13 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
+    setupFiles: ['./src/core/test-utils/setup.ts'],
     globals: true,
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
-      'obsidian': resolve(__dirname, 'tests/mocks/obsidian-module.ts'),
+      'obsidian': resolve(__dirname, 'src/core/test-utils/mocks/obsidian-module.ts'),
     },
   },
 })
