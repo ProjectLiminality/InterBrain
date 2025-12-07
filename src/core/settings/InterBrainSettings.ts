@@ -334,13 +334,14 @@ export class InterBrainSettingTab extends PluginSettingTab {
 				.setButtonText('Setup Environment')
 				.onClick(async () => {
 					const vaultPath = (this.app.vault.adapter as any).basePath;
+					const pluginPath = `${vaultPath}/.obsidian/plugins/${this.plugin.manifest.id}`;
 
 					// Run setup script
 					const { exec } = require('child_process');
 					button.setButtonText('Setting up...');
 					button.setDisabled(true);
 
-					exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+					exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
 						(error: Error | null, stdout: string, stderr: string) => {
 							if (error) {
 								console.error('Setup error:', error);
@@ -385,11 +386,12 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 */
 	private async runTranscriptionSetup(): Promise<void> {
 		const vaultPath = (this.app.vault.adapter as any).basePath;
+		const pluginPath = `${vaultPath}/.obsidian/plugins/${this.plugin.manifest.id}`;
 		const { exec } = require('child_process');
 
 		console.log('🎙️ Running transcription auto-setup...');
 
-		exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+		exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
 			async (error: Error | null, stdout: string, stderr: string) => {
 				if (error) {
 					console.error('Transcription setup error:', error);

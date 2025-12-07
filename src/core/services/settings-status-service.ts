@@ -139,7 +139,8 @@ export class SettingsStatusService {
 
 			// Check if venv exists
 			const vaultPath = (this.app.vault.adapter as any).basePath;
-			const venvPath = path.join(vaultPath, 'InterBrain/src/features/realtime-transcription/scripts/venv');
+			const pluginPath = path.join(vaultPath, '.obsidian', 'plugins', this.pluginId);
+			const venvPath = path.join(pluginPath, 'src/features/realtime-transcription/scripts/venv');
 			const venvExists = fs.existsSync(venvPath);
 
 			if (!venvExists) {

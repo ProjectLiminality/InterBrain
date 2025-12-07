@@ -234,9 +234,10 @@ export default class InterBrainPlugin extends Plugin {
    */
   private async runTranscriptionAutoSetup(): Promise<void> {
     const vaultPath = (this.app.vault.adapter as any).basePath;
+    const pluginPath = `${vaultPath}/.obsidian/plugins/${this.manifest.id}`;
     const { exec } = require('child_process');
 
-    exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+    exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
       async (error: Error | null, stdout: string, stderr: string) => {
         if (error) {
           console.error('[InterBrain] Transcription setup error:', error);
