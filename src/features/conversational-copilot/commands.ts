@@ -7,9 +7,9 @@ import { getConversationRecordingService } from './services/conversation-recordi
 import { getConversationSummaryService } from './services/conversation-summary-service';
 import { getEmailExportService } from './services/email-export-service';
 import { getRealtimeTranscriptionService } from '../realtime-transcription';
-import { getAudioRecordingService } from './services/audio-recording-service';
-import { getPerspectiveService } from './services/perspective-service';
-import { getAudioTrimmingService } from './services/audio-trimming-service';
+import { getAudioRecordingService } from '../songline/services/audio-recording-service';
+import { getPerspectiveService } from '../songline/services/perspective-service';
+import { getAudioTrimmingService } from '../songline/services/audio-trimming-service';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search

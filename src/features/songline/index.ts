@@ -15,17 +15,16 @@
  * - **Audio Trimming**: Service to extract specific time ranges from full conversations
  * - **Sovereign Storage**: Each perspective is stored directly in the relevant DreamNode's repo
  *
- * ## Architecture (Pending Refactor)
+ * ## Architecture
  *
- * Currently, songline-related code is scattered across:
- * - `conversational-copilot/services/perspective-service.ts` → should move here
- * - `conversational-copilot/services/conversations-service.ts` → should move here
- * - `conversational-copilot/services/audio-trimming-service.ts` → should move here
- * - `dreamweaving/PerspectivesSection.tsx` → should move here
- * - `dreamweaving/ConversationsSection.tsx` → should move here
- * - `dreamweaving/AudioClipPlayer.tsx` → should move here
- *
- * See docs/refactor-plan.md section 3.7 for migration details.
+ * Songline code is now consolidated within this feature:
+ * - `services/perspective-service.ts` - Manages perspectives.json files
+ * - `services/conversations-service.ts` - Manages conversation recordings
+ * - `services/audio-trimming-service.ts` - Trims recordings to clips
+ * - `services/audio-recording-service.ts` - Coordinates recording
+ * - `components/PerspectivesSection.tsx` - UI for viewing perspectives
+ * - `components/ConversationsSection.tsx` - UI for viewing conversations
+ * - `components/AudioClipPlayer.tsx` - Audio playback component
  *
  * ## Data Structure
  *
@@ -42,8 +41,39 @@
  * @packageDocumentation
  */
 
-// TODO: Move services from conversational-copilot once refactor is active
-// TODO: Move components from dreamweaving once refactor is active
-// TODO: Create barrel exports for all songline functionality
+// Export services
+export {
+	PerspectiveService,
+	PerspectiveServiceImpl,
+	Perspective,
+	PerspectivesFile,
+	initializePerspectiveService,
+	getPerspectiveService
+} from './services/perspective-service';
 
-export {};
+export {
+	ConversationsService,
+	ConversationsServiceImpl,
+	Conversation,
+	initializeConversationsService,
+	getConversationsService
+} from './services/conversations-service';
+
+export {
+	AudioTrimmingService,
+	AudioTrimOptions,
+	initializeAudioTrimmingService,
+	getAudioTrimmingService
+} from './services/audio-trimming-service';
+
+export {
+	AudioRecordingService,
+	AudioRecordingServiceImpl,
+	initializeAudioRecordingService,
+	getAudioRecordingService
+} from './services/audio-recording-service';
+
+// Export components
+export { PerspectivesSection } from './components/PerspectivesSection';
+export { ConversationsSection } from './components/ConversationsSection';
+export { AudioClipPlayer } from './components/AudioClipPlayer';

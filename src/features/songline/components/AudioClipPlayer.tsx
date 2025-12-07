@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Perspective } from '../conversational-copilot/services/perspective-service';
-import { getAudioStreamingService } from './services/audio-streaming-service';
+import { Perspective } from '../services/perspective-service';
+import { getAudioStreamingService } from '../../dreamweaving/services/audio-streaming-service';
 
 interface AudioClipPlayerProps {
 	perspective: Perspective;

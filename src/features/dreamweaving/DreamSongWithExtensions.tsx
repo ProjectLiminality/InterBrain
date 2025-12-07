@@ -12,12 +12,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { DreamSong } from './DreamSong';
-import { PerspectivesSection } from './PerspectivesSection';
-import { ConversationsSection } from './ConversationsSection';
+import { PerspectivesSection } from '../songline/components/PerspectivesSection';
+import { ConversationsSection } from '../songline/components/ConversationsSection';
 import { ReadmeSection } from './ReadmeSection';
 import { DreamSongBlock } from '../../core/types/dreamsong';
 import { MediaFile, DreamNode } from '../../core/types/dreamnode';
-import { Perspective, getPerspectiveService } from '../conversational-copilot/services/perspective-service';
+import { Perspective, getPerspectiveService } from '../songline/services/perspective-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 interface DreamSongWithExtensionsProps {

@@ -1,8 +1,8 @@
 import React from 'react';
-import { Perspective } from '../conversational-copilot/services/perspective-service';
+import { Perspective } from '../services/perspective-service';
 import { AudioClipPlayer } from './AudioClipPlayer';
-import separatorImage from '../../assets/images/Separator.png';
-import styles from './dreamsong.module.css';
+import separatorImage from '../../../assets/images/Separator.png';
+import styles from '../../dreamweaving/dreamsong.module.css';
 
 interface PerspectivesSectionProps {
 	perspectives: Perspective[];

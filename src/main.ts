@@ -45,10 +45,10 @@ import { initializeConversationRecordingService } from './features/conversationa
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializePDFGeneratorService } from './features/conversational-copilot/services/pdf-generator-service';
-import { initializeAudioRecordingService } from './features/conversational-copilot/services/audio-recording-service';
-import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
-import { initializeAudioTrimmingService } from './features/conversational-copilot/services/audio-trimming-service';
-import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
+import { initializeAudioRecordingService } from './features/songline/services/audio-recording-service';
+import { initializePerspectiveService } from './features/songline/services/perspective-service';
+import { initializeAudioTrimmingService } from './features/songline/services/audio-trimming-service';
+import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeMediaLoadingService } from './core/services/media-loading-service';
 import { initializeURIHandlerService } from './features/social-resonance/uri-handler-service';
