@@ -7,9 +7,9 @@
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { DreamSong } from '../../dreamweaving/DreamSong';
-import { DreamSongBlock } from '../../../types/dreamsong';
-import { MediaFile } from '../../../types/dreamnode';
+import { DreamSong } from '../dreamweaving/DreamSong';
+import { DreamSongBlock } from '../../../core/types/dreamsong';
+import { MediaFile } from '../../../core/types/dreamnode';
 
 interface DreamSongData {
   dreamNodeName: string;

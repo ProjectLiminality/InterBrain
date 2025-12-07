@@ -6,11 +6,11 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 import { App } from 'obsidian';
-import { GitService } from './git-service';
-import { VaultService } from './vault-service';
+import { GitService } from '../../../core/services/git-service';
+import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
-import { UDDService } from './udd-service';
-import { RadicleService } from './radicle-service';
+import { UDDService } from '../../../core/services/udd-service';
+import { RadicleService } from '../../../services/radicle-service';
 
 export interface SubmoduleInfo {
   name: string;

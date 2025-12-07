@@ -6,7 +6,7 @@
 
 import { App, Modal, Setting } from 'obsidian';
 import { FetchResult } from '../services/git-service';
-import { UpdateSummary } from '../services/update-summary-service';
+import { UpdateSummary } from '../../services/update-summary-service';
 
 export class UpdatePreviewModal extends Modal {
   private nodeName: string;

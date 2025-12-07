@@ -1,6 +1,6 @@
 import type InterBrainPlugin from '../../../main';
-import { getRealtimeTranscriptionService } from '../core/services/transcription-service';
-import { UIService } from '../../../services/ui-service';
+import { getRealtimeTranscriptionService } from '../services/transcription-service';
+import { UIService } from '../../../core/services/ui-service';
 
 /**
  * Register real-time transcription commands

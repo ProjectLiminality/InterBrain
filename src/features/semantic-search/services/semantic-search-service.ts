@@ -1,6 +1,6 @@
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../../core/types/dreamnode';
 import { VectorData } from './indexing-service';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { IEmbeddingService, VectorUtils, TextProcessor } from './embedding-service';
 import { ollamaEmbeddingService } from './ollama-embedding-service';
 

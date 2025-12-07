@@ -6,9 +6,9 @@
  * Handles data URL conversion and MIME type detection.
  */
 
-import { DreamSongBlock, MediaInfo } from '../../core/types/dreamsong';
-import { VaultService } from '../vault-service';
-import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../core/utils/link-file-utils';
+import { DreamSongBlock, MediaInfo } from '../../../core/types/dreamsong';
+import { VaultService } from '../../../core/services/vault-service';
+import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../../core/utils/link-file-utils';
 
 // Access Node.js modules directly in Electron context
  

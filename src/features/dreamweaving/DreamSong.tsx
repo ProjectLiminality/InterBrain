@@ -3,7 +3,7 @@ import { DreamSongBlock, MediaInfo } from '../../core/types/dreamsong';
 import { MediaFile } from '../../core/types/dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
-import { PDFPreview } from '../../components/PDFPreview';
+import { PDFPreview } from '../../core/components/PDFPreview';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];

@@ -2,13 +2,13 @@ import { DreamNode } from '../types/dreamnode';
 import { MockDreamNodeService, mockDreamNodeService } from './mock-dreamnode-service';
 import { GitDreamNodeService } from './git-dreamnode-service';
 import { VaultService } from './vault-service';
-import { CanvasParserService } from './canvas-parser-service';
+import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { LeafManagerService } from './leaf-manager-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
-import { IndexingService, indexingService } from '../features/semantic-search/services/indexing-service';
+import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../utils/url-utils';
-import { RadicleService, RadicleServiceImpl } from './radicle-service';
+import { RadicleService, RadicleServiceImpl } from '../../services/radicle-service';
 
 /**
  * Service interface that both mock and real implementations will follow

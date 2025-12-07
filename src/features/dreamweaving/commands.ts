@@ -1,11 +1,11 @@
 import { Plugin, TFile } from 'obsidian';
-import { UIService } from '../core/services/ui-service';
-import { VaultService } from '../core/services/vault-service';
-import { CanvasParserService } from '../core/services/canvas-parser-service';
-import { CanvasLayoutService } from '../core/services/canvas-layout-service';
-import { SubmoduleManagerService } from '../core/services/submodule-manager-service';
-import { useInterBrainStore } from '../core/store/interbrain-store';
-import { serviceManager } from '../core/services/service-manager';
+import { UIService } from '../../core/services/ui-service';
+import { VaultService } from '../../core/services/vault-service';
+import { CanvasParserService } from './services/canvas-parser-service';
+import { CanvasLayoutService } from './services/canvas-layout-service';
+import { SubmoduleManagerService } from './services/submodule-manager-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
 
 /**
  * Dreamweaving commands for canvas analysis and submodule management

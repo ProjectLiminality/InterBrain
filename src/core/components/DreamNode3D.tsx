@@ -6,7 +6,7 @@ import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../layouts/DynamicViewScaling';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { dreamNodeStyles } from './dreamNodeStyles';
-import { CanvasParserService } from '../services/canvas-parser-service';
+import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';

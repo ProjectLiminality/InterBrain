@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { SemanticSearchService } from '../core/services/semantic-search-service';
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../../core/types/dreamnode';
 import { VectorData } from '../core/services/indexing-service';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { ollamaEmbeddingService } from '../core/services/ollama-embedding-service';
 
 // Mock dependencies
-vi.mock('../../../store/interbrain-store', () => ({
+vi.mock('../../../core/store/interbrain-store', () => ({
   useInterBrainStore: {
     getState: vi.fn(),
     setState: vi.fn()

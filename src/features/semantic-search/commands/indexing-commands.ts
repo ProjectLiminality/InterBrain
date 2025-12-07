@@ -1,6 +1,6 @@
 import { Plugin } from 'obsidian';
-import { UIService } from '../../../services/ui-service';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { UIService } from '../../../core/services/ui-service';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 
 /**
  * Indexing and content processing commands

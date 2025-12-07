@@ -1,5 +1,5 @@
 import { App, TFile } from 'obsidian';
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../../core/types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { createLLMProvider, LLMMessage } from './llm-provider';
 

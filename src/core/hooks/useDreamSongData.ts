@@ -9,9 +9,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { TFile } from 'obsidian';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamNode } from '../types/dreamnode';
-import { CanvasParserService } from '../services/canvas-parser-service';
+import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { VaultService } from '../services/vault-service';
-import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../services/dreamsong';
+import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../../features/dreamweaving/dreamsong';
 import { serviceManager } from '../services/service-manager';
 
 interface UseDreamSongDataOptions {

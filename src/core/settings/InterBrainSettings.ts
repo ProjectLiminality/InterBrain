@@ -1,8 +1,8 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
-import type InterBrainPlugin from '../main';
+import type InterBrainPlugin from '../../main';
 import { SettingsStatusService, type SystemStatus } from '../services/settings-status-service';
-import { ollamaEmbeddingService } from '../features/semantic-search/services/ollama-embedding-service';
-import { getRealtimeTranscriptionService } from '../features/realtime-transcription';
+import { ollamaEmbeddingService } from '../../features/semantic-search/services/ollama-embedding-service';
+import { getRealtimeTranscriptionService } from '../../features/realtime-transcription';
 import { serviceManager } from '../services/service-manager';
 
 export interface InterBrainSettings {

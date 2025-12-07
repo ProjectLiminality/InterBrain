@@ -6,11 +6,11 @@
 
 import { Plugin } from 'obsidian';
 import { UIService } from '../core/services/ui-service';
-import { getUpdateCheckerService } from '../core/services/update-checker-service';
-import { getUpdateSummaryService, initializeUpdateSummaryService } from '../core/services/update-summary-service';
+import { getUpdateCheckerService } from '../services/update-checker-service';
+import { getUpdateSummaryService, initializeUpdateSummaryService } from '../services/update-summary-service';
 import { useInterBrainStore } from '../core/store/interbrain-store';
 import { GitService } from '../core/services/git-service';
-import { UpdatePreviewModal } from '../ui/update-preview-modal';
+import { UpdatePreviewModal } from '../core/ui/update-preview-modal';
 
 const path = require('path');
 const fs = require('fs').promises;

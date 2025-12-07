@@ -1,8 +1,8 @@
 import { Plugin } from 'obsidian';
-import { GitDreamNodeService } from './git-dreamnode-service';
+import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
 import { DreamSongParserService } from './dreamsong-parser-service';
-import { VaultService } from './vault-service';
-import { CanvasParserService } from './canvas-parser-service';
+import { VaultService } from '../../core/services/vault-service';
+import { CanvasParserService } from './services/canvas-parser-service';
 import { DreamNode } from '../core/types/dreamnode';
 import { DreamSongData, DreamSongBlock } from '../core/types/dreamsong';
 import {

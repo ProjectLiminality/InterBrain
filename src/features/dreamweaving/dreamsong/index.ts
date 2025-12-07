@@ -46,8 +46,8 @@ export {
 import { parseCanvasToBlocks } from './parser';
 import { generateStructureHash } from './hasher';
 import { resolveMediaPaths } from './media-resolver';
-import { CanvasData } from '../canvas-parser-service';
-import { VaultService } from '../vault-service';
+import { CanvasData } from '../services/canvas-parser-service';
+import { VaultService } from '../../../core/services/vault-service';
 
 /**
  * Main convenience function that combines all three layers

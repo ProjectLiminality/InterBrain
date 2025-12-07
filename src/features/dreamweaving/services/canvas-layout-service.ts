@@ -1,6 +1,6 @@
-import { VaultService } from './vault-service';
+import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, CanvasData, CanvasNode } from './canvas-parser-service';
-import { parseCanvasToBlocks } from './dreamsong/parser';
+import { parseCanvasToBlocks } from '../dreamsong/parser';
 
 /**
  * Canvas Layout Service

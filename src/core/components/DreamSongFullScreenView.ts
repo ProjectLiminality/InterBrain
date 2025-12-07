@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
 import { Root, createRoot } from 'react-dom/client';
 import { StrictMode, createElement } from 'react';
-import { DreamSongWithExtensions } from '../features/dreamweaving/DreamSongWithExtensions';
+import { DreamSongWithExtensions } from '../../features/dreamweaving/DreamSongWithExtensions';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamNode } from '../types/dreamnode';
 import { useInterBrainStore } from '../store/interbrain-store';

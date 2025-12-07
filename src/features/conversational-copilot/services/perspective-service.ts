@@ -6,8 +6,8 @@
  */
 
 import type InterBrainPlugin from '../../../main';
-import { VaultService } from '../../../services/vault-service';
-import type { DreamNode } from '../../../types/dreamnode';
+import { VaultService } from '../../../core/services/vault-service';
+import type { DreamNode } from '../../../core/types/dreamnode';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

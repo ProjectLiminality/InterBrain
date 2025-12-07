@@ -1,5 +1,5 @@
-import { VaultService } from './vault-service';
-import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './canvas-parser-service';
+import { VaultService } from '../../core/services/vault-service';
+import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './services/canvas-parser-service';
 
 // Access Node.js modules directly in Electron context (following VaultService pattern)
  
@@ -18,7 +18,7 @@ import {
   MediaTextPair,
   MediaInfo
 } from '../core/types/dreamsong';
-import { InterBrainState } from '../core/store/interbrain-store';
+import { InterBrainState } from '../../core/store/interbrain-store';
 
 /**
  * DreamSong Parser Service

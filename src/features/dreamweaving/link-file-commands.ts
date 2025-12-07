@@ -1,6 +1,6 @@
 import { Plugin, FuzzySuggestModal, TFile, App } from 'obsidian';
-import { UIService } from '../core/services/ui-service';
-import { isLinkFile } from '../core/utils/link-file-utils';
+import { UIService } from '../../core/services/ui-service';
+import { isLinkFile } from '../../core/utils/link-file-utils';
 
 /**
  * Link File Commands - Add support for .link files in various contexts

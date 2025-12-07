@@ -1,5 +1,5 @@
 import { Plugin } from 'obsidian';
-import { UIService } from '../../../services/ui-service';
+import { UIService } from '../../../core/services/ui-service';
 
 import { registerOllamaCommands } from './ollama-commands';
 import { registerIndexingCommands } from './indexing-commands';

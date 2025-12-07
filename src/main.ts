@@ -18,9 +18,9 @@ import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } fr
 import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './core/layouts/RingLayout';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerNavigationCommands } from './core/commands/navigation-commands';
-import { registerEditModeCommands } from './commands/edit-mode-commands';
+import { registerEditModeCommands } from './features/edit-mode';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
-import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
+import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
 import { registerRadicleCommands } from './commands/radicle-commands';
 import { registerGitHubCommands } from './commands/github-commands';
 import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
@@ -34,12 +34,11 @@ import {
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
 import { ConstellationCommands } from './commands/constellation-commands';
-import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
 import { registerFaceTimeCommands } from './commands/facetime-commands';
 import { FaceTimeService } from './services/facetime-service';
-import { CanvasParserService } from './services/canvas-parser-service';
-import { SubmoduleManagerService } from './services/submodule-manager-service';
-import { CanvasObserverService } from './services/canvas-observer-service';
+import { CanvasParserService } from './features/dreamweaving/services/canvas-parser-service';
+import { SubmoduleManagerService } from './features/dreamweaving/services/submodule-manager-service';
+import { CanvasObserverService } from './features/dreamweaving/services/canvas-observer-service';
 import { CoherenceBeaconService } from './services/coherence-beacon-service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';

@@ -1,8 +1,8 @@
 import { App, TFile, Notice, WorkspaceLeaf, EventRef } from 'obsidian';
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../../core/types/dreamnode';
 import { semanticSearchService } from '../../semantic-search/services/semantic-search-service';
-import { useInterBrainStore } from '../../../store/interbrain-store';
-import { VaultService } from '../../../services/vault-service';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { VaultService } from '../../../core/services/vault-service';
 
 /**
  * Transcription Service

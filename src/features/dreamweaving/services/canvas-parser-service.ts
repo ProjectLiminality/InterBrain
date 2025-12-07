@@ -1,4 +1,4 @@
-import { VaultService } from './vault-service';
+import { VaultService } from '../../../core/services/vault-service';
 
 // Simple path normalization for cross-platform compatibility
 function normalizePath(path: string): string {

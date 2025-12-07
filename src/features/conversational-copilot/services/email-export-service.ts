@@ -1,10 +1,10 @@
 import { App, Notice } from 'obsidian';
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../../core/types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../../services/uri-handler-service';
 import { ShareLinkService } from '../../../services/share-link-service';
-import { serviceManager } from '../../../services/service-manager';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { serviceManager } from '../../../core/services/service-manager';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { getPDFGeneratorService } from './pdf-generator-service';
 import * as os from 'os';
 import * as path from 'path';

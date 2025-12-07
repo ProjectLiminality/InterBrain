@@ -2,16 +2,16 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { DreamSongData } from '../types/dreamsong';
-import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../dreamspace/FibonacciSphereLayout';
+import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../components/FibonacciSphereLayout';
 import {
   OllamaConfigSlice,
   createOllamaConfigSlice,
   extractOllamaPersistenceData,
   restoreOllamaPersistenceData,
   OllamaConfig
-} from '../features/semantic-search/store/ollama-config-slice';
+} from '../../features/semantic-search/store/ollama-config-slice';
 // OllamaConfig imports are in the semantic search slice
-import { VectorData } from '../features/semantic-search/services/indexing-service';
+import { VectorData } from '../../features/semantic-search/services/indexing-service';
 import { FlipState } from '../types/dreamsong';
 import {
   DreamSongRelationshipGraph,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CanvasParserService, CanvasData } from './canvas-parser-service';
-import { VaultService } from './vault-service';
+import { VaultService } from '../../../core/services/vault-service';
 
 describe('CanvasParserService', () => {
   let canvasParserService: CanvasParserService;
