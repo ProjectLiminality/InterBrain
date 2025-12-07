@@ -11,7 +11,7 @@ import { VaultService } from '../services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
 import { getMediaLoadingService } from '../services/media-loading-service';
-import '../../dreamspace/dreamNodeAnimations.css';
+import './dreamNodeAnimations.css';
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
