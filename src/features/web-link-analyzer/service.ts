@@ -48,14 +48,12 @@ class WebLinkAnalyzerService {
 
   /**
    * Get the scripts directory path
-   * Uses vault-relative InterBrain folder to match where setup.sh creates the venv
+   * Uses pluginPath directly - works for both symlinked and normal installations
    */
   private getScriptsDir(): string {
-    // Use vault-relative path: InterBrain/src/features/web-link-analyzer/scripts
-    // This matches where the settings panel runs setup.sh
     return path.join(
-      this.vaultPath,
-      'InterBrain/src/features/web-link-analyzer/scripts'
+      this.pluginPath,
+      'src/features/web-link-analyzer/scripts'
     );
   }
 

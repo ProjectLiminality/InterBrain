@@ -31,6 +31,7 @@ export interface SystemStatus {
 export class SettingsStatusService {
 	constructor(
 		private app: App,
+		private pluginId: string,
 		private ollamaService?: OllamaEmbeddingService,
 		private transcriptionService?: TranscriptionService,
 		private radicleService?: RadicleService
@@ -194,7 +195,8 @@ export class SettingsStatusService {
 
 			// Check if venv exists
 			const vaultPath = (this.app.vault.adapter as any).basePath;
-			const venvPath = path.join(vaultPath, 'InterBrain/src/features/web-link-analyzer/scripts/venv');
+			const pluginPath = path.join(vaultPath, '.obsidian', 'plugins', this.pluginId);
+			const venvPath = path.join(pluginPath, 'src/features/web-link-analyzer/scripts/venv');
 			const venvExists = fs.existsSync(venvPath);
 
 			if (!venvExists) {

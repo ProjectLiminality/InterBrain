@@ -46,6 +46,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		if (!this.statusService) {
 			this.statusService = new SettingsStatusService(
 				this.app,
+				this.plugin.manifest.id,
 				ollamaEmbeddingService,
 				getRealtimeTranscriptionService(),
 				serviceManager.getRadicleService()
@@ -470,7 +471,8 @@ export class InterBrainSettingTab extends PluginSettingTab {
 						button.setButtonText('Setting up...');
 						button.setDisabled(true);
 
-						exec(`cd "${vaultPath}/InterBrain/src/features/web-link-analyzer/scripts" && bash setup.sh`,
+						const pluginPath = `${vaultPath}/.obsidian/plugins/${this.plugin.manifest.id}`;
+						exec(`cd "${pluginPath}/src/features/web-link-analyzer/scripts" && bash setup.sh`,
 							(error: Error | null, stdout: string, stderr: string) => {
 								if (error) {
 									console.error('Setup error:', error);
@@ -518,11 +520,12 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 */
 	private async runWebLinkAnalyzerSetup(): Promise<void> {
 		const vaultPath = (this.app.vault.adapter as any).basePath;
+		const pluginPath = `${vaultPath}/.obsidian/plugins/${this.plugin.manifest.id}`;
 		const { exec } = require('child_process');
 
 		console.log('🔗 Running web link analyzer auto-setup...');
 
-		exec(`cd "${vaultPath}/InterBrain/src/features/web-link-analyzer/scripts" && bash setup.sh`,
+		exec(`cd "${pluginPath}/src/features/web-link-analyzer/scripts" && bash setup.sh`,
 			async (error: Error | null, stdout: string, stderr: string) => {
 				if (error) {
 					console.error('Web link analyzer setup error:', error);
