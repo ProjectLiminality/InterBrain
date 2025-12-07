@@ -28,6 +28,7 @@ src/
 │   ├── search/
 │   ├── semantic-search/
 │   ├── social-resonance/
+│   ├── songline/            # Living definitions through conversation clips
 │   ├── updates/
 │   └── video-calling/
 │
@@ -339,7 +340,22 @@ src/
 - [ ] Update imports to use core paths
 - [ ] Create `index.ts` barrel export
 
-### 3.7 Web Link Analyzer (already in features)
+### 3.7 Songline (Living Definitions)
+- [ ] Create `src/features/songline/` directory
+- [ ] Move services FROM conversational-copilot:
+  - [ ] `src/features/conversational-copilot/services/perspective-service.ts` → `src/features/songline/perspective-service.ts`
+  - [ ] `src/features/conversational-copilot/services/conversations-service.ts` → `src/features/songline/conversations-service.ts`
+  - [ ] `src/features/conversational-copilot/services/audio-trimming-service.ts` → `src/features/songline/audio-trimming-service.ts`
+- [ ] Move components FROM dreamweaving:
+  - [ ] `src/features/dreamweaving/PerspectivesSection.tsx` → `src/features/songline/PerspectivesSection.tsx`
+  - [ ] `src/features/dreamweaving/ConversationsSection.tsx` → `src/features/songline/ConversationsSection.tsx`
+  - [ ] `src/features/dreamweaving/AudioClipPlayer.tsx` → `src/features/songline/AudioClipPlayer.tsx`
+- [ ] Update imports in moved files to use core paths
+- [ ] Update imports in DreamSongWithExtensions.tsx to use songline feature
+- [ ] Update main.ts service initialization imports
+- [ ] Create `index.ts` barrel export
+
+### 3.8 Web Link Analyzer (already in features)
 - [ ] Update imports to use core paths
 - [ ] Move `src/services/web-link-analyzer-service.ts` → `src/features/web-link-analyzer/service.ts`
 - [ ] Create `index.ts` barrel export
@@ -409,13 +425,14 @@ src/
 |---------|----------|----------|------------|
 | coherence-beacon | coherence-beacon-commands.ts | coherence-beacon-service.ts | (modal in core) |
 | constellation | constellation-commands.ts | - | Edge3D, ConstellationEdges, etc. |
-| conversational-copilot | commands.ts | 10 services | CopilotModeOverlay |
-| dreamweaving | dreamweaving-commands.ts, link-file-commands.ts | canvas-*, submodule-*, dreamsong/* | DreamSong, AudioClipPlayer, etc. |
+| conversational-copilot | commands.ts | 7 services (recording, summary, email, pdf, llm, transcription) | CopilotModeOverlay |
+| dreamweaving | dreamweaving-commands.ts, link-file-commands.ts | canvas-*, submodule-*, dreamsong/* | DreamSong, DreamSongWithExtensions, ReadmeSection |
 | edit-mode | edit-mode-commands.ts | - | EditModeOverlay, EditNode3D, etc. |
 | github-publishing | github-commands.ts | GitHubService, batch-share, network, share-link | dreamsong-standalone |
 | realtime-transcription | transcription-commands.ts | transcription-service.ts | - |
 | search | - | - | SearchNode3D, SearchOrchestrator |
 | semantic-search | 4 command files | 5 services | - |
 | social-resonance | radicle-commands.ts, housekeeping-commands.ts | radicle-service, batch-init, uri-handler | - |
+| songline | - | perspective-service, conversations-service, audio-trimming-service | PerspectivesSection, ConversationsSection, AudioClipPlayer |
 | updates | update-commands.ts, dreamer-update-commands.ts | update-checker, update-summary | - |
 | video-calling | facetime-commands.ts | facetime-service.ts | - |
