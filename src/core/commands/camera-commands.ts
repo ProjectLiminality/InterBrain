@@ -3,34 +3,10 @@ import { UIService } from '../services/ui-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 
 /**
- * Register developer/debug commands for DreamSpace
- * These commands are useful for debugging and development
+ * Register camera debug commands for DreamSpace
+ * These commands control the 3D camera for debugging and development
  */
-export function registerDeveloperCommands(plugin: Plugin, uiService: UIService): void {
-  // Debug: Toggle wireframe sphere
-  plugin.addCommand({
-    id: 'toggle-debug-wireframe-sphere',
-    name: '[Dev] Toggle Debug Wireframe Sphere',
-    callback: () => {
-      const store = useInterBrainStore.getState();
-      const newState = !store.debugWireframeSphere;
-      store.setDebugWireframeSphere(newState);
-      uiService.showSuccess(`Debug wireframe sphere ${newState ? 'enabled' : 'disabled'}`);
-    }
-  });
-
-  // Debug: Toggle intersection point
-  plugin.addCommand({
-    id: 'toggle-debug-intersection-point',
-    name: '[Dev] Toggle Debug Intersection Point',
-    callback: () => {
-      const store = useInterBrainStore.getState();
-      const newState = !store.debugIntersectionPoint;
-      store.setDebugIntersectionPoint(newState);
-      uiService.showSuccess(`Debug intersection point ${newState ? 'enabled' : 'disabled'}`);
-    }
-  });
-
+export function registerCameraCommands(plugin: Plugin, uiService: UIService): void {
   // Debug: Toggle flying camera controls
   plugin.addCommand({
     id: 'toggle-debug-flying-controls',

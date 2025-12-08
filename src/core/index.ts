@@ -1,9 +1,6 @@
 // Core module master barrel export
 // Exports all core functionality for easy importing
 
-// Types
-export * from './types';
-
 // Store
 export * from './store';
 

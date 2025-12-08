@@ -1,2 +1,2 @@
 // Core commands barrel export
-export * from './developer-commands';
+export * from './camera-commands';

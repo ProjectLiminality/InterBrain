@@ -6,6 +6,36 @@ import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from './types';
 
 /**
+ * Register debug commands for constellation layout visualization
+ * These commands toggle debug overlays for Dynamic View Scaling geometry
+ */
+export function registerConstellationDebugCommands(plugin: Plugin, uiService: UIService): void {
+  // Debug: Toggle wireframe sphere
+  plugin.addCommand({
+    id: 'toggle-debug-wireframe-sphere',
+    name: '[Dev] Toggle Debug Wireframe Sphere',
+    callback: () => {
+      const store = useInterBrainStore.getState();
+      const newState = !store.debugWireframeSphere;
+      store.setDebugWireframeSphere(newState);
+      uiService.showSuccess(`Debug wireframe sphere ${newState ? 'enabled' : 'disabled'}`);
+    }
+  });
+
+  // Debug: Toggle intersection point
+  plugin.addCommand({
+    id: 'toggle-debug-intersection-point',
+    name: '[Dev] Toggle Debug Intersection Point',
+    callback: () => {
+      const store = useInterBrainStore.getState();
+      const newState = !store.debugIntersectionPoint;
+      store.setDebugIntersectionPoint(newState);
+      uiService.showSuccess(`Debug intersection point ${newState ? 'enabled' : 'disabled'}`);
+    }
+  });
+}
+
+/**
  * Constellation Commands - Obsidian commands for DreamSong relationship analysis
  */
 export class ConstellationCommands {
