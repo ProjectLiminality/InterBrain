@@ -10,4 +10,3 @@ export * from './service-manager';
 export * from './leaf-manager-service';
 export * from './passphrase-manager';
 export * from './media-loading-service';
-export * from './settings-status-service';

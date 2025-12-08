@@ -55,7 +55,7 @@ import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
 import { initializeUpdateCheckerService } from './features/updates/update-checker-service';
-import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './core/settings/InterBrainSettings';
+import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;

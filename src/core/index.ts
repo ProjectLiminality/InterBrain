@@ -10,9 +10,6 @@ export * from './store';
 // Utils
 export * from './utils';
 
-// Settings
-export * from './settings';
-
 // Services
 export * from './services';
 
