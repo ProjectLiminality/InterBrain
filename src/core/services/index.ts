@@ -2,10 +2,12 @@
 export * from './ui-service';
 export * from './git-service';
 export * from './vault-service';
-export * from './git-template-service';
+// Re-export from dreamnode feature for backwards compatibility
+export * from '../../features/dreamnode/services/git-template-service';
 export * from './service-manager';
 export * from './leaf-manager-service';
-export * from './passphrase-manager';
+// Re-export from social-resonance for backwards compatibility
+export * from '../../features/social-resonance/passphrase-manager';
 
 // Re-exports from dreamnode feature for backwards compatibility
 export * from '../../features/dreamnode/services/udd-service';

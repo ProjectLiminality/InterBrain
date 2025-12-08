@@ -13,9 +13,6 @@ export * from './utils';
 // Services
 export * from './services';
 
-// Layouts
-export * from './layouts';
-
 // Components (selective - not all components should be exported)
 export { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './components/DreamspaceView';
 export { default as DreamspaceCanvas } from './components/DreamspaceCanvas';
@@ -23,9 +20,6 @@ export { default as DreamspaceCanvas } from './components/DreamspaceCanvas';
 // Re-exports from feature modules
 export * from '../features/dreamnode';
 export { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE, LinkFileView, LINK_FILE_VIEW_TYPE } from '../features/dreamweaving';
-
-// Hooks
-export * from './hooks';
 
 // Commands
 export * from './commands';

@@ -9,6 +9,8 @@ export { DreamNodeService } from './services/dreamnode-service';
 export { GitDreamNodeService } from './services/git-dreamnode-service';
 export { UDDService } from './services/udd-service';
 export { MediaLoadingService, getMediaLoadingService } from './services/media-loading-service';
+export { GitOperationsService } from './services/git-operations';
+export { GitTemplateService } from './services/git-template-service';
 
 // Components
 export { default as DreamNode3D } from './components/DreamNode3D';

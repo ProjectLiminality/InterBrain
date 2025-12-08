@@ -536,7 +536,7 @@ export class URIHandlerService {
 	 */
 	private async ensureRadicleNodeRunning(): Promise<string | null> {
 		// Import PassphraseManager for consistent passphrase handling
-		const { PassphraseManager } = await import('../../core/services/passphrase-manager');
+		const { PassphraseManager } = await import('../social-resonance/passphrase-manager');
 		const { UIService } = await import('../../core/services/ui-service');
 
 		// Create temporary instances for passphrase management

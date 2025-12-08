@@ -2,7 +2,7 @@ import { Plugin, Notice } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
-import { PassphraseManager } from '../../core/services/passphrase-manager';
+import { PassphraseManager } from './passphrase-manager';
 import type { DreamNode } from '../dreamnode';
 
 /**

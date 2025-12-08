@@ -5,9 +5,9 @@
  * Acts as a portal to the settings panel - prompting saves directly to settings.
  */
 
-import { UIService } from './ui-service';
+import { UIService } from '../../core/services/ui-service';
 import type { Plugin } from 'obsidian';
-import { serviceManager } from './service-manager';
+import { serviceManager } from '../../core/services/service-manager';
 
 export class PassphraseManager {
   private uiService: UIService;

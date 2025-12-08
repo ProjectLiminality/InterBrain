@@ -4,8 +4,8 @@ import * as path from 'path';
 import { UIService } from './core/services/ui-service';
 import { GitService } from './core/services/git-service';
 import { VaultService } from './core/services/vault-service';
-import { GitTemplateService } from './core/services/git-template-service';
-import { PassphraseManager } from './core/services/passphrase-manager';
+import { GitTemplateService } from './features/dreamnode/services/git-template-service';
+import { PassphraseManager } from './features/social-resonance/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/DreamSongFullScreenView';
@@ -548,28 +548,18 @@ export default class InterBrainPlugin extends Plugin {
             return;
           }
 
-          // STEP 4: Commit remaining changes (with AI-generated message or fallback)
+          // STEP 4: Commit remaining changes
           console.log(`💾 [Save Changes] Step 4: Committing remaining changes...`);
           const commitNotice = this.uiService.showLoading('Creating commit...');
 
           try {
-            // Try AI-generated commit message first
-            await this.gitService.commitWithAI(currentNode.repoPath);
+            const commitMessage = `Save changes in ${currentNode.name}`;
+            await execAsync(`git commit -m "${commitMessage}"`, { cwd: fullRepoPath });
             commitNotice.hide();
-            console.log(`💾 [Save Changes] ✓ Changes committed with AI-generated message`);
+            console.log(`💾 [Save Changes] ✓ Changes committed`);
           } catch (commitError) {
-            console.warn(`💾 [Save Changes] AI commit failed, using fallback message:`, commitError);
-
-            // Fallback: Use simple generic commit message if AI fails
-            try {
-              const fallbackMessage = `Save changes in ${currentNode.name}`;
-              await execAsync(`git commit -m "${fallbackMessage}"`, { cwd: fullRepoPath });
-              commitNotice.hide();
-              console.log(`💾 [Save Changes] ✓ Changes committed with fallback message`);
-            } catch (fallbackError) {
-              commitNotice.hide();
-              throw fallbackError;
-            }
+            commitNotice.hide();
+            throw commitError;
           }
 
           // STEP 5: Exit creator mode after successful save
