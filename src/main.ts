@@ -2,7 +2,7 @@ import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UIService } from './core/services/ui-service';
-import { GitService } from './core/services/git-service';
+import { GitOperationsService } from './features/dreamnode/services/git-operations';
 import { VaultService } from './core/services/vault-service';
 import { GitTemplateService } from './features/dreamnode/services/git-template-service';
 import { PassphraseManager } from './features/social-resonance/passphrase-manager';
@@ -63,7 +63,7 @@ export default class InterBrainPlugin extends Plugin {
 
   // Service instances
   private uiService!: UIService;
-  private gitService!: GitService;
+  private gitOpsService!: GitOperationsService;
   private vaultService!: VaultService;
   private gitTemplateService!: GitTemplateService;
   private passphraseManager!: PassphraseManager;
@@ -297,7 +297,7 @@ export default class InterBrainPlugin extends Plugin {
 
   private initializeServices(): void {
     this.uiService = new UIService(this.app);
-    this.gitService = new GitService(this.app);
+    this.gitOpsService = new GitOperationsService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
     this.gitTemplateService = new GitTemplateService(this.app.vault);
     this.passphraseManager = new PassphraseManager(this.uiService, this);
@@ -450,7 +450,7 @@ export default class InterBrainPlugin extends Plugin {
           const loadingNotice = this.uiService.showLoading('Exiting creator mode...');
           try {
             // Stash any uncommitted changes when exiting creator mode
-            await this.gitService.stashChanges(selectedNode.repoPath);
+            await this.gitOpsService.stashChanges(selectedNode.repoPath);
             store.setCreatorMode(false);
             this.uiService.showSuccess('Exited creator mode - changes stashed');
           } catch (error) {
@@ -466,7 +466,7 @@ export default class InterBrainPlugin extends Plugin {
           const loadingNotice = this.uiService.showLoading('Entering creator mode...');
           try {
             // Pop any existing stash when entering creator mode
-            await this.gitService.popStash(selectedNode.repoPath);
+            await this.gitOpsService.popStash(selectedNode.repoPath);
             store.setCreatorMode(true, selectedNode.id);
             this.uiService.showSuccess(`Creator mode active for: ${selectedNode.name}`);
           } catch (error) {
@@ -677,7 +677,7 @@ export default class InterBrainPlugin extends Plugin {
 
         try {
           // Use git service to open the repository folder in Finder
-          await this.gitService.openInFinder(currentNode.repoPath);
+          await this.gitOpsService.openInFinder(currentNode.repoPath);
           this.uiService.showSuccess(`Opened ${currentNode.name} in Finder`);
         } catch (error) {
           console.error('Failed to open in Finder:', error);
@@ -701,7 +701,7 @@ export default class InterBrainPlugin extends Plugin {
 
         try {
           // Use git service to open terminal at the repository folder and run claude --continue
-          await this.gitService.openInTerminal(currentNode.repoPath);
+          await this.gitOpsService.openInTerminal(currentNode.repoPath);
           this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude --continue`);
         } catch (error) {
           console.error('Failed to open in Terminal:', error);

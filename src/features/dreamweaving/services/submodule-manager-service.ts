@@ -6,7 +6,7 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 import { App } from 'obsidian';
-import { GitService } from '../../../core/services/git-service';
+import { GitOperationsService } from '../../dreamnode/services/git-operations';
 import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
 import { UDDService } from '../../dreamnode/services/udd-service';
@@ -40,7 +40,7 @@ export interface SyncResult {
 }
 
 export class SubmoduleManagerService {
-  private gitService: GitService;
+  private gitOpsService: GitOperationsService;
   private vaultPath: string = '';
 
   constructor(
@@ -49,7 +49,7 @@ export class SubmoduleManagerService {
     private canvasParser: CanvasParserService,
     private radicleService: RadicleService
   ) {
-    this.gitService = new GitService(app);
+    this.gitOpsService = new GitOperationsService(app);
     this.initializeVaultPath(app);
   }
 
@@ -378,11 +378,11 @@ export class SubmoduleManagerService {
    * Auto-commits any uncommitted changes to prevent data loss
    */
   private async ensureCleanGitState(dreamNodePath: string): Promise<void> {
-    const hasUncommitted = await this.gitService.hasUncommittedChanges(dreamNodePath);
+    const hasUncommitted = await this.gitOpsService.hasUncommittedChanges(dreamNodePath);
     if (hasUncommitted) {
       // Auto-commit changes before submodule operations
       // This is safer than stashing because commits are permanent and traceable
-      const committed = await this.gitService.commitAllChanges(
+      const committed = await this.gitOpsService.commitAllChanges(
         dreamNodePath,
         'Auto-save before submodule sync'
       );

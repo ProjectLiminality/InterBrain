@@ -1,6 +1,5 @@
 // Core services barrel export
 export * from './ui-service';
-export * from './git-service';
 export * from './vault-service';
 // Re-export from dreamnode feature for backwards compatibility
 export * from '../../features/dreamnode/services/git-template-service';

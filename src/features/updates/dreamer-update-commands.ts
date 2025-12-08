@@ -83,9 +83,9 @@ async function checkAllUpdatesFromDreamer(plugin: Plugin): Promise<void> {
           }
         } else {
           // Use Git fetch for GitHub or other remotes
-          const { GitService } = await import('../../core/services/git-service');
-          const gitService = new GitService((plugin as any).app);
-          const fetchResult = await gitService.fetchUpdates(dream.repoPath);
+          const { GitSyncService } = await import('../social-resonance/services/git-sync-service');
+          const gitSyncService = new GitSyncService((plugin as any).app);
+          const fetchResult = await gitSyncService.fetchUpdates(dream.repoPath);
           if (fetchResult.hasUpdates) {
             updatesFound++;
             console.log(`    ✅ Found ${fetchResult.commits.length} update(s) in ${dream.name}`);

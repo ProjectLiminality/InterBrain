@@ -9,7 +9,8 @@ import { UIService } from '../../core/services/ui-service';
 import { getUpdateCheckerService } from './update-checker-service';
 import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { GitService } from '../../core/services/git-service';
+import { GitSyncService } from '../social-resonance/services/git-sync-service';
+import { GitOperationsService } from '../dreamnode/services/git-operations';
 import { UpdatePreviewModal } from './ui/update-preview-modal';
 
 const path = require('path');
@@ -88,7 +89,7 @@ async function updateSubmodules(
  */
 async function checkSubmoduleUpdatesFromNetwork(
   selectedNode: any,
-  _gitService: GitService,
+  _gitSyncService: GitSyncService,
   _store: any,
   _uiService: UIService
 ): Promise<SubmoduleUpdate[]> {
@@ -223,7 +224,8 @@ function parseGitmodules(content: string): Array<{path: string, url: string, nam
 }
 
 export function registerUpdateCommands(plugin: Plugin, uiService: UIService): void {
-  const gitService = new GitService(plugin.app);
+  const gitSyncService = new GitSyncService(plugin.app);
+  const gitOpsService = new GitOperationsService(plugin.app);
 
   // Check for updates (manual trigger)
   plugin.addCommand({
@@ -275,7 +277,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       try {
         // Check root repo for updates
-        const fetchResult = await gitService.fetchUpdates(selectedNode.repoPath);
+        const fetchResult = await gitSyncService.fetchUpdates(selectedNode.repoPath);
         if (fetchResult.hasUpdates) {
           store.setNodeUpdateStatus(selectedNode.id, fetchResult);
         } else {
@@ -283,7 +285,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         }
 
         // NEW: Check submodules for updates from their standalone repos
-        submoduleUpdates = await checkSubmoduleUpdatesFromNetwork(selectedNode, gitService, store, uiService);
+        submoduleUpdates = await checkSubmoduleUpdatesFromNetwork(selectedNode, gitSyncService, store, uiService);
 
       } catch (error) {
         console.error('[UpdatePreview] Fetch failed:', error);
@@ -356,8 +358,8 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
             console.log('[UpdatePreview] User accepted update');
 
             // Check if this is a read-only repo with divergent branches
-            const divergentCheck = await gitService.checkDivergentBranches(selectedNode.repoPath);
-            const isReadOnly = await gitService.isReadOnlyRepo(selectedNode.repoPath);
+            const divergentCheck = await gitSyncService.checkDivergentBranches(selectedNode.repoPath);
+            const isReadOnly = await gitSyncService.isReadOnlyRepo(selectedNode.repoPath);
 
             if (isReadOnly && divergentCheck.hasDivergence) {
               // Show warning dialog for read-only repos with local changes
@@ -381,7 +383,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               console.log('[UpdatePreview] Resetting read-only repo to remote');
               const resetNotice = uiService.showLoading(`Resetting ${selectedNode.name} to remote...`);
               try {
-                await gitService.resetToRemote(selectedNode.repoPath);
+                await gitSyncService.resetToRemote(selectedNode.repoPath);
                 resetNotice.hide();
               } catch (error) {
                 resetNotice.hide();
@@ -396,7 +398,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               // Pull updates - cherry-pick peer commits or fast-forward from upstream
               // Extract commit hashes from updateStatus for cherry-picking
               const commitHashes = updateStatus!.commits.map(c => c.hash);
-              await gitService.pullUpdates(selectedNode.repoPath, commitHashes);
+              await gitSyncService.pullUpdates(selectedNode.repoPath, commitHashes);
 
               // Check for coherence beacons in the commits we just pulled
               applyNotice.hide();
@@ -459,7 +461,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
                 const buildNotice = uiService.showLoading('Building InterBrain...');
                 try {
-                  await gitService.buildDreamNode(selectedNode.repoPath);
+                  await gitOpsService.buildDreamNode(selectedNode.repoPath);
                   buildNotice.hide();
 
                   // Auto-reload plugin after build using lightweight reload
@@ -542,13 +544,13 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       const loadingNotice = uiService.showLoading(`Updating ${selectedNode.name}...`);
       try {
         // Pull updates
-        await gitService.pullUpdates(selectedNode.repoPath);
+        await gitSyncService.pullUpdates(selectedNode.repoPath);
 
         // If it's the InterBrain node, run build
         if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
           const buildNotice = uiService.showLoading('Building InterBrain...');
           try {
-            await gitService.buildDreamNode(selectedNode.repoPath);
+            await gitOpsService.buildDreamNode(selectedNode.repoPath);
             buildNotice.hide();
           } catch (buildError) {
             buildNotice.hide();
@@ -582,7 +584,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function generateUpdatePreviewMarkdown(
   nodeName: string,
-  updateStatus: import('../../core/services/git-service').FetchResult,
+  updateStatus: import('../social-resonance/services/git-sync-service').FetchResult,
   summary: import('./update-summary-service').UpdateSummary
 ): string {
   const { commits, filesChanged, insertions, deletions } = updateStatus;

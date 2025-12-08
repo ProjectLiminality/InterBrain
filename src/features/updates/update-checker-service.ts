@@ -7,15 +7,15 @@
  */
 
 import { App } from 'obsidian';
-import { GitService, FetchResult } from '../../core/services/git-service';
+import { GitSyncService, FetchResult } from '../social-resonance/services/git-sync-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 export class UpdateCheckerService {
-  private gitService: GitService;
+  private gitSyncService: GitSyncService;
   private isRunning: boolean = false;
 
   constructor(app: App) {
-    this.gitService = new GitService(app);
+    this.gitSyncService = new GitSyncService(app);
   }
 
   /**
@@ -44,7 +44,7 @@ export class UpdateCheckerService {
       const fetchPromises = realNodes.map(async (nodeData) => {
         const node = nodeData.node;
         try {
-          const result = await this.gitService.fetchUpdates(node.repoPath);
+          const result = await this.gitSyncService.fetchUpdates(node.repoPath);
 
           // Store result in Zustand store
           if (result.hasUpdates) {
@@ -77,7 +77,7 @@ export class UpdateCheckerService {
   async checkDreamNodeForUpdates(nodeId: string, repoPath: string): Promise<FetchResult> {
     console.log(`[UpdateChecker] Checking updates for node: ${nodeId}`);
 
-    const result = await this.gitService.fetchUpdates(repoPath);
+    const result = await this.gitSyncService.fetchUpdates(repoPath);
 
     // Store result in Zustand store
     const store = useInterBrainStore.getState();

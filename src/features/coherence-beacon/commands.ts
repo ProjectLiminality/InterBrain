@@ -23,12 +23,12 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
         new Notice(`📤 Detecting available remote for ${selectedNode.name}...`);
 
         // Use intelligent push that detects available remotes
-        const { GitService } = await import('../../core/services/git-service');
-        const gitService = new GitService(plugin.app);
+        const { GitSyncService } = await import('../social-resonance/services/git-sync-service');
+        const gitSyncService = new GitSyncService(plugin.app);
 
         // Get Radicle passphrase from settings for automatic node start
         const passphrase = (plugin as any).settings?.radiclePassphrase || undefined;
-        const result = await gitService.pushToAvailableRemote(selectedNode.repoPath, passphrase);
+        const result = await gitSyncService.pushToAvailableRemote(selectedNode.repoPath, passphrase);
 
         // Show success with remote type
         const remoteTypeLabel =
@@ -123,17 +123,19 @@ async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: stri
   new Notice('Pulling latest InterBrain updates from GitHub...');
 
   try {
-    // Use GitService for proper PATH handling
-    const { GitService } = await import('../../core/services/git-service');
-    const gitService = new GitService(plugin.app);
+    // Use GitSyncService for pull, GitOperationsService for build
+    const { GitSyncService } = await import('../social-resonance/services/git-sync-service');
+    const { GitOperationsService } = await import('../dreamnode/services/git-operations');
+    const gitSyncService = new GitSyncService(plugin.app);
+    const gitOpsService = new GitOperationsService(plugin.app);
 
     // Pull updates
-    await gitService.pullUpdates(repoPath);
+    await gitSyncService.pullUpdates(repoPath);
 
     const buildNotice = new Notice('Building InterBrain plugin...', 0);
 
     // Build the plugin
-    await gitService.buildDreamNode(repoPath);
+    await gitOpsService.buildDreamNode(repoPath);
 
     buildNotice.hide();
     new Notice('✅ InterBrain updated and rebuilt! Reload plugin to see changes.');
