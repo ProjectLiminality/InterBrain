@@ -1,76 +1,81 @@
 # Edit Mode Feature
 
-Unified editing interface that integrates metadata editing with relationship management in the focused view context. This feature represents the completion of Epic 4, combining spatial orchestration, relationship management, and semantic search integration.
+**Purpose**: In-space unified editing interface for DreamNodes with relationship management in liminal web layout.
 
-## Components
+## Key Files
 
-### EditNode3D
-- **Purpose**: In-space metadata editing UI extending ProtoNode3D patterns
-- **Features**: Title editing, type selection, DreamTalk media management
-- **Integration**: Pre-populated with existing DreamNode data for editing context
-- **Patterns**: Reuses ProtoNode3D validation, animation, and interaction patterns
+### `commands.ts`
+Command palette integration for edit mode workflow:
+- **Enter Edit Mode** (`Ctrl+E`) - Activates editing for selected node, shows existing relationships
+- **Exit Edit Mode** - Leaves edit mode without saving
+- **Save Edit Mode Changes** - Persists metadata and relationship changes
+- **Cancel Edit Mode Changes** - Reverts changes and returns to liminal-web
+- **Search Related Nodes** - Semantic search for relationship discovery
+- **Find Similar Related Nodes** - Auto-suggest similar opposite-type nodes
 
-## Key Features
+### `edit-slice.ts`
+Zustand store slice managing edit mode state:
+- Edit session lifecycle (start/exit)
+- Pending relationship tracking (toggle, save)
+- Search result management for relationship editing
+- Validation errors for metadata fields
+- New DreamTalk file handling
 
-### Metadata Editing
-- **Title Changes**: Live editing with debounced validation and store updates
-- **Type Changes**: Dream ↔ Dreamer switching with relationship impact warnings
-- **DreamTalk Media**: File drag-drop and selection for media updates
-- **Validation**: Same validation patterns as ProtoNode creation
+### `EditModeOverlay.tsx`
+Main coordinator component that orchestrates:
+- Renders `EditNode3D` for metadata editing at center position
+- Manages `EditModeSearchNode3D` visibility when relationship search is active
+- Handles save/cancel actions with DreamTalk media file deduplication
+- Triggers spatial layout transitions via custom events
+- Integrates with existing `SpatialOrchestrator` for relationship node positioning
 
-### Relationship Management  
-- **Honeycomb Layout**: Existing relationships shown with gold glow indicators
-- **Semantic Search**: Population of empty slots with opposite-type suggestions
-- **Click-to-Toggle**: Transform search results into relationships via visual feedback
-- **Real-time Preview**: Spatial layout updates during relationship editing
+### `EditNode3D.tsx`
+Central metadata editing interface (extends ProtoNode3D patterns):
+- Title editing with validation
+- Type toggle (dream/dreamer) with relationship impact warnings
+- Contact fields (email, phone, DID, Radicle ID) for dreamer nodes
+- DreamTalk media drag-drop and file selection
+- Relationship search toggle button
+- Save/cancel/search controls
 
-### User Experience
-- **Entry**: Available when node is centered in liminal web layout
-- **Commands**: Command palette driven for keyboard-first workflow
-- **Exit**: Save/cancel workflow preserving original state on cancel
-- **Integration**: Seamless with existing spatial navigation and undo/redo
+### `EditModeSearchNode3D.tsx`
+Relationship search interface that renders on top of EditNode3D:
+- Real-time semantic search with 500ms debounce
+- Searches opposite-type nodes for relationship compatibility
+- Displays elegant spinning ring loading indicator
+- Integrates with `semanticSearchService` for AI-powered discovery
+- Escape key handling via global `DreamspaceCanvas` handler
 
-## Technical Architecture
+## Main Exports
 
-### Store Integration
-- **State Management**: Dedicated EditModeState in Zustand store
-- **Original Preservation**: Store original relationships for cancel operations  
-- **Pending Changes**: Track relationship modifications before persistence
-- **Search Results**: Manage semantic search results for relationship discovery
-
-### Semantic Search Integration
-- **Type Filtering**: Automatic opposite-type filtering (Dream ↔ Dreamer)
-- **Search Commands**: Text-based and similarity-based relationship discovery
-- **Performance**: Background indexing and non-blocking operations
-- **Error Resilience**: Graceful degradation when semantic search unavailable
-
-### Service Layer
-- **Persistence**: Leverage existing DreamNodeService for metadata updates
-- **Bidirectional**: Relationship updates propagated to all connected nodes
-- **Git Integration**: Existing git workflow patterns for change tracking
-- **Mock/Real**: Compatible with both development modes
-
-## Commands
-
-- `enter-edit-mode` - Activate edit mode for centered node
-- `exit-edit-mode` - Exit without saving changes
-- `search-related-nodes` - Text-based semantic search for relationships
-- `find-similar-related-nodes` - Similarity-based relationship suggestions
-- `save-edit-mode-changes` - Persist all changes and exit
-- `cancel-edit-mode-changes` - Discard changes and exit
+```typescript
+export { EditModeOverlay } from './EditModeOverlay'
+export { EditNode3D } from './EditNode3D'
+export { registerEditModeCommands } from './commands'
+```
 
 ## Integration Points
 
-- **ProtoNode System**: Extends creation UI for editing context
-- **Spatial Orchestration**: Uses focused layout as editing foundation
-- **Semantic Search**: Epic 5 integration for intelligent relationship discovery
-- **Command System**: Follows existing command palette infrastructure
-- **Animation System**: Consistent with existing spatial movement patterns
+- **Store**: Uses `useInterBrainStore` edit-mode slice for state
+- **Services**: Delegates to `DreamNodeService` via `serviceManager` for persistence
+- **Spatial Layout**: Communicates with `SpatialOrchestrator` via custom DOM events:
+  - `edit-mode-search-layout` - Positions relationship nodes in search mode
+  - `edit-mode-save-transition` - Animates transition back to liminal-web
+  - `clear-edit-mode-data` - Cleans up stale orchestrator state
+- **Commands**: Registered in plugin's main command palette
 
-## Future Extensions
+## Layout States
 
-- **Advanced Validation**: Relationship constraint checking
-- **Bulk Operations**: Multi-node relationship management
-- **History Integration**: Edit mode specific undo/redo
-- **Media Management**: Enhanced DreamTalk media editing capabilities
-- **Template Integration**: Git template updates during metadata changes
+Edit mode operates across multiple spatial layouts:
+- **liminal-web** → **edit-mode** (enter editing)
+- **edit-mode** → **edit-search** (relationship search active)
+- **edit-search** → **edit-mode** (search toggle off, filter to pending)
+- **edit-mode** → **liminal-web** (save or cancel)
+
+## Notes
+
+- **No unit tests for VaultService** - Deliberate decision (see CLAUDE.md testing section)
+- **Contact info only for dreamer nodes** - Automatically hidden/cleared for dream type
+- **File deduplication** - SHA-256 hash comparison prevents duplicate media copies
+- **Escape key handling** - Centralized in `DreamspaceCanvas` for stability across layouts
+- **Focus persistence** - Title input maintains focus through type changes for seamless editing
