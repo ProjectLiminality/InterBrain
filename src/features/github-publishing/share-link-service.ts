@@ -6,7 +6,7 @@
 
 import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../core/types/dreamnode';
-import { URIHandlerService } from '../social-resonance/uri-handler-service';
+import { URIHandlerService } from '../uri-handler';
 import { serviceManager } from '../../core/services/service-manager';
 import { getRadicleBatchInitService } from '../social-resonance/batch-init-service';
 

@@ -51,7 +51,7 @@ import { initializeAudioTrimmingService } from './features/songline/services/aud
 import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeMediaLoadingService } from './core/services/media-loading-service';
-import { initializeURIHandlerService } from './features/social-resonance/uri-handler-service';
+import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
 import { initializeUpdateCheckerService } from './features/updates/update-checker-service';

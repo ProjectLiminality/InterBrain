@@ -8,7 +8,7 @@ import { App, Plugin } from 'obsidian';
 import { RadicleService } from '../social-resonance/radicle-service';
 import { VaultService } from '../../core/services/vault-service';
 import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
-import { getURIHandlerService } from '../social-resonance/uri-handler-service';
+import { getURIHandlerService } from '../uri-handler';
 
 export interface CoherenceBeacon {
   type: 'supermodule';

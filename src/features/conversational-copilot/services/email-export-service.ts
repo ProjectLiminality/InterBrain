@@ -1,7 +1,7 @@
 import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../../core/types/dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
-import { URIHandlerService } from '../../social-resonance/uri-handler-service';
+import { URIHandlerService } from '../../uri-handler';
 import { ShareLinkService } from '../../github-publishing/share-link-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';

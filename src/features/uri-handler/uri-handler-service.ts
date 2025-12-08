@@ -1,5 +1,5 @@
 import { App, Notice, Plugin } from 'obsidian';
-import { RadicleService } from './radicle-service';
+import { RadicleService } from '../social-resonance/radicle-service';
 import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
 import { DreamSongRelationshipService } from '../dreamweaving/dreamsong-relationship-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
