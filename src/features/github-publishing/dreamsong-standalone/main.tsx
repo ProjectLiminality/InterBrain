@@ -8,8 +8,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { DreamSong } from '../../dreamweaving/DreamSong';
-import { DreamSongBlock } from '../../../core/types/dreamsong';
-import { MediaFile } from '../../../core/types/dreamnode';
+import { DreamSongBlock } from '../../dreamweaving/types/dreamsong';
+import { MediaFile } from '../../dreamnode';
 
 interface DreamSongData {
   dreamNodeName: string;

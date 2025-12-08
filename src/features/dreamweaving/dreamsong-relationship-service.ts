@@ -1,10 +1,10 @@
 import { Plugin } from 'obsidian';
-import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
+import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { DreamSongParserService } from './dreamsong-parser-service';
 import { VaultService } from '../../core/services/vault-service';
 import { CanvasParserService } from './services/canvas-parser-service';
-import { DreamNode } from '../../core/types/dreamnode';
-import { DreamSongData, DreamSongBlock } from '../../core/types/dreamsong';
+import { DreamNode } from '../dreamnode';
+import { DreamSongData, DreamSongBlock } from './types/dreamsong';
 import {
   DreamSongRelationshipGraph,
   DreamSongNode,

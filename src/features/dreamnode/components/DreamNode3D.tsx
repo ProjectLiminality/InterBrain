@@ -2,16 +2,16 @@ import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwa
 import { Html, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
-import { DreamNode } from '../../core/types/dreamnode';
-import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../constellation-layout/DynamicViewScaling';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { dreamNodeStyles } from './dreamNodeStyles';
-import { CanvasParserService } from '../dreamweaving/services/canvas-parser-service';
-import { VaultService } from '../../core/services/vault-service';
+import { DreamNode } from '../types/dreamnode';
+import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/DynamicViewScaling';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { dreamNodeStyles } from '../styles/dreamNodeStyles';
+import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
+import { VaultService } from '../../../core/services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
-import { getMediaLoadingService } from '../../core/services/media-loading-service';
-import './dreamNodeAnimations.css';
+import { getMediaLoadingService } from '../services/media-loading-service';
+import '../styles/dreamNodeAnimations.css';
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
@@ -265,7 +265,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     console.log('🎯 Flip button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
     
     try {
-      const { serviceManager } = await import('../../core/services/service-manager');
+      const { serviceManager } = await import('../../../core/services/service-manager');
       console.log('🎯 About to execute flip-selected-dreamnode command');
       serviceManager.executeCommand('flip-selected-dreamnode');
     } catch (error) {
@@ -280,7 +280,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     console.log('🎯 DreamTalk fullscreen button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
     
     try {
-      const { serviceManager } = await import('../../core/services/service-manager');
+      const { serviceManager } = await import('../../../core/services/service-manager');
       console.log('🎯 About to execute open-dreamtalk-fullscreen command');
       serviceManager.executeCommand('open-dreamtalk-fullscreen');
     } catch (error) {
@@ -293,7 +293,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (isDragging) return;
     
     try {
-      const { serviceManager } = await import('../../core/services/service-manager');
+      const { serviceManager } = await import('../../../core/services/service-manager');
       serviceManager.executeCommand('open-dreamsong-fullscreen');
     } catch (error) {
       console.error('Failed to execute DreamSong full-screen command:', error);

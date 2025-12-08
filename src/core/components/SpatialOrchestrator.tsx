@@ -13,8 +13,8 @@
 
 import React, { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
 import { Vector3, Group } from 'three';
-import { DreamNode } from '../types/dreamnode';
-import type { DreamNode3DRef } from '../../features/dreamnode-visualization/DreamNode3D';
+import { DreamNode } from '../../features/dreamnode';
+import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { buildRelationshipGraph, calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../../features/liminal-web-layout';
 import { computeConstellationLayout, createFallbackLayout } from '../../features/constellation-layout/ConstellationLayout';
 import { useInterBrainStore } from '../store/interbrain-store';

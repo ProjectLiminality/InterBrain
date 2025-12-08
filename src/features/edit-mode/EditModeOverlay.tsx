@@ -3,7 +3,7 @@ import fs from 'fs';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
 import { UIService } from '../../core/services/ui-service';
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 import EditNode3D from './EditNode3D';
 import EditModeSearchNode3D from './EditModeSearchNode3D';
 

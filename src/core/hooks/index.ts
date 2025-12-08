@@ -1,2 +1,4 @@
 // Core hooks barrel export
-export * from './useDreamSongData';
+// Re-exports from feature modules for backwards compatibility
+
+export * from '../../features/dreamweaving/useDreamSongData';

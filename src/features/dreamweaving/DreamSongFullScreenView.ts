@@ -1,11 +1,11 @@
 import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
 import { Root, createRoot } from 'react-dom/client';
 import { StrictMode, createElement } from 'react';
-import { DreamSongWithExtensions } from '../../features/dreamweaving/DreamSongWithExtensions';
-import { DreamSongBlock } from '../types/dreamsong';
-import { DreamNode } from '../types/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
+import { DreamSongWithExtensions } from './DreamSongWithExtensions';
+import { DreamSongBlock } from './types/dreamsong';
+import { DreamNode } from '../dreamnode/types/dreamnode';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
 
 export const DREAMSONG_FULLSCREEN_VIEW_TYPE = 'dreamsong-fullscreen-view';
 

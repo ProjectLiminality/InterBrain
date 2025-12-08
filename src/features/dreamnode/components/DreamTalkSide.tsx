@@ -1,9 +1,9 @@
 import React from 'react';
-import { DreamNode, MediaFile } from '../../core/types/dreamnode';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from './dreamNodeStyles';
+import { DreamNode, MediaFile } from '../types/dreamnode';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from '../styles/dreamNodeStyles';
 import { setIcon } from 'obsidian';
-import { extractYouTubeVideoId } from '../drag-and-drop';
-import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../drag-and-drop';
+import { extractYouTubeVideoId } from '../../drag-and-drop';
+import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 import { PDFPreview } from './PDFPreview';
 
 interface DreamTalkSideProps {

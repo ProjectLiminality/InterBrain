@@ -17,7 +17,7 @@ import {
   ProcessedCanvasEdge,
   MediaTextPair,
   MediaInfo
-} from '../../core/types/dreamsong';
+} from './types/dreamsong';
 import { InterBrainState } from '../../core/store/interbrain-store';
 
 /**

@@ -19,20 +19,13 @@ export * from './layouts';
 // Components (selective - not all components should be exported)
 export { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './components/DreamspaceView';
 export { default as DreamspaceCanvas } from './components/DreamspaceCanvas';
-export { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './components/DreamSongFullScreenView';
-export { LinkFileView, LINK_FILE_VIEW_TYPE } from './components/LinkFileView';
 
-// Re-export DreamNode visualization components (now in feature)
-export { DreamNode3D, DreamTalkSide, DreamSongSide, PDFPreview } from '../features/dreamnode-visualization';
-export * from '../features/dreamnode-visualization/dreamNodeStyles';
+// Re-exports from feature modules
+export * from '../features/dreamnode';
+export { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE, LinkFileView, LINK_FILE_VIEW_TYPE } from '../features/dreamweaving';
 
 // Hooks
 export * from './hooks';
 
 // Commands
 export * from './commands';
-
-// UI
-// Note: Feature-specific modals moved to their respective features:
-// - CoherenceBeaconModal -> features/coherence-beacon/ui/
-// - UpdatePreviewModal -> features/updates/ui/

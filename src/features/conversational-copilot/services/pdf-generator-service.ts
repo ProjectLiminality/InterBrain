@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import * as fs from 'fs';
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 
 /**

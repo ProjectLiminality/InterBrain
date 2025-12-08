@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 import { VectorData } from './services/indexing-service';
 import { OllamaConfig, DEFAULT_OLLAMA_CONFIG } from './types';
 

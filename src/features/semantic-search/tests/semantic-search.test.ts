@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { SemanticSearchService } from '../services/semantic-search-service';
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { VectorData } from '../services/indexing-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { ollamaEmbeddingService } from '../services/ollama-embedding-service';

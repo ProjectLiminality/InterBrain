@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { DreamNodeService } from './dreamnode-service'
-import { createMockDreamNode } from '../test-utils/test-utils'
+import { createMockDreamNode } from '../../../core/test-utils/test-utils'
 
 // Mock the store
 const mockSetSelectedNode = vi.fn()
 const mockSetSearchResults = vi.fn()
 const mockSetSpatialLayout = vi.fn()
 
-vi.mock('../store/interbrain-store', () => ({
+vi.mock('../../../core/store/interbrain-store', () => ({
   useInterBrainStore: {
     getState: () => ({
       setSelectedNode: mockSetSelectedNode,

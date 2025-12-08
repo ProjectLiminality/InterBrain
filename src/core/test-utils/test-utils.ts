@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { DreamNode } from '../types/dreamnode'
+import type { DreamNode } from '../../features/dreamnode/types/dreamnode'
 
 // Test data factories
 export const createMockDreamNode = (overrides: Partial<DreamNode> = {}): DreamNode => ({

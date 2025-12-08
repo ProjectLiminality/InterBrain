@@ -15,8 +15,8 @@ import { DreamSong } from './DreamSong';
 import { PerspectivesSection } from '../songline/components/PerspectivesSection';
 import { ConversationsSection } from '../songline/components/ConversationsSection';
 import { ReadmeSection } from './ReadmeSection';
-import { DreamSongBlock } from '../../core/types/dreamsong';
-import { MediaFile, DreamNode } from '../../core/types/dreamnode';
+import { DreamSongBlock } from './types/dreamsong';
+import { MediaFile, DreamNode } from '../dreamnode';
 import { Perspective, getPerspectiveService } from '../songline/services/perspective-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 

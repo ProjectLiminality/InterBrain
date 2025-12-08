@@ -7,7 +7,7 @@
 
 import type InterBrainPlugin from '../../../main';
 import { VaultService } from '../../../core/services/vault-service';
-import type { DreamNode } from '../../../core/types/dreamnode';
+import type { DreamNode } from '../../dreamnode';
 
 export interface AudioRecordingService {
 	/**

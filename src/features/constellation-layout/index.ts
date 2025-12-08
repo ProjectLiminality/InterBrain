@@ -6,6 +6,7 @@ export { default as ConstellationEdges } from './ConstellationEdges';
 export { default as DreamSongThread3D } from './DreamSongThread3D';
 export { default as Edge3D } from './Edge3D';
 export { default as Star3D } from './Star3D';
+export { default as SphereRotationControls } from './SphereRotationControls';
 export * from './ConstellationLayout';
 export * from './ClusterRefinement';
 export * from './ForceDirected';

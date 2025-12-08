@@ -1,5 +1,5 @@
-import { DreamNode } from '../types/dreamnode';
-import { GitDreamNodeService } from './git-dreamnode-service';
+import { DreamNode } from '../../features/dreamnode/types/dreamnode';
+import { GitDreamNodeService } from '../../features/dreamnode/services/git-dreamnode-service';
 import { VaultService } from './vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { LeafManagerService } from './leaf-manager-service';

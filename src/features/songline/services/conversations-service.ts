@@ -6,7 +6,7 @@
  */
 
 import type InterBrainPlugin from '../../../main';
-import type { DreamNode } from '../../../core/types/dreamnode';
+import type { DreamNode } from '../../dreamnode';
 import { getAudioStreamingService } from '../../dreamweaving/services/audio-streaming-service';
 
 /**

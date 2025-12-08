@@ -8,7 +8,7 @@
 
 import { Vector3 } from 'three';
 import { DreamSongRelationshipGraph } from './types';
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 import {
   ConstellationLayoutConfig,
   ConstellationLayoutResult,

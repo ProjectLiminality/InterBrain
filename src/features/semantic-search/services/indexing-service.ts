@@ -1,4 +1,4 @@
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { IEmbeddingService, TextProcessor } from './embedding-service';
 import { ollamaEmbeddingService } from './ollama-embedding-service';

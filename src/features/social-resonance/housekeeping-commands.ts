@@ -8,7 +8,7 @@
  */
 
 import { Notice, Plugin } from 'obsidian';
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 import { serviceManager } from '../../core/services/service-manager';
 
 /**

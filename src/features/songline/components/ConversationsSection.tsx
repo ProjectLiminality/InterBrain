@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { getConversationsService, type Conversation } from '../services/conversations-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 

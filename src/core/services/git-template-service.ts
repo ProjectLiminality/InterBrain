@@ -1,4 +1,4 @@
-import { UDDFile } from '../types/dreamnode';
+import { UDDFile } from '../../features/dreamnode/types/dreamnode';
 import { Notice, Vault, TFile, TFolder } from 'obsidian';
 
 /**

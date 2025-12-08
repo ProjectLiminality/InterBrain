@@ -3,7 +3,7 @@ import { UIService } from '../../core/services/ui-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
 import { serviceManager } from '../../core/services/service-manager';
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 
 /**
  * Edit mode commands for unified node editing with relationship management

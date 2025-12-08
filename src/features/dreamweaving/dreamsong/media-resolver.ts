@@ -6,7 +6,7 @@
  * Handles data URL conversion and MIME type detection.
  */
 
-import { DreamSongBlock, MediaInfo } from '../../../core/types/dreamsong';
+import { DreamSongBlock, MediaInfo } from '../types/dreamsong';
 import { VaultService } from '../../../core/services/vault-service';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 

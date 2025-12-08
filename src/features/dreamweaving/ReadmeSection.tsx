@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 import separatorImage from '../../assets/images/Separator.png';
 import styles from './dreamsong.module.css';
 

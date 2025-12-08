@@ -7,7 +7,7 @@ const execAsync = promisify(exec);
 import { App, Plugin } from 'obsidian';
 import { RadicleService } from '../social-resonance/radicle-service';
 import { VaultService } from '../../core/services/vault-service';
-import { GitDreamNodeService } from '../../core/services/git-dreamnode-service';
+import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { getURIHandlerService } from '../uri-handler';
 
 export interface CoherenceBeacon {
@@ -532,7 +532,7 @@ export class CoherenceBeaconService {
     console.log(`CoherenceBeaconService: Establishing peer relationships for ${rootNodeName} with ${peerDID}...`);
 
     try {
-      const { UDDService } = await import('../../core/services/udd-service');
+      const { UDDService } = await import('../dreamnode/services/udd-service');
       const path = require('path');
 
       // Find all DreamNodes at vault root (including the one we just cloned and its submodules)

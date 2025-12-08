@@ -1,4 +1,4 @@
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { VectorData } from './indexing-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { IEmbeddingService, VectorUtils, TextProcessor } from './embedding-service';

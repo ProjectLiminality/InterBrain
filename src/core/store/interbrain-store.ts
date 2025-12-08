@@ -26,9 +26,9 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DreamNode } from '../types/dreamnode';
-import { DreamSongData } from '../types/dreamsong';
-import { FlipState } from '../types/dreamsong';
+import { DreamNode } from '../../features/dreamnode/types/dreamnode';
+import { DreamSongData } from '../../features/dreamweaving/types/dreamsong';
+import { FlipState } from '../../features/dreamweaving/types/dreamsong';
 
 // Feature slice imports
 import {
@@ -361,7 +361,7 @@ const createCoreSlice = (set: any, get: any): CoreSlice => ({
 
     // Trigger lazy media loading for node and 2-degree neighborhood
     if (node) {
-      import('../services/media-loading-service').then(({ getMediaLoadingService }) => {
+      import('../../features/dreamnode/services/media-loading-service').then(({ getMediaLoadingService }) => {
         try {
           const mediaLoadingService = getMediaLoadingService();
           mediaLoadingService.loadNodeWithNeighborhood(node.id);

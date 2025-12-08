@@ -1,5 +1,5 @@
 import { App, TFile, Notice, WorkspaceLeaf, EventRef } from 'obsidian';
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { semanticSearchService } from '../../semantic-search/services/semantic-search-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { VaultService } from '../../../core/services/vault-service';

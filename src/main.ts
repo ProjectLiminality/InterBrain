@@ -8,12 +8,12 @@ import { GitTemplateService } from './core/services/git-template-service';
 import { PassphraseManager } from './core/services/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
-import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './core/components/DreamSongFullScreenView';
-import { LinkFileView, LINK_FILE_VIEW_TYPE } from './core/components/LinkFileView';
+import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/DreamSongFullScreenView';
+import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
 import { calculateFibonacciSpherePositions } from './features/constellation-layout';
-import { DreamNode } from './core/types/dreamnode';
+import { DreamNode } from './features/dreamnode';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerNavigationCommands } from './core/commands/navigation-commands';
 import { registerDeveloperCommands } from './core/commands/developer-commands';
@@ -49,7 +49,7 @@ import { initializePerspectiveService } from './features/songline/services/persp
 import { initializeAudioTrimmingService } from './features/songline/services/audio-trimming-service';
 import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
-import { initializeMediaLoadingService } from './core/services/media-loading-service';
+import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
 import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
@@ -826,7 +826,7 @@ export default class InterBrainPlugin extends Plugin {
 
             // Trigger two-phase media loading after vault scan
             try {
-              const { getMediaLoadingService } = await import('./core/services/media-loading-service');
+              const { getMediaLoadingService } = await import('./features/dreamnode/services/media-loading-service');
               const mediaLoadingService = getMediaLoadingService();
               mediaLoadingService.loadAllNodesByDistance();
             } catch (error) {

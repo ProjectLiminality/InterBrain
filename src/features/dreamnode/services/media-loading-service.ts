@@ -6,7 +6,7 @@
  */
 
 import type { DreamNode, MediaFile, CanvasFile } from '../types/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 
 interface MediaLoadTask {
   nodeId: string;

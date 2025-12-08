@@ -1,4 +1,4 @@
-import { useInterBrainStore } from '../store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { DreamNode } from '../types/dreamnode';
 
 export class DreamNodeService {

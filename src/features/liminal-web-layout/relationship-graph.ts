@@ -5,7 +5,7 @@
  * Used by liminal web layout system for fast relationship traversal
  */
 
-import { DreamNode } from '../../core/types/dreamnode';
+import { DreamNode } from '../dreamnode';
 
 /**
  * In-memory relationship graph for high-performance queries

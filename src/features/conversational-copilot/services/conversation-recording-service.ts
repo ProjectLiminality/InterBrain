@@ -1,5 +1,5 @@
 import { App, TFile } from 'obsidian';
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { getTranscriptionService } from './transcription-service';
 import { getRealtimeTranscriptionService } from '../../realtime-transcription';
 

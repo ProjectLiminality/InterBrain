@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { IndexingService, VectorData } from '../services/indexing-service';
-import { DreamNode } from '../../../core/types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 
 // Mock the store

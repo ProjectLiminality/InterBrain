@@ -1,11 +1,11 @@
 import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
-import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
+import { useInterBrainStore, RealNodeData } from '../../../core/store/interbrain-store';
 import { Plugin } from 'obsidian';
-import { indexingService } from '../../features/semantic-search/services/indexing-service';
-import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../../features/drag-and-drop';
-import { createLinkFileContent, getLinkFileName } from '../../features/drag-and-drop';
-import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
-import { webLinkAnalyzerService } from '../../features/web-link-analyzer/service';
+import { indexingService } from '../../semantic-search/services/indexing-service';
+import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../../drag-and-drop';
+import { createLinkFileContent, getLinkFileName } from '../../drag-and-drop';
+import { sanitizeTitleToPascalCase } from '../../../core/utils/title-sanitization';
+import { webLinkAnalyzerService } from '../../web-link-analyzer/service';
 
 // Access Node.js modules directly in Electron context
  

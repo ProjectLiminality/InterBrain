@@ -9,7 +9,7 @@ import { App } from 'obsidian';
 import { GitService } from '../../../core/services/git-service';
 import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
-import { UDDService } from '../../../core/services/udd-service';
+import { UDDService } from '../../dreamnode/services/udd-service';
 import { RadicleService } from '../../social-resonance/radicle-service';
 
 export interface SubmoduleInfo {
