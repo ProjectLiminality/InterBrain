@@ -12,7 +12,7 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './core/
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './core/components/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
-import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './core/layouts/FibonacciSphereLayout';
+import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './features/constellation';
 import { DreamNode } from './core/types/dreamnode';
 import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './core/utils/relationship-graph';
 import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './core/layouts/RingLayout';

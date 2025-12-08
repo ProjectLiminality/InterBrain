@@ -13,3 +13,4 @@ export * from './LayoutConfig';
 export * from './clustering';
 export * from './types';
 export * from './constellation-slice';
+export * from './FibonacciSphereLayout';
