@@ -6,7 +6,7 @@
  * to create visually pleasing node arrangements within spherical caps.
  */
 
-import { DreamSongNode, DreamSongEdge } from '../../core/types/constellation';
+import { DreamSongNode, DreamSongEdge } from './types';
 import { ConstellationCluster, PlanarPosition, ForceVector, ConstellationLayoutConfig } from './LayoutConfig';
 
 /**

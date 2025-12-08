@@ -4,7 +4,7 @@ import {
   SerializableDreamSongGraph,
   serializeRelationshipGraph,
   deserializeRelationshipGraph
-} from '../../core/types/constellation';
+} from './types';
 import {
   FibonacciSphereConfig,
   DEFAULT_FIBONACCI_CONFIG

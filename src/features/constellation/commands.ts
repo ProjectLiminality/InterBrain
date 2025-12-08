@@ -3,7 +3,7 @@ import { DreamSongRelationshipService } from '../dreamweaving/dreamsong-relation
 import { UIService } from '../../core/services/ui-service';
 import { VaultService } from '../../core/services/vault-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from '../../core/types/constellation';
+import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from './types';
 
 /**
  * Constellation Commands - Obsidian commands for DreamSong relationship analysis
