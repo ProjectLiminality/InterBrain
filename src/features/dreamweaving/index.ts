@@ -1,4 +1,9 @@
 // Dreamweaving feature exports
+
+// Slice
+export * from './dreamweaving-slice';
+
+// Commands
 export { registerDreamweavingCommands } from './commands';
 export { registerLinkFileCommands, enhanceFileSuggestions } from './link-file-commands';
 

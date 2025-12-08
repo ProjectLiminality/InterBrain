@@ -55,6 +55,12 @@ export interface ConstellationSlice {
   fibonacciConfig: FibonacciSphereConfig;
   setFibonacciConfig: (config: Partial<FibonacciSphereConfig>) => void;
   resetFibonacciConfig: () => void;
+
+  // Debug flags for constellation visualization
+  debugWireframeSphere: boolean;
+  setDebugWireframeSphere: (visible: boolean) => void;
+  debugIntersectionPoint: boolean;
+  setDebugIntersectionPoint: (visible: boolean) => void;
 }
 
 /**
@@ -111,6 +117,12 @@ export const createConstellationSlice: StateCreator<
   })),
 
   resetFibonacciConfig: () => set({ fibonacciConfig: DEFAULT_FIBONACCI_CONFIG }),
+
+  // Debug flags
+  debugWireframeSphere: false,
+  setDebugWireframeSphere: (visible) => set({ debugWireframeSphere: visible }),
+  debugIntersectionPoint: false,
+  setDebugIntersectionPoint: (visible) => set({ debugIntersectionPoint: visible }),
 });
 
 /**

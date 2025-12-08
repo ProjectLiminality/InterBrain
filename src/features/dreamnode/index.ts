@@ -1,6 +1,9 @@
 // DreamNode feature barrel export
 // The fundamental unit: types, services, and visualization components
 
+// Slice
+export * from './dreamnode-slice';
+
 // Commands
 export { registerDreamNodeCommands } from './commands';
 

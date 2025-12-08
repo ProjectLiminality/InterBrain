@@ -6,31 +6,40 @@
  *
  * Core State (lives here):
  * - realNodes: Fundamental DreamNode data
- * - selectedNode: Current focus
- * - spatialLayout: Which mode is active
+ * - spatialLayout: Which mode is active (view layer orchestration)
  * - camera: 3D view state
- * - navigationHistory: Undo/redo across features
- * - flipState: DreamNode flip animations
- * - creatorMode: Whether editing a node's files
- * - debug flags
+ * - layoutTransition: Animation state between layouts
+ * - debugFlyingControls: Camera debug flag
  *
  * Feature Slices (imported from features/):
+ * - DreamweavingSlice: selectedNodeDreamSongData, dreamSongCache
+ * - DreamNodeSlice: flipState, creatorMode
  * - SearchSlice: searchResults, searchInterface, vectorData, ollamaConfig
- * - ConstellationSlice: constellationData, fibonacciConfig
+ * - ConstellationSlice: constellationData, fibonacciConfig, debug flags
  * - CopilotModeSlice: copilotMode state and actions
  * - EditModeSlice: editMode state and actions
  * - CreationSlice: creationState and actions
  * - RadialButtonsSlice: radialButtonUI
  * - UpdatesSlice: updateStatus
+ * - DragAndDropSlice: isDragging
+ * - LiminalWebSlice: selectedNode, navigationHistory
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DreamNode } from '../../features/dreamnode/types/dreamnode';
-import { DreamSongData } from '../../features/dreamweaving/types/dreamsong';
-import { FlipState } from '../../features/dreamweaving/types/dreamsong';
 
 // Feature slice imports
+import {
+  DreamweavingSlice,
+  createDreamweavingSlice,
+} from '../../features/dreamweaving/dreamweaving-slice';
+
+import {
+  DreamNodeSlice,
+  createDreamNodeSlice,
+} from '../../features/dreamnode/dreamnode-slice';
+
 import {
   SearchSlice,
   createSearchSlice,
@@ -80,7 +89,19 @@ import {
   createUpdatesSlice,
 } from '../../features/updates/updates-slice';
 
-// Type alias for spatial layout modes (the active view mode, not to be confused with SpatialLayout interface in dreamnode.ts)
+import {
+  DragAndDropSlice,
+  createDragAndDropSlice,
+} from '../../features/drag-and-drop/drag-and-drop-slice';
+
+import {
+  LiminalWebSlice,
+  createLiminalWebSlice,
+  NavigationHistoryEntry,
+  NavigationHistoryState,
+} from '../../features/liminal-web-layout/liminal-web-slice';
+
+// Type alias for spatial layout modes (the active view mode)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
 
 // Re-export types for backward compatibility
@@ -88,82 +109,16 @@ export type { CopilotModeState };
 export type { EditModeState, EditModeValidationErrors };
 export type { CreationState, ProtoNode, ValidationErrors };
 export type { SearchInterfaceState };
-
-// Helper function to get current scroll position of DreamSong content
-function getDreamSongScrollPosition(nodeId: string): number | null {
-  try {
-    if (typeof document === 'undefined') return null;
-
-    const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
-    if (dreamSongLeaf) {
-      const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
-      if (scrollContainer && 'scrollTop' in scrollContainer) {
-        return (scrollContainer as HTMLElement).scrollTop;
-      }
-    }
-
-    const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
-    if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
-      return (dreamSpaceContent as HTMLElement).scrollTop;
-    }
-
-    return null;
-  } catch (error) {
-    console.warn(`Failed to get scroll position for node ${nodeId}:`, error);
-    return null;
-  }
-}
-
-function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number): void {
-  try {
-    if (typeof document === 'undefined') return;
-
-    const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
-    if (dreamSongLeaf) {
-      const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
-      if (scrollContainer && 'scrollTop' in scrollContainer) {
-        (scrollContainer as HTMLElement).scrollTop = scrollPosition;
-        return;
-      }
-    }
-
-    const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
-    if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
-      (dreamSpaceContent as HTMLElement).scrollTop = scrollPosition;
-    }
-  } catch (error) {
-    console.warn(`Failed to restore scroll position for node ${nodeId}:`, error);
-  }
-}
+export type { NavigationHistoryEntry, NavigationHistoryState };
 
 // ============================================================================
 // CORE STATE TYPES
 // ============================================================================
 
-export interface NavigationHistoryEntry {
-  nodeId: string | null;
-  layout: 'constellation' | 'liminal-web';
-  timestamp: number;
-  flipState: FlipState | null;
-  scrollPosition: number | null;
-}
-
-export interface NavigationHistoryState {
-  history: NavigationHistoryEntry[];
-  currentIndex: number;
-  maxHistorySize: number;
-}
-
 export interface RealNodeData {
   node: DreamNode;
   fileHash?: string;
   lastSynced: number;
-}
-
-export interface DreamSongCacheEntry {
-  data: DreamSongData;
-  timestamp: number;
-  structureHash: string;
 }
 
 // ============================================================================
@@ -178,27 +133,7 @@ export interface CoreSlice {
   batchUpdateNodePositions: (positions: Map<string, [number, number, number]>) => void;
   deleteRealNode: (id: string) => void;
 
-  // Selected DreamNode state
-  selectedNode: DreamNode | null;
-  setSelectedNode: (node: DreamNode | null) => void;
-
-  // Selected DreamNode's DreamSong data
-  selectedNodeDreamSongData: DreamSongData | null;
-  setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
-
-  // DreamSong cache for service layer
-  dreamSongCache: Map<string, DreamSongCacheEntry>;
-  getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
-  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
-
-  // Creator mode state
-  creatorMode: {
-    isActive: boolean;
-    nodeId: string | null;
-  };
-  setCreatorMode: (active: boolean, nodeId?: string | null) => void;
-
-  // Spatial layout state
+  // Spatial layout state (view layer orchestration)
   spatialLayout: SpatialLayoutMode;
   setSpatialLayout: (layout: SpatialLayoutMode) => void;
 
@@ -217,44 +152,13 @@ export interface CoreSlice {
   layoutTransition: {
     isTransitioning: boolean;
     progress: number;
-    previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null;
+    previousLayout: SpatialLayoutMode | null;
   };
-  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null) => void;
+  setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: SpatialLayoutMode | null) => void;
 
-  // Debug flags
-  debugWireframeSphere: boolean;
-  setDebugWireframeSphere: (visible: boolean) => void;
-  debugIntersectionPoint: boolean;
-  setDebugIntersectionPoint: (visible: boolean) => void;
+  // Camera debug flag (stays in core - camera is view layer)
   debugFlyingControls: boolean;
   setDebugFlyingControls: (enabled: boolean) => void;
-
-  // Drag state
-  isDragging: boolean;
-  setIsDragging: (dragging: boolean) => void;
-
-  // Navigation history management
-  navigationHistory: NavigationHistoryState;
-  isRestoringFromHistory: boolean;
-  setRestoringFromHistory: (restoring: boolean) => void;
-  addHistoryEntry: (nodeId: string | null, layout: 'constellation' | 'liminal-web') => void;
-  getHistoryEntryForUndo: () => NavigationHistoryEntry | null;
-  getHistoryEntryForRedo: () => NavigationHistoryEntry | null;
-  performUndo: () => boolean;
-  performRedo: () => boolean;
-  clearNavigationHistory: () => void;
-  restoreVisualState: (entry: NavigationHistoryEntry) => void;
-
-  // DreamNode flip animation state
-  flipState: {
-    flippedNodeId: string | null;
-    flipStates: Map<string, FlipState>;
-  };
-  setFlippedNode: (nodeId: string | null) => void;
-  startFlipAnimation: (nodeId: string, direction: 'front-to-back' | 'back-to-front') => void;
-  completeFlipAnimation: (nodeId: string) => void;
-  resetAllFlips: () => void;
-  getNodeFlipState: (nodeId: string) => FlipState | null;
 }
 
 // ============================================================================
@@ -263,29 +167,25 @@ export interface CoreSlice {
 
 export interface InterBrainState extends
   CoreSlice,
+  DreamweavingSlice,
+  DreamNodeSlice,
   SearchSlice,
   ConstellationSlice,
   CopilotModeSlice,
   EditModeSlice,
   CreationSlice,
   RadialButtonsSlice,
-  UpdatesSlice {}
+  UpdatesSlice,
+  DragAndDropSlice,
+  LiminalWebSlice {}
 
 // ============================================================================
 // CORE SLICE CREATOR
 // ============================================================================
 
-const createCoreSlice = (set: any, get: any): CoreSlice => ({
+const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   // Initial state
   realNodes: new Map<string, RealNodeData>(),
-  selectedNode: null,
-  selectedNodeDreamSongData: null,
-  dreamSongCache: new Map<string, DreamSongCacheEntry>(),
-
-  creatorMode: {
-    isActive: false,
-    nodeId: null
-  },
 
   spatialLayout: 'constellation',
 
@@ -302,29 +202,7 @@ const createCoreSlice = (set: any, get: any): CoreSlice => ({
     previousLayout: null,
   },
 
-  debugWireframeSphere: false,
-  debugIntersectionPoint: false,
   debugFlyingControls: false,
-  isDragging: false,
-
-  navigationHistory: {
-    history: [{
-      nodeId: null,
-      layout: 'constellation',
-      timestamp: Date.now(),
-      flipState: null,
-      scrollPosition: null
-    }],
-    currentIndex: 0,
-    maxHistorySize: 150
-  },
-
-  isRestoringFromHistory: false,
-
-  flipState: {
-    flippedNodeId: null,
-    flipStates: new Map<string, FlipState>()
-  },
 
   // Actions
   setRealNodes: (nodes) => set({ realNodes: nodes }),
@@ -355,157 +233,7 @@ const createCoreSlice = (set: any, get: any): CoreSlice => ({
     return { realNodes: newMap };
   }),
 
-  setSelectedNode: (node) => set((state: InterBrainState) => {
-    const previousNode = state.selectedNode;
-    const currentLayout = state.spatialLayout;
-
-    // Trigger lazy media loading for node and 2-degree neighborhood
-    if (node) {
-      import('../../features/dreamnode/services/media-loading-service').then(({ getMediaLoadingService }) => {
-        try {
-          const mediaLoadingService = getMediaLoadingService();
-          mediaLoadingService.loadNodeWithNeighborhood(node.id);
-        } catch (error) {
-          console.warn('[Store] MediaLoadingService not initialized:', error);
-        }
-      }).catch(error => {
-        console.error('[Store] Failed to load media service:', error);
-      });
-    }
-
-    // Detect meaningful node selection changes for history tracking
-    const isMeaningfulChange = (
-      currentLayout === 'liminal-web' &&
-      previousNode &&
-      node &&
-      previousNode.id !== node.id
-    );
-
-    if (isMeaningfulChange && !state.isRestoringFromHistory) {
-      const newEntry: NavigationHistoryEntry = {
-        nodeId: node.id,
-        layout: 'liminal-web',
-        timestamp: Date.now(),
-        flipState: state.flipState.flipStates.get(node.id) || null,
-        scrollPosition: getDreamSongScrollPosition(node.id)
-      };
-
-      const { history, currentIndex, maxHistorySize } = state.navigationHistory;
-
-      const currentEntry = history[currentIndex];
-      const isDuplicate = currentEntry &&
-        currentEntry.nodeId === newEntry.nodeId &&
-        currentEntry.layout === newEntry.layout;
-
-      if (isDuplicate) {
-        return { selectedNode: node };
-      }
-
-      const newHistory = currentIndex >= 0
-        ? [...history.slice(0, currentIndex + 1), newEntry]
-        : [newEntry];
-
-      const trimmedHistory = newHistory.length > maxHistorySize
-        ? newHistory.slice(-maxHistorySize)
-        : newHistory;
-
-      return {
-        selectedNode: node,
-        navigationHistory: {
-          ...state.navigationHistory,
-          history: trimmedHistory,
-          currentIndex: trimmedHistory.length - 1
-        }
-      };
-    }
-
-    return { selectedNode: node };
-  }),
-
-  setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
-
-  getCachedDreamSong: (nodeId: string, structureHash: string) => {
-    const cacheKey = `${nodeId}-${structureHash}`;
-    return get().dreamSongCache.get(cacheKey) || null;
-  },
-
-  setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => {
-    const cacheKey = `${nodeId}-${structureHash}`;
-    const entry: DreamSongCacheEntry = {
-      data,
-      timestamp: Date.now(),
-      structureHash
-    };
-    set((state: InterBrainState) => {
-      const newCache = new Map(state.dreamSongCache);
-      newCache.set(cacheKey, entry);
-      return { dreamSongCache: newCache };
-    });
-  },
-
-  setCreatorMode: (active, nodeId = null) => set({
-    creatorMode: { isActive: active, nodeId: nodeId }
-  }),
-
   setSpatialLayout: (layout) => set((state: InterBrainState) => {
-    const previousLayout = state.spatialLayout;
-    const selectedNode = state.selectedNode;
-
-    const isMeaningfulChange = (
-      (previousLayout === 'constellation' && layout === 'liminal-web' && selectedNode) ||
-      (previousLayout === 'liminal-web' && layout === 'constellation')
-    );
-
-    if (isMeaningfulChange && !state.isRestoringFromHistory) {
-      const newEntry: NavigationHistoryEntry = {
-        nodeId: layout === 'liminal-web' ? selectedNode?.id || null : null,
-        layout: layout as 'constellation' | 'liminal-web',
-        timestamp: Date.now(),
-        flipState: (layout === 'liminal-web' && selectedNode) ?
-          state.flipState.flipStates.get(selectedNode.id) || null : null,
-        scrollPosition: (layout === 'liminal-web' && selectedNode) ?
-          getDreamSongScrollPosition(selectedNode.id) : null
-      };
-
-      const { history, currentIndex, maxHistorySize } = state.navigationHistory;
-
-      const currentEntry = history[currentIndex];
-      const isDuplicate = currentEntry &&
-        currentEntry.nodeId === newEntry.nodeId &&
-        currentEntry.layout === newEntry.layout;
-
-      if (isDuplicate) {
-        return {
-          spatialLayout: layout,
-          layoutTransition: {
-            ...state.layoutTransition,
-            previousLayout: state.spatialLayout,
-          }
-        };
-      }
-
-      const newHistory = currentIndex >= 0
-        ? [...history.slice(0, currentIndex + 1), newEntry]
-        : [newEntry];
-
-      const trimmedHistory = newHistory.length > maxHistorySize
-        ? newHistory.slice(-maxHistorySize)
-        : newHistory;
-
-      return {
-        spatialLayout: layout,
-        layoutTransition: {
-          ...state.layoutTransition,
-          previousLayout: state.spatialLayout,
-        },
-        navigationHistory: {
-          ...state.navigationHistory,
-          history: trimmedHistory,
-          currentIndex: trimmedHistory.length - 1
-        }
-      };
-    }
-
     return {
       spatialLayout: layout,
       layoutTransition: {
@@ -535,213 +263,7 @@ const createCoreSlice = (set: any, get: any): CoreSlice => ({
     }
   })),
 
-  setDebugWireframeSphere: (visible) => set({ debugWireframeSphere: visible }),
-  setDebugIntersectionPoint: (visible) => set({ debugIntersectionPoint: visible }),
   setDebugFlyingControls: (enabled) => set({ debugFlyingControls: enabled }),
-  setIsDragging: (dragging) => set({ isDragging: dragging }),
-
-  // Navigation history actions
-  addHistoryEntry: (nodeId, layout) => set((state: InterBrainState) => {
-    const { history, currentIndex, maxHistorySize } = state.navigationHistory;
-
-    const newEntry: NavigationHistoryEntry = {
-      nodeId,
-      layout,
-      timestamp: Date.now(),
-      flipState: (nodeId && layout === 'liminal-web') ?
-        state.flipState.flipStates.get(nodeId) || null : null,
-      scrollPosition: (nodeId && layout === 'liminal-web') ?
-        getDreamSongScrollPosition(nodeId) : null
-    };
-
-    const newHistory = currentIndex >= 0
-      ? [...history.slice(0, currentIndex + 1), newEntry]
-      : [newEntry];
-
-    const trimmedHistory = newHistory.length > maxHistorySize
-      ? newHistory.slice(-maxHistorySize)
-      : newHistory;
-
-    return {
-      navigationHistory: {
-        ...state.navigationHistory,
-        history: trimmedHistory,
-        currentIndex: trimmedHistory.length - 1
-      }
-    };
-  }),
-
-  getHistoryEntryForUndo: () => null,
-  getHistoryEntryForRedo: () => null,
-
-  performUndo: () => {
-    let success = false;
-
-    set((state: InterBrainState) => {
-      const { currentIndex } = state.navigationHistory;
-
-      if (currentIndex <= 0) {
-        return state;
-      }
-
-      success = true;
-
-      return {
-        navigationHistory: {
-          ...state.navigationHistory,
-          currentIndex: currentIndex - 1
-        }
-      };
-    });
-
-    return success;
-  },
-
-  performRedo: () => {
-    let success = false;
-
-    set((state: InterBrainState) => {
-      const { currentIndex, history } = state.navigationHistory;
-
-      if (currentIndex >= history.length - 1) {
-        return state;
-      }
-
-      success = true;
-
-      return {
-        navigationHistory: {
-          ...state.navigationHistory,
-          currentIndex: currentIndex + 1
-        }
-      };
-    });
-
-    return success;
-  },
-
-  clearNavigationHistory: () => set((state: InterBrainState) => ({
-    navigationHistory: {
-      ...state.navigationHistory,
-      history: [],
-      currentIndex: -1
-    }
-  })),
-
-  setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
-
-  restoreVisualState: (entry) => set((state: InterBrainState) => {
-    const newState: Partial<InterBrainState> = {};
-
-    if (entry.nodeId && entry.flipState) {
-      const updatedFlipStates = new Map(state.flipState.flipStates);
-      updatedFlipStates.set(entry.nodeId, entry.flipState);
-
-      newState.flipState = {
-        ...state.flipState,
-        flipStates: updatedFlipStates,
-        flippedNodeId: entry.flipState.isFlipped ? entry.nodeId : state.flipState.flippedNodeId
-      };
-    }
-
-    if (entry.nodeId && entry.scrollPosition !== null) {
-      if (typeof setTimeout !== 'undefined') {
-        setTimeout(() => {
-          restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
-        }, 100);
-      } else {
-        restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
-      }
-    }
-
-    return newState;
-  }),
-
-  // Flip animation actions
-  setFlippedNode: (nodeId) => set((state: InterBrainState) => {
-    if (state.flipState.flippedNodeId && state.flipState.flippedNodeId !== nodeId) {
-      const updatedFlipStates = new Map(state.flipState.flipStates);
-      updatedFlipStates.delete(state.flipState.flippedNodeId);
-
-      return {
-        flipState: {
-          flippedNodeId: nodeId,
-          flipStates: updatedFlipStates
-        }
-      };
-    }
-
-    return {
-      flipState: {
-        ...state.flipState,
-        flippedNodeId: nodeId
-      }
-    };
-  }),
-
-  startFlipAnimation: (nodeId, direction) => set((state: InterBrainState) => {
-    const updatedFlipStates = new Map(state.flipState.flipStates);
-
-    const currentFlipState = updatedFlipStates.get(nodeId) || {
-      isFlipped: false,
-      isFlipping: false,
-      flipDirection: 'front-to-back' as const,
-      animationStartTime: 0
-    };
-
-    const newFlipState = {
-      ...currentFlipState,
-      isFlipping: true,
-      flipDirection: direction,
-      animationStartTime: globalThis.performance.now()
-    };
-
-    updatedFlipStates.set(nodeId, newFlipState);
-
-    return {
-      flipState: {
-        ...state.flipState,
-        flipStates: updatedFlipStates,
-        flippedNodeId: nodeId
-      }
-    };
-  }),
-
-  completeFlipAnimation: (nodeId) => set((state: InterBrainState) => {
-    const updatedFlipStates = new Map(state.flipState.flipStates);
-    const currentFlipState = updatedFlipStates.get(nodeId);
-
-    if (currentFlipState) {
-      const finalFlippedState = currentFlipState.flipDirection === 'front-to-back';
-      const completedFlipState = {
-        ...currentFlipState,
-        isFlipped: finalFlippedState,
-        isFlipping: false,
-        animationStartTime: 0
-      };
-
-      updatedFlipStates.set(nodeId, completedFlipState);
-    }
-
-    return {
-      flipState: {
-        ...state.flipState,
-        flipStates: updatedFlipStates
-      }
-    };
-  }),
-
-  resetAllFlips: () => set(() => ({
-    flipState: {
-      flippedNodeId: null,
-      flipStates: new Map<string, FlipState>()
-    }
-  })),
-
-  getNodeFlipState: (nodeId) => {
-    const state = get() as InterBrainState;
-    return state.flipState.flipStates.get(nodeId) || null;
-  },
 });
 
 // ============================================================================
@@ -756,6 +278,8 @@ export const useInterBrainStore = create<InterBrainState>()(
     (set, get, api) => ({
       // Compose all slices
       ...createCoreSlice(set, get),
+      ...createDreamweavingSlice(set, get, api),
+      ...createDreamNodeSlice(set, get, api),
       ...createSearchSlice(set, get, api),
       ...createConstellationSlice(set, get, api),
       ...createCopilotModeSlice(set, get, api),
@@ -763,6 +287,8 @@ export const useInterBrainStore = create<InterBrainState>()(
       ...createCreationSlice(set, get, api),
       ...createRadialButtonsSlice(set, get, api),
       ...createUpdatesSlice(set, get, api),
+      ...createDragAndDropSlice(set, get, api),
+      ...createLiminalWebSlice(set, get, api),
     }),
     {
       name: 'interbrain-storage',
