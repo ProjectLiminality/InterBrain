@@ -1,13 +1,18 @@
-import { Plugin } from 'obsidian';
-import { UIService } from '../services/ui-service';
-import { useInterBrainStore } from '../store/interbrain-store';
-import { serviceManager } from '../services/service-manager';
-import { getConversationRecordingService } from '../../features/conversational-copilot/services/conversation-recording-service';
-
 /**
- * Core navigation commands: flip animations, fullscreen views, search toggle
+ * DreamNode Commands
+ *
+ * Commands for DreamNode interactions:
+ * - Flip animations (front/back)
+ * - Full-screen views (DreamTalk/DreamSong)
  */
-export function registerNavigationCommands(
+
+import { Plugin } from 'obsidian';
+import { UIService } from '../../core/services/ui-service';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { serviceManager } from '../../core/services/service-manager';
+import { getConversationRecordingService } from '../conversational-copilot/services/conversation-recording-service';
+
+export function registerDreamNodeCommands(
   plugin: Plugin,
   uiService: UIService
 ): void {
@@ -201,8 +206,8 @@ export function registerNavigationCommands(
         if (canvasExists) {
           try {
             // Use the new DreamSong service layer to parse blocks
-            const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/dreamsong/index');
-            const canvasParserService = new (await import('../../features/dreamweaving/services/canvas-parser-service')).CanvasParserService(
+            const { parseCanvasToBlocks, resolveMediaPaths } = await import('../dreamweaving/dreamsong/index');
+            const canvasParserService = new (await import('../dreamweaving/services/canvas-parser-service')).CanvasParserService(
               vaultService
             );
 
@@ -228,51 +233,6 @@ export function registerNavigationCommands(
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Failed to open DreamSong full-screen:', errorMessage);
         uiService.showError(`Failed to open DreamSong: ${errorMessage}`);
-      }
-    }
-  });
-
-  // ========================================
-  // Search Toggle Command
-  // ========================================
-
-  // Toggle Search Mode
-  plugin.addCommand({
-    id: 'toggle-search-mode',
-    name: 'Toggle Search Mode',
-    hotkeys: [{ modifiers: ['Ctrl'], key: 'f' }],
-    callback: async () => {
-      const store = useInterBrainStore.getState();
-
-      // Check if search is already active
-      if (store.searchInterface.isActive) {
-        // Dismiss search and return to constellation
-        store.setSearchActive(false);
-        store.setSpatialLayout('constellation');
-        uiService.showSuccess('Search dismissed');
-      } else {
-        // Check current layout to determine transition path
-        if (store.spatialLayout === 'liminal-web') {
-          // From liminal-web: First return to constellation, then trigger search command
-          console.log(`🔍 [Search-Toggle] Phase 1: liminal-web → constellation`);
-          store.setSelectedNode(null);
-          store.setSpatialLayout('constellation');
-
-          // Wait for constellation transition to complete, then trigger search command
-          globalThis.setTimeout(() => {
-            console.log(`🔍 [Search-Toggle] Phase 2: triggering search activation`);
-            const freshStore = useInterBrainStore.getState();
-            // Use the same logic as normal search activation
-            freshStore.setSearchActive(true);
-            freshStore.setSpatialLayout('search');
-          }, 1100); // Animation duration (1000ms) + buffer (100ms)
-          uiService.showSuccess('Search mode activated from liminal web');
-        } else {
-          // Normal activation from constellation or other states
-          store.setSearchActive(true);
-          store.setSpatialLayout('search');
-          uiService.showSuccess('Search mode activated');
-        }
       }
     }
   });

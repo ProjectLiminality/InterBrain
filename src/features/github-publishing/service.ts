@@ -14,7 +14,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
-import { sanitizeTitleToPascalCase } from '../../core/utils/title-sanitization';
+import { sanitizeTitleToPascalCase } from '../dreamnode/utils/title-sanitization';
 
 const execAsync = promisify(exec);
 

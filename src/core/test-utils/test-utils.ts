@@ -37,9 +37,24 @@ export const createMockUIService = () => ({
 })
 
 export const createMockGitService = () => ({
-  commitWithAI: vi.fn(),
-  createDreamNode: vi.fn(),
-  weaveDreams: vi.fn(),
+  // Local git operations (via GitOperationsService)
+  stashChanges: vi.fn(),
+  popStash: vi.fn(),
+  hasUncommittedChanges: vi.fn(),
+  commitAllChanges: vi.fn(),
+  hasStashes: vi.fn(),
+  hasUnpushedCommits: vi.fn(),
+  getUnpushedCommitCount: vi.fn(),
+  openInFinder: vi.fn(),
+  openInTerminal: vi.fn(),
+  buildDreamNode: vi.fn(),
+  // Remote sync operations (via GitSyncService)
+  fetchUpdates: vi.fn(),
+  pullUpdates: vi.fn(),
+  checkDivergentBranches: vi.fn(),
+  isReadOnlyRepo: vi.fn(),
+  resetToRemote: vi.fn(),
+  pushToAvailableRemote: vi.fn(),
 })
 
 export const createMockVaultService = () => ({

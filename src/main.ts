@@ -15,8 +15,9 @@ import { useInterBrainStore } from './core/store/interbrain-store';
 import { calculateFibonacciSpherePositions } from './features/constellation-layout';
 import { DreamNode } from './features/dreamnode';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
-import { registerNavigationCommands } from './core/commands/navigation-commands';
 import { registerDeveloperCommands } from './core/commands/developer-commands';
+import { registerDreamNodeCommands } from './features/dreamnode';
+import { registerSearchCommands } from './features/search';
 import { registerEditModeCommands } from './features/edit-mode';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
@@ -336,8 +337,11 @@ export default class InterBrainPlugin extends Plugin {
     // Register semantic search commands
     registerSemanticSearchCommands(this, this.uiService);
 
-    // Register navigation commands (flip animations, fullscreen views, search toggle)
-    registerNavigationCommands(this, this.uiService);
+    // Register DreamNode commands (flip animations, fullscreen views)
+    registerDreamNodeCommands(this, this.uiService);
+
+    // Register search commands (search toggle)
+    registerSearchCommands(this, this.uiService);
 
     // Register developer/debug commands (wireframe sphere, intersection point, flying controls, camera reset)
     registerDeveloperCommands(this, this.uiService);

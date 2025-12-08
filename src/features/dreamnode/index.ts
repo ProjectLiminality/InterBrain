@@ -1,6 +1,9 @@
 // DreamNode feature barrel export
 // The fundamental unit: types, services, and visualization components
 
+// Commands
+export { registerDreamNodeCommands } from './commands';
+
 // Types
 export * from './types/dreamnode';
 
@@ -21,3 +24,6 @@ export { PDFPreview } from './components/PDFPreview';
 
 // Styles
 export * from './styles/dreamNodeStyles';
+
+// Utils
+export * from './utils/title-sanitization';

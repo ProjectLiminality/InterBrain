@@ -1123,7 +1123,7 @@ export default function DreamspaceCanvas() {
 
       // Convert PascalCase file names to human-readable titles with spaces
       // Example: "HawkinsScale" → "Hawkins Scale"
-      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+      const { isPascalCase, pascalCaseToTitle } = await import('../../features/dreamnode/utils/title-sanitization');
       const humanReadableTitle = isPascalCase(fileNameWithoutExt)
         ? pascalCaseToTitle(fileNameWithoutExt)
         : fileNameWithoutExt;
@@ -1202,7 +1202,7 @@ export default function DreamspaceCanvas() {
 
       // Convert PascalCase file names to human-readable titles with spaces
       // Example: "HawkinsScale" → "Hawkins Scale"
-      const { isPascalCase, pascalCaseToTitle } = await import('../utils/title-sanitization');
+      const { isPascalCase, pascalCaseToTitle } = await import('../../features/dreamnode/utils/title-sanitization');
       const humanReadableTitle = isPascalCase(fileNameWithoutExt)
         ? pascalCaseToTitle(fileNameWithoutExt)
         : fileNameWithoutExt;

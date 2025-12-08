@@ -501,7 +501,7 @@ export class URIHandlerService {
 	 * - Mixed: "Thunderstorm-Generator-UPDATED" → "Thunderstorm Generator Updated"
 	 */
 	private async normalizeRepoNameToTitle(repoName: string): Promise<string> {
-		const { isPascalCase, pascalCaseToTitle } = await import('../../core/utils/title-sanitization');
+		const { isPascalCase, pascalCaseToTitle } = await import('../dreamnode/utils/title-sanitization');
 
 		// If repo name contains hyphens, underscores, or periods as separators
 		if (/[-_.]+/.test(repoName)) {

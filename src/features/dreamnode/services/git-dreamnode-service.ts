@@ -4,7 +4,7 @@ import { Plugin } from 'obsidian';
 import { indexingService } from '../../semantic-search/services/indexing-service';
 import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../../drag-and-drop';
 import { createLinkFileContent, getLinkFileName } from '../../drag-and-drop';
-import { sanitizeTitleToPascalCase } from '../../../core/utils/title-sanitization';
+import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 import { webLinkAnalyzerService } from '../../web-link-analyzer/service';
 
 // Access Node.js modules directly in Electron context

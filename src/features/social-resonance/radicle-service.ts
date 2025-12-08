@@ -728,7 +728,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // Normalize title to human-readable format using established naming schema
       // Import title normalization utilities
-      const { isPascalCase, pascalCaseToTitle } = await import('../../core/utils/title-sanitization');
+      const { isPascalCase, pascalCaseToTitle } = await import('../dreamnode/utils/title-sanitization');
 
       // Check if title needs normalization (kebab-case, snake_case, or PascalCase)
       let titleNormalized = false;
