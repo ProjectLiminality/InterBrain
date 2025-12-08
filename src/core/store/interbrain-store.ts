@@ -1,50 +1,112 @@
+/**
+ * InterBrain Store - Core state management with slice composition
+ *
+ * This store combines minimal core state with feature-specific slices.
+ * Each feature owns its state in its respective slice file.
+ *
+ * Core State (lives here):
+ * - realNodes: Fundamental DreamNode data
+ * - selectedNode: Current focus
+ * - spatialLayout: Which mode is active
+ * - camera: 3D view state
+ * - navigationHistory: Undo/redo across features
+ * - flipState: DreamNode flip animations
+ * - creatorMode: Whether editing a node's files
+ * - debug flags
+ *
+ * Feature Slices (imported from features/):
+ * - SearchSlice: searchResults, searchInterface, vectorData, ollamaConfig
+ * - ConstellationSlice: constellationData, fibonacciConfig
+ * - CopilotModeSlice: copilotMode state and actions
+ * - EditModeSlice: editMode state and actions
+ * - CreationSlice: creationState and actions
+ * - RadialButtonsSlice: radialButtonUI
+ * - UpdatesSlice: updateStatus
+ */
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DreamNode } from '../types/dreamnode';
 import { DreamSongData } from '../types/dreamsong';
-import { FibonacciSphereConfig, DEFAULT_FIBONACCI_CONFIG } from '../layouts/FibonacciSphereLayout';
-import {
-  OllamaConfigSlice,
-  createOllamaConfigSlice,
-  extractOllamaPersistenceData,
-  restoreOllamaPersistenceData,
-  OllamaConfig
-} from '../../features/semantic-search/store/ollama-config-slice';
-// OllamaConfig imports are in the semantic search slice
-import { VectorData } from '../../features/semantic-search/services/indexing-service';
 import { FlipState } from '../types/dreamsong';
+
+// Feature slice imports
 import {
-  DreamSongRelationshipGraph,
+  SearchSlice,
+  createSearchSlice,
+  extractSearchPersistenceData,
+  restoreSearchPersistenceData,
+  SearchInterfaceState,
+} from '../../features/semantic-search/search-slice';
+import type { OllamaConfig } from '../../features/semantic-search/search-slice';
+import { VectorData } from '../../features/semantic-search/services/indexing-service';
+
+import {
+  ConstellationSlice,
+  createConstellationSlice,
+  extractConstellationPersistenceData,
+  restoreConstellationPersistenceData,
   SerializableDreamSongGraph,
-  serializeRelationshipGraph,
-  deserializeRelationshipGraph
-} from '../types/constellation';
+} from '../../features/constellation/constellation-slice';
+
+import {
+  CopilotModeSlice,
+  createCopilotModeSlice,
+  CopilotModeState,
+} from '../../features/conversational-copilot/copilot-slice';
+
+import {
+  EditModeSlice,
+  createEditModeSlice,
+  EditModeState,
+  EditModeValidationErrors,
+} from '../../features/edit-mode/edit-slice';
+
+import {
+  CreationSlice,
+  createCreationSlice,
+  CreationState,
+  ProtoNode,
+  ValidationErrors,
+} from '../../features/dream-node-management/creation-slice';
+
+import {
+  RadialButtonsSlice,
+  createRadialButtonsSlice,
+} from '../../features/radial-buttons/radial-buttons-slice';
+
+import {
+  UpdatesSlice,
+  createUpdatesSlice,
+} from '../../features/updates/updates-slice';
+
+// Type alias for spatial layout modes (the active view mode, not to be confused with SpatialLayout interface in dreamnode.ts)
+export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
+
+// Re-export types for backward compatibility
+export type { CopilotModeState };
+export type { EditModeState, EditModeValidationErrors };
+export type { CreationState, ProtoNode, ValidationErrors };
+export type { SearchInterfaceState };
 
 // Helper function to get current scroll position of DreamSong content
 function getDreamSongScrollPosition(nodeId: string): number | null {
   try {
-    // Ensure we're in browser environment
     if (typeof document === 'undefined') return null;
-    
-    // Look for DreamSong leaf in right pane containing this nodeId
-     
+
     const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
     if (dreamSongLeaf) {
       const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
       if (scrollContainer && 'scrollTop' in scrollContainer) {
-         
         return (scrollContainer as HTMLElement).scrollTop;
       }
     }
-    
-    // Also check for embedded DreamSong content in DreamSpace
-     
+
     const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
     if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
-       
       return (dreamSpaceContent as HTMLElement).scrollTop;
     }
-    
+
     return null;
   } catch (error) {
     console.warn(`Failed to get scroll position for node ${nodeId}:`, error);
@@ -52,29 +114,21 @@ function getDreamSongScrollPosition(nodeId: string): number | null {
   }
 }
 
-// Helper function to restore scroll position of DreamSong content
 function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number): void {
   try {
-    // Ensure we're in browser environment
     if (typeof document === 'undefined') return;
-    
-    // Look for DreamSong leaf in right pane containing this nodeId
-     
+
     const dreamSongLeaf = document.querySelector(`[data-type="dreamsong-fullscreen"][data-node-id="${nodeId}"]`);
     if (dreamSongLeaf) {
       const scrollContainer = dreamSongLeaf.querySelector('.dreamsong-content');
       if (scrollContainer && 'scrollTop' in scrollContainer) {
-         
         (scrollContainer as HTMLElement).scrollTop = scrollPosition;
         return;
       }
     }
-    
-    // Also check for embedded DreamSong content in DreamSpace
-     
+
     const dreamSpaceContent = document.querySelector(`.dreamsong-container[data-node-id="${nodeId}"] .dreamsong-content`);
     if (dreamSpaceContent && 'scrollTop' in dreamSpaceContent) {
-       
       (dreamSpaceContent as HTMLElement).scrollTop = scrollPosition;
     }
   } catch (error) {
@@ -82,146 +136,72 @@ function restoreDreamSongScrollPosition(nodeId: string, scrollPosition: number):
   }
 }
 
-// Navigation history types
+// ============================================================================
+// CORE STATE TYPES
+// ============================================================================
+
 export interface NavigationHistoryEntry {
-  /** Node ID that was focused (null for constellation view) */
   nodeId: string | null;
-  /** Layout type at the time */
   layout: 'constellation' | 'liminal-web';
-  /** Timestamp of the navigation action */
   timestamp: number;
-  /** Flip state of the focused node (null if not flipped or no focused node) */
   flipState: FlipState | null;
-  /** Scroll position in DreamSong content (null if not applicable) */
   scrollPosition: number | null;
 }
 
 export interface NavigationHistoryState {
-  /** Stack of past navigation states */
   history: NavigationHistoryEntry[];
-  /** Current position in history (0 = most recent) */
   currentIndex: number;
-  /** Maximum history entries to keep */
   maxHistorySize: number;
 }
 
-// Creation state types
-export interface ProtoNode {
-  title: string;
-  type: 'dream' | 'dreamer';
-  dreamTalkFile?: globalThis.File;
-  additionalFiles?: globalThis.File[];
-  position: [number, number, number];
-  urlMetadata?: import('../utils/url-utils').UrlMetadata;
-}
-
-export interface ValidationErrors {
-  title?: string;
-  dreamTalk?: string;
-}
-
-export interface CreationState {
-  isCreating: boolean;
-  protoNode: ProtoNode | null;
-  validationErrors: ValidationErrors;
-}
-
-// Edit mode state types
-export interface EditModeState {
-  isActive: boolean;
-  editingNode: DreamNode | null;
-  originalRelationships: string[]; // Store original relationships for cancel operation
-  pendingRelationships: string[]; // Track relationship changes
-  searchResults: DreamNode[]; // Search results for relationship discovery
-  validationErrors: EditModeValidationErrors; // Validation errors for edit mode
-  newDreamTalkFile?: globalThis.File; // New media file for DreamTalk editing
-  isSearchingRelationships: boolean; // Toggle state for relationship search interface
-}
-
-export interface EditModeValidationErrors {
-  title?: string;
-  dreamTalk?: string;
-  relationships?: string;
-}
-
-// Copilot mode state types
-export interface CopilotModeState {
-  isActive: boolean;
-  conversationPartner: DreamNode | null; // The person node at center
-  transcriptionFilePath: string | null; // Path to active transcription file
-  showSearchResults: boolean; // Option key held state for showing/hiding results
-  frozenSearchResults: DreamNode[]; // Snapshot of results when showing
-  sharedNodeIds: string[]; // Track invoked nodes for post-call processing
-}
-
-// Real node storage - persisted across sessions
 export interface RealNodeData {
   node: DreamNode;
-  fileHash?: string; // For detecting file changes
-  lastSynced: number; // Timestamp of last vault sync
+  fileHash?: string;
+  lastSynced: number;
 }
 
-// DreamSong cache interface for service layer
 export interface DreamSongCacheEntry {
   data: DreamSongData;
   timestamp: number;
   structureHash: string;
 }
 
-// Note: OllamaConfig and DEFAULT_OLLAMA_CONFIG moved to semantic search feature
+// ============================================================================
+// CORE SLICE - Fundamental state that belongs to no single feature
+// ============================================================================
 
-export interface InterBrainState extends OllamaConfigSlice {
+export interface CoreSlice {
   // Real nodes storage (persisted)
   realNodes: Map<string, RealNodeData>;
   setRealNodes: (nodes: Map<string, RealNodeData>) => void;
   updateRealNode: (id: string, data: RealNodeData) => void;
   batchUpdateNodePositions: (positions: Map<string, [number, number, number]>) => void;
   deleteRealNode: (id: string) => void;
-  
+
   // Selected DreamNode state
   selectedNode: DreamNode | null;
   setSelectedNode: (node: DreamNode | null) => void;
-  
-  // Selected DreamNode's DreamSong data (for reuse in full-screen)
+
+  // Selected DreamNode's DreamSong data
   selectedNodeDreamSongData: DreamSongData | null;
   setSelectedNodeDreamSongData: (data: DreamSongData | null) => void;
-  
+
   // DreamSong cache for service layer
   dreamSongCache: Map<string, DreamSongCacheEntry>;
   getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
   setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
-  
+
   // Creator mode state
   creatorMode: {
     isActive: boolean;
-    nodeId: string | null; // ID of the node being edited
+    nodeId: string | null;
   };
   setCreatorMode: (active: boolean, nodeId?: string | null) => void;
-  
-  // Search functionality state
-  searchResults: DreamNode[];
-  setSearchResults: (results: DreamNode[]) => void;
-  
-  // Search interface state
-  searchInterface: {
-    isActive: boolean;
-    isSaving: boolean; // Track if save animation is in progress
-    currentQuery: string;
-    lastQuery: string; // For change detection
-  };
-  setSearchActive: (active: boolean) => void;
-  setSearchQuery: (query: string) => void;
-  setSearchSaving: (saving: boolean) => void;
-  
-  // Spatial layout state - expanded to include edit modes as first-class states
-  spatialLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
-  setSpatialLayout: (layout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot') => void;
-  
-  // Fibonacci sphere layout configuration
-  fibonacciConfig: FibonacciSphereConfig;
-  setFibonacciConfig: (config: Partial<FibonacciSphereConfig>) => void;
-  resetFibonacciConfig: () => void;
-  
+
+  // Spatial layout state
+  spatialLayout: SpatialLayoutMode;
+  setSpatialLayout: (layout: SpatialLayoutMode) => void;
+
   // Camera state management
   camera: {
     position: [number, number, number];
@@ -232,7 +212,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   setCameraPosition: (position: [number, number, number]) => void;
   setCameraTarget: (target: [number, number, number]) => void;
   setCameraTransition: (isTransitioning: boolean, duration?: number) => void;
-  
+
   // Layout transition state
   layoutTransition: {
     isTransitioning: boolean;
@@ -240,51 +220,18 @@ export interface InterBrainState extends OllamaConfigSlice {
     previousLayout: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null;
   };
   setLayoutTransition: (isTransitioning: boolean, progress?: number, previousLayout?: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot' | null) => void;
-  
-  // Debug wireframe sphere toggle
+
+  // Debug flags
   debugWireframeSphere: boolean;
   setDebugWireframeSphere: (visible: boolean) => void;
-  
-  // Debug intersection point toggle
   debugIntersectionPoint: boolean;
   setDebugIntersectionPoint: (visible: boolean) => void;
-  
-  // Debug flying camera controls toggle
   debugFlyingControls: boolean;
   setDebugFlyingControls: (enabled: boolean) => void;
 
-  // Drag state management (prevents hover interference during sphere rotation)
+  // Drag state
   isDragging: boolean;
   setIsDragging: (dragging: boolean) => void;
-  
-  // Creation state management
-  creationState: CreationState;
-  startCreation: (position: [number, number, number]) => void;
-  startCreationWithData: (position: [number, number, number], initialData?: Partial<ProtoNode>) => void;
-  updateProtoNode: (updates: Partial<ProtoNode>) => void;
-  setValidationErrors: (errors: ValidationErrors) => void;
-  completeCreation: () => void;
-  cancelCreation: () => void;
-
-  // Edit mode state management
-  editMode: EditModeState;
-  startEditMode: (node: DreamNode) => void;
-  exitEditMode: () => void;
-  updateEditingNodeMetadata: (updates: Partial<DreamNode>) => void;
-  setEditModeNewDreamTalkFile: (file: globalThis.File | undefined) => void;
-  setEditModeSearchResults: (results: DreamNode[]) => void;
-  setEditModeSearchActive: (active: boolean) => void;
-  togglePendingRelationship: (nodeId: string) => void;
-  savePendingRelationships: () => void;
-  setEditModeValidationErrors: (errors: EditModeValidationErrors) => void;
-
-  // Copilot mode state management
-  copilotMode: CopilotModeState;
-  startCopilotMode: (conversationPartner: DreamNode) => void;
-  exitCopilotMode: () => void;
-  setShowSearchResults: (show: boolean) => void;
-  freezeSearchResults: () => void;
-  addSharedNode: (nodeId: string) => void;
 
   // Navigation history management
   navigationHistory: NavigationHistoryState;
@@ -297,7 +244,7 @@ export interface InterBrainState extends OllamaConfigSlice {
   performRedo: () => boolean;
   clearNavigationHistory: () => void;
   restoreVisualState: (entry: NavigationHistoryEntry) => void;
-  
+
   // DreamNode flip animation state
   flipState: {
     flippedNodeId: string | null;
@@ -308,128 +255,58 @@ export interface InterBrainState extends OllamaConfigSlice {
   completeFlipAnimation: (nodeId: string) => void;
   resetAllFlips: () => void;
   getNodeFlipState: (nodeId: string) => FlipState | null;
-
-  // DreamSong relationship graph state
-  constellationData: {
-    relationshipGraph: DreamSongRelationshipGraph | null;
-    lastScanTimestamp: number | null;
-    isScanning: boolean;
-    positions: Map<string, [number, number, number]> | null;
-    lastLayoutTimestamp: number | null;
-    // Lightweight node metadata for instant startup rendering
-    nodeMetadata: Map<string, { name: string; type: string; uuid: string }> | null;
-  };
-  setRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
-  setConstellationScanning: (scanning: boolean) => void;
-  setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
-  setNodeMetadata: (metadata: Map<string, { name: string; type: string; uuid: string }> | null) => void;
-  clearConstellationData: () => void;
-
-  // Radial button UI state (option-key triggered)
-  radialButtonUI: {
-    isActive: boolean;
-    buttonCount: number;
-    optionKeyPressed: boolean; // Track actual hardware key state
-  };
-  setRadialButtonUIActive: (active: boolean) => void;
-  setRadialButtonCount: (count: number) => void;
-  setOptionKeyPressed: (pressed: boolean) => void;
-
-  // Update status for DreamNodes (non-persisted)
-  updateStatus: Map<string, import('../services/git-service').FetchResult>;
-  setNodeUpdateStatus: (nodeId: string, result: import('../services/git-service').FetchResult) => void;
-  clearNodeUpdateStatus: (nodeId: string) => void;
-  getNodeUpdateStatus: (nodeId: string) => import('../services/git-service').FetchResult | null;
 }
 
-// Helper to convert Map to serializable format for persistence
-const mapToArray = <K, V>(map: Map<K, V>): [K, V][] => Array.from(map.entries());
-const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
+// ============================================================================
+// COMBINED STATE TYPE
+// ============================================================================
 
-export const useInterBrainStore = create<InterBrainState>()(
-  persist(
-    (set, get) => ({
+export interface InterBrainState extends
+  CoreSlice,
+  SearchSlice,
+  ConstellationSlice,
+  CopilotModeSlice,
+  EditModeSlice,
+  CreationSlice,
+  RadialButtonsSlice,
+  UpdatesSlice {}
+
+// ============================================================================
+// CORE SLICE CREATOR
+// ============================================================================
+
+const createCoreSlice = (set: any, get: any): CoreSlice => ({
   // Initial state
   realNodes: new Map<string, RealNodeData>(),
-  
-  // Initialize Ollama config slice
-  ...createOllamaConfigSlice(set, get, {} as never),
   selectedNode: null,
   selectedNodeDreamSongData: null,
-
-  // DreamSong cache for service layer
   dreamSongCache: new Map<string, DreamSongCacheEntry>(),
 
   creatorMode: {
     isActive: false,
     nodeId: null
   },
-  searchResults: [],
-  searchInterface: {
-    isActive: false,
-    isSaving: false,
-    currentQuery: '',
-    lastQuery: ''
-  },
+
   spatialLayout: 'constellation',
-  fibonacciConfig: DEFAULT_FIBONACCI_CONFIG,
-  
-  // Camera initial state
+
   camera: {
-    position: [0, 0, 0], // Camera at origin for proper Dynamic View Scaling
-    target: [0, 0, 0],   // Looking at origin
+    position: [0, 0, 0],
+    target: [0, 0, 0],
     isTransitioning: false,
-    transitionDuration: 1000, // 1 second default
+    transitionDuration: 1000,
   },
-  
-  // Layout transition initial state
+
   layoutTransition: {
     isTransitioning: false,
     progress: 0,
     previousLayout: null,
   },
-  
-  // Debug wireframe sphere initial state (on by default for development)
+
   debugWireframeSphere: false,
-  
-  // Debug intersection point initial state (on by default for development)
   debugIntersectionPoint: false,
-  
-  // Debug flying camera controls initial state (off by default)
   debugFlyingControls: false,
-
-  // Drag state initial state (not dragging)
   isDragging: false,
-  
-  // Creation state initial state (not creating)
-  creationState: {
-    isCreating: false,
-    protoNode: null,
-    validationErrors: {}
-  },
-  
-  // Edit mode initial state (not editing)
-  editMode: {
-    isActive: false,
-    editingNode: null,
-    originalRelationships: [],
-    pendingRelationships: [],
-    searchResults: [],
-    validationErrors: {},
-    isSearchingRelationships: false
-  },
 
-  // Copilot mode initial state (not active)
-  copilotMode: {
-    isActive: false,
-    conversationPartner: null,
-    transcriptionFilePath: null,
-    showSearchResults: false,
-    frozenSearchResults: [],
-    sharedNodeIds: []
-  },
-
-  // Navigation history initial state (with initial constellation state)
   navigationHistory: {
     history: [{
       nodeId: null,
@@ -438,43 +315,27 @@ export const useInterBrainStore = create<InterBrainState>()(
       flipState: null,
       scrollPosition: null
     }],
-    currentIndex: 0, // Start at the initial constellation state
-    maxHistorySize: 150 // High limit for ultra-lightweight entries
+    currentIndex: 0,
+    maxHistorySize: 150
   },
-  
-  // Flag to disable history tracking during undo/redo operations
+
   isRestoringFromHistory: false,
-  
-  // DreamNode flip animation initial state
+
   flipState: {
     flippedNodeId: null,
     flipStates: new Map<string, FlipState>()
   },
 
-  // Constellation relationship graph initial state
-  constellationData: {
-    relationshipGraph: null,
-    lastScanTimestamp: null,
-    isScanning: false,
-    positions: null,
-    lastLayoutTimestamp: null,
-    nodeMetadata: null
-  },
-
-  radialButtonUI: {
-    isActive: false,
-    buttonCount: 6,
-    optionKeyPressed: false
-  },
-
   // Actions
   setRealNodes: (nodes) => set({ realNodes: nodes }),
-  updateRealNode: (id, data) => set(state => {
+
+  updateRealNode: (id, data) => set((state: InterBrainState) => {
     const newMap = new Map(state.realNodes);
     newMap.set(id, data);
     return { realNodes: newMap };
   }),
-  batchUpdateNodePositions: (positions) => set(state => {
+
+  batchUpdateNodePositions: (positions) => set((state: InterBrainState) => {
     const newMap = new Map(state.realNodes);
     for (const [nodeId, position] of positions) {
       const nodeData = newMap.get(nodeId);
@@ -487,21 +348,19 @@ export const useInterBrainStore = create<InterBrainState>()(
     }
     return { realNodes: newMap };
   }),
-  deleteRealNode: (id) => set(state => {
+
+  deleteRealNode: (id) => set((state: InterBrainState) => {
     const newMap = new Map(state.realNodes);
     newMap.delete(id);
     return { realNodes: newMap };
   }),
-  
-  // Note: Vector data and Ollama config actions provided by OllamaConfigSlice
-  
-  setSelectedNode: (node) => set(state => {
+
+  setSelectedNode: (node) => set((state: InterBrainState) => {
     const previousNode = state.selectedNode;
     const currentLayout = state.spatialLayout;
 
     // Trigger lazy media loading for node and 2-degree neighborhood
     if (node) {
-      // Import and trigger media loading asynchronously (non-blocking)
       import('../services/media-loading-service').then(({ getMediaLoadingService }) => {
         try {
           const mediaLoadingService = getMediaLoadingService();
@@ -516,48 +375,40 @@ export const useInterBrainStore = create<InterBrainState>()(
 
     // Detect meaningful node selection changes for history tracking
     const isMeaningfulChange = (
-      // Within Liminal Web: different node selected
       currentLayout === 'liminal-web' &&
       previousNode &&
       node &&
       previousNode.id !== node.id
     );
 
-    // Record history entry for meaningful changes (but not during undo/redo operations)
     if (isMeaningfulChange && !state.isRestoringFromHistory) {
-      // Create new entry
       const newEntry: NavigationHistoryEntry = {
         nodeId: node.id,
         layout: 'liminal-web',
         timestamp: Date.now(),
         flipState: state.flipState.flipStates.get(node.id) || null,
-        scrollPosition: getDreamSongScrollPosition(node.id) // We'll implement this helper
+        scrollPosition: getDreamSongScrollPosition(node.id)
       };
-      
-      // Add to history (reuse existing addHistoryEntry logic)
+
       const { history, currentIndex, maxHistorySize } = state.navigationHistory;
-      
-      // Check if this entry is a duplicate of the current entry (prevent undo/redo loops)
+
       const currentEntry = history[currentIndex];
-      const isDuplicate = currentEntry && 
-        currentEntry.nodeId === newEntry.nodeId && 
+      const isDuplicate = currentEntry &&
+        currentEntry.nodeId === newEntry.nodeId &&
         currentEntry.layout === newEntry.layout;
-      
+
       if (isDuplicate) {
-        // Don't add duplicate entry - just update selected node
         return { selectedNode: node };
       }
-      
-      // If we're not at the end of history, clear everything after current position
-      const newHistory = currentIndex >= 0 
+
+      const newHistory = currentIndex >= 0
         ? [...history.slice(0, currentIndex + 1), newEntry]
         : [newEntry];
-      
-      // Ensure history doesn't exceed max size
+
       const trimmedHistory = newHistory.length > maxHistorySize
         ? newHistory.slice(-maxHistorySize)
         : newHistory;
-      
+
       return {
         selectedNode: node,
         navigationHistory: {
@@ -567,14 +418,12 @@ export const useInterBrainStore = create<InterBrainState>()(
         }
       };
     }
-    
-    // Non-meaningful change - just update selected node
+
     return { selectedNode: node };
   }),
-  
+
   setSelectedNodeDreamSongData: (data) => set({ selectedNodeDreamSongData: data }),
 
-  // DreamSong cache methods for service layer
   getCachedDreamSong: (nodeId: string, structureHash: string) => {
     const cacheKey = `${nodeId}-${structureHash}`;
     return get().dreamSongCache.get(cacheKey) || null;
@@ -587,82 +436,45 @@ export const useInterBrainStore = create<InterBrainState>()(
       timestamp: Date.now(),
       structureHash
     };
-    set((state) => {
+    set((state: InterBrainState) => {
       const newCache = new Map(state.dreamSongCache);
       newCache.set(cacheKey, entry);
       return { dreamSongCache: newCache };
     });
   },
 
-  setCreatorMode: (active, nodeId = null) => set({ 
-    creatorMode: { isActive: active, nodeId: nodeId } 
+  setCreatorMode: (active, nodeId = null) => set({
+    creatorMode: { isActive: active, nodeId: nodeId }
   }),
-  setSearchResults: (results) => set({ searchResults: results }),
-  setSearchActive: (active) => set(state => ({
-    searchInterface: {
-      ...state.searchInterface,
-      isActive: active,
-      // Clear query when deactivating for fresh start on reentry
-      currentQuery: active ? state.searchInterface.currentQuery : '',
-      lastQuery: active ? state.searchInterface.lastQuery : ''
-    },
-    // Also clear search results when deactivating
-    searchResults: active ? state.searchResults : []
-  })),
-  setSearchQuery: (query) => set(state => ({
-    searchInterface: {
-      ...state.searchInterface,
-      currentQuery: query
-    }
-  })),
-  setSearchSaving: (saving) => set(state => ({
-    searchInterface: {
-      ...state.searchInterface,
-      isSaving: saving
-    }
-  })),
-  setSpatialLayout: (layout) => set(state => {
+
+  setSpatialLayout: (layout) => set((state: InterBrainState) => {
     const previousLayout = state.spatialLayout;
     const selectedNode = state.selectedNode;
-    
-    // Only log actual changes, not redundant calls
-    if (previousLayout !== layout) {
-      // Layout changed - could add logging here if needed
-    }
-    
-    // Detect meaningful layout changes for history tracking
+
     const isMeaningfulChange = (
-      // Constellation → Liminal Web (with selected node)
       (previousLayout === 'constellation' && layout === 'liminal-web' && selectedNode) ||
-      // Liminal Web → Constellation  
       (previousLayout === 'liminal-web' && layout === 'constellation')
-      // Note: Within Liminal Web changes are handled by setSelectedNode
     );
-    
-    // Record history entry for meaningful changes (but not during undo/redo operations)
+
     if (isMeaningfulChange && !state.isRestoringFromHistory) {
-      // Create new entry (inside this block, layout can only be 'constellation' or 'liminal-web')
       const newEntry: NavigationHistoryEntry = {
         nodeId: layout === 'liminal-web' ? selectedNode?.id || null : null,
-        layout: layout, // Already narrowed to valid types by isMeaningfulChange condition
+        layout: layout as 'constellation' | 'liminal-web',
         timestamp: Date.now(),
-        flipState: (layout === 'liminal-web' && selectedNode) ? 
+        flipState: (layout === 'liminal-web' && selectedNode) ?
           state.flipState.flipStates.get(selectedNode.id) || null : null,
-        scrollPosition: (layout === 'liminal-web' && selectedNode) ? 
+        scrollPosition: (layout === 'liminal-web' && selectedNode) ?
           getDreamSongScrollPosition(selectedNode.id) : null
       };
-      
-      // Add to history (reuse existing addHistoryEntry logic)
+
       const { history, currentIndex, maxHistorySize } = state.navigationHistory;
-      
-      // Check if this entry is a duplicate of the current entry (prevent undo/redo loops)
+
       const currentEntry = history[currentIndex];
-      const isDuplicate = currentEntry && 
-        currentEntry.nodeId === newEntry.nodeId && 
+      const isDuplicate = currentEntry &&
+        currentEntry.nodeId === newEntry.nodeId &&
         currentEntry.layout === newEntry.layout;
-      
+
       if (isDuplicate) {
-        // Don't add duplicate entry - just update layout without history changes
         return {
           spatialLayout: layout,
           layoutTransition: {
@@ -671,17 +483,15 @@ export const useInterBrainStore = create<InterBrainState>()(
           }
         };
       }
-      
-      // If we're not at the end of history, clear everything after current position
-      const newHistory = currentIndex >= 0 
+
+      const newHistory = currentIndex >= 0
         ? [...history.slice(0, currentIndex + 1), newEntry]
         : [newEntry];
-      
-      // Ensure history doesn't exceed max size
+
       const trimmedHistory = newHistory.length > maxHistorySize
         ? newHistory.slice(-maxHistorySize)
         : newHistory;
-      
+
       return {
         spatialLayout: layout,
         layoutTransition: {
@@ -695,8 +505,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         }
       };
     }
-    
-    // Non-meaningful change - just update layout
+
     return {
       spatialLayout: layout,
       layoutTransition: {
@@ -705,405 +514,54 @@ export const useInterBrainStore = create<InterBrainState>()(
       }
     };
   }),
-  
-  // Fibonacci sphere configuration actions
-  setFibonacciConfig: (config) => set(state => ({
-    fibonacciConfig: { ...state.fibonacciConfig, ...config }
+
+  setCameraPosition: (position) => set((state: InterBrainState) => ({
+    camera: { ...state.camera, position }
   })),
-  resetFibonacciConfig: () => set({ fibonacciConfig: DEFAULT_FIBONACCI_CONFIG }),
-  
-  // Camera actions
-  setCameraPosition: (position) => set(state => ({ 
-    camera: { ...state.camera, position } 
+
+  setCameraTarget: (target) => set((state: InterBrainState) => ({
+    camera: { ...state.camera, target }
   })),
-  setCameraTarget: (target) => set(state => ({ 
-    camera: { ...state.camera, target } 
+
+  setCameraTransition: (isTransitioning, duration = 1000) => set((state: InterBrainState) => ({
+    camera: { ...state.camera, isTransitioning, transitionDuration: duration }
   })),
-  setCameraTransition: (isTransitioning, duration = 1000) => set(state => ({ 
-    camera: { ...state.camera, isTransitioning, transitionDuration: duration } 
+
+  setLayoutTransition: (isTransitioning, progress = 0, previousLayout = null) => set((state: InterBrainState) => ({
+    layoutTransition: {
+      isTransitioning,
+      progress,
+      previousLayout: previousLayout || state.layoutTransition.previousLayout
+    }
   })),
-  
-  // Layout transition actions
-  setLayoutTransition: (isTransitioning, progress = 0, previousLayout = null) => set(state => ({ 
-    layoutTransition: { 
-      isTransitioning, 
-      progress, 
-      previousLayout: previousLayout || state.layoutTransition.previousLayout 
-    } 
-  })),
-  
-  // Debug wireframe sphere actions
+
   setDebugWireframeSphere: (visible) => set({ debugWireframeSphere: visible }),
-  
-  // Debug intersection point actions
   setDebugIntersectionPoint: (visible) => set({ debugIntersectionPoint: visible }),
-  
-  // Debug flying camera controls actions
   setDebugFlyingControls: (enabled) => set({ debugFlyingControls: enabled }),
-
-  // Drag state actions
   setIsDragging: (dragging) => set({ isDragging: dragging }),
-  
-  // Creation state actions
-  startCreation: (position) => set((_state) => {
-    return {
-      spatialLayout: 'creation',
-      creationState: {
-        isCreating: true,
-        protoNode: {
-          title: '',
-          type: 'dream', // Default to dream type
-          position,
-          dreamTalkFile: undefined
-        },
-        validationErrors: {}
-      }
-    };
-  }),
-  
-  startCreationWithData: (position, initialData) => set((_state) => {
-    return {
-      spatialLayout: 'creation',
-      creationState: {
-        isCreating: true,
-        protoNode: {
-          title: initialData?.title || '',
-          type: initialData?.type || 'dream',
-          position,
-          dreamTalkFile: initialData?.dreamTalkFile || undefined,
-          additionalFiles: initialData?.additionalFiles || undefined
-        },
-        validationErrors: {}
-      }
-    };
-  }),
-  
-  updateProtoNode: (updates) => set(state => ({
-    creationState: {
-      ...state.creationState,
-      protoNode: state.creationState.protoNode 
-        ? { ...state.creationState.protoNode, ...updates }
-        : null
-    }
-  })),
-  
-  setValidationErrors: (errors) => set(state => ({
-    creationState: {
-      ...state.creationState,
-      validationErrors: errors
-    }
-  })),
-  
-  completeCreation: () => set((_state) => {
-    return {
-      spatialLayout: 'constellation',
-      creationState: {
-        isCreating: false,
-        protoNode: null,
-        validationErrors: {}
-      }
-    };
-  }),
-  
-  cancelCreation: () => set((_state) => {
-    return {
-      spatialLayout: 'constellation',
-      creationState: {
-        isCreating: false,
-        protoNode: null,
-        validationErrors: {}
-      }
-    };
-  }),
-
-  // Edit mode actions
-  startEditMode: (node) => set((_state) => {
-    return {
-      editMode: {
-        isActive: true,
-        editingNode: { ...node }, // Create a copy to avoid mutations
-        originalRelationships: [...node.liminalWebConnections], // Store original relationships
-        pendingRelationships: [...node.liminalWebConnections], // Show existing relationships with glow
-        searchResults: [],
-        validationErrors: {},
-        isSearchingRelationships: false
-      },
-      // Also set the spatial layout to 'edit' mode
-      spatialLayout: 'edit' as const
-    };
-  }),
-
-  exitEditMode: () => set((_state) => {
-    // Note: We don't change the layout here - the calling code should handle that
-    // This allows for proper transitions (edit → liminal-web, edit-search → edit, etc.)
-    
-    return {
-      editMode: {
-        isActive: false,
-        editingNode: null,
-        originalRelationships: [],
-        pendingRelationships: [],
-        searchResults: [],
-        validationErrors: {},
-        newDreamTalkFile: undefined,
-        isSearchingRelationships: false
-      }
-    };
-  }),
-
-  updateEditingNodeMetadata: (updates) => set(state => ({
-    editMode: {
-      ...state.editMode,
-      editingNode: state.editMode.editingNode
-        ? { ...state.editMode.editingNode, ...updates }
-        : null
-    }
-  })),
-
-  setEditModeNewDreamTalkFile: (file) => set(state => ({
-    editMode: {
-      ...state.editMode,
-      newDreamTalkFile: file
-    }
-  })),
-
-  setEditModeSearchResults: (results) => set(state => ({
-    editMode: {
-      ...state.editMode,
-      searchResults: results
-    }
-  })),
-
-  setEditModeSearchActive: (active) => set(state => {
-    const newLayout = active ? 'edit-search' as const : 'edit' as const;
-
-    return {
-      editMode: {
-        ...state.editMode,
-        isSearchingRelationships: active,
-        // Clear search results when exiting edit-search mode to prevent persistence
-        searchResults: active ? state.editMode.searchResults : []
-      },
-      // Update spatial layout based on search mode state
-      spatialLayout: newLayout,
-      // Also clear main search results when exiting edit-search to clean up spatial layout
-      searchResults: active ? state.searchResults : []
-    };
-  }),
-
-  togglePendingRelationship: (nodeId) => set(state => {
-    const currentPending = state.editMode.pendingRelationships;
-    const isAlreadyPending = currentPending.includes(nodeId);
-    
-    return {
-      editMode: {
-        ...state.editMode,
-        pendingRelationships: isAlreadyPending
-          ? currentPending.filter(id => id !== nodeId) // Remove if exists
-          : [...currentPending, nodeId] // Add if doesn't exist
-      }
-    };
-  }),
-
-  savePendingRelationships: () => set(state => {
-    if (!state.editMode.editingNode) return state;
-
-    // Update the editing node with pending relationships
-    const updatedNode = {
-      ...state.editMode.editingNode,
-      liminalWebConnections: [...state.editMode.pendingRelationships]
-    };
-
-    return {
-      editMode: {
-        ...state.editMode,
-        editingNode: updatedNode,
-        originalRelationships: [...state.editMode.pendingRelationships] // Update original to match
-      }
-    };
-  }),
-
-  setEditModeValidationErrors: (errors) => set(state => ({
-    editMode: {
-      ...state.editMode,
-      validationErrors: errors
-    }
-  })),
-
-  // Copilot mode actions
-  startCopilotMode: (conversationPartner) => set((state) => {
-    // Hide ribbon for cleaner video call interface
-    try {
-      const app = (globalThis as any).app;
-      if (app?.workspace?.leftRibbon) {
-        app.workspace.leftRibbon.hide();
-        console.log(`🎯 [Copilot-Entry] Hidden ribbon for cleaner interface`);
-      }
-    } catch (error) {
-      console.warn('Failed to hide ribbon:', error);
-    }
-
-    // Pre-populate search results with conversation partner's related DreamNodes
-    const relatedNodeIds = conversationPartner.liminalWebConnections || [];
-    console.log(`🎯 [Copilot-Entry] Conversation partner "${conversationPartner.name}" has ${relatedNodeIds.length} liminalWebConnections:`, relatedNodeIds);
-
-    const relatedNodes: DreamNode[] = [];
-
-    for (const nodeId of relatedNodeIds) {
-      const nodeData = state.realNodes.get(nodeId);
-      if (nodeData) {
-        relatedNodes.push(nodeData.node);
-        console.log(`🎯 [Copilot-Entry] ✓ Found node: ${nodeData.node.name} (${nodeId})`);
-      } else {
-        console.log(`🎯 [Copilot-Entry] ✗ Node not found in realNodes: ${nodeId}`);
-      }
-    }
-
-    console.log(`🎯 [Copilot-Entry] Pre-populated ${relatedNodes.length} related nodes from liminal-web`);
-    console.log(`🎯 [Copilot-Entry] Related node names:`, relatedNodes.map(n => n.name));
-    console.log(`🎯 [Copilot-Entry] Setting searchResults and frozenSearchResults to:`, relatedNodes);
-
-    return {
-      spatialLayout: 'copilot',
-      searchResults: relatedNodes, // Initial array with already related nodes
-      copilotMode: {
-        isActive: true,
-        conversationPartner: { ...conversationPartner }, // Create a copy
-        transcriptionFilePath: null,
-        showSearchResults: false,
-        frozenSearchResults: relatedNodes, // Also pre-populate frozen results for Option key display
-        sharedNodeIds: []
-      }
-    };
-  }),
-
-  exitCopilotMode: () => set((state) => {
-    // PROCESS SHARED NODES BEFORE CLEARING STATE
-    const { conversationPartner, sharedNodeIds } = state.copilotMode;
-
-    if (conversationPartner && sharedNodeIds.length > 0) {
-      console.log(`🔗 [Copilot-Exit] Processing ${sharedNodeIds.length} shared nodes for "${conversationPartner.name}"`);
-      console.log(`🔗 [Copilot-Exit] Shared node IDs: ${sharedNodeIds.join(', ')}`);
-
-      // Filter out nodes that are already related to avoid duplicates
-      const newRelationships = sharedNodeIds.filter(id => !conversationPartner.liminalWebConnections.includes(id));
-
-      if (newRelationships.length > 0) {
-        // Create updated conversation partner with new relationships
-        const updatedPartner = {
-          ...conversationPartner,
-          liminalWebConnections: [...conversationPartner.liminalWebConnections, ...newRelationships]
-        };
-
-        console.log(`✅ [Copilot-Exit] Adding ${newRelationships.length} new relationships: ${newRelationships.join(', ')}`);
-        console.log(`✅ [Copilot-Exit] "${conversationPartner.name}" now has ${updatedPartner.liminalWebConnections.length} total relationships`);
-
-        // Update the conversation partner node in store
-        const existingNodeData = state.realNodes.get(conversationPartner.id);
-        if (existingNodeData) {
-          state.realNodes.set(conversationPartner.id, {
-            ...existingNodeData,
-            node: updatedPartner
-          });
-        }
-
-        // Also update selectedNode if it matches the conversation partner
-        if (state.selectedNode?.id === conversationPartner.id) {
-          state.selectedNode = updatedPartner;
-        }
-
-        // Update bidirectional relationships in store for immediate UI feedback
-        for (const sharedNodeId of newRelationships) {
-          const sharedNodeData = state.realNodes.get(sharedNodeId);
-          if (sharedNodeData) {
-            const updatedSharedNode = {
-              ...sharedNodeData.node,
-              liminalWebConnections: [...sharedNodeData.node.liminalWebConnections, conversationPartner.id]
-            };
-            state.realNodes.set(sharedNodeId, {
-              ...sharedNodeData,
-              node: updatedSharedNode
-            });
-            console.log(`✅ [Copilot-Exit] Updated bidirectional relationship for shared node: ${updatedSharedNode.name}`);
-          }
-        }
-      } else {
-        console.log(`ℹ️ [Copilot-Exit] No new relationships to add - all shared nodes were already related`);
-      }
-    }
-
-    // Show ribbon again when exiting copilot mode
-    try {
-      const app = (globalThis as any).app;
-      if (app?.workspace?.leftRibbon) {
-        app.workspace.leftRibbon.show();
-        console.log(`🎯 [Copilot-Exit] Restored ribbon visibility`);
-      }
-    } catch (error) {
-      console.warn('Failed to show ribbon:', error);
-    }
-
-    return {
-      spatialLayout: 'liminal-web', // Return to liminal-web layout with updated relationships
-      copilotMode: {
-        isActive: false,
-        conversationPartner: null,
-        transcriptionFilePath: null,
-        showSearchResults: false,
-        frozenSearchResults: [],
-        sharedNodeIds: []
-      }
-    };
-  }),
-
-  // Copilot show/hide actions
-  setShowSearchResults: (show: boolean) => set((state) => ({
-    copilotMode: {
-      ...state.copilotMode,
-      showSearchResults: show
-    }
-  })),
-
-  freezeSearchResults: () => set((state) => ({
-    copilotMode: {
-      ...state.copilotMode,
-      frozenSearchResults: [...state.searchResults] // Capture current search results
-    }
-  })),
-
-  addSharedNode: (nodeId: string) => set((state) => ({
-    copilotMode: {
-      ...state.copilotMode,
-      sharedNodeIds: [...state.copilotMode.sharedNodeIds, nodeId]
-    }
-  })),
 
   // Navigation history actions
-  addHistoryEntry: (nodeId, layout) => set(state => {
+  addHistoryEntry: (nodeId, layout) => set((state: InterBrainState) => {
     const { history, currentIndex, maxHistorySize } = state.navigationHistory;
-    
-    // Create new entry
+
     const newEntry: NavigationHistoryEntry = {
       nodeId,
       layout,
       timestamp: Date.now(),
-      flipState: (nodeId && layout === 'liminal-web') ? 
+      flipState: (nodeId && layout === 'liminal-web') ?
         state.flipState.flipStates.get(nodeId) || null : null,
-      scrollPosition: (nodeId && layout === 'liminal-web') ? 
+      scrollPosition: (nodeId && layout === 'liminal-web') ?
         getDreamSongScrollPosition(nodeId) : null
     };
-    
-    // If we're not at the end of history (user has undone some actions),
-    // clear everything after current position (standard undo/redo behavior)
-    const newHistory = currentIndex >= 0 
+
+    const newHistory = currentIndex >= 0
       ? [...history.slice(0, currentIndex + 1), newEntry]
       : [newEntry];
-    
-    // Ensure history doesn't exceed max size (remove oldest entries)
+
     const trimmedHistory = newHistory.length > maxHistorySize
       ? newHistory.slice(-maxHistorySize)
       : newHistory;
-    
+
     return {
       navigationHistory: {
         ...state.navigationHistory,
@@ -1112,30 +570,22 @@ export const useInterBrainStore = create<InterBrainState>()(
       }
     };
   }),
-  
-  getHistoryEntryForUndo: () => {
-    // This function will be called from commands which have access to getState()
-    return null; // Commands will implement the logic
-  },
-  
-  getHistoryEntryForRedo: () => {
-    // This function will be called from commands which have access to getState()
-    return null; // Commands will implement the logic
-  },
-  
+
+  getHistoryEntryForUndo: () => null,
+  getHistoryEntryForRedo: () => null,
+
   performUndo: () => {
     let success = false;
-    
-    set(state => {
+
+    set((state: InterBrainState) => {
       const { currentIndex } = state.navigationHistory;
-      
+
       if (currentIndex <= 0) {
-        return state; // Nothing to undo
+        return state;
       }
-      
+
       success = true;
-      
-      // Move to previous entry
+
       return {
         navigationHistory: {
           ...state.navigationHistory,
@@ -1143,23 +593,22 @@ export const useInterBrainStore = create<InterBrainState>()(
         }
       };
     });
-    
+
     return success;
   },
-  
+
   performRedo: () => {
     let success = false;
-    
-    set(state => {
+
+    set((state: InterBrainState) => {
       const { currentIndex, history } = state.navigationHistory;
-      
+
       if (currentIndex >= history.length - 1) {
-        return state; // Nothing to redo
+        return state;
       }
-      
+
       success = true;
-      
-      // Move to next entry
+
       return {
         navigationHistory: {
           ...state.navigationHistory,
@@ -1167,26 +616,24 @@ export const useInterBrainStore = create<InterBrainState>()(
         }
       };
     });
-    
+
     return success;
   },
-  
-  clearNavigationHistory: () => set(state => ({
+
+  clearNavigationHistory: () => set((state: InterBrainState) => ({
     navigationHistory: {
       ...state.navigationHistory,
       history: [],
       currentIndex: -1
     }
   })),
-  
-  setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
-  
-  restoreVisualState: (entry) => set((state) => {
-    const newState = { ...state };
 
-    // Restore FlipState if present
+  setRestoringFromHistory: (restoring) => set({ isRestoringFromHistory: restoring }),
+
+  restoreVisualState: (entry) => set((state: InterBrainState) => {
+    const newState: Partial<InterBrainState> = {};
+
     if (entry.nodeId && entry.flipState) {
-      // Update the flip state for this node
       const updatedFlipStates = new Map(state.flipState.flipStates);
       updatedFlipStates.set(entry.nodeId, entry.flipState);
 
@@ -1197,31 +644,25 @@ export const useInterBrainStore = create<InterBrainState>()(
       };
     }
 
-    // Restore scroll position (async, but we don't wait for it)
     if (entry.nodeId && entry.scrollPosition !== null) {
-      // Use setTimeout to ensure DOM has updated after state change
       if (typeof setTimeout !== 'undefined') {
-         
         setTimeout(() => {
           restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
         }, 100);
       } else {
-        // Fallback for non-browser environments
         restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
       }
     }
 
     return newState;
   }),
-  
-  // DreamNode flip animation actions
-  setFlippedNode: (nodeId) => set((state) => {
-    
-    // Reset previous flipped node if different
+
+  // Flip animation actions
+  setFlippedNode: (nodeId) => set((state: InterBrainState) => {
     if (state.flipState.flippedNodeId && state.flipState.flippedNodeId !== nodeId) {
       const updatedFlipStates = new Map(state.flipState.flipStates);
       updatedFlipStates.delete(state.flipState.flippedNodeId);
-      
+
       return {
         flipState: {
           flippedNodeId: nodeId,
@@ -1229,7 +670,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         }
       };
     }
-    
+
     return {
       flipState: {
         ...state.flipState,
@@ -1237,29 +678,27 @@ export const useInterBrainStore = create<InterBrainState>()(
       }
     };
   }),
-  
-  startFlipAnimation: (nodeId, direction) => set((state) => {
-    
+
+  startFlipAnimation: (nodeId, direction) => set((state: InterBrainState) => {
     const updatedFlipStates = new Map(state.flipState.flipStates);
-    
+
     const currentFlipState = updatedFlipStates.get(nodeId) || {
       isFlipped: false,
       isFlipping: false,
       flipDirection: 'front-to-back' as const,
       animationStartTime: 0
     };
-    
+
     const newFlipState = {
       ...currentFlipState,
       isFlipping: true,
       flipDirection: direction,
       animationStartTime: globalThis.performance.now()
     };
-    
+
     updatedFlipStates.set(nodeId, newFlipState);
 
     return {
-      ...state,
       flipState: {
         ...state.flipState,
         flipStates: updatedFlipStates,
@@ -1267,12 +706,11 @@ export const useInterBrainStore = create<InterBrainState>()(
       }
     };
   }),
-  
-  completeFlipAnimation: (nodeId) => set((state) => {
-    
+
+  completeFlipAnimation: (nodeId) => set((state: InterBrainState) => {
     const updatedFlipStates = new Map(state.flipState.flipStates);
     const currentFlipState = updatedFlipStates.get(nodeId);
-    
+
     if (currentFlipState) {
       const finalFlippedState = currentFlipState.flipDirection === 'front-to-back';
       const completedFlipState = {
@@ -1281,10 +719,10 @@ export const useInterBrainStore = create<InterBrainState>()(
         isFlipping: false,
         animationStartTime: 0
       };
-      
+
       updatedFlipStates.set(nodeId, completedFlipState);
     }
-    
+
     return {
       flipState: {
         ...state.flipState,
@@ -1292,121 +730,47 @@ export const useInterBrainStore = create<InterBrainState>()(
       }
     };
   }),
-  
+
   resetAllFlips: () => set(() => ({
     flipState: {
       flippedNodeId: null,
       flipStates: new Map<string, FlipState>()
     }
   })),
-  
+
   getNodeFlipState: (nodeId) => {
-    const state = get();
+    const state = get() as InterBrainState;
     return state.flipState.flipStates.get(nodeId) || null;
   },
+});
 
-  // Constellation relationship graph actions
-  setRelationshipGraph: (graph) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      relationshipGraph: graph,
-      lastScanTimestamp: graph ? Date.now() : null,
-      isScanning: false
-    }
-  })),
+// ============================================================================
+// STORE CREATION WITH SLICE COMPOSITION
+// ============================================================================
 
-  setConstellationScanning: (scanning) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      isScanning: scanning
-    }
-  })),
+// Helper to convert array to Map for persistence restoration
+const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
 
-  setConstellationPositions: (positions) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      positions,
-      lastLayoutTimestamp: positions ? Date.now() : null
-    }
-  })),
-
-  setNodeMetadata: (metadata) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      nodeMetadata: metadata
-    }
-  })),
-
-  clearConstellationData: () => set(() => ({
-    constellationData: {
-      relationshipGraph: null,
-      lastScanTimestamp: null,
-      isScanning: false,
-      positions: null,
-      lastLayoutTimestamp: null,
-      nodeMetadata: null
-    }
-  })),
-
-  setRadialButtonUIActive: (active) => set((state) => ({
-    radialButtonUI: {
-      ...state.radialButtonUI,
-      isActive: active
-    }
-  })),
-
-  setRadialButtonCount: (count) => set((state) => ({
-    radialButtonUI: {
-      ...state.radialButtonUI,
-      buttonCount: count
-    }
-  })),
-
-  setOptionKeyPressed: (pressed) => set((state) => ({
-    radialButtonUI: {
-      ...state.radialButtonUI,
-      optionKeyPressed: pressed
-    }
-  })),
-
-  // Update status management (non-persisted)
-  updateStatus: new Map(),
-
-  setNodeUpdateStatus: (nodeId, result) => set((state) => {
-    const newStatus = new Map(state.updateStatus);
-    newStatus.set(nodeId, result);
-    return { updateStatus: newStatus };
-  }),
-
-  clearNodeUpdateStatus: (nodeId) => set((state) => {
-    const newStatus = new Map(state.updateStatus);
-    newStatus.delete(nodeId);
-    return { updateStatus: newStatus };
-  }),
-
-  getNodeUpdateStatus: (nodeId) => {
-    return get().updateStatus.get(nodeId) || null;
-  },
+export const useInterBrainStore = create<InterBrainState>()(
+  persist(
+    (set, get, api) => ({
+      // Compose all slices
+      ...createCoreSlice(set, get),
+      ...createSearchSlice(set, get, api),
+      ...createConstellationSlice(set, get, api),
+      ...createCopilotModeSlice(set, get, api),
+      ...createEditModeSlice(set, get, api),
+      ...createCreationSlice(set, get, api),
+      ...createRadialButtonsSlice(set, get, api),
+      ...createUpdatesSlice(set, get, api),
     }),
     {
-      name: 'interbrain-storage', // Storage key
-      // Only persist vector data, constellation data, and Ollama config
+      name: 'interbrain-storage',
       partialize: (state) => ({
-        // Don't persist realNodes at all - they reload from vault on app start
-        // This avoids localStorage quota issues entirely
         realNodes: [],
-        constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions || state.constellationData.nodeMetadata) ? {
-          ...state.constellationData,
-          relationshipGraph: state.constellationData.relationshipGraph ?
-            serializeRelationshipGraph(state.constellationData.relationshipGraph) : null,
-          positions: state.constellationData.positions ?
-            mapToArray(state.constellationData.positions) : null,
-          nodeMetadata: state.constellationData.nodeMetadata ?
-            mapToArray(state.constellationData.nodeMetadata) : null
-        } : null,
-        ...extractOllamaPersistenceData(state),
+        ...extractSearchPersistenceData(state),
+        ...extractConstellationPersistenceData(state),
       }),
-      // Custom merge function to handle Map deserialization
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as {
           realNodes: [string, RealNodeData][];
@@ -1422,50 +786,20 @@ export const useInterBrainStore = create<InterBrainState>()(
           ollamaConfig?: OllamaConfig;
         };
 
-        // Restore constellation data if present
-        let constellationData = {
-          relationshipGraph: null as DreamSongRelationshipGraph | null,
-          lastScanTimestamp: null as number | null,
-          isScanning: false,
-          positions: null as Map<string, [number, number, number]> | null,
-          lastLayoutTimestamp: null as number | null,
-          nodeMetadata: null as Map<string, { name: string; type: string; uuid: string }> | null
-        };
-
-        if (persistedData.constellationData) {
-          try {
-            constellationData = {
-              relationshipGraph: persistedData.constellationData.relationshipGraph ?
-                deserializeRelationshipGraph(persistedData.constellationData.relationshipGraph) : null,
-              lastScanTimestamp: persistedData.constellationData.lastScanTimestamp,
-              isScanning: false,
-              positions: persistedData.constellationData.positions ?
-                arrayToMap(persistedData.constellationData.positions) : null,
-              lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp,
-              nodeMetadata: persistedData.constellationData.nodeMetadata ?
-                arrayToMap(persistedData.constellationData.nodeMetadata) : null
-            };
-          } catch (error) {
-            console.warn('Failed to deserialize constellation data:', error);
-            // Keep default null state
-          }
-        }
-
         return {
           ...current,
           realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
-          constellationData,
-          ...restoreOllamaPersistenceData(persistedData),
+          ...restoreSearchPersistenceData(persistedData),
+          ...restoreConstellationPersistenceData(persistedData),
         };
       },
     }
   )
 );
 
-// DIAGNOSTIC: Log all store updates to identify re-render storm trigger
-// Currently disabled but kept for potential debugging
+// DIAGNOSTIC: Log all store updates (disabled but kept for debugging)
 if (typeof window !== 'undefined') {
   useInterBrainStore.subscribe((_state, _prevState) => {
-    // Diagnostic logging disabled - could track update count here if needed
+    // Diagnostic logging disabled
   });
 }

@@ -11,8 +11,8 @@ export { OllamaHealthService, createOllamaHealthService } from './services/ollam
 export { indexingService } from './services/indexing-service';
 export { semanticSearchService } from './services/semantic-search-service';
 
-// Store slice
-export { createOllamaConfigSlice } from './store/ollama-config-slice';
+// Store slice (full search slice with ollamaConfig, vectorData, searchResults, etc.)
+export { createSearchSlice, SearchSlice, extractSearchPersistenceData, restoreSearchPersistenceData } from './search-slice';
 
 // Types and configurations
 export type {

@@ -1,5 +1,5 @@
 import { App, Modal } from 'obsidian';
-import { CoherenceBeacon } from '../../features/coherence-beacon/service';
+import { CoherenceBeacon } from '../service';
 
 export class CoherenceBeaconModal extends Modal {
   private beacon: CoherenceBeacon;

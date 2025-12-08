@@ -1,3 +1,4 @@
 // Core UI barrel export
-export * from './coherence-beacon-modal';
-export * from './update-preview-modal';
+// Note: Feature-specific modals moved to their respective features:
+// - CoherenceBeaconModal -> features/coherence-beacon/ui/
+// - UpdatePreviewModal -> features/updates/ui/

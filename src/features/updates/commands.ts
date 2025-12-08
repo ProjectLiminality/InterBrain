@@ -10,7 +10,7 @@ import { getUpdateCheckerService } from './update-checker-service';
 import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { GitService } from '../../core/services/git-service';
-import { UpdatePreviewModal } from '../../core/ui/update-preview-modal';
+import { UpdatePreviewModal } from './ui/update-preview-modal';
 
 const path = require('path');
 const fs = require('fs').promises;
@@ -413,7 +413,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                   console.log(`[UpdatePreview] Found ${beacons.length} coherence beacon(s)`);
 
                   // Import modal dynamically to avoid circular dependencies
-                  const { CoherenceBeaconModal } = await import('../../core/ui/coherence-beacon-modal');
+                  const { CoherenceBeaconModal } = await import('../coherence-beacon/ui/coherence-beacon-modal');
 
                   // Process each beacon sequentially
                   for (const beacon of beacons) {
