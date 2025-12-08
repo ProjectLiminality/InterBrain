@@ -7,9 +7,6 @@ export * from './types';
 // Store
 export * from './store';
 
-// Utils
-export * from './utils';
-
 // Services
 export * from './services';
 
