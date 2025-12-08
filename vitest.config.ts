@@ -12,7 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
-      'obsidian': resolve(__dirname, 'src/core/test-utils/mocks/obsidian-module.ts'),
+      'obsidian': resolve(__dirname, 'src/core/test-utils/mocks/obsidian.ts'),
     },
   },
 })
