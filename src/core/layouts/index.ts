@@ -1,3 +1,5 @@
 // Core layouts barrel export
-export * from './RingLayout';
-export * from './DynamicViewScaling';
+// Re-exports from feature modules for backwards compatibility
+
+export * from '../../features/liminal-web-layout/RingLayout';
+export * from '../../features/constellation-layout/DynamicViewScaling';

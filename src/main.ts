@@ -12,7 +12,7 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './core/
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './core/components/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
-import { calculateFibonacciSpherePositions } from './features/constellation';
+import { calculateFibonacciSpherePositions } from './features/constellation-layout';
 import { DreamNode } from './core/types/dreamnode';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerNavigationCommands } from './core/commands/navigation-commands';
@@ -25,14 +25,14 @@ import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
 import { registerHousekeepingCommands } from './features/social-resonance/housekeeping-commands';
 import { registerDreamerUpdateCommands } from './features/updates/dreamer-update-commands';
-import { registerRelationshipCommands } from './features/liminal-web';
+import { registerRelationshipCommands } from './features/liminal-web-layout';
 import { registerUpdateCommands } from './features/updates/commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
-import { ConstellationCommands } from './features/constellation/commands';
+import { ConstellationCommands } from './features/constellation-layout/commands';
 import { registerFaceTimeCommands } from './features/video-calling/commands';
 import { FaceTimeService } from './features/video-calling/service';
 import { CanvasParserService } from './features/dreamweaving/services/canvas-parser-service';

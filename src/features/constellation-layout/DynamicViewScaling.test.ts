@@ -7,7 +7,7 @@ import {
   NIGHT_SKY_SPHERE_RADIUS,
   CAMERA_INTERSECTION_POINT,
   type DynamicViewScalingConfig
-} from '../layouts/DynamicViewScaling';
+} from './DynamicViewScaling';
 
 describe('DynamicViewScaling', () => {
   describe('Constants', () => {

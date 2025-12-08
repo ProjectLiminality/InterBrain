@@ -4,7 +4,7 @@ import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { DreamNode3D } from '../../features/dreamnode-visualization';
 import type { DreamNode3DRef } from '../../features/dreamnode-visualization/DreamNode3D';
-import Star3D from './Star3D';
+import { Star3D } from '../../features/constellation-layout';
 import SphereRotationControls from './SphereRotationControls';
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import ProtoNode3D from '../../features/creation/ProtoNode3D';
@@ -12,7 +12,7 @@ import SearchNode3D from '../../features/search/SearchNode3D';
 import SearchOrchestrator from '../../features/search/SearchOrchestrator';
 import { EditModeOverlay } from '../../features/edit-mode';
 import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
-import ConstellationEdges, { shouldShowConstellationEdges } from '../../features/constellation/ConstellationEdges';
+import ConstellationEdges, { shouldShowConstellationEdges } from '../../features/constellation-layout/ConstellationEdges';
 import { RadialButtonRing3D } from '../../features/radial-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/radial-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../types/dreamnode';
@@ -21,7 +21,7 @@ import { serviceManager } from '../services/service-manager';
 import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
-import { CAMERA_INTERSECTION_POINT } from '../layouts/DynamicViewScaling';
+import { CAMERA_INTERSECTION_POINT } from '../../features/constellation-layout/DynamicViewScaling';
 import { processDroppedUrlData } from '../../features/drag-and-drop';
 
 // Create singleton service instances

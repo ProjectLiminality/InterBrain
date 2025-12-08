@@ -13,7 +13,7 @@ import {
   DreamSongRelationshipConfig,
   DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG,
   serializeRelationshipGraph
-} from '../constellation/types';
+} from '../constellation-layout/types';
 
 // Access Node.js modules directly in Electron context
  
