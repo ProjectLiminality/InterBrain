@@ -26,7 +26,7 @@ import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
 import { registerHousekeepingCommands } from './features/social-resonance/housekeeping-commands';
 import { registerDreamerUpdateCommands } from './features/updates/dreamer-update-commands';
-import { registerRelationshipCommands } from './core/commands/relationship-commands';
+import { registerRelationshipCommands } from './features/liminal-web';
 import { registerUpdateCommands } from './features/updates/commands';
 import {
 	registerTranscriptionCommands,
