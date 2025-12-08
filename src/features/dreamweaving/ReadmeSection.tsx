@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DreamNode } from '../dreamnode';
-import separatorImage from '../../assets/images/Separator.png';
+import separatorImage from './assets/Separator.png';
 import styles from './dreamsong.module.css';
 
 interface ReadmeSectionProps {
