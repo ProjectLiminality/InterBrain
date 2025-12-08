@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../../core/components/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../dreamnode-visualization/dreamNodeStyles';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 interface SearchNode3DProps {

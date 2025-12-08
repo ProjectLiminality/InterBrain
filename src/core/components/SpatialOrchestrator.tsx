@@ -14,7 +14,7 @@
 import React, { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
 import { Vector3, Group } from 'three';
 import { DreamNode } from '../types/dreamnode';
-import { DreamNode3DRef } from './DreamNode3D';
+import type { DreamNode3DRef } from '../../features/dreamnode-visualization/DreamNode3D';
 import { buildRelationshipGraph } from '../utils/relationship-graph';
 import { calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../layouts/RingLayout';
 import { computeConstellationLayout, createFallbackLayout } from '../../features/constellation/ConstellationLayout';

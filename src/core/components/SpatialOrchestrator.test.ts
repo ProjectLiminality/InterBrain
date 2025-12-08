@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React from 'react'
 import { DreamNode } from '../types/dreamnode'
-import { DreamNode3DRef } from './DreamNode3D'
+import type { DreamNode3DRef } from '../../features/dreamnode-visualization/DreamNode3D'
 import { SpatialLayoutType } from '../store/interbrain-store'
 
 // Mock Three.js dependencies

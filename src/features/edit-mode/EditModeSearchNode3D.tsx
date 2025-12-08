@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Html } from '@react-three/drei';
-import { dreamNodeStyles, getNodeColors } from '../../core/components/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors } from '../dreamnode-visualization/dreamNodeStyles';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
 

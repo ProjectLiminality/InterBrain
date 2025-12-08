@@ -12,12 +12,11 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './core/
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './core/components/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
-import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './features/constellation';
+import { calculateFibonacciSpherePositions } from './features/constellation';
 import { DreamNode } from './core/types/dreamnode';
-import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './core/utils/relationship-graph';
-import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './core/layouts/RingLayout';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerNavigationCommands } from './core/commands/navigation-commands';
+import { registerDeveloperCommands } from './core/commands/developer-commands';
 import { registerEditModeCommands } from './features/edit-mode';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
@@ -339,6 +338,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register navigation commands (flip animations, fullscreen views, search toggle)
     registerNavigationCommands(this, this.uiService);
+
+    // Register developer/debug commands (wireframe sphere, intersection point, flying controls, camera reset)
+    registerDeveloperCommands(this, this.uiService);
 
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
@@ -662,16 +664,6 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Toggle DreamNode selection
-    this.addCommand({
-      id: 'toggle-dreamnode-selection',
-      name: 'Toggle DreamNode selection',
-      callback: () => {
-        console.log('Toggle selection command executed');
-        this.uiService.showPlaceholder('Selection UI coming soon!');
-      }
-    });
-
     // Open DreamNode in Finder command
     this.addCommand({
       id: 'open-dreamnode-in-finder',
@@ -819,42 +811,6 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Debug: Toggle wireframe sphere
-    this.addCommand({
-      id: 'toggle-debug-wireframe-sphere',
-      name: 'Toggle Debug Wireframe Sphere',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const newState = !store.debugWireframeSphere;
-        store.setDebugWireframeSphere(newState);
-        this.uiService.showSuccess(`Debug wireframe sphere ${newState ? 'enabled' : 'disabled'}`);
-      }
-    });
-
-    // Debug: Toggle intersection point
-    this.addCommand({
-      id: 'toggle-debug-intersection-point',
-      name: 'Toggle Debug Intersection Point',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const newState = !store.debugIntersectionPoint;
-        store.setDebugIntersectionPoint(newState);
-        this.uiService.showSuccess(`Debug intersection point ${newState ? 'enabled' : 'disabled'}`);
-      }
-    });
-
-    // Debug: Toggle flying camera controls
-    this.addCommand({
-      id: 'toggle-debug-flying-controls',
-      name: 'Toggle Debug Flying Camera Controls',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const newState = !store.debugFlyingControls;
-        store.setDebugFlyingControls(newState);
-        this.uiService.showSuccess(`Debug flying controls ${newState ? 'enabled' : 'disabled'}`);
-      }
-    });
-
     // Scan vault for DreamNodes
     this.addCommand({
       id: 'scan-vault',
@@ -933,32 +889,6 @@ export default class InterBrainPlugin extends Plugin {
         await plugins.disablePlugin('interbrain');
         await plugins.enablePlugin('interbrain');
         console.log(`[Refresh] Plugin reload complete`);
-      }
-    });
-
-    // Reset data store
-    this.addCommand({
-      id: 'reset-data-store',
-      name: 'Reset Data Store',
-      callback: () => {
-        const confirmMsg = 'Clear data store? (Vault files will remain unchanged)';
-
-        if (globalThis.confirm(confirmMsg)) {
-          serviceManager.resetData();
-          this.uiService.showSuccess('Data store reset');
-        }
-      }
-    });
-
-    // Test command: Clear selection
-    this.addCommand({
-      id: 'clear-dreamnode-selection',
-      name: '[TEST] Clear DreamNode Selection',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.setSelectedNode(null);
-        this.uiService.showSuccess('Selection cleared');
-        console.log('Selection cleared - Zustand state should be null');
       }
     });
 
@@ -1053,154 +983,6 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Camera command: Reset camera position
-    this.addCommand({
-      id: 'camera-reset',
-      name: 'Reset Camera Position',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        // Reset to origin for proper Dynamic View Scaling geometry
-        store.setCameraPosition([0, 0, 0]);
-        store.setCameraTarget([0, 0, 0]);
-        store.setCameraTransition(false);
-        this.uiService.showSuccess('Camera position reset');
-        console.log('Camera reset to default position');
-      }
-    });
-
-    // Fibonacci sphere layout commands
-    this.addCommand({
-      id: 'fibonacci-expand-sphere',
-      name: 'Expand Fibonacci Sphere',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentRadius = store.fibonacciConfig.radius;
-        const newRadius = Math.min(currentRadius * 1.5, 5000); // Max radius of 5000
-        store.setFibonacciConfig({ radius: newRadius });
-        this.uiService.showSuccess(`Sphere expanded to radius ${Math.round(newRadius)}`);
-        console.log('Fibonacci sphere radius increased to:', newRadius);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-contract-sphere',
-      name: 'Contract Fibonacci Sphere',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentRadius = store.fibonacciConfig.radius;
-        const newRadius = Math.max(currentRadius / 1.5, 200); // Min radius of 200
-        store.setFibonacciConfig({ radius: newRadius });
-        this.uiService.showSuccess(`Sphere contracted to radius ${Math.round(newRadius)}`);
-        console.log('Fibonacci sphere radius decreased to:', newRadius);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-reset-config',
-      name: 'Reset Fibonacci Sphere to Default',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.resetFibonacciConfig();
-        this.uiService.showSuccess('Fibonacci sphere reset to default configuration');
-        console.log('Fibonacci sphere configuration reset to default:', DEFAULT_FIBONACCI_CONFIG);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-increase-nodes',
-      name: 'Increase Node Count',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentCount = store.fibonacciConfig.nodeCount;
-        const newCount = Math.min(currentCount + 6, 100); // Max 100 nodes
-        store.setFibonacciConfig({ nodeCount: newCount });
-        this.uiService.showSuccess(`Node count increased to ${newCount}`);
-        console.log('Fibonacci sphere node count increased to:', newCount);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-decrease-nodes',
-      name: 'Decrease Node Count',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentCount = store.fibonacciConfig.nodeCount;
-        const newCount = Math.max(currentCount - 6, 6); // Min 6 nodes
-        store.setFibonacciConfig({ nodeCount: newCount });
-        this.uiService.showSuccess(`Node count decreased to ${newCount}`);
-        console.log('Fibonacci sphere node count decreased to:', newCount);
-      }
-    });
-
-    // Git Template System Commands
-    this.addCommand({
-      id: 'create-dreamnode-from-template',
-      name: 'Create DreamNode from Git Template',
-      callback: async () => {
-        console.log('Create DreamNode from template command executed');
-        this.uiService.showPlaceholder('Git template creation coming soon! Use mock creation for now.');
-        
-        // TODO: Implement template-based creation workflow
-        // 1. Prompt user for title and type
-        // 2. Select location in vault for new DreamNode
-        // 3. Generate UUID
-        // 4. Call gitTemplateService.initializeFromTemplate()
-        // 5. Integrate with existing DreamSpace UI
-      }
-    });
-
-    this.addCommand({
-      id: 'validate-dreamnode-template',
-      name: 'Validate DreamNode Template',
-      callback: async () => {
-        console.log('Validate template command executed');
-        const loadingNotice = this.uiService.showLoading('Validating DreamNode template...');
-        
-        try {
-          const validation = this.gitTemplateService.validateTemplate();
-          if (validation.valid) {
-            this.uiService.showSuccess('Template is valid and ready for use');
-            console.log('Template validation successful');
-          } else {
-            this.uiService.showError(`Template validation failed: ${validation.errors.join(', ')}`);
-            console.error('Template validation errors:', validation.errors);
-          }
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Unknown validation error');
-          console.error('Template validation error:', error);
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
-    this.addCommand({
-      id: 'check-dreamnode-coherence',
-      name: 'Check DreamNode Template Coherence',
-      callback: async () => {
-        console.log('Check template coherence command executed');
-        const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
-        
-        try {
-          const results = await this.gitTemplateService.scanVaultCoherence();
-          
-          if (results.total === 0) {
-            this.uiService.showSuccess('No DreamNodes found in vault');
-          } else if (results.incoherent.length === 0) {
-            this.uiService.showSuccess(`All ${results.total} DreamNodes are coherent with template`);
-          } else {
-            this.uiService.showError(`Found ${results.incoherent.length} incoherent DreamNodes out of ${results.total} total`);
-            console.log('Incoherent DreamNodes:', results.incoherent);
-          }
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Coherence check failed');
-          console.error('Coherence check error:', error);
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
     // Refresh Git Status command
     this.addCommand({
       id: 'refresh-git-status',
@@ -1224,218 +1006,6 @@ export default class InterBrainPlugin extends Plugin {
           console.error('Git status refresh error:', error);
         } finally {
           loadingNotice.hide();
-        }
-      }
-    });
-
-    this.addCommand({
-      id: 'update-dreamnode-coherence',
-      name: 'Update DreamNode Template Coherence',
-      callback: async () => {
-        console.log('Update template coherence command executed');
-        const loadingNotice = this.uiService.showLoading('Updating DreamNode coherence...');
-        
-        try {
-          // First scan for incoherent nodes
-          const scanResults = await this.gitTemplateService.scanVaultCoherence();
-          
-          if (scanResults.incoherent.length === 0) {
-            this.uiService.showSuccess('All DreamNodes are already coherent');
-            return;
-          }
-          
-          // Note: Actual coherence update would require shell commands
-          // For now, just report what would be updated
-          this.uiService.showError(
-            `Found ${scanResults.incoherent.length} incoherent DreamNodes. ` +
-            'Manual update required (git hooks cannot be updated via Obsidian API)'
-          );
-          
-          // Log details for manual fixing
-          for (const node of scanResults.incoherent) {
-            console.log(`Incoherent DreamNode: ${node.path}`);
-            console.log(`  Issues: ${node.issues.join(', ')}`);
-          }
-          
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Coherence update failed');
-          console.error('Coherence update error:', error);
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
-    // Step 3.5: Simple move-to-center command to test dual-mode positioning
-    this.addCommand({
-      id: 'move-selected-node-to-center',
-      name: 'Move Selected Node to Center',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        // Check if DreamSpace is open
-        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
-          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
-          return;
-        }
-        
-        // Call global canvas function (simple approach for now)
-        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { moveSelectedNodeToCenter(): boolean } }).__interbrainCanvas;
-        if (canvasAPI && canvasAPI.moveSelectedNodeToCenter) {
-          const success = canvasAPI.moveSelectedNodeToCenter();
-          if (success) {
-            this.uiService.showSuccess(`Moving ${selectedNode.name} to center`);
-          } else {
-            this.uiService.showError('Failed to move node - ref not found');
-          }
-        } else {
-          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
-        }
-      }
-    });
-
-    // Step 4: Test focused layout via SpatialOrchestrator
-    this.addCommand({
-      id: 'test-focused-layout-orchestrator',
-      name: 'Test: Focus on Selected Node (Orchestrator)',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        // Check if DreamSpace is open
-        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
-          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
-          return;
-        }
-        
-        // Call global canvas function to trigger focused layout
-        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { focusOnNode(nodeId: string): boolean } }).__interbrainCanvas;
-        if (canvasAPI && canvasAPI.focusOnNode) {
-          const success = canvasAPI.focusOnNode(selectedNode.id);
-          if (success) {
-            this.uiService.showSuccess(`Focusing on ${selectedNode.name} with liminal web layout`);
-          } else {
-            this.uiService.showError('Failed to focus - orchestrator not ready');
-          }
-        } else {
-          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
-        }
-      }
-    });
-
-    // Test command for relationship queries
-    this.addCommand({
-      id: 'test-relationship-queries',
-      name: 'Test: Query Node Relationships',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        try {
-          // Get all nodes from store
-          const store = useInterBrainStore.getState();
-          const realNodes = store.realNodes;
-          const allNodes = Array.from(realNodes.values()).map(data => data.node);
-
-          // Build relationship graph
-          const graph = buildRelationshipGraph(allNodes);
-          
-          // Log stats
-          const stats = getRelationshipStats(graph);
-          console.log('=== Relationship Graph Stats ===');
-          console.log(`Total nodes: ${stats.totalNodes}`);
-          console.log(`Dreams: ${stats.dreamNodes}, Dreamers: ${stats.dreamerNodes}`);
-          console.log(`Average connections: ${stats.averageConnections.toFixed(1)}`);
-          console.log(`Max connections: ${stats.maxConnections}`);
-          console.log(`Nodes with no connections: ${stats.nodesWithNoConnections}`);
-          
-          // Log relationships for selected node
-          logNodeRelationships(graph, selectedNode.id);
-          
-          this.uiService.showSuccess(`Logged relationships for ${selectedNode.name} to console`);
-        } catch (error) {
-          console.error('Relationship query error:', error);
-          this.uiService.showError('Failed to query relationships');
-        }
-      }
-    });
-
-    // Test command for focused layout position calculation
-    this.addCommand({
-      id: 'test-focused-layout-positions',
-      name: 'Test: Calculate Focused Layout Positions',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        try {
-          // Get all nodes from store
-          const realNodes = store.realNodes;
-          const allNodes = Array.from(realNodes.values()).map(data => data.node);
-
-          // Build relationship graph
-          const graph = buildRelationshipGraph(allNodes);
-          
-          // Calculate ring layout positions
-          const positions = calculateRingLayoutPositions(selectedNode.id, graph, DEFAULT_RING_CONFIG);
-          const stats = getRingLayoutStats(positions);
-          
-          console.log(`\n=== Ring Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
-          // console.log('DEBUG: Selected node ID:', selectedNode.id); // Debug removed for production
-          // console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None'); // Debug removed for production
-          console.log('Layout Stats:', stats);
-          
-          if (positions.centerNode) {
-            console.log('\nCenter Position:', positions.centerNode.position);
-          }
-          
-          console.log(`\nRing 1 (${positions.ring1Nodes.length} nodes):`);
-          positions.ring1Nodes.forEach((node, i) => {
-            const nodeData = graph.nodes.get(node.nodeId);
-            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-          });
-          
-          console.log(`\nRing 2 (${positions.ring2Nodes.length} nodes):`);
-          positions.ring2Nodes.forEach((node, i) => {
-            const nodeData = graph.nodes.get(node.nodeId);
-            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-          });
-          
-          console.log(`\nRing 3 (${positions.ring3Nodes.length} nodes):`);
-          positions.ring3Nodes.forEach((node, i) => {
-            const nodeData = graph.nodes.get(node.nodeId);
-            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-          });
-          
-          console.log(`\nSphere nodes (remain on sphere): ${positions.sphereNodes.length}`);
-          
-          this.uiService.showSuccess(`Calculated focused layout for ${selectedNode.name} - check console`);
-        } catch (error) {
-          console.error('Position calculation error:', error);
-          this.uiService.showError(error instanceof Error ? error.message : 'Failed to calculate positions');
         }
       }
     });
