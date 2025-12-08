@@ -8,7 +8,7 @@
 
 import { DreamSongBlock, MediaInfo } from '../../../core/types/dreamsong';
 import { VaultService } from '../../../core/services/vault-service';
-import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../../core/utils/link-file-utils';
+import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 
 // Access Node.js modules directly in Electron context
  

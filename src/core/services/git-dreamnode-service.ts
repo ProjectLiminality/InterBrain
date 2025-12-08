@@ -2,8 +2,8 @@ import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
 import { useInterBrainStore, RealNodeData } from '../store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { indexingService } from '../../features/semantic-search/services/indexing-service';
-import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../utils/url-utils';
-import { createLinkFileContent, getLinkFileName } from '../utils/link-file-utils';
+import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../../features/drag-and-drop';
+import { createLinkFileContent, getLinkFileName } from '../../features/drag-and-drop';
 import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 import { webLinkAnalyzerService } from '../../features/web-link-analyzer/service';
 

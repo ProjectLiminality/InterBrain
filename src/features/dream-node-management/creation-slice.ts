@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import type { UrlMetadata } from '../../core/utils/url-utils';
+import type { UrlMetadata } from '../drag-and-drop';
 
 /**
  * Proto-node for node creation

@@ -2,8 +2,8 @@ import { App, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { DreamSongBlock } from '../types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../components/DreamSongFullScreenView';
-import { generateYouTubeIframe, extractYouTubeVideoId } from '../utils/url-utils';
-import { parseLinkFileContent, isLinkFile } from '../utils/link-file-utils';
+import { generateYouTubeIframe, extractYouTubeVideoId } from '../../features/drag-and-drop';
+import { parseLinkFileContent, isLinkFile } from '../../features/drag-and-drop';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { DREAMSPACE_VIEW_TYPE } from '../components/DreamspaceView';
 

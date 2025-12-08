@@ -5,7 +5,7 @@ import { CanvasParserService } from '../../features/dreamweaving/services/canvas
 import { LeafManagerService } from './leaf-manager-service';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
-import { UrlMetadata } from '../utils/url-utils';
+import { UrlMetadata } from '../../features/drag-and-drop';
 import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance/radicle-service';
 
 /**

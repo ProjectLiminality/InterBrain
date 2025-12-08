@@ -1,5 +1,5 @@
 import { TextFileView, WorkspaceLeaf } from 'obsidian';
-import { parseLinkFileContent, LinkFileMetadata, getLinkThumbnail } from '../utils/link-file-utils';
+import { parseLinkFileContent, LinkFileMetadata, getLinkThumbnail } from '../../features/drag-and-drop';
 
 export const LINK_FILE_VIEW_TYPE = 'link-view';
 

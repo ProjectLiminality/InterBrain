@@ -21,7 +21,7 @@ import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { CAMERA_INTERSECTION_POINT } from '../layouts/DynamicViewScaling';
-import { processDroppedUrlData } from '../utils/url-utils';
+import { processDroppedUrlData } from '../../features/drag-and-drop';
 
 // Create singleton service instances
 const uiService = new UIService();
