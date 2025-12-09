@@ -58,8 +58,7 @@ export default function DreamspaceCanvas() {
   // Unified escape key handler - extracted to core hook
   useEscapeKeyHandler(spatialOrchestratorRef);
 
-  // Drag and drop state
-  const [, setIsDragOver] = useState(false); // Keep for state management but remove unused variable warning
+  // Drag and drop state - tracks mouse position for 3D drop positioning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
   
   // Get nodes from store
@@ -364,13 +363,11 @@ export default function DreamspaceCanvas() {
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(true);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
     // Track mouse position for drop positioning
     setDragMousePosition({ x: e.clientX, y: e.clientY });
   };
@@ -378,10 +375,8 @@ export default function DreamspaceCanvas() {
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
     // Only clear drag state if leaving the container (not just moving between children)
     if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node)) {
-      setIsDragOver(false);
       setDragMousePosition(null);
     }
   };
@@ -389,8 +384,6 @@ export default function DreamspaceCanvas() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    setIsDragOver(false);
 
     // Check for files first
     const files = Array.from(e.dataTransfer.files);
