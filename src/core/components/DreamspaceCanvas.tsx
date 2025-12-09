@@ -6,7 +6,7 @@ import { DreamNode3D } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { Star3D, SphereRotationControls } from '../../features/constellation-layout';
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
-import ProtoNode3D from '../../features/creation/ProtoNode3D';
+import { CreationModeOverlay } from '../../features/creation';
 import { SearchModeOverlay } from '../../features/search';
 import { EditModeOverlay } from '../../features/edit-mode';
 import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
@@ -14,7 +14,7 @@ import ConstellationEdges, { shouldShowConstellationEdges } from '../../features
 import { RadialButtonRing3D } from '../../features/radial-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/radial-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../../features/dreamnode';
-import { useInterBrainStore, ProtoNode } from '../store/interbrain-store';
+import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
@@ -313,7 +313,7 @@ export default function DreamspaceCanvas() {
   }, [spatialLayout, selectedNode]);
 
   // Creation state for proto-node rendering
-  const { creationState, startCreationWithData, completeCreation, cancelCreation } = useInterBrainStore();
+  const { startCreationWithData } = useInterBrainStore();
   
   // Helper function to get or create DreamNode3D ref
   const getDreamNodeRef = (nodeId: string): React.RefObject<DreamNode3DRef | null> => {
@@ -754,70 +754,8 @@ export default function DreamspaceCanvas() {
     // TODO: Open DreamSong view
   };
 
-  const handleProtoNodeComplete = async (protoNode: ProtoNode) => {
-    try {
-      
-      // Use raycasting to find intersection with rotated sphere (more robust approach)
-      let finalPosition = protoNode.position;
-      if (dreamWorldRef.current) {
-        // Create raycaster from camera position forward
-        const raycaster = new Raycaster();
-        const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
-        const cameraDirection = new Vector3(0, 0, -1); // Forward direction
-        
-        raycaster.set(cameraPosition, cameraDirection);
-        
-        // Create sphere geometry in world space (accounting for rotation)
-        const sphereRadius = 5000;
-        const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
-        
-        // Find intersection points
-        const intersectionPoint = new Vector3();
-        const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
-        
-        if (hasIntersection) {
-          // Since the sphere rotates but the camera ray is fixed, we need to apply
-          // the INVERSE rotation to get the correct position on the rotated sphere
-          const sphereRotation = dreamWorldRef.current.quaternion;
-          const inverseRotation = sphereRotation.clone().invert();
-          intersectionPoint.applyQuaternion(inverseRotation);
-          
-          finalPosition = intersectionPoint.toArray() as [number, number, number];
-          
-        } else {
-          console.warn('No intersection found with sphere - using default position');
-          finalPosition = [0, 0, -5000]; // Fallback to forward position
-        }
-      }
-      
-      // Use the service manager to create the node
-      const service = serviceManager.getActive();
-      await service.create(
-        protoNode.title,
-        protoNode.type,
-        protoNode.dreamTalkFile,
-        finalPosition, // Pass rotation-adjusted position to project onto sphere
-        protoNode.additionalFiles // Pass additional files from proto-node
-      );
-      
-      // No need to manually refresh - event listener will handle it
-      
-      // Add small delay to ensure new DreamNode renders before hiding proto-node
-      globalThis.setTimeout(() => {
-        completeCreation();
-      }, 100); // 100ms delay for rendering
-      
-    } catch (error) {
-      console.error('Failed to create DreamNode:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to create DreamNode');
-    }
-  };
-
-  const handleProtoNodeCancel = () => {
-    cancelCreation();
-  };
-
-  // Search interface handlers moved to SearchModeOverlay
+  // Creation handlers moved to CreationModeOverlay
+  // Search handlers moved to SearchModeOverlay
 
   const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
     try {
@@ -1367,16 +1305,8 @@ export default function DreamspaceCanvas() {
 
         {/* Orchestrator Context - provides orchestrator access to feature overlays */}
         <OrchestratorContext.Provider value={spatialOrchestratorRef.current}>
-          {/* Proto-node for creation - stationary relative to camera */}
-          {creationState.isCreating && creationState.protoNode && (
-            <>
-              <ProtoNode3D
-                position={creationState.protoNode.position}
-                onComplete={handleProtoNodeComplete}
-                onCancel={handleProtoNodeCancel}
-              />
-            </>
-          )}
+          {/* Creation mode overlay - self-contained creation functionality */}
+          <CreationModeOverlay />
 
           {/* Search mode overlay - self-contained search functionality */}
           <SearchModeOverlay />
