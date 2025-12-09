@@ -1,10 +1,75 @@
 # Core Module
 
-The Obsidian plugin infrastructure layer. Contains foundational services, components, and state management that features build upon.
+The foundational infrastructure that all features build upon. Core defines *how* things work; features define *what* things do.
 
 ## Purpose
 
-Core provides the minimal foundational layer that is too close to the Obsidian plugin architecture to extract into a standalone feature. Features depend on core, but core should not depend on features (except through the store's slice composition).
+Core provides three essential capabilities:
+
+1. **State Management** - The Zustand store acts as a universal communication bus. Features declare intent by updating store state; core reacts by orchestrating the UI.
+
+2. **Spatial Orchestration** - The SpatialOrchestrator is the conductor that positions DreamNodes in 3D space. Since our UI consists entirely of DreamNodes that move, all visual behavior flows through orchestrated position changes.
+
+3. **Plugin Infrastructure** - Services and commands that interface with Obsidian, providing the bridge between our React/R3F canvas and the host application.
+
+## Architectural Patterns
+
+### Store as Universal Communication Bus
+
+The store's `spatialLayout` is the single source of truth for what mode the UI is in:
+
+```
+spatialLayout: 'constellation' | 'liminal-web' | 'copilot' | 'edit' | 'search' | 'creation'
+```
+
+This single value determines:
+- How clicks on DreamNodes are interpreted
+- How keyboard shortcuts behave (Option key shows radial buttons vs search results)
+- How the SpatialOrchestrator positions nodes
+- What UI overlays are visible
+
+**Features declare intent** by calling `setSpatialLayout()`. **Core reacts** by rendering appropriate behaviors. This creates clean separation: features don't need to know about each other's existence.
+
+### Commands-First Development
+
+Obsidian commands are the fundamental interface between frontend and backend:
+
+1. **Build the command first** - Implement logic as an Obsidian command
+2. **Iterate on the command** - Test via command palette
+3. **Bind to UI** - Connect user interactions (clicks, buttons) to command execution
+
+This pattern ensures every action is testable via command palette and creates a clear boundary between "what happens" (command logic) and "how it's triggered" (UI binding).
+
+### DreamspaceCanvas and SpatialOrchestrator
+
+These two components divide the 3D rendering responsibilities:
+
+**DreamspaceCanvas** - The "what": Owns the React Three Fiber canvas, renders all DreamNodes, handles user input events (clicks, drags, keyboard), and mounts overlay components.
+
+**SpatialOrchestrator** - The "where": Holds refs to all DreamNode3D instances, calculates target positions for each layout mode, and animates nodes between positions.
+
+The flow:
+```
+User interaction → Canvas handles event → Store updates → Orchestrator reacts → Nodes animate
+```
+
+Layout modes the orchestrator manages:
+- **Constellation**: Fibonacci sphere distribution of all nodes
+- **Liminal-web**: Selected node centered, related nodes in rings
+- **Copilot**: Conversation partner centered, search results at periphery
+- **Edit/Search/Creation**: Context-specific overlays with specialized arrangements
+
+Features interact with the orchestrator through its public API, never by directly manipulating node positions.
+
+### Dependency Direction
+
+```
+Features → Core → Obsidian/React
+```
+
+- Features depend on core (import store, services, orchestrator)
+- Core does NOT depend on features (except slice composition in the store)
+- This allows features to be developed independently
 
 ## Directory Structure
 
