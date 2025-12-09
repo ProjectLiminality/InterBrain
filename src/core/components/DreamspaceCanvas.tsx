@@ -7,8 +7,7 @@ import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNo
 import { Star3D, SphereRotationControls } from '../../features/constellation-layout';
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import ProtoNode3D from '../../features/creation/ProtoNode3D';
-import SearchNode3D from '../../features/search/SearchNode3D';
-import SearchOrchestrator from '../../features/search/SearchOrchestrator';
+import { SearchModeOverlay } from '../../features/search';
 import { EditModeOverlay } from '../../features/edit-mode';
 import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
 import ConstellationEdges, { shouldShowConstellationEdges } from '../../features/constellation-layout/ConstellationEdges';
@@ -178,9 +177,6 @@ export default function DreamspaceCanvas() {
 
   // Copilot mode state for transcription buffer
   const copilotMode = useInterBrainStore(state => state.copilotMode);
-
-  // Search interface state
-  const searchInterface = useInterBrainStore(state => state.searchInterface);
 
   // Radial button UI state
   const radialButtonUI = useInterBrainStore(state => state.radialButtonUI);
@@ -821,99 +817,7 @@ export default function DreamspaceCanvas() {
     cancelCreation();
   };
 
-  // Search interface handlers
-  const handleSearchSave = async (query: string, dreamTalkFile?: globalThis.File, additionalFiles?: globalThis.File[]) => {
-    try {
-      console.log('SearchNode save:', { query, dreamTalkFile, additionalFiles });
-      
-      // Use raycasting to find intersection with rotated sphere (same as ProtoNode)
-      let finalPosition: [number, number, number] = [0, 0, -50]; // Fallback position
-      if (dreamWorldRef.current) {
-        // Create raycaster from camera position forward
-        const raycaster = new Raycaster();
-        const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
-        const cameraDirection = new Vector3(0, 0, -1); // Forward direction
-        
-        raycaster.set(cameraPosition, cameraDirection);
-        
-        // Create sphere geometry in world space (accounting for rotation)
-        const sphereRadius = 5000;
-        const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
-        
-        // Find intersection points
-        const intersectionPoint = new Vector3();
-        const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
-        
-        if (hasIntersection) {
-          // Since the sphere rotates but the camera ray is fixed, we need to apply
-          // the INVERSE rotation to get the correct position on the rotated sphere
-          const sphereRotation = dreamWorldRef.current.quaternion;
-          const inverseRotation = sphereRotation.clone().invert();
-          intersectionPoint.applyQuaternion(inverseRotation);
-          
-          finalPosition = intersectionPoint.toArray() as [number, number, number];
-          
-        } else {
-          console.warn('No intersection found with sphere - using default position');
-          finalPosition = [0, 0, -5000]; // Fallback to forward position
-        }
-      }
-      
-      // Use service to create DreamNode from search query
-      const service = serviceManager.getActive();
-      await service.create(
-        query,
-        'dream',
-        dreamTalkFile, // DreamTalk file (single file)
-        finalPosition, // Pass rotation-adjusted position to project onto sphere
-        additionalFiles // Additional files array
-      );
-      
-      // No need to manually refresh - event listener will handle it
-      
-      // Note: Constellation return is already triggered by SearchNode3D handleSave()
-      // which happens BEFORE this onSave callback, ensuring parallel animations
-      
-      // Delay dismissing search interface to ensure overlap and prevent flicker
-      // This runs AFTER the save animation (1000ms) and overlap period (100ms)
-      globalThis.setTimeout(() => {
-        // Dismiss search interface after everything is rendered
-        const store = useInterBrainStore.getState();
-        store.setSearchActive(false);
-        
-        // Show success message
-        uiService.showSuccess(`Created DreamNode: "${query}"`);
-      }, 200); // Increased delay to ensure DreamNode is fully rendered
-      
-    } catch (error) {
-      console.error('Failed to create DreamNode from search:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to create DreamNode');
-    }
-  };
-
-  const handleSearchCancel = () => {
-    const store = useInterBrainStore.getState();
-    store.setSearchActive(false);
-    store.setSpatialLayout('constellation');
-  };
-
-  const handleSearchResults = (results: { node: DreamNode; score: number }[]) => {
-    // Convert search results to DreamNodes for spatial display
-    const searchResultNodes = results.map(result => result.node);
-    
-    // Update store with search results
-    const store = useInterBrainStore.getState();
-    store.setSearchResults(searchResultNodes);
-    
-    // If we have results and no search interface active, switch to search results display
-    if (searchResultNodes.length > 0 && !store.searchInterface.isActive) {
-      if (spatialOrchestratorRef.current) {
-        spatialOrchestratorRef.current.showSearchResults(searchResultNodes);
-      }
-    }
-    
-    console.log(`DreamspaceCanvas: Updated with ${searchResultNodes.length} search results`);
-  };
+  // Search interface handlers moved to SearchModeOverlay
 
   const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
     try {
@@ -1474,19 +1378,8 @@ export default function DreamspaceCanvas() {
             </>
           )}
 
-          {/* Search node interface - render if in search mode OR during save animation */}
-          {((searchInterface.isActive && spatialLayout === 'search') || searchInterface.isSaving) && (
-            <>
-              <SearchNode3D
-                position={[0, 0, -50]} // Focus position
-                onSave={handleSearchSave}
-                onCancel={handleSearchCancel}
-              />
-              <SearchOrchestrator
-                onSearchResults={handleSearchResults}
-              />
-            </>
-          )}
+          {/* Search mode overlay - self-contained search functionality */}
+          <SearchModeOverlay />
 
           {/* Edit mode overlay - render when edit mode is active */}
           <EditModeOverlay />

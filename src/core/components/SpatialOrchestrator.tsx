@@ -73,6 +73,9 @@ export interface SpatialOrchestratorRef {
 
   /** Show related nodes in liminal-web mode (move back to ring positions) */
   showRelatedNodesInLiminalWeb: () => void;
+
+  /** Calculate forward position on sphere accounting for current rotation */
+  calculateForwardPositionOnSphere: () => [number, number, number];
 }
 
 interface SpatialOrchestratorProps {
@@ -1200,6 +1203,22 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       } catch (error) {
         console.error('[Orchestrator-LiminalWeb] Error showing related nodes:', error);
       }
+    },
+
+    calculateForwardPositionOnSphere: (): [number, number, number] => {
+      // Calculate forward position on sphere at radius 5000
+      // Camera is at origin, forward is -Z direction
+      const sphereRadius = 5000;
+      const forwardPosition = new Vector3(0, 0, -sphereRadius);
+
+      // Apply inverse rotation to account for sphere rotation
+      if (dreamWorldRef.current) {
+        const sphereRotation = dreamWorldRef.current.quaternion.clone();
+        const inverseRotation = sphereRotation.invert();
+        forwardPosition.applyQuaternion(inverseRotation);
+      }
+
+      return [forwardPosition.x, forwardPosition.y, forwardPosition.z];
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 
