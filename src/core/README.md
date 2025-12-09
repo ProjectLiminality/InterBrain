@@ -77,6 +77,9 @@ Features → Core → Obsidian/React
 core/
 ├── commands/         # Plugin command registrations
 ├── components/       # React/R3F canvas infrastructure
+├── context/          # React context providers (OrchestratorContext)
+├── hooks/            # Shared React hooks (Escape key, Option key handlers)
+├── layout/           # Fundamental positioning algorithms (ring layout)
 ├── services/         # Plugin-level services
 ├── store/            # Zustand store with slice composition
 ├── test-utils/       # Test infrastructure and mocks
@@ -96,18 +99,19 @@ Zustand store with slice composition pattern. Core state includes:
 Feature slices are composed in via `createXxxSlice()` pattern.
 
 ### DreamspaceCanvas (`components/DreamspaceCanvas.tsx`)
-Main React Three Fiber canvas. Handles:
+Main React Three Fiber canvas (~680 lines). Handles:
 - 3D scene rendering with all DreamNodes
-- Drag-and-drop for file/URL creation
-- Keyboard navigation (Escape hierarchy)
+- Drag-and-drop events (logic delegated to `features/drag-and-drop`)
+- Keyboard navigation via extracted hooks
 - Layout mode switching coordination
-- Proto-node and search-node rendering
+- Mounting overlay components for each mode
 
 ### SpatialOrchestrator (`components/SpatialOrchestrator.tsx`)
-Central hub for spatial layout management:
+Central hub for spatial layout management (~935 lines):
 - Manages DreamNode3D refs for position orchestration
-- Calculates and applies ring/honeycomb layouts
-- Handles transitions between constellation and liminal-web
+- Uses `ring-layout` algorithm for honeycomb positioning
+- Helper functions for common operations (moveNode, returnNodeToConstellation)
+- Interrupt-capable animations (mid-flight direction changes)
 - Coordinates edit mode and copilot mode search layouts
 
 ### DreamspaceView (`components/DreamspaceView.ts`)
@@ -136,6 +140,41 @@ Thin wrapper for Node.js fs operations with vault path resolution.
 
 ### UIService (`services/ui-service.ts`)
 Obsidian Notice/Modal wrappers for user feedback.
+
+## Layout Algorithms
+
+### Ring Layout (`layout/ring-layout.ts`)
+Pure algorithm that converts an ordered list of nodes into honeycomb positions:
+
+```typescript
+calculateRingPositions(
+  orderedNodes: Array<{ id: string }>,
+  allNodeIds: string[],
+  centerNodeId?: string,
+  config?: RingLayoutConfig
+): RingLayoutPositions
+```
+
+This is the fundamental positioning pattern used by the SpatialOrchestrator for liminal-web, edit mode, and copilot layouts. It distributes nodes across three concentric rings:
+- **Ring 1**: 6 slots, closest to camera (Z = -100)
+- **Ring 2**: 12 slots, middle distance (Z = -200)
+- **Ring 3**: 18 slots, furthest (Z = -300)
+
+The algorithm is stateless and testable - features pass ordered nodes, core returns positions.
+
+## Hooks
+
+### useEscapeKeyHandler
+Manages the escape key hierarchy across modes:
+1. Copilot mode → exit to liminal-web
+2. Edit mode → exit to liminal-web
+3. Search mode → exit to constellation
+4. Liminal-web → exit to constellation
+
+### useOptionKeyHandlers
+Two hooks for Option key behavior:
+- `useCopilotOptionKeyHandler` - Toggle search results visibility in copilot mode
+- `useLiminalWebOptionKeyHandler` - Toggle radial button ring in liminal-web mode
 
 ## Commands
 
@@ -166,4 +205,18 @@ The main barrel (`index.ts`) exports:
 - The store composes feature slices but owns only fundamental state
 - ServiceManager is the main integration point for plugin services
 - SpatialOrchestrator manages all node positioning - features should use its API
-- DreamspaceCanvas is large (~1600 lines) but well-organized by functionality
+- When adding new layout modes, use the `ring-layout` algorithm as the foundation
+- Extract feature-specific logic to feature slices (see `drag-and-drop/drop-handlers.ts` as example)
+
+## Refactoring Log
+
+### Phase 2 Refactoring (December 2024)
+- **SpatialOrchestrator**: 1237 → 935 lines (24% reduction)
+  - Extracted helper functions (moveNode, returnNodeToConstellation, etc.)
+  - Unified interrupt-capable movement (removed legacy interruptAndXxx variants)
+- **DreamspaceCanvas**: 1156 → 679 lines (41% reduction)
+  - Extracted drop handlers to `features/drag-and-drop/drop-handlers.ts`
+  - Extracted openNodeContent to `features/conversational-copilot/utils/`
+  - Removed unused handleNodeDoubleClick stub
+- **Ring Layout**: Extracted from liminal-web feature to `core/layout/ring-layout.ts`
+  - Pure function with comprehensive test coverage (17 tests)
