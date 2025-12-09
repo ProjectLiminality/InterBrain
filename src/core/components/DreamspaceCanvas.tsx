@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { Group, Vector3, Raycaster, Sphere, Mesh } from 'three';
+import { Group, Mesh } from 'three';
 import { FlyControls } from '@react-three/drei';
 import { DreamNode3D } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
@@ -15,16 +15,21 @@ import { ActiveVideoCallButton } from '../../features/radial-buttons/ActiveVideo
 import { DreamNode } from '../../features/dreamnode';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
-import { UIService } from '../services/ui-service';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { CAMERA_INTERSECTION_POINT } from '../../features/constellation-layout/DynamicViewScaling';
-import { processDroppedUrlData } from '../../features/drag-and-drop';
+import {
+  detectDropTarget,
+  handleDropOnNode,
+  handleNormalDrop,
+  handleCommandDrop,
+  handleNormalUrlDrop,
+  handleCommandUrlDrop,
+  handleUrlDropOnNode
+} from '../../features/drag-and-drop';
+import { openNodeContent } from '../../features/conversational-copilot/utils/open-node-content';
 import { OrchestratorContext } from '../context/orchestrator-context';
 import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
-
-// Create singleton service instances
-const uiService = new UIService();
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -109,9 +114,6 @@ export default function DreamspaceCanvas() {
   useCopilotOptionKeyHandler(spatialOrchestratorRef, spatialLayout, copilotMode.showSearchResults);
   useLiminalWebOptionKeyHandler(spatialOrchestratorRef, spatialLayout, selectedNode);
 
-  // Creation state for proto-node rendering
-  const { startCreationWithData } = useInterBrainStore();
-  
   // Helper function to get or create DreamNode3D ref
   const getDreamNodeRef = (nodeId: string): React.RefObject<DreamNode3DRef | null> => {
     let nodeRef = dreamNodeRefs.current.get(nodeId);
@@ -282,200 +284,8 @@ export default function DreamspaceCanvas() {
     hitSphereRefs.current.set(nodeId, meshRef);
   };
 
-  /**
-   * Validate media file types for DreamTalk
-   * Allows images, videos, PDFs, and .link files
-   */
-  const isValidMediaFile = (file: globalThis.File): boolean => {
-    const validTypes = [
-      'image/png',
-      'image/jpeg',
-      'image/jpg',
-      'image/gif',
-      'image/webp',
-      'video/mp4',
-      'video/webm',
-      'application/pdf',
-      // .link files appear as text/plain or application/octet-stream depending on system
-      'text/plain',
-      'application/octet-stream'
-    ];
-
-    // Also check file extension for .link and .pdf files since MIME detection is unreliable
-    const fileName = file.name.toLowerCase();
-    if (fileName.endsWith('.link') || fileName.endsWith('.pdf')) {
-      return true;
-    }
-
-    return validTypes.includes(file.type);
-  };
-
-  /**
-   * Calculate 3D position from mouse coordinates projected onto sphere
-   */
-  const calculateDropPosition = (mouseX: number, mouseY: number): [number, number, number] => {
-    // Get the canvas element specifically for accurate bounds
-    const canvasElement = globalThis.document.querySelector('.dreamspace-canvas-container canvas') as globalThis.HTMLCanvasElement;
-    if (!canvasElement) return [0, 0, -5000]; // Fallback position
-    
-    const rect = canvasElement.getBoundingClientRect();
-    
-    // Convert screen coordinates to normalized device coordinates (-1 to 1)
-    // Note: Canvas coordinate system has origin at top-left, but NDC has origin at center
-    const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1; // Flip Y for NDC
-    
-    
-    // Create ray direction accounting for camera FOV (75 degrees)
-    const fov = 75 * Math.PI / 180; // Convert to radians
-    const aspect = rect.width / rect.height;
-    const tanHalfFov = Math.tan(fov / 2);
-    
-    // Calculate proper ray direction with perspective projection
-    const rayDirection = new Vector3(
-      ndcX * tanHalfFov * aspect,
-      ndcY * tanHalfFov,
-      -1 // Forward direction from camera
-    ).normalize();
-    
-    const raycaster = new Raycaster();
-    const cameraPosition = new Vector3(0, 0, 0); // Camera is at origin
-    raycaster.set(cameraPosition, rayDirection);
-    
-    // Find intersection with sphere
-    const sphereRadius = 5000;
-    const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
-    
-    const intersectionPoint = new Vector3();
-    const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
-    
-    if (hasIntersection && dreamWorldRef.current) {
-      // Apply inverse rotation to account for sphere rotation
-      const sphereRotation = dreamWorldRef.current.quaternion;
-      const inverseRotation = sphereRotation.clone().invert();
-      intersectionPoint.applyQuaternion(inverseRotation);
-      
-      
-      return intersectionPoint.toArray() as [number, number, number];
-    }
-    
-    console.warn('No intersection found with sphere - using fallback');
-    // Fallback to forward position
-    return [0, 0, -5000];
-  };
-
-  /**
-   * Detect what's under the drop position using scene-based raycasting
-   */
-  const detectDropTarget = (mouseX: number, mouseY: number): { type: 'empty' | 'node'; position: [number, number, number]; node?: DreamNode } => {
-    // Get the canvas element for accurate bounds
-    const canvasElement = globalThis.document.querySelector('.dreamspace-canvas-container canvas') as globalThis.HTMLCanvasElement;
-    if (!canvasElement) {
-      return { type: 'empty', position: [0, 0, -5000] };
-    }
-    
-    const rect = canvasElement.getBoundingClientRect();
-    
-    // Convert to normalized device coordinates
-    const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1;
-    
-    // Create ray for intersection testing
-    const fov = 75 * Math.PI / 180;
-    const aspect = rect.width / rect.height;
-    const tanHalfFov = Math.tan(fov / 2);
-    
-    const rayDirection = new Vector3(
-      ndcX * tanHalfFov * aspect,
-      ndcY * tanHalfFov,
-      -1
-    ).normalize();
-    
-    const raycaster = new Raycaster();
-    const cameraPosition = new Vector3(0, 0, 0);
-    raycaster.set(cameraPosition, rayDirection);
-    
-    // Collect all hit sphere meshes for raycasting
-    const hitSpheres: Mesh[] = [];
-    hitSphereRefs.current.forEach((meshRef, _nodeId) => {
-      if (meshRef.current) {
-        hitSpheres.push(meshRef.current);
-      }
-    });
-    
-    // Use Three.js native raycasting against hit sphere geometries
-    const intersections = raycaster.intersectObjects(hitSpheres);
-    
-    // Calculate drop position on sphere
-    const dropPosition = calculateDropPosition(mouseX, mouseY);
-    
-    if (intersections.length > 0) {
-      // Get the closest intersection
-      const closestIntersection = intersections[0];
-      const hitMesh = closestIntersection.object as Mesh;
-      const dreamNodeData = hitMesh.userData.dreamNode as DreamNode;
-      
-      return { type: 'node', position: dropPosition, node: dreamNodeData };
-    } else {
-      return { type: 'empty', position: dropPosition };
-    }
-  };
-
   const handleNodeHover = (_node: DreamNode, _isHovered: boolean) => {
     // Hover state handled by individual DreamNode3D components
-  };
-
-  // Helper function to open appropriate fullscreen content for a node
-  const openNodeContent = async (node: DreamNode) => {
-    const leafManager = serviceManager.getLeafManagerService();
-
-    if (!leafManager || !vaultService || !canvasParserService) {
-      console.error('Services not available for opening content');
-      return;
-    }
-
-    try {
-      // Check for DreamSong first (most rich content)
-      const dreamSongPath = `${node.repoPath}/DreamSong.canvas`;
-      if (await vaultService.fileExists(dreamSongPath)) {
-        console.log(`🎭 [Copilot] Opening DreamSong for ${node.name}`);
-
-        // Parse and open DreamSong (reuse existing pattern from fullscreen-commands.ts)
-        const canvasData = await canvasParserService.parseCanvas(dreamSongPath);
-        const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/dreamsong/index');
-        let blocks = parseCanvasToBlocks(canvasData, node.id);
-        blocks = await resolveMediaPaths(blocks, node.repoPath, vaultService);
-
-        await leafManager.openDreamSongFullScreen(node, blocks);
-        uiService.showSuccess(`Opened DreamSong for ${node.name}`);
-        return;
-      }
-
-      // Check for DreamTalk media
-      if (node.dreamTalkMedia && node.dreamTalkMedia.length > 0) {
-        console.log(`🎤 [Copilot] Opening DreamTalk for ${node.name}`);
-        await leafManager.openDreamTalkFullScreen(node, node.dreamTalkMedia[0]);
-        uiService.showSuccess(`Opened DreamTalk for ${node.name}`);
-        return;
-      }
-
-      // Try README as final fallback
-      const readmePath = `${node.repoPath}/README.md`;
-      if (await vaultService.fileExists(readmePath)) {
-        console.log(`📖 [Copilot] Opening README for ${node.name}`);
-        await leafManager.openReadmeFile(node);
-        uiService.showSuccess(`Opened README for ${node.name}`);
-        return;
-      }
-
-      // Nothing to display
-      console.log(`❌ [Copilot] No content found for ${node.name}`);
-      uiService.showInfo("Nothing to display");
-
-    } catch (error) {
-      console.error(`Failed to open content for ${node.name}:`, error);
-      uiService.showError(`Failed to open content: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   };
 
   const handleNodeClick = async (node: DreamNode) => {
@@ -513,7 +323,7 @@ export default function DreamspaceCanvas() {
       console.log(`🔗 [Copilot] Shared node IDs:`, updatedStore.copilotMode.sharedNodeIds);
 
       // Open appropriate fullscreen view
-      await openNodeContent(node);
+      await openNodeContent(node, vaultService, canvasParserService);
 
       return; // Prevent liminal-web navigation
     }
@@ -547,35 +357,10 @@ export default function DreamspaceCanvas() {
     }
   };
 
-  const handleNodeDoubleClick = (_node: DreamNode) => {
-    // TODO: Open DreamSong view
-  };
-
   // Creation handlers moved to CreationModeOverlay
   // Search handlers moved to SearchModeOverlay
 
-  const handleDropOnNode = async (files: globalThis.File[], node: DreamNode) => {
-    try {
-      const service = serviceManager.getActive();
-
-      // In regular mode (not edit mode), just add files without updating dreamTalk
-      // This treats file drops like dropping files on a folder
-      if (service.addFilesToNodeWithoutDreamTalkUpdate) {
-        await service.addFilesToNodeWithoutDreamTalkUpdate(node.id, files);
-        uiService.showSuccess(`Added ${files.length} file(s) to "${node.name}"`);
-      } else {
-        // Fallback for services that don't support the new method
-        await service.addFilesToNode(node.id, files);
-      }
-
-      // No need to manually refresh - event listener will handle it
-    } catch (error) {
-      console.error('Failed to add files to node:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to add files to node');
-    }
-  };
-
-  // Drag and drop event handlers
+  // Drag and drop event handlers - logic extracted to features/drag-and-drop
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -624,7 +409,7 @@ export default function DreamspaceCanvas() {
     if (files.length === 0 && !urlData) return;
 
     const mousePos = dragMousePosition || { x: e.clientX, y: e.clientY };
-    const dropTarget = detectDropTarget(mousePos.x, mousePos.y);
+    const dropTarget = detectDropTarget(mousePos.x, mousePos.y, hitSphereRefs, dreamWorldRef);
     const isCommandDrop = e.metaKey || e.ctrlKey; // Command on Mac, Ctrl on Windows/Linux
 
     // Handle URL drops
@@ -641,23 +426,17 @@ export default function DreamspaceCanvas() {
           await handleCommandUrlDrop(urlData);
         } else {
           // Normal Drop: Create node instantly at drop position
-          await handleNormalUrlDrop(urlData, dropTarget.position);
+          await handleNormalUrlDrop(urlData, dropTarget.position, spatialOrchestratorRef);
         }
       }
       setDragMousePosition(null);
       return;
     }
 
-    // Handle file drops (existing logic)
+    // Handle file drops
     if (dropTarget.type === 'node' && dropTarget.node) {
-      // Dropping on an existing DreamNode
-      if (isCommandDrop) {
-        // Command+Drop on node: TODO - could open edit mode in future
-        await handleDropOnNode(files, dropTarget.node);
-      } else {
-        // Normal drop on node: add files to node
-        await handleDropOnNode(files, dropTarget.node);
-      }
+      // Dropping on an existing DreamNode - add files to node
+      await handleDropOnNode(files, dropTarget.node);
     } else {
       // Dropping on empty space
       if (isCommandDrop) {
@@ -665,265 +444,11 @@ export default function DreamspaceCanvas() {
         await handleCommandDrop(files);
       } else {
         // Normal Drop: Create node instantly at drop position
-        await handleNormalDrop(files, dropTarget.position);
+        await handleNormalDrop(files, dropTarget.position, spatialOrchestratorRef);
       }
     }
 
     setDragMousePosition(null);
-  };
-
-  const handleNormalDrop = async (files: globalThis.File[], position: [number, number, number]) => {
-    try {
-      const primaryFile = files[0]; // Use first file for node naming and primary dreamTalk
-      const fileNameWithoutExt = primaryFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
-
-      // Convert PascalCase file names to human-readable titles with spaces
-      // Example: "HawkinsScale" → "Hawkins Scale"
-      const { isPascalCase, pascalCaseToTitle } = await import('../../features/dreamnode/utils/title-sanitization');
-      const humanReadableTitle = isPascalCase(fileNameWithoutExt)
-        ? pascalCaseToTitle(fileNameWithoutExt)
-        : fileNameWithoutExt;
-
-      const store = useInterBrainStore.getState();
-      const service = serviceManager.getActive();
-      
-      // Find first valid media file for dreamTalk
-      const dreamTalkFile = files.find(f => isValidMediaFile(f));
-      const additionalFiles = files.filter(f => f !== dreamTalkFile);
-      
-      // Determine node type based on liminal-web context
-      let nodeType: 'dream' | 'dreamer' = 'dream'; // Default to Dream
-      let shouldAutoRelate = false;
-      let focusedNodeId: string | null = null;
-      
-      // In liminal-web mode with a focused node, create opposite type and auto-relate
-      if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
-        const focusedNode = store.selectedNode;
-        focusedNodeId = focusedNode.id;
-        
-        // Create opposite type for automatic relationship
-        nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
-        shouldAutoRelate = true;
-        
-        console.log(`Liminal-web drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
-      }
-      
-      // Create node with determined type
-      const newNode = await service.create(
-        humanReadableTitle,
-        nodeType,
-        dreamTalkFile,
-        position,
-        additionalFiles
-      );
-      
-      // Auto-create relationship if in liminal-web mode
-      if (shouldAutoRelate && focusedNodeId && newNode) {
-        try {
-          // Add bidirectional relationship
-          await service.addRelationship(focusedNodeId, newNode.id);
-          console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
-          uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
-          
-          // Refresh the focused node to include the new relationship
-          const updatedFocusedNode = await service.get(focusedNodeId);
-          if (updatedFocusedNode) {
-            // Update the selected node with fresh relationship data
-            store.setSelectedNode(updatedFocusedNode);
-            
-            // Trigger a liminal-web layout refresh with smooth fly-in for the new node
-            // Small delay to ensure the new node is in the store
-            globalThis.setTimeout(() => {
-              if (spatialOrchestratorRef.current) {
-                spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
-              }
-            }, 100);
-          }
-        } catch (error) {
-          console.error('Failed to create automatic relationship:', error);
-          // Don't fail the whole operation if relationship fails
-        }
-      }
-      
-    } catch (error) {
-      console.error('Failed to create node from drop:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to create node from drop');
-    }
-  };
-
-  const handleCommandDrop = async (files: globalThis.File[]) => {
-    try {
-      const file = files[0]; // Use first file for title
-      const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
-
-      // Convert PascalCase file names to human-readable titles with spaces
-      // Example: "HawkinsScale" → "Hawkins Scale"
-      const { isPascalCase, pascalCaseToTitle } = await import('../../features/dreamnode/utils/title-sanitization');
-      const humanReadableTitle = isPascalCase(fileNameWithoutExt)
-        ? pascalCaseToTitle(fileNameWithoutExt)
-        : fileNameWithoutExt;
-
-      // Use the EXACT same position as the Create DreamNode command
-      const spawnPosition: [number, number, number] = [0, 0, -25];
-
-      // Separate media files from other files
-      const mediaFiles = files.filter(f => isValidMediaFile(f));
-      const otherFiles = files.filter(f => !isValidMediaFile(f));
-
-      // Use first media file as dreamTalk, rest go to additional files
-      const dreamTalkFile = mediaFiles.length > 0 ? mediaFiles[0] : undefined;
-      const additionalFiles = [
-        ...mediaFiles.slice(1), // Remaining media files
-        ...otherFiles // All non-media files (like PDFs)
-      ];
-
-      // Start creation with pre-filled data including all files
-      startCreationWithData(spawnPosition, {
-        title: humanReadableTitle,
-        type: 'dream',
-        dreamTalkFile: dreamTalkFile,
-        additionalFiles: additionalFiles.length > 0 ? additionalFiles : undefined
-      });
-
-
-    } catch (error) {
-      console.error('Failed to start creation from drop:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from drop');
-    }
-  };
-
-  const handleNormalUrlDrop = async (urlData: string, position: [number, number, number]) => {
-    try {
-      const urlMetadata = await processDroppedUrlData(urlData);
-
-      if (!urlMetadata || !urlMetadata.isValid) {
-        uiService.showError('Invalid URL dropped');
-        return;
-      }
-
-      console.log('🔗 Creating DreamNode from URL:', urlMetadata);
-
-      const store = useInterBrainStore.getState();
-      const service = serviceManager.getActive();
-
-      // Determine node type based on liminal-web context (same as file drop logic)
-      let nodeType: 'dream' | 'dreamer' = 'dream';
-      let shouldAutoRelate = false;
-      let focusedNodeId: string | null = null;
-
-      if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
-        const focusedNode = store.selectedNode;
-        focusedNodeId = focusedNode.id;
-        nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
-        shouldAutoRelate = true;
-        console.log(`Liminal-web URL drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
-      }
-
-      // Create the DreamNode with URL as the "dreamTalk" (stored in metadata)
-      // For website URLs, use AI-powered analysis if enabled and set up in settings
-      let newNode: DreamNode;
-      const webLinkAnalyzerReady = serviceManager.isWebLinkAnalyzerReady();
-      console.log(`🔗 URL type: ${urlMetadata.type}, has createFromWebsiteUrl: ${!!service.createFromWebsiteUrl}, analyzer ready: ${webLinkAnalyzerReady}`);
-
-      if (urlMetadata.type === 'website' && service.createFromWebsiteUrl && webLinkAnalyzerReady) {
-        const apiKey = serviceManager.getClaudeApiKey();
-        console.log(`🔗 Using AI analysis, API key configured: ${!!apiKey}`);
-        newNode = await service.createFromWebsiteUrl(
-          urlMetadata.title || urlMetadata.url,
-          nodeType,
-          urlMetadata,
-          position,
-          apiKey || undefined
-        );
-      } else {
-        // Fallback: create basic node without AI analysis
-        if (urlMetadata.type === 'website' && !webLinkAnalyzerReady) {
-          console.log(`🔗 Web Link Analyzer not ready, using basic node creation`);
-        }
-        newNode = await service.createFromUrl(
-          urlMetadata.title || urlMetadata.url,
-          nodeType,
-          urlMetadata,
-          position
-        );
-      }
-
-      // Auto-create relationship if in liminal-web mode
-      if (shouldAutoRelate && focusedNodeId && newNode) {
-        try {
-          await service.addRelationship(focusedNodeId, newNode.id);
-          console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
-          uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
-
-          // Refresh and trigger layout update (same as file drop)
-          const updatedFocusedNode = await service.get(focusedNodeId);
-          if (updatedFocusedNode) {
-            store.setSelectedNode(updatedFocusedNode);
-            globalThis.setTimeout(() => {
-              if (spatialOrchestratorRef.current) {
-                spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
-              }
-            }, 100);
-          }
-        } catch (error) {
-          console.error('Failed to create automatic relationship:', error);
-        }
-      }
-
-    } catch (error) {
-      console.error('Failed to create node from URL drop:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to create node from URL drop');
-    }
-  };
-
-  const handleCommandUrlDrop = async (urlData: string) => {
-    try {
-      const urlMetadata = await processDroppedUrlData(urlData);
-
-      if (!urlMetadata || !urlMetadata.isValid) {
-        uiService.showError('Invalid URL dropped');
-        return;
-      }
-
-      console.log('🔗 Opening ProtoNode with URL:', urlMetadata);
-
-      // Use the same spawn position as file command drop
-      const spawnPosition: [number, number, number] = [0, 0, -25];
-
-      // Start creation with URL pre-filled in ProtoNode
-      startCreationWithData(spawnPosition, {
-        title: urlMetadata.title || urlMetadata.url,
-        type: 'dream',
-        urlMetadata: urlMetadata // Add URL metadata to proto node data
-      });
-
-    } catch (error) {
-      console.error('Failed to start creation from URL drop:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to start creation from URL drop');
-    }
-  };
-
-  const handleUrlDropOnNode = async (urlData: string, node: DreamNode) => {
-    try {
-      const urlMetadata = await processDroppedUrlData(urlData);
-
-      if (!urlMetadata || !urlMetadata.isValid) {
-        uiService.showError('Invalid URL dropped');
-        return;
-      }
-
-      console.log('🔗 Adding URL to existing DreamNode:', { url: urlMetadata, node: node.name });
-
-      // Use service to add URL to existing node
-      const service = serviceManager.getActive();
-      await service.addUrlToNode(node.id, urlMetadata);
-
-      uiService.showSuccess(`Added URL to "${node.name}"`);
-
-    } catch (error) {
-      console.error('Failed to add URL to node:', error);
-      uiService.showError(error instanceof Error ? error.message : 'Failed to add URL to node');
-    }
   };
 
   const prevRenderCountRef = useRef(0);
@@ -1055,7 +580,6 @@ export default function DreamspaceCanvas() {
                   dreamNode={node}
                   onHover={handleNodeHover}
                   onClick={handleNodeClick}
-                  onDoubleClick={handleNodeDoubleClick}
                   enableDynamicScaling={shouldEnableDynamicScaling}
                   onHitSphereRef={handleHitSphereRef}
                   vaultService={vaultService}
