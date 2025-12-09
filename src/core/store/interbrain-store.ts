@@ -121,6 +121,18 @@ export interface RealNodeData {
   lastSynced: number;
 }
 
+/**
+ * Navigation Request - Declarative way for features to request spatial navigation
+ *
+ * Features write navigation requests to the store, and the SpatialOrchestrator
+ * reacts to them. This is the universal pattern for feature → core communication.
+ */
+export interface NavigationRequest {
+  type: 'focus' | 'constellation' | 'applyLayout';
+  nodeId?: string;
+  interrupt?: boolean; // Use interrupt variants for mid-flight changes
+}
+
 // ============================================================================
 // CORE SLICE - Fundamental state that belongs to no single feature
 // ============================================================================
@@ -159,6 +171,11 @@ export interface CoreSlice {
   // Camera debug flag (stays in core - camera is view layer)
   debugFlyingControls: boolean;
   setDebugFlyingControls: (enabled: boolean) => void;
+
+  // Navigation request (feature → core communication)
+  navigationRequest: NavigationRequest | null;
+  requestNavigation: (request: NavigationRequest) => void;
+  clearNavigationRequest: () => void;
 }
 
 // ============================================================================
@@ -203,6 +220,8 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   },
 
   debugFlyingControls: false,
+
+  navigationRequest: null,
 
   // Actions
   setRealNodes: (nodes) => set({ realNodes: nodes }),
@@ -264,6 +283,10 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   })),
 
   setDebugFlyingControls: (enabled) => set({ debugFlyingControls: enabled }),
+
+  requestNavigation: (request) => set({ navigationRequest: request }),
+
+  clearNavigationRequest: () => set({ navigationRequest: null }),
 });
 
 // ============================================================================

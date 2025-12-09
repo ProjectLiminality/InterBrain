@@ -345,70 +345,8 @@ export default function DreamspaceCanvas() {
     }
   }, [dreamNodes.length, spatialOrchestratorRef.current]); // Re-register when nodes change OR orchestrator becomes ready
   
-  // Expose moveToCenter function globally for commands
-  useEffect(() => {
-    (globalThis as unknown as { __interbrainCanvas: unknown }).__interbrainCanvas = {
-      moveSelectedNodeToCenter: () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          return false;
-        }
-        
-        const nodeRef = dreamNodeRefs.current.get(selectedNode.id);
-        if (!nodeRef?.current) {
-          return false;
-        }
-        
-        // Move to center position (close to camera for large appearance)
-        const centerPosition: [number, number, number] = [0, 0, -50];
-        
-        nodeRef.current.moveToPosition(centerPosition, 2000);
-        return true;
-      },
-      focusOnNode: (nodeId: string) => {
-        // Trigger focused layout via SpatialOrchestrator
-        if (spatialOrchestratorRef.current) {
-          spatialOrchestratorRef.current.focusOnNode(nodeId);
-          return true;
-        }
-        return false;
-      },
-      returnToConstellation: () => {
-        // Return to constellation via SpatialOrchestrator
-        if (spatialOrchestratorRef.current) {
-          spatialOrchestratorRef.current.returnToConstellation();
-          return true;
-        }
-        return false;
-      },
-      interruptAndFocusOnNode: (nodeId: string) => {
-        // Trigger focused layout with mid-flight interruption support
-        if (spatialOrchestratorRef.current) {
-          spatialOrchestratorRef.current.interruptAndFocusOnNode(nodeId);
-          return true;
-        }
-        return false;
-      },
-      interruptAndReturnToConstellation: () => {
-        // Return to constellation with mid-flight interruption support
-        if (spatialOrchestratorRef.current) {
-          spatialOrchestratorRef.current.interruptAndReturnToConstellation();
-          return true;
-        }
-        return false;
-      },
-      applyConstellationLayout: async () => {
-        // Apply constellation layout positioning via SpatialOrchestrator
-        if (spatialOrchestratorRef.current) {
-          await spatialOrchestratorRef.current.applyConstellationLayout();
-          return;
-        }
-        throw new Error('SpatialOrchestrator not available');
-      }
-    };
-  }, []);
+  // Note: Global __interbrainCanvas API has been replaced with store-based navigation.
+  // Features now use store.requestNavigation() and core reacts via useEffect above.
 
   // React to spatial layout changes and trigger appropriate orchestrator methods
   useEffect(() => {
@@ -502,7 +440,45 @@ export default function DreamspaceCanvas() {
         break;
     }
   }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
-  
+
+  // React to navigation requests from features
+  // This is the universal pattern for feature → core communication
+  const navigationRequest = useInterBrainStore(state => state.navigationRequest);
+  const clearNavigationRequest = useInterBrainStore(state => state.clearNavigationRequest);
+
+  useEffect(() => {
+    if (!navigationRequest || !spatialOrchestratorRef.current) return;
+
+    const orchestrator = spatialOrchestratorRef.current;
+
+    switch (navigationRequest.type) {
+      case 'focus':
+        if (navigationRequest.nodeId) {
+          if (navigationRequest.interrupt) {
+            orchestrator.interruptAndFocusOnNode(navigationRequest.nodeId);
+          } else {
+            orchestrator.focusOnNode(navigationRequest.nodeId);
+          }
+        }
+        break;
+
+      case 'constellation':
+        if (navigationRequest.interrupt) {
+          orchestrator.interruptAndReturnToConstellation();
+        } else {
+          orchestrator.returnToConstellation();
+        }
+        break;
+
+      case 'applyLayout':
+        orchestrator.applyConstellationLayout();
+        break;
+    }
+
+    // Clear the request after processing
+    clearNavigationRequest();
+  }, [navigationRequest, clearNavigationRequest]);
+
   // Note: Custom DOM events for edit mode have been replaced with OrchestratorContext
   // EditModeOverlay now calls orchestrator methods directly via useOrchestrator() hook
   

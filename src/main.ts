@@ -1042,50 +1042,27 @@ export default class InterBrainPlugin extends Plugin {
           store.setRestoringFromHistory(true);
           
           try {
-            // Restore the layout state via SpatialOrchestrator (proper way)
+            // Restore the layout state via store-based navigation
             if (previousEntry.layout === 'constellation') {
-              // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { interruptAndReturnToConstellation(): boolean } }).__interbrainCanvas;
-              if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
-                const success = canvasAPI.interruptAndReturnToConstellation();
-                if (success) {
-                  store.setSelectedNode(null); // Update store to match
-                } else {
-                  this.uiService.showError('Failed to return to constellation - SpatialOrchestrator not ready');
-                  return;
-                }
-              } else {
-                this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                return;
-              }
+              // Going to constellation - request navigation with interruption
+              store.setSelectedNode(null);
+              store.requestNavigation({ type: 'constellation', interrupt: true });
             } else if (previousEntry.layout === 'liminal-web' && previousEntry.nodeId) {
               // Going to liminal-web - need to find and focus on the node
               const allNodes = await this.getAllAvailableNodes();
               const targetNode = allNodes.find(node => node.id === previousEntry.nodeId);
-              
+
               if (targetNode) {
-                // First update store (required for SpatialOrchestrator to work)
+                // Update store and request navigation
                 store.setSelectedNode(targetNode);
-                
-                // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
-                if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
-                  const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
-                  if (!success) {
-                    this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
-                    return;
-                  }
-                } else {
-                  this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                  return;
-                }
+                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case - skip to next valid entry
                 console.warn(`Node ${previousEntry.nodeId} no longer exists, skipping undo step`);
                 this.uiService.showError('Target node no longer exists - skipped to previous state');
               }
             }
-            
+
             // Restore visual state (flip state and scroll position) after layout restoration
             store.restoreVisualState(previousEntry);
           } finally {
@@ -1134,43 +1111,20 @@ export default class InterBrainPlugin extends Plugin {
           store.setRestoringFromHistory(true);
           
           try {
-            // Restore the layout state via SpatialOrchestrator (proper way)
+            // Restore the layout state via store-based navigation
             if (nextEntry.layout === 'constellation') {
-              // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
-              if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
-                const success = canvasAPI.interruptAndReturnToConstellation();
-                if (success) {
-                  store.setSelectedNode(null); // Update store to match
-                } else {
-                  this.uiService.showError('Failed to return to constellation - SpatialOrchestrator not ready');
-                  return;
-                }
-              } else {
-                this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                return;
-              }
+              // Going to constellation - request navigation with interruption
+              store.setSelectedNode(null);
+              store.requestNavigation({ type: 'constellation', interrupt: true });
             } else if (nextEntry.layout === 'liminal-web' && nextEntry.nodeId) {
               // Going to liminal-web - need to find and focus on the node
               const allNodes = await this.getAllAvailableNodes();
               const targetNode = allNodes.find(node => node.id === nextEntry.nodeId);
-              
+
               if (targetNode) {
-                // First update store (required for SpatialOrchestrator to work)
+                // Update store and request navigation
                 store.setSelectedNode(targetNode);
-                
-                // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
-                if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
-                  const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
-                  if (!success) {
-                    this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
-                    return;
-                  }
-                } else {
-                  this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                  return;
-                }
+                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case
                 console.warn(`Node ${nextEntry.nodeId} no longer exists, skipping redo step`);

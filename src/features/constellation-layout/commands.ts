@@ -1,7 +1,6 @@
 import { Plugin } from 'obsidian';
 import { DreamSongRelationshipService } from '../dreamweaving/dreamsong-relationship-service';
 import { UIService } from '../../core/services/ui-service';
-import { VaultService } from '../../core/services/vault-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from './types';
 
@@ -41,12 +40,10 @@ export function registerConstellationDebugCommands(plugin: Plugin, uiService: UI
 export class ConstellationCommands {
   private relationshipService: DreamSongRelationshipService;
   private uiService: UIService;
-  private vaultService: VaultService;
 
   constructor(plugin: Plugin) {
     this.relationshipService = new DreamSongRelationshipService(plugin);
     this.uiService = new UIService(plugin.app);
-    this.vaultService = new VaultService(plugin.app.vault, plugin.app);
   }
 
   /**
@@ -148,18 +145,12 @@ export class ConstellationCommands {
         if (relationshipsChanged) {
           console.log('🔄 [Constellation Commands] Relationships changed - applying constellation layout...');
 
-          // Auto-apply constellation layout positioning (if DreamSpace is open)
+          // Auto-apply constellation layout positioning via store
           try {
-            // Check if SpatialOrchestrator is available before attempting layout
-            const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { applyConstellationLayout?(): Promise<void> } }).__interbrainCanvas;
-
-            if (canvasAPI && canvasAPI.applyConstellationLayout) {
-              await this.applyConstellationLayout();
-              console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
-            } else {
-              console.log('ℹ️ [Constellation Commands] SpatialOrchestrator not available (DreamSpace not open) - skipping layout application');
-              console.log('   Layout will be applied automatically when DreamSpace opens');
-            }
+            await this.applyConstellationLayout();
+            // Request the visual layout update via store
+            store.requestNavigation({ type: 'applyLayout' });
+            console.log('✅ [Constellation Commands] Constellation layout applied automatically after scan');
           } catch (layoutError) {
             console.error('Failed to auto-apply constellation layout:', layoutError);
             // Non-fatal - data is saved, layout can be applied later
@@ -357,40 +348,32 @@ export class ConstellationCommands {
         return;
       }
 
-      // Check if DreamSpace canvas API is available
-      const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { applyConstellationLayout?(): Promise<void> } }).__interbrainCanvas;
-      if (!canvasAPI || !canvasAPI.applyConstellationLayout) {
-        this.uiService.showError('❌ 3D space not available. Please open DreamSpace view first.', 5000);
-        return;
-      }
-
       // Show progress notice
       const layoutNotice = this.uiService.showInfo('🌌 Computing constellation layout...', 0);
 
-      // Apply the constellation layout via global canvas API
-      await canvasAPI.applyConstellationLayout();
-      const success = true; // If we get here without throwing, it succeeded
+      // Request layout application via store-based navigation
+      // The DreamspaceCanvas reacts to this and invokes SpatialOrchestrator
+      store.requestNavigation({ type: 'applyLayout' });
+
+      // Brief delay to allow the layout to be applied
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Hide progress notice
       layoutNotice.hide();
 
-      if (success) {
-        // Get layout statistics for user feedback
-        const positions = store.constellationData.positions;
-        const positionCount = positions?.size || 0;
+      // Get layout statistics for user feedback
+      const positions = store.constellationData.positions;
+      const positionCount = positions?.size || 0;
 
-        this.uiService.showSuccess(
-          `✅ Constellation layout applied!\n\n📍 ${positionCount} DreamNodes positioned using force-directed algorithm`,
-          5000
-        );
+      this.uiService.showSuccess(
+        `✅ Constellation layout applied!\n\n📍 ${positionCount} DreamNodes positioned using force-directed algorithm`,
+        5000
+      );
 
-        console.log('✅ [Constellation Commands] Constellation layout applied successfully:', {
-          nodesPositioned: positionCount,
-          hasPositions: !!positions
-        });
-      } else {
-        this.uiService.showError('❌ Failed to apply constellation layout - SpatialOrchestrator not ready', 5000);
-      }
+      console.log('✅ [Constellation Commands] Constellation layout applied successfully:', {
+        nodesPositioned: positionCount,
+        hasPositions: !!positions
+      });
 
     } catch (error) {
       const errorMessage = `❌ Layout application failed: ${error instanceof Error ? error.message : error}`;

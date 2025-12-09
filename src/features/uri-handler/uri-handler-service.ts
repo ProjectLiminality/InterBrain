@@ -446,22 +446,13 @@ export class URIHandlerService {
 			return;
 		}
 
-		// Set selected node in store FIRST (prevents "no selectedNode available" warning)
+		// Set selected node and request navigation via store
 		const store = useInterBrainStore.getState();
 		store.setSelectedNode(targetNode);
+		store.requestNavigation({ type: 'focus', nodeId: targetNode.id });
 
-		// Check if DreamSpace is open and has focus API
-		const canvasAPI = (globalThis as any).__interbrainCanvas;
-		if (!canvasAPI?.focusOnNode) {
-			return;
-		}
-
-		// Focus on the node (triggers liminal-web layout transition)
-		const success = canvasAPI.focusOnNode(targetNode.id);
-		if (success && !silent) {
+		if (!silent) {
 			new Notice(`🎯 Node focused in DreamSpace!`);
-		} else if (!success) {
-			console.warn(`⚠️ [URIHandler] Failed to focus on "${repoName}"`);
 		}
 	}
 
@@ -675,14 +666,12 @@ export class URIHandlerService {
 					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 					if (scanResult.success) {
-						// Step 4: Apply constellation layout if DreamSpace is open
-						const canvasAPI = (globalThis as any).__interbrainCanvas;
-						if (canvasAPI?.applyConstellationLayout) {
-							await canvasAPI.applyConstellationLayout();
+						// Step 4: Apply constellation layout via store
+						const store = useInterBrainStore.getState();
+						store.requestNavigation({ type: 'applyLayout' });
 
-							// Step 5: Auto-focus the newly cloned node
-							await this.autoFocusNode(finalRepoName, silent);
-						}
+						// Step 5: Auto-focus the newly cloned node (after brief delay for layout)
+						setTimeout(() => this.autoFocusNode(finalRepoName, silent), 100);
 					} else {
 						console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
 					}
@@ -819,14 +808,12 @@ export class URIHandlerService {
 					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 					if (scanResult.success) {
-						// Step 4: Apply constellation layout if DreamSpace is open
-						const canvasAPI = (globalThis as any).__interbrainCanvas;
-						if (canvasAPI?.applyConstellationLayout) {
-							await canvasAPI.applyConstellationLayout();
+						// Step 4: Apply constellation layout via store
+						const store = useInterBrainStore.getState();
+						store.requestNavigation({ type: 'applyLayout' });
 
-							// Step 5: Auto-focus the newly cloned node
-							await this.autoFocusNode(repoName, silent);
-						}
+						// Step 5: Auto-focus the newly cloned node (after brief delay for layout)
+						setTimeout(() => this.autoFocusNode(repoName, silent), 100);
 					} else {
 						console.warn(`⚠️ [URIHandler] Relationship scan failed:`, scanResult.error);
 					}
@@ -893,12 +880,10 @@ export class URIHandlerService {
 				const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
 
 				if (scanResult.success) {
-					// Apply constellation layout to show new relationship
-					const canvasAPI = (globalThis as any).__interbrainCanvas;
-					if (canvasAPI?.applyConstellationLayout) {
-						await canvasAPI.applyConstellationLayout();
-						console.log(`✅ [URIHandler] UI refreshed - relationship now visible`);
-					}
+					// Apply constellation layout via store to show new relationship
+					const store = useInterBrainStore.getState();
+					store.requestNavigation({ type: 'applyLayout' });
+					console.log(`✅ [URIHandler] UI refreshed - relationship now visible`);
 				}
 			} catch (refreshError) {
 				console.error(`❌ [URIHandler] UI refresh failed (non-critical):`, refreshError);
