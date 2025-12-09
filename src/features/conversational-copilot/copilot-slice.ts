@@ -113,9 +113,11 @@ export const createCopilotModeSlice: StateCreator<
       }
     } as Partial<CopilotSliceStore>);
 
-    // Also update searchResults (from search slice) and spatialLayout (from core)
-    // These are set separately since they belong to other slices
+    // Update cross-slice state: searchResults and spatialLayout
+    // spatialLayout transition is the key signal that activates copilot-specific behaviors
     state.setSearchResults(relatedNodes);
+    state.setSpatialLayout('copilot');
+    console.log(`🎯 [Copilot-Entry] Layout transitioned to 'copilot'`);
   },
 
   exitCopilotMode: () => {
@@ -179,6 +181,10 @@ export const createCopilotModeSlice: StateCreator<
     } catch (error) {
       console.warn('Failed to show ribbon:', error);
     }
+
+    // Transition layout back to liminal-web before clearing copilot state
+    state.setSpatialLayout('liminal-web');
+    console.log(`🎯 [Copilot-Exit] Layout transitioned to 'liminal-web'`);
 
     set({
       copilotMode: INITIAL_COPILOT_STATE
