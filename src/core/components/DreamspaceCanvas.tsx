@@ -22,7 +22,7 @@ import { CanvasParserService } from '../../features/dreamweaving/services/canvas
 import { CAMERA_INTERSECTION_POINT } from '../../features/constellation-layout/DynamicViewScaling';
 import { processDroppedUrlData } from '../../features/drag-and-drop';
 import { OrchestratorContext } from '../context/orchestrator-context';
-import { useEscapeKeyHandler } from '../hooks';
+import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
 
 // Create singleton service instances
 const uiService = new UIService();
@@ -106,125 +106,9 @@ export default function DreamspaceCanvas() {
     // Unmount happens via onExitComplete callback
   }, [radialButtonUI.isActive]);
 
-  // Option key handler for copilot mode show/hide
-  useEffect(() => {
-    if (spatialLayout !== 'copilot') return;
-
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      // Option key on Mac, Alt key on Windows/Linux
-      if (e.altKey && !copilotMode.showSearchResults) {
-        e.preventDefault();
-        console.log('🔍 [Copilot] Option key pressed - showing search results');
-        const store = useInterBrainStore.getState();
-
-        console.log('🔍 [Copilot] Current searchResults:', store.searchResults.length, store.searchResults.map(n => n.name));
-        console.log('🔍 [Copilot] Current frozenSearchResults BEFORE freeze:', store.copilotMode.frozenSearchResults.length, store.copilotMode.frozenSearchResults.map(n => n.name));
-
-        store.freezeSearchResults(); // Capture latest search results
-        store.setShowSearchResults(true);
-
-        // Trigger layout update to show frozen results
-        if (spatialOrchestratorRef.current && store.copilotMode.conversationPartner) {
-          // Force the layout to update with frozen results by calling showEditModeSearchResults
-          // This ensures the display logic runs even if no new search results are coming in
-          // Get fresh state after freezeSearchResults() was called
-          const updatedStore = useInterBrainStore.getState();
-          const frozenResults = updatedStore.copilotMode.frozenSearchResults;
-          console.log('🔍 [Copilot] frozenSearchResults AFTER freeze:', frozenResults.length, frozenResults.map(n => n.name));
-
-          if (frozenResults && frozenResults.length > 0) {
-            console.log(`🔍 [Copilot] Displaying ${frozenResults.length} frozen search results`);
-            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, frozenResults);
-          } else {
-            console.log('🔍 [Copilot] No frozen results to display');
-          }
-        }
-      }
-    };
-
-    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
-      // Detect when Option/Alt key is released
-      if (!e.altKey && copilotMode.showSearchResults) {
-        console.log('🔍 [Copilot] Option key released - hiding search results');
-        const store = useInterBrainStore.getState();
-        store.setShowSearchResults(false);
-
-        // Trigger layout update to hide results by calling with empty array
-        if (spatialOrchestratorRef.current && store.copilotMode.conversationPartner) {
-          console.log('🔍 [Copilot] Hiding search results - clearing layout');
-          spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, []);
-        }
-      }
-    };
-
-    globalThis.document.addEventListener('keydown', handleKeyDown);
-    globalThis.document.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      globalThis.document.removeEventListener('keydown', handleKeyDown);
-      globalThis.document.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [spatialLayout, copilotMode.showSearchResults]);
-
-  // Option key handler for radial button UI in liminal-web mode
-  // Coordinated animation: buttons appear + related nodes hide (and vice versa)
-  // ARCHITECTURE: Track actual hardware key state separately from UI visibility
-  useEffect(() => {
-    if (spatialLayout !== 'liminal-web' || !selectedNode) return;
-
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      // Option key on Mac, Alt key on Windows/Linux
-      if (e.altKey) {
-        e.preventDefault();
-        const store = useInterBrainStore.getState();
-
-        // Always track the hardware key state
-        if (!store.radialButtonUI.optionKeyPressed) {
-          store.setOptionKeyPressed(true);
-        }
-
-        // Only show buttons if not already showing
-        if (!store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(true);
-
-          // Hide related nodes by moving them to constellation
-          if (spatialOrchestratorRef.current) {
-            spatialOrchestratorRef.current.hideRelatedNodesInLiminalWeb();
-          }
-        }
-      }
-    };
-
-    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
-      // Detect when Option/Alt key is released
-      if (!e.altKey) {
-        const store = useInterBrainStore.getState();
-
-        // Always clear the hardware key state
-        if (store.radialButtonUI.optionKeyPressed) {
-          store.setOptionKeyPressed(false);
-        }
-
-        // Only hide buttons if they're currently showing
-        if (store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(false);
-
-          // Show related nodes by moving them back to ring positions
-          if (spatialOrchestratorRef.current) {
-            spatialOrchestratorRef.current.showRelatedNodesInLiminalWeb();
-          }
-        }
-      }
-    };
-
-    globalThis.document.addEventListener('keydown', handleKeyDown);
-    globalThis.document.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      globalThis.document.removeEventListener('keydown', handleKeyDown);
-      globalThis.document.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [spatialLayout, selectedNode]);
+  // Option key handlers - extracted to core hooks
+  useCopilotOptionKeyHandler(spatialOrchestratorRef, spatialLayout, copilotMode.showSearchResults);
+  useLiminalWebOptionKeyHandler(spatialOrchestratorRef, spatialLayout, selectedNode);
 
   // Creation state for proto-node rendering
   const { startCreationWithData } = useInterBrainStore();
