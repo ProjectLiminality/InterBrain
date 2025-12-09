@@ -3,6 +3,7 @@ import { GitDreamNodeService } from '../../features/dreamnode/services/git-dream
 import { VaultService } from './vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { LeafManagerService } from './leaf-manager-service';
+import { SubmoduleManagerService } from '../../features/dreamweaving/services/submodule-manager-service';
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../../features/drag-and-drop';
@@ -68,7 +69,7 @@ export class ServiceManager {
   private vaultService: VaultService | null = null;
   private canvasParserService: CanvasParserService | null = null;
   private leafManagerService: LeafManagerService | null = null;
-  private submoduleManagerService: any = null; // SubmoduleManagerService
+  private submoduleManagerService: SubmoduleManagerService | null = null;
 
   constructor() {
     this.indexingService = indexingService;
@@ -87,11 +88,12 @@ export class ServiceManager {
       vaultService: VaultService;
       canvasParserService: CanvasParserService;
       leafManagerService: LeafManagerService;
+      submoduleManagerService: SubmoduleManagerService;
     };
     this.vaultService = pluginWithServices.vaultService;
     this.canvasParserService = pluginWithServices.canvasParserService;
     this.leafManagerService = pluginWithServices.leafManagerService;
-    this.submoduleManagerService = (pluginWithServices as any).submoduleManagerService;
+    this.submoduleManagerService = pluginWithServices.submoduleManagerService;
 
     // Perform initial vault scan
     if (this.dreamNodeService) {
@@ -135,7 +137,7 @@ export class ServiceManager {
   /**
    * Get SubmoduleManagerService instance (only available when plugin is initialized)
    */
-  getSubmoduleManagerService() {
+  getSubmoduleManagerService(): SubmoduleManagerService | null {
     return this.submoduleManagerService;
   }
 
