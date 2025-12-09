@@ -7,6 +7,9 @@ export * from './store';
 // Services
 export * from './services';
 
+// Context
+export { OrchestratorContext, useOrchestrator } from './context/orchestrator-context';
+
 // Components (selective - not all components should be exported)
 export { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './components/DreamspaceView';
 export { default as DreamspaceCanvas } from './components/DreamspaceCanvas';

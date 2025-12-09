@@ -22,6 +22,7 @@ import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
 import { CAMERA_INTERSECTION_POINT } from '../../features/constellation-layout/DynamicViewScaling';
 import { processDroppedUrlData } from '../../features/drag-and-drop';
+import { OrchestratorContext } from '../context/orchestrator-context';
 
 // Create singleton service instances
 const uiService = new UIService();
@@ -502,68 +503,8 @@ export default function DreamspaceCanvas() {
     }
   }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
   
-  // Listen for custom edit mode events
-  useEffect(() => {
-    const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
-    if (!canvas) return;
-    
-    const handleEditModeSaveTransition = (event: globalThis.Event) => {
-      const customEvent = event as globalThis.CustomEvent;
-      const nodeId = customEvent.detail?.nodeId;
-      
-      if (nodeId && spatialOrchestratorRef.current) {
-        console.log('DreamspaceCanvas: Handling edit mode save transition for node:', nodeId);
-        // Use special transition that doesn't move the center node
-        spatialOrchestratorRef.current.animateToLiminalWebFromEdit(nodeId);
-      }
-    };
-    
-    const handleEditModeSearchLayout = (event: globalThis.Event) => {
-      const customEvent = event as globalThis.CustomEvent;
-      const centerNodeId = customEvent.detail?.centerNodeId;
-      const searchResults = customEvent.detail?.searchResults;
-
-      if (centerNodeId && searchResults && spatialOrchestratorRef.current) {
-        spatialOrchestratorRef.current.showEditModeSearchResults(centerNodeId, searchResults);
-      } else {
-        console.error('[Canvas-Event] Missing required data - centerNode:', !!centerNodeId, 'searchResults:', !!searchResults, 'orchestrator:', !!spatialOrchestratorRef.current);
-      }
-    };
-    
-    // Handle clear edit mode data event (called when cancelling edit mode)
-    const handleClearEditModeData = (_event: globalThis.Event) => {
-      if (spatialOrchestratorRef.current) {
-        spatialOrchestratorRef.current.clearEditModeData();
-      } else {
-        console.error('[Canvas-Event] Orchestrator not available for cleanup');
-      }
-    };
-
-    // Handle copilot mode layout event (called when entering copilot mode)
-    const handleCopilotModeLayout = (event: globalThis.Event) => {
-      const customEvent = event as globalThis.CustomEvent;
-      const conversationPartnerId = customEvent.detail?.conversationPartnerId;
-
-      if (conversationPartnerId && spatialOrchestratorRef.current) {
-        // Position the conversation partner at center
-        spatialOrchestratorRef.current.focusOnNode(conversationPartnerId);
-      } else {
-        console.error('[Canvas-Event] Missing required data - conversationPartnerId:', !!conversationPartnerId, 'orchestrator:', !!spatialOrchestratorRef.current);
-      }
-    };
-    
-    canvas.addEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
-    canvas.addEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
-    canvas.addEventListener('clear-edit-mode-data', handleClearEditModeData);
-    canvas.addEventListener('copilot-mode-layout', handleCopilotModeLayout);
-
-    return () => {
-      canvas.removeEventListener('edit-mode-save-transition', handleEditModeSaveTransition);
-      canvas.removeEventListener('edit-mode-search-layout', handleEditModeSearchLayout);
-      canvas.removeEventListener('clear-edit-mode-data', handleClearEditModeData);
-      canvas.removeEventListener('copilot-mode-layout', handleCopilotModeLayout);
-    };
-  }, []);
+  // Note: Custom DOM events for edit mode have been replaced with OrchestratorContext
+  // EditModeOverlay now calls orchestrator methods directly via useOrchestrator() hook
   
   // Debug logging for creation state (removed excessive logging)
   
@@ -1543,37 +1484,40 @@ export default function DreamspaceCanvas() {
           }}
           transitionDuration={1000}
         />
-        
-        {/* Proto-node for creation - stationary relative to camera */}
-        {creationState.isCreating && creationState.protoNode && (
-          <>
-            <ProtoNode3D
-              position={creationState.protoNode.position}
-              onComplete={handleProtoNodeComplete}
-              onCancel={handleProtoNodeCancel}
-            />
-          </>
-        )}
-        
-        {/* Search node interface - render if in search mode OR during save animation */}
-        {((searchInterface.isActive && spatialLayout === 'search') || searchInterface.isSaving) && (
-          <>
-            <SearchNode3D
-              position={[0, 0, -50]} // Focus position
-              onSave={handleSearchSave}
-              onCancel={handleSearchCancel}
-            />
-            <SearchOrchestrator
-              onSearchResults={handleSearchResults}
-            />
-          </>
-        )}
-        
-        {/* Edit mode overlay - render when edit mode is active */}
-        <EditModeOverlay />
 
-        {/* Copilot mode overlay - render when copilot mode is active */}
-        <CopilotModeOverlay />
+        {/* Orchestrator Context - provides orchestrator access to feature overlays */}
+        <OrchestratorContext.Provider value={spatialOrchestratorRef.current}>
+          {/* Proto-node for creation - stationary relative to camera */}
+          {creationState.isCreating && creationState.protoNode && (
+            <>
+              <ProtoNode3D
+                position={creationState.protoNode.position}
+                onComplete={handleProtoNodeComplete}
+                onCancel={handleProtoNodeCancel}
+              />
+            </>
+          )}
+
+          {/* Search node interface - render if in search mode OR during save animation */}
+          {((searchInterface.isActive && spatialLayout === 'search') || searchInterface.isSaving) && (
+            <>
+              <SearchNode3D
+                position={[0, 0, -50]} // Focus position
+                onSave={handleSearchSave}
+                onCancel={handleSearchCancel}
+              />
+              <SearchOrchestrator
+                onSearchResults={handleSearchResults}
+              />
+            </>
+          )}
+
+          {/* Edit mode overlay - render when edit mode is active */}
+          <EditModeOverlay />
+
+          {/* Copilot mode overlay - render when copilot mode is active */}
+          <CopilotModeOverlay />
+        </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}
         {debugFlyingControls && (

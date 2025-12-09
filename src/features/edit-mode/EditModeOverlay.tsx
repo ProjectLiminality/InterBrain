@@ -1,6 +1,7 @@
 import React from 'react';
 import fs from 'fs';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { serviceManager } from '../../core/services/service-manager';
 import { UIService } from '../../core/services/ui-service';
 import { DreamNode } from '../dreamnode';
@@ -12,11 +13,12 @@ const uiService = new UIService();
 
 /**
  * EditModeOverlay - Main coordinator for edit mode functionality
- * 
+ *
  * Integrates with existing spatial layout system:
- * - EditNode3D for metadata editing at center position  
+ * - EditNode3D for metadata editing at center position
  * - Leverages existing SpatialOrchestrator search layout for relationship nodes
  * - Uses existing DreamNode3D components with gold glow for relationships
+ * - Uses OrchestratorContext for direct orchestrator access (no DOM events)
  */
 export default function EditModeOverlay() {
   const {
@@ -24,6 +26,9 @@ export default function EditModeOverlay() {
     savePendingRelationships,
     exitEditMode
   } = useInterBrainStore();
+
+  // Access orchestrator via context (no more DOM events needed)
+  const orchestrator = useOrchestrator();
   
   // Position EditNode3D at the same location as the center node in liminal-web mode
   // But slightly offset towards camera so it renders on top of the regular DreamNode3D
@@ -207,19 +212,15 @@ export default function EditModeOverlay() {
       if (freshNode) {
         // Update the selectedNode to reflect the saved changes
         useInterBrainStore.getState().setSelectedNode(freshNode);
-        
+
         // IMPORTANT: Change spatial layout to liminal-web FIRST
         // This ensures the regular DreamNode3D is ready to appear
         useInterBrainStore.getState().setSpatialLayout('liminal-web');
 
-        // Then trigger the special edit mode save transition animation
+        // Trigger the special edit mode save transition animation via orchestrator
         // This animates the nodes into their liminal-web positions
-        const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
-        if (canvas) {
-          const event = new globalThis.CustomEvent('edit-mode-save-transition', {
-            detail: { nodeId: freshNode.id }
-          });
-          canvas.dispatchEvent(event);
+        if (orchestrator) {
+          orchestrator.animateToLiminalWebFromEdit(freshNode.id);
         }
 
         // Exit edit mode after animations complete
@@ -250,49 +251,39 @@ export default function EditModeOverlay() {
 
   const handleSearchToggleOff = async () => {
     const store = useInterBrainStore.getState();
-    
+
     console.log(`🔍 [EditModeOverlay] Toggling off search mode - filtering to pending relationships`);
-    
+
     // Close the search interface
     store.setEditModeSearchActive(false);
-    
+
     // Get current pending relationships to show only related nodes
     const pendingRelationshipIds = store.editMode.pendingRelationships;
-    
+
     if (pendingRelationshipIds.length > 0 && store.editMode.editingNode) {
       // Get the related nodes from the service layer
       const dreamNodeService = serviceManager.getActive();
       const relatedNodes = await Promise.all(
         pendingRelationshipIds.map(id => dreamNodeService.get(id))
       );
-      
+
       // Filter out any null results (in case some relationships are broken)
       const validRelatedNodes = relatedNodes.filter(node => node !== null) as DreamNode[];
-      
+
       console.log(`✅ [EditModeOverlay] Showing ${validRelatedNodes.length} pending related nodes after search toggle off`);
-      
+
       // Update the edit mode search results to show only pending relationships
       store.setEditModeSearchResults(validRelatedNodes);
-      
-      // CRITICAL: Clear stale orchestrator data before showing filtered results
-      const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
-      if (canvas) {
+
+      // Use orchestrator context directly (no DOM events)
+      if (orchestrator && store.editMode.editingNode) {
         // First clear the stale edit mode data
-        const clearEvent = new globalThis.CustomEvent('clear-edit-mode-data', {
-          detail: { source: 'search-toggle-off' }
-        });
-        canvas.dispatchEvent(clearEvent);
-        
+        orchestrator.clearEditModeData();
+
         // Then trigger the filtered layout after a brief delay to ensure cleanup completes
         globalThis.setTimeout(() => {
           if (store.editMode.editingNode) {
-            const layoutEvent = new globalThis.CustomEvent('edit-mode-search-layout', {
-              detail: { 
-                centerNodeId: store.editMode.editingNode.id,
-                searchResults: validRelatedNodes
-              }
-            });
-            canvas.dispatchEvent(layoutEvent);
+            orchestrator.showEditModeSearchResults(store.editMode.editingNode.id, validRelatedNodes);
           }
         }, 10);
       }
@@ -301,7 +292,7 @@ export default function EditModeOverlay() {
       // No pending relationships, clear search results
       store.setEditModeSearchResults([]);
     }
-    
+
     // Note: Focus management removed - global DreamspaceCanvas escape handler doesn't require it
   };
   
