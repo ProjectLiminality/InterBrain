@@ -35,7 +35,6 @@ export class LeafManagerService {
   private findDreamspaceLeaf(): WorkspaceLeaf | null {
     const leaves = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
     if (leaves.length > 0) {
-       
       console.log(`🎯 [LeafManager] Found dreamspace leaf: ${(leaves[0] as any).id}`);
       return leaves[0];
     }
@@ -61,9 +60,6 @@ export class LeafManagerService {
         // Create overlay specifically on the dreamspace leaf
         console.log(`🎯 [LeafManager] Creating overlay on dreamspace leaf`);
         const overlayLeaf = this.app.workspace.createLeafInParent(dreamspaceLeaf.parent, -1);
-
-        // Set up simple refocus workaround: when overlay closes, refocus transcript
-        this.setupOverlayCloseHandler(overlayLeaf);
 
         return overlayLeaf;
       } else {
@@ -469,83 +465,63 @@ export class LeafManagerService {
   }
 
   /**
-   * Set up automatic cleanup when a DreamSong leaf is closed by the user
+   * Generic leaf cleanup helper - wraps detach to remove from tracking map
    */
-  private setupLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
-    // Listen for leaf detach
+  private setupGenericLeafCleanup(
+    leafMap: Map<string, WorkspaceLeaf>,
+    nodeId: string,
+    leaf: WorkspaceLeaf,
+    leafType: string,
+    onCleanup?: () => Promise<void>
+  ): void {
     const originalDetach = leaf.detach.bind(leaf);
     leaf.detach = async () => {
-      // Only clean up if we still have this leaf tracked
-      if (this.dreamSongLeaves.has(dreamNodeId)) {
-        this.dreamSongLeaves.delete(dreamNodeId);
-        console.log(`Auto-cleaned up DreamSong leaf for node: ${dreamNodeId}`);
+      if (leafMap.has(nodeId)) {
+        leafMap.delete(nodeId);
+        console.log(`Auto-cleaned up ${leafType} leaf for node: ${nodeId}`);
+        if (onCleanup) await onCleanup();
         await this.collapseRightPaneIfEmpty();
       }
       return originalDetach();
     };
+  }
+
+  /**
+   * Set up automatic cleanup when a DreamSong leaf is closed by the user
+   */
+  private setupLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
+    this.setupGenericLeafCleanup(this.dreamSongLeaves, dreamNodeId, leaf, 'DreamSong');
   }
 
   /**
    * Set up automatic cleanup when a DreamTalk leaf is closed by the user
    */
   private setupDreamTalkLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
-    // Listen for leaf detach
-    const originalDetach = leaf.detach.bind(leaf);
-    leaf.detach = async () => {
-      // Only clean up if we still have this leaf tracked
-      if (this.dreamTalkLeaves.has(dreamNodeId)) {
-        this.dreamTalkLeaves.delete(dreamNodeId);
-        console.log(`Auto-cleaned up DreamTalk leaf for node: ${dreamNodeId}`);
-        await this.collapseRightPaneIfEmpty();
-      }
-      return originalDetach();
-    };
+    this.setupGenericLeafCleanup(this.dreamTalkLeaves, dreamNodeId, leaf, 'DreamTalk');
   }
 
   /**
    * Set up automatic cleanup for URL-based leaves (also deletes temporary file)
    */
   private setupUrlLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf, tempFilePath: string): void {
-    // Listen for leaf detach
-    const originalDetach = leaf.detach.bind(leaf);
-    leaf.detach = async () => {
-      // Only clean up if we still have this leaf tracked
-      if (this.dreamTalkLeaves.has(dreamNodeId)) {
-        this.dreamTalkLeaves.delete(dreamNodeId);
-        console.log(`Auto-cleaned up URL DreamTalk leaf for node: ${dreamNodeId}`);
-
-        // Delete the temporary file
-        try {
-          const tempFile = this.app.vault.getAbstractFileByPath(tempFilePath);
-          if (tempFile) {
-            await this.app.vault.delete(tempFile);
-            console.log(`Deleted temporary file: ${tempFilePath}`);
-          }
-        } catch (error) {
-          console.warn(`Failed to delete temporary file ${tempFilePath}:`, error);
+    this.setupGenericLeafCleanup(this.dreamTalkLeaves, dreamNodeId, leaf, 'URL DreamTalk', async () => {
+      try {
+        const tempFile = this.app.vault.getAbstractFileByPath(tempFilePath);
+        if (tempFile) {
+          await this.app.vault.delete(tempFile);
+          console.log(`Deleted temporary file: ${tempFilePath}`);
         }
-
-        await this.collapseRightPaneIfEmpty();
+      } catch (error) {
+        console.warn(`Failed to delete temporary file ${tempFilePath}:`, error);
       }
-      return originalDetach();
-    };
+    });
   }
 
   /**
    * Set up automatic cleanup when a canvas leaf is closed by the user
    */
   private setupCanvasLeafCleanup(dreamNodeId: string, leaf: WorkspaceLeaf): void {
-    // Listen for leaf detach
-    const originalDetach = leaf.detach.bind(leaf);
-    leaf.detach = async () => {
-      // Only clean up if we still have this leaf tracked
-      if (this.canvasLeaves.has(dreamNodeId)) {
-        this.canvasLeaves.delete(dreamNodeId);
-        console.log(`Auto-cleaned up canvas leaf for node: ${dreamNodeId}`);
-        await this.collapseRightPaneIfEmpty();
-      }
-      return originalDetach();
-    };
+    this.setupGenericLeafCleanup(this.canvasLeaves, dreamNodeId, leaf, 'canvas');
   }
 
   /**
@@ -608,109 +584,6 @@ export class LeafManagerService {
    */
   isCanvasOpen(dreamNodeId: string): boolean {
     return this.canvasLeaves.has(dreamNodeId);
-  }
-
-  /**
-   * Set up handler to refocus transcript when overlay closes in copilot mode
-   * Simple workaround: clicking X button breaks focus, so we programmatically refocus
-   */
-  private setupOverlayCloseHandler(overlayLeaf: WorkspaceLeaf): void {
-    // Use workspace layout-change event to detect when this specific leaf closes
-    const handler = this.app.workspace.on('layout-change', () => {
-      const store = useInterBrainStore.getState();
-
-      // Check if we're still in copilot mode
-      if (!store.copilotMode.isActive) {
-        this.app.workspace.offref(eventRef);
-        return;
-      }
-
-      // Check if the overlay leaf still exists in the workspace
-      const allLeaves = this.app.workspace.getLeavesOfType(DREAMSONG_FULLSCREEN_VIEW_TYPE);
-      const leafStillExists = allLeaves.includes(overlayLeaf);
-
-      // If leaf was closed, trigger refocus and cleanup this listener
-      if (!leafStillExists) {
-        console.log(`🎯 [LeafManager] Overlay closed, refocusing transcript (simple workaround)`);
-
-        // Simple refocus: click the dreamspace to restore window focus, then let periodic check handle it
-        // Even simpler: just call setActiveLeaf on the transcript leaf
-        const transcriptLeaves = this.app.workspace.getLeavesOfType('markdown');
-        const transcriptLeaf = transcriptLeaves.find(leaf => {
-           
-          const file = (leaf.view as any).file;
-          return file && file.path && file.path.includes('transcript-');
-        });
-
-        if (transcriptLeaf) {
-          // Small delay to let Obsidian settle after close
-          setTimeout(() => {
-            // Try to focus the Electron window directly (more aggressive than window.focus())
-            try {
-               
-              const electron = (window as any).require?.('electron');
-              if (electron?.remote?.getCurrentWindow) {
-                const currentWindow = electron.remote.getCurrentWindow();
-                currentWindow.focus();
-                console.log(`🪟 [LeafManager] Focused Electron window via remote`);
-              } else if (electron?.BrowserWindow) {
-                const currentWindow = electron.BrowserWindow.getFocusedWindow();
-                if (currentWindow) {
-                  currentWindow.focus();
-                  console.log(`🪟 [LeafManager] Focused Electron window via BrowserWindow`);
-                }
-              } else {
-                // Fallback to regular window.focus()
-                window.focus();
-                console.log(`🪟 [LeafManager] Focused window (fallback)`);
-              }
-            } catch {
-              // If electron access fails, fall back to window.focus()
-              window.focus();
-              console.log(`🪟 [LeafManager] Focused window (error fallback)`);
-            }
-
-            this.app.workspace.setActiveLeaf(transcriptLeaf, { focus: true });
-
-            // Also focus the editor
-             
-            const editor = (transcriptLeaf.view as any).editor;
-            if (editor) {
-              if (editor.focus) {
-                editor.focus();
-              }
-
-              // ULTRA HACK: Simulate a click on the editor to trigger whatever input state needs to activate
-              // This mimics what happens when user manually clicks
-              try {
-                 
-                const editorElement = (editor as any).cm?.dom;
-                if (editorElement) {
-                  // Dispatch a click event to the editor DOM element
-                  const clickEvent = new window.MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window
-                  });
-                  editorElement.dispatchEvent(clickEvent);
-                  console.log(`🖱️ [LeafManager] Simulated click on editor element`);
-                }
-              } catch {
-                console.log(`⚠️ [LeafManager] Could not simulate click on editor`);
-              }
-            }
-
-            console.log(`✅ [LeafManager] Transcript refocused after overlay close`);
-          }, 100); // Increased delay to 100ms
-        }
-
-        // Cleanup this one-time handler
-        this.app.workspace.offref(eventRef);
-      }
-    });
-
-    const eventRef = handler;
-    console.log(`🎯 [LeafManager] Set up overlay close handler for transcript refocus`);
   }
 
   /**
