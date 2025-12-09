@@ -100,6 +100,9 @@ export function useLiminalWebOptionKeyHandler(
         e.preventDefault();
         const store = useInterBrainStore.getState();
 
+        // Double-check we're still in liminal-web mode (could have changed since handler was registered)
+        if (store.spatialLayout !== 'liminal-web') return;
+
         // Always track the hardware key state
         if (!store.radialButtonUI.optionKeyPressed) {
           store.setOptionKeyPressed(true);
@@ -121,6 +124,9 @@ export function useLiminalWebOptionKeyHandler(
       // Detect when Option/Alt key is released
       if (!e.altKey) {
         const store = useInterBrainStore.getState();
+
+        // Double-check we're still in liminal-web mode
+        if (store.spatialLayout !== 'liminal-web') return;
 
         // Always clear the hardware key state
         if (store.radialButtonUI.optionKeyPressed) {
