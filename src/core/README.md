@@ -2,6 +2,34 @@
 
 The foundational infrastructure that all features build upon. **Core defines *how* things work; features define *what* things do.**
 
+## Feature Slices
+
+Core provides the foundation for these feature modules:
+
+| Feature | Purpose |
+|---------|---------|
+| [dreamnode](../features/dreamnode/README.md) | DreamNode data types, services, and CRUD operations |
+| [dreamweaving](../features/dreamweaving/README.md) | Canvas parsing, submodules, DreamSong playback |
+| [constellation-layout](../features/constellation-layout/README.md) | Fibonacci sphere distribution of all nodes |
+| [liminal-web-layout](../features/liminal-web-layout/README.md) | Focused node with related nodes in rings |
+| [conversational-copilot](../features/conversational-copilot/README.md) | AI conversation mode with node invocation |
+| [edit-mode](../features/edit-mode/README.md) | Node editing with relationship management |
+| [search](../features/search/README.md) | Search overlay and result display |
+| [semantic-search](../features/semantic-search/README.md) | Vector embeddings and similarity search |
+| [creation](../features/creation/README.md) | ProtoNode3D for new node creation |
+| [drag-and-drop](../features/drag-and-drop/README.md) | File and URL drop handling |
+| [radial-buttons](../features/radial-buttons/README.md) | Radial action menu around nodes |
+| [realtime-transcription](../features/realtime-transcription/README.md) | Voice transcription via Python backend |
+| [social-resonance](../features/social-resonance/README.md) | Radicle P2P integration |
+| [coherence-beacon](../features/coherence-beacon/README.md) | Node synchronization beacons |
+| [video-calling](../features/video-calling/README.md) | WebRTC video call integration |
+| [web-link-analyzer](../features/web-link-analyzer/README.md) | AI-powered URL content analysis |
+| [github-publishing](../features/github-publishing/README.md) | Publish nodes to GitHub |
+| [settings](../features/settings/README.md) | Plugin settings tab |
+| [updates](../features/updates/README.md) | Plugin update checking |
+| [uri-handler](../features/uri-handler/README.md) | interbrain:// protocol handling |
+| [songline](../features/songline/README.md) | Songline navigation feature |
+
 ## Core Principles
 
 ### 1. All Vault Access Through VaultService
