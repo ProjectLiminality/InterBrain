@@ -42,7 +42,7 @@ export { default as RelationshipSearchInput } from './RelationshipSearchInput';
 
 1. **Enter**: User selects node in liminal-web layout, presses `Ctrl+E`
 2. **Edit**: DreamNodeEditor3D renders at center with node data
-3. **Modify**: User edits title, type, contact info, uploads media
+3. **Modify**: User edits title, contact info (dreamer only), uploads media
 4. **Relationships**: Toggle search to find/add relationship candidates
 5. **Save**: EditorService orchestrates persistence via parent GitDreamNodeService
 6. **Exit**: Return to liminal-web layout with updated node
@@ -51,9 +51,9 @@ export { default as RelationshipSearchInput } from './RelationshipSearchInput';
 
 - **DreamNodeEditor3D**: Self-contained editor UI
   - Renders only when `editMode.isActive` is true
-  - Title, type toggle, contact fields (dreamer only)
-  - Media drag/drop using `isValidDreamTalkMedia` from dreamnode
+  - Title editing, contact fields (dreamer only), media drag/drop
   - Relationship search toggle
+  - Note: Node type (dream/dreamer) is immutable - set at creation
 
 - **RelationshipSearchInput**: Semantic search for finding nodes to link
   - Debounced search as user types
