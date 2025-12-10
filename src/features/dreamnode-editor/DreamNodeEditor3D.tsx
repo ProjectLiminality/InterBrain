@@ -153,6 +153,11 @@ export default function DreamNodeEditor3D() {
     setLocalRadicleId(editingNode.radicleId || '');
   }, [editingNode?.id, editingNode?.type]);
 
+  // Debounced store update (must be before early return - rules of hooks)
+  const updateStoreTitle = useCallback((title: string) => {
+    updateEditingNodeMetadata({ name: title });
+  }, [updateEditingNodeMetadata]);
+
   // Don't render if edit mode is not active
   if (!editMode.isActive || !editingNode) {
     return null;
@@ -161,11 +166,6 @@ export default function DreamNodeEditor3D() {
   const nodeColors = getNodeColors(editingNode.type);
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = dreamNodeStyles.dimensions.borderWidth;
-
-  // Debounced store update
-  const updateStoreTitle = useCallback((title: string) => {
-    updateEditingNodeMetadata({ name: title });
-  }, [updateEditingNodeMetadata]);
 
   // Event handlers
   const handleTitleChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
