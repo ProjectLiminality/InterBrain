@@ -15,8 +15,10 @@ import { DreamNode } from '../../dreamnode';
  *
  * Handles:
  * 1. New DreamTalk media file (with hash-based deduplication)
- * 2. Metadata changes (name, type, contact fields)
+ * 2. Metadata changes (name, contact fields for dreamer)
  * 3. Relationship changes
+ *
+ * Note: Node type is immutable after creation - not saved here.
  */
 export async function saveEditModeChanges(): Promise<{ success: boolean; error?: string }> {
   const store = useInterBrainStore.getState();
@@ -35,10 +37,9 @@ export async function saveEditModeChanges(): Promise<{ success: boolean; error?:
       await handleDreamTalkFileUpdate(editingNode, editMode.newDreamTalkFile);
     }
 
-    // 2. Save metadata changes
+    // 2. Save metadata changes (type is immutable, not saved)
     const updates: Partial<DreamNode> = {
-      name: editingNode.name,
-      type: editingNode.type
+      name: editingNode.name
     };
 
     // Include contact info only for dreamer-type nodes

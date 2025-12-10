@@ -19,10 +19,13 @@ const uiService = new UIService();
  * This component:
  * - Renders when edit mode is active (checks store state internally)
  * - Shows at the center position overlaying the selected node
- * - Handles title, type, contact info editing
+ * - Handles title editing and contact info (dreamer only)
  * - Manages media upload/drag-drop
  * - Toggles relationship search interface
  * - Calls EditorService for persistence
+ *
+ * Note: Node type (dream/dreamer) is immutable after creation as it
+ * defines the relationship ontology in the liminal web.
  */
 export default function DreamNodeEditor3D() {
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
@@ -98,12 +101,12 @@ export default function DreamNodeEditor3D() {
     return Object.keys(errors).length === 0;
   }, [setEditModeValidationErrors, validationErrors]);
 
-  // Focus title input on type change
+  // Focus title input when entering edit mode
   useEffect(() => {
     if (editingNode && titleInputRef.current) {
       titleInputRef.current.focus();
     }
-  }, [editingNode?.type]);
+  }, [editingNode?.id]);
 
   // Handle pre-filled dreamTalkMedia
   useEffect(() => {
@@ -177,11 +180,6 @@ export default function DreamNodeEditor3D() {
       updateStoreTitle(title);
       validateTitle(title);
     }, 300) as unknown as number;
-  };
-
-  const handleTypeChange = (type: 'dream' | 'dreamer') => {
-    updateEditingNodeMetadata({ type });
-    globalThis.setTimeout(() => titleInputRef.current?.focus(), 0);
   };
 
   const handleEmailChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
@@ -444,15 +442,6 @@ export default function DreamNodeEditor3D() {
               />
             )}
 
-            {/* Type Toggle */}
-            <TypeToggle
-              currentType={editingNode.type}
-              onChange={handleTypeChange}
-              nodeSize={nodeSize}
-              hasError={!!validationErrors.title}
-              opacity={animatedUIOpacity}
-            />
-
             {/* Contact Info Fields (dreamer only) */}
             {editingNode.type === 'dreamer' && (
               <ContactFields
@@ -573,63 +562,6 @@ function ValidationError({ message, nodeSize, opacity }: {
   );
 }
 
-function TypeToggle({ currentType, onChange, nodeSize, hasError, opacity }: {
-  currentType: 'dream' | 'dreamer';
-  onChange: (type: 'dream' | 'dreamer') => void;
-  nodeSize: number;
-  hasError: boolean;
-  opacity: number;
-}) {
-  const buttonStyle = (type: 'dream' | 'dreamer') => ({
-    padding: `${Math.max(8, nodeSize * 0.02)}px ${Math.max(16, nodeSize * 0.04)}px`,
-    border: `${dreamNodeStyles.dimensions.toggleBorderWidth}px solid ${getNodeColors(type).border}`,
-    background: currentType === type ? getNodeColors(type).border : 'transparent',
-    color: 'white',
-    fontSize: `${Math.max(14, nodeSize * 0.035)}px`,
-    fontFamily: dreamNodeStyles.typography.fontFamily,
-    cursor: 'pointer',
-    transition: 'background 0.2s ease',
-    flex: '1',
-    minWidth: '60px',
-    boxSizing: 'border-box' as const
-  });
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: `${nodeSize + (hasError ? 40 : 20)}px`,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        display: 'flex',
-        opacity
-      }}
-    >
-      <button
-        onClick={(e) => { e.stopPropagation(); onChange('dream'); }}
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          ...buttonStyle('dream'),
-          borderRadius: `${Math.max(4, nodeSize * 0.01)}px 0 0 ${Math.max(4, nodeSize * 0.01)}px`,
-          marginRight: '0.5px'
-        }}
-      >
-        Dream
-      </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onChange('dreamer'); }}
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          ...buttonStyle('dreamer'),
-          borderRadius: `0 ${Math.max(4, nodeSize * 0.01)}px ${Math.max(4, nodeSize * 0.01)}px 0`
-        }}
-      >
-        Dreamer
-      </button>
-    </div>
-  );
-}
-
 function ContactFields({ email, phone, did, radicleId, onEmailChange, onPhoneChange, onDidChange, nodeSize, hasError, opacity }: {
   email: string;
   phone: string;
@@ -660,7 +592,7 @@ function ContactFields({ email, phone, did, radicleId, onEmailChange, onPhoneCha
     <div
       style={{
         position: 'absolute',
-        top: `${nodeSize + (hasError ? 100 : 80)}px`,
+        top: `${nodeSize + (hasError ? 40 : 20)}px`,
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',
@@ -734,9 +666,10 @@ function ActionButtons({ onCancel, onSave, onToggleSearch, isDisabled, isAnimati
   const borderRadius = `${Math.max(4, nodeSize * 0.01)}px`;
 
   // Calculate top position based on node type and error state
+  // Dreamer nodes have contact fields, dream nodes go straight to buttons
   const topOffset = nodeType === 'dreamer'
-    ? nodeSize + (hasError ? 360 : 340)
-    : nodeSize + (hasError ? 120 : 100);
+    ? nodeSize + (hasError ? 300 : 280)
+    : nodeSize + (hasError ? 40 : 20);
 
   return (
     <div
