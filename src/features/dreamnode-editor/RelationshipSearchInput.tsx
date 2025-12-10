@@ -4,22 +4,19 @@ import { dreamNodeStyles, getNodeColors } from '../dreamnode/styles/dreamNodeSty
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
 
-interface EditModeSearchNode3DProps {
+interface RelationshipSearchInputProps {
   position: [number, number, number];
-  // Note: onCancel prop removed as escape handling is now managed by global DreamspaceCanvas handler
 }
 
 /**
- * EditModeSearchNode3D - Relationship search interface for edit mode
- * 
- * Renders on top of EditNode3D when relationship search is active.
- * Reuses SearchNode3D visual design but integrates with edit mode search functionality.
- * 
- * Search queries trigger real-time relationship discovery for the editing node.
+ * RelationshipSearchInput - Search interface for finding relationship candidates
+ *
+ * Renders above DreamNodeEditor3D when relationship search is active.
+ * Provides semantic search for finding nodes to add as relationships.
  */
-export default function EditModeSearchNode3D({ 
+export default function RelationshipSearchInput({
   position
-}: EditModeSearchNode3DProps) {
+}: RelationshipSearchInputProps) {
   const titleInputRef = useRef<globalThis.HTMLInputElement>(null);
   
   // Get edit mode state from store  

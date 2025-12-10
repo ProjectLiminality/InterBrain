@@ -165,8 +165,3 @@ export const createEditModeSlice: StateCreator<
     }
   } as Partial<EditModeSliceStore>)),
 });
-
-/**
- * Re-export types for convenience
- */
-export type { DreamNode };

@@ -8,7 +8,7 @@ import { Star3D, SphereRotationControls, ConstellationEdges, shouldShowConstella
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
-import { EditModeOverlay } from '../../features/dreamnode-editor';
+import { DreamNodeEditor3D } from '../../features/dreamnode-editor';
 import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
 import { RadialButtonRing3D } from '../../features/radial-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/radial-buttons/ActiveVideoCallButton';
@@ -274,7 +274,7 @@ export default function DreamspaceCanvas() {
   }, [navigationRequest, clearNavigationRequest]);
 
   // Note: Custom DOM events for edit mode have been replaced with OrchestratorContext
-  // EditModeOverlay now calls orchestrator methods directly via useOrchestrator() hook
+  // DreamNodeEditor3D now calls orchestrator methods directly via useOrchestrator() hook
   
   // Debug logging for creation state (removed excessive logging)
   
@@ -625,8 +625,8 @@ export default function DreamspaceCanvas() {
           {/* Search mode overlay - self-contained search functionality */}
           <SearchModeOverlay />
 
-          {/* Edit mode overlay - render when edit mode is active */}
-          <EditModeOverlay />
+          {/* DreamNode editor - render when edit mode is active */}
+          <DreamNodeEditor3D />
 
           {/* Copilot mode overlay - render when copilot mode is active */}
           <CopilotModeOverlay />

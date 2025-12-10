@@ -1,6 +1,6 @@
 # DreamNode Editor
 
-**Purpose**: Editing workflow UI for DreamNodes - metadata editing and relationship management in 3D space.
+**Purpose**: In-place editing UI for existing DreamNodes - modify metadata and manage relationships.
 
 **Parent feature**: [`dreamnode/`](../dreamnode/README.md) (core types, services, persistence)
 
@@ -9,12 +9,13 @@
 ```
 dreamnode-editor/
 ├── store/
-│   └── slice.ts              # Edit mode state (session, pending relationships, validation)
-├── EditModeOverlay.tsx       # Main coordinator component
-├── EditNode3D.tsx            # Central metadata editing interface
-├── EditModeSearchNode3D.tsx  # Relationship search interface
-├── commands.ts               # Obsidian command palette (enter, exit, save, cancel)
-├── index.ts                  # Barrel export
+│   └── slice.ts                    # Edit mode state (Zustand)
+├── services/
+│   └── editor-service.ts           # Save orchestration using parent service
+├── DreamNodeEditor3D.tsx           # Main 3D editing component (self-contained)
+├── RelationshipSearchInput.tsx     # Semantic search for relationship candidates
+├── commands.ts                     # Obsidian command palette commands
+├── index.ts                        # Barrel export
 └── README.md
 ```
 
@@ -25,51 +26,63 @@ dreamnode-editor/
 export * from './store/slice';
 // → createEditModeSlice, EditModeSlice, EditModeState, EditModeValidationErrors
 
-// Components
-export { default as EditModeOverlay } from './EditModeOverlay';
-export { default as EditNode3D } from './EditNode3D';
-export { default as EditModeSearchNode3D } from './EditModeSearchNode3D';
-
 // Commands
 export { registerEditModeCommands } from './commands';
+
+// Services
+export * from './services/editor-service';
+// → saveEditModeChanges, getFreshNodeData, cancelEditMode, exitToLiminalWeb
+
+// Components
+export { default as DreamNodeEditor3D } from './DreamNodeEditor3D';
+export { default as RelationshipSearchInput } from './RelationshipSearchInput';
 ```
 
 ## Workflow
 
-1. **Enter**: `Ctrl+E` on selected node → shows existing relationships in ring
-2. **Edit metadata**: Title, type, contact info (dreamer only), DreamTalk media
-3. **Manage relationships**: Toggle nodes to add/remove connections
-4. **Search relationships**: Semantic search for compatible nodes
-5. **Save/Cancel**: Persist changes or revert
+1. **Enter**: User selects node in liminal-web layout, presses `Ctrl+E`
+2. **Edit**: DreamNodeEditor3D renders at center with node data
+3. **Modify**: User edits title, type, contact info, uploads media
+4. **Relationships**: Toggle search to find/add relationship candidates
+5. **Save**: EditorService orchestrates persistence via parent GitDreamNodeService
+6. **Exit**: Return to liminal-web layout with updated node
 
 ## Key Features
 
-- **EditNode3D**: Central editing interface (extends ProtoNode3D patterns)
-- **Relationship toggle**: Click ring nodes to add/remove from pending changes
-- **Semantic search**: AI-powered discovery of related nodes
-- **Type switching**: Warnings when changing node type affects relationships
-- **Contact fields**: Email, phone, DID, Radicle ID for dreamer nodes
+- **DreamNodeEditor3D**: Self-contained editor UI
+  - Renders only when `editMode.isActive` is true
+  - Title, type toggle, contact fields (dreamer only)
+  - Media drag/drop using `isValidDreamTalkMedia` from dreamnode
+  - Relationship search toggle
 
-## Layout States
+- **RelationshipSearchInput**: Semantic search for finding nodes to link
+  - Debounced search as user types
+  - Searches opposite-type nodes (dream searches dreamers, vice versa)
+
+- **EditorService**: Save orchestration
+  - Uses parent `GitDreamNodeService.update()` for metadata
+  - Uses parent `GitDreamNodeService.updateRelationships()` for links
+  - Smart file deduplication (hash comparison to avoid duplicate copies)
+
+## Architecture: Commands → Services → UI
 
 ```
-liminal-web → edit-mode (enter editing)
-edit-mode → edit-search (relationship search active)
-edit-search → edit-mode (search toggle off)
-edit-mode → liminal-web (save or cancel)
+User clicks Save → UI calls handleSave() → calls saveEditModeChanges() (service)
+                                                     ↓
+                               GitDreamNodeService.update() (parent)
+                               GitDreamNodeService.updateRelationships() (parent)
 ```
+
+Commands registered in `commands.ts` also use the service layer, ensuring
+consistent behavior whether triggered via UI or command palette.
 
 ## Dependencies
 
 **From `dreamnode/`**:
-- `GitDreamNodeService` - Persistence operations
-- `dreamNodeStyles` - Visual constants
+- `DreamNode` type
+- `GitDreamNodeService` (via serviceManager)
+- `isValidDreamTalkMedia()` - media file validation
+- `dreamNodeStyles`, `getNodeColors()`, `getNodeGlow()` - visual styling
 
 **From `semantic-search/`**:
-- `semanticSearchService` - AI-powered relationship discovery
-
-## Notes
-
-- **File deduplication**: SHA-256 hash comparison prevents duplicate media copies
-- **Escape key**: Centralized in `DreamspaceCanvas` for stability
-- **Contact info**: Automatically hidden/cleared when switching to dream type
+- `semanticSearchService.searchOppositeTypeNodes()` - relationship discovery
