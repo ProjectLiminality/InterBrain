@@ -6,7 +6,7 @@ import { DreamNode3D } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { Star3D, SphereRotationControls, ConstellationEdges, shouldShowConstellationEdges } from '../../features/constellation-layout';
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
-import { CreationModeOverlay } from '../../features/dreamnode-creator';
+import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
 import { EditModeOverlay } from '../../features/dreamnode-editor';
 import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
@@ -356,7 +356,7 @@ export default function DreamspaceCanvas() {
     }
   };
 
-  // Creation handlers moved to CreationModeOverlay
+  // Creation handlers moved to DreamNodeCreator3D
   // Search handlers moved to SearchModeOverlay
 
   // Drag and drop event handlers - logic extracted to features/drag-and-drop
@@ -619,8 +619,8 @@ export default function DreamspaceCanvas() {
 
         {/* Orchestrator Context - provides orchestrator access to feature overlays */}
         <OrchestratorContext.Provider value={spatialOrchestratorRef.current}>
-          {/* Creation mode overlay - self-contained creation functionality */}
-          <CreationModeOverlay />
+          {/* DreamNode creator - self-contained creation UI */}
+          <DreamNodeCreator3D />
 
           {/* Search mode overlay - self-contained search functionality */}
           <SearchModeOverlay />

@@ -1,6 +1,6 @@
 # DreamNode Creator
 
-**Purpose**: Creation workflow UI for DreamNodes - translucent inline editing in 3D space.
+**Purpose**: Creation workflow UI for DreamNodes - inline editing in 3D space.
 
 **Parent feature**: [`dreamnode/`](../dreamnode/README.md) (core types, services, persistence)
 
@@ -24,10 +24,6 @@ export * from './store/slice';
 
 // Components
 export { default as DreamNodeCreator3D } from './DreamNodeCreator3D';
-
-// Backward compatibility aliases
-export { default as CreationModeOverlay } from './DreamNodeCreator3D';
-export { default as ProtoNode3D } from './DreamNodeCreator3D';
 ```
 
 ## Workflow
@@ -40,7 +36,7 @@ export { default as ProtoNode3D } from './DreamNodeCreator3D';
 
 ## Key Features
 
-- **DreamNodeCreator3D**: Self-contained translucent DreamNode creation UI
+- **DreamNodeCreator3D**: Self-contained DreamNode creation UI
   - Renders only when `creationState.isCreating` is true
   - Title input, type toggle (Dream/Dreamer), file upload
   - Media preview: Images, videos, PDFs, YouTube thumbnails
