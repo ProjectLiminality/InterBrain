@@ -86,7 +86,7 @@ import {
 import {
   RadialButtonsSlice,
   createRadialButtonsSlice,
-} from '../../features/action-buttons/radial-buttons-slice';
+} from '../../features/action-buttons/store/slice';
 
 import {
   UpdatesSlice,

@@ -10,10 +10,11 @@ Displays configurable action buttons in an elegant ring pattern around the selec
 
 ```
 action-buttons/
+├── store/
+│   └── slice.ts               # Zustand state slice
 ├── radial-button-config.tsx   # Button configuration array with icons, commands, conditional logic
 ├── RadialButtonRing3D.tsx     # Main 3D ring component with animations
 ├── ActiveVideoCallButton.tsx  # Persistent "end call" button during copilot mode
-├── radial-buttons-slice.ts    # Zustand state slice
 ├── index.ts                   # Barrel export
 └── README.md
 ```
