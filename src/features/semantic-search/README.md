@@ -2,39 +2,33 @@
 
 **Purpose**: AI-powered semantic search for DreamNodes using local Ollama embeddings for sovereign, privacy-first search.
 
-## Architecture
+## Directory Structure
 
-**Service Layer Pattern**: Interface-based services (`IEmbeddingService`, `IIndexingService`) with production implementations using Ollama API.
-
-**Store Integration**: Dedicated `SearchSlice` in Zustand store for vector data, search results, search UI state, and Ollama configuration.
-
-**Command-Driven**: All functionality exposed via Obsidian command palette (no direct UI components in this slice).
-
-### Key Files
-
-**Core Services**:
-- `services/embedding-service.ts` - Abstract interface + utilities (TextProcessor, VectorUtils)
-- `services/ollama-embedding-service.ts` - Production Ollama API client, generates 768D embeddings
-- `services/ollama-health-service.ts` - Diagnostics and setup validation for Ollama
-- `services/indexing-service.ts` - Manages vector index, git-aware change detection, progress tracking
-- `services/semantic-search-service.ts` - Cosine similarity search with keyword fallback
-
-**State Management**:
-- `search-slice.ts` - Zustand slice with:
-  - `vectorData: Map<string, VectorData>` - Persistent embedding cache
-  - `searchResults: DreamNode[]` - Current search results
-  - `searchInterface: SearchInterfaceState` - Search UI state (isActive, currentQuery, isSaving)
-  - `ollamaConfig: OllamaConfig` - Embedding service configuration
-
-**Commands** (Obsidian Command Palette):
-- `commands/ollama-commands.ts` - Diagnostics, status checks, embedding tests (4 commands)
-- `commands/indexing-commands.ts` - Index management: intelligent reindex, full reindex, single node (3 commands)
-- `commands/search-commands.ts` - Search operations: semantic search, find similar, clear results (3 commands)
-- `commands/index.ts` - Command registration orchestrator
-
-**Types & Exports**:
-- `types/index.ts` - Type definitions and constants (re-exports from services)
-- `index.ts` - Public API with exports for all services, types, and commands
+```
+semantic-search/
+├── store/
+│   └── slice.ts                    # Zustand slice (vectorData, searchResults, ollamaConfig)
+├── services/
+│   ├── embedding-service.ts        # Interface + utilities (TextProcessor, VectorUtils)
+│   ├── ollama-embedding-service.ts # Production Ollama API client (768D embeddings)
+│   ├── ollama-health-service.ts    # Diagnostics and setup validation
+│   ├── indexing-service.ts         # Vector index with git-aware change detection
+│   └── semantic-search-service.ts  # Cosine similarity search with fallback
+├── commands/
+│   ├── index.ts                    # Command registration orchestrator
+│   ├── ollama-commands.ts          # Diagnostics, status checks (4 commands)
+│   ├── indexing-commands.ts        # Index management (3 commands)
+│   └── search-commands.ts          # Search operations (3 commands)
+├── types/
+│   └── index.ts                    # Type definitions and constants
+├── tests/
+│   ├── embedding-service.test.ts
+│   ├── ollama-embedding.test.ts
+│   ├── indexing-service.test.ts
+│   └── semantic-search.test.ts
+├── index.ts                        # Barrel export
+└── README.md
+```
 
 ## Main Exports
 
@@ -46,7 +40,7 @@ export { indexingService } from './services/indexing-service';
 export { semanticSearchService } from './services/semantic-search-service';
 
 // Store slice
-export { createSearchSlice, SearchSlice, extractSearchPersistenceData, restoreSearchPersistenceData } from './search-slice';
+export { createSearchSlice, SearchSlice, extractSearchPersistenceData, restoreSearchPersistenceData } from './store/slice';
 
 // Types
 export type { OllamaConfig, IEmbeddingService, VectorData, SearchResult, SearchOptions, CommandResult, SetupInstructions };
@@ -55,6 +49,14 @@ export { DEFAULT_OLLAMA_CONFIG } from './types';
 // Commands
 export { registerSemanticSearchCommands } from './commands';
 ```
+
+## Architecture
+
+**Service Layer Pattern**: Interface-based services (`IEmbeddingService`, `IIndexingService`) with production implementations using Ollama API.
+
+**Store Integration**: Dedicated `SearchSlice` in Zustand store for vector data, search results, search UI state, and Ollama configuration.
+
+**Command-Driven**: All functionality exposed via Obsidian command palette (no direct UI components in this slice).
 
 ## Data Flow
 
@@ -83,8 +85,6 @@ export { registerSemanticSearchCommands } from './commands';
 - **Async Command Pattern**: Commands use `setTimeout(..., 0)` to close command palette before executing long operations
 - **Progress Notifications**: IndexingService emits progress at 20% intervals during batch operations
 
----
-
 ## Command Reference (10 Total)
 
 **Ollama Setup & Diagnostics** (4):
@@ -105,11 +105,8 @@ export { registerSemanticSearchCommands } from './commands';
 
 ## Tests
 
-- `tests/embedding-service.test.ts` - TextProcessor and VectorUtils unit tests
-- `tests/ollama-embedding.test.ts` - OllamaEmbeddingService integration tests
-- `tests/indexing-service.test.ts` - IndexingService with mocked embedding service
-- `tests/semantic-search.test.ts` - SemanticSearchService with mocked dependencies
-
-## Flags
-
-**Status**: Production-ready, well-structured feature slice with comprehensive test coverage and clear separation of concerns. No issues detected.
+All services have comprehensive unit tests with mocked dependencies:
+- `tests/embedding-service.test.ts` - TextProcessor and VectorUtils
+- `tests/ollama-embedding.test.ts` - OllamaEmbeddingService integration
+- `tests/indexing-service.test.ts` - IndexingService with mocked embedding
+- `tests/semantic-search.test.ts` - SemanticSearchService

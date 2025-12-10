@@ -50,8 +50,8 @@ import {
   extractSearchPersistenceData,
   restoreSearchPersistenceData,
   SearchInterfaceState,
-} from '../../features/semantic-search/search-slice';
-import type { OllamaConfig } from '../../features/semantic-search/search-slice';
+} from '../../features/semantic-search/store/slice';
+import type { OllamaConfig } from '../../features/semantic-search/store/slice';
 import { VectorData } from '../../features/semantic-search/services/indexing-service';
 
 import {

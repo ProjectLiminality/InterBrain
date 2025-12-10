@@ -12,7 +12,7 @@ export { indexingService } from './services/indexing-service';
 export { semanticSearchService } from './services/semantic-search-service';
 
 // Store slice (full search slice with ollamaConfig, vectorData, searchResults, etc.)
-export { createSearchSlice, SearchSlice, extractSearchPersistenceData, restoreSearchPersistenceData } from './search-slice';
+export { createSearchSlice, SearchSlice, extractSearchPersistenceData, restoreSearchPersistenceData } from './store/slice';
 
 // Types and configurations
 export type {
