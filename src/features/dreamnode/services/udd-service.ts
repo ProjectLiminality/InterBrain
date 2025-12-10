@@ -3,6 +3,9 @@
  *
  * This service provides centralized .udd file operations for both the main
  * application and git hook scripts. Designed to be lightweight and reusable.
+ *
+ * Note: Uses synchronous fs operations since UDD files are small JSON files
+ * and operations need to be atomic (especially in git hooks).
  */
 
 import { UDDFile } from '../types/dreamnode';

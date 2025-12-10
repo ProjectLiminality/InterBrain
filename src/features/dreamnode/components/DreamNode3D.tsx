@@ -180,6 +180,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
   // Determine if DreamTalk fullscreen button should be visible (stable version)
+  // Note: mediaLoadedTrigger in dependencies ensures re-evaluation after media loads
   const shouldShowDreamTalkFullscreen = useMemo(() => {
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&

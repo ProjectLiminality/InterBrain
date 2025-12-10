@@ -6,7 +6,7 @@ import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { useDreamSongData } from '../../dreamweaving/useDreamSongData';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { serviceManager } from '../../../core/services/service-manager';
-import { setIcon } from 'obsidian';
+import { NodeActionButton } from './NodeActionButton';
 
 interface DreamSongSideProps {
   dreamNode: DreamNode;
@@ -62,12 +62,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     return service;
   }, []);
 
-  // Log when DreamSongSide mounts (validates lazy loading optimization)
-  React.useEffect(() => {
-    return () => {
-      // Cleanup if needed
-    };
-  }, [dreamNode.name]);
 
   // Use the new hook for DreamSong data (with dreamNode for Songline feature detection)
   const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
@@ -216,101 +210,22 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         <div style={getMediaOverlayStyle()} />
       </div>
 
-      {/* Full-screen button (top-center, on back side) - Stable Click Wrapper */}
+      {/* Full-screen button (top-center, on back side) */}
       {shouldShowFullscreenButton && onFullScreenClick && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '8px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '84px',
-            height: '84px',
-            cursor: 'pointer',
-            zIndex: 100, // Much higher z-index to override any overlays
-            pointerEvents: 'auto'
-          }}
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent event from bubbling to node
-            onFullScreenClick(e);
-          }}
-        >
-          {/* Visual button - DOM manipulation happens here, not on click handler */}
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '50%',
-              background: '#000000',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              color: '#fff',
-              transition: 'all 0.2s ease',
-              zIndex: 99,
-              pointerEvents: 'none' // Clicks pass through to wrapper
-            }}
-            ref={(el) => {
-              if (el) {
-                // Clear existing content and add Obsidian icon
-                el.innerHTML = '';
-                setIcon(el, 'lucide-maximize');
-                // Scale icon for larger button
-                const iconElement = el.querySelector('.lucide-maximize');
-                if (iconElement) {
-                  (iconElement as HTMLElement).style.width = '36px';
-                  (iconElement as HTMLElement).style.height = '36px';
-                }
-              }
-            }}
-          />
-        </div>
+        <NodeActionButton
+          icon="lucide-maximize"
+          position="top"
+          onClick={onFullScreenClick}
+        />
       )}
 
       {/* Flip button (bottom-center, on back side) */}
       {shouldShowFlipButton && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '8px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '84px',
-            height: '84px',
-            borderRadius: '50%',
-            background: '#000000',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer !important',
-            fontSize: '12px',
-            color: '#fff',
-            transition: 'all 0.2s ease',
-            zIndex: 100,
-            pointerEvents: 'auto'
-          }}
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent event from bubbling to node
-            onFlipClick(e);
-          }}
-          ref={(el) => {
-            if (el) {
-              // Clear existing content and add Obsidian icon
-              el.innerHTML = '';
-              setIcon(el, 'lucide-rotate-3d');
-              // Scale icon for larger button
-              const iconElement = el.querySelector('.lucide-rotate-3d');
-              if (iconElement) {
-                (iconElement as HTMLElement).style.width = '36px';
-                (iconElement as HTMLElement).style.height = '36px';
-              }
-            }
-          }}
-        >
-        </div>
+        <NodeActionButton
+          icon="lucide-rotate-3d"
+          position="bottom"
+          onClick={onFlipClick}
+        />
       )}
     </div>
   );

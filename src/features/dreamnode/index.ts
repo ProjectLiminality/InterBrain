@@ -39,6 +39,7 @@ export { DreamSongSide } from './components/DreamSongSide';
 export { PDFPreview } from './components/PDFPreview';
 // Shared UI components for Creator and Editor
 export { DropZone, ValidationError } from './components/shared-ui';
+export { NodeActionButton } from './components/NodeActionButton';
 
 // Styles
 export * from './styles/dreamNodeStyles';

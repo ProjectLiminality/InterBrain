@@ -1,10 +1,10 @@
 import React from 'react';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from '../styles/dreamNodeStyles';
-import { setIcon } from 'obsidian';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 import { PDFPreview } from './PDFPreview';
+import { NodeActionButton } from './NodeActionButton';
 
 interface DreamTalkSideProps {
   dreamNode: DreamNode;
@@ -163,101 +163,22 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         {dreamNode.name}
       </div>
 
-      {/* Full-screen button (top-center, on front side) - Stable Click Wrapper */}
+      {/* Full-screen button (top-center, on front side) */}
       {shouldShowFullscreenButton && onFullScreenClick && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '8px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '84px',
-            height: '84px',
-            cursor: 'pointer',
-            zIndex: 100, // Much higher z-index to override any overlays
-            pointerEvents: 'auto'
-          }}
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent event from bubbling to node
-            onFullScreenClick(e);
-          }}
-        >
-          {/* Visual button - DOM manipulation happens here, not on click handler */}
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '50%',
-              background: '#000000',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              color: '#fff',
-              transition: 'all 0.2s ease',
-              zIndex: 99,
-              pointerEvents: 'none' // Clicks pass through to wrapper
-            }}
-            ref={(el) => {
-              if (el) {
-                // Clear existing content and add Obsidian icon
-                el.innerHTML = '';
-                setIcon(el, 'lucide-maximize');
-                // Scale icon for larger button
-                const iconElement = el.querySelector('.lucide-maximize');
-                if (iconElement) {
-                  (iconElement as HTMLElement).style.width = '36px';
-                  (iconElement as HTMLElement).style.height = '36px';
-                }
-              }
-            }}
-          />
-        </div>
+        <NodeActionButton
+          icon="lucide-maximize"
+          position="top"
+          onClick={onFullScreenClick}
+        />
       )}
-      
-      {/* Professional flip button - Obsidian style */}
+
+      {/* Flip button (bottom-center, on front side) */}
       {shouldShowFlipButton && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '8px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '84px',
-            height: '84px',
-            borderRadius: '50%',
-            background: '#000000',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer !important',
-            fontSize: '12px',
-            color: '#fff',
-            transition: 'all 0.2s ease',
-            zIndex: 100,
-            pointerEvents: 'auto'
-          }}
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent event from bubbling to node
-            onFlipClick(e);
-          }}
-          ref={(el) => {
-            if (el) {
-              // Clear existing content and add Obsidian icon
-              el.innerHTML = '';
-              setIcon(el, 'lucide-rotate-3d');
-              // Scale icon for larger button
-              const iconElement = el.querySelector('.lucide-rotate-3d');
-              if (iconElement) {
-                (iconElement as HTMLElement).style.width = '36px';
-                (iconElement as HTMLElement).style.height = '36px';
-              }
-            }
-          }}
-        >
-        </div>
+        <NodeActionButton
+          icon="lucide-rotate-3d"
+          position="bottom"
+          onClick={onFlipClick}
+        />
       )}
     </div>
   );
