@@ -7,7 +7,7 @@
  */
 
 import { Vector3 } from 'three';
-import { ConstellationCluster, ConstellationLayoutConfig } from './LayoutConfig';
+import { ConstellationCluster, ConstellationLayoutConfig } from '../LayoutConfig';
 import { geodesicDistance, sphericalCapsOverlap } from './SphericalProjection';
 
 /**

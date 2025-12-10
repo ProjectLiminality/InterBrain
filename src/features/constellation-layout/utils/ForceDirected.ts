@@ -6,8 +6,8 @@
  * to create visually pleasing node arrangements within spherical caps.
  */
 
-import { DreamSongNode, DreamSongEdge } from './types';
-import { ConstellationCluster, PlanarPosition, ForceVector, ConstellationLayoutConfig } from './LayoutConfig';
+import { DreamSongNode, DreamSongEdge } from '../types';
+import { ConstellationCluster, PlanarPosition, ForceVector, ConstellationLayoutConfig } from '../LayoutConfig';
 
 /**
  * Result of force-directed layout computation

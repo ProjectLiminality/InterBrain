@@ -6,7 +6,7 @@
  */
 
 import { Vector3 } from 'three';
-import { TangentBasis, PlanarPosition } from './LayoutConfig';
+import { TangentBasis, PlanarPosition } from '../LayoutConfig';
 
 /**
  * Compute orthonormal tangent basis at a point on the unit sphere

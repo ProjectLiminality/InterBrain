@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import { Group } from 'three';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { DreamNode } from '../../dreamnode';
-import { detectConnectedComponents, getClusterColor } from '../clustering';
+import { detectConnectedComponents, getClusterColor } from '../utils/Clustering';
 import DreamSongThread3D, { groupEdgesByDreamSong, sortEdgesBySequence } from './DreamSongThread3D';
 
 export interface ConstellationEdgesProps {

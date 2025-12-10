@@ -7,7 +7,7 @@
  */
 
 import { Vector3 } from 'three';
-import { DreamSongRelationshipGraph, DreamSongNode } from './types';
+import { DreamSongRelationshipGraph, DreamSongNode } from '../types';
 
 /**
  * Represents a cluster of connected DreamNodes

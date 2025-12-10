@@ -17,7 +17,7 @@ import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
-import { CAMERA_INTERSECTION_POINT } from '../../features/constellation-layout/DynamicViewScaling';
+import { CAMERA_INTERSECTION_POINT } from '../../features/constellation-layout/utils/DynamicViewScaling';
 import {
   detectDropTarget,
   handleDropOnNode,

@@ -3,7 +3,7 @@ import { Html, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
-import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/DynamicViewScaling';
+import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { dreamNodeStyles } from '../styles/dreamNodeStyles';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';

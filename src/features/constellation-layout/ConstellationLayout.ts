@@ -17,9 +17,9 @@ import {
   CLUSTER_COLORS,
   DEFAULT_CONSTELLATION_CONFIG
 } from './LayoutConfig';
-import { detectConnectedComponents } from './clustering';
-import { computeClusterLayout } from './ForceDirected';
-import { refineClusterPositions } from './ClusterRefinement';
+import { detectConnectedComponents } from './utils/Clustering';
+import { computeClusterLayout } from './utils/ForceDirected';
+import { refineClusterPositions } from './utils/ClusterRefinement';
 import {
   fibonacciSphere,
   sphericalCapArea,
@@ -27,7 +27,7 @@ import {
   exponentialMap,
   getTangentBasis,
   scaleToSphere
-} from './SphericalProjection';
+} from './utils/SphericalProjection';
 
 /**
  * Compute complete constellation layout from relationship graph

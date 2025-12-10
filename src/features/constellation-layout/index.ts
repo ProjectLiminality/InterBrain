@@ -14,15 +14,17 @@ export { default as Edge3D, isValidEdge, calculateArcMidpoint } from './componen
 export { default as Star3D } from './components/Star3D';
 export { default as SphereRotationControls } from './components/SphereRotationControls';
 
-// Layout algorithms
+// Orchestrator
 export * from './ConstellationLayout';
-export * from './ClusterRefinement';
-export * from './ForceDirected';
-export * from './SphericalProjection';
-export * from './LayoutConfig';
-export * from './clustering';
-export * from './FibonacciSphereLayout';
-export * from './DynamicViewScaling';
 
-// Types
+// Utils (algorithms)
+export * from './utils/Clustering';
+export * from './utils/ClusterRefinement';
+export * from './utils/ForceDirected';
+export * from './utils/SphericalProjection';
+export * from './utils/FibonacciSphereLayout';
+export * from './utils/DynamicViewScaling';
+
+// Config & Types
+export * from './LayoutConfig';
 export * from './types';

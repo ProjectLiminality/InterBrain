@@ -8,7 +8,7 @@ import {
 import {
   FibonacciSphereConfig,
   DEFAULT_FIBONACCI_CONFIG
-} from '../FibonacciSphereLayout';
+} from '../utils/FibonacciSphereLayout';
 
 // Re-export types for convenience
 export type { DreamSongRelationshipGraph, SerializableDreamSongGraph, FibonacciSphereConfig };

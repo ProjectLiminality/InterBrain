@@ -7,26 +7,33 @@
 ```
 constellation-layout/
 ├── store/
-│   └── slice.ts              # Zustand slice for relationship graph, positions, config
+│   └── slice.ts                  # Zustand slice for relationship graph, positions, config
 ├── components/
 │   ├── ConstellationEdges.tsx    # Main container: renders all DreamSong threads
 │   ├── DreamSongThread3D.tsx     # Groups edges from same DreamSong (unified interaction)
 │   ├── Edge3D.tsx                # Spherical arc (great circle) between two nodes
 │   ├── Star3D.tsx                # Pure visual star for night sky occlusion
 │   └── SphereRotationControls.tsx # Virtual trackball with quaternion math and momentum
+├── utils/
+│   ├── Clustering.ts             # Connected components detection (DFS)
+│   ├── Clustering.test.ts
+│   ├── ClusterRefinement.ts      # Spring-mass simulation for overlap elimination
+│   ├── ClusterRefinement.test.ts
+│   ├── ForceDirected.ts          # Fruchterman-Reingold algorithm
+│   ├── ForceDirected.test.ts
+│   ├── SphericalProjection.ts    # Exponential map: 2D tangent → 3D sphere
+│   ├── SphericalProjection.test.ts
+│   ├── FibonacciSphereLayout.ts  # Golden ratio sphere distribution
+│   ├── FibonacciSphereLayout.test.ts
+│   ├── DynamicViewScaling.ts     # Apple Watch-style distance scaling
+│   └── DynamicViewScaling.test.ts
 ├── assets/
-│   └── star.png              # Star image for night sky visualization
-├── ConstellationLayout.ts    # Main orchestrator: clustering → positioning → projection
-├── clustering.ts             # Connected components detection using DFS
-├── ForceDirected.ts          # Fruchterman-Reingold algorithm for node arrangement
-├── SphericalProjection.ts    # Exponential map: 2D tangent plane → 3D sphere surface
-├── ClusterRefinement.ts      # Iterative spring-mass simulation for overlap elimination
-├── LayoutConfig.ts           # Configuration types and defaults
-├── FibonacciSphereLayout.ts  # Golden ratio sphere distribution (baseline/fallback)
-├── DynamicViewScaling.ts     # Apple Watch-style distance-based scaling
-├── types.ts                  # DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge
-├── commands.ts               # Obsidian commands: scan vault, export JSON, show stats
-├── index.ts                  # Barrel export
+│   └── star.png                  # Star image for night sky visualization
+├── ConstellationLayout.ts        # Main orchestrator (calls utils pipeline)
+├── LayoutConfig.ts               # Configuration types and defaults
+├── types.ts                      # DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge
+├── commands.ts                   # Obsidian commands: scan vault, export JSON, show stats
+├── index.ts                      # Barrel export
 └── README.md
 ```
 
@@ -41,34 +48,36 @@ export type { ConstellationDataState } from './store/slice';
 export { ConstellationCommands, registerConstellationDebugCommands } from './commands';
 
 // Components
-export { default as ConstellationEdges, shouldShowConstellationEdges } from './components/ConstellationEdges';
+export { default as ConstellationEdges } from './components/ConstellationEdges';
 export { default as DreamSongThread3D } from './components/DreamSongThread3D';
 export { default as Edge3D } from './components/Edge3D';
 export { default as Star3D } from './components/Star3D';
 export { default as SphereRotationControls } from './components/SphereRotationControls';
 
-// Layout algorithms
+// Orchestrator
 export { computeConstellationLayout, validateLayout, createFallbackLayout } from './ConstellationLayout';
-export { detectConnectedComponents, getClusterColor } from './clustering';
-export { computeClusterLayout } from './ForceDirected';
-export { exponentialMap, fibonacciSphere, geodesicDistance } from './SphericalProjection';
-export { refineClusterPositions } from './ClusterRefinement';
-export { calculateFibonacciSpherePositions, DEFAULT_FIBONACCI_CONFIG } from './FibonacciSphereLayout';
-export { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from './DynamicViewScaling';
 
-// Types
-export type { DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge } from './types';
+// Utils (algorithms)
+export { detectConnectedComponents, getClusterColor } from './utils/Clustering';
+export { refineClusterPositions, hasClusterOverlaps } from './utils/ClusterRefinement';
+export { computeClusterLayout } from './utils/ForceDirected';
+export { exponentialMap, fibonacciSphere, geodesicDistance } from './utils/SphericalProjection';
+export { calculateFibonacciSpherePositions, DEFAULT_FIBONACCI_CONFIG } from './utils/FibonacciSphereLayout';
+export { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from './utils/DynamicViewScaling';
+
+// Config & Types
 export type { ConstellationLayoutConfig, ConstellationCluster, LayoutStatistics } from './LayoutConfig';
+export type { DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge } from './types';
 ```
 
 ## Algorithm Pipeline
 
 1. **Scan Vault** → Extract relationships from DreamSong.canvas files
-2. **Detect Clusters** → Connected components using DFS (undirected graph)
-3. **Global Positioning** → Place cluster centers on sphere (Fibonacci distribution)
-4. **Local Layouts** → Force-directed within each cluster (Fruchterman-Reingold)
-5. **Projection** → Exponential map from 2D tangent plane to 3D sphere surface
-6. **Refinement** → Iterative spring-mass to eliminate overlaps
+2. **Clustering** (`utils/Clustering.ts`) → Connected components using DFS
+3. **Global Positioning** → Fibonacci sphere distribution for cluster centers
+4. **Force-Directed** (`utils/ForceDirected.ts`) → Fruchterman-Reingold within clusters
+5. **Spherical Projection** (`utils/SphericalProjection.ts`) → Exponential map from 2D tangent to 3D
+6. **Refinement** (`utils/ClusterRefinement.ts`) → Spring-mass simulation for overlap elimination
 7. **Store** → Persist positions + graph to Zustand (localStorage)
 
 ## Key Components
@@ -87,11 +96,22 @@ Google Earth-style virtual trackball:
 - Velocity estimation with low-pass filtering
 - Rotation locked when in liminal-web mode
 
-### `DynamicViewScaling.ts` - Distance-Based Scaling
+### `utils/DynamicViewScaling.ts` - Distance-Based Scaling
 Apple Watch-style scaling zones:
 - **Inner radius (750)**: Center plateau - nodes at maximum size
 - **Outer radius (2250)**: Transition zone with perspective-corrected scaling
 - **Beyond outer**: Stars only (performance optimization)
+
+## Utils Overview
+
+| File | Algorithm | Purpose |
+|------|-----------|---------|
+| `Clustering.ts` | DFS graph traversal | Detect connected components |
+| `ClusterRefinement.ts` | Spring-mass simulation | Push overlapping clusters apart |
+| `ForceDirected.ts` | Fruchterman-Reingold | Arrange nodes within clusters |
+| `SphericalProjection.ts` | Exponential/log maps | 2D ↔ 3D sphere projection |
+| `FibonacciSphereLayout.ts` | Golden ratio spiral | Even point distribution |
+| `DynamicViewScaling.ts` | Perspective correction | Distance-based sizing |
 
 ## Integration Points
 
@@ -109,7 +129,12 @@ Apple Watch-style scaling zones:
 - **Intelligent diff**: Only recomputes layout when relationships change
 - **Performance**: Nodes at `radius: 5000` for proper night sky scale
 
-## Testing
+## Test Coverage
 
-- **`FibonacciSphereLayout.test.ts`** - Golden ratio distribution
-- **`DynamicViewScaling.test.ts`** - Distance-based scaling math
+All utility algorithms have comprehensive unit tests:
+- `Clustering.test.ts` - Connected components, cluster colors
+- `ClusterRefinement.test.ts` - Overlap detection, refinement
+- `ForceDirected.test.ts` - Layout convergence, positioning
+- `SphericalProjection.test.ts` - Exp/log maps, geodesic distance
+- `FibonacciSphereLayout.test.ts` - Golden ratio distribution
+- `DynamicViewScaling.test.ts` - Perspective-corrected scaling
