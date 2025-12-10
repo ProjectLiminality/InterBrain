@@ -6,11 +6,11 @@
  * but all the processing logic lives here.
  */
 
-import React from 'react';
+import type { RefObject, MutableRefObject } from 'react';
 import { Vector3, Raycaster, Sphere, Mesh, Group } from 'three';
 import { DreamNode } from '../dreamnode';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { serviceManager } from '../../core/services/service-manager';
+import { serviceManager, type IDreamNodeService } from '../../core/services/service-manager';
 import { UIService } from '../../core/services/ui-service';
 import { processDroppedUrlData } from './url-utils';
 import type { SpatialOrchestratorRef } from '../../core/components/SpatialOrchestrator';
@@ -20,6 +20,60 @@ import type { SpatialOrchestratorRef } from '../../core/components/SpatialOrches
  * Note: Created without app since drop-handlers only needs notification methods
  */
 const uiService = new UIService();
+
+/**
+ * Radius of the DreamWorld sphere for raycasting calculations
+ */
+const DREAMWORLD_SPHERE_RADIUS = 5000;
+
+/**
+ * Camera field of view in radians (75 degrees)
+ */
+const CAMERA_FOV_RAD = 75 * Math.PI / 180;
+
+/**
+ * Result of setting up a raycast from screen coordinates
+ */
+interface RaycastSetup {
+  raycaster: Raycaster;
+  canvasRect: globalThis.DOMRect;
+}
+
+/**
+ * Create a raycaster from screen coordinates
+ * Shared setup logic for calculateDropPosition and detectDropTarget
+ */
+function createRaycastFromScreenCoords(
+  mouseX: number,
+  mouseY: number
+): RaycastSetup | null {
+  const canvasElement = globalThis.document.querySelector(
+    '.dreamspace-canvas-container canvas'
+  ) as globalThis.HTMLCanvasElement;
+
+  if (!canvasElement) return null;
+
+  const rect = canvasElement.getBoundingClientRect();
+
+  // Convert screen coordinates to normalized device coordinates (-1 to 1)
+  const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
+  const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1;
+
+  // Calculate ray direction with perspective projection
+  const aspect = rect.width / rect.height;
+  const tanHalfFov = Math.tan(CAMERA_FOV_RAD / 2);
+
+  const rayDirection = new Vector3(
+    ndcX * tanHalfFov * aspect,
+    ndcY * tanHalfFov,
+    -1
+  ).normalize();
+
+  const raycaster = new Raycaster();
+  raycaster.set(new Vector3(0, 0, 0), rayDirection);
+
+  return { raycaster, canvasRect: rect };
+}
 
 /**
  * Validate media file types for DreamTalk
@@ -55,38 +109,15 @@ export function isValidMediaFile(file: globalThis.File): boolean {
 export function calculateDropPosition(
   mouseX: number,
   mouseY: number,
-  dreamWorldRef: React.RefObject<Group | null>
+  dreamWorldRef: RefObject<Group | null>
 ): [number, number, number] {
-  // Get the canvas element specifically for accurate bounds
-  const canvasElement = globalThis.document.querySelector('.dreamspace-canvas-container canvas') as globalThis.HTMLCanvasElement;
-  if (!canvasElement) return [0, 0, -5000]; // Fallback position
+  const raycastSetup = createRaycastFromScreenCoords(mouseX, mouseY);
+  if (!raycastSetup) return [0, 0, -DREAMWORLD_SPHERE_RADIUS]; // Fallback position
 
-  const rect = canvasElement.getBoundingClientRect();
-
-  // Convert screen coordinates to normalized device coordinates (-1 to 1)
-  const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
-  const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1; // Fly Y for NDC
-
-  // Create ray direction accounting for camera FOV (75 degrees)
-  const fov = 75 * Math.PI / 180;
-  const aspect = rect.width / rect.height;
-  const tanHalfFov = Math.tan(fov / 2);
-
-  // Calculate proper ray direction with perspective projection
-  const rayDirection = new Vector3(
-    ndcX * tanHalfFov * aspect,
-    ndcY * tanHalfFov,
-    -1
-  ).normalize();
-
-  const raycaster = new Raycaster();
-  const cameraPosition = new Vector3(0, 0, 0);
-  raycaster.set(cameraPosition, rayDirection);
+  const { raycaster } = raycastSetup;
 
   // Find intersection with sphere
-  const sphereRadius = 5000;
-  const worldSphere = new Sphere(new Vector3(0, 0, 0), sphereRadius);
-
+  const worldSphere = new Sphere(new Vector3(0, 0, 0), DREAMWORLD_SPHERE_RADIUS);
   const intersectionPoint = new Vector3();
   const hasIntersection = raycaster.ray.intersectSphere(worldSphere, intersectionPoint);
 
@@ -100,7 +131,7 @@ export function calculateDropPosition(
   }
 
   console.warn('No intersection found with sphere - using fallback');
-  return [0, 0, -5000];
+  return [0, 0, -DREAMWORLD_SPHERE_RADIUS];
 }
 
 /**
@@ -118,35 +149,15 @@ export interface DropTargetResult {
 export function detectDropTarget(
   mouseX: number,
   mouseY: number,
-  hitSphereRefs: React.MutableRefObject<Map<string, React.RefObject<Mesh | null>>>,
-  dreamWorldRef: React.RefObject<Group | null>
+  hitSphereRefs: MutableRefObject<Map<string, RefObject<Mesh | null>>>,
+  dreamWorldRef: RefObject<Group | null>
 ): DropTargetResult {
-  // Get the canvas element for accurate bounds
-  const canvasElement = globalThis.document.querySelector('.dreamspace-canvas-container canvas') as globalThis.HTMLCanvasElement;
-  if (!canvasElement) {
-    return { type: 'empty', position: [0, 0, -5000] };
+  const raycastSetup = createRaycastFromScreenCoords(mouseX, mouseY);
+  if (!raycastSetup) {
+    return { type: 'empty', position: [0, 0, -DREAMWORLD_SPHERE_RADIUS] };
   }
 
-  const rect = canvasElement.getBoundingClientRect();
-
-  // Convert to normalized device coordinates
-  const ndcX = ((mouseX - rect.left) / rect.width) * 2 - 1;
-  const ndcY = -((mouseY - rect.top) / rect.height) * 2 + 1;
-
-  // Create ray for intersection testing
-  const fov = 75 * Math.PI / 180;
-  const aspect = rect.width / rect.height;
-  const tanHalfFov = Math.tan(fov / 2);
-
-  const rayDirection = new Vector3(
-    ndcX * tanHalfFov * aspect,
-    ndcY * tanHalfFov,
-    -1
-  ).normalize();
-
-  const raycaster = new Raycaster();
-  const cameraPosition = new Vector3(0, 0, 0);
-  raycaster.set(cameraPosition, rayDirection);
+  const { raycaster } = raycastSetup;
 
   // Collect all hit sphere meshes for raycasting
   const hitSpheres: Mesh[] = [];
@@ -171,6 +182,71 @@ export function detectDropTarget(
     return { type: 'node', position: dropPosition, node: dreamNodeData };
   } else {
     return { type: 'empty', position: dropPosition };
+  }
+}
+
+/**
+ * Context for liminal-web auto-relationship creation
+ */
+interface LiminalWebContext {
+  shouldAutoRelate: boolean;
+  nodeType: 'dream' | 'dreamer';
+  focusedNodeId: string | null;
+}
+
+/**
+ * Determine if we should auto-create relationship in liminal-web mode
+ */
+function getLiminalWebContext(): LiminalWebContext {
+  const store = useInterBrainStore.getState();
+
+  if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
+    const focusedNode = store.selectedNode;
+    return {
+      shouldAutoRelate: true,
+      nodeType: focusedNode.type === 'dream' ? 'dreamer' : 'dream',
+      focusedNodeId: focusedNode.id
+    };
+  }
+
+  return {
+    shouldAutoRelate: false,
+    nodeType: 'dream',
+    focusedNodeId: null
+  };
+}
+
+/**
+ * Auto-create relationship in liminal-web mode and trigger layout refresh
+ */
+async function autoRelateInLiminalWeb(
+  service: IDreamNodeService,
+  newNode: DreamNode,
+  nodeType: 'dream' | 'dreamer',
+  focusedNodeId: string,
+  spatialOrchestratorRef: RefObject<SpatialOrchestratorRef | null>
+): Promise<void> {
+  const store = useInterBrainStore.getState();
+
+  try {
+    // Add bidirectional relationship
+    await service.addRelationship(focusedNodeId, newNode.id);
+    uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
+
+    // Refresh the focused node to include the new relationship
+    const updatedFocusedNode = await service.get(focusedNodeId);
+    if (updatedFocusedNode) {
+      store.setSelectedNode(updatedFocusedNode);
+
+      // Trigger a liminal-web layout refresh with smooth fly-in for the new node
+      globalThis.setTimeout(() => {
+        if (spatialOrchestratorRef.current) {
+          spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
+        }
+      }, 100);
+    }
+  } catch (error) {
+    console.error('Failed to create automatic relationship:', error);
   }
 }
 
@@ -202,7 +278,7 @@ export async function handleDropOnNode(files: globalThis.File[], node: DreamNode
 export async function handleNormalDrop(
   files: globalThis.File[],
   position: [number, number, number],
-  spatialOrchestratorRef: React.RefObject<SpatialOrchestratorRef | null>
+  spatialOrchestratorRef: RefObject<SpatialOrchestratorRef | null>
 ): Promise<void> {
   try {
     const primaryFile = files[0];
@@ -214,27 +290,14 @@ export async function handleNormalDrop(
       ? pascalCaseToTitle(fileNameWithoutExt)
       : fileNameWithoutExt;
 
-    const store = useInterBrainStore.getState();
     const service = serviceManager.getActive();
 
     // Find first valid media file for dreamTalk
     const dreamTalkFile = files.find(f => isValidMediaFile(f));
     const additionalFiles = files.filter(f => f !== dreamTalkFile);
 
-    // Determine node type based on liminal-web context
-    let nodeType: 'dream' | 'dreamer' = 'dream';
-    let shouldAutoRelate = false;
-    let focusedNodeId: string | null = null;
-
-    // In liminal-web mode with a focused node, create opposite type and auto-relate
-    if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
-      const focusedNode = store.selectedNode;
-      focusedNodeId = focusedNode.id;
-
-      // Create opposite type for automatic relationship
-      nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
-      shouldAutoRelate = true;
-    }
+    // Get liminal-web context for auto-relationship
+    const { shouldAutoRelate, nodeType, focusedNodeId } = getLiminalWebContext();
 
     // Create node with determined type
     const newNode = await service.create(
@@ -247,26 +310,10 @@ export async function handleNormalDrop(
 
     // Auto-create relationship if in liminal-web mode
     if (shouldAutoRelate && focusedNodeId && newNode) {
-      try {
-        // Add bidirectional relationship
-        await service.addRelationship(focusedNodeId, newNode.id);
-        uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
-
-        // Refresh the focused node to include the new relationship
-        const updatedFocusedNode = await service.get(focusedNodeId);
-        if (updatedFocusedNode) {
-          store.setSelectedNode(updatedFocusedNode);
-
-          // Trigger a liminal-web layout refresh with smooth fly-in for the new node
-          globalThis.setTimeout(() => {
-            if (spatialOrchestratorRef.current) {
-              spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
-            }
-          }, 100);
-        }
-      } catch (error) {
-        console.error('Failed to create automatic relationship:', error);
-      }
+      await autoRelateInLiminalWeb(service, newNode, nodeType, focusedNodeId, spatialOrchestratorRef);
+    } else if (newNode) {
+      // Show success for non-liminal-web drops
+      uiService.showSuccess(`Created "${newNode.name}"`);
     }
 
   } catch (error) {
@@ -324,7 +371,7 @@ export async function handleCommandDrop(files: globalThis.File[]): Promise<void>
 export async function handleNormalUrlDrop(
   urlData: string,
   position: [number, number, number],
-  spatialOrchestratorRef: React.RefObject<SpatialOrchestratorRef | null>
+  spatialOrchestratorRef: RefObject<SpatialOrchestratorRef | null>
 ): Promise<void> {
   try {
     const urlMetadata = await processDroppedUrlData(urlData);
@@ -334,20 +381,10 @@ export async function handleNormalUrlDrop(
       return;
     }
 
-    const store = useInterBrainStore.getState();
     const service = serviceManager.getActive();
 
-    // Determine node type based on liminal-web context
-    let nodeType: 'dream' | 'dreamer' = 'dream';
-    let shouldAutoRelate = false;
-    let focusedNodeId: string | null = null;
-
-    if (store.spatialLayout === 'liminal-web' && store.selectedNode) {
-      const focusedNode = store.selectedNode;
-      focusedNodeId = focusedNode.id;
-      nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
-      shouldAutoRelate = true;
-    }
+    // Get liminal-web context for auto-relationship
+    const { shouldAutoRelate, nodeType, focusedNodeId } = getLiminalWebContext();
 
     // Create the DreamNode with URL
     let newNode: DreamNode;
@@ -373,22 +410,10 @@ export async function handleNormalUrlDrop(
 
     // Auto-create relationship if in liminal-web mode
     if (shouldAutoRelate && focusedNodeId && newNode) {
-      try {
-        await service.addRelationship(focusedNodeId, newNode.id);
-        uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
-
-        const updatedFocusedNode = await service.get(focusedNodeId);
-        if (updatedFocusedNode) {
-          store.setSelectedNode(updatedFocusedNode);
-          globalThis.setTimeout(() => {
-            if (spatialOrchestratorRef.current) {
-              spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
-            }
-          }, 100);
-        }
-      } catch (error) {
-        console.error('Failed to create automatic relationship:', error);
-      }
+      await autoRelateInLiminalWeb(service, newNode, nodeType, focusedNodeId, spatialOrchestratorRef);
+    } else if (newNode) {
+      // Show success for non-liminal-web drops
+      uiService.showSuccess(`Created "${newNode.name}"`);
     }
 
   } catch (error) {

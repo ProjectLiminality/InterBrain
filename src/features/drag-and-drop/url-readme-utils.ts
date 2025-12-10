@@ -1,9 +1,8 @@
 /**
- * URL Node Utilities
+ * URL README Utilities
  *
- * Utility functions for creating and modifying DreamNodes from URLs.
- * These are used by GitDreamNodeService but the logic lives here
- * in the drag-and-drop feature since it's URL-domain knowledge.
+ * Functions for generating README content and .link files from URLs.
+ * Used by GitDreamNodeService for URL-based DreamNode creation.
  */
 
 import { MediaFile } from '../dreamnode';

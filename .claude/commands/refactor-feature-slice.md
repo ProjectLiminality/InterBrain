@@ -16,9 +16,10 @@ This refactoring follows a **Music-First** approach:
 4. **Review Chunking** - Identify opportunities for better organization
 5. **Implement** - Make structural changes
 6. **Clean Up** - Remove obsolete logging, enforce UI→Commands pattern
-7. **Test Coverage** - Ensure meaningful tests for pure utilities
-8. **Document** - Update README
-9. **Validate** - Ensure everything works
+7. **Implementation Review** - Identify low-risk, high-reward code improvements
+8. **Test Coverage** - Ensure meaningful tests for pure utilities
+9. **Document** - Update README
+10. **Validate** - Ensure everything works
 
 ---
 
@@ -237,7 +238,81 @@ For components with early returns (`if (!x) return null`):
 
 ---
 
-## Phase 7: Test Coverage
+## Phase 7: Implementation Review
+
+⚠️ **STOP AND INTERACT** ⚠️
+
+Review the actual implementation for **low-risk, high-reward** improvements. This is NOT about changing architecture - it's about polishing the code within its current structure.
+
+### What to Look For
+
+**✅ Low-Risk Improvements (propose these):**
+
+| Category | Examples |
+|----------|----------|
+| **Duplicated logic** | Same validation in multiple places → extract to shared function |
+| **Missing error handling** | Unhandled promise rejections, missing try/catch for I/O |
+| **Type safety gaps** | `any` types that could be specific, missing null checks |
+| **Dead code** | Unused imports, unreachable branches, commented-out code |
+| **Simplifications** | Overly complex conditionals, nested ternaries, verbose patterns |
+| **Consistency** | Mixed naming conventions, inconsistent error message formats |
+| **Performance quick wins** | Obvious re-computations, missing early returns |
+
+**❌ Out of Scope (do NOT propose):**
+
+- Architectural changes (different state management, new abstractions)
+- Behavior changes (unless fixing obvious bugs)
+- Speculative optimizations without evidence of problems
+- Stylistic preferences that don't improve clarity
+- Changes that would require extensive testing
+
+### Risk Assessment Framework
+
+For each potential improvement, assess:
+
+```
+[IMPROVEMENT]: Brief description
+[RISK]: Low / Medium / High
+[REWARD]: Code clarity / Error handling / Type safety / Performance / Maintainability
+[SCOPE]: Number of files/lines affected
+[RECOMMENDATION]: Implement / Skip / Ask user
+```
+
+**Only propose improvements where Risk=Low and Reward is clear.**
+
+### Present Findings
+
+Share your analysis:
+
+```markdown
+### Implementation Review Findings
+
+**1. [Category]: [Brief description]**
+- Current: [what exists now]
+- Proposed: [what it would become]
+- Risk: Low | Reward: [benefit]
+- Files: [affected files]
+
+**2. [Category]: [Brief description]**
+...
+
+**Skip List** (noted but not recommending):
+- [Item]: [reason for skipping - too risky, uncertain benefit, etc.]
+```
+
+Then ask: **"Would you like me to implement any of these improvements?"**
+
+### Implementation Guidelines
+
+When implementing approved improvements:
+1. Make one logical change at a time
+2. Run tests after each change
+3. Keep changes minimal and focused
+4. Preserve existing behavior exactly (unless fixing bugs)
+
+---
+
+## Phase 8: Test Coverage
 
 Ensure meaningful test coverage for **pure utility functions**. Tests should verify behavior, not implementation.
 
@@ -306,7 +381,7 @@ For each utility file, ensure tests cover:
 
 ---
 
-## Phase 8: Documentation
+## Phase 9: Documentation
 
 Write/update README.md with:
 
@@ -339,7 +414,7 @@ feature-name/
 
 ---
 
-## Phase 9: Validation & Commit
+## Phase 10: Validation & Commit
 
 1. Run `npm run check-all` - must pass with 0 errors
 2. Review changes with user if significant restructuring occurred
