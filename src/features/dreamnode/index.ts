@@ -5,7 +5,7 @@
 export * from './store/slice';
 
 // Commands
-export { registerDreamNodeCommands } from './commands';
+export { registerDreamNodeCommands, revealContainingDreamNode, convertFolderToDreamNode } from './commands';
 
 // Types
 export * from './types/dreamnode';

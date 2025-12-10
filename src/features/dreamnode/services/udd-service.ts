@@ -141,4 +141,69 @@ export class UDDService {
     const udd = await this.readUDD(dreamNodePath);
     return udd.title;
   }
+
+  /**
+   * Check if a .udd file exists at the given path
+   */
+  static uddExists(dreamNodePath: string): boolean {
+    const uddPath = path.join(dreamNodePath, '.udd');
+    return fs.existsSync(uddPath);
+  }
+
+  /**
+   * Create a new .udd file with the given data
+   * Use this for initializing new DreamNodes
+   */
+  static async createUDD(dreamNodePath: string, data: {
+    uuid: string;
+    title: string;
+    type: 'dream' | 'dreamer';
+    dreamTalk?: string;
+  }): Promise<void> {
+    const udd: UDDFile = {
+      uuid: data.uuid,
+      title: data.title,
+      type: data.type,
+      dreamTalk: data.dreamTalk || '',
+      submodules: [],
+      supermodules: []
+    };
+    await this.writeUDD(dreamNodePath, udd);
+  }
+
+  /**
+   * Ensure a .udd file has all required fields, adding defaults if missing
+   * Returns true if the file was updated
+   */
+  static async ensureRequiredFields(dreamNodePath: string): Promise<boolean> {
+    const udd = await this.readUDD(dreamNodePath);
+    let updated = false;
+
+    if (!udd.submodules) {
+      udd.submodules = [];
+      updated = true;
+    }
+    if (!udd.supermodules) {
+      udd.supermodules = [];
+      updated = true;
+    }
+    if (!udd.dreamTalk) {
+      udd.dreamTalk = '';
+      updated = true;
+    }
+
+    if (updated) {
+      await this.writeUDD(dreamNodePath, udd);
+    }
+    return updated;
+  }
+
+  /**
+   * Update the radicleId field in a .udd file
+   */
+  static async setRadicleId(dreamNodePath: string, radicleId: string): Promise<void> {
+    const udd = await this.readUDD(dreamNodePath);
+    udd.radicleId = radicleId;
+    await this.writeUDD(dreamNodePath, udd);
+  }
 }

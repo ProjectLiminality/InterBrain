@@ -4,13 +4,18 @@
  * Commands for DreamNode interactions:
  * - Flip animations (front/back)
  * - Full-screen views (DreamTalk/DreamSong)
+ * - Reveal containing DreamNode (from file explorer)
+ * - Convert folder to DreamNode
  */
 
-import { Plugin } from 'obsidian';
+import { Plugin, TFolder, TAbstractFile } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
 import { getConversationRecordingService } from '../conversational-copilot/services/conversation-recording-service';
+import { DreamNodeConversionService } from './services/dreamnode-conversion-service';
+import { UDDService } from './services/udd-service';
+import { DREAMSPACE_VIEW_TYPE } from '../../core/components/DreamspaceView';
 
 export function registerDreamNodeCommands(
   plugin: Plugin,
@@ -225,4 +230,140 @@ export function registerDreamNodeCommands(
       }
     }
   });
+
+  // ========================================
+  // DreamNode Navigation Commands
+  // ========================================
+
+  // Reveal Containing DreamNode - Navigate to the DreamNode containing the selected file
+  plugin.addCommand({
+    id: 'reveal-containing-dreamnode',
+    name: 'Reveal Containing DreamNode',
+    callback: async () => {
+      const activeFile = plugin.app.workspace.getActiveFile();
+      if (!activeFile) {
+        uiService.showWarning('No file selected');
+        return;
+      }
+
+      await revealContainingDreamNode(plugin, uiService, activeFile);
+    }
+  });
+
+  // ========================================
+  // DreamNode Conversion Commands
+  // ========================================
+
+  // Convert Folder to DreamNode - Convert a regular folder into a DreamNode
+  plugin.addCommand({
+    id: 'convert-to-dreamnode',
+    name: 'Convert Folder to DreamNode',
+    callback: async () => {
+      // This command is typically triggered from context menu, not command palette
+      // Show info if no folder is selected
+      uiService.showInfo('Right-click a folder in the file explorer to convert it to a DreamNode');
+    }
+  });
+}
+
+// ========================================
+// Exported functions for context menu integration
+// ========================================
+
+/**
+ * Reveal the DreamNode containing a file/folder in DreamSpace
+ */
+export async function revealContainingDreamNode(
+  plugin: Plugin,
+  uiService: UIService,
+  file: TAbstractFile
+): Promise<void> {
+  const conversionService = new DreamNodeConversionService(plugin.app, plugin.manifest);
+
+  console.log('[RevealDreamNode] Starting search for:', file.path);
+
+  // Find the containing DreamNode by searching for .udd file
+  const dreamNodePath = conversionService.findContainingDreamNode(file);
+
+  console.log('[RevealDreamNode] Found DreamNode path:', dreamNodePath);
+
+  if (!dreamNodePath) {
+    uiService.showInfo('No DreamNode found for this item');
+    return;
+  }
+
+  // Read the UUID from the .udd file using UDDService
+  let uuid: string;
+
+  try {
+    uuid = await UDDService.getUUID(dreamNodePath);
+    console.log('[RevealDreamNode] Read UUID from .udd:', uuid);
+  } catch (error) {
+    console.error('[RevealDreamNode] Failed to read UUID from .udd:', error);
+    uiService.showError('Failed to read DreamNode UUID');
+    return;
+  }
+
+  // Find the DreamNode by UUID (which is the node ID)
+  const store = useInterBrainStore.getState();
+  const nodeData = store.dreamNodes.get(uuid);
+
+  if (!nodeData) {
+    console.error('[RevealDreamNode] No matching node found for UUID:', uuid);
+    console.log('[RevealDreamNode] Available UUIDs:', Array.from(store.dreamNodes.keys()));
+    const path = require('path');
+    uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
+    return;
+  }
+
+  const targetNode = nodeData.node;
+  console.log('[RevealDreamNode] Found target node:', targetNode.name);
+
+  // Open DreamSpace if not already open
+  const dreamspaceLeaf = plugin.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
+  if (!dreamspaceLeaf) {
+    const leaf = plugin.app.workspace.getLeaf(true);
+    await leaf.setViewState({
+      type: DREAMSPACE_VIEW_TYPE,
+      active: true
+    });
+    plugin.app.workspace.revealLeaf(leaf);
+    // Wait a bit for DreamSpace to initialize
+    await new Promise(resolve => setTimeout(resolve, 300));
+  } else {
+    // Focus existing DreamSpace
+    plugin.app.workspace.revealLeaf(dreamspaceLeaf);
+  }
+
+  // Select the node
+  store.setSelectedNode(targetNode);
+
+  // Switch to liminal-web layout to show the selected node
+  if (store.spatialLayout !== 'liminal-web') {
+    store.setSpatialLayout('liminal-web');
+  }
+
+  uiService.showInfo(`Revealed: ${targetNode.name}`);
+}
+
+/**
+ * Convert a folder to a DreamNode
+ */
+export async function convertFolderToDreamNode(
+  plugin: Plugin,
+  uiService: UIService,
+  folder: TFolder,
+  radiclePassphrase?: string
+): Promise<void> {
+  const conversionService = new DreamNodeConversionService(plugin.app, plugin.manifest);
+
+  const result = await conversionService.convertToDreamNode(folder, {
+    radiclePassphrase
+  });
+
+  if (result.success) {
+    uiService.showInfo(`Successfully converted "${result.title}" to DreamNode`);
+  } else {
+    uiService.showError(`Failed to convert to DreamNode: ${result.error}`);
+  }
 }

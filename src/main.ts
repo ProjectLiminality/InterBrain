@@ -1,6 +1,4 @@
 import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
-import * as fs from 'fs';
-import * as path from 'path';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
 import { VaultService } from './core/services/vault-service';
@@ -12,10 +10,14 @@ import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/LinkF
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
 import { calculateFibonacciSpherePositions } from './features/constellation-layout';
-import { DreamNode } from './features/dreamnode';
+import {
+  DreamNode,
+  registerDreamNodeCommands,
+  revealContainingDreamNode,
+  convertFolderToDreamNode
+} from './features/dreamnode';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerCameraCommands } from './core/commands/camera-commands';
-import { registerDreamNodeCommands } from './features/dreamnode';
 import { registerSearchCommands } from './features/search';
 import { registerConstellationDebugCommands } from './features/constellation-layout';
 import { registerEditModeCommands } from './features/dreamnode-editor';
@@ -494,6 +496,7 @@ export default class InterBrainPlugin extends Plugin {
           console.log(`💾 [Save Changes] Starting save workflow for: ${currentNode.name}`);
           const { exec } = require('child_process');
           const { promisify } = require('util');
+          const path = require('path');
           const execAsync = promisify(exec);
           const fullRepoPath = path.join(this.vaultService.getVaultPath(), currentNode.repoPath);
 
@@ -1159,7 +1162,7 @@ export default class InterBrainPlugin extends Plugin {
             .setTitle('Reveal in DreamSpace')
             .setIcon('target')
             .onClick(async () => {
-              await this.revealContainingDreamNode(file);
+              await revealContainingDreamNode(this, this.uiService, file);
             });
         });
 
@@ -1170,375 +1173,13 @@ export default class InterBrainPlugin extends Plugin {
               .setTitle('Convert to DreamNode')
               .setIcon('git-fork')
               .onClick(async () => {
-                await this.convertToDreamNode(file);
+                const passphrase = (this as any).settings?.radiclePassphrase;
+                await convertFolderToDreamNode(this, this.uiService, file, passphrase);
               });
           });
         }
       })
     );
-  }
-
-  /**
-   * Intelligently find and reveal the containing DreamNode for any file or folder
-   */
-  private async revealContainingDreamNode(file: TAbstractFile): Promise<void> {
-    const vaultPath = (this.app.vault.adapter as any).basePath;
-
-    console.log('[RevealDreamNode] Starting search for:', file.path);
-
-    // Find the containing DreamNode by searching for .udd file
-    const dreamNodePath = await this.findContainingDreamNode(file, vaultPath);
-
-    console.log('[RevealDreamNode] Found DreamNode path:', dreamNodePath);
-
-    if (!dreamNodePath) {
-      this.uiService.showInfo('No DreamNode found for this item');
-      return;
-    }
-
-    // Read the UUID from the .udd file
-    const uddPath = path.join(dreamNodePath, '.udd');
-    let uuid: string;
-
-    try {
-      const uddContent = fs.readFileSync(uddPath, 'utf-8');
-      const uddData = JSON.parse(uddContent);
-      uuid = uddData.uuid;
-      console.log('[RevealDreamNode] Read UUID from .udd:', uuid);
-    } catch (error) {
-      console.error('[RevealDreamNode] Failed to read UUID from .udd:', error);
-      this.uiService.showError('Failed to read DreamNode UUID');
-      return;
-    }
-
-    if (!uuid) {
-      console.error('[RevealDreamNode] No UUID found in .udd file');
-      this.uiService.showError('Invalid DreamNode: missing UUID');
-      return;
-    }
-
-    // Find the DreamNode by UUID (which is the node ID)
-    const store = useInterBrainStore.getState();
-    const nodeData = store.dreamNodes.get(uuid);
-
-    if (!nodeData) {
-      console.error('[RevealDreamNode] No matching node found for UUID:', uuid);
-      console.log('[RevealDreamNode] Available UUIDs:', Array.from(store.dreamNodes.keys()));
-      this.uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
-      return;
-    }
-
-    const targetNode = nodeData.node;
-    console.log('[RevealDreamNode] Found target node:', targetNode.name);
-
-    // Open DreamSpace if not already open
-    const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-    if (!dreamspaceLeaf) {
-      const leaf = this.app.workspace.getLeaf(true);
-      await leaf.setViewState({
-        type: DREAMSPACE_VIEW_TYPE,
-        active: true
-      });
-      this.app.workspace.revealLeaf(leaf);
-      // Wait a bit for DreamSpace to initialize
-      await new Promise(resolve => setTimeout(resolve, 300));
-    } else {
-      // Focus existing DreamSpace
-      this.app.workspace.revealLeaf(dreamspaceLeaf);
-    }
-
-    // Select the node
-    store.setSelectedNode(targetNode);
-
-    // Switch to liminal-web layout to show the selected node
-    if (store.spatialLayout !== 'liminal-web') {
-      store.setSpatialLayout('liminal-web');
-    }
-
-    this.uiService.showInfo(`Revealed: ${targetNode.name}`);
-  }
-
-  /**
-   * Find the containing DreamNode by searching upward for .udd file
-   * Returns the absolute path to the DreamNode folder, or null if not found
-   */
-  private async findContainingDreamNode(file: TAbstractFile, vaultPath: string): Promise<string | null> {
-    // Start from the file's directory (or the folder itself if it's a folder)
-    let currentPath: string;
-
-    if (file instanceof TFolder) {
-      // For folders: first check if this folder has .udd directly inside
-      currentPath = path.join(vaultPath, file.path);
-      const uddInFolder = path.join(currentPath, '.udd');
-      console.log('[FindDreamNode] Checking folder for .udd:', uddInFolder);
-      if (fs.existsSync(uddInFolder)) {
-        console.log('[FindDreamNode] Found .udd in folder!');
-        return currentPath;
-      }
-      // If not, check parent (same level as this folder)
-      currentPath = path.dirname(currentPath);
-      console.log('[FindDreamNode] Not found in folder, moving to parent:', currentPath);
-    } else {
-      // For files: start from parent directory
-      currentPath = path.join(vaultPath, path.dirname(file.path));
-      console.log('[FindDreamNode] File detected, starting from parent:', currentPath);
-    }
-
-    // Walk up the tree looking for .udd file
-    let iterations = 0;
-    while (currentPath.startsWith(vaultPath)) {
-      iterations++;
-      const uddPath = path.join(currentPath, '.udd');
-      console.log(`[FindDreamNode] Iteration ${iterations}: Checking ${uddPath}`);
-
-      if (fs.existsSync(uddPath)) {
-        console.log('[FindDreamNode] Found .udd file!');
-        return currentPath;
-      }
-
-      // Move up one directory
-      const parentPath = path.dirname(currentPath);
-
-      // Stop if we've reached the vault root or can't go higher
-      if (parentPath === currentPath || parentPath === vaultPath) {
-        console.log('[FindDreamNode] Reached vault root, stopping');
-        break;
-      }
-
-      currentPath = parentPath;
-    }
-
-    console.log('[FindDreamNode] No .udd file found after', iterations, 'iterations');
-    return null;
-  }
-
-  /**
-   * Convert a regular directory into a DreamNode (idempotent)
-   * Fills in any missing pieces: .git repo, .udd file, hooks, README, LICENSE
-   */
-  private async convertToDreamNode(folder: TFolder): Promise<void> {
-    const vaultPath = (this.app.vault.adapter as any).basePath;
-    const folderPath = path.join(vaultPath, folder.path);
-    const folderName = path.basename(folder.path);
-
-    // Set up execAsync for git operations
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    console.log('[ConvertToDreamNode] Starting conversion for:', folderPath);
-
-    try {
-      // Check what's already present
-      const hasGit = fs.existsSync(path.join(folderPath, '.git'));
-      const hasUdd = fs.existsSync(path.join(folderPath, '.udd'));
-      const hasReadme = fs.existsSync(path.join(folderPath, 'README.md'));
-      const hasLicense = fs.existsSync(path.join(folderPath, 'LICENSE'));
-
-      console.log('[ConvertToDreamNode] Current state:', { hasGit, hasUdd, hasReadme, hasLicense });
-
-      // Generate or read UUID
-      let uuid: string;
-      let title: string = folderName;
-      let type: 'dream' | 'dreamer' = 'dream';
-
-      if (hasUdd) {
-        // Read existing .udd file
-        const uddContent = fs.readFileSync(path.join(folderPath, '.udd'), 'utf-8');
-        const uddData = JSON.parse(uddContent);
-        uuid = uddData.uuid;
-        title = uddData.title || folderName;
-        type = uddData.type || 'dream';
-        console.log('[ConvertToDreamNode] Using existing UUID from .udd:', uuid);
-      } else {
-        // Generate new UUID
-        const crypto = require('crypto');
-        uuid = crypto.randomUUID();
-        console.log('[ConvertToDreamNode] Generated new UUID:', uuid);
-      }
-
-      // Initialize git if not present
-      if (!hasGit) {
-        console.log('[ConvertToDreamNode] Initializing git with template...');
-        const templatePath = path.join(vaultPath, '.obsidian', 'plugins', this.manifest.id, 'DreamNode-template');
-        await execAsync(`git init --template="${templatePath}" "${folderPath}"`);
-
-        // Make hooks executable
-        const hooksDir = path.join(folderPath, '.git', 'hooks');
-        if (fs.existsSync(hooksDir)) {
-          await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: folderPath });
-          await execAsync(`chmod +x "${path.join(hooksDir, 'post-commit')}"`, { cwd: folderPath });
-          console.log('[ConvertToDreamNode] Made hooks executable');
-        }
-      }
-
-      // Create/update .udd file
-      if (!hasUdd) {
-        console.log('[ConvertToDreamNode] Creating .udd file...');
-        const uddContent = {
-          uuid,
-          title,
-          type,
-          dreamTalk: '',
-          submodules: [],
-          supermodules: []
-        };
-        fs.writeFileSync(path.join(folderPath, '.udd'), JSON.stringify(uddContent, null, 2));
-      } else {
-        // Validate existing .udd has all required fields
-        const uddPath = path.join(folderPath, '.udd');
-        const uddContent = JSON.parse(fs.readFileSync(uddPath, 'utf-8'));
-        let updated = false;
-
-        // Ensure all required fields exist
-        if (!uddContent.submodules) {
-          uddContent.submodules = [];
-          updated = true;
-        }
-        if (!uddContent.supermodules) {
-          uddContent.supermodules = [];
-          updated = true;
-        }
-        if (!uddContent.dreamTalk) {
-          uddContent.dreamTalk = '';
-          updated = true;
-        }
-
-        if (updated) {
-          fs.writeFileSync(uddPath, JSON.stringify(uddContent, null, 2));
-          console.log('[ConvertToDreamNode] Updated .udd with missing fields');
-        }
-      }
-
-      // Create README if not present
-      if (!hasReadme) {
-        console.log('[ConvertToDreamNode] Creating README.md...');
-        const readmeContent = `# ${title}\n\nA DreamNode in the InterBrain network.\n`;
-        fs.writeFileSync(path.join(folderPath, 'README.md'), readmeContent);
-      }
-
-      // Create LICENSE if not present
-      if (!hasLicense) {
-        console.log('[ConvertToDreamNode] Creating LICENSE...');
-        const licenseContent = `GNU AFFERO GENERAL PUBLIC LICENSE
-Version 3, 19 November 2007
-
-This DreamNode is licensed under the GNU AGPL v3.
-See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
-`;
-        fs.writeFileSync(path.join(folderPath, 'LICENSE'), licenseContent);
-      }
-
-      // Commit changes if there are any uncommitted files
-      const gitStatus = await execAsync('git status --porcelain', { cwd: folderPath });
-      if (gitStatus.stdout.trim()) {
-        console.log('[ConvertToDreamNode] Committing DreamNode initialization...');
-        await execAsync('git add -A', { cwd: folderPath });
-        try {
-          await execAsync(`git commit -m "Convert to DreamNode: ${title}"`, { cwd: folderPath });
-        } catch (commitError: any) {
-          // Verify commit succeeded (hooks may output to stderr)
-          try {
-            await execAsync('git rev-parse HEAD', { cwd: folderPath });
-            console.log('[ConvertToDreamNode] Commit verified successful');
-          } catch {
-            throw commitError;
-          }
-        }
-      } else {
-        console.log('[ConvertToDreamNode] No uncommitted changes, skipping commit');
-      }
-
-      // Initialize Radicle if not already initialized
-      const hasRadicle = fs.existsSync(path.join(folderPath, '.rad'));
-      if (!hasRadicle) {
-        console.log('[ConvertToDreamNode] Initializing Radicle repository...');
-        try {
-          const settings = (this as any).settings;
-          const passphrase = settings?.radiclePassphrase;
-          const process = require('process');
-          const env = { ...process.env };
-          if (passphrase) {
-            env.RAD_PASSPHRASE = passphrase;
-          }
-
-          const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
-          const timestamp = new Date().toISOString();
-          const description = `${nodeTypeLabel} ${timestamp}`;
-
-          const { spawn } = require('child_process');
-          const radCommand = 'rad'; // Assume rad is in PATH
-
-          const radInitPromise = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-            const child = spawn(radCommand, [
-              'init',
-              folderPath,
-              '--private',
-              '--name', folderName,
-              '--default-branch', 'main',
-              '--description', description,
-              '--no-confirm',
-              '--no-seed'
-            ], {
-              env,
-              cwd: folderPath,
-              stdio: ['pipe', 'pipe', 'pipe']
-            });
-
-            let stdout = '';
-            let stderr = '';
-
-            child.stdout?.on('data', (data: any) => {
-              stdout += data.toString();
-            });
-
-            child.stderr?.on('data', (data: any) => {
-              stderr += data.toString();
-            });
-
-            child.on('close', (code: number) => {
-              if (code === 0) {
-                resolve({ stdout, stderr });
-              } else {
-                reject(new Error(`rad init exited with code ${code}`));
-              }
-            });
-
-            child.on('error', reject);
-            child.stdin?.end();
-          });
-
-          const radResult = await radInitPromise;
-
-          // Extract and save RID
-          const ridMatch = radResult.stdout.match(/rad:z[a-zA-Z0-9]+/);
-          if (ridMatch) {
-            const radicleId = ridMatch[0];
-            const uddPath = path.join(folderPath, '.udd');
-            const uddContent = JSON.parse(fs.readFileSync(uddPath, 'utf-8'));
-            uddContent.radicleId = radicleId;
-            fs.writeFileSync(uddPath, JSON.stringify(uddContent, null, 2));
-
-            await execAsync('git add .udd', { cwd: folderPath });
-            await execAsync('git commit -m "Add Radicle ID to DreamNode"', { cwd: folderPath });
-            console.log('[ConvertToDreamNode] Added Radicle ID:', radicleId);
-          }
-        } catch (radError) {
-          console.warn('[ConvertToDreamNode] Radicle init failed (continuing anyway):', radError);
-        }
-      }
-
-      // Refresh the vault to pick up the new DreamNode
-      console.log('[ConvertToDreamNode] Rescanning vault...');
-      await serviceManager.scanVault();
-
-      this.uiService.showInfo(`Successfully converted "${title}" to DreamNode`);
-      console.log('[ConvertToDreamNode] Conversion complete!');
-
-    } catch (error) {
-      console.error('[ConvertToDreamNode] Conversion failed:', error);
-      this.uiService.showError(`Failed to convert to DreamNode: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   }
 
   // Helper method to get all available nodes (used by undo/redo)

@@ -71,6 +71,47 @@ React's Rules of Hooks require hooks to be called in the same order every render
 When consolidating components, ensure `useCallback`, `useEffect`, `useState` etc.
 are all placed before any conditional `return null` statements.
 
+### 4. Filesystem Operations Architecture
+**Only the dreamnode feature should write to the vault. Other features delegate to DreamNode services.**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Other Features                        │
+│  (dreamweaving, social-resonance, github-publishing,    │
+│   uri-handler, dreamnode-editor, etc.)                  │
+└──────────────────────┬──────────────────────────────────┘
+                       │ calls (for vault writes)
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│              DreamNode Feature Services                  │
+│  GitDreamNodeService, UDDService                        │
+│  (owns all vault DreamNode read/write operations)       │
+└──────────────────────┬──────────────────────────────────┘
+                       │ uses
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                   VaultService                           │
+│  (thin wrapper for fs operations, path resolution)       │
+│  (located in core/services - only place with fs import) │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Check for violations:**
+- Search for `require('fs')` or `import.*fs` outside of `core/services/vault-service.ts` and `dreamnode/`
+- Search for `fs.writeFileSync`, `fs.mkdirSync`, `fsPromises.writeFile` in feature code
+- Features reading .udd files should use UDDService
+- Features creating/modifying DreamNodes should use GitDreamNodeService
+
+**Acceptable exceptions:**
+- Reading/writing temp files outside vault (e.g., email export scripts)
+- Checking external tool paths (e.g., Python venv existence)
+- Operations on files outside the vault entirely
+
+**When violations are found:**
+1. Identify if the operation is on DreamNode data (UDD, canvas, media, relationships)
+2. If yes → add method to appropriate DreamNode service and call that instead
+3. If no (temp files, external tools) → use VaultService if in-vault, or direct fs if external
+
 ---
 
 ## Phase 1: Discovery
