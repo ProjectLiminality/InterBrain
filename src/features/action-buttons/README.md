@@ -1,4 +1,4 @@
-# Radial Buttons Feature
+# Action Buttons Feature
 
 **Purpose**: Option-key triggered circular button menu around selected DreamNodes in 3D space.
 
@@ -6,13 +6,17 @@
 
 Displays configurable action buttons in an elegant ring pattern around the selected DreamNode when Option/Alt key is held. Each button executes an Obsidian command and can be conditionally shown/disabled based on node state.
 
-## Key Files
+## Directory Structure
 
-- **`radial-button-config.tsx`** - Button configuration array with icon names, command IDs, conditional rendering logic, and GitHub access checking for follow-only repos
-- **`RadialButtonRing3D.tsx`** - Main 3D ring component with bidirectional slide animations (enter/exit), position calculation, and HTML/Billboard-based button rendering
-- **`ActiveVideoCallButton.tsx`** - Persistent "end call" button shown during copilot mode at fixed position (independent of Option key)
-- **`radial-buttons-slice.ts`** - Zustand state slice tracking `isActive`, `buttonCount`, and `optionKeyPressed` hardware state
-- **`index.ts`** - Public exports
+```
+action-buttons/
+├── radial-button-config.tsx   # Button configuration array with icons, commands, conditional logic
+├── RadialButtonRing3D.tsx     # Main 3D ring component with animations
+├── ActiveVideoCallButton.tsx  # Persistent "end call" button during copilot mode
+├── radial-buttons-slice.ts    # Zustand state slice
+├── index.ts                   # Barrel export
+└── README.md
+```
 
 ## Main Exports
 

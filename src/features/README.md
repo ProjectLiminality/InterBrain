@@ -133,7 +133,7 @@ export { registerDreamNodeCommands } from './commands';
 | [github-publishing](./github-publishing/README.md) | Publish nodes to GitHub | Medium |
 | [video-calling](./video-calling/README.md) | WebRTC video call integration | Medium |
 | **UI & System** | | |
-| [radial-buttons](./radial-buttons/README.md) | Radial action menu around nodes | Low |
+| [action-buttons](./action-buttons/README.md) | Action menu around nodes | Low |
 | [realtime-transcription](./realtime-transcription/README.md) | Voice transcription via Python backend | Medium |
 | [settings](./settings/README.md) | Plugin settings tab | Low |
 | [updates](./updates/README.md) | Plugin update checking | Low |
