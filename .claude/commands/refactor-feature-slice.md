@@ -13,9 +13,9 @@ This refactoring follows a **Music-First** approach:
 1. **Understand** - Read and analyze the current state
 2. **Present Understanding** - Share your interpretation of the feature's purpose
 3. **Clarify with User** - Get conceptual corrections and insights
-4. **Review Chunking** - Identify opportunities for better organization
+4. **Review Chunking** - Identify opportunities for better organization (including orphan file consolidation)
 5. **Implement** - Make structural changes
-6. **Clean Up** - Remove obsolete logging, enforce UI→Commands pattern
+6. **Clean Up** - Remove obsolete logging, enforce UI→Commands pattern, audit commands.ts
 7. **Implementation Review** - Identify low-risk, high-reward code improvements
 8. **Test Coverage** - Ensure meaningful tests for pure utilities
 9. **Document** - Update README
@@ -176,6 +176,21 @@ Based on your understanding and user clarification, analyze the chunking:
 - Is there logic that should be extracted to utilities?
 - Is there state management that should be consolidated?
 - Are the file names clear about what each file does?
+- **Are there orphan `.ts` files at root level that should be organized?**
+
+### Orphan File Consolidation Rule
+**Files at the feature root level should be limited to:**
+- `index.ts` (barrel export)
+- `commands.ts` (Obsidian commands)
+- `types.ts` (single type file - otherwise use `types/` directory)
+- Main orchestrator file (e.g., `ConstellationLayout.ts`)
+- `README.md`
+
+**Pure utility/algorithm files should go in `utils/`:**
+- Stateless functions (math, parsing, validation)
+- Algorithm implementations
+- Helper functions
+- Use **PascalCase** naming: `Clustering.ts`, `ForceDirected.ts`
 
 ### Present Opportunities
 Share your analysis:
@@ -191,6 +206,9 @@ Share your analysis:
    - Could extract [X] into a utility
    - Could extract [Y] into a separate component
    - Recommendation: [your suggestion]
+
+3. **Orphan files at root**: [List any .ts files at root that aren't index/commands/types/main orchestrator]
+   - Recommendation: Move to utils/ with PascalCase naming
 ```
 
 Ask the user: **"Do you want to adjust how this feature is chunked before we proceed with structural changes?"**
@@ -276,6 +294,48 @@ grep -n "console.log" src/features/[feature-name]/
 For components with early returns (`if (!x) return null`):
 - Ensure ALL hooks (useState, useEffect, useCallback, useRef, useMemo) are BEFORE the return
 - Add comment `// must be before early return - rules of hooks` for clarity
+
+### 6d. Commands.ts Audit
+
+**Commands should be minimal and user-focused.** Review `commands.ts` for:
+
+**Keep commands that:**
+- Are user-facing actions (command palette, keyboard shortcuts)
+- Provide genuine utility to users
+- Are part of the core feature workflow
+
+**Remove or convert commands that:**
+- Are debug/development-only (prefix with `[Dev]` and consider removing)
+- Duplicate functionality available elsewhere
+- Are internal operations that should be services
+- Have excessive console logging
+
+**Command Categories:**
+| Type | Action |
+|------|--------|
+| **User workflow** | Keep - essential for feature |
+| **Debug/Dev** | Keep with `[Dev]` prefix OR remove if not actively used |
+| **Export/dump** | Keep if users need it, otherwise remove |
+| **Statistics/info** | Keep if genuinely useful, consolidate if redundant |
+
+**Console Logging in Commands:**
+- Remove per-operation logging (e.g., "Starting scan...", "Scan complete")
+- Keep error logging (`console.error`)
+- Remove success logging (the UI notice is sufficient)
+- Remove diff/comparison logging unless actively debugging
+
+**Present audit results:**
+```
+**Commands.ts Audit:**
+
+Current commands: [list]
+
+Recommendations:
+1. [command-name]: [Keep/Remove/Modify] - [reason]
+2. ...
+
+Console logging to remove: [count] statements
+```
 
 ---
 
