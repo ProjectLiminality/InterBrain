@@ -77,16 +77,7 @@ export default function DreamNodeCreator3D() {
     }
   }, [draft?.dreamTalkFile, previewMedia]);
 
-  // Don't render if not in creation mode
-  if (!creationState.isCreating || !draft) {
-    return null;
-  }
-
-  const nodeColors = getNodeColors(draft.type);
-  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
-  const borderWidth = dreamNodeStyles.dimensions.borderWidth;
-
-  // Validation
+  // Validation (must be before early return - rules of hooks)
   const validateTitle = useCallback((title: string) => {
     const errors: Record<string, string> = {};
 
@@ -101,6 +92,15 @@ export default function DreamNodeCreator3D() {
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   }, [setValidationErrors]);
+
+  // Don't render if not in creation mode
+  if (!creationState.isCreating || !draft) {
+    return null;
+  }
+
+  const nodeColors = getNodeColors(draft.type);
+  const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
+  const borderWidth = dreamNodeStyles.dimensions.borderWidth;
 
   // Event handlers
   const handleTitleChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
