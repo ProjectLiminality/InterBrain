@@ -1,7 +1,6 @@
 import { StateCreator } from 'zustand';
-import { DreamNode } from '../dreamnode/types/dreamnode';
-import { FlipState } from '../dreamweaving/types/dreamsong';
-import { getDreamSongScrollPosition, restoreDreamSongScrollPosition } from '../dreamweaving/dreamweaving-slice';
+import { DreamNode } from '../../dreamnode/types/dreamnode';
+import { FlipState } from '../../dreamweaving/types/dreamsong';
 
 /**
  * Navigation history entry for undo/redo
@@ -11,7 +10,6 @@ export interface NavigationHistoryEntry {
   layout: 'constellation' | 'liminal-web';
   timestamp: number;
   flipState: FlipState | null;
-  scrollPosition: number | null;
 }
 
 /**
@@ -31,8 +29,7 @@ export const INITIAL_NAVIGATION_HISTORY: NavigationHistoryState = {
     nodeId: null,
     layout: 'constellation',
     timestamp: Date.now(),
-    flipState: null,
-    scrollPosition: null
+    flipState: null
   }],
   currentIndex: 0,
   maxHistorySize: 150
@@ -92,7 +89,7 @@ export const createLiminalWebSlice: StateCreator<
 
     // Trigger lazy media loading for node and 2-degree neighborhood
     if (node) {
-      import('../dreamnode/services/media-loading-service').then(({ getMediaLoadingService }) => {
+      import('../../dreamnode/services/media-loading-service').then(({ getMediaLoadingService }) => {
         try {
           const mediaLoadingService = getMediaLoadingService();
           mediaLoadingService.loadNodeWithNeighborhood(node.id);
@@ -117,8 +114,7 @@ export const createLiminalWebSlice: StateCreator<
         nodeId: node.id,
         layout: 'liminal-web',
         timestamp: Date.now(),
-        flipState: state.flipState.flipStates.get(node.id) || null,
-        scrollPosition: getDreamSongScrollPosition(node.id)
+        flipState: state.flipState.flipStates.get(node.id) || null
       };
 
       const { history, currentIndex, maxHistorySize } = state.navigationHistory;
@@ -163,9 +159,7 @@ export const createLiminalWebSlice: StateCreator<
       layout,
       timestamp: Date.now(),
       flipState: (nodeId && layout === 'liminal-web') ?
-        state.flipState.flipStates.get(nodeId) || null : null,
-      scrollPosition: (nodeId && layout === 'liminal-web') ?
-        getDreamSongScrollPosition(nodeId) : null
+        state.flipState.flipStates.get(nodeId) || null : null
     };
 
     const newHistory = currentIndex >= 0
@@ -254,16 +248,6 @@ export const createLiminalWebSlice: StateCreator<
         flipStates: updatedFlipStates,
         flippedNodeId: entry.flipState.isFlipped ? entry.nodeId : state.flipState.flippedNodeId
       };
-    }
-
-    if (entry.nodeId && entry.scrollPosition !== null) {
-      if (typeof setTimeout !== 'undefined') {
-        setTimeout(() => {
-          restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
-        }, 100);
-      } else {
-        restoreDreamSongScrollPosition(entry.nodeId!, entry.scrollPosition!);
-      }
     }
 
     return newState;

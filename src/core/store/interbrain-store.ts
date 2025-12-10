@@ -100,7 +100,7 @@ import {
   createLiminalWebSlice,
   NavigationHistoryEntry,
   NavigationHistoryState,
-} from '../../features/liminal-web-layout/liminal-web-slice';
+} from '../../features/liminal-web-layout/store/slice';
 
 // Type alias for spatial layout modes (the active view mode)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';

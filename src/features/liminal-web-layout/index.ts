@@ -1,10 +1,12 @@
 // Liminal Web Layout feature barrel export
-// Ring layout, relationship graph, and social relationship management
+// Ring layout, relationship graph, state management, and commands
 
-// Slice
-export * from './liminal-web-slice';
+// Store (state management)
+export * from './store/slice';
 
-// Layout
+// Layout algorithms
 export * from './relationship-graph';
 export * from './RingLayout';
-export * from './relationship-commands';
+
+// Commands
+export * from './commands';
