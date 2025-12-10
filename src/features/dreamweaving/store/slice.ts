@@ -1,11 +1,11 @@
 import { StateCreator } from 'zustand';
-import { DreamSongData } from './types/dreamsong';
+import { DreamSongData } from '../types/dreamsong';
 import {
   DreamSongRelationshipGraph,
   SerializableDreamSongGraph,
   serializeRelationshipGraph,
   deserializeRelationshipGraph
-} from './types/relationship';
+} from '../types/relationship';
 
 // Re-export relationship types for consumers
 export type { DreamSongRelationshipGraph, SerializableDreamSongGraph };

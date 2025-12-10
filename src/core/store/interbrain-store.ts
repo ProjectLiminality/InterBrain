@@ -34,7 +34,7 @@ import {
   extractDreamweavingPersistenceData,
   restoreDreamweavingPersistenceData,
   SerializableDreamSongGraph as DreamweavingSerializableGraph,
-} from '../../features/dreamweaving/dreamweaving-slice';
+} from '../../features/dreamweaving/store/slice';
 
 import {
   DreamNodeSlice,

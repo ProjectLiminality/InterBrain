@@ -2,7 +2,7 @@ import React from 'react';
 import { Perspective } from '../services/perspective-service';
 import { AudioClipPlayer } from './AudioClipPlayer';
 import separatorImage from '../../dreamweaving/assets/Separator.png';
-import styles from '../../dreamweaving/dreamsong.module.css';
+import styles from '../../dreamweaving/styles/dreamsong.module.css';
 
 interface PerspectivesSectionProps {
 	perspectives: Perspective[];

@@ -6,8 +6,10 @@
 
 ```
 dreamweaving/
+├── store/
+│   └── slice.ts                    # Zustand slice (cache, scroll position, relationship state)
 ├── components/
-│   ├── DreamSong.tsx              # Pure React renderer for DreamSong content (browser-safe)
+│   ├── DreamSong.tsx               # Pure React renderer for DreamSong content (browser-safe)
 │   ├── DreamSongWithExtensions.tsx # Wrapper with Obsidian-only extensions (perspectives, conversations)
 │   ├── DreamSongFullScreenView.ts  # Obsidian ItemView for fullscreen DreamSong display
 │   ├── LinkFileView.ts             # Custom view for .link files with YouTube thumbnails
@@ -32,12 +34,11 @@ dreamweaving/
 ├── types/
 │   ├── dreamsong.ts                # DreamSong blocks, media, parsing types
 │   └── relationship.ts             # Relationship graph types (source of truth for constellation-layout)
+├── styles/
+│   └── dreamsong.module.css        # DreamSong component styles
 ├── assets/
 │   └── Separator.png               # Visual separator for DreamSong sections
-├── commands.ts                     # 10 Obsidian commands (canvas, submodule, sync, layout)
-├── dreamweaving-slice.ts           # Zustand slice (cache, scroll position, relationship state)
-├── dreamsong.module.css            # DreamSong component styles
-├── link-file-commands.ts           # Commands for .link file handling in canvas
+├── commands.ts                     # All Obsidian commands (canvas, submodule, sync, layout, link files)
 ├── index.ts                        # Barrel export
 └── README.md
 ```
@@ -45,12 +46,11 @@ dreamweaving/
 ## Main Exports
 
 ```typescript
-// Slice (state management)
-export * from './dreamweaving-slice';
+// Store (state management)
+export { createDreamweavingSlice, DreamweavingSlice, ... } from './store/slice';
 
-// Commands
-export { registerDreamweavingCommands } from './commands';
-export { registerLinkFileCommands, enhanceFileSuggestions } from './link-file-commands';
+// Commands (includes link file commands)
+export { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './commands';
 
 // Types
 export * from './types/dreamsong';
@@ -136,6 +136,12 @@ Stateful orchestrators with side effects:
 - Canvas parsing and analysis
 - Git submodule operations
 - Relationship extraction
+
+### Layer 4: Store (`store/slice.ts`)
+Zustand state slice for:
+- DreamSong cache entries
+- Relationship graph state
+- Persistence serialization
 
 ## Integration Points
 

@@ -1,12 +1,22 @@
 // Dreamweaving feature exports
 // Transforms Obsidian canvas files into DreamSong story flows and manages git submodule relationships
 
-// Slice
-export * from './dreamweaving-slice';
+// Store (state management)
+// Note: slice re-exports some relationship types for backward compatibility
+export {
+  createDreamweavingSlice,
+  DreamweavingSlice,
+  DreamSongCacheEntry,
+  DreamSongRelationshipState,
+  INITIAL_DREAMSONG_RELATIONSHIP_STATE,
+  getDreamSongScrollPosition,
+  restoreDreamSongScrollPosition,
+  extractDreamweavingPersistenceData,
+  restoreDreamweavingPersistenceData
+} from './store/slice';
 
-// Commands
-export { registerDreamweavingCommands } from './commands';
-export { registerLinkFileCommands, enhanceFileSuggestions } from './link-file-commands';
+// Commands (includes link file commands)
+export { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions, EnhancedFileSuggest } from './commands';
 
 // Types
 export * from './types/dreamsong';
