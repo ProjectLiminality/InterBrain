@@ -5,7 +5,7 @@
 export * from './store/slice';
 
 // Commands
-export { ConstellationCommands, registerConstellationDebugCommands } from './commands';
+export { registerConstellationDebugCommands } from './commands';
 
 // Components
 export { default as ConstellationEdges, shouldShowConstellationEdges, useConstellationStats } from './components/ConstellationEdges';

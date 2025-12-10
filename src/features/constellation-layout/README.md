@@ -40,12 +40,12 @@ constellation-layout/
 ## Main Exports
 
 ```typescript
-// Store (state management)
+// Store (state management - positions and layout config only)
 export { createConstellationSlice, ConstellationSlice } from './store/slice';
-export type { ConstellationDataState } from './store/slice';
+export type { ConstellationLayoutState } from './store/slice';
 
-// Commands
-export { ConstellationCommands, registerConstellationDebugCommands } from './commands';
+// Commands (debug visualization only - scan command moved to dreamweaving)
+export { registerConstellationDebugCommands } from './commands';
 
 // Components
 export { default as ConstellationEdges } from './components/ConstellationEdges';

@@ -1,52 +1,53 @@
 import { StateCreator } from 'zustand';
 import {
-  DreamSongRelationshipGraph,
-  SerializableDreamSongGraph,
-  serializeRelationshipGraph,
-  deserializeRelationshipGraph
-} from '../types';
-import {
   FibonacciSphereConfig,
   DEFAULT_FIBONACCI_CONFIG
 } from '../utils/FibonacciSphereLayout';
 
 // Re-export types for convenience
-export type { DreamSongRelationshipGraph, SerializableDreamSongGraph, FibonacciSphereConfig };
-export { DEFAULT_FIBONACCI_CONFIG, serializeRelationshipGraph, deserializeRelationshipGraph };
+export type { FibonacciSphereConfig };
+export { DEFAULT_FIBONACCI_CONFIG };
+
+// Re-export relationship types from dreamweaving (the source of truth)
+export type {
+  DreamSongRelationshipGraph,
+  SerializableDreamSongGraph,
+} from '../../dreamweaving/types/relationship';
+export {
+  serializeRelationshipGraph,
+  deserializeRelationshipGraph
+} from '../../dreamweaving/types/relationship';
 
 /**
- * Constellation data state
+ * Constellation layout state
+ * Note: Relationship graph data is owned by dreamweaving slice, not here.
+ * This slice only owns computed positions and layout configuration.
  */
-export interface ConstellationDataState {
-  relationshipGraph: DreamSongRelationshipGraph | null;
-  lastScanTimestamp: number | null;
-  isScanning: boolean;
+export interface ConstellationLayoutState {
+  /** Computed positions from layout algorithm */
   positions: Map<string, [number, number, number]> | null;
+  /** Timestamp of last layout computation */
   lastLayoutTimestamp: number | null;
-  // Lightweight node metadata for instant startup rendering
+  /** Lightweight node metadata for instant startup rendering */
   nodeMetadata: Map<string, { name: string; type: string; uuid: string }> | null;
 }
 
 /**
- * Initial constellation data state
+ * Initial constellation layout state
  */
-export const INITIAL_CONSTELLATION_DATA: ConstellationDataState = {
-  relationshipGraph: null,
-  lastScanTimestamp: null,
-  isScanning: false,
+export const INITIAL_CONSTELLATION_LAYOUT: ConstellationLayoutState = {
   positions: null,
   lastLayoutTimestamp: null,
   nodeMetadata: null
 };
 
 /**
- * Constellation slice - owns constellation layout and relationship graph state
+ * Constellation slice - owns layout positions and configuration
+ * Note: Relationship graph data is read from dreamweaving slice, not stored here.
  */
 export interface ConstellationSlice {
-  // DreamSong relationship graph state
-  constellationData: ConstellationDataState;
-  setRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
-  setConstellationScanning: (scanning: boolean) => void;
+  // Layout positions and metadata (computed from relationship graph)
+  constellationData: ConstellationLayoutState;
   setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
   setNodeMetadata: (metadata: Map<string, { name: string; type: string; uuid: string }> | null) => void;
   clearConstellationData: () => void;
@@ -72,23 +73,7 @@ export const createConstellationSlice: StateCreator<
   [],
   ConstellationSlice
 > = (set) => ({
-  constellationData: INITIAL_CONSTELLATION_DATA,
-
-  setRelationshipGraph: (graph) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      relationshipGraph: graph,
-      lastScanTimestamp: graph ? Date.now() : null,
-      isScanning: false
-    }
-  })),
-
-  setConstellationScanning: (scanning) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      isScanning: scanning
-    }
-  })),
+  constellationData: INITIAL_CONSTELLATION_LAYOUT,
 
   setConstellationPositions: (positions) => set((state) => ({
     constellationData: {
@@ -106,7 +91,7 @@ export const createConstellationSlice: StateCreator<
   })),
 
   clearConstellationData: () => set(() => ({
-    constellationData: INITIAL_CONSTELLATION_DATA
+    constellationData: INITIAL_CONSTELLATION_LAYOUT
   })),
 
   // Fibonacci sphere configuration
@@ -132,16 +117,14 @@ const mapToArray = <K, V>(map: Map<K, V>): [K, V][] => Array.from(map.entries())
 const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
 
 /**
- * Extracts persistence data for the constellation slice
+ * Extracts persistence data for the constellation slice (positions only)
  */
 export function extractConstellationPersistenceData(state: ConstellationSlice) {
   return {
-    constellationData: (state.constellationData.relationshipGraph || state.constellationData.positions || state.constellationData.nodeMetadata) ? {
-      ...state.constellationData,
-      relationshipGraph: state.constellationData.relationshipGraph ?
-        serializeRelationshipGraph(state.constellationData.relationshipGraph) : null,
+    constellationData: (state.constellationData.positions || state.constellationData.nodeMetadata) ? {
       positions: state.constellationData.positions ?
         mapToArray(state.constellationData.positions) : null,
+      lastLayoutTimestamp: state.constellationData.lastLayoutTimestamp,
       nodeMetadata: state.constellationData.nodeMetadata ?
         mapToArray(state.constellationData.nodeMetadata) : null
     } : null,
@@ -153,25 +136,22 @@ export function extractConstellationPersistenceData(state: ConstellationSlice) {
  */
 export function restoreConstellationPersistenceData(persistedData: {
   constellationData?: {
-    relationshipGraph: SerializableDreamSongGraph | null;
-    lastScanTimestamp: number | null;
-    isScanning: boolean;
     positions: [string, [number, number, number]][] | null;
     lastLayoutTimestamp: number | null;
     nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
+    // Legacy fields for migration (will be ignored, data now in dreamweaving slice)
+    relationshipGraph?: unknown;
+    lastScanTimestamp?: unknown;
+    isScanning?: unknown;
   } | null;
 }): Partial<ConstellationSlice> {
   if (!persistedData.constellationData) {
-    return { constellationData: INITIAL_CONSTELLATION_DATA };
+    return { constellationData: INITIAL_CONSTELLATION_LAYOUT };
   }
 
   try {
     return {
       constellationData: {
-        relationshipGraph: persistedData.constellationData.relationshipGraph ?
-          deserializeRelationshipGraph(persistedData.constellationData.relationshipGraph) : null,
-        lastScanTimestamp: persistedData.constellationData.lastScanTimestamp,
-        isScanning: false,
         positions: persistedData.constellationData.positions ?
           arrayToMap(persistedData.constellationData.positions) : null,
         lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp,
@@ -181,6 +161,6 @@ export function restoreConstellationPersistenceData(persistedData: {
     };
   } catch (error) {
     console.warn('Failed to deserialize constellation data:', error);
-    return { constellationData: INITIAL_CONSTELLATION_DATA };
+    return { constellationData: INITIAL_CONSTELLATION_LAYOUT };
   }
 }

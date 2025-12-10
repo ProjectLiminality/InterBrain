@@ -6,6 +6,8 @@ import { CanvasLayoutService } from './services/canvas-layout-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
+import { DreamSongRelationshipService } from './dreamsong-relationship-service';
+import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from './types/relationship';
 
 /**
  * Dreamweaving commands for canvas analysis and submodule management
@@ -796,4 +798,98 @@ export function registerDreamweavingCommands(
     }
   });
 
+  // Scan DreamSong Relationships - Extract relationship graph from all DreamSongs
+  const relationshipService = new DreamSongRelationshipService(plugin);
+
+  plugin.addCommand({
+    id: 'scan-dreamsong-relationships',
+    name: 'Scan DreamSong Relationships',
+    callback: async () => {
+      const store = useInterBrainStore.getState();
+      store.setDreamSongRelationshipScanning(true);
+
+      const scanNotice = uiService.showInfo('Scanning DreamSong relationships...', 0);
+
+      try {
+        const result = await relationshipService.scanVaultForDreamSongRelationships(
+          DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
+        );
+
+        scanNotice.hide();
+
+        if (result.success && result.graph) {
+          const { metadata, nodes } = result.graph;
+          const existingGraph = store.dreamSongRelationships.graph;
+          const relationshipsChanged = hasDreamSongRelationshipsChanged(existingGraph, result.graph);
+
+          store.setDreamSongRelationshipGraph(result.graph);
+
+          const changeIndicator = relationshipsChanged ? 'UPDATED' : 'NO CHANGES';
+          const statsMessage = [
+            `DreamSong relationship scan complete! ${changeIndicator}`,
+            ``,
+            `Results:`,
+            `- ${metadata.totalNodes} DreamNodes discovered`,
+            `- ${metadata.totalDreamSongs} DreamSongs found`,
+            `- ${metadata.totalEdges} relationship edges created`,
+            `- ${metadata.standaloneNodes} standalone nodes`,
+            `- ${nodes.size - metadata.standaloneNodes} connected nodes`,
+            ``,
+            `Scan completed in ${result.stats.scanTimeMs}ms`,
+            relationshipsChanged
+              ? `Relationships changed - constellation will update`
+              : `No changes detected`
+          ].join('\n');
+
+          uiService.showSuccess(statsMessage, 8000);
+
+          if (relationshipsChanged) {
+            // Request constellation layout update
+            store.requestNavigation({ type: 'applyLayout' });
+          }
+
+        } else {
+          store.setDreamSongRelationshipScanning(false);
+          const errorMessage = result.error
+            ? `Scan failed: ${result.error.message}\n\nType: ${result.error.type}`
+            : 'Scan failed with unknown error';
+          uiService.showError(errorMessage, 8000);
+          console.error('[DreamSong Relationships] Scan failed:', result.error);
+        }
+
+      } catch (error) {
+        scanNotice.hide();
+        store.setDreamSongRelationshipScanning(false);
+        const errorMessage = `Unexpected error during scan: ${error instanceof Error ? error.message : error}`;
+        uiService.showError(errorMessage, 8000);
+        console.error('[DreamSong Relationships] Unexpected scan error:', error);
+      }
+    }
+  });
+
+}
+
+/**
+ * Check if DreamSong relationship graph has changed
+ */
+function hasDreamSongRelationshipsChanged(
+  oldGraph: DreamSongRelationshipGraph | null,
+  newGraph: DreamSongRelationshipGraph
+): boolean {
+  if (!oldGraph) return true;
+
+  if (oldGraph.edges.length !== newGraph.edges.length) return true;
+  if (oldGraph.metadata.totalNodes !== newGraph.metadata.totalNodes) return true;
+
+  const oldEdgeSignatures = new Set(oldGraph.edges.map(e => `${e.source}→${e.target}`));
+  const newEdgeSignatures = new Set(newGraph.edges.map(e => `${e.source}→${e.target}`));
+
+  for (const sig of newEdgeSignatures) {
+    if (!oldEdgeSignatures.has(sig)) return true;
+  }
+  for (const sig of oldEdgeSignatures) {
+    if (!newEdgeSignatures.has(sig)) return true;
+  }
+
+  return false;
 }

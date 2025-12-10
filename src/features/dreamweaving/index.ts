@@ -9,6 +9,10 @@ export { registerLinkFileCommands, enhanceFileSuggestions } from './link-file-co
 
 // Types
 export * from './types/dreamsong';
+export * from './types/relationship';
+
+// Services
+export { DreamSongRelationshipService } from './dreamsong-relationship-service';
 
 // Components
 export { DreamSong } from './DreamSong';

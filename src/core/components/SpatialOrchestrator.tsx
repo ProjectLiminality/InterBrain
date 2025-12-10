@@ -822,7 +822,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       console.log('🌌 [SpatialOrchestrator] Applying constellation layout...');
 
       const store = useInterBrainStore.getState();
-      const relationshipGraph = store.constellationData.relationshipGraph;
+      // Read relationship graph from dreamweaving slice (source of truth for DreamSong relationships)
+      const relationshipGraph = store.dreamSongRelationships.graph;
 
       if (!relationshipGraph) {
         console.warn('⚠️ [SpatialOrchestrator] No relationship graph available for constellation layout');

@@ -33,8 +33,8 @@ export default function ConstellationEdges({
   showEdges = true,
   opacity = 0.6
 }: ConstellationEdgesProps) {
-  // Get relationship graph from store
-  const relationshipGraph = useInterBrainStore(state => state.constellationData.relationshipGraph);
+  // Get relationship graph from dreamweaving slice (source of truth for DreamSong relationships)
+  const relationshipGraph = useInterBrainStore(state => state.dreamSongRelationships.graph);
 
   // Create position lookup function
   const getNodePosition = useMemo(() => {
@@ -117,7 +117,8 @@ export default function ConstellationEdges({
  * Hook to get constellation statistics from the current relationship graph
  */
 export function useConstellationStats() {
-  const relationshipGraph = useInterBrainStore(state => state.constellationData.relationshipGraph);
+  // Read relationship graph from dreamweaving slice (source of truth)
+  const relationshipGraph = useInterBrainStore(state => state.dreamSongRelationships.graph);
 
   return useMemo(() => {
     if (!relationshipGraph) {

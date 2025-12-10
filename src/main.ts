@@ -35,7 +35,6 @@ import {
 	cleanupTranscriptionService,
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
-import { ConstellationCommands } from './features/constellation-layout/commands';
 import { registerFaceTimeCommands } from './features/video-calling/commands';
 import { FaceTimeService } from './features/video-calling/service';
 import { CanvasParserService } from './features/dreamweaving/services/canvas-parser-service';
@@ -72,7 +71,6 @@ export default class InterBrainPlugin extends Plugin {
   private submoduleManagerService!: SubmoduleManagerService;
   public coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
-  private constellationCommands!: ConstellationCommands;
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
@@ -319,9 +317,6 @@ export default class InterBrainPlugin extends Plugin {
     this.leafManagerService = new LeafManagerService(this.app);
     this.canvasObserverService = new CanvasObserverService(this.app);
 
-    // Initialize constellation commands
-    this.constellationCommands = new ConstellationCommands(this);
-
     // Make services accessible to ServiceManager BEFORE initialization
     // Note: Using 'any' here is legitimate - we're extending the plugin with dynamic properties
     (this as any).vaultService = this.vaultService;
@@ -387,9 +382,6 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register update commands (auto-fetch and update management)
     registerUpdateCommands(this, this.uiService);
-
-    // Register constellation commands (DreamSong relationship analysis)
-    this.constellationCommands.registerCommands(this);
 
     // Register link file commands (.link file support)
     registerLinkFileCommands(this, this.uiService);

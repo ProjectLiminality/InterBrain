@@ -1,5 +1,15 @@
 import { StateCreator } from 'zustand';
 import { DreamSongData } from './types/dreamsong';
+import {
+  DreamSongRelationshipGraph,
+  SerializableDreamSongGraph,
+  serializeRelationshipGraph,
+  deserializeRelationshipGraph
+} from './types/relationship';
+
+// Re-export relationship types for consumers
+export type { DreamSongRelationshipGraph, SerializableDreamSongGraph };
+export { serializeRelationshipGraph, deserializeRelationshipGraph };
 
 /**
  * DreamSong cache entry
@@ -11,7 +21,29 @@ export interface DreamSongCacheEntry {
 }
 
 /**
- * Dreamweaving slice - owns DreamSong-related state
+ * DreamSong relationship data state
+ * Tracks the relationship graph derived from DreamSong canvas sequences
+ */
+export interface DreamSongRelationshipState {
+  /** The relationship graph extracted from DreamSongs */
+  graph: DreamSongRelationshipGraph | null;
+  /** Timestamp of last successful scan */
+  lastScanTimestamp: number | null;
+  /** Whether a scan is currently in progress */
+  isScanning: boolean;
+}
+
+/**
+ * Initial DreamSong relationship state
+ */
+export const INITIAL_DREAMSONG_RELATIONSHIP_STATE: DreamSongRelationshipState = {
+  graph: null,
+  lastScanTimestamp: null,
+  isScanning: false
+};
+
+/**
+ * Dreamweaving slice - owns DreamSong-related state including relationships
  */
 export interface DreamweavingSlice {
   // Selected DreamNode's DreamSong data
@@ -23,6 +55,12 @@ export interface DreamweavingSlice {
   getCachedDreamSong: (nodeId: string, structureHash: string) => DreamSongCacheEntry | null;
   setCachedDreamSong: (nodeId: string, structureHash: string, data: DreamSongData) => void;
   clearDreamSongCache: () => void;
+
+  // DreamSong relationship graph (extracted from canvas sequences)
+  dreamSongRelationships: DreamSongRelationshipState;
+  setDreamSongRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
+  setDreamSongRelationshipScanning: (scanning: boolean) => void;
+  clearDreamSongRelationships: () => void;
 }
 
 /**
@@ -111,4 +149,68 @@ export const createDreamweavingSlice: StateCreator<
   },
 
   clearDreamSongCache: () => set({ dreamSongCache: new Map() }),
+
+  // DreamSong relationship graph state
+  dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE,
+
+  setDreamSongRelationshipGraph: (graph) => set((state) => ({
+    dreamSongRelationships: {
+      ...state.dreamSongRelationships,
+      graph,
+      lastScanTimestamp: graph ? Date.now() : null,
+      isScanning: false
+    }
+  })),
+
+  setDreamSongRelationshipScanning: (scanning) => set((state) => ({
+    dreamSongRelationships: {
+      ...state.dreamSongRelationships,
+      isScanning: scanning
+    }
+  })),
+
+  clearDreamSongRelationships: () => set({
+    dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE
+  }),
 });
+
+/**
+ * Extracts persistence data for dreamweaving slice (DreamSong relationships)
+ */
+export function extractDreamweavingPersistenceData(state: DreamweavingSlice) {
+  return {
+    dreamSongRelationships: state.dreamSongRelationships.graph ? {
+      graph: serializeRelationshipGraph(state.dreamSongRelationships.graph),
+      lastScanTimestamp: state.dreamSongRelationships.lastScanTimestamp,
+      isScanning: false
+    } : null
+  };
+}
+
+/**
+ * Restores persistence data for dreamweaving slice
+ */
+export function restoreDreamweavingPersistenceData(persistedData: {
+  dreamSongRelationships?: {
+    graph: SerializableDreamSongGraph | null;
+    lastScanTimestamp: number | null;
+    isScanning: boolean;
+  } | null;
+}): Partial<DreamweavingSlice> {
+  if (!persistedData.dreamSongRelationships?.graph) {
+    return { dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE };
+  }
+
+  try {
+    return {
+      dreamSongRelationships: {
+        graph: deserializeRelationshipGraph(persistedData.dreamSongRelationships.graph),
+        lastScanTimestamp: persistedData.dreamSongRelationships.lastScanTimestamp,
+        isScanning: false
+      }
+    };
+  } catch (error) {
+    console.warn('Failed to deserialize DreamSong relationship data:', error);
+    return { dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE };
+  }
+}

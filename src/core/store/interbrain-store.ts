@@ -12,10 +12,10 @@
  * - debugFlyingControls: Camera debug flag
  *
  * Feature Slices (imported from features/):
- * - DreamweavingSlice: selectedNodeDreamSongData, dreamSongCache
+ * - DreamweavingSlice: selectedNodeDreamSongData, dreamSongCache, dreamSongRelationships
  * - DreamNodeSlice: flipState, creatorMode
  * - SearchSlice: searchResults, searchInterface, vectorData, ollamaConfig
- * - ConstellationSlice: constellationData, fibonacciConfig, debug flags
+ * - ConstellationSlice: constellationData (positions, layout config), fibonacciConfig, debug flags
  * - CopilotModeSlice: copilotMode state and actions
  * - EditModeSlice: editMode state and actions
  * - CreationSlice: creationState and actions
@@ -31,6 +31,9 @@ import { persist } from 'zustand/middleware';
 import {
   DreamweavingSlice,
   createDreamweavingSlice,
+  extractDreamweavingPersistenceData,
+  restoreDreamweavingPersistenceData,
+  SerializableDreamSongGraph as DreamweavingSerializableGraph,
 } from '../../features/dreamweaving/dreamweaving-slice';
 
 import {
@@ -321,6 +324,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         ...extractDreamNodePersistenceData(state),
         ...extractSearchPersistenceData(state),
         ...extractConstellationPersistenceData(state),
+        ...extractDreamweavingPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as {
@@ -334,6 +338,12 @@ export const useInterBrainStore = create<InterBrainState>()(
             positions: [string, [number, number, number]][] | null;
             lastLayoutTimestamp: number | null;
             nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
+          } | null;
+          // DreamSong relationships (from dreamweaving slice)
+          dreamSongRelationships?: {
+            graph: DreamweavingSerializableGraph | null;
+            lastScanTimestamp: number | null;
+            isScanning: boolean;
           } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
@@ -350,6 +360,7 @@ export const useInterBrainStore = create<InterBrainState>()(
           realNodes: restoredDreamNodes.dreamNodes,
           ...restoreSearchPersistenceData(persistedData),
           ...restoreConstellationPersistenceData(persistedData),
+          ...restoreDreamweavingPersistenceData(persistedData),
         };
       },
     }
