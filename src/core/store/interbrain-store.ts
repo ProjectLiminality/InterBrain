@@ -70,7 +70,7 @@ import {
   createEditModeSlice,
   EditModeState,
   EditModeValidationErrors,
-} from '../../features/edit-mode/edit-slice';
+} from '../../features/dreamnode-editor/store/slice';
 
 import {
   CreationSlice,
@@ -78,7 +78,7 @@ import {
   CreationState,
   ProtoNode,
   ValidationErrors,
-} from '../../features/creation/store/slice';
+} from '../../features/dreamnode-creator/store/slice';
 
 import {
   RadialButtonsSlice,

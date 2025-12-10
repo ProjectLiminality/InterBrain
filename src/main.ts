@@ -18,7 +18,7 @@ import { registerCameraCommands } from './core/commands/camera-commands';
 import { registerDreamNodeCommands } from './features/dreamnode';
 import { registerSearchCommands } from './features/search';
 import { registerConstellationDebugCommands } from './features/constellation-layout';
-import { registerEditModeCommands } from './features/edit-mode';
+import { registerEditModeCommands } from './features/dreamnode-editor';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
 import { registerRadicleCommands } from './features/social-resonance/commands';

@@ -111,27 +111,33 @@ export { registerDreamNodeCommands } from './commands';
 
 | Feature | Purpose | Complexity |
 |---------|---------|------------|
-| [dreamnode](./dreamnode/README.md) | Core DreamNode data, git operations, 3D visualization | High |
-| [dreamweaving](./dreamweaving/README.md) | Canvas parsing, submodules, DreamSong playback | High |
+| **DreamNode Family** | | |
+| [dreamnode](./dreamnode/README.md) | Core: types, services, git operations, 3D visualization | High |
+| [dreamnode-creator](./dreamnode-creator/README.md) | Creation workflow UI (builds on dreamnode) | Medium |
+| [dreamnode-editor](./dreamnode-editor/README.md) | Editing workflow UI (builds on dreamnode) | Medium |
+| **Layout & Navigation** | | |
 | [constellation-layout](./constellation-layout/README.md) | Fibonacci sphere distribution of all nodes | Medium |
 | [liminal-web-layout](./liminal-web-layout/README.md) | Focused node with related nodes in rings | Medium |
-| [conversational-copilot](./conversational-copilot/README.md) | AI conversation mode with node invocation | Medium |
-| [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High |
-| [edit-mode](./edit-mode/README.md) | Node editing with relationship management | Medium |
-| [search](./search/README.md) | Search overlay and result display | Low |
-| [creation](./creation/README.md) | Node creation UI and state management | Medium |
+| [songline](./songline/README.md) | Songline navigation feature | Low |
+| **Content & Canvas** | | |
+| [dreamweaving](./dreamweaving/README.md) | Canvas parsing, submodules, DreamSong playback | High |
 | [drag-and-drop](./drag-and-drop/README.md) | File and URL drop handling | Medium |
-| [radial-buttons](./radial-buttons/README.md) | Radial action menu around nodes | Low |
-| [realtime-transcription](./realtime-transcription/README.md) | Voice transcription via Python backend | Medium |
+| [web-link-analyzer](./web-link-analyzer/README.md) | AI-powered URL content analysis | Low |
+| **Search & AI** | | |
+| [search](./search/README.md) | Search overlay and result display | Low |
+| [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High |
+| [conversational-copilot](./conversational-copilot/README.md) | AI conversation mode with node invocation | Medium |
+| **Collaboration** | | |
 | [social-resonance](./social-resonance/README.md) | Radicle P2P integration | Medium |
 | [coherence-beacon](./coherence-beacon/README.md) | Node synchronization beacons | Medium |
-| [video-calling](./video-calling/README.md) | WebRTC video call integration | Medium |
-| [web-link-analyzer](./web-link-analyzer/README.md) | AI-powered URL content analysis | Low |
 | [github-publishing](./github-publishing/README.md) | Publish nodes to GitHub | Medium |
+| [video-calling](./video-calling/README.md) | WebRTC video call integration | Medium |
+| **UI & System** | | |
+| [radial-buttons](./radial-buttons/README.md) | Radial action menu around nodes | Low |
+| [realtime-transcription](./realtime-transcription/README.md) | Voice transcription via Python backend | Medium |
 | [settings](./settings/README.md) | Plugin settings tab | Low |
 | [updates](./updates/README.md) | Plugin update checking | Low |
 | [uri-handler](./uri-handler/README.md) | interbrain:// protocol handling | Low |
-| [songline](./songline/README.md) | Songline navigation feature | Low |
 
 ## Creating a New Feature
 

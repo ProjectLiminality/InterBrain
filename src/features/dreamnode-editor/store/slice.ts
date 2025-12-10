@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { DreamNode } from '../dreamnode';
+import { DreamNode } from '../../dreamnode';
 
 /**
  * Edit mode validation errors
