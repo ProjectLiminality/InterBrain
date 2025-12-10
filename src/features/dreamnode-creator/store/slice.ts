@@ -2,9 +2,10 @@ import { StateCreator } from 'zustand';
 import type { UrlMetadata } from '../../drag-and-drop';
 
 /**
- * Proto-node for node creation
+ * Draft DreamNode - temporary data during creation workflow
+ * Holds user input before the actual DreamNode is created
  */
-export interface ProtoNode {
+export interface DraftDreamNode {
   title: string;
   type: 'dream' | 'dreamer';
   dreamTalkFile?: globalThis.File;
@@ -26,7 +27,7 @@ export interface ValidationErrors {
  */
 export interface CreationState {
   isCreating: boolean;
-  protoNode: ProtoNode | null;
+  draft: DraftDreamNode | null;
   validationErrors: ValidationErrors;
 }
 
@@ -35,7 +36,7 @@ export interface CreationState {
  */
 export const INITIAL_CREATION_STATE: CreationState = {
   isCreating: false,
-  protoNode: null,
+  draft: null,
   validationErrors: {}
 };
 
@@ -45,8 +46,8 @@ export const INITIAL_CREATION_STATE: CreationState = {
 export interface CreationSlice {
   creationState: CreationState;
   startCreation: (position: [number, number, number]) => void;
-  startCreationWithData: (position: [number, number, number], initialData?: Partial<ProtoNode>) => void;
-  updateProtoNode: (updates: Partial<ProtoNode>) => void;
+  startCreationWithData: (position: [number, number, number], initialData?: Partial<DraftDreamNode>) => void;
+  updateDraft: (updates: Partial<DraftDreamNode>) => void;
   setValidationErrors: (errors: ValidationErrors) => void;
   completeCreation: () => void;
   cancelCreation: () => void;
@@ -66,9 +67,9 @@ export const createCreationSlice: StateCreator<
   startCreation: (position) => set(() => ({
     creationState: {
       isCreating: true,
-      protoNode: {
+      draft: {
         title: '',
-        type: 'dream', // Default to dream type
+        type: 'dream',
         position,
         dreamTalkFile: undefined
       },
@@ -79,7 +80,7 @@ export const createCreationSlice: StateCreator<
   startCreationWithData: (position, initialData) => set(() => ({
     creationState: {
       isCreating: true,
-      protoNode: {
+      draft: {
         title: initialData?.title || '',
         type: initialData?.type || 'dream',
         position,
@@ -90,11 +91,11 @@ export const createCreationSlice: StateCreator<
     }
   })),
 
-  updateProtoNode: (updates) => set((state) => ({
+  updateDraft: (updates) => set((state) => ({
     creationState: {
       ...state.creationState,
-      protoNode: state.creationState.protoNode
-        ? { ...state.creationState.protoNode, ...updates }
+      draft: state.creationState.draft
+        ? { ...state.creationState.draft, ...updates }
         : null
     }
   })),
@@ -119,3 +120,9 @@ export const createCreationSlice: StateCreator<
  * Re-export types for convenience
  */
 export type { UrlMetadata };
+
+/**
+ * Backward compatibility alias - use DraftDreamNode in new code
+ * @deprecated Use DraftDreamNode instead
+ */
+export type ProtoNode = DraftDreamNode;

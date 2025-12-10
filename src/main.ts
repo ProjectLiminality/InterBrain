@@ -635,10 +635,10 @@ export default class InterBrainPlugin extends Plugin {
         const newState = useInterBrainStore.getState();
         console.log('Creation mode activated - state:', {
           isCreating: newState.creationState.isCreating,
-          protoNode: newState.creationState.protoNode,
+          draft: newState.creationState.draft,
           position: spawnPosition
         });
-        console.log('Proto-node should appear in DreamSpace');
+        console.log('DreamNodeCreator should appear in DreamSpace');
       }
     });
 

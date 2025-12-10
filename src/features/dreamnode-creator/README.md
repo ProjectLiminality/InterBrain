@@ -9,9 +9,8 @@
 ```
 dreamnode-creator/
 ├── store/
-│   └── slice.ts              # Creation workflow state (ProtoNode, validation)
-├── ProtoNode3D.tsx           # Main 3D creation component
-├── CreationModeOverlay.tsx   # 2D overlay controls
+│   └── slice.ts              # Creation workflow state (DraftDreamNode, validation)
+├── DreamNodeCreator3D.tsx    # Main 3D creation component (self-contained)
 ├── index.ts                  # Barrel export
 └── README.md
 ```
@@ -21,11 +20,14 @@ dreamnode-creator/
 ```typescript
 // Store (state management)
 export * from './store/slice';
-// → createCreationSlice, CreationSlice, ProtoNode, ValidationErrors
+// → createCreationSlice, CreationSlice, DraftDreamNode, ValidationErrors
 
 // Components
-export { default as ProtoNode3D } from './ProtoNode3D';
-export { default as CreationModeOverlay } from './CreationModeOverlay';
+export { default as DreamNodeCreator3D } from './DreamNodeCreator3D';
+
+// Backward compatibility aliases
+export { default as CreationModeOverlay } from './DreamNodeCreator3D';
+export { default as ProtoNode3D } from './DreamNodeCreator3D';
 ```
 
 ## Workflow
@@ -38,18 +40,32 @@ export { default as CreationModeOverlay } from './CreationModeOverlay';
 
 ## Key Features
 
-- **ProtoNode3D**: Translucent DreamNode preview at 3D position
-- **Inline editing**: Title, type toggle, file upload
-- **Media preview**: Images, videos, PDFs, YouTube thumbnails
-- **Completion animation**: Slides z=-25 → z=-75 while fading UI
-- **Keyboard**: Enter to create, Escape to cancel
+- **DreamNodeCreator3D**: Self-contained translucent DreamNode creation UI
+  - Renders only when `creationState.isCreating` is true
+  - Title input, type toggle (Dream/Dreamer), file upload
+  - Media preview: Images, videos, PDFs, YouTube thumbnails
+  - Completion animation: Slides z=-25 → z=-75 while fading UI
+  - Keyboard: Enter to create
 
 ## Dependencies
 
 **From `dreamnode/`**:
 - `dreamNodeStyles` - Visual constants (dimensions, colors, glows)
 - `getNodeColors()`, `getNodeGlow()` - Type-specific styling
+- `isValidDreamTalkMedia()` - Media file validation
 
 **External**:
 - React Three Fiber (`useFrame`)
 - `@react-three/drei` (`Html`)
+
+## Future Improvements
+
+### Context-Aware Creation in Liminal-Web Mode
+
+When in liminal-web mode (viewing a DreamNode's connections), the creator could:
+- Pre-fill relationship data based on current context
+- Auto-suggest title based on parent DreamNode's content
+- Position new node intelligently within the web layout
+- Create with initial link to the focused DreamNode
+
+This would transform creation from "make a thing" to "extend the conversation" - supporting the liminal web's social relationship model.

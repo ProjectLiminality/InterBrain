@@ -24,6 +24,8 @@ export * as vaultScanner from './utils/vault-scanner';
 export * as repoInitializer from './utils/repo-initializer';
 // title-sanitization: Title to folder name conversion
 export { sanitizeTitleToPascalCase } from './utils/title-sanitization';
+// media-validation: Single source of truth for supported DreamTalk media
+export { isValidDreamTalkMedia, getMediaCategory, SUPPORTED_MEDIA_TYPES, SUPPORTED_EXTENSIONS } from './utils/media-validation';
 // Legacy class - kept for backward compatibility
 export { GitOperationsService } from './utils/git-operations';
 
