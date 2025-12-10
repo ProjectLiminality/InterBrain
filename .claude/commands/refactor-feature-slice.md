@@ -16,8 +16,9 @@ This refactoring follows a **Music-First** approach:
 4. **Review Chunking** - Identify opportunities for better organization
 5. **Implement** - Make structural changes
 6. **Clean Up** - Remove obsolete logging, enforce UI→Commands pattern
-7. **Document** - Update README
-8. **Validate** - Ensure everything works
+7. **Test Coverage** - Ensure meaningful tests for pure utilities
+8. **Document** - Update README
+9. **Validate** - Ensure everything works
 
 ---
 
@@ -236,7 +237,76 @@ For components with early returns (`if (!x) return null`):
 
 ---
 
-## Phase 7: Documentation
+## Phase 7: Test Coverage
+
+Ensure meaningful test coverage for **pure utility functions**. Tests should verify behavior, not implementation.
+
+### What to Test
+
+**Test these (pure functions, easily testable):**
+- Utility functions in `utils/` directories
+- Pure data transformation functions
+- Validation/parsing logic
+- Type guards
+- String formatting/sanitization
+
+**Skip these (complex dependencies, integration territory):**
+- React components (require render testing setup)
+- Functions that depend on Obsidian API
+- Functions that make network requests (unless mocked)
+- Service layer orchestration (better as integration tests)
+
+### Test Quality Guidelines
+
+1. **Test behavior, not implementation**
+   - Test what the function returns/does, not how it does it
+   - Focus on edge cases and error conditions
+
+2. **Use meaningful test names**
+   ```typescript
+   // ✅ Good
+   it('should return null when URL is invalid')
+
+   // ❌ Bad
+   it('test case 1')
+   ```
+
+3. **Cover edge cases**
+   - Empty inputs
+   - Invalid inputs
+   - Boundary conditions
+   - Error states
+
+4. **Mock external dependencies**
+   - Use `vi.mock()` for modules
+   - Use `vi.stubGlobal()` for globals like `fetch`
+   - Use `vi.useFakeTimers()` for date/time dependent code
+
+### Test File Location
+
+Place test files adjacent to the code they test:
+```
+feature/
+├── utils/
+│   ├── parser.ts
+│   └── parser.test.ts    # Adjacent to source
+├── services/
+│   └── my-service.ts     # Skip testing - service layer
+└── components/
+    └── MyComponent.tsx   # Skip testing - React components
+```
+
+### Minimum Coverage Checklist
+
+For each utility file, ensure tests cover:
+- [ ] Happy path (expected inputs)
+- [ ] Edge cases (empty, null, undefined)
+- [ ] Error conditions (invalid inputs)
+- [ ] Boundary conditions (min/max values)
+
+---
+
+## Phase 8: Documentation
 
 Write/update README.md with:
 
@@ -269,7 +339,7 @@ feature-name/
 
 ---
 
-## Phase 8: Validation & Commit
+## Phase 9: Validation & Commit
 
 1. Run `npm run check-all` - must pass with 0 errors
 2. Review changes with user if significant restructuring occurred
@@ -281,6 +351,7 @@ Refactor [feature-name] feature slice
 - [Conceptual changes if any]
 - [Structural changes]
 - [Clean up: logging, UI→Commands pattern]
+- [Test coverage for utilities]
 - [Documentation updates]
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
