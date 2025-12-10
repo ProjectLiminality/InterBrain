@@ -45,7 +45,7 @@ export default function DreamSongThread3D({
   // Store access for selecting DreamNode
   const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
   const setSpatialLayout = useInterBrainStore(state => state.setSpatialLayout);
-  const realNodes = useInterBrainStore(state => state.realNodes);
+  const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
 
   // Find the DreamNode that owns this DreamSong
   const ownerNode = useMemo(() => {
@@ -55,7 +55,7 @@ export default function DreamSongThread3D({
     const dreamNodeFolder = pathParts[pathParts.length - 2]; // Get parent folder name
 
     // Find the node by matching folder name in path
-    for (const [, nodeData] of realNodes) {
+    for (const [, nodeData] of dreamNodesMap) {
       const nodeFolderName = nodeData.node.name.replace(/\s+/g, ''); // Remove spaces for folder matching
       if (dreamNodeFolder === nodeFolderName ||
           dreamNodeFolder === nodeData.node.name) {
@@ -64,7 +64,7 @@ export default function DreamSongThread3D({
     }
 
     return null;
-  }, [dreamSongPath, realNodes]);
+  }, [dreamSongPath, dreamNodesMap]);
 
   // Generate valid edges with positions
   const validEdges = useMemo(() => {

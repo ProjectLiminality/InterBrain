@@ -71,9 +71,9 @@ describe('IndexingService', () => {
       }
     ];
 
-    // Create mock store with realNodes Map (no more mock data mode)
+    // Create mock store with dreamNodes Map (no more mock data mode)
     mockStore = {
-      realNodes: new Map([
+      dreamNodes: new Map([
         ['node-1', { node: mockNodes[0], lastSynced: Date.now() }],
         ['node-2', { node: mockNodes[1], lastSynced: Date.now() }]
       ]),

@@ -303,19 +303,19 @@ export function registerGitHubCommands(
             console.log(`GitHubCommands: Updated selectedNode with GitHub URLs`);
           }
 
-          // Update realNodes store
-          const realNodeData = store.realNodes.get(selectedNode.id);
-          if (realNodeData) {
+          // Update dreamNodes store
+          const dreamNodeData = store.dreamNodes.get(selectedNode.id);
+          if (dreamNodeData) {
             const updatedNodeData = {
-              ...realNodeData,
+              ...dreamNodeData,
               node: {
-                ...realNodeData.node,
+                ...dreamNodeData.node,
                 githubRepoUrl: result.repoUrl,
-                githubPagesUrl: result.pagesUrl || realNodeData.node.githubPagesUrl
+                githubPagesUrl: result.pagesUrl || dreamNodeData.node.githubPagesUrl
               }
             };
-            store.updateRealNode(selectedNode.id, updatedNodeData);
-            console.log(`GitHubCommands: Updated realNodes with GitHub URLs`);
+            store.updateDreamNode(selectedNode.id, updatedNodeData);
+            console.log(`GitHubCommands: Updated dreamNodes with GitHub URLs`);
           }
 
           // Copy Obsidian URI to clipboard
@@ -453,19 +453,19 @@ export function registerGitHubCommands(
             console.log(`GitHubCommands: Cleared selectedNode GitHub URLs`);
           }
 
-          // Update realNodes store
-          const realNodeData = store.realNodes.get(selectedNode.id);
-          if (realNodeData) {
+          // Update dreamNodes store
+          const dreamNodeData = store.dreamNodes.get(selectedNode.id);
+          if (dreamNodeData) {
             const updatedNodeData = {
-              ...realNodeData,
+              ...dreamNodeData,
               node: {
-                ...realNodeData.node,
+                ...dreamNodeData.node,
                 githubRepoUrl: undefined,
                 githubPagesUrl: undefined
               }
             };
-            store.updateRealNode(selectedNode.id, updatedNodeData);
-            console.log(`GitHubCommands: Cleared realNodes GitHub URLs`);
+            store.updateDreamNode(selectedNode.id, updatedNodeData);
+            console.log(`GitHubCommands: Cleared dreamNodes GitHub URLs`);
           }
 
           // Success notification

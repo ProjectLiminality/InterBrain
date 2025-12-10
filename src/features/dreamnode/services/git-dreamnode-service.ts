@@ -1,11 +1,13 @@
-import { DreamNode, UDDFile, GitStatus } from '../types/dreamnode';
-import { useInterBrainStore, RealNodeData } from '../../../core/store/interbrain-store';
+import { DreamNode, UDDFile } from '../types/dreamnode';
+import { useInterBrainStore, DreamNodeData } from '../../../core/store/interbrain-store';
 import { Plugin } from 'obsidian';
 import { indexingService } from '../../semantic-search/services/indexing-service';
-import { UrlMetadata, generateYouTubeIframe, generateMarkdownLink } from '../../drag-and-drop';
-import { createLinkFileContent, getLinkFileName } from '../../drag-and-drop';
+import { UrlMetadata, writeLinkFile, writeUrlReadme, appendUrlToReadme } from '../../drag-and-drop';
 import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 import { webLinkAnalyzerService } from '../../web-link-analyzer/service';
+import { serviceManager } from '../../../core/services/service-manager';
+import { GitOperationsService } from '../utils/git-operations';
+import { UDDService } from './udd-service';
 
 // Access Node.js modules directly in Electron context
  
@@ -35,9 +37,11 @@ export class GitDreamNodeService {
   private plugin: Plugin;
   private vaultPath: string;
   private templatePath: string;
-  
+  private gitOpsService: GitOperationsService;
+
   constructor(plugin: Plugin) {
     this.plugin = plugin;
+    this.gitOpsService = new GitOperationsService(plugin.app);
     // Get vault file system path for Node.js fs operations
     const adapter = plugin.app.vault.adapter as VaultAdapter;
     
@@ -127,7 +131,7 @@ export class GitDreamNodeService {
       liminalWebConnections: initialConnections,
       repoPath: repoName, // Relative to vault
       hasUnsavedChanges: false,
-      gitStatus: await this.checkGitStatus(repoPath),
+      gitStatus: await this.gitOpsService.getGitStatus(repoPath),
       email: metadata?.email,
       phone: metadata?.phone,
       did: metadata?.did
@@ -135,7 +139,7 @@ export class GitDreamNodeService {
     
     // Update store immediately for snappy UI
     const store = useInterBrainStore.getState();
-    const nodeData: RealNodeData = {
+    const nodeData: DreamNodeData = {
       node,
       fileHash: dreamTalk ? await this.calculateFileHash(dreamTalk) : undefined,
       lastSynced: Date.now()
@@ -179,7 +183,7 @@ export class GitDreamNodeService {
    */
   async update(id: string, changes: Partial<DreamNode>): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(id);
+    const nodeData = store.dreamNodes.get(id);
     
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${id} not found`);
@@ -246,7 +250,7 @@ export class GitDreamNodeService {
    */
   async delete(id: string): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(id);
+    const nodeData = store.dreamNodes.get(id);
     
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${id} not found`);
@@ -280,7 +284,7 @@ export class GitDreamNodeService {
    */
   async list(): Promise<DreamNode[]> {
     const store = useInterBrainStore.getState();
-    return Array.from(store.realNodes.values()).map(data => data.node);
+    return Array.from(store.dreamNodes.values()).map(data => data.node);
   }
   
   /**
@@ -288,7 +292,7 @@ export class GitDreamNodeService {
    */
   async get(id: string): Promise<DreamNode | null> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(id);
+    const nodeData = store.dreamNodes.get(id);
     return nodeData ? nodeData.node : null;
   }
   
@@ -310,7 +314,7 @@ export class GitDreamNodeService {
 
       // Batch collection - don't update store until all nodes are processed
       const nodesToAdd: Array<{ dirPath: string; udd: UDDFile; dirName: string }> = [];
-      const nodesToUpdate: Array<{ existingData: RealNodeData; dirPath: string; udd: UDDFile; dirName: string }> = [];
+      const nodesToUpdate: Array<{ existingData: DreamNodeData; dirPath: string; udd: UDDFile; dirName: string }> = [];
 
       // Check each directory
       for (const dir of directories) {
@@ -339,7 +343,7 @@ export class GitDreamNodeService {
 
           // Check if node exists in store
           const store = useInterBrainStore.getState();
-          const existingData = store.realNodes.get(udd.uuid);
+          const existingData = store.dreamNodes.get(udd.uuid);
 
           if (!existingData) {
             // Queue for batch add
@@ -359,7 +363,7 @@ export class GitDreamNodeService {
       console.log(`[VaultScan] Processing ${nodesToAdd.length} adds, ${nodesToUpdate.length} updates`);
 
       const store = useInterBrainStore.getState();
-      const newRealNodes = new Map(store.realNodes); // Clone existing map
+      const newDreamNodes = new Map(store.dreamNodes); // Clone existing map
 
       // Process all new nodes IN PARALLEL for speed (disk I/O can happen concurrently)
       const addPromises = nodesToAdd.map(async ({ dirPath, udd, dirName }) => {
@@ -373,7 +377,7 @@ export class GitDreamNodeService {
       const addResults = await Promise.all(addPromises);
       for (const result of addResults) {
         if (result) {
-          newRealNodes.set(result.uuid, result.nodeData);
+          newDreamNodes.set(result.uuid, result.nodeData);
           stats.added++;
         }
       }
@@ -394,15 +398,15 @@ export class GitDreamNodeService {
       const updateResults = await Promise.all(updatePromises);
       for (const result of updateResults) {
         if (result) {
-          newRealNodes.set(result.uuid, result.nodeData);
+          newDreamNodes.set(result.uuid, result.nodeData);
           stats.updated++;
         }
       }
 
       // Remove nodes that no longer exist in vault
-      for (const [id] of store.realNodes) {
+      for (const [id] of store.dreamNodes) {
         if (!foundNodeIds.has(id)) {
-          newRealNodes.delete(id);
+          newDreamNodes.delete(id);
           stats.removed++;
         }
       }
@@ -410,11 +414,11 @@ export class GitDreamNodeService {
       // Build bidirectional relationships from Dreamer → Dream connections
       // This is the ONLY source of truth for liminal web relationships
       console.log('[VaultScan] Building bidirectional relationships from liminal-web.json files...');
-      for (const [dreamerId, dreamerData] of newRealNodes) {
+      for (const [dreamerId, dreamerData] of newDreamNodes) {
         if (dreamerData.node.type === 'dreamer') {
           // For each Dream node this Dreamer points to
           for (const dreamId of dreamerData.node.liminalWebConnections) {
-            const dreamData = newRealNodes.get(dreamId);
+            const dreamData = newDreamNodes.get(dreamId);
             if (dreamData) {
               // Add reverse connection: Dream → Dreamer
               const dreamConnections = new Set(dreamData.node.liminalWebConnections || []);
@@ -430,7 +434,7 @@ export class GitDreamNodeService {
 
       // Extract and persist lightweight metadata for instant startup
       const nodeMetadata = new Map<string, { name: string; type: string; uuid: string }>();
-      for (const [id, data] of newRealNodes) {
+      for (const [id, data] of newDreamNodes) {
         nodeMetadata.set(id, {
           name: data.node.name,
           type: data.node.type,
@@ -439,7 +443,7 @@ export class GitDreamNodeService {
       }
 
       // Single store update - triggers only ONE React re-render
-      store.setRealNodes(newRealNodes);
+      store.setDreamNodes(newDreamNodes);
       store.setNodeMetadata(nodeMetadata);
 
       // CRITICAL: Defer media loading to give React time to render placeholders first
@@ -605,153 +609,42 @@ export class GitDreamNodeService {
 
       console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
 
-      // Initialize Radicle repository (rad init --private)
+      // Initialize Radicle repository via RadicleService (social-resonance feature)
       console.log(`GitDreamNodeService: Initializing Radicle repository...`);
       try {
+        const radicleService = serviceManager.getRadicleService();
         const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
         const timestamp = new Date().toISOString();
         const description = `${nodeTypeLabel} ${timestamp}`;
+        const repoName = path.basename(repoPath);
 
         // Get passphrase from settings
         const settings = (this.plugin as any).settings;
         const passphrase = settings?.radiclePassphrase;
 
-        // Prepare environment with passphrase
-        const process = require('process');
-        const env = { ...process.env };
-        if (passphrase) {
-          env.RAD_PASSPHRASE = passphrase;
-          console.log('GitDreamNodeService: Using passphrase from settings via RAD_PASSPHRASE');
-        } else {
-          console.log('GitDreamNodeService: No passphrase in settings, relying on ssh-agent');
-        }
+        // Call RadicleService.init() - returns RID or null
+        const radicleId = await radicleService.init(repoPath, repoName, description, passphrase);
 
-        // Note: Radicle node management is handled separately (Concern 2)
-        // We assume the node is already running if user has Radicle configured
+        if (radicleId) {
+          console.log(`GitDreamNodeService: Radicle init succeeded with RID: ${radicleId}`);
 
-        // Find rad command in common installation locations
-        const os = require('os');
-        const homeDir = os.homedir();
-        const possibleRadPaths = [
-          'rad', // Try PATH first
-          path.join(homeDir, '.radicle', 'bin', 'rad'), // Standard Radicle install location
-          '/usr/local/bin/rad', // Homebrew default
-          '/opt/homebrew/bin/rad', // Homebrew on Apple Silicon
-        ];
-
-        let radCommand: string | null = null;
-        for (const radPath of possibleRadPaths) {
-          try {
-            await execAsync(`"${radPath}" --version`);
-            radCommand = radPath;
-            console.log(`GitDreamNodeService: Found rad at ${radPath}`);
-            break;
-          } catch {
-            // Continue to next path
-          }
-        }
-
-        if (!radCommand) {
-          console.warn('GitDreamNodeService: rad command not found, skipping Radicle init');
-          throw new Error('rad command not found');
-        }
-
-        // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
-        // IMPORTANT: --name is REQUIRED for non-TTY mode, otherwise rad init fails with TTY error
-        // IMPORTANT: --no-seed prevents automatic network seeding (user controls sharing via "Share" command)
-        // Use sanitized directory name (already cleaned by sanitizeTitleToPascalCase)
-        const repoName = path.basename(repoPath);
-
-        const { spawn } = require('child_process');
-        const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-          const child = spawn(radCommand, [
-            'init',
-            repoPath,
-            '--private',  // Private = not announced, stays local until share
-            '--name', repoName,  // REQUIRED for non-TTY mode, use sanitized dir name
-            '--default-branch', 'main',
-            '--description', description,
-            '--no-confirm',
-            '--no-seed'  // Don't seed until user explicitly shares (Concern 2)
-          ], {
-            env,  // Pass environment with RAD_PASSPHRASE
-            cwd: repoPath,
-            stdio: ['pipe', 'pipe', 'pipe']  // Provide stdin pipe to bypass TTY
-          });
-
-          let stdout = '';
-          let stderr = '';
-
-          child.stdout?.on('data', (data: any) => {
-            stdout += data.toString();
-          });
-
-          child.stderr?.on('data', (data: any) => {
-            stderr += data.toString();
-          });
-
-          child.on('close', (code: number | null) => {
-            console.log(`GitDreamNodeService: rad init closed with code ${code}`);
-            console.log(`GitDreamNodeService: rad init stdout:`, stdout);
-            console.log(`GitDreamNodeService: rad init stderr:`, stderr);
-
-            if (code === 0) {
-              resolve({ stdout, stderr });
-            } else {
-              const error: any = new Error(`rad init exited with code ${code}`);
-              error.stdout = stdout;
-              error.stderr = stderr;
-              reject(error);
-            }
-          });
-
-          child.on('error', (error: Error) => {
-            console.error(`GitDreamNodeService: rad init spawn error:`, error);
-            reject(error);
-          });
-
-          // Close stdin immediately since we're non-interactive
-          child.stdin?.end();
-        });
-
-        const radInitResult = await spawnPromise();
-        console.log(`GitDreamNodeService: Radicle init succeeded`);
-
-        // Extract RID from rad init output
-        // Expected format: "Repository rad:z... created."
-        const ridMatch = radInitResult.stdout.match(/rad:z[a-zA-Z0-9]+/);
-        if (ridMatch) {
-          const radicleId = ridMatch[0];
-          console.log(`GitDreamNodeService: Captured Radicle ID: ${radicleId}`);
-
-          // Update .udd file with radicleId AND preserve existing metadata (did, email, phone)
+          // Update .udd file with radicleId
           const uddPath = path.join(repoPath, '.udd');
           const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
           const udd = JSON.parse(uddContent);
-
-          // Add radicleId (preserves all existing fields like did, email, phone)
           udd.radicleId = radicleId;
-
           await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
-          console.log(`GitDreamNodeService: Updated .udd with radicleId (preserving existing metadata)`);
 
-          // Commit the radicleId + metadata update as single atomic commit
+          // Commit the radicleId update
           await execAsync('git add .udd', { cwd: repoPath });
-          await execAsync('git commit -m "Add Radicle ID and metadata to DreamNode"', { cwd: repoPath });
-          console.log(`GitDreamNodeService: Committed radicleId + metadata in single commit`);
+          await execAsync('git commit -m "Add Radicle ID to DreamNode"', { cwd: repoPath });
+          console.log(`GitDreamNodeService: Committed radicleId to .udd`);
         } else {
-          console.warn(`GitDreamNodeService: Could not extract RID from rad init output`);
+          console.log(`GitDreamNodeService: Radicle init skipped or failed (non-fatal)`);
         }
       } catch (radError: any) {
-        console.error(`GitDreamNodeService: Radicle init failed:`, radError);
-        if (radError.stderr) {
-          console.error(`GitDreamNodeService: Radicle stderr:`, radError.stderr);
-        }
-        if (radError.stdout) {
-          console.log(`GitDreamNodeService: Radicle stdout:`, radError.stdout);
-        }
         // Don't throw - allow node creation to proceed even if rad init fails
-        // This ensures the plugin works even without Radicle CLI installed
+        console.warn(`GitDreamNodeService: Radicle init failed (non-fatal):`, radError.message);
       }
 
     } catch (error: any) {
@@ -841,11 +734,11 @@ export class GitDreamNodeService {
   /**
    * Build node data from vault without updating store (for batching)
    */
-  private async buildNodeDataFromVault(dirPath: string, udd: UDDFile, repoName: string): Promise<RealNodeData | null> {
+  private async buildNodeDataFromVault(dirPath: string, udd: UDDFile, repoName: string): Promise<DreamNodeData | null> {
     // Load dreamTalk media if specified
     // IMPORTANT: If file temporarily doesn't exist, preserve existing dreamTalkMedia from store
     const store = useInterBrainStore.getState();
-    const existingData = store.realNodes.get(udd.uuid);
+    const existingData = store.dreamNodes.get(udd.uuid);
     let dreamTalkMedia: Array<{
       path: string;
       absolutePath: string;
@@ -953,7 +846,7 @@ export class GitDreamNodeService {
    * Update node from vault if changed
    */
   private async updateNodeFromVault(
-    existingData: RealNodeData,
+    existingData: DreamNodeData,
     dirPath: string,
     udd: UDDFile,
     repoName: string
@@ -1037,13 +930,12 @@ export class GitDreamNodeService {
    * CRITICAL: Read-modify-write pattern to preserve fields that exist on disk but not in store
    */
   private async updateUDDFile(node: DreamNode): Promise<void> {
-    const uddPath = path.join(this.vaultPath, node.repoPath, '.udd');
+    const fullPath = path.join(this.vaultPath, node.repoPath);
 
     // Read existing .udd from disk first to preserve all fields
     let existingUdd: Partial<UDDFile> = {};
     try {
-      const existingContent = await fsPromises.readFile(uddPath, 'utf-8');
-      existingUdd = JSON.parse(existingContent);
+      existingUdd = await UDDService.readUDD(fullPath);
     } catch {
       console.log(`GitDreamNodeService: No existing .udd found, creating new one`);
     }
@@ -1094,7 +986,7 @@ export class GitDreamNodeService {
       udd.githubPagesUrl = existingUdd.githubPagesUrl;
     }
 
-    await fsPromises.writeFile(uddPath, JSON.stringify(udd, null, 2));
+    await UDDService.writeUDD(fullPath, udd);
   }
   
   /**
@@ -1157,11 +1049,11 @@ export class GitDreamNodeService {
       console.log(`GitDreamNodeService: Auto-committed changes for ${node.name}: ${commitMessage}`);
       
       // Refresh git status after commit
-      const newGitStatus = await this.checkGitStatus(node.repoPath);
+      const newGitStatus = await this.gitOpsService.getGitStatus(node.repoPath);
       
       // Update store with new git status
       const store = useInterBrainStore.getState();
-      const nodeData = store.realNodes.get(node.id);
+      const nodeData = store.dreamNodes.get(node.id);
       if (nodeData) {
         store.updateRealNode(node.id, {
           ...nodeData,
@@ -1255,7 +1147,7 @@ export class GitDreamNodeService {
    */
   async addFilesToNode(nodeId: string, files: globalThis.File[]): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
     
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1320,7 +1212,7 @@ export class GitDreamNodeService {
    */
   async addFilesToNodeWithoutDreamTalkUpdate(nodeId: string, files: globalThis.File[]): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
 
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1380,7 +1272,7 @@ export class GitDreamNodeService {
    */
   reset(): void {
     const store = useInterBrainStore.getState();
-    store.setRealNodes(new Map());
+    store.setDreamNodes(new Map());
     console.log('GitDreamNodeService: Reset store data');
   }
   
@@ -1396,7 +1288,7 @@ export class GitDreamNodeService {
    */
   private async refreshAllGitStatus(): Promise<{ updated: number; errors: number }> {
     const store = useInterBrainStore.getState();
-    const nodes = Array.from(store.realNodes.entries());
+    const nodes = Array.from(store.dreamNodes.entries());
     
     let updated = 0;
     let errors = 0;
@@ -1405,7 +1297,7 @@ export class GitDreamNodeService {
     
     for (const [nodeId, nodeData] of nodes) {
       try {
-        const newGitStatus = await this.checkGitStatus(nodeData.node.repoPath);
+        const newGitStatus = await this.gitOpsService.getGitStatus(nodeData.node.repoPath);
         const oldGitStatus = nodeData.node.gitStatus;
         
         // Check if git status actually changed
@@ -1461,7 +1353,7 @@ export class GitDreamNodeService {
    */
   getStats() {
     const store = useInterBrainStore.getState();
-    const nodes = Array.from(store.realNodes.values()).map(d => d.node);
+    const nodes = Array.from(store.dreamNodes.values()).map(d => d.node);
     
     return {
       totalNodes: nodes.length,
@@ -1471,98 +1363,6 @@ export class GitDreamNodeService {
     };
   }
   
-  /**
-   * Check git status for a repository
-   */
-  private async checkGitStatus(repoPath: string): Promise<GitStatus> {
-    try {
-      const fullPath = path.join(this.vaultPath, repoPath);
-      
-      // Check if git repository exists
-      const gitDir = path.join(fullPath, '.git');
-      if (!await this.fileExists(gitDir)) {
-        // No git repo yet, return clean state
-        return {
-          hasUncommittedChanges: false,
-          hasStashedChanges: false,
-          hasUnpushedChanges: false,
-          lastChecked: Date.now()
-        };
-      }
-      
-      // Get current commit hash
-      let commitHash: string | undefined;
-      try {
-        const hashResult = await execAsync('git rev-parse HEAD', { cwd: fullPath });
-        commitHash = hashResult.stdout.trim();
-      } catch {
-        // No commits yet
-        console.log(`GitDreamNodeService: No commits yet in ${repoPath}`);
-      }
-      
-      // Check for uncommitted changes
-      const statusResult = await execAsync('git status --porcelain', { cwd: fullPath });
-      const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
-      
-      // Check for stashed changes
-      const stashResult = await execAsync('git stash list', { cwd: fullPath });
-      const hasStashedChanges = stashResult.stdout.trim().length > 0;
-      
-      // Check for unpushed commits (ahead of remote) using git status
-      let hasUnpushedChanges = false;
-      let aheadCount = 0;
-      try {
-        // Use git status --porcelain=v1 --branch to get ahead/behind info
-        const statusBranchResult = await execAsync('git status --porcelain=v1 --branch', { cwd: fullPath });
-        const branchLine = statusBranchResult.stdout.split('\n')[0];
-        
-        // Look for "ahead N" in the branch line
-        // Format: "## branch...origin/branch [ahead N, behind M]" or "## branch...origin/branch [ahead N]"
-        const aheadMatch = branchLine.match(/\[ahead (\d+)/);
-        if (aheadMatch) {
-          aheadCount = parseInt(aheadMatch[1], 10);
-          hasUnpushedChanges = aheadCount > 0;
-          console.log(`GitDreamNodeService: Found ${aheadCount} unpushed commits in ${repoPath}`);
-        } else {
-          console.log(`GitDreamNodeService: No ahead commits detected in ${repoPath}, branch line: ${branchLine}`);
-        }
-      } catch (error) {
-        // No upstream or git error, assume no unpushed commits
-        console.log(`GitDreamNodeService: Git status error for ${repoPath}:`, error instanceof Error ? error.message : 'Unknown error');
-      }
-      
-      // Count different types of changes for details
-      let details;
-      if (hasUncommittedChanges || hasStashedChanges || hasUnpushedChanges || commitHash) {
-        const statusLines = statusResult.stdout.trim().split('\n').filter((line: string) => line.length > 0);
-        const staged = statusLines.filter((line: string) => line.charAt(0) !== ' ' && line.charAt(0) !== '?').length;
-        const unstaged = statusLines.filter((line: string) => line.charAt(1) !== ' ').length;
-        const untracked = statusLines.filter((line: string) => line.startsWith('??')).length;
-        const stashCount = hasStashedChanges ? stashResult.stdout.trim().split('\n').length : 0;
-        
-        details = { staged, unstaged, untracked, stashCount, aheadCount, commitHash };
-      }
-      
-      return {
-        hasUncommittedChanges,
-        hasStashedChanges,
-        hasUnpushedChanges,
-        lastChecked: Date.now(),
-        details
-      };
-      
-    } catch (error) {
-      console.warn(`Failed to check git status for ${repoPath}:`, error);
-      // Return clean state on error
-      return {
-        hasUncommittedChanges: false,
-        hasStashedChanges: false,
-        hasUnpushedChanges: false,
-        lastChecked: Date.now()
-      };
-    }
-  }
-
   // Relationship management methods
   
   /**
@@ -1571,7 +1371,7 @@ export class GitDreamNodeService {
    */
   async updateRelationships(nodeId: string, relationshipIds: string[]): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
 
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1608,7 +1408,7 @@ export class GitDreamNodeService {
    */
   async getRelationships(nodeId: string): Promise<string[]> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
     
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1623,8 +1423,8 @@ export class GitDreamNodeService {
    */
   async addRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
-    const relatedNodeData = store.realNodes.get(relatedNodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
+    const relatedNodeData = store.dreamNodes.get(relatedNodeId);
 
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1681,8 +1481,8 @@ export class GitDreamNodeService {
    */
   async removeRelationship(nodeId: string, relatedNodeId: string): Promise<void> {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
-    const relatedNodeData = store.realNodes.get(relatedNodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
+    const relatedNodeData = store.dreamNodes.get(relatedNodeId);
 
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1760,50 +1560,32 @@ export class GitDreamNodeService {
     urlMetadata: UrlMetadata,
     position?: [number, number, number]
   ): Promise<DreamNode> {
+    const vaultService = serviceManager.getVaultService();
+    if (!vaultService) {
+      throw new Error('VaultService not initialized');
+    }
+
     // Use provided position or calculate random position
     const nodePosition = position
-      ? position // Position is already calculated in world coordinates
+      ? position
       : this.calculateNewNodePosition();
 
     // Create node using existing create method without files
     const node = await this.create(title, type, undefined, nodePosition);
 
-    // Generate .link file name and content
-    const linkFileName = getLinkFileName(urlMetadata, title);
-    const linkFileContent = createLinkFileContent(urlMetadata, title);
-
-    console.log(`🔗 [GitDreamNodeService] Creating link file:`, {
-      linkFileName,
-      linkFilePath: path.join(this.vaultPath, node.repoPath, linkFileName),
-      contentLength: linkFileContent.length,
-      contentPreview: linkFileContent.substring(0, 100)
-    });
-
-    // Write .link file to repository
-    const linkFilePath = path.join(this.vaultPath, node.repoPath, linkFileName);
-    await fsPromises.writeFile(linkFilePath, linkFileContent);
-
-    console.log(`🔗 [GitDreamNodeService] Link file written successfully:`, linkFilePath);
+    // Write .link file using drag-and-drop utility
+    const linkResult = await writeLinkFile(vaultService, node.repoPath, urlMetadata, title);
 
     // Update dreamTalk media to reference the .link file
-    node.dreamTalkMedia = [{
-      path: linkFileName,
-      absolutePath: linkFilePath,
-      type: urlMetadata.type,
-      data: linkFileContent, // Store link metadata as data
-      size: linkFileContent.length
-    }];
+    node.dreamTalkMedia = [linkResult.media];
 
-    // Create README content with URL
-    const readmeContent = this.createUrlReadmeContent(urlMetadata, title);
-    await this.writeReadmeFile(node.repoPath, readmeContent);
+    // Create README content with URL using drag-and-drop utility
+    await writeUrlReadme(vaultService, node.repoPath, urlMetadata, title);
 
     // Update .udd file with .link file path
     await this.updateUDDFile(node);
 
     console.log(`GitDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type})`);
-    console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
-    console.log(`GitDreamNodeService: URL: ${urlMetadata.url}`);
     return node;
   }
 
@@ -1857,8 +1639,13 @@ export class GitDreamNodeService {
    * Add URL to an existing DreamNode
    */
   async addUrlToNode(nodeId: string, urlMetadata: UrlMetadata): Promise<void> {
+    const vaultService = serviceManager.getVaultService();
+    if (!vaultService) {
+      throw new Error('VaultService not initialized');
+    }
+
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
 
     if (!nodeData) {
       throw new Error(`DreamNode with ID ${nodeId} not found`);
@@ -1866,48 +1653,14 @@ export class GitDreamNodeService {
 
     const node = nodeData.node;
 
-    // Generate .link file name and content
-    const linkFileName = getLinkFileName(urlMetadata, node.name);
-    const linkFileContent = createLinkFileContent(urlMetadata, node.name);
-
-    console.log(`🔗 [GitDreamNodeService] Adding link file to existing node:`, {
-      linkFileName,
-      linkFilePath: path.join(this.vaultPath, node.repoPath, linkFileName),
-      contentLength: linkFileContent.length,
-      contentPreview: linkFileContent.substring(0, 100)
-    });
-
-    // Write .link file to repository
-    const linkFilePath = path.join(this.vaultPath, node.repoPath, linkFileName);
-    await fsPromises.writeFile(linkFilePath, linkFileContent);
-
-    console.log(`🔗 [GitDreamNodeService] Link file added successfully:`, linkFilePath);
+    // Write .link file using drag-and-drop utility
+    const linkResult = await writeLinkFile(vaultService, node.repoPath, urlMetadata, node.name);
 
     // Add .link file as additional dreamTalk media
-    const linkMedia = {
-      path: linkFileName,
-      absolutePath: linkFilePath,
-      type: urlMetadata.type,
-      data: linkFileContent,
-      size: linkFileContent.length
-    };
+    node.dreamTalkMedia.push(linkResult.media);
 
-    node.dreamTalkMedia.push(linkMedia);
-
-    // Append URL content to README
-    const urlContent = this.createUrlReadmeContent(urlMetadata);
-    const readmePath = path.join(this.vaultPath, node.repoPath, 'README.md');
-
-    try {
-      // Read existing README content
-      const existingContent = await fsPromises.readFile(readmePath, 'utf8');
-      const newContent = existingContent + '\n\n' + urlContent;
-      await fsPromises.writeFile(readmePath, newContent);
-    } catch (error) {
-      console.warn(`Failed to update README for node ${nodeId}:`, error);
-      // Create new README if it doesn't exist
-      await this.writeReadmeFile(node.repoPath, urlContent);
-    }
+    // Append URL content to README using drag-and-drop utility
+    await appendUrlToReadme(vaultService, node.repoPath, urlMetadata);
 
     // Update .udd file
     await this.updateUDDFile(node);
@@ -1920,40 +1673,7 @@ export class GitDreamNodeService {
     });
 
     console.log(`GitDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
-    console.log(`GitDreamNodeService: Created .link file: ${linkFileName}`);
-  }
-
-  /**
-   * Create README content for URLs
-   */
-  private createUrlReadmeContent(urlMetadata: UrlMetadata, title?: string): string {
-    let content = '';
-
-    if (title) {
-      content += `# ${title}\n\n`;
-    }
-
-    if (urlMetadata.type === 'youtube' && urlMetadata.videoId) {
-      // Add YouTube iframe embed for Obsidian
-      content += generateYouTubeIframe(urlMetadata.videoId, 560, 315);
-      content += '\n\n';
-
-      // Add markdown link as backup
-      content += `[${urlMetadata.title || 'YouTube Video'}](${urlMetadata.url})`;
-    } else {
-      // For other URLs, add as markdown link
-      content += generateMarkdownLink(urlMetadata.url, urlMetadata.title);
-    }
-
-    return content;
-  }
-
-  /**
-   * Write README.md file to node repository
-   */
-  private async writeReadmeFile(repoPath: string, content: string): Promise<void> {
-    const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
-    await fsPromises.writeFile(readmePath, content);
+    console.log(`GitDreamNodeService: Created .link file: ${linkResult.fileName}`);
   }
 
   /**

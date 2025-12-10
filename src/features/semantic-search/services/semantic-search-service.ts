@@ -322,7 +322,7 @@ export class SemanticSearchService {
    */
   private async getAllAvailableNodes(): Promise<DreamNode[]> {
     const store = useInterBrainStore.getState();
-    return Array.from(store.realNodes.values()).map(data => data.node);
+    return Array.from(store.dreamNodes.values()).map(data => data.node);
   }
   
   /**

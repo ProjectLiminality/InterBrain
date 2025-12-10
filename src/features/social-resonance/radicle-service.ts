@@ -33,10 +33,11 @@ export interface RadicleService {
   isNodeRunning(): Promise<boolean>;
 
   /**
-   * Initialize a DreamNode repository with Radicle
+   * Initialize a DreamNode repository with Radicle (private by default)
    * @param passphrase Optional passphrase (uses ssh-agent if not provided)
+   * @returns The Radicle ID (RID) if successfully initialized, null otherwise
    */
-  init(dreamNodePath: string, name?: string, description?: string, passphrase?: string): Promise<void>;
+  init(dreamNodePath: string, name?: string, description?: string, passphrase?: string): Promise<string | null>;
 
   /**
    * Clone a DreamNode from the Radicle network
@@ -215,29 +216,21 @@ export class RadicleServiceImpl implements RadicleService {
     return this._radCommand;
   }
 
-  async init(dreamNodePath: string, name?: string, description?: string, passphrase?: string): Promise<void> {
+  async init(dreamNodePath: string, name?: string, description?: string, passphrase?: string): Promise<string | null> {
     if (!await this.isAvailable()) {
-      throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
+      console.warn('RadicleService: Radicle CLI not available, skipping init');
+      return null;
     }
 
     // Ensure Radicle node is running before initializing
-    await this.ensureNodeRunning(passphrase);
+    try {
+      await this.ensureNodeRunning(passphrase);
+    } catch (nodeError) {
+      console.warn('RadicleService: Could not ensure node is running:', nodeError);
+      // Continue anyway - node might already be running
+    }
 
     const radCmd = this.getRadCommand();
-
-    // Build command with proper flags to bypass TTY requirements
-    // IMPORTANT: Pass the path as the first argument to rad init
-    // NOTE: name parameter should be pre-sanitized (e.g., directory name in PascalCase)
-    const args = ['init', `"${dreamNodePath}"`, '--public', '--default-branch', 'main', '--no-confirm'];
-    if (name) {
-      args.push('--name', `"${name}"`);
-    }
-    if (description) {
-      args.push('--description', `"${description}"`);
-    }
-
-    const command = `"${radCmd}" ${args.join(' ')}`;
-    console.log(`RadicleService: Running '${command}'`);
 
     // Prepare environment with passphrase if provided
     const env = { ...(globalThis as any).process.env };
@@ -253,20 +246,31 @@ export class RadicleServiceImpl implements RadicleService {
     const gitPath = require('path').join(dreamNodePath, '.git');
     console.log(`RadicleService: Checking if ${gitPath} exists:`, fs.existsSync(gitPath));
 
-    // Debug: Try running git status to verify the repo works
     try {
-      await execAsync('git status', { cwd: dreamNodePath });
-      console.log(`RadicleService: git status works in ${dreamNodePath}`);
-    } catch (gitErr: any) {
-      console.error(`RadicleService: git status failed:`, gitErr.message);
-    }
-
-    try {
-      // Use spawn instead of exec to provide proper stdin
+      // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
+      // IMPORTANT: --name is REQUIRED for non-TTY mode
+      // IMPORTANT: --private keeps repo local until explicitly shared
+      // IMPORTANT: --no-seed prevents automatic network seeding
       const { spawn } = require('child_process');
+      const repoName = name || require('path').basename(dreamNodePath);
+
+      const spawnArgs = [
+        'init',
+        dreamNodePath,
+        '--private',           // Private = not announced, stays local until share
+        '--default-branch', 'main',
+        '--no-confirm',
+        '--no-seed',           // Don't seed until user explicitly shares
+        '--name', repoName,    // REQUIRED for non-TTY mode
+      ];
+      if (description) {
+        spawnArgs.push('--description', description);
+      }
+
+      console.log(`RadicleService: Running rad ${spawnArgs.join(' ')}`);
 
       const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(radCmd, ['init', dreamNodePath, '--public', '--default-branch', 'main', '--no-confirm', ...(name ? ['--name', name] : []), ...(description ? ['--description', description] : [])], {
+        const child = spawn(radCmd, spawnArgs, {
           env: env,
           cwd: dreamNodePath,
           stdio: ['pipe', 'pipe', 'pipe']  // Provide stdin pipe
@@ -313,46 +317,48 @@ export class RadicleServiceImpl implements RadicleService {
       if (result.stderr) {
         console.warn('RadicleService: rad init stderr:', result.stderr);
       }
+
+      // Extract RID from rad init output
+      // Expected format: "Repository rad:z... created."
+      const ridMatch = result.stdout.match(/rad:z[a-zA-Z0-9]+/);
+      if (ridMatch) {
+        const radicleId = ridMatch[0];
+        console.log(`RadicleService: Captured Radicle ID: ${radicleId}`);
+        return radicleId;
+      }
+
+      console.warn('RadicleService: Could not extract RID from rad init output');
+      return null;
     } catch (error: any) {
       const errorOutput = error.stderr || error.stdout || error.message || '';
 
-      // Check if already initialized in storage - this means we need to use rad checkout
-      // Error format: "attempt to reinitialize '/Users/.../storage/z2KWk...'"
+      // Check if already initialized in storage - extract RID if possible
       if (errorOutput.includes('reinitialize') && errorOutput.includes('/storage/')) {
-        console.log(`RadicleService: Repository exists in Radicle storage but working directory not linked`);
-
-        // Extract Radicle ID from storage path
-        // Path format: /Users/username/.radicle/storage/z2KWkLyACv7ycuZva8C5NFo1m9EGC (no rad: prefix in path)
+        console.log(`RadicleService: Repository exists in Radicle storage`);
         const storageMatch = errorOutput.match(/\/storage\/(z[A-Za-z0-9]+)/);
         if (storageMatch && storageMatch[1]) {
-          const radicleId = `rad:${storageMatch[1]}`; // Add rad: prefix
-          console.log(`RadicleService: Found Radicle ID in storage: ${radicleId}`);
-
-          // Return a special error that includes the Radicle ID
-          throw new Error(`RADICLE_STORAGE_EXISTS:${radicleId}`);
+          const radicleId = `rad:${storageMatch[1]}`;
+          console.log(`RadicleService: Found existing Radicle ID: ${radicleId}`);
+          return radicleId;
         }
-
-        // Fallback if we can't extract ID
-        throw new Error('Repository exists in Radicle storage but working directory not linked. Run "rad ." to check status.');
       }
 
-      // Check if already initialized normally - this is expected and not an error
+      // Check if already initialized normally - try to get existing RID
       if (errorOutput.includes('already initialized')) {
-        console.log(`RadicleService: Repository already initialized (not an error)`);
-        throw new Error(errorOutput); // Throw with clean message for caller to handle
+        console.log(`RadicleService: Repository already initialized, attempting to get existing RID`);
+        try {
+          const existingRid = await this.getRadicleId(dreamNodePath, passphrase);
+          if (existingRid) {
+            return existingRid;
+          }
+        } catch {
+          // Ignore - will return null
+        }
       }
 
-      // Log unexpected errors
-      console.error('RadicleService: rad init failed:', error);
-      console.error('RadicleService: rad init stdout:', error.stdout);
-      console.error('RadicleService: rad init stderr:', error.stderr);
-
-      // Check if error is due to missing passphrase
-      if (errorOutput.includes('RAD_PASSPHRASE') || errorOutput.includes('passphrase')) {
-        throw new Error('Radicle passphrase required. Please configure your passphrase or ensure ssh-agent is running.');
-      }
-
-      throw new Error(`Failed to initialize Radicle: ${errorOutput || error.message || 'Unknown error'}`);
+      // Log unexpected errors but don't throw - graceful degradation
+      console.warn('RadicleService: rad init failed (non-fatal):', errorOutput || error.message);
+      return null;
     }
   }
 

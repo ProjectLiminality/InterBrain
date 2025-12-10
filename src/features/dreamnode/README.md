@@ -12,21 +12,41 @@ DreamNodes are git-backed repositories representing either ideas (Dreams) or peo
 - **`types/dreamnode.ts`** - Core TypeScript interfaces: `DreamNode`, `UDDFile` (Universal Dream Description), `MediaFile`, `CanvasFile`, `GitStatus`, `ObsidianCanvasData`
 
 ### State Management
-- **`dreamnode-slice.ts`** - Zustand slice for DreamNode UI state (flip animations, creator mode)
+- **`store/slice.ts`** - Zustand slice owning DreamNode data and UI state:
+  - `dreamNodes` - The canonical Map of all DreamNode data (moved from core store)
+  - Flip animations, creator mode UI state
 - **`index.ts`** - Barrel export for all feature exports
 
-### Services (Business Logic)
-- **`services/dreamnode-service.ts`** - Base service for node selection, layout management, camera control
-- **`services/git-dreamnode-service.ts`** - Real git-backed CRUD operations (create/read/update/delete nodes)
-  - Handles git repository creation with template
-  - Vault scanning for existing nodes
+### Services (Orchestrators with State)
+- **`services/git-dreamnode-service.ts`** - Git-backed CRUD operations (create/read/update/delete nodes)
+  - Orchestrates utilities for git, vault scanning, repo initialization
+  - Handles store synchronization
   - Radicle P2P initialization
   - Bidirectional relationship management (liminal web connections)
-  - Git status checking (uncommitted/stashed/unpushed changes)
 - **`services/udd-service.ts`** - Lightweight read/write for `.udd` files (metadata persistence)
-- **`services/git-operations.ts`** - Low-level git command utilities
-- **`services/git-template-service.ts`** - DreamNode template initialization and hook setup
 - **`services/media-loading-service.ts`** - Lazy-loading service for DreamTalk media (loads by distance from camera)
+
+### Utilities (Stateless Functions)
+- **`utils/git-utils.ts`** - Stateless git command wrappers
+  - `getGitStatus(repoPath)` - Get comprehensive git status
+  - `stashChanges(repoPath)`, `popStash(repoPath)` - Stash operations
+  - `commitAllChanges(repoPath, message)` - Commit operations
+  - `initRepo(repoPath, templatePath)` - Repository initialization
+  - `openInFinder(repoPath)`, `openInTerminal(repoPath)` - Shell operations
+- **`utils/vault-scanner.ts`** - Filesystem discovery utilities
+  - `discoverDreamNodes(vaultPath)` - Scan vault for DreamNodes
+  - `isValidDreamNode(dirPath)` - Validate DreamNode directory
+  - `readUDD(dirPath)`, `readLiminalWeb(dirPath)` - Read metadata files
+  - `discoverDreamTalkMedia(dirPath, filename)` - Discover media files
+- **`utils/repo-initializer.ts`** - Repository creation utilities
+  - `createRepoDirectory(repoPath)` - Create directory
+  - `initGitWithTemplate(repoPath, templatePath)` - Initialize git
+  - `processUDDTemplate(repoPath, config)` - Process template placeholders
+  - `moveTemplateFiles(repoPath)` - Move files from .git to working dir
+  - `setupDreamerNode(repoPath)` - Create dreamer-specific files
+  - `makeInitialCommit(repoPath, title)` - Make initial commit
+- **`utils/title-sanitization.ts`** - Convert titles to PascalCase for folder names
+- **`utils/git-operations.ts`** - Legacy class (deprecated, use git-utils)
 
 ### 3D Visualization Components
 - **`components/DreamNode3D.tsx`** - Main 3D component with Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
@@ -52,24 +72,27 @@ DreamNodes are git-backed repositories representing either ideas (Dreams) or peo
 
 ### Types
 - `DreamNode`, `UDDFile`, `MediaFile`, `CanvasFile`, `GitStatus`, `ObsidianCanvasData`
+- `DreamNodeData` - Node data with sync metadata (from store/slice)
 
-### Services
-- `DreamNodeService` - Base service
-- `GitDreamNodeService` - Git-backed implementation
+### Services (Orchestrators)
+- `GitDreamNodeService` - Git-backed DreamNode CRUD + store sync
 - `UDDService` - .udd file operations
-- `GitOperationsService`, `GitTemplateService`
-- `MediaLoadingService` + `getMediaLoadingService()`
+- `MediaLoadingService` + `getMediaLoadingService()` - Lazy media loading
+
+### Utilities (Stateless Functions)
+- `gitUtils` namespace - All git operations (`getGitStatus`, `stashChanges`, etc.)
+- `vaultScanner` namespace - Discovery functions (`discoverDreamNodes`, etc.)
+- `repoInitializer` namespace - Repo creation (`createRepoDirectory`, etc.)
+- `sanitizeTitleToPascalCase()` - Title cleaning
+- `GitOperationsService` - Legacy class (deprecated)
 
 ### Components
 - `DreamNode3D` (+ `DreamNode3DRef` type)
 - `DreamTalkSide`, `DreamSongSide`, `PDFPreview`
 
 ### State & Commands
-- `dreamnode-slice` exports (Zustand slice creator)
+- `store/slice` exports (Zustand slice with dreamNodes state)
 - `registerDreamNodeCommands()` - Command registration function
-
-### Utilities
-- `sanitizeTitleToPascalCase()` - Title cleaning
 
 ## Architecture Notes
 

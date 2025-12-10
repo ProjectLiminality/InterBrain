@@ -2,9 +2,8 @@ import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UIService } from './core/services/ui-service';
-import { GitOperationsService } from './features/dreamnode/services/git-operations';
+import { GitOperationsService } from './features/dreamnode/utils/git-operations';
 import { VaultService } from './core/services/vault-service';
-import { GitTemplateService } from './features/dreamnode/services/git-template-service';
 import { PassphraseManager } from './features/social-resonance/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
@@ -65,7 +64,6 @@ export default class InterBrainPlugin extends Plugin {
   private uiService!: UIService;
   private gitOpsService!: GitOperationsService;
   private vaultService!: VaultService;
-  private gitTemplateService!: GitTemplateService;
   private passphraseManager!: PassphraseManager;
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
@@ -151,7 +149,7 @@ export default class InterBrainPlugin extends Plugin {
       setTimeout(() => {
         const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
-        const nodeData = store.realNodes.get(uuidToSelect);
+        const nodeData = store.dreamNodes.get(uuidToSelect);
 
         if (nodeData) {
           console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
@@ -165,7 +163,7 @@ export default class InterBrainPlugin extends Plugin {
             console.log(`[InterBrain] Retrying node selection after brief delay...`);
             setTimeout(() => {
               const retryStore = useInterBrainStore.getState();
-              const retryNodeData = retryStore.realNodes.get(uuidToSelect);
+              const retryNodeData = retryStore.dreamNodes.get(uuidToSelect);
 
               if (retryNodeData) {
                 console.log(`[InterBrain] Auto-selecting node (retry): ${retryNodeData.node.name} (${uuidToSelect})`);
@@ -205,7 +203,7 @@ export default class InterBrainPlugin extends Plugin {
         // Find and select the InterBrain node by UUID
         const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
-        const nodeData = store.realNodes.get(interbrainUUID);
+        const nodeData = store.dreamNodes.get(interbrainUUID);
 
         if (nodeData) {
           console.log('[InterBrain] Selecting InterBrain node');
@@ -299,7 +297,6 @@ export default class InterBrainPlugin extends Plugin {
     this.uiService = new UIService(this.app);
     this.gitOpsService = new GitOperationsService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
-    this.gitTemplateService = new GitTemplateService(this.app.vault);
     this.passphraseManager = new PassphraseManager(this.uiService, this);
     this.faceTimeService = new FaceTimeService();
 
@@ -1222,11 +1219,11 @@ export default class InterBrainPlugin extends Plugin {
 
     // Find the DreamNode by UUID (which is the node ID)
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(uuid);
+    const nodeData = store.dreamNodes.get(uuid);
 
     if (!nodeData) {
       console.error('[RevealDreamNode] No matching node found for UUID:', uuid);
-      console.log('[RevealDreamNode] Available UUIDs:', Array.from(store.realNodes.keys()));
+      console.log('[RevealDreamNode] Available UUIDs:', Array.from(store.dreamNodes.keys()));
       this.uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
       return;
     }
@@ -1383,7 +1380,6 @@ export default class InterBrainPlugin extends Plugin {
           title,
           type,
           dreamTalk: '',
-          liminalWebRelationships: type === 'dreamer' ? ['550e8400-e29b-41d4-a716-446655440000'] : [],
           submodules: [],
           supermodules: []
         };
@@ -1395,10 +1391,6 @@ export default class InterBrainPlugin extends Plugin {
         let updated = false;
 
         // Ensure all required fields exist
-        if (!uddContent.liminalWebRelationships) {
-          uddContent.liminalWebRelationships = type === 'dreamer' ? ['550e8400-e29b-41d4-a716-446655440000'] : [];
-          updated = true;
-        }
         if (!uddContent.submodules) {
           uddContent.submodules = [];
           updated = true;
@@ -1553,8 +1545,8 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
   private async getAllAvailableNodes(): Promise<DreamNode[]> {
     try {
       const store = useInterBrainStore.getState();
-      const realNodes = store.realNodes;
-      const allNodes = Array.from(realNodes.values()).map(data => data.node);
+      const dreamNodesMap = store.dreamNodes;
+      const allNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
       return allNodes;
     } catch (error) {
       console.error('Failed to get available nodes:', error);

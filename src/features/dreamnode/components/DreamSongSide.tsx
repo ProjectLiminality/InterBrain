@@ -82,11 +82,11 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   const gitStyle = getGitStateStyle(gitState);
 
   // Connect to store for media click navigation
-  const realNodes = useInterBrainStore(state => state.realNodes);
+  const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
   const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
-  
-  // Convert realNodes Map to dreamNodes array (same pattern as DreamspaceCanvas)
-  const dreamNodes = Array.from(realNodes.values()).map(data => data.node);
+
+  // Convert dreamNodes Map to array (same pattern as DreamspaceCanvas)
+  const dreamNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
 
   // Handler for media click navigation
   const handleMediaClick = useCallback((sourceDreamNodeId: string) => {

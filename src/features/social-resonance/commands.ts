@@ -396,6 +396,7 @@ export function registerRadicleCommands(
             }
 
             // Create DreamNode with ALL required properties
+            // Note: liminalWebConnections will be populated during vault scan from liminal-web.json
             const clonedNode: DreamNode = {
               id: udd.uuid, // CRITICAL: id property
               name: udd.title || repoName,
@@ -403,7 +404,7 @@ export function registerRadicleCommands(
               repoPath: repoName,
               dreamTalkMedia: dreamTalkMedia,
               dreamSongContent: [],
-              liminalWebConnections: udd.liminalWebRelationships || [], // CRITICAL: defensive check
+              liminalWebConnections: [], // Populated from liminal-web.json during vault scan
               position: position,
               hasUnsavedChanges: false,
               email: udd.email,
@@ -413,14 +414,14 @@ export function registerRadicleCommands(
 
             console.log(`RadicleCommands: Created DreamNode object:`, clonedNode);
 
-            // Add to store (realNodes is a Map)
+            // Add to store (dreamNodes is a Map)
             const freshStore = useInterBrainStore.getState();
-            const currentNodes = new Map(freshStore.realNodes);
+            const currentNodes = new Map(freshStore.dreamNodes);
             currentNodes.set(clonedNode.id, {
               node: clonedNode,
               lastSynced: Date.now()
             });
-            freshStore.setRealNodes(currentNodes);
+            freshStore.setDreamNodes(currentNodes);
 
             console.log(`RadicleCommands: Added cloned node to store, total nodes: ${currentNodes.size}`);
             uiService.showInfo(`"${clonedNode.name}" is now visible in DreamSpace`);

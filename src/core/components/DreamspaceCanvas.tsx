@@ -48,9 +48,9 @@ export default function DreamspaceCanvas() {
     }
   }, []); // Run once on mount
   
-  const realNodes = useInterBrainStore(state => state.realNodes);
+  const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
 
-  // No need to load initial nodes - they come from store.realNodes
+  // No need to load initial nodes - they come from store.dreamNodes
 
   // SpatialOrchestrator reference for controlling all spatial interactions
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
@@ -60,9 +60,9 @@ export default function DreamspaceCanvas() {
 
   // Drag and drop state - tracks mouse position for 3D drop positioning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
-  
+
   // Get nodes from store
-  const dreamNodes: DreamNode[] = Array.from(realNodes.values()).map(data => data.node);
+  const dreamNodes: DreamNode[] = Array.from(dreamNodesMap.values()).map(data => data.node);
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);

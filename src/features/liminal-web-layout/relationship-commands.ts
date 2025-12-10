@@ -1,288 +1,29 @@
 import { Notice } from 'obsidian';
 import type InterBrainPlugin from '../../main';
 import { serviceManager } from '../../core/services/service-manager';
-
-const fs = require('fs');
-const path = require('path');
-const fsPromises = fs.promises;
-
-// InterBrain node UUID - the anchor of the space
-const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+import { VaultService } from '../../core/services/vault-service';
 
 /**
- * Sync bidirectional relationships across all DreamNodes
- * Ensures that if A points to B, then B also points to A
+ * Clean up dangling relationship references in liminal-web.json files
+ * Removes references to non-existent DreamNodes (only affects DreamerNodes)
  */
-async function syncBidirectionalRelationships(plugin: InterBrainPlugin): Promise<void> {
-  try {
-    new Notice('Starting relationship sync...');
-
-    const adapter = plugin.app.vault.adapter as any;
-    const vaultPath = adapter.basePath || '';
-
-    // Get all DreamNode directories
-    const entries = await fsPromises.readdir(vaultPath, { withFileTypes: true });
-    const dreamNodeDirs = [];
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-
-      const dirPath = path.join(vaultPath, entry.name);
-      const uddPath = path.join(dirPath, '.udd');
-      const gitPath = path.join(dirPath, '.git');
-
-      try {
-        await fsPromises.access(uddPath);
-        await fsPromises.access(gitPath);
-        dreamNodeDirs.push({ name: entry.name, path: dirPath });
-      } catch {
-        // Not a valid DreamNode, skip
-        continue;
-      }
-    }
-
-    console.log(`[RelationshipSync] Found ${dreamNodeDirs.length} DreamNodes to scan`);
-
-    // Load all UDD files in parallel (include type for dreamer detection)
-    const uddDataMap = new Map<string, { uuid: string; type: string; relationships: string[]; path: string; dirName: string }>();
-
-    await Promise.all(
-      dreamNodeDirs.map(async ({ name, path: dirPath }) => {
-        try {
-          const uddPath = path.join(dirPath, '.udd');
-          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
-          const udd = JSON.parse(uddContent);
-
-          uddDataMap.set(udd.uuid, {
-            uuid: udd.uuid,
-            type: udd.type || 'dream', // Default to 'dream' if type missing
-            relationships: udd.liminalWebRelationships || [],
-            path: uddPath,
-            dirName: name
-          });
-        } catch (error) {
-          console.error(`[RelationshipSync] Error reading ${name}/.udd:`, error);
-        }
-      })
-    );
-
-    console.log(`[RelationshipSync] Loaded ${uddDataMap.size} UDD files`);
-
-    // Build relationship graph and detect missing bidirectional links
-    const fixesNeeded = new Map<string, Set<string>>();
-
-    // First, ensure all dreamer nodes are linked to InterBrain (the anchor of the space)
-    const interbrainData = uddDataMap.get(INTERBRAIN_UUID);
-    if (interbrainData) {
-      for (const [uuid, data] of uddDataMap) {
-        if (data.type === 'dreamer' && uuid !== INTERBRAIN_UUID) {
-          // Check if dreamer is linked to InterBrain
-          if (!data.relationships.includes(INTERBRAIN_UUID)) {
-            console.log(`[RelationshipSync] Auto-linking dreamer ${data.dirName} to InterBrain`);
-            if (!fixesNeeded.has(uuid)) {
-              fixesNeeded.set(uuid, new Set());
-            }
-            fixesNeeded.get(uuid)!.add(INTERBRAIN_UUID);
-          }
-
-          // Check if InterBrain is linked back to dreamer (bidirectional)
-          if (!interbrainData.relationships.includes(uuid)) {
-            console.log(`[RelationshipSync] Auto-linking InterBrain to dreamer ${data.dirName}`);
-            if (!fixesNeeded.has(INTERBRAIN_UUID)) {
-              fixesNeeded.set(INTERBRAIN_UUID, new Set());
-            }
-            fixesNeeded.get(INTERBRAIN_UUID)!.add(uuid);
-          }
-        }
-      }
-    } else {
-      console.warn(`[RelationshipSync] InterBrain node (${INTERBRAIN_UUID}) not found - skipping auto-link for dreamers`);
-    }
-
-    // Then handle general bidirectional relationship sync
-    for (const [uuid, data] of uddDataMap) {
-      for (const relatedUuid of data.relationships) {
-        const relatedData = uddDataMap.get(relatedUuid);
-
-        if (!relatedData) {
-          console.warn(`[RelationshipSync] Node ${data.dirName} references non-existent node ${relatedUuid}`);
-          continue;
-        }
-
-        // Check if the relationship is bidirectional
-        if (!relatedData.relationships.includes(uuid)) {
-          console.log(`[RelationshipSync] Found missing bidirectional link: ${data.dirName} -> ${relatedData.dirName} (need to add reverse)`);
-
-          if (!fixesNeeded.has(relatedUuid)) {
-            fixesNeeded.set(relatedUuid, new Set());
-          }
-          fixesNeeded.get(relatedUuid)!.add(uuid);
-        }
-      }
-    }
-
-    console.log(`[RelationshipSync] Found ${fixesNeeded.size} nodes needing relationship fixes`);
-
-    // Apply fixes in parallel (skip if no fixes needed)
-    let fixedCount = 0;
-    let errorCount = 0;
-
-    await Promise.all(
-      Array.from(fixesNeeded.entries()).map(async ([uuid, missingRelationships]) => {
-        try {
-          const data = uddDataMap.get(uuid);
-          if (!data) return;
-
-          // Read current UDD file
-          const uddContent = await fsPromises.readFile(data.path, 'utf-8');
-          const udd = JSON.parse(uddContent);
-
-          // Add missing relationships
-          const currentRelationships = new Set(udd.liminalWebRelationships || []);
-          for (const missingUuid of missingRelationships) {
-            currentRelationships.add(missingUuid);
-          }
-
-          udd.liminalWebRelationships = Array.from(currentRelationships);
-
-          // Write back to disk
-          await fsPromises.writeFile(data.path, JSON.stringify(udd, null, 2));
-
-          // Commit metadata change if there's a diff (git will refuse if no diff)
-          // This ensures clean git state for future pulls/merges
-          try {
-            const { exec } = require('child_process');
-            const { promisify } = require('util');
-            const execAsync = promisify(exec);
-
-            const nodePath = path.dirname(data.path);
-
-            // Check if there's actually a diff to commit
-            const { stdout: diffOutput } = await execAsync('git diff --quiet .udd || echo "has-diff"', { cwd: nodePath });
-
-            if (diffOutput.trim() === 'has-diff') {
-              await execAsync('git add .udd', { cwd: nodePath });
-              await execAsync(
-                `git commit -m "[metadata] Sync bidirectional relationships"`,
-                { cwd: nodePath }
-              );
-              console.log(`[RelationshipSync] ✓ Committed metadata for ${data.dirName}`);
-            } else {
-              console.log(`[RelationshipSync] No git diff for ${data.dirName} - skipping commit`);
-            }
-          } catch (commitError: any) {
-            // Non-critical - relationship is already fixed on disk
-            if (!commitError.message?.includes('nothing to commit')) {
-              console.warn(`[RelationshipSync] Could not commit metadata (non-critical):`, commitError);
-            }
-          }
-
-          fixedCount++;
-          console.log(`[RelationshipSync] Fixed ${data.dirName} - added ${missingRelationships.size} relationships`);
-        } catch (error) {
-          errorCount++;
-          console.error(`[RelationshipSync] Error fixing node ${uuid}:`, error);
-        }
-      })
-    );
-
-    console.log(`[RelationshipSync] Complete - Fixed: ${fixedCount}, Errors: ${errorCount}`);
-
-    // PHASE 2: Commit any uncommitted .udd files (even if relationships are already correct)
-    // This ensures clean git state for future pulls/merges
-    console.log(`[RelationshipSync] Phase 2: Checking for uncommitted .udd files...`);
-
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    let committedCount = 0;
-
-    await Promise.all(
-      dreamNodeDirs.map(async (dir) => {
-        try {
-          const nodePath = dir.path;
-          const uddPath = path.join(nodePath, '.udd');
-
-          // Check if .udd exists and has uncommitted changes
-          try {
-            await fsPromises.access(uddPath);
-          } catch {
-            return; // No .udd file
-          }
-
-          // Check for uncommitted changes to .udd
-          const { stdout: diffOutput } = await execAsync('git diff --quiet .udd || echo "has-diff"', { cwd: nodePath });
-
-          if (diffOutput.trim() === 'has-diff') {
-            try {
-              await execAsync('git add .udd', { cwd: nodePath });
-              await execAsync(
-                `git commit -m "[metadata] Commit relationship metadata to history"`,
-                { cwd: nodePath }
-              );
-              committedCount++;
-              console.log(`[RelationshipSync] ✓ Committed uncommitted metadata for ${dir.name}`);
-            } catch (commitError: any) {
-              if (!commitError.message?.includes('nothing to commit')) {
-                console.warn(`[RelationshipSync] Could not commit metadata for ${dir.name}:`, commitError);
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(`[RelationshipSync] Error checking git state for ${dir.name}:`, error);
-        }
-      })
-    );
-
-    console.log(`[RelationshipSync] Phase 2 complete - Committed: ${committedCount} .udd files`);
-
-    // Rescan vault to update UI
-    await serviceManager.scanVault();
-
-    const totalMessage = fixedCount > 0
-      ? `✓ Fixed ${fixedCount} relationships and committed ${committedCount} metadata files!`
-      : committedCount > 0
-      ? `✓ All relationships synced. Committed ${committedCount} metadata files to history.`
-      : '✓ All relationships are already bidirectional and committed!';
-
-    new Notice(totalMessage);
-
-  } catch (error) {
-    console.error('[RelationshipSync] Fatal error:', error);
-    new Notice(`Failed to sync relationships: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Clean up dangling relationship references
- * Removes references to non-existent DreamNodes
- */
-async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<void> {
+async function cleanDanglingRelationships(vaultService: VaultService): Promise<void> {
   try {
     new Notice('Starting relationship cleanup...');
 
-    const adapter = plugin.app.vault.adapter as any;
-    const vaultPath = adapter.basePath || '';
-
-    // Get all DreamNode directories
-    const entries = await fsPromises.readdir(vaultPath, { withFileTypes: true });
-    const dreamNodeDirs = [];
+    // Get all entries at vault root
+    const entries = await vaultService.readdirRoot();
+    const dreamNodeDirs: { name: string; path: string }[] = [];
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
-      const dirPath = path.join(vaultPath, entry.name);
-      const uddPath = path.join(dirPath, '.udd');
-      const gitPath = path.join(dirPath, '.git');
+      const dirPath = entry.name;
+      const uddExists = await vaultService.fileExists(vaultService.joinPath(dirPath, '.udd'));
+      const gitExists = await vaultService.folderExists(vaultService.joinPath(dirPath, '.git'));
 
-      try {
-        await fsPromises.access(uddPath);
-        await fsPromises.access(gitPath);
+      if (uddExists && gitExists) {
         dreamNodeDirs.push({ name: entry.name, path: dirPath });
-      } catch {
-        // Not a valid DreamNode, skip
-        continue;
       }
     }
 
@@ -294,8 +35,8 @@ async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<voi
     await Promise.all(
       dreamNodeDirs.map(async ({ path: dirPath }) => {
         try {
-          const uddPath = path.join(dirPath, '.udd');
-          const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
+          const uddPath = vaultService.joinPath(dirPath, '.udd');
+          const uddContent = await vaultService.readFile(uddPath);
           const udd = JSON.parse(uddContent);
           if (udd.uuid) {
             validUuids.add(udd.uuid);
@@ -314,8 +55,8 @@ async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<voi
     await Promise.all(
       dreamNodeDirs.map(async ({ name, path: dirPath }) => {
         try {
-          const liminalWebPath = path.join(dirPath, 'liminal-web.json');
-          const liminalWebContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
+          const liminalWebPath = vaultService.joinPath(dirPath, 'liminal-web.json');
+          const liminalWebContent = await vaultService.readFile(liminalWebPath);
           const liminalWeb = JSON.parse(liminalWebContent);
 
           if (liminalWeb.relationships && Array.isArray(liminalWeb.relationships)) {
@@ -378,7 +119,7 @@ async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<voi
           if (!data) return;
 
           // Read current liminal-web.json file
-          const liminalWebContent = await fsPromises.readFile(data.path, 'utf-8');
+          const liminalWebContent = await vaultService.readFile(data.path);
           const liminalWeb = JSON.parse(liminalWebContent);
 
           // Filter out dangling references
@@ -391,7 +132,7 @@ async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<voi
           liminalWeb.relationships = cleanedRelationships;
 
           // Write back to disk
-          await fsPromises.writeFile(data.path, JSON.stringify(liminalWeb, null, 2));
+          await vaultService.writeFile(data.path, JSON.stringify(liminalWeb, null, 2));
 
           cleanedCount++;
           console.log(`[RelationshipCleanup] Cleaned "${data.dirName}" - removed ${removedCount} dangling references`);
@@ -416,21 +157,17 @@ async function cleanDanglingRelationships(plugin: InterBrainPlugin): Promise<voi
 }
 
 export function registerRelationshipCommands(plugin: InterBrainPlugin) {
-  // Command: Sync bidirectional relationships
-  plugin.addCommand({
-    id: 'sync-bidirectional-relationships',
-    name: 'Sync Bidirectional Relationships',
-    callback: async () => {
-      await syncBidirectionalRelationships(plugin);
-    }
-  });
-
   // Command: Clean dangling relationship references
   plugin.addCommand({
     id: 'clean-dangling-relationships',
     name: 'Clean Dangling Relationship References',
     callback: async () => {
-      await cleanDanglingRelationships(plugin);
+      const vaultService = serviceManager.getVaultService();
+      if (!vaultService) {
+        new Notice('VaultService not initialized');
+        return;
+      }
+      await cleanDanglingRelationships(vaultService);
     }
   });
 }

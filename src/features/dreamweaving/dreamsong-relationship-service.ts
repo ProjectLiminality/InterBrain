@@ -141,7 +141,7 @@ export class DreamSongRelationshipService {
   }> {
     // NOTE: Vault scan removed - already done during plugin initialization
     // Calling scanVault() here was causing media to disappear because it replaced
-    // the entire realNodes Map, losing any media that was already loaded
+    // the entire dreamNodes Map, losing any media that was already loaded
     // The vault scan during plugin init is sufficient - we just use that data
 
     // Get all DreamNodes from the service (uses existing store data)

@@ -1,8 +1,8 @@
 // DreamNode feature barrel export
 // The fundamental unit: types, services, and visualization components
 
-// Slice
-export * from './dreamnode-slice';
+// Store (state management)
+export * from './store/slice';
 
 // Commands
 export { registerDreamNodeCommands } from './commands';
@@ -10,13 +10,22 @@ export { registerDreamNodeCommands } from './commands';
 // Types
 export * from './types/dreamnode';
 
-// Services
-export { DreamNodeService } from './services/dreamnode-service';
+// Services (orchestrators with state)
 export { GitDreamNodeService } from './services/git-dreamnode-service';
 export { UDDService } from './services/udd-service';
 export { MediaLoadingService, getMediaLoadingService } from './services/media-loading-service';
-export { GitOperationsService } from './services/git-operations';
-export { GitTemplateService } from './services/git-template-service';
+
+// Utilities (stateless functions)
+// git-utils: Git command wrappers
+export * as gitUtils from './utils/git-utils';
+// vault-scanner: Filesystem discovery
+export * as vaultScanner from './utils/vault-scanner';
+// repo-initializer: Repository creation
+export * as repoInitializer from './utils/repo-initializer';
+// title-sanitization: Title to folder name conversion
+export { sanitizeTitleToPascalCase } from './utils/title-sanitization';
+// Legacy class - kept for backward compatibility
+export { GitOperationsService } from './utils/git-operations';
 
 // Components
 export { default as DreamNode3D } from './components/DreamNode3D';
@@ -27,6 +36,3 @@ export { PDFPreview } from './components/PDFPreview';
 
 // Styles
 export * from './styles/dreamNodeStyles';
-
-// Utils
-export * from './utils/title-sanitization';

@@ -23,9 +23,6 @@ export interface UDDFile {
   /** Single file reference path for DreamTalk symbol (relative to repo root) */
   dreamTalk: string;
 
-  /** @deprecated Legacy field - relationships now stored in liminal-web.json for Dreamer nodes */
-  liminalWebRelationships?: string[];
-
   /** Array of UUIDs for vertical holonic relationships - children */
   submodules: string[];
 

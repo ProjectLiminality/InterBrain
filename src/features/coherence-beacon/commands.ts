@@ -125,7 +125,7 @@ async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: stri
   try {
     // Use GitSyncService for pull, GitOperationsService for build
     const { GitSyncService } = await import('../social-resonance/services/git-sync-service');
-    const { GitOperationsService } = await import('../dreamnode/services/git-operations');
+    const { GitOperationsService } = await import('../dreamnode/utils/git-operations');
     const gitSyncService = new GitSyncService(plugin.app);
     const gitOpsService = new GitOperationsService(plugin.app);
 

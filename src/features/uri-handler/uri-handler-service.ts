@@ -153,7 +153,7 @@ export class URIHandlerService {
 					const store = useInterBrainStore.getState();
 
 					// Convert Map to array for searching
-					const nodesArray = Array.from(store.realNodes.values()).map(nodeData => nodeData.node);
+					const nodesArray = Array.from(store.dreamNodes.values()).map(nodeData => nodeData.node);
 
 					// Check if Dreamer node exists
 					let dreamerNode = nodesArray.find((n: any) => n.type === 'dreamer' && n.did === senderDid);
@@ -776,7 +776,6 @@ export class URIHandlerService {
 						title,
 						type: 'dream',
 						dreamTalk: '',
-						liminalWebRelationships: [],
 						submodules: [],
 						supermodules: [],
 						githubRepoUrl: githubUrl // Preserve GitHub URL for fallback broadcasts

@@ -27,8 +27,6 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DreamNode } from '../../features/dreamnode/types/dreamnode';
-
 // Feature slice imports
 import {
   DreamweavingSlice,
@@ -38,7 +36,10 @@ import {
 import {
   DreamNodeSlice,
   createDreamNodeSlice,
-} from '../../features/dreamnode/dreamnode-slice';
+  DreamNodeData,
+  extractDreamNodePersistenceData,
+  restoreDreamNodePersistenceData,
+} from '../../features/dreamnode/store/slice';
 
 import {
   SearchSlice,
@@ -115,11 +116,11 @@ export type { NavigationHistoryEntry, NavigationHistoryState };
 // CORE STATE TYPES
 // ============================================================================
 
-export interface RealNodeData {
-  node: DreamNode;
-  fileHash?: string;
-  lastSynced: number;
-}
+// Re-export DreamNodeData from dreamnode store slice (was RealNodeData)
+export type { DreamNodeData };
+
+// Backward compatibility alias - use DreamNodeData in new code
+export type RealNodeData = DreamNodeData;
 
 /**
  * Navigation Request - Declarative way for features to request spatial navigation
@@ -138,10 +139,12 @@ export interface NavigationRequest {
 // ============================================================================
 
 export interface CoreSlice {
-  // Real nodes storage (persisted)
-  realNodes: Map<string, RealNodeData>;
-  setRealNodes: (nodes: Map<string, RealNodeData>) => void;
-  updateRealNode: (id: string, data: RealNodeData) => void;
+  // Backward compatibility aliases for realNodes (now lives in DreamNodeSlice as dreamNodes)
+  // These are computed getters/setters that delegate to dreamNodes
+  // TODO: Migrate all usages to use dreamNodes directly, then remove these
+  realNodes: Map<string, DreamNodeData>;
+  setRealNodes: (nodes: Map<string, DreamNodeData>) => void;
+  updateRealNode: (id: string, data: DreamNodeData) => void;
   batchUpdateNodePositions: (positions: Map<string, [number, number, number]>) => void;
   deleteRealNode: (id: string) => void;
 
@@ -201,8 +204,10 @@ export interface InterBrainState extends
 // ============================================================================
 
 const createCoreSlice = (set: any, _get: any): CoreSlice => ({
-  // Initial state
-  realNodes: new Map<string, RealNodeData>(),
+  // Backward compatibility: realNodes is kept in sync with dreamNodes
+  // Both point to the same data - realNodes exists for legacy code
+  // TODO: Migrate all usages to dreamNodes, then remove realNodes
+  realNodes: new Map<string, DreamNodeData>(),
 
   spatialLayout: 'constellation',
 
@@ -223,17 +228,17 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
 
   navigationRequest: null,
 
-  // Actions
-  setRealNodes: (nodes) => set({ realNodes: nodes }),
+  // Actions - update both dreamNodes and realNodes for backward compatibility
+  setRealNodes: (nodes) => set({ dreamNodes: nodes, realNodes: nodes }),
 
   updateRealNode: (id, data) => set((state: InterBrainState) => {
-    const newMap = new Map(state.realNodes);
+    const newMap = new Map(state.dreamNodes);
     newMap.set(id, data);
-    return { realNodes: newMap };
+    return { dreamNodes: newMap, realNodes: newMap };
   }),
 
   batchUpdateNodePositions: (positions) => set((state: InterBrainState) => {
-    const newMap = new Map(state.realNodes);
+    const newMap = new Map(state.dreamNodes);
     for (const [nodeId, position] of positions) {
       const nodeData = newMap.get(nodeId);
       if (nodeData) {
@@ -243,13 +248,13 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
         });
       }
     }
-    return { realNodes: newMap };
+    return { dreamNodes: newMap, realNodes: newMap };
   }),
 
   deleteRealNode: (id) => set((state: InterBrainState) => {
-    const newMap = new Map(state.realNodes);
+    const newMap = new Map(state.dreamNodes);
     newMap.delete(id);
-    return { realNodes: newMap };
+    return { dreamNodes: newMap, realNodes: newMap };
   }),
 
   setSpatialLayout: (layout) => set((state: InterBrainState) => {
@@ -293,9 +298,6 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
 // STORE CREATION WITH SLICE COMPOSITION
 // ============================================================================
 
-// Helper to convert array to Map for persistence restoration
-const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
-
 export const useInterBrainStore = create<InterBrainState>()(
   persist(
     (set, get, api) => ({
@@ -316,13 +318,15 @@ export const useInterBrainStore = create<InterBrainState>()(
     {
       name: 'interbrain-storage',
       partialize: (state) => ({
-        realNodes: [],
+        ...extractDreamNodePersistenceData(state),
         ...extractSearchPersistenceData(state),
         ...extractConstellationPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as {
-          realNodes: [string, RealNodeData][];
+          dreamNodes?: [string, DreamNodeData][];
+          // Legacy field - will be migrated to dreamNodes
+          realNodes?: [string, DreamNodeData][];
           constellationData?: {
             relationshipGraph: SerializableDreamSongGraph | null;
             lastScanTimestamp: number | null;
@@ -335,9 +339,15 @@ export const useInterBrainStore = create<InterBrainState>()(
           ollamaConfig?: OllamaConfig;
         };
 
+        // Support migration from legacy realNodes to dreamNodes
+        const dreamNodesData = persistedData.dreamNodes || persistedData.realNodes;
+        const restoredDreamNodes = restoreDreamNodePersistenceData({ dreamNodes: dreamNodesData });
+
         return {
           ...current,
-          realNodes: persistedData.realNodes ? arrayToMap(persistedData.realNodes) : new Map(),
+          ...restoredDreamNodes,
+          // Keep realNodes in sync with dreamNodes for backward compatibility
+          realNodes: restoredDreamNodes.dreamNodes,
           ...restoreSearchPersistenceData(persistedData),
           ...restoreConstellationPersistenceData(persistedData),
         };

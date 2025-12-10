@@ -205,11 +205,11 @@ class WebLinkAnalyzerService {
    */
   private updateNodeTitle(nodeId: string, newTitle: string): void {
     const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(nodeId);
+    const nodeData = store.dreamNodes.get(nodeId);
 
     if (nodeData && nodeData.node.name !== newTitle) {
       const updatedNode = { ...nodeData.node, name: newTitle };
-      store.updateRealNode(nodeId, {
+      store.updateDreamNode(nodeId, {
         ...nodeData,
         node: updatedNode,
         lastSynced: Date.now(),

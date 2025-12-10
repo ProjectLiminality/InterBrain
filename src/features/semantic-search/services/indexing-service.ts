@@ -515,7 +515,7 @@ export class IndexingService implements IIndexingService {
     const store = useInterBrainStore.getState();
 
     // Get from real nodes
-    const nodes = Array.from(store.realNodes.values()).map(data => data.node);
+    const nodes = Array.from(store.dreamNodes.values()).map(data => data.node);
     console.log(`IndexingService: Found ${nodes.length} nodes in store:`, nodes.map(n => n.name).join(', '));
     return nodes;
   }

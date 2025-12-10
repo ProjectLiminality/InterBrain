@@ -76,7 +76,7 @@ export class EmailExportService {
 
 			for (const inv of invocations) {
 				try {
-					const nodeData = useInterBrainStore.getState().realNodes.get(inv.dreamUUID);
+					const nodeData = useInterBrainStore.getState().dreamNodes.get(inv.dreamUUID);
 					if (!nodeData?.node) {
 						console.warn(`⚠️ [EmailExport] Node not found in store: ${inv.dreamUUID} (${inv.nodeName})`);
 						continue;

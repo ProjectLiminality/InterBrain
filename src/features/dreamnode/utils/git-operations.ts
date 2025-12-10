@@ -11,10 +11,12 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
+const fs = require('fs');
 
 const execAsync = promisify(exec);
 
 import { App } from 'obsidian';
+import { GitStatus } from '../types/dreamnode';
 
 // Type for accessing file system path from Obsidian vault adapter
 interface VaultAdapter {
@@ -322,6 +324,92 @@ export class GitOperationsService {
     } catch (error) {
       console.error('GitOperationsService: Failed to build:', error);
       throw new Error(`Failed to build: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get comprehensive git status for a repository
+   * Returns full GitStatus object with all status flags and details
+   */
+  async getGitStatus(repoPath: string): Promise<GitStatus> {
+    const fullPath = this.getFullPath(repoPath);
+
+    try {
+      // Check if git repository exists
+      const gitDir = path.join(fullPath, '.git');
+      if (!fs.existsSync(gitDir)) {
+        return {
+          hasUncommittedChanges: false,
+          hasStashedChanges: false,
+          hasUnpushedChanges: false,
+          lastChecked: Date.now()
+        };
+      }
+
+      // Get current commit hash
+      let commitHash: string | undefined;
+      try {
+        const hashResult = await execAsync('git rev-parse HEAD', { cwd: fullPath });
+        commitHash = hashResult.stdout.trim();
+      } catch {
+        // No commits yet
+        console.log(`GitOperationsService: No commits yet in ${repoPath}`);
+      }
+
+      // Check for uncommitted changes
+      const statusResult = await execAsync('git status --porcelain', { cwd: fullPath });
+      const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
+
+      // Check for stashed changes
+      const stashResult = await execAsync('git stash list', { cwd: fullPath });
+      const hasStashedChanges = stashResult.stdout.trim().length > 0;
+
+      // Check for unpushed commits using git status --branch
+      let hasUnpushedChanges = false;
+      let aheadCount = 0;
+      try {
+        const statusBranchResult = await execAsync('git status --porcelain=v1 --branch', { cwd: fullPath });
+        const branchLine = statusBranchResult.stdout.split('\n')[0];
+
+        // Look for "ahead N" in the branch line
+        const aheadMatch = branchLine.match(/\[ahead (\d+)/);
+        if (aheadMatch) {
+          aheadCount = parseInt(aheadMatch[1], 10);
+          hasUnpushedChanges = aheadCount > 0;
+        }
+      } catch (error) {
+        // No upstream or git error
+        console.log(`GitOperationsService: Git status error for ${repoPath}:`, error instanceof Error ? error.message : 'Unknown error');
+      }
+
+      // Build details if any status flags are set
+      let details;
+      if (hasUncommittedChanges || hasStashedChanges || hasUnpushedChanges || commitHash) {
+        const statusLines = statusResult.stdout.trim().split('\n').filter((line: string) => line.length > 0);
+        const staged = statusLines.filter((line: string) => line.charAt(0) !== ' ' && line.charAt(0) !== '?').length;
+        const unstaged = statusLines.filter((line: string) => line.charAt(1) !== ' ').length;
+        const untracked = statusLines.filter((line: string) => line.startsWith('??')).length;
+        const stashCount = hasStashedChanges ? stashResult.stdout.trim().split('\n').length : 0;
+
+        details = { staged, unstaged, untracked, stashCount, aheadCount, commitHash };
+      }
+
+      return {
+        hasUncommittedChanges,
+        hasStashedChanges,
+        hasUnpushedChanges,
+        lastChecked: Date.now(),
+        details
+      };
+
+    } catch (error) {
+      console.warn(`GitOperationsService: Failed to check git status for ${repoPath}:`, error);
+      return {
+        hasUncommittedChanges: false,
+        hasStashedChanges: false,
+        hasUnpushedChanges: false,
+        lastChecked: Date.now()
+      };
     }
   }
 }

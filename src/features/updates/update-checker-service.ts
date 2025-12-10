@@ -33,15 +33,15 @@ export class UpdateCheckerService {
 
     try {
       const store = useInterBrainStore.getState();
-      const realNodes = Array.from(store.realNodes.values());
+      const dreamNodesList = Array.from(store.dreamNodes.values());
 
-      if (realNodes.length === 0) {
+      if (dreamNodesList.length === 0) {
         console.log('[UpdateChecker] No DreamNodes found');
         return;
       }
 
       // Run fetch operations in parallel for performance
-      const fetchPromises = realNodes.map(async (nodeData) => {
+      const fetchPromises = dreamNodesList.map(async (nodeData) => {
         const node = nodeData.node;
         try {
           const result = await this.gitSyncService.fetchUpdates(node.repoPath);
@@ -65,7 +65,7 @@ export class UpdateCheckerService {
       const results = await Promise.all(fetchPromises);
 
       const updatesAvailable = results.filter(r => r.result?.hasUpdates).length;
-      console.log(`[UpdateChecker] ✅ Update check complete: ${updatesAvailable}/${realNodes.length} nodes have updates`);
+      console.log(`[UpdateChecker] ✅ Update check complete: ${updatesAvailable}/${dreamNodesList.length} nodes have updates`);
     } finally {
       this.isRunning = false;
     }

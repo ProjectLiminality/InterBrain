@@ -36,7 +36,7 @@ export class MediaLoadingService {
   async loadAllNodesByDistance(): Promise<void> {
 
     const store = useInterBrainStore.getState();
-    const allNodeIds = Array.from(store.realNodes.keys());
+    const allNodeIds = Array.from(store.dreamNodes.keys());
 
     if (allNodeIds.length === 0) {
       return;
@@ -55,7 +55,7 @@ export class MediaLoadingService {
     // Process first chunk immediately to start FOV loading ASAP
     for (let i = 0; i < Math.min(CHUNK_SIZE, allNodeIds.length); i++) {
       const nodeId = allNodeIds[i];
-      const nodeData = store.realNodes.get(nodeId);
+      const nodeData = store.dreamNodes.get(nodeId);
       if (!nodeData) continue;
 
       const pos = nodeData.node.position;
@@ -99,7 +99,7 @@ export class MediaLoadingService {
 
       for (let i = CHUNK_SIZE; i < allNodeIds.length; i++) {
         const nodeId = allNodeIds[i];
-        const nodeData = store.realNodes.get(nodeId);
+        const nodeData = store.dreamNodes.get(nodeId);
         if (!nodeData) continue;
 
         const pos = nodeData.node.position;
@@ -328,8 +328,8 @@ export class MediaLoadingService {
    * Get node from store (handles both mock and real modes)
    */
   private getNode(nodeId: string, store: ReturnType<typeof useInterBrainStore.getState>): DreamNode | null {
-    const realNodeData = store.realNodes.get(nodeId);
-    return realNodeData?.node || null;
+    const dreamNodeData = store.dreamNodes.get(nodeId);
+    return dreamNodeData?.node || null;
   }
 
   /**

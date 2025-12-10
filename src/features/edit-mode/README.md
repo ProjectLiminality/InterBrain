@@ -57,7 +57,7 @@ export { registerEditModeCommands } from './commands'
 ## Integration Points
 
 - **Store**: Uses `useInterBrainStore` edit-mode slice for state
-- **Services**: Delegates to `DreamNodeService` via `serviceManager` for persistence
+- **Services**: Delegates to `GitDreamNodeService` via `serviceManager` for persistence
 - **Spatial Layout**: Communicates with `SpatialOrchestrator` via custom DOM events:
   - `edit-mode-search-layout` - Positions relationship nodes in search mode
   - `edit-mode-save-transition` - Animates transition back to liminal-web

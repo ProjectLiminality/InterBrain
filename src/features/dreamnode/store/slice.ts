@@ -1,8 +1,23 @@
 import { StateCreator } from 'zustand';
-import { FlipState } from '../dreamweaving/types/dreamsong';
+import { FlipState } from '../../dreamweaving/types/dreamsong';
+import { DreamNode } from '../types/dreamnode';
 
 // Re-export for convenience
 export type { FlipState };
+
+// ============================================================================
+// DREAMNODE DATA TYPES
+// ============================================================================
+
+/**
+ * DreamNode data with sync metadata
+ * (Renamed from RealNodeData - the "real" prefix was from mock/real distinction)
+ */
+export interface DreamNodeData {
+  node: DreamNode;
+  fileHash?: string;
+  lastSynced: number;
+}
 
 /**
  * Creator mode state - whether user is editing a DreamNode's files
@@ -20,11 +35,24 @@ export interface FlipAnimationState {
   flipStates: Map<string, FlipState>;
 }
 
+// ============================================================================
+// DREAMNODE SLICE INTERFACE
+// ============================================================================
+
 /**
- * DreamNode slice - owns DreamNode-specific UI state
- * (flip animations, creator mode)
+ * DreamNode slice - owns ALL DreamNode state
+ * - dreamNodes: The actual node data (was realNodes in core store)
+ * - flipState: Flip animation UI state
+ * - creatorMode: Creator mode UI state
  */
 export interface DreamNodeSlice {
+  // DreamNode data storage
+  dreamNodes: Map<string, DreamNodeData>;
+  setDreamNodes: (nodes: Map<string, DreamNodeData>) => void;
+  updateDreamNode: (id: string, data: DreamNodeData) => void;
+  batchUpdateDreamNodePositions: (positions: Map<string, [number, number, number]>) => void;
+  deleteDreamNode: (id: string) => void;
+
   // Creator mode state
   creatorMode: CreatorModeState;
   setCreatorMode: (active: boolean, nodeId?: string | null) => void;
@@ -38,8 +66,36 @@ export interface DreamNodeSlice {
   getNodeFlipState: (nodeId: string) => FlipState | null;
 }
 
+// ============================================================================
+// PERSISTENCE HELPERS
+// ============================================================================
+
+/**
+ * Extract dreamNodes data for persistence (Map → Array)
+ */
+export const extractDreamNodePersistenceData = (state: DreamNodeSlice) => ({
+  dreamNodes: Array.from(state.dreamNodes.entries()),
+});
+
+/**
+ * Restore dreamNodes data from persistence (Array → Map)
+ */
+export const restoreDreamNodePersistenceData = (persisted: {
+  dreamNodes?: [string, DreamNodeData][];
+}) => ({
+  dreamNodes: persisted.dreamNodes ? new Map(persisted.dreamNodes) : new Map(),
+});
+
+// ============================================================================
+// SLICE CREATOR
+// ============================================================================
+
 /**
  * Creates the dreamnode slice
+ *
+ * Note: We use `any` for set() when updating realNodes because it's a cross-slice
+ * backward compatibility alias that exists in CoreSlice. TypeScript's StateCreator
+ * only knows about this slice's interface, not the full composed state.
  */
 export const createDreamNodeSlice: StateCreator<
   DreamNodeSlice,
@@ -47,6 +103,39 @@ export const createDreamNodeSlice: StateCreator<
   [],
   DreamNodeSlice
 > = (set, get) => ({
+  // DreamNode data storage
+  dreamNodes: new Map<string, DreamNodeData>(),
+
+  // All setters update both dreamNodes and realNodes for backward compatibility
+  setDreamNodes: (nodes) => (set as any)({ dreamNodes: nodes, realNodes: nodes }),
+
+  updateDreamNode: (id, data) => set((state) => {
+    const newMap = new Map(state.dreamNodes);
+    newMap.set(id, data);
+    return { dreamNodes: newMap, realNodes: newMap } as any;
+  }),
+
+  batchUpdateDreamNodePositions: (positions) => set((state) => {
+    const newMap = new Map(state.dreamNodes);
+    for (const [nodeId, position] of positions) {
+      const nodeData = newMap.get(nodeId);
+      if (nodeData) {
+        newMap.set(nodeId, {
+          ...nodeData,
+          node: { ...nodeData.node, position }
+        });
+      }
+    }
+    return { dreamNodes: newMap, realNodes: newMap } as any;
+  }),
+
+  deleteDreamNode: (id) => set((state) => {
+    const newMap = new Map(state.dreamNodes);
+    newMap.delete(id);
+    return { dreamNodes: newMap, realNodes: newMap } as any;
+  }),
+
+  // Creator mode state
   creatorMode: {
     isActive: false,
     nodeId: null

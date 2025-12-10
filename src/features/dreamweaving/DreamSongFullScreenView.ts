@@ -208,10 +208,10 @@ export class DreamSongFullScreenView extends ItemView {
     console.log(`DreamSongFullScreenView: handleMediaClick called with sourceDreamNodeId="${sourceDreamNodeId}"`);
 
     const store = useInterBrainStore.getState();
-    const { realNodes, setSelectedNode } = store;
+    const { dreamNodes: dreamNodesMap, setSelectedNode } = store;
 
-    // Convert realNodes Map to dreamNodes array (same pattern as DreamspaceCanvas)
-    const dreamNodes = Array.from(realNodes.values()).map(data => data.node);
+    // Convert dreamNodes Map to array (same pattern as DreamspaceCanvas)
+    const dreamNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
     console.log(`DreamSongFullScreenView: Available dreamNodes:`, dreamNodes.map(n => ({ id: n.id, name: n.name })));
 
     // Find the DreamNode by ID or name

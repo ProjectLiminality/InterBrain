@@ -10,7 +10,7 @@ import { getUpdateCheckerService } from './update-checker-service';
 import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { GitSyncService } from '../social-resonance/services/git-sync-service';
-import { GitOperationsService } from '../dreamnode/services/git-operations';
+import { GitOperationsService } from '../dreamnode/utils/git-operations';
 import { UpdatePreviewModal } from './ui/update-preview-modal';
 
 const path = require('path');

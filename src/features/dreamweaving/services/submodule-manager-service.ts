@@ -6,7 +6,7 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 import { App } from 'obsidian';
-import { GitOperationsService } from '../../dreamnode/services/git-operations';
+import { GitOperationsService } from '../../dreamnode/utils/git-operations';
 import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
 import { UDDService } from '../../dreamnode/services/udd-service';

@@ -2,33 +2,14 @@
 
 The foundational infrastructure that all features build upon. **Core defines *how* things work; features define *what* things do.**
 
+## Navigation
+
+- **[Features README](../features/README.md)** - Complete guide to feature slices: architecture patterns, directory structure, naming conventions, and catalog of all features
+- **This file** - Core module internals: services, store, components
+
 ## Feature Slices
 
-Core provides the foundation for these feature modules:
-
-| Feature | Purpose |
-|---------|---------|
-| [dreamnode](../features/dreamnode/README.md) | DreamNode data types, services, and CRUD operations |
-| [dreamweaving](../features/dreamweaving/README.md) | Canvas parsing, submodules, DreamSong playback |
-| [constellation-layout](../features/constellation-layout/README.md) | Fibonacci sphere distribution of all nodes |
-| [liminal-web-layout](../features/liminal-web-layout/README.md) | Focused node with related nodes in rings |
-| [conversational-copilot](../features/conversational-copilot/README.md) | AI conversation mode with node invocation |
-| [edit-mode](../features/edit-mode/README.md) | Node editing with relationship management |
-| [search](../features/search/README.md) | Search overlay and result display |
-| [semantic-search](../features/semantic-search/README.md) | Vector embeddings and similarity search |
-| [creation](../features/creation/README.md) | ProtoNode3D for new node creation |
-| [drag-and-drop](../features/drag-and-drop/README.md) | File and URL drop handling |
-| [radial-buttons](../features/radial-buttons/README.md) | Radial action menu around nodes |
-| [realtime-transcription](../features/realtime-transcription/README.md) | Voice transcription via Python backend |
-| [social-resonance](../features/social-resonance/README.md) | Radicle P2P integration |
-| [coherence-beacon](../features/coherence-beacon/README.md) | Node synchronization beacons |
-| [video-calling](../features/video-calling/README.md) | WebRTC video call integration |
-| [web-link-analyzer](../features/web-link-analyzer/README.md) | AI-powered URL content analysis |
-| [github-publishing](../features/github-publishing/README.md) | Publish nodes to GitHub |
-| [settings](../features/settings/README.md) | Plugin settings tab |
-| [updates](../features/updates/README.md) | Plugin update checking |
-| [uri-handler](../features/uri-handler/README.md) | interbrain:// protocol handling |
-| [songline](../features/songline/README.md) | Songline navigation feature |
+Core composes Zustand slices from feature modules. For the complete feature catalog, architecture patterns, and how to create new features, see **[Features README](../features/README.md)**.
 
 ## Core Principles
 
@@ -95,7 +76,7 @@ core/
 
 ## Key Files
 
-**Store**: `store/interbrain-store.ts` - Zustand with slice composition. Core owns `realNodes`, `spatialLayout`, `camera`, `layoutTransition`.
+**Store**: `store/interbrain-store.ts` - Zustand with slice composition. Core owns `spatialLayout`, `camera`, `layoutTransition`. Features own their data (e.g., `dreamnode` owns `dreamNodes` via its slice).
 
 **Canvas**: `components/DreamspaceCanvas.tsx` (~670 lines) - R3F canvas, user input, overlay mounting. Delegates drop logic to `features/drag-and-drop`.
 

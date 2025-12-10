@@ -86,7 +86,7 @@ export function registerIndexingCommands(plugin: Plugin, uiService: UIService): 
  */
 async function performFullIndexing(plugin: Plugin, uiService: UIService): Promise<void> {
   const store = useInterBrainStore.getState();
-  const nodeCount = store.realNodes.size;
+  const nodeCount = store.dreamNodes.size;
 
   if (nodeCount === 0) {
     uiService.showWarning('No DreamNodes found to index');

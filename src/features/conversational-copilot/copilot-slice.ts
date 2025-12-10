@@ -44,7 +44,7 @@ export interface CopilotModeSlice {
  */
 export interface CopilotSliceDependencies {
   // From core
-  realNodes: Map<string, { node: DreamNode; lastSynced: number }>;
+  dreamNodes: Map<string, { node: DreamNode; lastSynced: number }>;
   selectedNode: DreamNode | null;
   spatialLayout: SpatialLayoutMode;
   setSpatialLayout: (layout: SpatialLayoutMode) => void;
@@ -90,12 +90,12 @@ export const createCopilotModeSlice: StateCreator<
     const relatedNodes: DreamNode[] = [];
 
     for (const nodeId of relatedNodeIds) {
-      const nodeData = state.realNodes.get(nodeId);
+      const nodeData = state.dreamNodes.get(nodeId);
       if (nodeData) {
         relatedNodes.push(nodeData.node);
         console.log(`🎯 [Copilot-Entry] ✓ Found node: ${nodeData.node.name} (${nodeId})`);
       } else {
-        console.log(`🎯 [Copilot-Entry] ✗ Node not found in realNodes: ${nodeId}`);
+        console.log(`🎯 [Copilot-Entry] ✗ Node not found in dreamNodes: ${nodeId}`);
       }
     }
 
@@ -143,9 +143,9 @@ export const createCopilotModeSlice: StateCreator<
         console.log(`✅ [Copilot-Exit] "${conversationPartner.name}" now has ${updatedPartner.liminalWebConnections.length} total relationships`);
 
         // Update the conversation partner node in store
-        const existingNodeData = state.realNodes.get(conversationPartner.id);
+        const existingNodeData = state.dreamNodes.get(conversationPartner.id);
         if (existingNodeData) {
-          state.realNodes.set(conversationPartner.id, {
+          state.dreamNodes.set(conversationPartner.id, {
             ...existingNodeData,
             node: updatedPartner
           });
@@ -153,13 +153,13 @@ export const createCopilotModeSlice: StateCreator<
 
         // Update bidirectional relationships in store for immediate UI feedback
         for (const sharedNodeId of newRelationships) {
-          const sharedNodeData = state.realNodes.get(sharedNodeId);
+          const sharedNodeData = state.dreamNodes.get(sharedNodeId);
           if (sharedNodeData) {
             const updatedSharedNode = {
               ...sharedNodeData.node,
               liminalWebConnections: [...sharedNodeData.node.liminalWebConnections, conversationPartner.id]
             };
-            state.realNodes.set(sharedNodeId, {
+            state.dreamNodes.set(sharedNodeId, {
               ...sharedNodeData,
               node: updatedSharedNode
             });
