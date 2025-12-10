@@ -1,9 +1,9 @@
 import React from 'react';
-import { DreamSongBlock, MediaInfo } from './types/dreamsong';
-import { MediaFile } from '../dreamnode';
-import separatorImage from './assets/Separator.png';
-import styles from './dreamsong.module.css';
-import { PDFPreview } from '../dreamnode/components/PDFPreview';
+import { DreamSongBlock, MediaInfo } from '../types/dreamsong';
+import { MediaFile } from '../../dreamnode';
+import separatorImage from '../assets/Separator.png';
+import styles from '../dreamsong.module.css';
+import { PDFPreview } from '../../dreamnode/components/PDFPreview';
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];

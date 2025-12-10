@@ -2,10 +2,10 @@ import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
 import { Root, createRoot } from 'react-dom/client';
 import { StrictMode, createElement } from 'react';
 import { DreamSongWithExtensions } from './DreamSongWithExtensions';
-import { DreamSongBlock } from './types/dreamsong';
-import { DreamNode } from '../dreamnode/types/dreamnode';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { serviceManager } from '../../core/services/service-manager';
+import { DreamSongBlock } from '../types/dreamsong';
+import { DreamNode } from '../../dreamnode/types/dreamnode';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { serviceManager } from '../../../core/services/service-manager';
 
 export const DREAMSONG_FULLSCREEN_VIEW_TYPE = 'dreamsong-fullscreen-view';
 
@@ -97,8 +97,8 @@ export class DreamSongFullScreenView extends ItemView {
       const canvasPath = `${this.dreamNode.repoPath}/DreamSong.canvas`;
 
       // Use the same parsing logic as the fullscreen command
-      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../../features/dreamweaving/dreamsong/index');
-      const { CanvasParserService } = await import('../../features/dreamweaving/services/canvas-parser-service');
+      const { parseCanvasToBlocks, resolveMediaPaths } = await import('../dreamsong/index');
+      const { CanvasParserService } = await import('../services/canvas-parser-service');
 
       const vaultService = serviceManager.getVaultService();
       if (!vaultService) {

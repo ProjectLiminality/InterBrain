@@ -1,10 +1,10 @@
 import { Plugin } from 'obsidian';
-import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
+import { GitDreamNodeService } from '../../dreamnode/services/git-dreamnode-service';
 import { DreamSongParserService } from './dreamsong-parser-service';
-import { VaultService } from '../../core/services/vault-service';
-import { CanvasParserService } from './services/canvas-parser-service';
-import { DreamNode } from '../dreamnode';
-import { DreamSongData, DreamSongBlock } from './types/dreamsong';
+import { VaultService } from '../../../core/services/vault-service';
+import { CanvasParserService } from './canvas-parser-service';
+import { DreamNode } from '../../dreamnode';
+import { DreamSongData, DreamSongBlock } from '../types/dreamsong';
 import {
   DreamSongRelationshipGraph,
   DreamSongNode,
@@ -13,7 +13,7 @@ import {
   DreamSongRelationshipConfig,
   DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG,
   serializeRelationshipGraph
-} from './types/relationship';
+} from '../types/relationship';
 
 // Access Node.js modules directly in Electron context
  

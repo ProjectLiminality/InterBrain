@@ -6,7 +6,7 @@ import { CanvasLayoutService } from './services/canvas-layout-service';
 import { SubmoduleManagerService } from './services/submodule-manager-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
-import { DreamSongRelationshipService } from './dreamsong-relationship-service';
+import { DreamSongRelationshipService } from './services/dreamsong-relationship-service';
 import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG, DreamSongRelationshipGraph } from './types/relationship';
 
 /**

@@ -7,12 +7,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { TFile } from 'obsidian';
-import { DreamSongBlock } from './types/dreamsong';
-import { DreamNode } from '../dreamnode/types/dreamnode';
-import { CanvasParserService } from './services/canvas-parser-service';
-import { VaultService } from '../../core/services/vault-service';
-import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from './dreamsong/index';
-import { serviceManager } from '../../core/services/service-manager';
+import { DreamSongBlock } from '../types/dreamsong';
+import { DreamNode } from '../../dreamnode/types/dreamnode';
+import { CanvasParserService } from '../services/canvas-parser-service';
+import { VaultService } from '../../../core/services/vault-service';
+import { parseAndResolveCanvas, generateCanvasStructureHash, hashesEqual } from '../dreamsong/index';
+import { serviceManager } from '../../../core/services/service-manager';
 
 interface UseDreamSongDataOptions {
   canvasParser: CanvasParserService;

@@ -12,13 +12,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { DreamSong } from './DreamSong';
-import { PerspectivesSection } from '../songline/components/PerspectivesSection';
-import { ConversationsSection } from '../songline/components/ConversationsSection';
+import { PerspectivesSection } from '../../songline/components/PerspectivesSection';
+import { ConversationsSection } from '../../songline/components/ConversationsSection';
 import { ReadmeSection } from './ReadmeSection';
-import { DreamSongBlock } from './types/dreamsong';
-import { MediaFile, DreamNode } from '../dreamnode';
-import { Perspective, getPerspectiveService } from '../songline/services/perspective-service';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { DreamSongBlock } from '../types/dreamsong';
+import { MediaFile, DreamNode } from '../../dreamnode';
+import { Perspective, getPerspectiveService } from '../../songline/services/perspective-service';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 
 interface DreamSongWithExtensionsProps {
   blocks: DreamSongBlock[];

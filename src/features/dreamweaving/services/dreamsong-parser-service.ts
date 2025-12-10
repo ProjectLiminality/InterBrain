@@ -1,15 +1,15 @@
-import { VaultService } from '../../core/services/vault-service';
-import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './services/canvas-parser-service';
+import { VaultService } from '../../../core/services/vault-service';
+import { CanvasParserService, CanvasData, CanvasNode, CanvasEdge } from './canvas-parser-service';
 
 // Access Node.js modules directly in Electron context (following VaultService pattern)
- 
+
 const fs = require('fs');
 const path = require('path');
- 
-import { 
-  DreamSongData, 
-  DreamSongBlock, 
-  DreamSongParseResult, 
+
+import {
+  DreamSongData,
+  DreamSongBlock,
+  DreamSongParseResult,
   DreamSongParseError,
   DreamSongParserConfig,
   DEFAULT_DREAMSONG_PARSER_CONFIG,
@@ -17,8 +17,8 @@ import {
   ProcessedCanvasEdge,
   MediaTextPair,
   MediaInfo
-} from './types/dreamsong';
-import { InterBrainState } from '../../core/store/interbrain-store';
+} from '../types/dreamsong';
+import { InterBrainState } from '../../../core/store/interbrain-store';
 
 /**
  * DreamSong Parser Service

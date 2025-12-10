@@ -31,8 +31,8 @@ constellation-layout/
 │   └── star.png                  # Star image for night sky visualization
 ├── ConstellationLayout.ts        # Main orchestrator (calls utils pipeline)
 ├── LayoutConfig.ts               # Configuration types and defaults
-├── types.ts                      # DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge
-├── commands.ts                   # Obsidian commands: scan vault, export JSON, show stats
+├── types.ts                      # Re-exports relationship types from dreamweaving
+├── commands.ts                   # Debug commands + apply-layout (scan moved to dreamweaving)
 ├── index.ts                      # Barrel export
 └── README.md
 ```
@@ -72,22 +72,24 @@ export type { DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge } from '.
 
 ## Algorithm Pipeline
 
-1. **Scan Vault** → Extract relationships from DreamSong.canvas files
+1. **Relationship Graph** → Reads from dreamweaving slice (source of truth)
 2. **Clustering** (`utils/Clustering.ts`) → Connected components using DFS
 3. **Global Positioning** → Fibonacci sphere distribution for cluster centers
 4. **Force-Directed** (`utils/ForceDirected.ts`) → Fruchterman-Reingold within clusters
 5. **Spherical Projection** (`utils/SphericalProjection.ts`) → Exponential map from 2D tangent to 3D
 6. **Refinement** (`utils/ClusterRefinement.ts`) → Spring-mass simulation for overlap elimination
-7. **Store** → Persist positions + graph to Zustand (localStorage)
+7. **Store** → Persist computed positions to Zustand (localStorage)
 
 ## Key Components
 
 ### `store/slice.ts` - State Management
 Zustand slice managing:
-- **constellationData**: Relationship graph, positions, node metadata, scan timestamps
+- **constellationData**: Computed positions, node metadata, layout timestamps
 - **fibonacciConfig**: Sphere layout configuration
 - **debugWireframeSphere**, **debugIntersectionPoint**: Debug visualization flags
 - Persistence serialization for localStorage caching
+
+Note: Relationship graph data is owned by dreamweaving slice, not here.
 
 ### `components/SphereRotationControls.tsx` - Rotation Controls
 Google Earth-style virtual trackball:
@@ -115,18 +117,18 @@ Apple Watch-style scaling zones:
 
 ## Integration Points
 
-- **DreamWeaving**: Uses `DreamSongRelationshipService` to scan vault
+- **Dreamweaving**: Reads relationship graph from dreamweaving slice (source of truth)
 - **Spatial Orchestrator**: Applies computed positions to DreamNodes in 3D space
-- **Zustand Store**: Reads/writes `constellationData` slice
-- **Commands**: Exposed via Obsidian command palette
+- **Zustand Store**: Reads relationships from dreamweaving, writes positions to constellation slice
+- **Commands**: Debug visualization toggles via Obsidian command palette
 
 ## Technical Notes
 
 - **Spherical geometry**: Uses exponential/logarithmic maps (differential geometry)
 - **Quaternion rotation**: No gimbal lock, smooth rotation at all orientations
 - **36-node capacity**: Works seamlessly with liminal-web layout
-- **Persistent state**: Graph + positions cached in Zustand/localStorage
-- **Intelligent diff**: Only recomputes layout when relationships change
+- **Persistent state**: Positions cached in constellation slice, relationships in dreamweaving slice
+- **Intelligent diff**: Layout recomputes when dreamweaving relationship graph changes
 - **Performance**: Nodes at `radius: 5000` for proper night sky scale
 
 ## Test Coverage

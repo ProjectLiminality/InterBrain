@@ -1,113 +1,153 @@
 # Dreamweaving Feature
 
-Canvas-to-DreamSong transformation system with git submodule management for DreamNode composition.
+**Purpose**: Transforms Obsidian canvas files into linear DreamSong story flows and manages git submodule relationships between DreamNodes, enabling compositional knowledge weaving through canvas-based storytelling.
 
-## Purpose
+## Directory Structure
 
-Transforms Obsidian canvas files into linear "DreamSong" story flows by analyzing dependencies, importing external DreamNodes as git submodules, and rendering content blocks with flip-flop media-text layouts.
-
-## Key Files
-
-### Core Components
-- **`DreamSong.tsx`** - Pure canvas content renderer (browser-safe, no Node.js deps)
-- **`DreamSongWithExtensions.tsx`** - Wrapper adding Perspectives, Conversations, README sections (Obsidian-only)
-- **`DreamSongFullScreenView.ts`** - Fullscreen leaf view for DreamSongs
-- **`LinkFileView.ts`** - Custom view for `.link` files (YouTube thumbnails, etc.)
-- **`ReadmeSection.tsx`** - Displays DreamNode README.md in DreamSong UI
-
-### Commands
-- **`commands.ts`** - 9 main commands (Create DreamSong, Sync Canvas Submodules, Auto-layout, etc.)
-- **`link-file-commands.ts`** - Commands for `.link` file suggestions in canvas
-
-### Services
-- **`services/canvas-parser-service.ts`** - Parse canvas JSON, find DreamNode boundaries, analyze dependencies
-- **`services/submodule-manager-service.ts`** - Import/sync git submodules using Radicle URLs, bidirectional .udd relationship tracking
-- **`services/canvas-layout-service.ts`** - Auto-layout canvas nodes in top-to-bottom flow
-- **`services/canvas-observer-service.ts`** - Watch for canvas file changes
-- **`services/audio-streaming-service.ts`** - Stream audio from submodule files
-
-### Data Layer
-- **`dreamweaving-slice.ts`** - Zustand store slice for DreamSong cache and scroll position
-- **`types/dreamsong.ts`** - TypeScript interfaces for DreamSong blocks, media, parsing config
-- **`dreamsong/`** - Parser utilities (hasher, media resolver, topological sort)
-- **`dreamsong-parser-service.ts`** - Core DreamSong data generation from canvas
-- **`dreamsong-relationship-service.ts`** - Track DreamNode relationships via canvas links
-
-### Hooks
-- **`useDreamSongData.ts`** - React hook for loading/caching DreamSong data
+```
+dreamweaving/
+├── components/
+│   ├── DreamSong.tsx              # Pure React renderer for DreamSong content (browser-safe)
+│   ├── DreamSongWithExtensions.tsx # Wrapper with Obsidian-only extensions (perspectives, conversations)
+│   ├── DreamSongFullScreenView.ts  # Obsidian ItemView for fullscreen DreamSong display
+│   ├── LinkFileView.ts             # Custom view for .link files with YouTube thumbnails
+│   └── ReadmeSection.tsx           # Clickable README link in DreamSong UI
+├── hooks/
+│   └── useDreamSongData.ts         # React hook with hash-based change detection
+├── services/
+│   ├── audio-streaming-service.ts  # Load audio files as base64 data URLs
+│   ├── canvas-layout-service.ts    # Auto-arrange canvas elements in linear flow
+│   ├── canvas-observer-service.ts  # MutationObserver for .link file thumbnail replacement
+│   ├── canvas-parser-service.ts    # Parse canvas JSON, find DreamNode boundaries
+│   ├── canvas-parser-service.test.ts
+│   ├── dreamsong-parser-service.ts # L1/L2 caching parser (used by relationship extraction)
+│   ├── dreamsong-relationship-service.ts # Extract relationship graphs from DreamSong sequences
+│   ├── submodule-manager-service.ts # Git submodule operations with bidirectional tracking
+│   └── submodule-manager-service.test.ts
+├── dreamsong/                      # Pure parsing functions (Layer 1 architecture)
+│   ├── parser.ts                   # Canvas → blocks transformation, topological sort
+│   ├── hasher.ts                   # Structure hash generation for change detection
+│   ├── media-resolver.ts           # Resolve media paths to data URLs
+│   └── index.ts                    # Barrel export with convenience functions
+├── types/
+│   ├── dreamsong.ts                # DreamSong blocks, media, parsing types
+│   └── relationship.ts             # Relationship graph types (source of truth for constellation-layout)
+├── assets/
+│   └── Separator.png               # Visual separator for DreamSong sections
+├── commands.ts                     # 10 Obsidian commands (canvas, submodule, sync, layout)
+├── dreamweaving-slice.ts           # Zustand slice (cache, scroll position, relationship state)
+├── dreamsong.module.css            # DreamSong component styles
+├── link-file-commands.ts           # Commands for .link file handling in canvas
+├── index.ts                        # Barrel export
+└── README.md
+```
 
 ## Main Exports
 
 ```typescript
-// State
-export { createDreamweavingSlice } from './dreamweaving-slice'
-export { useDreamSongData } from './useDreamSongData'
+// Slice (state management)
+export * from './dreamweaving-slice';
 
 // Commands
-export { registerDreamweavingCommands } from './commands'
-export { registerLinkFileCommands } from './link-file-commands'
-
-// Components
-export { DreamSong } from './DreamSong'
-export { DreamSongWithExtensions } from './DreamSongWithExtensions'
-export { ReadmeSection } from './ReadmeSection'
-
-// Views
-export { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './DreamSongFullScreenView'
-export { LinkFileView, LINK_FILE_VIEW_TYPE } from './LinkFileView'
+export { registerDreamweavingCommands } from './commands';
+export { registerLinkFileCommands, enhanceFileSuggestions } from './link-file-commands';
 
 // Types
-export * from './types/dreamsong'
+export * from './types/dreamsong';
+export * from './types/relationship';
+
+// Services
+export { DreamSongRelationshipService } from './services/dreamsong-relationship-service';
+export { DreamSongParserService } from './services/dreamsong-parser-service';
+export { CanvasParserService } from './services/canvas-parser-service';
+export { CanvasLayoutService } from './services/canvas-layout-service';
+export { SubmoduleManagerService } from './services/submodule-manager-service';
+export { CanvasObserverService } from './services/canvas-observer-service';
+export { AudioStreamingServiceImpl, initializeAudioStreamingService, getAudioStreamingService } from './services/audio-streaming-service';
+
+// Components
+export { DreamSong } from './components/DreamSong';
+export { DreamSongWithExtensions } from './components/DreamSongWithExtensions';
+export { ReadmeSection } from './components/ReadmeSection';
+
+// Views
+export { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './components/DreamSongFullScreenView';
+export { LinkFileView, LINK_FILE_VIEW_TYPE } from './components/LinkFileView';
+
+// Hooks
+export { useDreamSongData, useDreamSongExists } from './hooks/useDreamSongData';
+
+// Pure functions (parser, hasher, media-resolver)
+export { parseCanvasToBlocks, parseAndResolveCanvas, resolveMediaPaths, ... } from './dreamsong/index';
 ```
 
-## Key Commands (Ctrl/Cmd+P)
+## Core Concepts
 
-- **Create DreamSong Canvas** (`Ctrl+D`) - Creates `DreamSong.canvas` in selected DreamNode
-- **Sync Canvas Submodules** (`Ctrl+Shift+S`) - Import external dependencies as git submodules with Radicle URLs
-- **Auto-layout Canvas** - Arrange canvas nodes in linear flow
-- **Parse Canvas Dependencies** - Debug command for dependency analysis
-- **Commit All Changes** - Recursively commit all changes in DreamNode + submodules
-- **Remove All Submodules** - Cleanup command for development
+### DreamSong Canvas Transformation
+1. **Canvas Parsing**: Extract nodes and edges from Obsidian canvas JSON
+2. **Topological Sort**: Order nodes by dependency graph (respecting directed edges)
+3. **Media-Text Pairing**: Detect undirected edges linking file nodes to text nodes
+4. **Block Creation**: Generate linear DreamSong blocks with flip-flop media-text layout
+5. **Media Resolution**: Convert file paths to data URLs for rendering
 
-## Architecture Notes
+### Git Submodule Management
+1. **Dependency Detection**: Parse canvas for external DreamNode references
+2. **Submodule Import**: Add referenced DreamNodes as git submodules via Radicle URLs
+3. **Bidirectional Tracking**: Update parent's `submodules` and child's `supermodules` in .udd files
+4. **Coherence Beacons**: Commit metadata for network-based relationship discovery
 
-### Git Submodule Workflow
-1. **Canvas Analysis** - Detect external DreamNode references via canvas file nodes
-2. **Submodule Import** - Add external DreamNodes as git submodules using `rad://...` URLs from Radicle
-3. **Bidirectional Tracking** - Update `.udd` files: parent tracks children (submodules), children track parents (supermodules)
-4. **Coherence Beacons** - Commit messages with `COHERENCE_BEACON` metadata for network discovery
-5. **Path Rewriting** - Update canvas file paths to point to submodule locations
+### Relationship Graph (Source of Truth)
+Dreamweaving owns the DreamSong relationship data because relationships are created through the act of weaving DreamTalks into DreamSongs on the canvas.
 
-### DreamSong Rendering
-1. **Topological Sort** - Order canvas nodes based on edge dependencies (directed graph)
-2. **Media-Text Pairing** - Detect media+text pairs connected by edges
-3. **Flip-Flop Layout** - Alternate left/right alignment for media-text blocks
-4. **Browser-Safe** - `DreamSong.tsx` has ZERO Node.js dependencies (works in GitHub Pages)
+- **constellation-layout** reads this data for visualization
+- Stored in `dreamSongRelationships` state in dreamweaving slice
+- Serialized/deserialized for persistence in localStorage
 
-### Coherence Beacon System (Foundation)
-- **Purpose**: Enable decentralized DreamNode discovery across network
-- **Implementation**: Git commits with `COHERENCE_BEACON: {...}` metadata
-- **Workflow**:
-  - Submodule sync creates beacon commits in sovereign repos
-  - "Check for Updates" command scans commit history for beacons
-  - Beacons contain Radicle IDs for network-based DreamNode relationships
+## Commands
 
-## Flags
+| Command | Description |
+|---------|-------------|
+| `create-dreamsong-canvas` | Create DreamSong.canvas in selected DreamNode |
+| `commit-dreamsong-changes` | Commit pending changes to selected DreamNode |
+| `auto-save-and-commit-dreamsong` | Auto-save with submodule sync |
+| `sync-canvas-submodules` | Import/remove submodules based on canvas dependencies |
+| `auto-layout-dreamsong-canvas` | Arrange canvas elements in linear flow |
+| `scan-dreamsong-relationships` | Scan vault and update relationship graph |
+| `open-dreamsong-fullscreen` | Open DreamSong in fullscreen Obsidian view |
+| `show-link-files` | Fuzzy search all .link files in vault |
+| `add-link-file-to-canvas` | Add .link file to active canvas |
 
-### Potential Issues
-- **Heavy git operations** - Commands like "Commit All DreamNodes" can be slow
-- **Radicle PATH handling** - Requires `~/.radicle/bin` in PATH for `git-remote-rad` helper
-- **Submodule complexity** - Bidirectional relationship tracking can fail partway through (has idempotent recovery)
+## Architecture Layers
 
-### Unused/Dead Code
-- **Canvas Observer Service** - Created but not actively used (file watching infrastructure for future)
+### Layer 1: Pure Functions (`dreamsong/`)
+Stateless, easily testable functions:
+- `parser.ts`: Canvas → blocks transformation
+- `hasher.ts`: Structure hash for change detection
+- `media-resolver.ts`: Path → data URL resolution
 
-### Migration Notes
-- **Songline extraction** - AudioClipPlayer, ConversationsSection, PerspectivesSection moved to `features/songline/` (see comment in index.ts)
-- **DreamSong vs DreamSongWithExtensions** - Split browser-safe vs Obsidian-specific rendering
+### Layer 2: React Hook (`hooks/useDreamSongData.ts`)
+Minimal state management with hash-based optimization:
+- Memoized parsing
+- File change watching
+- Songline feature detection
 
-## Related Features
-- **dreamnode** - DreamNode CRUD operations, git integration
-- **songline** - Audio clips, conversations, perspectives (extracted from dreamweaving)
-- **social-resonance** - Radicle integration for submodule URLs
-- **drag-and-drop** - .link file metadata handling
+### Layer 3: Services (`services/`)
+Stateful orchestrators with side effects:
+- Canvas parsing and analysis
+- Git submodule operations
+- Relationship extraction
+
+## Integration Points
+
+- **dreamnode**: Provides UDD service, git operations
+- **constellation-layout**: Consumes relationship graph for visualization
+- **songline**: Provides perspective/conversation components
+- **social-resonance**: Provides RadicleService for submodule URLs
+- **drag-and-drop**: Provides .link file parsing utilities
+
+## Technical Notes
+
+- **Two Parsing Systems**: `dreamsong/` (pure functions for UI) and `dreamsong-parser-service.ts` (with caching for relationship extraction)
+- **macOS Case Sensitivity**: Directory is `dreamsong/` (lowercase) - avoid imports with `DreamSong/`
+- **Flip-Flop Layout**: Media-text pairs alternate left/right alignment
+- **Hash-Based Updates**: Only re-render when canvas structure actually changes
