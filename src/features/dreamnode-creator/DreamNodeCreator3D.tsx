@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../dreamnode/styles/dreamNodeStyles';
-import { isValidDreamTalkMedia } from '../dreamnode';
+import { isValidDreamTalkMedia, DropZone, ValidationError, validateDreamNodeTitle, isTitleValid } from '../dreamnode';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { serviceManager } from '../../core/services/service-manager';
@@ -70,27 +70,24 @@ export default function DreamNodeCreator3D() {
     if (draft && titleInputRef.current) titleInputRef.current.focus();
   }, [draft?.type]);
 
-  // Generate preview URL for pre-filled media
+  // Generate preview URL for pre-filled media with cleanup
   React.useEffect(() => {
-    if (draft?.dreamTalkFile && !previewMedia) {
-      setPreviewMedia(globalThis.URL.createObjectURL(draft.dreamTalkFile));
+    if (!draft?.dreamTalkFile || previewMedia) {
+      return;
     }
+    const url = globalThis.URL.createObjectURL(draft.dreamTalkFile);
+    setPreviewMedia(url);
+    // Cleanup URL on unmount to prevent memory leaks
+    return () => {
+      globalThis.URL.revokeObjectURL(url);
+    };
   }, [draft?.dreamTalkFile, previewMedia]);
 
   // Validation (must be before early return - rules of hooks)
   const validateTitle = useCallback((title: string) => {
-    const errors: Record<string, string> = {};
-
-    if (!title.trim()) {
-      errors.title = 'Title is required';
-    } else if (title.length > 255) {
-      errors.title = 'Title must be less than 255 characters';
-    } else if (/[<>:"/\\|?*]/.test(title)) {
-      errors.title = 'Title contains invalid characters';
-    }
-
+    const errors = validateDreamNodeTitle(title);
     setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+    return isTitleValid(errors);
   }, [setValidationErrors]);
 
   // Don't render if not in creation mode
@@ -320,54 +317,6 @@ export default function DreamNodeCreator3D() {
 // SUB-COMPONENTS
 // ============================================================================
 
-function DropZone({ isDragOver, opacity, onClickBrowse }: {
-  isDragOver: boolean;
-  opacity: number;
-  onClickBrowse: () => void;
-}) {
-  return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-        cursor: 'pointer',
-        border: isDragOver ? '2px dashed rgba(255,255,255,0.5)' : 'none',
-        borderRadius: '50%',
-        zIndex: 1,
-        pointerEvents: 'auto',
-        opacity
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        onClickBrowse();
-      }}
-      onMouseDown={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: '75%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          color: dreamNodeStyles.colors.text.secondary,
-          fontSize: '24px',
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          pointerEvents: 'none'
-        }}
-      >
-        <div>Drop image here</div>
-        <div>or click to browse</div>
-      </div>
-    </div>
-  );
-}
-
 function UrlPreview({ urlMetadata }: { urlMetadata: DraftDreamNode['urlMetadata'] }) {
   if (!urlMetadata) return null;
 
@@ -421,32 +370,6 @@ function UrlPreview({ urlMetadata }: { urlMetadata: DraftDreamNode['urlMetadata'
       }}
     >
       {urlMetadata.type === 'website' ? '🔗' : 'URL'}
-    </div>
-  );
-}
-
-function ValidationError({ message, nodeSize, opacity }: {
-  message: string;
-  nodeSize: number;
-  opacity: number;
-}) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: `${nodeSize + 10}px`,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        background: 'rgba(255, 0, 0, 0.8)',
-        color: 'white',
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        whiteSpace: 'nowrap',
-        opacity
-      }}
-    >
-      {message}
     </div>
   );
 }

@@ -26,6 +26,8 @@ export * as repoInitializer from './utils/repo-initializer';
 export { sanitizeTitleToPascalCase } from './utils/title-sanitization';
 // media-validation: Single source of truth for supported DreamTalk media
 export { isValidDreamTalkMedia, getMediaCategory, SUPPORTED_MEDIA_TYPES, SUPPORTED_EXTENSIONS } from './utils/media-validation';
+// validation: Title validation for Creator and Editor
+export { validateDreamNodeTitle, isTitleValid, type TitleValidationErrors } from './utils/validation';
 // Legacy class - kept for backward compatibility
 export { GitOperationsService } from './utils/git-operations';
 
@@ -35,6 +37,8 @@ export type { DreamNode3DRef } from './components/DreamNode3D';
 export { DreamTalkSide } from './components/DreamTalkSide';
 export { DreamSongSide } from './components/DreamSongSide';
 export { PDFPreview } from './components/PDFPreview';
+// Shared UI components for Creator and Editor
+export { DropZone, ValidationError } from './components/shared-ui';
 
 // Styles
 export * from './styles/dreamNodeStyles';

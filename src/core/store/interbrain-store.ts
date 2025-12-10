@@ -76,7 +76,7 @@ import {
   CreationSlice,
   createCreationSlice,
   CreationState,
-  ProtoNode,
+  DraftDreamNode,
   ValidationErrors,
 } from '../../features/dreamnode-creator/store/slice';
 
@@ -108,7 +108,7 @@ export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'limin
 // Re-export types for backward compatibility
 export type { CopilotModeState };
 export type { EditModeState, EditModeValidationErrors };
-export type { CreationState, ProtoNode, ValidationErrors };
+export type { CreationState, DraftDreamNode, ValidationErrors };
 export type { SearchInterfaceState };
 export type { NavigationHistoryEntry, NavigationHistoryState };
 

@@ -120,9 +120,3 @@ export const createCreationSlice: StateCreator<
  * Re-export types for convenience
  */
 export type { UrlMetadata };
-
-/**
- * Backward compatibility alias - use DraftDreamNode in new code
- * @deprecated Use DraftDreamNode instead
- */
-export type ProtoNode = DraftDreamNode;
