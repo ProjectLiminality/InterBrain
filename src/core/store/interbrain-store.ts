@@ -93,7 +93,7 @@ import {
 import {
   DragAndDropSlice,
   createDragAndDropSlice,
-} from '../../features/drag-and-drop/drag-and-drop-slice';
+} from '../../features/drag-and-drop/store/slice';
 
 import {
   LiminalWebSlice,

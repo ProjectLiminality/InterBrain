@@ -36,11 +36,6 @@ export interface LinkFileMetadata {
  * Create .link file content from URL metadata
  */
 export function createLinkFileContent(urlMetadata: UrlMetadata, title?: string): string {
-  console.log('🔗 [createLinkFileContent] Creating link file content with:', {
-    urlMetadata,
-    title
-  });
-
   const linkMetadata: LinkFileMetadata = {
     url: urlMetadata.url,
     type: urlMetadata.type,
@@ -53,18 +48,9 @@ export function createLinkFileContent(urlMetadata: UrlMetadata, title?: string):
     linkMetadata.videoId = urlMetadata.videoId;
     linkMetadata.embedUrl = urlMetadata.embedUrl || getYouTubeEmbedUrl(urlMetadata.videoId);
     linkMetadata.thumbnail = `https://img.youtube.com/vi/${urlMetadata.videoId}/maxresdefault.jpg`;
-    console.log('🔗 [createLinkFileContent] Added YouTube metadata:', {
-      videoId: linkMetadata.videoId,
-      embedUrl: linkMetadata.embedUrl,
-      thumbnail: linkMetadata.thumbnail
-    });
   }
 
-  const jsonContent = JSON.stringify(linkMetadata, null, 2);
-  console.log('🔗 [createLinkFileContent] Generated JSON content:', jsonContent);
-  console.log('🔗 [createLinkFileContent] Content length:', jsonContent.length);
-
-  return jsonContent;
+  return JSON.stringify(linkMetadata, null, 2);
 }
 
 /**

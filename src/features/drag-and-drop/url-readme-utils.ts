@@ -32,16 +32,9 @@ export async function writeLinkFile(
   const linkFileName = getLinkFileName(urlMetadata, title);
   const linkFileContent = createLinkFileContent(urlMetadata, title);
 
-  console.log(`🔗 [url-node-utils] Creating link file:`, {
-    linkFileName,
-    contentLength: linkFileContent.length
-  });
-
   // Write .link file to repository
   const linkFilePath = vaultService.joinPath(repoPath, linkFileName);
   await vaultService.writeFile(linkFilePath, linkFileContent);
-
-  console.log(`🔗 [url-node-utils] Link file written:`, linkFilePath);
 
   return {
     fileName: linkFileName,

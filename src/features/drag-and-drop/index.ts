@@ -1,15 +1,13 @@
 // Drag-and-drop feature barrel export
 // Handles URL drops, link file creation, and URL metadata extraction
 
-// Slice
-export * from './drag-and-drop-slice';
+// Store
+export * from './store/slice';
 
-// Drop handlers (logic extracted from DreamspaceCanvas)
+// Drop handlers (orchestration logic for file and URL drops)
 export * from './drop-handlers';
 
-// URL Node utilities (URL-to-DreamNode transformation logic)
-export * from './url-node-utils';
-
-// Utils
+// URL utilities
 export * from './url-utils';
+export * from './url-readme-utils';
 export * from './link-file-utils';

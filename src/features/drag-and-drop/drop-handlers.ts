@@ -15,7 +15,10 @@ import { UIService } from '../../core/services/ui-service';
 import { processDroppedUrlData } from './url-utils';
 import type { SpatialOrchestratorRef } from '../../core/components/SpatialOrchestrator';
 
-// Singleton service for UI feedback
+/**
+ * UIService instance for drop operation feedback
+ * Note: Created without app since drop-handlers only needs notification methods
+ */
 const uiService = new UIService();
 
 /**
@@ -231,8 +234,6 @@ export async function handleNormalDrop(
       // Create opposite type for automatic relationship
       nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
       shouldAutoRelate = true;
-
-      console.log(`Liminal-web drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
     }
 
     // Create node with determined type
@@ -249,7 +250,6 @@ export async function handleNormalDrop(
       try {
         // Add bidirectional relationship
         await service.addRelationship(focusedNodeId, newNode.id);
-        console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
         uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
 
         // Refresh the focused node to include the new relationship
@@ -334,8 +334,6 @@ export async function handleNormalUrlDrop(
       return;
     }
 
-    console.log('🔗 Creating DreamNode from URL:', urlMetadata);
-
     const store = useInterBrainStore.getState();
     const service = serviceManager.getActive();
 
@@ -349,17 +347,14 @@ export async function handleNormalUrlDrop(
       focusedNodeId = focusedNode.id;
       nodeType = focusedNode.type === 'dream' ? 'dreamer' : 'dream';
       shouldAutoRelate = true;
-      console.log(`Liminal-web URL drop: Creating ${nodeType} to relate with ${focusedNode.type} "${focusedNode.name}"`);
     }
 
     // Create the DreamNode with URL
     let newNode: DreamNode;
     const webLinkAnalyzerReady = serviceManager.isWebLinkAnalyzerReady();
-    console.log(`🔗 URL type: ${urlMetadata.type}, has createFromWebsiteUrl: ${!!service.createFromWebsiteUrl}, analyzer ready: ${webLinkAnalyzerReady}`);
 
     if (urlMetadata.type === 'website' && service.createFromWebsiteUrl && webLinkAnalyzerReady) {
       const apiKey = serviceManager.getClaudeApiKey();
-      console.log(`🔗 Using AI analysis, API key configured: ${!!apiKey}`);
       newNode = await service.createFromWebsiteUrl(
         urlMetadata.title || urlMetadata.url,
         nodeType,
@@ -368,9 +363,6 @@ export async function handleNormalUrlDrop(
         apiKey || undefined
       );
     } else {
-      if (urlMetadata.type === 'website' && !webLinkAnalyzerReady) {
-        console.log(`🔗 Web Link Analyzer not ready, using basic node creation`);
-      }
       newNode = await service.createFromUrl(
         urlMetadata.title || urlMetadata.url,
         nodeType,
@@ -383,7 +375,6 @@ export async function handleNormalUrlDrop(
     if (shouldAutoRelate && focusedNodeId && newNode) {
       try {
         await service.addRelationship(focusedNodeId, newNode.id);
-        console.log(`Auto-related new ${nodeType} "${newNode.name}" with focused node`);
         uiService.showSuccess(`Created ${nodeType} "${newNode.name}" and related to focused node`);
 
         const updatedFocusedNode = await service.get(focusedNodeId);
@@ -418,8 +409,6 @@ export async function handleCommandUrlDrop(urlData: string): Promise<void> {
       return;
     }
 
-    console.log('🔗 Opening ProtoNode with URL:', urlMetadata);
-
     const spawnPosition: [number, number, number] = [0, 0, -25];
 
     const { startCreationWithData } = useInterBrainStore.getState();
@@ -446,8 +435,6 @@ export async function handleUrlDropOnNode(urlData: string, node: DreamNode): Pro
       uiService.showError('Invalid URL dropped');
       return;
     }
-
-    console.log('🔗 Adding URL to existing DreamNode:', { url: urlMetadata, node: node.name });
 
     const service = serviceManager.getActive();
     await service.addUrlToNode(node.id, urlMetadata);
