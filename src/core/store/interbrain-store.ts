@@ -78,7 +78,7 @@ import {
   CreationState,
   ProtoNode,
   ValidationErrors,
-} from '../../features/dream-node-management/creation-slice';
+} from '../../features/creation/store/slice';
 
 import {
   RadialButtonsSlice,

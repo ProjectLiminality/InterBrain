@@ -119,7 +119,7 @@ export { registerDreamNodeCommands } from './commands';
 | [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High |
 | [edit-mode](./edit-mode/README.md) | Node editing with relationship management | Medium |
 | [search](./search/README.md) | Search overlay and result display | Low |
-| [creation](./creation/README.md) | ProtoNode3D for new node creation | Low |
+| [creation](./creation/README.md) | Node creation UI and state management | Medium |
 | [drag-and-drop](./drag-and-drop/README.md) | File and URL drop handling | Medium |
 | [radial-buttons](./radial-buttons/README.md) | Radial action menu around nodes | Low |
 | [realtime-transcription](./realtime-transcription/README.md) | Voice transcription via Python backend | Medium |

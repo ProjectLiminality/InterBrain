@@ -1,8 +1,16 @@
 # Creation Feature
 
-**Purpose**: In-space 3D creation UI for DreamNodes with translucent inline editing.
+**Purpose**: In-space 3D creation UI for DreamNodes with translucent inline editing and state management.
 
 ## Key Files
+
+### State Management
+- **`store/slice.ts`** - Zustand slice for creation workflow:
+  - `ProtoNode` interface: Temporary node data during creation (title, type, position, files, URL metadata)
+  - `CreationSlice`: State machine for creation mode (start → update → validate → complete/cancel)
+  - Actions: `startCreation`, `startCreationWithData`, `updateProtoNode`, `completeCreation`, `cancelCreation`
+
+### Components
 
 ### `ProtoNode3D.tsx` (603 lines)
 Main creation component that renders a translucent DreamNode in 3D space for inline editing.
@@ -29,13 +37,18 @@ Simple barrel export for `ProtoNode3D`.
 ## Main Exports
 
 ```typescript
+// Store slice
+export { createCreationSlice, ProtoNode, CreationSlice, ValidationErrors } from './store/slice';
+
+// Components
 export { default as ProtoNode3D } from './ProtoNode3D';
+export { default as CreationModeOverlay } from './CreationModeOverlay';
 ```
 
 ## Dependencies
 
-**From store**:
-- `useInterBrainStore`: Accesses `creationState`, `updateProtoNode()`, `setValidationErrors()`
+**Internal** (from this feature's store):
+- `creationState`, `updateProtoNode()`, `setValidationErrors()` via `useInterBrainStore`
 - `ProtoNode` type: Shape of the proto-node being created
 
 **From dreamnode feature**:
