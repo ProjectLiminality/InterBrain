@@ -57,7 +57,7 @@ import {
   extractConstellationPersistenceData,
   restoreConstellationPersistenceData,
   SerializableDreamSongGraph,
-} from '../../features/constellation-layout/constellation-slice';
+} from '../../features/constellation-layout/store/slice';
 
 import {
   CopilotModeSlice,

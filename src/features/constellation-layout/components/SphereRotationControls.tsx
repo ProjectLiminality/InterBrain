@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Group, Vector3, Quaternion } from 'three';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 
 interface SphereRotationControlsProps {
   groupRef: React.RefObject<Group | null>;

@@ -8,9 +8,9 @@
 
 import React, { useMemo } from 'react';
 import { Group } from 'three';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { DreamNode } from '../dreamnode';
-import { detectConnectedComponents, getClusterColor } from './clustering';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { DreamNode } from '../../dreamnode';
+import { detectConnectedComponents, getClusterColor } from '../clustering';
 import DreamSongThread3D, { groupEdgesByDreamSong, sortEdgesBySequence } from './DreamSongThread3D';
 
 export interface ConstellationEdgesProps {

@@ -1,59 +1,64 @@
 # Constellation Layout Feature
 
-**3D spherical graph layout system with relationship-based clustering and dynamic view scaling for DreamNode visualization.**
+**Purpose**: Arranges DreamNodes on a 3D sphere surface using relationship-based clustering and force-directed algorithms, providing a "night sky" visualization with Apple Watch-style distance scaling and Google Earth-style rotation controls.
 
-## Purpose
+## Directory Structure
 
-Arranges DreamNodes on a sphere surface based on their DreamSong relationships, using force-directed algorithms and spherical geometry. Provides Apple Watch-style distance-based scaling and Google Earth-style rotation controls.
-
-## Key Files
-
-### Core Algorithm
-- **`ConstellationLayout.ts`** - Main orchestrator: clustering → global positioning → force-directed → projection → refinement
-- **`clustering.ts`** - Connected components detection using DFS for automatic cluster discovery
-- **`ForceDirected.ts`** - Fruchterman-Reingold algorithm for relationship-aware node arrangement
-- **`SphericalProjection.ts`** - Exponential map: 2D tangent plane → 3D sphere surface (geodesic math)
-- **`ClusterRefinement.ts`** - Iterative spring-mass simulation to eliminate cluster overlaps
-- **`LayoutConfig.ts`** - Configuration types and defaults (based on HTML prototype)
-
-### Spatial Distribution
-- **`FibonacciSphereLayout.ts`** - Golden ratio sphere distribution (baseline/fallback positioning)
-- **`DynamicViewScaling.ts`** - Apple Watch-style distance-based scaling with perspective correction
-
-### 3D Components
-- **`Star3D.tsx`** - Pure visual star component for night sky occlusion
-- **`Edge3D.tsx`** - Spherical arc (great circle) between two nodes on sphere
-- **`DreamSongThread3D.tsx`** - Groups multiple edges from same DreamSong (unified interaction)
-- **`ConstellationEdges.tsx`** - Main container: reads graph from store, renders all threads
-- **`SphereRotationControls.tsx`** - Virtual trackball with quaternion math and momentum physics
-
-### State & Commands
-- **`constellation-slice.ts`** - Zustand slice: relationship graph, positions, node metadata, config
-- **`commands.ts`** - Obsidian commands: scan vault, export JSON, show stats, apply layout
-- **`types.ts`** - Core types: `DreamSongRelationshipGraph`, `DreamSongNode`, `DreamSongEdge`
-
-### Misc
-- **`index.ts`** - Barrel export for all constellation layout APIs
+```
+constellation-layout/
+├── store/
+│   └── slice.ts              # Zustand slice for relationship graph, positions, config
+├── components/
+│   ├── ConstellationEdges.tsx    # Main container: renders all DreamSong threads
+│   ├── DreamSongThread3D.tsx     # Groups edges from same DreamSong (unified interaction)
+│   ├── Edge3D.tsx                # Spherical arc (great circle) between two nodes
+│   ├── Star3D.tsx                # Pure visual star for night sky occlusion
+│   └── SphereRotationControls.tsx # Virtual trackball with quaternion math and momentum
+├── assets/
+│   └── star.png              # Star image for night sky visualization
+├── ConstellationLayout.ts    # Main orchestrator: clustering → positioning → projection
+├── clustering.ts             # Connected components detection using DFS
+├── ForceDirected.ts          # Fruchterman-Reingold algorithm for node arrangement
+├── SphericalProjection.ts    # Exponential map: 2D tangent plane → 3D sphere surface
+├── ClusterRefinement.ts      # Iterative spring-mass simulation for overlap elimination
+├── LayoutConfig.ts           # Configuration types and defaults
+├── FibonacciSphereLayout.ts  # Golden ratio sphere distribution (baseline/fallback)
+├── DynamicViewScaling.ts     # Apple Watch-style distance-based scaling
+├── types.ts                  # DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge
+├── commands.ts               # Obsidian commands: scan vault, export JSON, show stats
+├── index.ts                  # Barrel export
+└── README.md
+```
 
 ## Main Exports
 
 ```typescript
-// Algorithm
-export { computeConstellationLayout } from './ConstellationLayout';
-export { detectConnectedComponents } from './clustering';
-export { computeClusterLayout } from './ForceDirected';
-export { exponentialMap, fibonacciSphere } from './SphericalProjection';
-
-// Components
-export { default as ConstellationEdges } from './ConstellationEdges';
-export { default as Star3D } from './Star3D';
-export { default as SphereRotationControls } from './SphereRotationControls';
-
-// State
-export { createConstellationSlice } from './constellation-slice';
+// Store (state management)
+export { createConstellationSlice, ConstellationSlice } from './store/slice';
+export type { ConstellationDataState } from './store/slice';
 
 // Commands
 export { ConstellationCommands, registerConstellationDebugCommands } from './commands';
+
+// Components
+export { default as ConstellationEdges, shouldShowConstellationEdges } from './components/ConstellationEdges';
+export { default as DreamSongThread3D } from './components/DreamSongThread3D';
+export { default as Edge3D } from './components/Edge3D';
+export { default as Star3D } from './components/Star3D';
+export { default as SphereRotationControls } from './components/SphereRotationControls';
+
+// Layout algorithms
+export { computeConstellationLayout, validateLayout, createFallbackLayout } from './ConstellationLayout';
+export { detectConnectedComponents, getClusterColor } from './clustering';
+export { computeClusterLayout } from './ForceDirected';
+export { exponentialMap, fibonacciSphere, geodesicDistance } from './SphericalProjection';
+export { refineClusterPositions } from './ClusterRefinement';
+export { calculateFibonacciSpherePositions, DEFAULT_FIBONACCI_CONFIG } from './FibonacciSphereLayout';
+export { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from './DynamicViewScaling';
+
+// Types
+export type { DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge } from './types';
+export type { ConstellationLayoutConfig, ConstellationCluster, LayoutStatistics } from './LayoutConfig';
 ```
 
 ## Algorithm Pipeline
@@ -66,39 +71,45 @@ export { ConstellationCommands, registerConstellationDebugCommands } from './com
 6. **Refinement** → Iterative spring-mass to eliminate overlaps
 7. **Store** → Persist positions + graph to Zustand (localStorage)
 
-## Architecture Notes
+## Key Components
 
-- **Based on HTML prototype** - All algorithms validated in prototype before implementation
-- **Spherical geometry** - Uses exponential/logarithmic maps (differential geometry)
-- **Quaternion rotation** - No gimbal lock, smooth rotation at all orientations
-- **Persistent state** - Graph + positions cached in Zustand/localStorage
-- **Intelligent diff** - Only recomputes layout when relationships actually change
-- **Performance** - Nodes at `radius: 5000` for proper night sky scale
+### `store/slice.ts` - State Management
+Zustand slice managing:
+- **constellationData**: Relationship graph, positions, node metadata, scan timestamps
+- **fibonacciConfig**: Sphere layout configuration
+- **debugWireframeSphere**, **debugIntersectionPoint**: Debug visualization flags
+- Persistence serialization for localStorage caching
+
+### `components/SphereRotationControls.tsx` - Rotation Controls
+Google Earth-style virtual trackball:
+- Quaternion mathematics (no gimbal lock)
+- Physics-based momentum with exponential damping (325ms time constant)
+- Velocity estimation with low-pass filtering
+- Rotation locked when in liminal-web mode
+
+### `DynamicViewScaling.ts` - Distance-Based Scaling
+Apple Watch-style scaling zones:
+- **Inner radius (750)**: Center plateau - nodes at maximum size
+- **Outer radius (2250)**: Transition zone with perspective-corrected scaling
+- **Beyond outer**: Stars only (performance optimization)
 
 ## Integration Points
 
-- **DreamWeaving** - Uses `DreamSongRelationshipService` to scan vault
-- **Spatial Orchestrator** - Applies computed positions to DreamNodes in 3D space
-- **Zustand Store** - Reads/writes `constellationData` slice
-- **Commands** - Exposed via Obsidian command palette
+- **DreamWeaving**: Uses `DreamSongRelationshipService` to scan vault
+- **Spatial Orchestrator**: Applies computed positions to DreamNodes in 3D space
+- **Zustand Store**: Reads/writes `constellationData` slice
+- **Commands**: Exposed via Obsidian command palette
 
-## Flags & Issues
+## Technical Notes
 
-### Dead Code
-- **`clustering.ts`** - Functions `calculateClusterCenter()` and `calculateClusterRadius()` use placeholder random positions (will be replaced when positions are in store)
-
-### Unused Exports
-- **`ForceDirected.ts`** - `optimizeWithGradientDescent()` - Alternative optimization method (not currently used)
-- **`ClusterRefinement.ts`** - `optimizeClusterDistribution()` - Simulated annealing approach (not currently used)
-
-### Dependencies
-- Depends on `../dreamnode` for `DreamNode` type
-- Depends on `../dreamweaving` for `DreamSongRelationshipService`
-- Depends on `../../core/store/interbrain-store` for state management
+- **Spherical geometry**: Uses exponential/logarithmic maps (differential geometry)
+- **Quaternion rotation**: No gimbal lock, smooth rotation at all orientations
+- **36-node capacity**: Works seamlessly with liminal-web layout
+- **Persistent state**: Graph + positions cached in Zustand/localStorage
+- **Intelligent diff**: Only recomputes layout when relationships change
+- **Performance**: Nodes at `radius: 5000` for proper night sky scale
 
 ## Testing
 
-- **`FibonacciSphereLayout.test.ts`** - Tests golden ratio distribution
-- **`DynamicViewScaling.test.ts`** - Tests distance-based scaling math
-
-No other tests yet (algorithms ported from validated HTML prototype).
+- **`FibonacciSphereLayout.test.ts`** - Golden ratio distribution
+- **`DynamicViewScaling.test.ts`** - Distance-based scaling math
