@@ -222,7 +222,6 @@ export default function DreamNodeEditor3D() {
     if (!file) return;
 
     if (!isValidDreamTalkMedia(file)) {
-      console.log(`DreamNodeEditor3D: Dropped file is not valid DreamTalk media: ${file.name}`);
       return;
     }
 

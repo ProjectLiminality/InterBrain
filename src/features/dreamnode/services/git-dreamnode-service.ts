@@ -152,7 +152,6 @@ export class GitDreamNodeService {
         // Index the new node after git repository is created
         try {
           await indexingService.indexNode(node);
-          console.log(`GitDreamNodeService: Indexed new node "${title}"`);
         } catch (error) {
           console.error('Failed to index new node:', error);
           // Don't fail the creation if indexing fails
@@ -162,7 +161,7 @@ export class GitDreamNodeService {
         // Check if git repository actually exists (commit might have succeeded despite stderr)
         try {
           await execAsync('git rev-parse HEAD', { cwd: repoPath });
-          console.log(`GitDreamNodeService: Repository created successfully (stderr from hook is normal)`);
+          // Repository created successfully (stderr from hook is normal)
         } catch {
           // Actually failed
           console.error('Failed to create git repository:', error);
@@ -174,7 +173,6 @@ export class GitDreamNodeService {
     // 2. liminal-web.json created with { relationships: [INTERBRAIN_UUID] }
     // No need for separate auto-link - everything is atomic in initial creation
 
-    console.log(`GitDreamNodeService: Created ${type} "${title}" with ID ${uuid}`);
     return node;
   }
   
@@ -218,7 +216,6 @@ export class GitDreamNodeService {
             // Update repoPath in the node
             updatedNode = { ...updatedNode, repoPath: newRepoName };
             
-            console.log(`GitDreamNodeService: Renamed folder from "${originalNode.repoPath}" to "${newRepoName}"`);
           }
         } catch (error) {
           console.error(`Failed to rename folder for node ${id}:`, error);
@@ -242,7 +239,6 @@ export class GitDreamNodeService {
       await this.autoCommitChanges(updatedNode, changes);
     }
     
-    console.log(`GitDreamNodeService: Updated node ${id}`, changes);
   }
   
   /**
@@ -262,12 +258,10 @@ export class GitDreamNodeService {
     
     try {
       // Delete the actual git repository from disk
-      console.log(`GitDreamNodeService: Deleting git repository at ${fullRepoPath}`);
       
       // Use recursive removal to delete the entire directory
       await fsPromises.rm(fullRepoPath, { recursive: true, force: true });
       
-      console.log(`GitDreamNodeService: Successfully deleted git repository for ${nodeName}`);
     } catch (error) {
       console.error(`GitDreamNodeService: Failed to delete git repository for ${nodeName}:`, error);
       throw new Error(`Failed to delete git repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -276,7 +270,6 @@ export class GitDreamNodeService {
     // Remove from store only after successful deletion
     store.deleteRealNode(id);
     
-    console.log(`GitDreamNodeService: Deleted node ${nodeName} (${id})`);
   }
   
   /**
@@ -303,7 +296,6 @@ export class GitDreamNodeService {
     const stats = { added: 0, updated: 0, removed: 0 };
 
     try {
-      console.log('[VaultScan] Starting batch scan...');
 
       // Get all root-level directories
       const entries = await fsPromises.readdir(this.vaultPath, { withFileTypes: true });
@@ -360,7 +352,6 @@ export class GitDreamNodeService {
       }
 
       // Now process all batched operations - build complete Map without triggering re-renders
-      console.log(`[VaultScan] Processing ${nodesToAdd.length} adds, ${nodesToUpdate.length} updates`);
 
       const store = useInterBrainStore.getState();
       const newDreamNodes = new Map(store.dreamNodes); // Clone existing map
@@ -413,7 +404,6 @@ export class GitDreamNodeService {
 
       // Build bidirectional relationships from Dreamer → Dream connections
       // This is the ONLY source of truth for liminal web relationships
-      console.log('[VaultScan] Building bidirectional relationships from liminal-web.json files...');
       for (const [dreamerId, dreamerData] of newDreamNodes) {
         if (dreamerData.node.type === 'dreamer') {
           // For each Dream node this Dreamer points to
@@ -430,7 +420,6 @@ export class GitDreamNodeService {
           }
         }
       }
-      console.log('[VaultScan] Bidirectional relationships complete');
 
       // Extract and persist lightweight metadata for instant startup
       const nodeMetadata = new Map<string, { name: string; type: string; uuid: string }>();
@@ -482,15 +471,12 @@ export class GitDreamNodeService {
       await fsPromises.mkdir(repoPath, { recursive: true });
       
       // Initialize git with template
-      console.log(`GitDreamNodeService: Initializing git with template: ${this.templatePath}`);
-      const initResult = await execAsync(`git init --template="${this.templatePath}" "${repoPath}"`);
-      console.log(`GitDreamNodeService: Git init result:`, initResult);
+      await execAsync(`git init --template="${this.templatePath}" "${repoPath}"`);
       
       // Make sure hooks are executable
       const hooksDir = path.join(repoPath, '.git', 'hooks');
       if (await this.fileExists(hooksDir)) {
         await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: repoPath });
-        console.log(`GitDreamNodeService: Made pre-commit hook executable`);
       }
       
       // Write dreamTalk file if provided
@@ -520,7 +506,6 @@ export class GitDreamNodeService {
 
       // Move template files from .git/ to working directory
       // (This is what the pre-commit hook used to do, but doing it here prevents timing issues)
-      console.log(`GitDreamNodeService: Moving template files to working directory`);
       const gitDir = path.join(repoPath, '.git');
 
       // Move .udd file
@@ -528,7 +513,6 @@ export class GitDreamNodeService {
       const uddDest = path.join(repoPath, '.udd');
       if (await this.fileExists(uddSource)) {
         await fsPromises.rename(uddSource, uddDest);
-        console.log(`GitDreamNodeService: Moved .git/udd to .udd`);
       }
 
       // Move README.md
@@ -536,7 +520,6 @@ export class GitDreamNodeService {
       const readmeDest = path.join(repoPath, 'README.md');
       if (await this.fileExists(readmeSource)) {
         await fsPromises.rename(readmeSource, readmeDest);
-        console.log(`GitDreamNodeService: Moved .git/README.md to README.md`);
       }
 
       // Move LICENSE
@@ -544,7 +527,6 @@ export class GitDreamNodeService {
       const licenseDest = path.join(repoPath, 'LICENSE');
       if (await this.fileExists(licenseSource)) {
         await fsPromises.rename(licenseSource, licenseDest);
-        console.log(`GitDreamNodeService: Moved .git/LICENSE to LICENSE`);
       }
 
       // For Dreamer nodes: Create .gitignore and empty liminal-web.json BEFORE initial commit
@@ -553,7 +535,6 @@ export class GitDreamNodeService {
         const gitignorePath = path.join(repoPath, '.gitignore');
         const gitignoreContent = 'liminal-web.json\n';
         await fsPromises.writeFile(gitignorePath, gitignoreContent);
-        console.log(`GitDreamNodeService: Created .gitignore for Dreamer node`);
 
         // Create/update liminal-web.json with InterBrain relationship
         // All Dreamer nodes should start connected to InterBrain
@@ -565,7 +546,6 @@ export class GitDreamNodeService {
         try {
           const existingContent = await fsPromises.readFile(liminalWebPath, 'utf-8');
           liminalWeb = JSON.parse(existingContent);
-          console.log(`GitDreamNodeService: Found existing liminal-web.json with ${liminalWeb.relationships.length} relationships`);
         } catch {
           // File doesn't exist, create new
           liminalWeb = { relationships: [] };
@@ -577,40 +557,30 @@ export class GitDreamNodeService {
         }
 
         await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
-        console.log(`GitDreamNodeService: Updated liminal-web.json with InterBrain connection (total: ${liminalWeb.relationships.length} relationships)`);
       }
 
-      // Make initial commit
-      console.log(`GitDreamNodeService: Starting git operations in ${repoPath}`);
-
       // Add all files
-      const addResult = await execAsync('git add -A', { cwd: repoPath });
-      console.log(`GitDreamNodeService: Git add result:`, addResult);
+      await execAsync('git add -A', { cwd: repoPath });
       
       // Make the initial commit (this triggers the pre-commit hook)
       // Escape the title to handle quotes and special characters
       const escapedTitle = title.replace(/"/g, '\\"');
       try {
-        const commitResult = await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
-        console.log(`GitDreamNodeService: Git commit result:`, commitResult);
+        await execAsync(`git commit -m "Initialize DreamNode: ${escapedTitle}"`, { cwd: repoPath });
       } catch (commitError: any) {
         // Pre-commit hook outputs to stderr which causes exec to throw even on success
         // Check if commit actually succeeded by verifying HEAD exists
         try {
-          const headResult = await execAsync('git rev-parse HEAD', { cwd: repoPath });
-          console.log(`[GitDreamNodeService] ✅ Commit verified successful despite stderr - HEAD exists: ${headResult.stdout.trim()}`);
+          await execAsync('git rev-parse HEAD', { cwd: repoPath });
           // Commit succeeded - don't rethrow, continue normally
         } catch (verifyError) {
           // Commit actually failed - HEAD doesn't exist
-          console.error(`[GitDreamNodeService] ❌ Commit failed - HEAD verification failed:`, verifyError);
+          console.error('GitDreamNodeService: Commit failed - HEAD verification failed:', verifyError);
           throw commitError;
         }
       }
 
-      console.log(`GitDreamNodeService: Git repository created successfully at ${repoPath}`);
-
       // Initialize Radicle repository via RadicleService (social-resonance feature)
-      console.log(`GitDreamNodeService: Initializing Radicle repository...`);
       try {
         const radicleService = serviceManager.getRadicleService();
         const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
@@ -626,8 +596,6 @@ export class GitDreamNodeService {
         const radicleId = await radicleService.init(repoPath, repoName, description, passphrase);
 
         if (radicleId) {
-          console.log(`GitDreamNodeService: Radicle init succeeded with RID: ${radicleId}`);
-
           // Update .udd file with radicleId
           const uddPath = path.join(repoPath, '.udd');
           const uddContent = await fsPromises.readFile(uddPath, 'utf-8');
@@ -638,13 +606,10 @@ export class GitDreamNodeService {
           // Commit the radicleId update
           await execAsync('git add .udd', { cwd: repoPath });
           await execAsync('git commit -m "Add Radicle ID to DreamNode"', { cwd: repoPath });
-          console.log(`GitDreamNodeService: Committed radicleId to .udd`);
-        } else {
-          console.log(`GitDreamNodeService: Radicle init skipped or failed (non-fatal)`);
         }
       } catch (radError: any) {
         // Don't throw - allow node creation to proceed even if rad init fails
-        console.warn(`GitDreamNodeService: Radicle init failed (non-fatal):`, radError.message);
+        console.warn('GitDreamNodeService: Radicle init failed (non-fatal):', radError.message);
       }
 
     } catch (error: any) {
@@ -652,11 +617,10 @@ export class GitDreamNodeService {
       // (This can happen if earlier operations like git init had stderr output)
       try {
         await execAsync('git rev-parse HEAD', { cwd: repoPath });
-        console.log(`[GitDreamNodeService] ✅ Repository exists despite error - operation succeeded`);
         return; // Success - don't throw
       } catch {
         // Repository doesn't exist - this is a real error
-        console.error('Failed to create git repository:', error);
+        console.error('GitDreamNodeService: Failed to create git repository:', error);
         throw error;
       }
     }
@@ -678,7 +642,6 @@ export class GitDreamNodeService {
     // Update the udd file while it's still in the .git directory
     // The pre-commit hook will move it to .udd in the working directory
     const uddPath = path.join(repoPath, '.git', 'udd');
-    console.log(`GitDreamNodeService: Updating template file at ${uddPath}`);
 
     let uddContent = await fsPromises.readFile(uddPath, 'utf-8');
 
@@ -696,19 +659,16 @@ export class GitDreamNodeService {
       if (metadata.email) udd.email = metadata.email;
       if (metadata.phone) udd.phone = metadata.phone;
       uddContent = JSON.stringify(udd, null, 2);
-      console.log(`GitDreamNodeService: Added metadata to .udd:`, Object.keys(metadata));
     }
 
     await fsPromises.writeFile(uddPath, uddContent);
-    console.log(`GitDreamNodeService: Updated template metadata`);
-    
+
     // Update README.md (also in .git directory initially)
     const readmePath = path.join(repoPath, '.git', 'README.md');
     if (await this.fileExists(readmePath)) {
       let readmeContent = await fsPromises.readFile(readmePath, 'utf-8');
       readmeContent = readmeContent.replace(/TEMPLATE_TITLE_PLACEHOLDER/g, values.title);
       await fsPromises.writeFile(readmePath, readmeContent);
-      console.log(`GitDreamNodeService: Updated README.md template`);
     }
   }
   
@@ -856,7 +816,6 @@ export class GitDreamNodeService {
 
     // CRITICAL: Sync repoPath with actual directory name (handles Radicle clone renames)
     if (node.repoPath !== repoName) {
-      console.log(`📁 [GitDreamNodeService] Syncing repoPath: "${node.repoPath}" → "${repoName}"`);
       node.repoPath = repoName;
       updated = true;
     }
@@ -865,7 +824,6 @@ export class GitDreamNodeService {
     // .udd file is source of truth for display names, NOT the folder name
     // Folder names are PascalCase for compatibility, but display uses human-readable titles
     if (node.name !== udd.title) {
-      console.log(`✏️ [GitDreamNodeService] Syncing display name from .udd: "${node.name}" → "${udd.title}"`);
       node.name = udd.title;
       updated = true;
     }
@@ -937,7 +895,7 @@ export class GitDreamNodeService {
     try {
       existingUdd = await UDDService.readUDD(fullPath);
     } catch {
-      console.log(`GitDreamNodeService: No existing .udd found, creating new one`);
+      // No existing .udd found, will create new one
     }
 
     // Build updated UDD, merging with existing fields
@@ -1045,8 +1003,6 @@ export class GitDreamNodeService {
       // Escape the commit message to handle quotes and special characters
       const escapedMessage = commitMessage.replace(/"/g, '\\"');
       await execAsync(`git commit -m "${escapedMessage}"`, { cwd: repoPath });
-      
-      console.log(`GitDreamNodeService: Auto-committed changes for ${node.name}: ${commitMessage}`);
       
       // Refresh git status after commit
       const newGitStatus = await this.gitOpsService.getGitStatus(node.repoPath);
@@ -1199,11 +1155,9 @@ export class GitDreamNodeService {
       node,
       lastSynced: Date.now()
     });
-    
+
     // Update .udd file
     await this.updateUDDFile(node);
-    
-    console.log(`GitDreamNodeService: Added ${files.length} files to ${nodeId}`);
   }
 
   /**
@@ -1235,8 +1189,6 @@ export class GitDreamNodeService {
       ...nodeData,
       lastSynced: Date.now()
     });
-
-    console.log(`GitDreamNodeService: Added ${files.length} files to ${nodeId} (without dreamTalk update)`);
   }
 
   private isMediaFile(file: globalThis.File): boolean {
@@ -1273,7 +1225,6 @@ export class GitDreamNodeService {
   reset(): void {
     const store = useInterBrainStore.getState();
     store.setDreamNodes(new Map());
-    console.log('GitDreamNodeService: Reset store data');
   }
   
   /**
@@ -1292,9 +1243,7 @@ export class GitDreamNodeService {
     
     let updated = 0;
     let errors = 0;
-    
-    console.log(`GitDreamNodeService: Refreshing git status for ${nodes.length} nodes...`);
-    
+
     for (const [nodeId, nodeData] of nodes) {
       try {
         const newGitStatus = await this.gitOpsService.getGitStatus(nodeData.node.repoPath);
@@ -1323,18 +1272,16 @@ export class GitDreamNodeService {
             node: updatedNode,
             lastSynced: Date.now()
           });
-          
+
           updated++;
-          console.log(`GitDreamNodeService: Updated git status for ${updatedNode.name}: uncommitted=${newGitStatus.hasUncommittedChanges}, stashed=${newGitStatus.hasStashedChanges}, unpushed=${newGitStatus.hasUnpushedChanges}`);
           
           // Trigger re-indexing if commit changed (meaningful content change)
           if (commitChanged && !newGitStatus.hasUncommittedChanges) {
             // Only re-index if the node is clean (committed changes)
             try {
               await indexingService.indexNode(updatedNode);
-              console.log(`GitDreamNodeService: Re-indexed node "${updatedNode.name}" after commit change`);
             } catch (error) {
-              console.error(`Failed to re-index node ${updatedNode.name}:`, error);
+              console.error(`GitDreamNodeService: Failed to re-index node ${updatedNode.name}:`, error);
             }
           }
         }
@@ -1343,8 +1290,7 @@ export class GitDreamNodeService {
         errors++;
       }
     }
-    
-    console.log(`GitDreamNodeService: Git status refresh complete. Updated: ${updated}, Errors: ${errors}`);
+
     return { updated, errors };
   }
   
@@ -1395,12 +1341,6 @@ export class GitDreamNodeService {
     for (const removedId of removed) {
       await this.removeRelationship(nodeId, removedId);
     }
-
-    console.log(`GitDreamNodeService: Updated relationships for ${nodeId}:`, {
-      added: added.length,
-      removed: removed.length,
-      total: relationshipIds.length
-    });
   }
 
   /**
@@ -1471,8 +1411,6 @@ export class GitDreamNodeService {
     if (updateTasks.length > 0) {
       await Promise.all(updateTasks);
     }
-
-    console.log(`GitDreamNodeService: Added bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
   /**
@@ -1506,7 +1444,6 @@ export class GitDreamNodeService {
       if (node.type === 'dreamer') {
         await this.updateLiminalWebFile(node);
       }
-      console.log(`GitDreamNodeService: Removed one-way relationship ${nodeId} -> ${relatedNodeId}`);
       return;
     }
 
@@ -1537,18 +1474,16 @@ export class GitDreamNodeService {
     });
 
     // Update liminal-web.json for Dreamer nodes (relationships stored here, not in .udd)
-    const updateTasks = [];
+    const updateTasks2 = [];
     if (node.type === 'dreamer') {
-      updateTasks.push(this.updateLiminalWebFile(node));
+      updateTasks2.push(this.updateLiminalWebFile(node));
     }
     if (relatedNode.type === 'dreamer') {
-      updateTasks.push(this.updateLiminalWebFile(relatedNode));
+      updateTasks2.push(this.updateLiminalWebFile(relatedNode));
     }
-    if (updateTasks.length > 0) {
-      await Promise.all(updateTasks);
+    if (updateTasks2.length > 0) {
+      await Promise.all(updateTasks2);
     }
-
-    console.log(`GitDreamNodeService: Removed bidirectional relationship ${nodeId} <-> ${relatedNodeId}`);
   }
 
   /**
@@ -1585,7 +1520,6 @@ export class GitDreamNodeService {
     // Update .udd file with .link file path
     await this.updateUDDFile(node);
 
-    console.log(`GitDreamNodeService: Created ${type} "${title}" from URL (${urlMetadata.type})`);
     return node;
   }
 
@@ -1627,9 +1561,6 @@ export class GitDreamNodeService {
         console.error('GitDreamNodeService: Background web analysis failed:', error);
         // Node still exists with basic content - user can retry later
       });
-      console.log(`GitDreamNodeService: Created website node "${title}" - AI analysis running in background`);
-    } else {
-      console.log(`GitDreamNodeService: Created website node "${title}" - No API key, skipping AI analysis`);
     }
 
     return node;
@@ -1671,9 +1602,6 @@ export class GitDreamNodeService {
       node,
       lastSynced: Date.now()
     });
-
-    console.log(`GitDreamNodeService: Added URL (${urlMetadata.type}) to node ${nodeId}: ${urlMetadata.url}`);
-    console.log(`GitDreamNodeService: Created .link file: ${linkResult.fileName}`);
   }
 
   /**
@@ -1702,7 +1630,6 @@ export class GitDreamNodeService {
 
       // Write back
       await fsPromises.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
-      console.log(`GitDreamNodeService: Updated liminal-web.json for ${node.name} with ${liminalWeb.relationships.length} relationships`);
     } catch (error) {
       console.error(`GitDreamNodeService: Failed to update liminal-web.json for ${node.name}:`, error);
     }

@@ -65,10 +65,6 @@ export async function saveEditModeChanges(): Promise<{ success: boolean; error?:
       store.setEditModeNewDreamTalkFile(undefined);
     }
 
-    console.log(`EditorService: Saved changes for node ${editingNode.id}:`, {
-      relationships: editMode.pendingRelationships.length
-    });
-
     return { success: true };
   } catch (error) {
     console.error('EditorService: Failed to save changes:', error);
@@ -113,14 +109,12 @@ async function handleDreamTalkFileUpdate(
 
   if (!fileIsReadable) {
     // Internal file - just update the dreamTalk path in metadata, no file copy needed
-    console.log(`EditorService: File not readable, setting existing file as DreamTalk: ${file.name}`);
     await updateDreamTalkReference(editingNode, file, vaultService);
     return;
   }
 
   if (!fileHash || !vaultService) {
     // Fallback to direct save
-    console.log(`EditorService: Saving new DreamTalk media (fallback): ${file.name}`);
     await dreamNodeService.addFilesToNode(editingNode.id, [file]);
     return;
   }
@@ -140,15 +134,10 @@ async function handleDreamTalkFileUpdate(
 
     if (existingHash === fileHash) {
       // Same file - just update the metadata reference, no copy needed
-      console.log(`EditorService: File already exists with same hash, updating reference: ${file.name}`);
       await updateDreamTalkReference(editingNode, file, vaultService);
       return;
     }
-
-    // Different file with same name - copy and update
-    console.log(`EditorService: File exists but different hash, replacing: ${file.name}`);
-  } else {
-    console.log(`EditorService: Saving new DreamTalk media: ${file.name}`);
+    // Different file with same name - will be replaced below
   }
 
   // Copy file to repo

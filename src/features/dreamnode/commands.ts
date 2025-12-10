@@ -41,8 +41,6 @@ export function registerDreamNodeCommands(
       }
 
       if (canFlip && selectedNode) {
-        console.log(`🎬 [Command] Flip Selected DreamNode: ${selectedNode.name}`);
-
         // Determine flip direction based on current state
         const isCurrentlyFlipped = currentFlipState?.isFlipped || false;
         const direction = isCurrentlyFlipped ? 'back-to-front' : 'front-to-back';
@@ -74,7 +72,6 @@ export function registerDreamNodeCommands(
       }
 
       if (canFlipToFront && selectedNode) {
-        console.log(`🎬 [Command] Flip DreamNode to Front: ${selectedNode.name}`);
         store.startFlipAnimation(selectedNode.id, 'back-to-front');
       }
 
@@ -102,7 +99,6 @@ export function registerDreamNodeCommands(
       }
 
       if (canFlipToBack && selectedNode) {
-        console.log(`🎬 [Command] Flip DreamNode to Back: ${selectedNode.name}`);
         store.startFlipAnimation(selectedNode.id, 'front-to-back');
       }
 
@@ -133,8 +129,6 @@ export function registerDreamNodeCommands(
           uiService.showError('Selected DreamNode has no DreamTalk media');
           return;
         }
-
-        console.log(`Opening DreamTalk full-screen for: ${selectedNode.name}`);
 
         // Get leaf manager service
         const leafManager = serviceManager.getLeafManagerService();
@@ -169,16 +163,13 @@ export function registerDreamNodeCommands(
           return;
         }
 
-        console.log(`Opening DreamSong full-screen for: ${selectedNode.name}`);
-
         // Record invocation if in copilot mode
         if (store.copilotMode.isActive) {
           try {
             const recordingService = getConversationRecordingService();
             await recordingService.recordInvocation(selectedNode);
-            console.log(`🎙️ [DreamSong] Recorded invocation for conversation export`);
           } catch (error) {
-            console.warn(`⚠️ [DreamSong] Failed to record invocation:`, error);
+            console.warn('Failed to record invocation:', error);
             // Don't block the fullscreen opening if recording fails
           }
         }
@@ -217,8 +208,6 @@ export function registerDreamNodeCommands(
 
             // Resolve media paths to data URLs
             blocks = await resolveMediaPaths(blocks, selectedNode.repoPath, vaultService);
-
-            console.log(`Parsed ${blocks.length} blocks for canvas fullscreen view`);
           } catch (parseError) {
             console.error('Failed to parse DreamSong canvas:', parseError);
             // Continue with empty blocks

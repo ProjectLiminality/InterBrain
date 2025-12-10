@@ -44,7 +44,6 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
   }, [src]);
 
   const handleLoadSuccess = ({ numPages }: { numPages: number }) => {
-    console.log('[PDFPreview] Loaded PDF with', numPages, 'pages');
     setNumPages(numPages);
     setLoading(false);
   };

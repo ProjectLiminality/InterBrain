@@ -62,26 +62,20 @@ export class GitOperationsService {
   async stashChanges(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitOperationsService: Stashing changes in ${fullPath}`);
-
       const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
       if (!statusOutput.trim()) {
-        console.log('GitOperationsService: No changes to stash');
         return;
       }
 
       await execAsync('git add -A', { cwd: fullPath });
       const stashMessage = 'InterBrain creator mode';
       await execAsync(`git stash push -m "${stashMessage}"`, { cwd: fullPath });
-
-      console.log(`GitOperationsService: Successfully stashed changes in: ${fullPath}`);
     } catch (error) {
       console.error('GitOperationsService: Failed to stash changes:', error);
       if (error instanceof Error && (
         error.message.includes('No local changes') ||
         error.message.includes('No tracked files')
       )) {
-        console.log('GitOperationsService: No changes to stash (expected)');
         return;
       }
       throw new Error(`Failed to stash changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -94,17 +88,12 @@ export class GitOperationsService {
   async popStash(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitOperationsService: Checking for stashes in ${fullPath}`);
-
       const { stdout } = await execAsync('git stash list', { cwd: fullPath });
       if (!stdout.trim()) {
-        console.log('GitOperationsService: No stashes to pop');
         return;
       }
 
-      console.log(`GitOperationsService: Found stashes, popping most recent from ${fullPath}`);
       await execAsync('git stash pop', { cwd: fullPath });
-      console.log(`GitOperationsService: Successfully popped stash in: ${fullPath}`);
     } catch (error) {
       console.error('GitOperationsService: Failed to pop stash:', error);
       throw new Error(`Failed to pop stash: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -132,18 +121,14 @@ export class GitOperationsService {
   async commitAllChanges(repoPath: string, commitMessage: string): Promise<boolean> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitOperationsService: Committing all changes in ${fullPath}`);
-
       const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
       if (!statusOutput.trim()) {
-        console.log('GitOperationsService: No changes to commit');
         return false;
       }
 
       await execAsync('git add -A', { cwd: fullPath });
       await execAsync(`git commit -m "${commitMessage}"`, { cwd: fullPath });
 
-      console.log(`GitOperationsService: Successfully committed changes in: ${fullPath}`);
       return true;
     } catch (error) {
       console.error('GitOperationsService: Failed to commit changes:', error);
@@ -151,7 +136,6 @@ export class GitOperationsService {
         error.message.includes('nothing to commit') ||
         error.message.includes('no changes added')
       )) {
-        console.log('GitOperationsService: No changes to commit (expected)');
         return false;
       }
       throw new Error(`Failed to commit changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -189,8 +173,8 @@ export class GitOperationsService {
       const count = parseInt(aheadCount.trim(), 10);
 
       return count > 0;
-    } catch (error) {
-      console.log(`GitOperationsService: No upstream or git error in ${fullPath}:`, error instanceof Error ? error.message : 'Unknown error');
+    } catch {
+      // No upstream configured or git error - not unpushed
       return false;
     }
   }
@@ -214,9 +198,7 @@ export class GitOperationsService {
   async openInFinder(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitOperationsService: Opening ${fullPath} in Finder`);
       await execAsync(`open "${fullPath}"`, { cwd: fullPath });
-      console.log(`GitOperationsService: Successfully opened ${fullPath} in Finder`);
     } catch (error) {
       console.error('GitOperationsService: Failed to open in Finder:', error);
       throw new Error(`Failed to open in Finder: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -229,8 +211,6 @@ export class GitOperationsService {
   async openInTerminal(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitOperationsService: Opening terminal at ${fullPath} and running claude --continue`);
-
       const script = `
         tell application "Terminal"
           set newWindow to do script "cd '${fullPath}'"
@@ -240,8 +220,6 @@ export class GitOperationsService {
       `;
 
       await execAsync(`osascript -e '${script}'`);
-
-      console.log(`GitOperationsService: Successfully opened terminal at ${fullPath} and started claude --continue`);
     } catch (error) {
       console.error('GitOperationsService: Failed to open in Terminal:', error);
       throw new Error(`Failed to open in Terminal: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -254,8 +232,6 @@ export class GitOperationsService {
   async buildDreamNode(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     try {
-      console.log(`GitOperationsService: Running build for ${fullPath}`);
-
       // Find node path first (npm requires node in PATH)
       let nodePath = 'node';
       try {
@@ -309,18 +285,9 @@ export class GitOperationsService {
         PATH: `${nodeBinDir}:${(globalThis as any).process.env.PATH || ''}`
       };
 
-      console.log(`GitOperationsService: Using node at: ${nodePath}`);
-      console.log(`GitOperationsService: Using npm at: ${npmPath}`);
-      console.log(`GitOperationsService: Enhanced PATH: ${enhancedEnv.PATH}`);
-
-      // Run npm install first
-      console.log(`GitOperationsService: Running npm install for ${fullPath}...`);
+      // Run npm install first, then build
       await execAsync(`${npmPath} install`, { cwd: fullPath, env: enhancedEnv });
-      console.log(`GitOperationsService: npm install completed`);
-
-      // Then run the build
       await execAsync(`${npmPath} run build`, { cwd: fullPath, env: enhancedEnv });
-      console.log(`GitOperationsService: Successfully built: ${fullPath}`);
     } catch (error) {
       console.error('GitOperationsService: Failed to build:', error);
       throw new Error(`Failed to build: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -353,7 +320,6 @@ export class GitOperationsService {
         commitHash = hashResult.stdout.trim();
       } catch {
         // No commits yet
-        console.log(`GitOperationsService: No commits yet in ${repoPath}`);
       }
 
       // Check for uncommitted changes
@@ -377,9 +343,8 @@ export class GitOperationsService {
           aheadCount = parseInt(aheadMatch[1], 10);
           hasUnpushedChanges = aheadCount > 0;
         }
-      } catch (error) {
+      } catch {
         // No upstream or git error
-        console.log(`GitOperationsService: Git status error for ${repoPath}:`, error instanceof Error ? error.message : 'Unknown error');
       }
 
       // Build details if any status flags are set

@@ -100,8 +100,6 @@ export default function RelationshipSearchInput({
         return;
       }
       
-      console.log(`🔍 [EditModeSearchNode3D] Searching for relationships: "${query}"`);
-      
       // Search for opposite-type nodes for relationship editing
       const searchResults = await semanticSearchService.searchOppositeTypeNodes(
         query,
@@ -113,8 +111,7 @@ export default function RelationshipSearchInput({
       );
       
       const resultNodes = searchResults.map(result => result.node);
-      console.log(`✅ [EditModeSearchNode3D] Found ${resultNodes.length} related nodes`);
-      
+
       // Update store with search results for edit mode tracking
       setEditModeSearchResults(resultNodes);
       

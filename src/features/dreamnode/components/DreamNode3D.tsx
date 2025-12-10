@@ -261,12 +261,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const handleFlipClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDragging || isFlipping) return;
-    
-    console.log('🎯 Flip button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
-    
+
     try {
       const { serviceManager } = await import('../../../core/services/service-manager');
-      console.log('🎯 About to execute flip-selected-dreamnode command');
       serviceManager.executeCommand('flip-selected-dreamnode');
     } catch (error) {
       console.error('Failed to execute flip command:', error);
@@ -276,12 +273,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const handleDreamTalkFullScreen = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDragging) return;
-    
-    console.log('🎯 DreamTalk fullscreen button clicked!', { nodeId: dreamNode.id, nodeName: dreamNode.name });
-    
+
     try {
       const { serviceManager } = await import('../../../core/services/service-manager');
-      console.log('🎯 About to execute open-dreamtalk-fullscreen command');
       serviceManager.executeCommand('open-dreamtalk-fullscreen');
     } catch (error) {
       console.error('Failed to execute DreamTalk full-screen command:', error);

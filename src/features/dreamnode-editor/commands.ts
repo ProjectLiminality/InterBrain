@@ -54,19 +54,15 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
         store.setSearchResults([]);
 
         // Enter edit mode with fresh node data
-        console.log(`[EditMode-Entry] Starting edit mode for node "${freshNode.name}" (${freshNode.id})`);
         store.startEditMode(freshNode);
 
         // If the node has existing relationships, show them
         if (freshNode.liminalWebConnections && freshNode.liminalWebConnections.length > 0) {
-          console.log(`[EditMode-Relationships] Found ${freshNode.liminalWebConnections.length} existing relationships`);
-
           const relatedNodes = await Promise.all(
             freshNode.liminalWebConnections.map(id => dreamNodeService.get(id))
           );
 
           const validRelatedNodes = relatedNodes.filter((node): node is DreamNode => node !== null);
-          console.log(`[EditMode-Relationships] Resolved ${validRelatedNodes.length} valid related nodes`);
 
           store.setEditModeSearchResults(validRelatedNodes);
 
@@ -106,8 +102,6 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       }
 
       try {
-        console.log(`[EditMode-Exit] Exiting edit mode without saving`);
-
         // Clear stale edit mode data from orchestrator
         const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
         if (canvas) {
@@ -235,8 +229,6 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
       }
 
       try {
-        console.log(`[EditMode-Cancel] Cancelling edit mode for node "${store.editMode.editingNode?.name}"`);
-
         // Clear stale edit mode data from orchestrator
         const canvas = globalThis.document.querySelector('[data-dreamspace-canvas]');
         if (canvas) {

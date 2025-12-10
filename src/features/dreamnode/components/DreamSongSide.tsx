@@ -90,16 +90,12 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
 
   // Handler for media click navigation
   const handleMediaClick = useCallback((sourceDreamNodeId: string) => {
-    console.log(`DreamSongSide: handleMediaClick called with sourceDreamNodeId="${sourceDreamNodeId}"`);
-    console.log(`DreamSongSide: Available dreamNodes:`, dreamNodes?.map(n => ({ id: n.id, name: n.name })));
-
     // Find the DreamNode by ID or name
     const targetNode = dreamNodes?.find(node =>
       node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
     );
 
     if (targetNode) {
-      console.log(`DreamSongSide: Found target node:`, { id: targetNode.id, name: targetNode.name });
       setSelectedNode(targetNode);
     } else {
       console.warn(`DreamSongSide: No matching DreamNode found for "${sourceDreamNodeId}"`);

@@ -15,8 +15,59 @@ This refactoring follows a **Music-First** approach:
 3. **Clarify with User** - Get conceptual corrections and insights
 4. **Review Chunking** - Identify opportunities for better organization
 5. **Implement** - Make structural changes
-6. **Document** - Update README
-7. **Validate** - Ensure everything works
+6. **Clean Up** - Remove obsolete logging, enforce UI→Commands pattern
+7. **Document** - Update README
+8. **Validate** - Ensure everything works
+
+---
+
+## Core Architectural Principles
+
+### 1. UI → Commands → Services Pattern
+**All UI interactions must go through Obsidian commands.**
+
+```
+User clicks button → executeCommandById('interbrain:do-thing')
+                              ↓
+                     Command handler calls service
+                              ↓
+                     Service performs operation
+```
+
+- UI components should NEVER call services directly
+- Every meaningful user action should have a corresponding command
+- Commands provide: keyboard shortcuts, command palette access, consistent behavior
+
+**Check for violations:**
+- Search for `serviceManager.getActive()` in component files - should only be in commands/services
+- Search for direct store mutations from onClick handlers
+
+### 2. Console Logging Discipline
+**Remove all non-essential console.log statements.**
+
+❌ **Remove:**
+- Per-node logging that scales with data (e.g., "Processing node X" for each node)
+- Debug logging left over from development
+- Redundant state logging on every render
+- Success confirmations for routine operations
+
+✅ **Keep:**
+- Error logging (`console.error`)
+- One-time initialization logging (startup, config loaded)
+- User-initiated action confirmations (sparse)
+- Warnings for edge cases
+
+**Search patterns:**
+```bash
+grep -n "console.log" src/features/[feature-name]/
+```
+
+### 3. Hook Hygiene
+**All React hooks must be called before any early returns.**
+
+React's Rules of Hooks require hooks to be called in the same order every render.
+When consolidating components, ensure `useCallback`, `useEffect`, `useState` etc.
+are all placed before any conditional `return null` statements.
 
 ---
 
@@ -148,7 +199,44 @@ feature-name/
 
 ---
 
-## Phase 6: Documentation
+## Phase 6: Clean Up
+
+### 6a. Enforce UI → Commands Pattern
+
+Check that UI components don't call services directly:
+
+```bash
+# Find potential violations in component files
+grep -n "serviceManager" src/features/[feature-name]/*.tsx
+grep -n "dreamNodeService" src/features/[feature-name]/*.tsx
+```
+
+**If violations found:**
+1. Ensure corresponding command exists in `commands.ts`
+2. Replace direct service call with `app.commands.executeCommandById()`
+3. Or if the operation is internal (not user-triggered), move to a service
+
+### 6b. Remove Excessive Console Logging
+
+```bash
+# Find all console.log statements
+grep -n "console.log" src/features/[feature-name]/
+```
+
+**For each log statement, ask:**
+1. Does this scale with data? (per-node, per-render) → REMOVE
+2. Is this debug leftover? → REMOVE
+3. Is this a one-time init or error? → KEEP
+
+### 6c. Verify Hook Order
+
+For components with early returns (`if (!x) return null`):
+- Ensure ALL hooks (useState, useEffect, useCallback, useRef, useMemo) are BEFORE the return
+- Add comment `// must be before early return - rules of hooks` for clarity
+
+---
+
+## Phase 7: Documentation
 
 Write/update README.md with:
 
@@ -181,7 +269,7 @@ feature-name/
 
 ---
 
-## Phase 7: Validation & Commit
+## Phase 8: Validation & Commit
 
 1. Run `npm run check-all` - must pass with 0 errors
 2. Review changes with user if significant restructuring occurred
@@ -192,6 +280,7 @@ Refactor [feature-name] feature slice
 
 - [Conceptual changes if any]
 - [Structural changes]
+- [Clean up: logging, UI→Commands pattern]
 - [Documentation updates]
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
@@ -216,6 +305,20 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 
 **Services**: Stateful orchestrators with side effects
 **Utilities**: Pure functions, stateless, easily testable
+
+### UI → Commands Quick Check
+
+```typescript
+// ❌ BAD: Component calls service directly
+const handleSave = async () => {
+  await serviceManager.getActive().update(node.id, changes);
+};
+
+// ✅ GOOD: Component executes command
+const handleSave = () => {
+  app.commands.executeCommandById('interbrain:save-edit-mode-changes');
+};
+```
 
 ---
 
