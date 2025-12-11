@@ -4,18 +4,36 @@
  * Handles peer discovery and synchronization operations:
  * - Discover which peers are seeding DreamNodes (Radicle → Liminal Web)
  * - Sync Radicle follow/delegate relationships with Liminal Web
+ *
+ * Uses dreamnode/utils/vault-scanner for DreamNode discovery,
+ * then builds peer-specific mappings (DID→UUID) on top.
  */
 
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const path = require('path');
+const fs = require('fs').promises;
 const execAsync = promisify(exec);
 
 import type { RadicleService } from './radicle-service';
 import {
-  scanVaultForDreamNodes,
-  updateLiminalWebRelationships,
-  type UDDData
-} from '../utils/vault-scanner';
+  discoverDreamNodes,
+  readLiminalWeb,
+  type DiscoveredNode
+} from '../../dreamnode/utils/vault-scanner';
+
+/**
+ * Extended node data with peer-specific fields
+ */
+interface PeerNodeData {
+  uuid: string;
+  type: 'dream' | 'dreamer';
+  did?: string;
+  radicleId?: string;
+  relationships: string[];
+  dirPath: string;
+  dirName: string;
+}
 
 /**
  * Result of peer discovery operation
@@ -101,18 +119,99 @@ export class PeerSyncService {
   }
 
   /**
+   * Build peer-specific data maps from discovered nodes
+   * Adds DID→UUID mapping and loads relationships for dreamers
+   */
+  private async buildPeerMaps(
+    vaultPath: string,
+    includeRelationships: boolean
+  ): Promise<{
+    nodeDataMap: Map<string, PeerNodeData>;
+    didToUuidMap: Map<string, string>;
+  }> {
+    const { discovered } = await discoverDreamNodes(vaultPath);
+
+    const nodeDataMap = new Map<string, PeerNodeData>();
+    const didToUuidMap = new Map<string, string>();
+
+    // Process discovered nodes in parallel
+    await Promise.all(
+      discovered.map(async (node: DiscoveredNode) => {
+        const nodeType = (node.udd.type || 'dream') as 'dream' | 'dreamer';
+
+        // Load relationships for dreamers if requested
+        let relationships: string[] = [];
+        if (includeRelationships && nodeType === 'dreamer') {
+          relationships = await readLiminalWeb(node.dirPath);
+        }
+
+        const peerData: PeerNodeData = {
+          uuid: node.udd.uuid,
+          type: nodeType,
+          did: node.udd.did,
+          radicleId: node.udd.radicleId,
+          relationships,
+          dirPath: node.dirPath,
+          dirName: node.dirName
+        };
+
+        nodeDataMap.set(node.udd.uuid, peerData);
+
+        // Build reverse DID→UUID mapping for dreamers
+        if (nodeType === 'dreamer' && node.udd.did) {
+          didToUuidMap.set(node.udd.did, node.udd.uuid);
+        }
+      })
+    );
+
+    return { nodeDataMap, didToUuidMap };
+  }
+
+  /**
+   * Update liminal-web.json relationships for a dreamer
+   */
+  private async updateLiminalWebRelationships(
+    dreamerDirPath: string,
+    newRelationshipUuid: string
+  ): Promise<boolean> {
+    const liminalWebPath = path.join(dreamerDirPath, 'liminal-web.json');
+
+    try {
+      let liminalWeb: { relationships: string[] } = { relationships: [] };
+
+      try {
+        const content = await fs.readFile(liminalWebPath, 'utf-8');
+        liminalWeb = JSON.parse(content);
+        liminalWeb.relationships = liminalWeb.relationships || [];
+      } catch {
+        // File doesn't exist, use empty
+      }
+
+      if (liminalWeb.relationships.includes(newRelationshipUuid)) {
+        return false; // Already exists
+      }
+
+      liminalWeb.relationships.push(newRelationshipUuid);
+      await fs.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2), 'utf-8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Discover which peers are seeding DreamNodes
    * Updates liminal-web.json when new peer relationships are found
    */
   async discoverPeerAcceptances(vaultPath: string): Promise<PeerDiscoveryResult> {
-    const { uddDataMap, didToUuidMap } = await scanVaultForDreamNodes(vaultPath, false);
+    const { nodeDataMap, didToUuidMap } = await this.buildPeerMaps(vaultPath, false);
 
     let totalDreamNodes = 0;
     let newRelationshipsFound = 0;
     let errors = 0;
 
     // For each Dream node with Radicle ID, check who's seeding it
-    for (const [uuid, data] of uddDataMap) {
+    for (const [uuid, data] of nodeDataMap) {
       if (data.type === 'dreamer') continue;
       if (!data.radicleId) continue;
 
@@ -125,11 +224,11 @@ export class PeerSyncService {
           const dreamerUuid = didToUuidMap.get(seederDID);
           if (!dreamerUuid) continue;
 
-          const dreamerData = uddDataMap.get(dreamerUuid);
+          const dreamerData = nodeDataMap.get(dreamerUuid);
           if (!dreamerData) continue;
 
           // Update liminal-web.json if relationship is new
-          const wasAdded = await updateLiminalWebRelationships(
+          const wasAdded = await this.updateLiminalWebRelationships(
             dreamerData.dirPath,
             uuid
           );
@@ -170,11 +269,11 @@ export class PeerSyncService {
   async syncPeerFollowing(vaultPath: string, passphrase?: string): Promise<PeerSyncResult> {
     this.radPath = await this.findRadPath();
 
-    const { uddDataMap } = await scanVaultForDreamNodes(vaultPath, true);
+    const { nodeDataMap } = await this.buildPeerMaps(vaultPath, true);
 
     // Find all Dreamer nodes with DIDs
-    const dreamersWithDids: Array<{ uuid: string; did: string; data: UDDData }> = [];
-    for (const [uuid, data] of uddDataMap) {
+    const dreamersWithDids: Array<{ uuid: string; did: string; data: PeerNodeData }> = [];
+    for (const [uuid, data] of nodeDataMap) {
       if (data.type === 'dreamer' && data.did?.startsWith('did:key:')) {
         dreamersWithDids.push({ uuid, did: data.did, data });
       }
@@ -202,7 +301,7 @@ export class PeerSyncService {
 
     for (const { did, data: dreamerData } of dreamersWithDids) {
       for (const relatedUuid of dreamerData.relationships) {
-        const relatedData = uddDataMap.get(relatedUuid);
+        const relatedData = nodeDataMap.get(relatedUuid);
         if (!relatedData) continue;
 
         operations.push((async () => {
@@ -278,7 +377,7 @@ export class PeerSyncService {
     // Reconcile git remotes
     const reconcileOps = Array.from(desiredRemotesPerRepo.entries()).map(([repoPath, desiredPeers]) =>
       (async () => {
-        const repoData = Array.from(uddDataMap.values()).find(d => d.dirPath === repoPath);
+        const repoData = Array.from(nodeDataMap.values()).find(d => d.dirPath === repoPath);
         if (!repoData) return;
 
         try {

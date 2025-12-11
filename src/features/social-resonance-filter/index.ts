@@ -10,12 +10,3 @@ export {
   checkSubmoduleUpdatesFromNetwork,
   updateSubmodulesFromStandalone
 } from './utils/submodule-sync';
-export {
-  findDreamNodeDirs,
-  loadUDDData,
-  scanVaultForDreamNodes,
-  updateLiminalWebRelationships,
-  type DreamNodeDir,
-  type UDDData,
-  type VaultScanResult
-} from './utils/vault-scanner';
