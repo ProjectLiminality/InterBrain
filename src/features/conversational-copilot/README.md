@@ -12,20 +12,25 @@ Transforms video calls into documented conversations by:
 - Beautiful PDF + email exports with deep links
 - Songline perspective creation (audio clips for shared nodes)
 
-## Key Files
+## Directory Structure
 
-### Commands & State
-- **commands.ts** - Command palette registration (`start-conversation-mode`, `end-conversation-mode`)
-- **copilot-slice.ts** - Zustand state slice (copilot mode state, bidirectional relationship tracking)
-- **CopilotModeOverlay.tsx** - Minimal React component (mostly empty, exists for consistency)
-
-### Services
-- **transcription-service.ts** - Markdown file monitoring, semantic search triggering (500-char FIFO buffer, 5s throttle)
-- **conversation-recording-service.ts** - Tracks DreamNode invocations, embeds markers in transcript
-- **conversation-summary-service.ts** - Claude API integration for AI summaries + clip suggestions
-- **email-export-service.ts** - Generates Apple Mail drafts with PDFs, deep links, install scripts
-- **pdf-generator-service.ts** - Creates beautiful black-themed PDFs with clickable DreamNode images
-- **llm-provider.ts** - Provider abstraction layer (Claude Haiku, future OpenRouter support)
+```
+conversational-copilot/
+├── store/
+│   └── slice.ts              # Zustand state slice (copilot mode state)
+├── services/
+│   ├── transcription-service.ts       # Markdown monitoring, semantic search
+│   ├── conversation-recording-service.ts  # DreamNode invocation tracking
+│   ├── conversation-summary-service.ts    # Claude API integration
+│   ├── email-export-service.ts           # Apple Mail draft generation
+│   ├── pdf-generator-service.ts          # PDF document creation
+│   └── llm-provider.ts                   # LLM provider abstraction
+├── utils/
+│   └── open-node-content.ts  # Node content opening logic
+├── commands.ts               # Command palette registration
+├── CopilotModeOverlay.tsx    # Minimal React component (architectural consistency)
+└── README.md                 # This file
+```
 
 ## Main Exports
 
@@ -98,6 +103,13 @@ getPDFGeneratorService()            // PDF document generation
 - **Python Dependency**: Requires Whisper transcription service running
 - **Claude API Required**: No AI summary fallback if API key missing (graceful degradation in place)
 - **No OpenRouter**: LLM provider abstraction exists but only Claude implemented
+
+### Prerequisites
+- **Radicle Authentication**: Email export requires Radicle authentication. Before using the conversational copilot feature, run:
+  ```bash
+  rad auth
+  ```
+  This registers your SSH key with ssh-agent, enabling Radicle identity operations for email delegation and share link generation. Without this, the email export may fail with authentication errors.
 
 ### Technical Debt
 - CopilotModeOverlay.tsx is essentially unused (returns null)

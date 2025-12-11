@@ -66,7 +66,7 @@ import {
   CopilotModeSlice,
   createCopilotModeSlice,
   CopilotModeState,
-} from '../../features/conversational-copilot/copilot-slice';
+} from '../../features/conversational-copilot/store/slice';
 
 import {
   EditModeSlice,

@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand';
-import { DreamNode } from '../dreamnode';
-import type { SpatialLayoutMode } from '../../core/store/interbrain-store';
+import { DreamNode } from '../../dreamnode';
+import type { SpatialLayoutMode } from '../../../core/store/interbrain-store';
 
 /**
  * Copilot mode state types
@@ -85,22 +85,16 @@ export const createCopilotModeSlice: StateCreator<
     // Pre-populate search results with conversation partner's related DreamNodes
     const state = get();
     const relatedNodeIds = conversationPartner.liminalWebConnections || [];
-    console.log(`🎯 [Copilot-Entry] Conversation partner "${conversationPartner.name}" has ${relatedNodeIds.length} liminalWebConnections:`, relatedNodeIds);
 
     const relatedNodes: DreamNode[] = [];
-
     for (const nodeId of relatedNodeIds) {
       const nodeData = state.dreamNodes.get(nodeId);
       if (nodeData) {
         relatedNodes.push(nodeData.node);
-        console.log(`🎯 [Copilot-Entry] ✓ Found node: ${nodeData.node.name} (${nodeId})`);
-      } else {
-        console.log(`🎯 [Copilot-Entry] ✗ Node not found in dreamNodes: ${nodeId}`);
       }
     }
 
-    console.log(`🎯 [Copilot-Entry] Pre-populated ${relatedNodes.length} related nodes from liminal-web`);
-    console.log(`🎯 [Copilot-Entry] Related node names:`, relatedNodes.map(n => n.name));
+    console.log(`🎯 [Copilot] Starting conversation with "${conversationPartner.name}" (${relatedNodes.length} related nodes)`);
 
     set({
       copilotMode: {
@@ -117,7 +111,6 @@ export const createCopilotModeSlice: StateCreator<
     // spatialLayout transition is the key signal that activates copilot-specific behaviors
     state.setSearchResults(relatedNodes);
     state.setSpatialLayout('copilot');
-    console.log(`🎯 [Copilot-Entry] Layout transitioned to 'copilot'`);
   },
 
   exitCopilotMode: () => {
@@ -126,21 +119,17 @@ export const createCopilotModeSlice: StateCreator<
 
     // Process shared nodes before clearing state
     if (conversationPartner && sharedNodeIds.length > 0) {
-      console.log(`🔗 [Copilot-Exit] Processing ${sharedNodeIds.length} shared nodes for "${conversationPartner.name}"`);
-      console.log(`🔗 [Copilot-Exit] Shared node IDs: ${sharedNodeIds.join(', ')}`);
-
       const newRelationships = sharedNodeIds.filter(
         id => !conversationPartner.liminalWebConnections.includes(id)
       );
 
       if (newRelationships.length > 0) {
+        console.log(`🔗 [Copilot] Adding ${newRelationships.length} new relationships for "${conversationPartner.name}"`);
+
         const updatedPartner = {
           ...conversationPartner,
           liminalWebConnections: [...conversationPartner.liminalWebConnections, ...newRelationships]
         };
-
-        console.log(`✅ [Copilot-Exit] Adding ${newRelationships.length} new relationships: ${newRelationships.join(', ')}`);
-        console.log(`✅ [Copilot-Exit] "${conversationPartner.name}" now has ${updatedPartner.liminalWebConnections.length} total relationships`);
 
         // Update the conversation partner node in store
         const existingNodeData = state.dreamNodes.get(conversationPartner.id);
@@ -163,11 +152,8 @@ export const createCopilotModeSlice: StateCreator<
               ...sharedNodeData,
               node: updatedSharedNode
             });
-            console.log(`✅ [Copilot-Exit] Updated bidirectional relationship for shared node: ${updatedSharedNode.name}`);
           }
         }
-      } else {
-        console.log(`ℹ️ [Copilot-Exit] No new relationships to add - all shared nodes were already related`);
       }
     }
 
@@ -176,7 +162,6 @@ export const createCopilotModeSlice: StateCreator<
       const app = (globalThis as any).app;
       if (app?.workspace?.leftRibbon) {
         app.workspace.leftRibbon.show();
-        console.log(`🎯 [Copilot-Exit] Restored ribbon visibility`);
       }
     } catch (error) {
       console.warn('Failed to show ribbon:', error);
@@ -184,7 +169,6 @@ export const createCopilotModeSlice: StateCreator<
 
     // Transition layout back to liminal-web before clearing copilot state
     state.setSpatialLayout('liminal-web');
-    console.log(`🎯 [Copilot-Exit] Layout transitioned to 'liminal-web'`);
 
     set({
       copilotMode: INITIAL_COPILOT_STATE
