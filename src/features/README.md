@@ -126,7 +126,7 @@ export { registerDreamNodeCommands } from './commands';
 | **Search & AI** | | | |
 | [search](./search/README.md) | Search overlay and result display | Low | ✅ |
 | [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High | ✅ |
-| [conversational-copilot](./conversational-copilot/README.md) | AI conversation mode with node invocation | Medium | |
+| [conversational-copilot](./conversational-copilot/README.md) | AI conversation mode with node invocation | Medium | ✅ |
 | **Collaboration** | | | |
 | [social-resonance](./social-resonance/README.md) | Radicle P2P integration | Medium | |
 | [coherence-beacon](./coherence-beacon/README.md) | Node synchronization beacons | Medium | |
