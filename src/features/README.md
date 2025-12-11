@@ -122,7 +122,7 @@ export { registerDreamNodeCommands } from './commands';
 | **Content & Canvas** | | | |
 | [dreamweaving](./dreamweaving/README.md) | Canvas parsing, submodules, DreamSong playback | High | ✅ |
 | [drag-and-drop](./drag-and-drop/README.md) | File and URL drop handling | Medium | ✅ |
-| [web-link-analyzer](./web-link-analyzer/README.md) | AI-powered URL content analysis | Low | |
+| [web-link-analyzer](./web-link-analyzer/README.md) | AI-powered URL content analysis | Low | ✅ |
 | **Search & AI** | | | |
 | [search](./search/README.md) | Search overlay and result display | Low | ✅ |
 | [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High | ✅ |
