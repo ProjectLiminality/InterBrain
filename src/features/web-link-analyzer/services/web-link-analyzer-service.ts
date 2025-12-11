@@ -10,7 +10,7 @@
  */
 
 import { Notice } from 'obsidian';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { ChildProcess, spawn } from 'child_process';
 
 const fs = require('fs');
@@ -76,8 +76,6 @@ class WebLinkAnalyzerService {
       ? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
       : path.join(scriptsDir, 'venv', 'bin', 'python3');
 
-    console.log(`WebLinkAnalyzerService: Checking for venv at ${venvPython}`);
-
     if (fs.existsSync(venvPython)) {
       return venvPython;
     }
@@ -123,9 +121,6 @@ class WebLinkAnalyzerService {
 
     const fullRepoPath = path.join(this.vaultPath, repoPath);
     const profilePath = path.join(os.homedir(), '.claude', 'CLAUDE.md');
-
-    console.log(`WebLinkAnalyzerService: Starting analysis of ${url}`);
-    console.log(`WebLinkAnalyzerService: Output dir: ${fullRepoPath}`);
 
     // Build command arguments
     const args = [
@@ -173,7 +168,6 @@ class WebLinkAnalyzerService {
               this.triggerMediaReload(nodeId);
 
               new Notice(`DreamNode enriched: ${result.title || 'Analysis complete'}`);
-              console.log(`WebLinkAnalyzerService: Successfully analyzed ${url}`);
             } else {
               new Notice(`Analysis failed: ${result.error}`);
               console.error('WebLinkAnalyzerService: Analysis failed:', result.error);
@@ -214,7 +208,6 @@ class WebLinkAnalyzerService {
         node: updatedNode,
         lastSynced: Date.now(),
       });
-      console.log(`WebLinkAnalyzerService: Updated node title to "${newTitle}"`);
     }
   }
 
@@ -235,7 +228,6 @@ class WebLinkAnalyzerService {
    */
   stop(): void {
     if (this.currentProcess) {
-      console.log('WebLinkAnalyzerService: Stopping current analysis');
       this.currentProcess.kill('SIGTERM');
       this.currentProcess = null;
     }

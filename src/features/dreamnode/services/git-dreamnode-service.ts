@@ -4,7 +4,7 @@ import { Plugin } from 'obsidian';
 import { indexingService } from '../../semantic-search/services/indexing-service';
 import { UrlMetadata, writeLinkFile, writeUrlReadme, appendUrlToReadme } from '../../drag-and-drop';
 import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
-import { webLinkAnalyzerService } from '../../web-link-analyzer/service';
+import { webLinkAnalyzerService } from '../../web-link-analyzer';
 import { serviceManager } from '../../../core/services/service-manager';
 import { GitOperationsService } from '../utils/git-operations';
 import { UDDService } from './udd-service';
