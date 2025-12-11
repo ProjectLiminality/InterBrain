@@ -15,9 +15,9 @@ import { getRealtimeTranscriptionService } from './services/transcription-servic
  * Check transcription feature status
  */
 export async function checkTranscriptionStatus(): Promise<FeatureStatus> {
-	const transcriptionService = getRealtimeTranscriptionService();
-
 	try {
+		const transcriptionService = getRealtimeTranscriptionService();
+
 		const pythonAvailable = await transcriptionService.checkPythonAvailable();
 
 		if (!pythonAvailable) {
@@ -47,14 +47,92 @@ export async function checkTranscriptionStatus(): Promise<FeatureStatus> {
 			message: 'Ready (Python + Whisper)',
 			details: 'Real-time transcription available'
 		};
-	} catch (error) {
+	} catch {
+		// Service not initialized or other error - fall back to direct venv check
+		const venvExists = checkVenvExistsFallback();
+		const pythonAvailable = await checkPythonAvailableFallback();
+
+		if (!pythonAvailable) {
+			return {
+				available: false,
+				status: 'not-installed',
+				message: 'Python not installed',
+				details: 'Install Python 3 to use transcription features'
+			};
+		}
+
+		if (!venvExists) {
+			return {
+				available: false,
+				status: 'warning',
+				message: 'Python installed, environment needs setup',
+				details: 'Click "Setup Environment" button below to initialize'
+			};
+		}
+
 		return {
-			available: false,
-			status: 'error',
-			message: 'Error checking transcription',
-			details: error instanceof Error ? error.message : 'Unknown error'
+			available: true,
+			status: 'ready',
+			message: 'Ready (Python + Whisper)',
+			details: 'Real-time transcription available'
 		};
 	}
+}
+
+/**
+ * Fallback venv check when service not initialized
+ */
+function checkVenvExistsFallback(): boolean {
+	try {
+		const path = require('path');
+		const fs = require('fs');
+
+		const vaultPath = (globalThis as any).app?.vault?.adapter?.basePath;
+		if (!vaultPath) return false;
+
+		const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
+
+		// Try direct path first
+		const scriptsDir = path.join(pluginDir, 'src', 'features', 'realtime-transcription', 'scripts');
+		const isWindows = (globalThis as any).process?.platform === 'win32';
+		const venvPython = isWindows
+			? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
+			: path.join(scriptsDir, 'venv', 'bin', 'python3');
+
+		if (fs.existsSync(venvPython)) {
+			return true;
+		}
+
+		// Try with symlink resolution
+		try {
+			const realPluginDir = fs.realpathSync(pluginDir);
+			const realScriptsDir = path.join(realPluginDir, 'src', 'features', 'realtime-transcription', 'scripts');
+			const realVenvPython = isWindows
+				? path.join(realScriptsDir, 'venv', 'Scripts', 'python.exe')
+				: path.join(realScriptsDir, 'venv', 'bin', 'python3');
+
+			return fs.existsSync(realVenvPython);
+		} catch {
+			return false;
+		}
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Fallback Python check when service not initialized
+ */
+async function checkPythonAvailableFallback(): Promise<boolean> {
+	const { exec } = require('child_process');
+	const isWindows = (globalThis as any).process?.platform === 'win32';
+	const pythonCmd = isWindows ? 'python' : 'python3';
+
+	return new Promise((resolve) => {
+		exec(`${pythonCmd} --version`, (error: Error | null) => {
+			resolve(!error);
+		});
+	});
 }
 
 /**
