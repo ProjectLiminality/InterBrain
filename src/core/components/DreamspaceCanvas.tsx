@@ -9,7 +9,6 @@ import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrat
 import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
 import { DreamNodeEditor3D } from '../../features/dreamnode-editor';
-import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
 import { RadialButtonRing3D } from '../../features/action-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/action-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../../features/dreamnode';
@@ -627,9 +626,6 @@ export default function DreamspaceCanvas() {
 
           {/* DreamNode editor - render when edit mode is active */}
           <DreamNodeEditor3D />
-
-          {/* Copilot mode overlay - render when copilot mode is active */}
-          <CopilotModeOverlay />
         </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}

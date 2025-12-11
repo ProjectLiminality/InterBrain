@@ -38,23 +38,33 @@ songline/
 
 ## Data Structure
 
+### Dream Nodes (Ideas)
 ```
 DreamNode/
-├── .udd (contains perspectives array)
-├── conversations/
-│   ├── conversation-{timestamp}.mp3  # Full recordings
-│   └── {speaker}~{speaker}-{timestamp}.mp3  # Trimmed clips
-└── perspectives.json  # Legacy - being phased out in favor of .udd
+├── .udd                    # UUID, title, type, dreamTalk, relationships
+├── perspectives.json       # Perspectives from conversations about this idea
+└── perspectives/           # Trimmed audio clips (sovereign storage)
+    └── {peer}~{me}-{timestamp}.mp3
 ```
+
+### Dreamer Nodes (People)
+```
+DreamerNode/
+├── .udd                    # UUID, name, type, contact info
+└── conversations/          # Full conversation recordings
+    ├── conversation-{date}-{time}.mp3   # Full audio recording
+    └── transcript-{date}-{time}.md      # Whisper transcription
+```
+
+### Storage Philosophy
+- **Full recordings** stored in the **DreamerNode** (who you talked to)
+- **Trimmed clips** stored in the **DreamNode** (what you talked about)
+- Each perspective clip is sovereign - physically trimmed, not temporally masked
 
 ## Architecture Notes
 
-- **Sovereign Storage**: Each perspective is fully contained within relevant DreamNode's repo (no external references)
-- **Temporal Slicing**: Uses ffmpeg to physically trim audio files instead of temporal masking
-- **Lazy Loading**: Conversations/perspectives only load when node is selected in liminal-web layout
-- **Caching**: Both services implement in-memory caching to avoid redundant file I/O
+- **Sovereign Storage**: Each perspective clip is physically trimmed and stored directly in the relevant DreamNode's repository
+- **Temporal Slicing**: Uses ffmpeg to create independent audio files (not temporal masking)
+- **Lazy Loading**: Perspectives only load when node is selected in liminal-web layout
+- **Caching**: Services implement in-memory caching to avoid redundant file I/O
 - **Singleton Pattern**: All services use singleton instances initialized at plugin startup
-
-## Migration Note
-
-Legacy `perspectives.json` format is being phased out in favor of storing perspectives directly in `.udd` file's perspectives array.
