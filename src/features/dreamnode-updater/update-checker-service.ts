@@ -7,7 +7,7 @@
  */
 
 import { App } from 'obsidian';
-import { GitSyncService, FetchResult } from '../social-resonance/services/git-sync-service';
+import { GitSyncService, FetchResult } from '../social-resonance-filter/services/git-sync-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 export class UpdateCheckerService {

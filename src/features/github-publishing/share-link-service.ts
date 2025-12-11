@@ -8,7 +8,7 @@ import { App, Notice } from 'obsidian';
 import { DreamNode } from '../dreamnode';
 import { URIHandlerService } from '../uri-handler';
 import { serviceManager } from '../../core/services/service-manager';
-import { getRadicleBatchInitService } from '../social-resonance/batch-init-service';
+import { getRadicleBatchInitService } from '../social-resonance-filter/batch-init-service';
 
 export class ShareLinkService {
 	private app: App;

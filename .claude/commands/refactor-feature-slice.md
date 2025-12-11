@@ -77,7 +77,7 @@ are all placed before any conditional `return null` statements.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Other Features                        │
-│  (dreamweaving, social-resonance, github-publishing,    │
+│  (dreamweaving, social-resonance-filter, github-publishing, │
 │   uri-handler, dreamnode-editor, etc.)                  │
 └──────────────────────┬──────────────────────────────────┘
                        │ calls (for vault writes)

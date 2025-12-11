@@ -2,7 +2,7 @@ import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
 import { VaultService } from './core/services/vault-service';
-import { PassphraseManager } from './features/social-resonance/passphrase-manager';
+import { PassphraseManager } from './features/social-resonance-filter/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
@@ -23,13 +23,13 @@ import { registerConstellationDebugCommands } from './features/constellation-lay
 import { registerEditModeCommands } from './features/dreamnode-editor';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
-import { registerRadicleCommands } from './features/social-resonance/commands';
+import { registerRadicleCommands } from './features/social-resonance-filter/commands';
 import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
-import { registerHousekeepingCommands } from './features/social-resonance/housekeeping-commands';
-import { registerDreamerUpdateCommands } from './features/updates/dreamer-update-commands';
+import { registerHousekeepingCommands } from './features/social-resonance-filter/housekeeping-commands';
+import { registerDreamerUpdateCommands } from './features/dreamnode-updater/dreamer-update-commands';
 import { registerRelationshipCommands } from './features/liminal-web-layout';
-import { registerUpdateCommands } from './features/updates/commands';
+import { registerUpdateCommands } from './features/dreamnode-updater/commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
@@ -53,9 +53,9 @@ import { initializeConversationsService } from './features/songline/services/con
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
 import { initializeURIHandlerService } from './features/uri-handler';
-import { initializeRadicleBatchInitService } from './features/social-resonance/batch-init-service';
+import { initializeRadicleBatchInitService } from './features/social-resonance-filter/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
-import { initializeUpdateCheckerService } from './features/updates/update-checker-service';
+import { initializeUpdateCheckerService } from './features/dreamnode-updater/update-checker-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 
 export default class InterBrainPlugin extends Plugin {

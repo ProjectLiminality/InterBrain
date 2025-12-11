@@ -5,7 +5,7 @@
  */
 
 import { App, Modal, Setting } from 'obsidian';
-import { FetchResult } from '../../social-resonance/services/git-sync-service';
+import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
 import { UpdateSummary } from '../update-summary-service';
 
 export class UpdatePreviewModal extends Modal {

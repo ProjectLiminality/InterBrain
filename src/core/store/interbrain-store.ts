@@ -91,7 +91,7 @@ import {
 import {
   UpdatesSlice,
   createUpdatesSlice,
-} from '../../features/updates/updates-slice';
+} from '../../features/dreamnode-updater/updates-slice';
 
 import {
   DragAndDropSlice,

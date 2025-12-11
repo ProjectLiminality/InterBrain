@@ -9,7 +9,7 @@ import { UIService } from '../../core/services/ui-service';
 import { getUpdateCheckerService } from './update-checker-service';
 import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { GitSyncService } from '../social-resonance/services/git-sync-service';
+import { GitSyncService } from '../social-resonance-filter/services/git-sync-service';
 import { GitOperationsService } from '../dreamnode/utils/git-operations';
 import { UpdatePreviewModal } from './ui/update-preview-modal';
 
@@ -584,7 +584,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function generateUpdatePreviewMarkdown(
   nodeName: string,
-  updateStatus: import('../social-resonance/services/git-sync-service').FetchResult,
+  updateStatus: import('../social-resonance-filter/services/git-sync-service').FetchResult,
   summary: import('./update-summary-service').UpdateSummary
 ): string {
   const { commits, filesChanged, insertions, deletions } = updateStatus;

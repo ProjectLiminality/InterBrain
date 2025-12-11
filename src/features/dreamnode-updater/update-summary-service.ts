@@ -6,7 +6,7 @@
  */
 
 import { ClaudeProvider, LLMMessage } from '../conversational-copilot/services/llm-provider';
-import { FetchResult } from '../social-resonance/services/git-sync-service';
+import { FetchResult } from '../social-resonance-filter/services/git-sync-service';
 
 export interface UpdateSummary {
   userFacingChanges: string;

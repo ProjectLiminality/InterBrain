@@ -23,7 +23,7 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
         new Notice(`📤 Detecting available remote for ${selectedNode.name}...`);
 
         // Use intelligent push that detects available remotes
-        const { GitSyncService } = await import('../social-resonance/services/git-sync-service');
+        const { GitSyncService } = await import('../social-resonance-filter/services/git-sync-service');
         const gitSyncService = new GitSyncService(plugin.app);
 
         // Get Radicle passphrase from settings for automatic node start
@@ -124,7 +124,7 @@ async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: stri
 
   try {
     // Use GitSyncService for pull, GitOperationsService for build
-    const { GitSyncService } = await import('../social-resonance/services/git-sync-service');
+    const { GitSyncService } = await import('../social-resonance-filter/services/git-sync-service');
     const { GitOperationsService } = await import('../dreamnode/utils/git-operations');
     const gitSyncService = new GitSyncService(plugin.app);
     const gitOpsService = new GitOperationsService(plugin.app);

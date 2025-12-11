@@ -10,7 +10,7 @@ import { GitOperationsService } from '../../dreamnode/utils/git-operations';
 import { VaultService } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
 import { UDDService } from '../../dreamnode/services/udd-service';
-import { RadicleService } from '../../social-resonance/radicle-service';
+import { RadicleService } from '../../social-resonance-filter/radicle-service';
 
 export interface SubmoduleInfo {
   name: string;

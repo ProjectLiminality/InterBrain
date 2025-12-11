@@ -5,7 +5,7 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 import { App, Plugin } from 'obsidian';
-import { RadicleService } from '../social-resonance/radicle-service';
+import { RadicleService } from '../social-resonance-filter/radicle-service';
 import { VaultService } from '../../core/services/vault-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { getURIHandlerService } from '../uri-handler';
