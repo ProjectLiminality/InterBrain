@@ -92,9 +92,56 @@ class WebLinkAnalyzerService {
 
   /**
    * Check if venv exists (synchronous, used by settings status)
+   * Falls back to checking common paths if service not initialized
    */
   checkVenvExists(): boolean {
-    return this.getVenvPython() !== null;
+    // If service is initialized, use normal path
+    if (this.pluginPath) {
+      return this.getVenvPython() !== null;
+    }
+
+    // Fallback: Try to find venv without initialization
+    // This happens when settings panel checks status before service is initialized
+    try {
+      // Try common Obsidian vault locations
+      const possibleVaultPaths = [
+        // Check if running in Obsidian context with window.app
+        (globalThis as any).app?.vault?.adapter?.basePath,
+      ].filter(Boolean);
+
+      for (const vaultPath of possibleVaultPaths) {
+        const pluginPath = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
+        const scriptsDir = path.join(pluginPath, 'src/features/web-link-analyzer/scripts');
+
+        const isWindows = process.platform === 'win32';
+        const venvPython = isWindows
+          ? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
+          : path.join(scriptsDir, 'venv', 'bin', 'python3');
+
+        if (fs.existsSync(venvPython)) {
+          return true;
+        }
+
+        // Also check if symlinked (resolve real path)
+        try {
+          const realPluginPath = fs.realpathSync(pluginPath);
+          const realScriptsDir = path.join(realPluginPath, 'src/features/web-link-analyzer/scripts');
+          const realVenvPython = isWindows
+            ? path.join(realScriptsDir, 'venv', 'Scripts', 'python.exe')
+            : path.join(realScriptsDir, 'venv', 'bin', 'python3');
+
+          if (fs.existsSync(realVenvPython)) {
+            return true;
+          }
+        } catch {
+          // Symlink resolution failed, continue
+        }
+      }
+    } catch (error) {
+      console.warn('WebLinkAnalyzerService: Error checking venv existence:', error);
+    }
+
+    return false;
   }
 
   /**
