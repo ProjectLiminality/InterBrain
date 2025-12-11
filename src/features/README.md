@@ -118,7 +118,7 @@ export { registerDreamNodeCommands } from './commands';
 | **Layout & Navigation** | | | |
 | [constellation-layout](./constellation-layout/README.md) | Fibonacci sphere distribution of all nodes | Medium | ✅ |
 | [liminal-web-layout](./liminal-web-layout/README.md) | Focused node with related nodes in rings | Medium | ✅ |
-| [songline](./songline/README.md) | Songline navigation feature | Low | |
+| [songline](./songline/README.md) | Songline navigation feature | Low | ✅ |
 | **Content & Canvas** | | | |
 | [dreamweaving](./dreamweaving/README.md) | Canvas parsing, submodules, DreamSong playback | High | ✅ |
 | [drag-and-drop](./drag-and-drop/README.md) | File and URL drop handling | Medium | ✅ |
