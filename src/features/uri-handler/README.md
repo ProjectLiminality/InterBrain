@@ -1,53 +1,75 @@
-# URI Handler Feature
+# URI Handler
 
-**Purpose**: Deep linking system for one-click DreamNode cloning and collaboration handshakes via `obsidian://` protocol.
+**Purpose**: Deep linking entry point for receiving shared content via `obsidian://` protocol.
 
-## Key Files
+## Directory Structure
 
-### `uri-handler-service.ts`
-Core service implementing Obsidian protocol handlers for DreamNode cloning and contact exchange.
-
-**Main protocols**:
-- `obsidian://interbrain-clone` - Clone DreamNodes from Radicle/GitHub with auto-linking to Dreamer nodes
-- `obsidian://interbrain-update-contact` - DID backpropagation for completing collaboration handshakes
-
-**Key methods**:
-- `registerHandlers()` - Registers protocol handlers with Obsidian
-- `handleClone()` - Unified handler supporting single/batch clones with parallelization
-- `handleUpdateContact()` - Updates Dreamer nodes with DID info and triggers auto-sync
-- `cloneFromRadicle()` - Public method for Radicle network cloning (used by CoherenceBeaconService)
-- `cloneFromGitHub()` - GitHub repository cloning with auto `.udd` generation
-- Static generators: `generateSingleNodeLink()`, `generateBatchNodeLink()`, `generateGitHubCloneLink()`, `generateUpdateContactLink()`
-
-**Integration points**:
-- RadicleService - Network cloning operations
-- GitDreamNodeService - Vault scanning and node creation
-- DreamSongRelationshipService - Relationship scanning after clones
-- IndexingService - Semantic search indexing of new nodes
-- PassphraseManager - Radicle node startup with passphrase handling
-
-**Selection logic**:
-- Single clone: Selects the cloned Dream node
-- Batch clone: Selects the Dreamer node (shows all shared DreamNodes)
-
-**Fast path optimization**: When all nodes already exist, skips full refresh and directly updates relationships in-memory.
-
-### `index.ts`
-Barrel export for service.
+```
+uri-handler/
+├── uri-handler-service.ts  # Protocol registration and clone orchestration
+├── index.ts                # Barrel export
+└── README.md
+```
 
 ## Main Exports
 
-- `URIHandlerService` - Main service class
-- `initializeURIHandlerService()` - Singleton initialization
-- `getURIHandlerService()` - Singleton accessor
+```typescript
+// Service
+export { URIHandlerService } from './uri-handler-service';
+export { initializeURIHandlerService, getURIHandlerService } from './uri-handler-service';
 
-## Notes
+// Static URL generators (for email sharing)
+URIHandlerService.generateSingleNodeLink()
+URIHandlerService.generateBatchNodeLink()
+URIHandlerService.generateGitHubCloneLink()
+URIHandlerService.generateUpdateContactLink()
+```
 
-- Supports mixed identifier types: Radicle IDs (`rad:z...`), GitHub URLs, UUIDs
-- Parallel clone execution for batch operations (significant performance improvement)
-- Auto-creates Dreamer nodes for senders with DID/email metadata
-- Bidirectional relationship linking (Dreamer <-> DreamNode via `liminal-web.json`)
-- Smart UI refresh with constellation layout updates
-- Handles duplicate detection (shows "already cloned" instead of re-cloning)
-- Network propagation delay handling with user-friendly messaging
-- Auto-focus newly cloned nodes in DreamSpace view
+## Protocol Actions
+
+| Protocol | Purpose |
+|----------|---------|
+| `interbrain-clone` | Clone DreamNodes from Radicle/GitHub with Dreamer linking |
+| `interbrain-update-contact` | DID backpropagation for collaboration handshakes |
+
+## Integration Flow
+
+```
+External Link (email/message)
+        ↓
+uri-handler (this feature)
+        ↓ delegates to
+social-resonance-filter (RadicleService.clone)
+        ↓ creates via
+dreamnode (GitDreamNodeService.create, addRelationship)
+        ↓ uses
+dreamnode (UDDService for .udd operations)
+```
+
+## Responsibility Boundaries
+
+### What This Feature Owns
+- Protocol handler registration
+- Clone orchestration (parallel batch clones)
+- Dreamer node discovery/creation for senders
+- URL generation for sharing
+
+### What This Feature Does NOT Own
+- Network operations → `social-resonance-filter` (RadicleService)
+- Vault/node operations → `dreamnode` (GitDreamNodeService, UDDService)
+- Relationship persistence → `dreamnode` (addRelationship)
+- Semantic indexing → `semantic-search` (indexingService)
+
+## Selection Logic
+
+- **Single clone**: Selects the cloned Dream node
+- **Batch clone**: Selects the Dreamer node (shows all shared content)
+
+## Fast Path Optimization
+
+When all nodes already exist, skips full refresh and directly updates relationships in-memory.
+
+## Dependents
+
+- `coherence-beacon` - calls `cloneFromRadicle()` for beacon acceptance
+- `dreamweaving` - uses URL generators for sharing
