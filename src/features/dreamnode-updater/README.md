@@ -1,48 +1,135 @@
-# Updates Feature
+# DreamNode Updater
 
-Manages checking, summarizing, and applying updates for DreamNodes from git/Radicle remotes.
+**Purpose**: User-facing update workflow for DreamNodes - check, preview, summarize, and apply updates from peers.
 
-## Purpose
+## Directory Structure
 
-Automatically fetches updates for all DreamNodes on plugin load, provides user-friendly summaries using LLM, and handles update workflows including submodule synchronization.
+```
+dreamnode-updater/
+├── ui/
+│   └── update-preview-modal.ts  # Modal for update preview with accept/reject
+├── commands.ts                  # Update commands (check, preview, apply)
+├── dreamer-update-commands.ts   # Batch check for Dreamer's related nodes
+├── update-checker-service.ts    # Service wrapper (single-node checking)
+├── update-summary-service.ts    # LLM-powered commit summaries
+├── updates-slice.ts             # Zustand state for update status
+├── index.ts                     # Barrel export
+└── README.md
+```
 
-## Key Files
+## Responsibility Boundaries
 
-### Services
-- **update-checker-service.ts** - Background service that fetches updates for all DreamNodes in parallel, stores results in Zustand store
-- **update-summary-service.ts** - LLM-powered update summaries (falls back to keyword-based parsing if no API key), translates git commits to user-friendly descriptions
-- **updates-slice.ts** - Zustand state slice for storing `FetchResult` status per DreamNode (non-persisted)
+### What This Feature Owns
+- **Update workflow UI**: Preview modal, accept/reject actions
+- **LLM summaries**: Translates git commits to user-friendly descriptions
+- **Update state**: Zustand slice for tracking which nodes have updates
+- **Submodule sync**: Detects standalone→submodule divergence
 
-### Commands
-- **commands.ts** - Core update commands: check for updates, preview with modal, apply updates, handle submodule sync from standalone repos
-- **dreamer-update-commands.ts** - Batch check all Dream nodes related to a selected Dreamer node
+### What This Feature Does NOT Own
+- **Network operations** → `social-resonance-filter` (fetch, pull, push)
+- **Coherence beacon parsing** → `coherence-beacon` (relationship discovery)
+- **Radicle CLI** → `social-resonance-filter` (P2P plumbing)
 
-### UI
-- **ui/update-preview-modal.ts** - Modal showing update summary with commit details, grouped by peer/source, accept/reject actions
+### How It Calls Into social-resonance-filter
+
+```typescript
+// Check for updates on selected node
+const result = await gitSyncService.fetchUpdates(selectedNode.repoPath);
+
+// Apply updates (cherry-pick peer commits)
+await gitSyncService.pullUpdates(selectedNode.repoPath, commitHashes);
+
+// Check for divergent branches
+const divergence = await gitSyncService.checkDivergentBranches(repoPath);
+```
 
 ## Main Exports
 
 ```typescript
 export { registerUpdateCommands } from './commands';
 export { registerDreamerUpdateCommands } from './dreamer-update-commands';
-export { UpdateCheckerService } from './update-checker-service';
-export { UpdateSummaryService } from './update-summary-service';
+export { initializeUpdateCheckerService, getUpdateCheckerService } from './update-checker-service';
 ```
 
-## Submodule Update Flow
+## Commands
 
-Unique workflow: When a Dream node (e.g., Cylinder) has submodules (e.g., Circle), and the standalone Circle repo gets updated, the commands detect this divergence and allow syncing the submodule from the standalone version.
+| Command | Description |
+|---------|-------------|
+| `check-for-updates` | Check selected DreamNode for peer updates |
+| `preview-updates` | Show update preview modal with LLM summary |
+| `apply-updates` | Apply updates to selected DreamNode |
 
-**Workflow**: Standalone update → network share → submodule check → pull standalone into submodule → commit pointer update
+## Update Flow
 
-## InterBrain Special Case
+```
+User clicks "Check for Updates" on selected DreamNode
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│ GitSyncService.fetchUpdates()           │
+│ (from social-resonance-filter)          │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│ Store result in Zustand                 │
+│ (enables visual update indicator)       │
+└─────────────────────────────────────────┘
+              │
+              ▼
+User clicks "Preview Updates"
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│ LLM generates user-friendly summary     │
+│ (falls back to keyword parsing)         │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│ UpdatePreviewModal shows:               │
+│ - Summary of changes                    │
+│ - Commit list grouped by peer           │
+│ - Accept / Reject buttons               │
+└─────────────────────────────────────────┘
+              │
+              ▼
+User clicks "Accept"
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│ GitSyncService.pullUpdates()            │
+│ (cherry-pick or fast-forward)           │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│ Check for coherence beacons             │
+│ (hand off to coherence-beacon feature)  │
+└─────────────────────────────────────────┘
+```
 
-When updating the InterBrain DreamNode itself (hardcoded UUID `550e8400-e29b-41d4-a716-446655440000`), automatically runs build and plugin reload after applying updates.
+## Special Cases
 
-## Notes
+### InterBrain Self-Update
+When updating the InterBrain DreamNode (UUID `550e8400-e29b-41d4-a716-446655440000`):
+1. Apply updates via git pull
+2. Run `npm run build`
+3. Auto-reload plugin
 
-- Update checker runs on plugin load (non-blocking background operation)
-- Visual indicators: Update status stored in Zustand enables glow effects on nodes with updates
-- Read-only repo handling: Warns users about divergent branches, offers hard reset to remote
-- Coherence beacon integration: After pulling updates, checks commits for relationship announcements
-- Unused code: `generateUpdatePreviewMarkdown()` function kept for potential future use
+### Submodule Updates
+When a DreamNode has submodules that diverged from their standalone versions:
+1. Detect standalone→submodule commit difference
+2. Pull standalone commits into submodule
+3. Update parent's submodule pointer
+4. Commit pointer change
+
+### Read-Only Repos
+For GitHub-cloned repos without push access:
+- Warns about divergent branches
+- Offers hard reset to remote (discards local changes)
+
+## Performance Note
+
+Batch checking all nodes on startup was **removed** for performance.
+Update checking is now **on-demand**: user selects a node and triggers check.

@@ -279,18 +279,9 @@ export default class InterBrainPlugin extends Plugin {
       this.app.commands.executeCommandById('interbrain:scan-vault-dreamsong-relationships');
     }, 600); // Wait for vault scan to complete (after update checker)
 
-    // Start auto-fetch for updates after vault scan completes
-    setTimeout(() => {
-      console.log('[Plugin] Starting auto-fetch for DreamNode updates...');
-      const updateChecker = initializeUpdateCheckerService(this.app);
-
-      // Run auto-fetch in background (non-blocking)
-      updateChecker.checkAllDreamNodesForUpdates().then(() => {
-        console.log('[Plugin] Auto-fetch complete');
-      }).catch((error) => {
-        console.error('[Plugin] Auto-fetch failed:', error);
-      });
-    }, 500); // Wait for vault scan to complete
+    // Initialize update checker service (but don't auto-fetch - user triggers via command)
+    // Batch checking removed for performance - use "Check for Updates" on selected node
+    initializeUpdateCheckerService(this.app);
   }
 
   private initializeServices(): void {

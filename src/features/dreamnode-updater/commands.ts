@@ -6,7 +6,6 @@
 
 import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
-import { getUpdateCheckerService } from './update-checker-service';
 import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { GitSyncService } from '../social-resonance-filter/services/git-sync-service';
@@ -227,23 +226,29 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
   const gitSyncService = new GitSyncService(plugin.app);
   const gitOpsService = new GitOperationsService(plugin.app);
 
-  // Check for updates (manual trigger)
+  // Check for updates on selected DreamNode
   plugin.addCommand({
     id: 'check-for-updates',
     name: 'Check for Updates',
     callback: async () => {
-      const loadingNotice = uiService.showLoading('Checking for updates...');
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+
+      if (!selectedNode) {
+        uiService.showError('Please select a DreamNode first');
+        return;
+      }
+
+      const loadingNotice = uiService.showLoading(`Checking ${selectedNode.name} for updates...`);
       try {
-        const updateChecker = getUpdateCheckerService();
-        await updateChecker.checkAllDreamNodesForUpdates();
+        const result = await gitSyncService.fetchUpdates(selectedNode.repoPath);
 
-        const store = useInterBrainStore.getState();
-        const updateCount = store.updateStatus.size;
-
-        if (updateCount === 0) {
-          uiService.showSuccess('All DreamNodes are up to date');
+        if (result.hasUpdates) {
+          store.setNodeUpdateStatus(selectedNode.id, result);
+          uiService.showSuccess(`Found ${result.commits.length} update(s) for ${selectedNode.name}`);
         } else {
-          uiService.showSuccess(`Found updates for ${updateCount} DreamNode${updateCount > 1 ? 's' : ''}`);
+          store.clearNodeUpdateStatus(selectedNode.id);
+          uiService.showSuccess(`${selectedNode.name} is up to date`);
         }
       } catch (error) {
         console.error('Update check failed:', error);

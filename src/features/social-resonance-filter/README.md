@@ -1,21 +1,42 @@
-# Social Resonance Feature
+# Social Resonance Filter
 
-**Purpose**: Peer-to-peer DreamNode sharing via Radicle network integration with "Save & Share" paradigm hiding technical complexity.
+**Purpose**: P2P commit propagation filter via Radicle network. Commits only reach you if your direct peers resonated with them - filtering out noise through social curation.
 
-## Key Files
+## Core Concept
 
-### Core Services
-- **`radicle-service.ts`** - Full Radicle CLI integration: init, clone, share, peer following, delegates, seeding scope, git remote management, routing table queries
-- **`services/git-sync-service.ts`** - Git synchronization operations: fetch/pull/push with peer support, cherry-picking, divergence detection, dual remote mode (Radicle + GitHub)
-- **`passphrase-manager.ts`** - Radicle passphrase management with smart node detection (returns empty string if node already running)
-- **`batch-init-service.ts`** - Batch Radicle initialization with race condition prevention and gap detection (syncs .udd ↔ git state)
+The "filter" in Social Resonance Filter refers to how commit propagation works:
+- You only receive commits from your **direct peers** who chose to accept/share them
+- If a commit doesn't resonate with anyone in your network, it never reaches you
+- This creates **natural curation** - quality rises through resonance, noise gets filtered out
 
-### Commands
-- **`commands.ts`** - User-facing commands: Initialize DreamNode with Radicle, Share DreamNode, Clone from Network, Discover Peer Acceptances, Sync Peer Following
-- **`housekeeping-commands.ts`** - Maintenance command: Sync Radicle Follow Relationships (ensures collaboration handshakes complete)
+## Directory Structure
 
-### Entry Point
-- **`index.ts`** - Feature slice exports
+```
+social-resonance-filter/
+├── services/
+│   └── git-sync-service.ts      # Network-oriented git: fetch, pull, push, peer sync
+├── radicle-service.ts           # Radicle CLI wrapper: init, clone, share, follow
+├── passphrase-manager.ts        # Radicle auth with smart node detection
+├── batch-init-service.ts        # Mass Radicle initialization
+├── commands.ts                  # User-facing Radicle commands
+├── housekeeping-commands.ts     # Maintenance: sync follow relationships
+├── index.ts                     # Barrel export
+└── README.md
+```
+
+## Responsibility Boundaries
+
+### What This Feature Owns (P2P Plumbing)
+- **Radicle CLI operations**: init, clone, share, follow, delegate, seed
+- **Git sync operations**: fetch, pull, push with peer awareness
+- **Passphrase management**: Smart detection of running node
+- **Remote reconciliation**: Sync git remotes with liminal-web.json peers
+- **Routing table queries**: Discover who has accepted your DreamNodes
+
+### What This Feature Does NOT Own
+- **Update workflow UI** → `dreamnode-updater` (modals, LLM summaries)
+- **Coherence beacon detection** → `coherence-beacon` (relationship discovery)
+- **GitHub publishing workflow** → `github-publishing` (public sharing)
 
 ## Main Exports
 
@@ -25,7 +46,7 @@ registerRadicleCommands(plugin, uiService, passphraseManager)
 registerHousekeepingCommands(plugin)
 
 // Services
-RadicleService: isAvailable, init, clone, share, getSeeders, followPeer, addDelegate, setSeedingScope, reconcileRemotes
+RadicleService: isAvailable, init, clone, share, getSeeders, followPeer, addDelegate, reconcileRemotes
 GitSyncService: fetchUpdates, pullUpdates, pushToAvailableRemote, checkDivergentBranches
 PassphraseManager: getPassphrase, isPassphraseSet
 getRadicleBatchInitService(): RadicleBatchInitService
@@ -33,35 +54,32 @@ getRadicleBatchInitService(): RadicleBatchInitService
 
 ## Architecture Notes
 
-### Radicle Integration Strategy
-- **Platform Support**: macOS/Linux only (Windows uses GitHub fallback, testable via `SIMULATE_WINDOWS=true`)
-- **Passphrase Flow**: Checks if node running first → uses settings passphrase → prompts user to configure
-- **Command Discovery**: Searches `rad` in PATH, `~/.radicle/bin/rad`, `/usr/local/bin/rad`, `/opt/homebrew/bin/rad`
-- **Git Helper PATH**: Enhances PATH with `~/.radicle/bin` for `git-remote-rad` helper
+### Platform Support
+- **macOS/Linux**: Full Radicle integration
+- **Windows**: GitHub fallback (testable via `SIMULATE_WINDOWS=true`)
 
-### Pure P2P Collaboration Pattern
-- **Delegates**: All peers added as equal delegates (threshold=1, revisions auto-accepted)
-- **Peer Following**: Both node-level (`rad follow <DID>`) and repository-specific following
-- **Git Remotes**: Declarative reconciliation via `reconcileRemotes()` - adds/updates/removes peer remotes to match liminal-web.json
-- **Seeding Scope**: `'all'` for public infrastructure, `'followed'` for private collaboration
-- **Routing Table Discovery**: `getSeeders()` enables transitive discovery (Alice discovers Bob/Charlie accepted beacon)
+### Radicle Discovery
+Searches for `rad` binary in: PATH, `~/.radicle/bin/rad`, `/usr/local/bin/rad`, `/opt/homebrew/bin/rad`
+
+### Pure P2P Pattern
+- **Delegates**: All peers are equal delegates (threshold=1, auto-accept)
+- **Following**: Both node-level and repo-specific
+- **Seeding**: `'all'` for public, `'followed'` for private
 
 ### Dual Remote Mode
-- **GitHub + Radicle**: When both exist, pushes to BOTH (GitHub for publishing, Radicle for collaboration)
-- **Priority**: Radicle → GitHub → origin → first available
+When both Radicle and GitHub remotes exist:
+- Push to **both** (GitHub for publishing, Radicle for collaboration)
+- Priority: Radicle → GitHub → origin → first available
 
-### Gap Detection & Repair
-- **Batch Init Service**: Detects when .udd lacks radicleId but git repo is initialized → writes ID to .udd
-- **Clone Operation**: Normalizes titles (kebab/snake/PascalCase → "Spaced Title"), saves radicleId to .udd for instant future lookups
-- **Init Command**: Three-step check: .udd file → git repo → full initialization
+### Gap Detection
+- Batch init detects .udd without radicleId but with git remote → repairs
+- Clone normalizes titles and persists radicleId to .udd
 
-## Testing Patterns
+## Dependents
 
-### Windows Fallback Testing
-Set `SIMULATE_WINDOWS=true` environment variable to test GitHub fallback on macOS/Linux
-
-### Command Testing Protocol
-All commands check `radicleService.isAvailable()` first, show user-friendly errors with installation link
-
-## Known Issues
-None flagged for removal - all files actively used.
+Features that call into this one:
+- `dreamnode-updater` - uses GitSyncService.fetchUpdates()
+- `coherence-beacon` - uses GitSyncService for push operations
+- `github-publishing` - uses RadicleBatchInitService
+- `dreamweaving` - uses RadicleService for submodule URLs
+- `uri-handler` - uses RadicleService for clone operations

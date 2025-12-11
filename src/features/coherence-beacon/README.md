@@ -46,12 +46,39 @@ export { CoherenceBeaconService } from './service';
 - **PATH manipulation**: Hardcoded Radicle binary path detection (`~/.radicle/bin/rad`, `/usr/local/bin/rad`) - could be configuration
 - **Git protocol workaround**: Sets `GIT_ALLOW_PROTOCOL=file:rad` to enable rad:// URLs in submodules (security consideration)
 
+## Responsibility Boundaries
+
+### What This Feature Owns
+- **Beacon detection**: Parsing `COHERENCE_BEACON` metadata in git commits
+- **Beacon acceptance**: Clone supermodules, establish relationships
+- **Beacon rejection**: Track rejected beacons to prevent re-prompting
+- **User decision modal**: Present beacon info, accept/reject UI
+
+### What This Feature Does NOT Own
+- **Network operations** → `social-resonance-filter` (fetch, pull, push)
+- **Update preview UI** → `dreamnode-updater` (summaries, preview modal)
+- **Radicle CLI** → `social-resonance-filter` (P2P plumbing)
+
+### Integration Point
+
+Called BY `dreamnode-updater` after applying updates:
+```typescript
+// In dreamnode-updater/commands.ts after pullUpdates:
+const beacons = await coherenceBeaconService.checkCommitsForBeacons(
+  selectedNode.repoPath,
+  updateStatus.commits
+);
+if (beacons.length > 0) {
+  // Present CoherenceBeaconModal for each beacon
+}
+```
+
 ## Dependencies
 
-- `GitSyncService` (social-resonance) - Push/pull operations
+- `GitSyncService` (social-resonance-filter) - Push/pull operations
 - `GitDreamNodeService` (dreamnode) - Relationship management via liminal-web.json
 - `GitOperationsService` (dreamnode) - Build operations for InterBrain self-update
 - `UDDService` (dreamnode) - Reading/writing .udd metadata
-- `RadicleService` (social-resonance) - Radicle network integration
+- `RadicleService` (social-resonance-filter) - Radicle network integration
 - `VaultService` (core) - Vault path resolution
 - `URIHandlerService` (uri-handler) - Radicle cloning via `rad://` URLs
