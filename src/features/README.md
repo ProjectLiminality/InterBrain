@@ -78,6 +78,36 @@ features/
 - Easily testable in isolation
 - Example: `gitUtils.getGitStatus(repoPath)` - runs git command, returns result
 
+### Feature-Owned Settings Pattern
+
+Features own their settings panel sections through `settings-section.ts`:
+
+```typescript
+// features/my-feature/settings-section.ts
+
+// Status check - called by settings aggregator
+export async function checkMyFeatureStatus(): Promise<FeatureStatus> {
+  // Feature-specific status logic
+}
+
+// Settings UI - rendered in settings panel
+export function createMyFeatureSettingsSection(
+  containerEl: HTMLElement,
+  plugin: InterBrainPlugin,
+  status: FeatureStatus | undefined,
+  refreshDisplay: () => Promise<void>
+): void {
+  // Feature-specific settings UI
+}
+```
+
+The `settings` feature is a **thin orchestrator** that:
+- Owns global settings (AI Integration, Keyboard Shortcuts, Advanced)
+- Delegates feature sections to `create*SettingsSection()` functions
+- Aggregates status via `check*Status()` functions
+
+This pattern ensures features own their configuration UI and status checking logic.
+
 ### Barrel Export Pattern
 
 Every feature has an `index.ts` that exports its public API:
@@ -128,16 +158,16 @@ export { registerDreamNodeCommands } from './commands';
 | [semantic-search](./semantic-search/README.md) | Vector embeddings and similarity search | High | ✅ |
 | [conversational-copilot](./conversational-copilot/README.md) | AI conversation mode with node invocation | Medium | ✅ |
 | **Collaboration** | | | |
-| [social-resonance-filter](./social-resonance-filter/README.md) | Radicle P2P integration & commit propagation | Medium | |
-| [coherence-beacon](./coherence-beacon/README.md) | Node synchronization beacons | Medium | |
+| [social-resonance-filter](./social-resonance-filter/README.md) | Radicle P2P integration & commit propagation | Medium | ✅ |
+| [coherence-beacon](./coherence-beacon/README.md) | Node synchronization beacons | Medium | ✅ |
 | [github-publishing](./github-publishing/README.md) | Publish nodes to GitHub | Medium | |
 | [video-calling](./video-calling/README.md) | WebRTC video call integration | Medium | |
 | **UI & System** | | | |
 | [action-buttons](./action-buttons/README.md) | Action menu around nodes | Low | ✅ |
 | [realtime-transcription](./realtime-transcription/README.md) | Voice transcription via Python backend | Medium | ✅ |
-| [settings](./settings/README.md) | Plugin settings tab | Low | |
-| [dreamnode-updater](./dreamnode-updater/README.md) | DreamNode update workflow (preview, apply) | Low | |
-| [uri-handler](./uri-handler/README.md) | interbrain:// protocol handling | Low | |
+| [settings](./settings/README.md) | Plugin settings tab (thin orchestrator) | Low | ✅ |
+| [dreamnode-updater](./dreamnode-updater/README.md) | DreamNode update workflow (preview, apply) | Low | ✅ |
+| [uri-handler](./uri-handler/README.md) | interbrain:// protocol handling | Low | ✅ |
 
 ## Creating a New Feature
 

@@ -31,5 +31,11 @@ export { DEFAULT_OLLAMA_CONFIG } from './types';
 // Command registration
 export { registerSemanticSearchCommands } from './commands';
 
+// Settings section
+export {
+	createSemanticSearchSettingsSection,
+	checkSemanticSearchStatus
+} from './settings-section';
+
 // Version info
 export const SEMANTIC_SEARCH_VERSION = '1.0.0';

@@ -91,6 +91,13 @@ class WebLinkAnalyzerService {
   }
 
   /**
+   * Check if venv exists (synchronous, used by settings status)
+   */
+  checkVenvExists(): boolean {
+    return this.getVenvPython() !== null;
+  }
+
+  /**
    * Main entry point: analyze a web link and update the DreamNode
    */
   async analyzeWebLink(

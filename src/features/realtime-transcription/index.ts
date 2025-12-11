@@ -16,3 +16,9 @@ export type {
 	TranscriptionConfig,
 	ITranscriptionService
 } from './types/transcription-types';
+
+// Settings section
+export {
+	createTranscriptionSettingsSection,
+	checkTranscriptionStatus
+} from './settings-section';
