@@ -19,8 +19,6 @@ export class FaceTimeService {
     try {
       // Check if FaceTime app exists by trying to get its path
       const { stdout } = await execAsync('osascript -e "POSIX path of (path to application \\"FaceTime\\")"');
-      console.log('[FaceTimeService] FaceTime path:', stdout.trim());
-      // If we got a path, FaceTime is available
       return stdout.trim().length > 0;
     } catch (error) {
       console.error('[FaceTimeService] FaceTime not found:', error);
@@ -57,9 +55,8 @@ export class FaceTimeService {
       `;
 
       await execAsync(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`);
-      console.log(`FaceTime call initiated to: ${email}`);
     } catch (error) {
-      console.error('Failed to initiate FaceTime call:', error);
+      console.error('[FaceTimeService] Failed to initiate call:', error);
       throw new Error(`Failed to start FaceTime call: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -79,9 +76,8 @@ export class FaceTimeService {
       `;
 
       await execAsync(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`);
-      console.log('FaceTime call ended');
     } catch (error) {
-      console.error('Failed to end FaceTime call:', error);
+      console.error('[FaceTimeService] Failed to end call:', error);
       throw new Error(`Failed to end FaceTime call: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

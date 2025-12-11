@@ -161,7 +161,7 @@ export { registerDreamNodeCommands } from './commands';
 | [social-resonance-filter](./social-resonance-filter/README.md) | Radicle P2P integration & commit propagation | Medium | ✅ |
 | [coherence-beacon](./coherence-beacon/README.md) | Node synchronization beacons | Medium | ✅ |
 | [github-publishing](./github-publishing/README.md) | Publish nodes to GitHub | Medium | |
-| [video-calling](./video-calling/README.md) | WebRTC video call integration | Medium | |
+| [video-calling](./video-calling/README.md) | Video call initiation (FaceTime, future: more) | Low | ✅ |
 | **UI & System** | | | |
 | [action-buttons](./action-buttons/README.md) | Action menu around nodes | Low | ✅ |
 | [realtime-transcription](./realtime-transcription/README.md) | Voice transcription via Python backend | Medium | ✅ |

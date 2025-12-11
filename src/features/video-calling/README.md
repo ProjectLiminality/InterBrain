@@ -1,6 +1,16 @@
 # Video Calling Feature
 
-macOS FaceTime integration for initiating video calls with dreamer-type DreamNodes.
+Video call initiation and management for dreamer-type DreamNodes.
+
+## Purpose
+
+This feature slice owns all video calling functionality in InterBrain. Currently minimal with macOS FaceTime automation, but designed to grow:
+
+- **Current**: FaceTime integration via AppleScript (macOS only)
+- **Future**: Support for additional video calling apps (Zoom, Meet, etc.)
+- **Eventually**: Native WebRTC video calling built into InterBrain
+
+All video calling capabilities—whether external app automation or internal implementation—will live in this feature slice.
 
 ## Key Files
 
