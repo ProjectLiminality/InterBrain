@@ -14,7 +14,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
-import { sanitizeTitleToPascalCase } from '../dreamnode/utils/title-sanitization';
+import { sanitizeTitleToPascalCase } from '../../dreamnode/utils/title-sanitization';
 
 const execAsync = promisify(exec);
 
@@ -45,7 +45,6 @@ export class GitHubService {
    */
   setPluginDir(dir: string): void {
     this.pluginDir = dir;
-    console.log(`GitHubService: Plugin directory set to ${dir}`);
   }
 
   /**
@@ -67,7 +66,6 @@ export class GitHubService {
       try {
         await execAsync(`${path} --version`);
         this.ghPath = path;
-        console.log(`GitHubService: Found gh at ${path}`);
         return path;
       } catch {
         // Try next path
@@ -227,7 +225,6 @@ export class GitHubService {
       const { stdout, stderr } = await execAsync(`${ghPath} auth status 2>&1`);
       const output = stdout + stderr;
 
-      console.log('GitHubService: gh auth status output:', output);
 
       if (output.includes('Logged in to github.com')) {
         return { available: true };
@@ -318,7 +315,6 @@ export class GitHubService {
         `"${ghPath}" api -X POST "repos/${owner}/${cleanRepo}/pages" -f source[branch]=gh-pages -f source[path]=/`
       );
 
-      console.log(`GitHubService: GitHub Pages enabled successfully`);
       return pagesUrl;
     } catch (error) {
       if (error instanceof Error) {
@@ -328,7 +324,6 @@ export class GitHubService {
         if (errorMsg.includes('already exists') ||
             errorMsg.includes('409') ||
             errorMsg.includes('unexpected end of json')) {
-          console.log(`GitHubService: GitHub Pages already configured (this is expected)`);
           return pagesUrl;
         }
 
@@ -416,7 +411,6 @@ export class GitHubService {
         fs.mkdirSync(buildDir, { recursive: true });
       }
 
-      console.log(`GitHubService: Preparing static site at ${buildDir}`);
 
       // Create media directory for copied files
       const mediaDir = path.join(buildDir, 'media');
@@ -442,7 +436,6 @@ export class GitHubService {
       };
 
       // Copy media files and update block references
-      let mediaFilesCopied = 0;
       for (const block of blocks) {
         if (block.media && block.media._absolutePath) {
           const absolutePath = block.media._absolutePath;
@@ -452,12 +445,10 @@ export class GitHubService {
             const destPath = path.join(mediaDir, uniqueFilename);
 
             fs.copyFileSync(absolutePath, destPath);
-            mediaFilesCopied++;
 
             // Update src to relative path (works in browser)
             block.media.src = `./media/${uniqueFilename}`;
 
-            console.log(`GitHubService: Copied media ${path.basename(absolutePath)} → ${uniqueFilename}`);
           } else {
             console.warn(`GitHubService: Media file not found: ${absolutePath}`);
           }
@@ -467,7 +458,6 @@ export class GitHubService {
         }
       }
 
-      console.log(`GitHubService: Copied ${mediaFilesCopied} media files to build directory`);
 
       // Handle DreamTalk media (copy file, not embed)
       let dreamTalkMedia: any[] | undefined;
@@ -503,7 +493,6 @@ export class GitHubService {
             size: fs.statSync(dreamTalkPath).size
           }];
 
-          console.log(`GitHubService: Copied DreamTalk media → ${uniqueFilename}`);
         }
       }
 
@@ -526,7 +515,6 @@ export class GitHubService {
 
       const viewerBundlePath = path.join(this.pluginDir, 'viewer-bundle', 'index.html');
 
-      console.log(`GitHubService: Looking for viewer bundle at ${viewerBundlePath}`);
 
       if (!fs.existsSync(viewerBundlePath)) {
         throw new Error(
@@ -560,12 +548,10 @@ export class GitHubService {
           const destPath = path.join(buildAssetsDir, file);
           fs.copyFileSync(srcPath, destPath);
         }
-        console.log(`GitHubService: Copied ${assetFiles.length} viewer asset files`);
       } else {
         console.warn(`GitHubService: Assets directory not found at ${viewerAssetsDir}`);
       }
 
-      console.log(`GitHubService: Static site ready for deployment`);
 
       // Deploy to gh-pages branch
       await this.deployToPages(dreamNodePath, buildDir);
@@ -573,7 +559,6 @@ export class GitHubService {
       // Cleanup temp directory
       try {
         fs.rmSync(buildDir, { recursive: true, force: true });
-        console.log(`GitHubService: Cleaned up temp build directory`);
       } catch (error) {
         console.warn(`GitHubService: Failed to cleanup temp directory:`, error);
       }
@@ -604,7 +589,6 @@ export class GitHubService {
 
       // Get all submodules for this DreamNode
       const submodules = await this.getSubmodules(dreamNodePath, vaultPath);
-      console.log(`GitHubService: Building link resolver for ${submodules.length} submodule(s)`);
 
       for (const submodule of submodules) {
         try {
@@ -627,17 +611,14 @@ export class GitHubService {
           // Map UUID to hosting URLs
           if (udd.githubPagesUrl) {
             githubPagesUrls[udd.uuid] = udd.githubPagesUrl;
-            console.log(`GitHubService: Mapped ${submodule.name} (${udd.uuid}) → Pages: ${udd.githubPagesUrl}`);
           }
 
           if (udd.githubRepoUrl) {
             githubRepoUrls[udd.uuid] = udd.githubRepoUrl;
-            console.log(`GitHubService: Mapped ${submodule.name} (${udd.uuid}) → Repo: ${udd.githubRepoUrl}`);
           }
 
           if (udd.radicleId) {
             radicleIds[udd.uuid] = udd.radicleId;
-            console.log(`GitHubService: Mapped ${submodule.name} (${udd.uuid}) → Radicle: ${udd.radicleId}`);
           }
 
         } catch (error) {
@@ -646,7 +627,6 @@ export class GitHubService {
         }
       }
 
-      console.log(`GitHubService: Link resolver built - ${Object.keys(githubPagesUrls).length} Pages URLs, ${Object.keys(githubRepoUrls).length} Repo URLs, ${Object.keys(radicleIds).length} Radicle IDs`);
 
       return {
         githubPagesUrls,
@@ -681,12 +661,10 @@ export class GitHubService {
 
       if (!submoduleMatch) {
         // Local file (no submodule path) - not clickable
-        console.log(`[GitHubService] Local file (non-clickable): ${filename}`);
         return null;
       }
 
       const submoduleDirName = submoduleMatch[2]; // "VectorEquilibrium"
-      console.log(`[GitHubService] Detected submodule media: ${filename} → directory: ${submoduleDirName}`);
 
       // Read .udd file from submodule directory
       const uddPath = path.join(vaultPath, submoduleDirName, '.udd');
@@ -708,7 +686,6 @@ export class GitHubService {
         return null;
       }
 
-      console.log(`✅ [GitHubService] Resolved UUID for ${submoduleDirName}: ${udd.uuid}`);
       return udd.uuid;
 
     } catch (error) {
@@ -753,7 +730,6 @@ export class GitHubService {
         { cwd: buildDir }
       );
 
-      console.log('GitHubService: Successfully deployed to gh-pages branch');
 
     } catch (error) {
       if (error instanceof Error) {
@@ -809,7 +785,6 @@ export class GitHubService {
 
     // Check for circular dependencies
     if (visitedUUIDs.has(udd.uuid)) {
-      console.log(`GitHubService: Skipping circular dependency: ${udd.title}`);
       if (!udd.githubRepoUrl) {
         throw new Error(`Circular dependency detected but node not yet shared: ${udd.title}`);
       }
@@ -826,12 +801,11 @@ export class GitHubService {
 
     // Check if already shared - if so, skip repo creation but still rebuild Pages
     if (udd.githubRepoUrl) {
-      console.log(`GitHubService: Submodule already shared, rebuilding GitHub Pages: ${udd.title}`);
 
       // Rebuild GitHub Pages with latest code (includes UUID resolution)
       try {
-        const { parseCanvasToBlocks } = await import('../dreamweaving/dreamsong/index');
-        const { getMimeType } = await import('../dreamweaving/dreamsong/media-resolver');
+        const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
+        const { getMimeType } = await import('../../dreamweaving/dreamsong/media-resolver');
         const files = fs.readdirSync(submodulePath);
         const canvasFiles = files.filter(f => f.endsWith('.canvas'));
         let blocks: any[] = [];
@@ -875,7 +849,6 @@ export class GitHubService {
         }
 
         await this.buildStaticSite(submodulePath, udd.uuid, udd.title, blocks);
-        console.log(`GitHubService: Rebuilt GitHub Pages for ${udd.title}`);
       } catch (error) {
         console.warn(`GitHubService: Failed to rebuild Pages for ${udd.title}:`, error);
       }
@@ -889,7 +862,6 @@ export class GitHubService {
     }
 
     // Recursively share this submodule (creates repo + builds Pages)
-    console.log(`GitHubService: Sharing submodule: ${udd.title}`);
     const result = await this.shareDreamNode(submodulePath, udd.uuid, visitedUUIDs);
 
     // Update submodule's .udd with GitHub URLs
@@ -930,7 +902,6 @@ export class GitHubService {
 
     // Check for circular dependencies
     if (visitedUUIDs.has(udd.uuid)) {
-      console.log(`GitHubService: Skipping circular dependency: ${udd.title}`);
       return { uuid: udd.uuid, title: udd.title };
     }
 
@@ -939,12 +910,10 @@ export class GitHubService {
 
     // Check if this submodule is even published
     if (!udd.githubRepoUrl) {
-      console.log(`GitHubService: Submodule not published, skipping: ${udd.title}`);
       return { uuid: udd.uuid, title: udd.title };
     }
 
     // Recursively unpublish this submodule
-    console.log(`GitHubService: Unpublishing submodule: ${udd.title}`);
     await this.unpublishDreamNode(submodulePath, udd.uuid, vaultPath, visitedUUIDs);
 
     return { uuid: udd.uuid, title: udd.title };
@@ -972,11 +941,9 @@ export class GitHubService {
 
     // Step 1: Unpublish all submodules recursively (depth-first)
     const submodules = await this.getSubmodules(dreamNodePath, vaultPath);
-    console.log(`GitHubService: Found ${submodules.length} submodule(s) for ${udd.title}`);
 
     for (const submodule of submodules) {
       try {
-        console.log(`GitHubService: Processing submodule at ${submodule.path}`);
         await this.unpublishSubmodule(submodule.path, vaultPath, visitedUUIDs);
       } catch (error) {
         console.error(`GitHubService: Failed to unpublish submodule ${submodule.name}:`, error);
@@ -994,17 +961,13 @@ export class GitHubService {
         const ghPath = await this.detectGhPath();
 
         // Try to delete gh-pages branch
-        console.log(`GitHubService: Deleting gh-pages branch from ${owner}/${cleanRepo}`);
         try {
           await execAsync(`"${ghPath}" api -X DELETE "repos/${owner}/${cleanRepo}/git/refs/heads/gh-pages"`);
-          console.log(`GitHubService: gh-pages branch deleted`);
         } catch {
           // Branch might not exist - that's okay
-          console.log(`GitHubService: gh-pages branch not found (may not exist)`);
         }
 
         // Delete GitHub repository
-        console.log(`GitHubService: Deleting GitHub repository: ${owner}/${cleanRepo}`);
         await execAsync(`"${ghPath}" repo delete ${owner}/${cleanRepo} --yes`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1020,7 +983,6 @@ export class GitHubService {
 
         // Check for already deleted
         if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
-          console.log(`GitHubService: Repository already deleted: ${owner}/${cleanRepo}`);
           // Continue - repo already deleted
         } else {
           console.warn(`GitHubService: Failed to delete GitHub repo:`, error);
@@ -1032,7 +994,6 @@ export class GitHubService {
     // Step 3: Remove github remote from local repo
     try {
       await execAsync('git remote remove github', { cwd: dreamNodePath });
-      console.log(`GitHubService: Removed 'github' remote from local repo`);
     } catch (error) {
       console.warn(`GitHubService: Failed to remove github remote (may not exist):`, error);
       // Continue - remote might not exist
@@ -1042,7 +1003,6 @@ export class GitHubService {
     delete udd.githubRepoUrl;
     delete udd.githubPagesUrl;
     await this.writeUDD(dreamNodePath, udd);
-    console.log(`GitHubService: Cleaned GitHub URLs from .udd`);
 
     // Step 5: Commit .udd changes
     try {
@@ -1071,7 +1031,6 @@ export class GitHubService {
 
     // Check if already shared - .udd file has githubRepoUrl
     if (udd.githubRepoUrl) {
-      console.log(`GitHubService: ${udd.title} already shared to GitHub: ${udd.githubRepoUrl}`);
 
       // Generate Obsidian URI
       const obsidianUri = this.generateObsidianURI(udd.githubRepoUrl);
@@ -1089,8 +1048,6 @@ export class GitHubService {
       const existingGitHubUrl = stdout.trim();
 
       if (existingGitHubUrl) {
-        console.log(`GitHubService: Found existing 'github' remote for ${udd.title}: ${existingGitHubUrl}`);
-        console.log(`GitHubService: Updating .udd file with missing GitHub URL`);
 
         // Update .udd with missing GitHub URL
         udd.githubRepoUrl = existingGitHubUrl;
@@ -1098,9 +1055,8 @@ export class GitHubService {
 
         // Build and deploy static site (idempotent - safe to run multiple times)
         let pagesUrl: string | undefined;
-        console.log(`GitHubService: Building static site for existing repo ${udd.title}...`);
         try {
-          const { parseCanvasToBlocks } = await import('../dreamweaving/dreamsong/index');
+          const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
 
           const files = fs.readdirSync(dreamNodePath);
           const canvasFiles = files.filter(f => f.endsWith('.canvas'));
@@ -1108,7 +1064,6 @@ export class GitHubService {
           let blocks: any[] = [];
 
           if (canvasFiles.length > 0) {
-            console.log(`GitHubService: Using DreamSong (.canvas) for GitHub Pages`);
             const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
             const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
             const canvasData = JSON.parse(canvasContent);
@@ -1124,16 +1079,13 @@ export class GitHubService {
                   const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
                   if (resolvedUuid) {
                     block.media.sourceDreamNodeId = resolvedUuid;
-                    console.log(`GitHubService: Resolved UUID for ${block.media.src} → ${resolvedUuid}`);
                   }
 
                   // Store absolute path for later file copy (NOT base64 embedding)
                   const mediaPath = path.join(vaultPath, block.media.src);
-                  console.log(`GitHubService: Preparing media ${block.media.src} at ${mediaPath}`);
 
                   if (fs.existsSync(mediaPath)) {
                     block.media._absolutePath = mediaPath;
-                    console.log(`GitHubService: Queued media for copy: ${path.basename(mediaPath)}`);
                   } else {
                     console.warn(`GitHubService: Media file not found: ${mediaPath}`);
                   }
@@ -1144,10 +1096,8 @@ export class GitHubService {
             }
           } else if (udd.dreamTalk) {
             // DreamTalk media file - handled by buildStaticSite
-            console.log(`GitHubService: No DreamSong found, DreamTalk will be handled by buildStaticSite`);
             blocks = [];
           } else {
-            console.log(`GitHubService: No DreamSong or DreamTalk found, checking for README.md`);
             const readmePath = path.join(dreamNodePath, 'README.md');
             if (fs.existsSync(readmePath)) {
               const readmeContent = fs.readFileSync(readmePath, 'utf-8');
@@ -1169,19 +1119,16 @@ export class GitHubService {
                 text: htmlContent,
                 edges: []
               }];
-              console.log(`GitHubService: Created README.md fallback block with HTML conversion`);
             } else {
               console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
             }
           }
 
           await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title, blocks);
-          console.log(`GitHubService: Static site built and deployed to gh-pages branch`);
 
           // Setup GitHub Pages (idempotent - will succeed even if already configured)
           try {
             pagesUrl = await this.setupPages(existingGitHubUrl);
-            console.log(`GitHubService: GitHub Pages configured: ${pagesUrl}`);
 
             // Update .udd with actual Pages URL
             udd.githubPagesUrl = pagesUrl;
@@ -1220,18 +1167,15 @@ export class GitHubService {
       }
     } catch {
       // No 'github' remote exists - this is fine, continue with normal sharing
-      console.log(`GitHubService: No existing 'github' remote found for ${udd.title}`);
     }
 
     // Step 1: Discover and share all submodules recursively (depth-first)
     const submodules = await this.getSubmodules(dreamNodePath);
     const sharedSubmodules: Array<{ uuid: string; githubUrl: string; title: string; relativePath: string }> = [];
 
-    console.log(`GitHubService: Found ${submodules.length} submodule(s) for ${udd.title}`);
 
     for (const submodule of submodules) {
       try {
-        console.log(`GitHubService: Processing submodule at ${submodule.path}`);
         const result = await this.shareSubmodule(submodule.path, visitedUUIDs);
         sharedSubmodules.push(result);
       } catch (error) {
@@ -1242,7 +1186,6 @@ export class GitHubService {
 
     // Step 2: Update .gitmodules with GitHub URLs
     if (sharedSubmodules.length > 0) {
-      console.log(`GitHubService: Updating .gitmodules with GitHub URLs`);
       await this.updateGitmodulesUrls(dreamNodePath, sharedSubmodules);
 
       // Commit .gitmodules changes
@@ -1258,18 +1201,16 @@ export class GitHubService {
 
     // Step 3: Find available repo name based on title
     const repoName = await this.findAvailableRepoName(udd.title);
-    console.log(`GitHubService: Using repository name: ${repoName}`);
 
     // Step 4: Create GitHub repository
     const repoUrl = await this.createRepo(dreamNodePath, repoName);
 
     // Step 5: Build and deploy static DreamSong site
     let pagesUrl: string | undefined;
-    console.log(`GitHubService: Building static site for ${udd.title}...`);
     try {
       // Use the same parsing pipeline as local rendering
       // This ensures GitHub Pages displays exactly what you see locally
-      const { parseCanvasToBlocks } = await import('../dreamweaving/dreamsong/index');
+      const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
 
       // Find and parse canvas file
       const files = fs.readdirSync(dreamNodePath);
@@ -1280,7 +1221,6 @@ export class GitHubService {
       // Fallback hierarchy: DreamSong → DreamTalk → README
       if (canvasFiles.length > 0) {
         // PRIMARY: DreamSong (canvas file) - Full rich content
-        console.log(`GitHubService: Using DreamSong (.canvas) for GitHub Pages`);
         const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
         const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
         const canvasData = JSON.parse(canvasContent);
@@ -1300,18 +1240,15 @@ export class GitHubService {
               const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
               if (resolvedUuid) {
                 block.media.sourceDreamNodeId = resolvedUuid;
-                console.log(`GitHubService: Resolved UUID for ${block.media.src} → ${resolvedUuid}`);
               }
 
               // Step 2: Store absolute path for later file copy (NOT base64 embedding)
               // Canvas paths are vault-relative (e.g., "ArkCrystal/ARK Crystal.jpeg")
               const mediaPath = path.join(vaultPath, block.media.src);
-              console.log(`GitHubService: Preparing media ${block.media.src} at ${mediaPath}`);
 
               if (fs.existsSync(mediaPath)) {
                 // Store absolute path - buildStaticSite will copy the file
                 block.media._absolutePath = mediaPath;
-                console.log(`GitHubService: Queued media for copy: ${path.basename(mediaPath)}`);
               } else {
                 console.warn(`GitHubService: Media file not found: ${mediaPath}`);
               }
@@ -1322,12 +1259,10 @@ export class GitHubService {
         }
       } else if (udd.dreamTalk) {
         // FALLBACK 1: DreamTalk media file - handled by buildStaticSite
-        console.log(`GitHubService: No DreamSong found, DreamTalk will be handled by buildStaticSite`);
         // Empty blocks - buildStaticSite reads dreamTalk from .udd and copies it
         blocks = [];
       } else {
         // FALLBACK 2: README.md - Text content
-        console.log(`GitHubService: No DreamSong or DreamTalk found, checking for README.md`);
         const readmePath = path.join(dreamNodePath, 'README.md');
         if (fs.existsSync(readmePath)) {
           const readmeContent = fs.readFileSync(readmePath, 'utf-8');
@@ -1356,20 +1291,17 @@ export class GitHubService {
             text: htmlContent,
             edges: []
           }];
-          console.log(`GitHubService: Created README.md fallback block with HTML conversion`);
         } else {
           console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
         }
       }
 
       await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title, blocks);
-      console.log(`GitHubService: Static site built and deployed to gh-pages branch`);
 
       // Step 6: Setup GitHub Pages (configure to serve from gh-pages branch)
       // IMPORTANT: This must happen AFTER buildStaticSite pushes the gh-pages branch
       try {
         pagesUrl = await this.setupPages(repoUrl);
-        console.log(`GitHubService: GitHub Pages configured: ${pagesUrl}`);
       } catch (error) {
         console.warn('GitHubService: Failed to enable GitHub Pages:', error);
         // Continue without Pages URL - site is deployed but Pages config might fail

@@ -1,7 +1,7 @@
 import { Notice, Plugin } from 'obsidian';
-import { DreamNode } from '../dreamnode';
-import { githubService } from './service';
-import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
+import { DreamNode } from '../../dreamnode';
+import { githubService } from './github-service';
+import { GitDreamNodeService } from '../../dreamnode/services/git-dreamnode-service';
 
 /**
  * GitHub Batch Share Service
@@ -23,8 +23,6 @@ export class GitHubBatchShareService {
 	 * Returns map of UUID → GitHub URL
 	 */
 	async ensureNodesHaveGitHubUrls(nodeUUIDs: string[]): Promise<Map<string, string>> {
-		console.log(`🔮 [GitHubBatchShare] Processing ${nodeUUIDs.length} nodes for GitHub URLs`);
-
 		const result = new Map<string, string>();
 
 		if (nodeUUIDs.length === 0) {
@@ -40,15 +38,12 @@ export class GitHubBatchShareService {
 				if (node) {
 					nodes.push(node);
 				} else {
-					console.warn(`⚠️ [GitHubBatchShare] Node ${uuid} not found`);
+					console.warn(`[GitHubBatchShare] Node ${uuid} not found`);
 				}
 			}
 
 			// Step 2: Separate into already-shared vs needs-sharing
 			const { alreadyShared, needsSharing } = await this.categorizeNodes(nodes);
-
-			console.log(`✅ [GitHubBatchShare] ${alreadyShared.length} nodes already have GitHub URLs`);
-			console.log(`🔄 [GitHubBatchShare] ${needsSharing.length} nodes need sharing`);
 
 			// Step 3: Add already-shared nodes to result
 			for (const node of alreadyShared) {
@@ -75,19 +70,18 @@ export class GitHubBatchShareService {
 				const failCount = needsSharing.length - successCount;
 
 				if (successCount > 0) {
-					new Notice(`✅ Shared ${successCount} node${successCount > 1 ? 's' : ''} to GitHub`);
+					new Notice(`Shared ${successCount} node${successCount > 1 ? 's' : ''} to GitHub`);
 				}
 
 				if (failCount > 0) {
-					console.warn(`⚠️ [GitHubBatchShare] ${failCount} node(s) failed to share`);
+					console.warn(`[GitHubBatchShare] ${failCount} node(s) failed to share`);
 				}
 			}
 
-			console.log(`✅ [GitHubBatchShare] Complete: ${result.size}/${nodeUUIDs.length} nodes have GitHub URLs`);
 			return result;
 
 		} catch (error) {
-			console.error('❌ [GitHubBatchShare] Batch sharing failed:', error);
+			console.error('[GitHubBatchShare] Batch sharing failed:', error);
 			throw error;
 		}
 	}
@@ -133,13 +127,12 @@ export class GitHubBatchShareService {
 				if (udd.githubRepoUrl) {
 					return udd.githubRepoUrl;
 				}
-			} catch (error) {
-				console.warn(`⚠️ [GitHubBatchShare] Could not read .udd for ${node.name}:`, error);
+			} catch {
+				// Could not read .udd - this is expected for new nodes
 			}
 
 			return null;
-		} catch (error) {
-			console.warn(`⚠️ [GitHubBatchShare] Could not get GitHub URL for ${node.name}:`, error);
+		} catch {
 			return null;
 		}
 	}
@@ -154,7 +147,6 @@ export class GitHubBatchShareService {
 		// Check if GitHub is available
 		const availabilityCheck = await githubService.isAvailable();
 		if (!availabilityCheck.available) {
-			console.warn('⚠️ [GitHubBatchShare] GitHub CLI not available, skipping sharing');
 			throw new Error(availabilityCheck.error || 'GitHub CLI not available');
 		}
 
@@ -167,8 +159,6 @@ export class GitHubBatchShareService {
 		// Process nodes one at a time to avoid git/GitHub conflicts
 		for (const node of nodes) {
 			try {
-				console.log(`🔄 [GitHubBatchShare] Sharing ${node.name}...`);
-
 				const fullRepoPath = path.join(vaultPath, node.repoPath);
 
 				// Share to GitHub (creates repo, pushes, builds Pages)
@@ -179,16 +169,8 @@ export class GitHubBatchShareService {
 
 				if (shareResult.repoUrl) {
 					result.set(node.id, shareResult.repoUrl);
-					console.log(`✅ [GitHubBatchShare] ${node.name} shared: ${shareResult.repoUrl}`);
-
-					// Update local node's .udd file to persist GitHub URL
-					// The shareDreamNode method should have already updated .udd, but verify
-					const githubUrl = await this.getGitHubUrlFromUdd(node);
-					if (!githubUrl) {
-						console.warn(`⚠️ [GitHubBatchShare] ${node.name} shared but .udd not updated with GitHub URL`);
-					}
 				} else {
-					console.warn(`⚠️ [GitHubBatchShare] ${node.name} shared but no GitHub URL returned`);
+					console.warn(`[GitHubBatchShare] ${node.name} shared but no GitHub URL returned`);
 				}
 
 			} catch (error) {
@@ -196,24 +178,19 @@ export class GitHubBatchShareService {
 				const errorMsg = error instanceof Error ? error.message : String(error);
 
 				if (errorMsg.includes('already exists') || errorMsg.includes('already shared')) {
-					console.log(`ℹ️ [GitHubBatchShare] ${node.name} already shared, retrieving URL...`);
-
 					try {
 						const githubUrl = await this.getGitHubUrlFromUdd(node);
 
 						if (githubUrl) {
 							result.set(node.id, githubUrl);
-							console.log(`✅ [GitHubBatchShare] ${node.name} already shared: ${githubUrl}`);
 							continue; // Success! Move to next node
-						} else {
-							console.warn(`⚠️ [GitHubBatchShare] Could not retrieve GitHub URL for already-shared ${node.name}`);
 						}
 					} catch (getUrlError) {
-						console.error(`❌ [GitHubBatchShare] Could not retrieve GitHub URL for ${node.name}:`, getUrlError);
+						console.error(`[GitHubBatchShare] Could not retrieve GitHub URL for ${node.name}:`, getUrlError);
 					}
 				} else {
 					// Different error - log and continue
-					console.error(`❌ [GitHubBatchShare] Failed to share ${node.name}:`, error);
+					console.error(`[GitHubBatchShare] Failed to share ${node.name}:`, error);
 				}
 			}
 		}
@@ -227,7 +204,6 @@ let _githubBatchShareService: GitHubBatchShareService | null = null;
 
 export function initializeGitHubBatchShareService(plugin: Plugin, dreamNodeService: GitDreamNodeService): void {
 	_githubBatchShareService = new GitHubBatchShareService(plugin, dreamNodeService);
-	console.log(`🔮 [GitHubBatchShare] Service initialized`);
 }
 
 export function getGitHubBatchShareService(): GitHubBatchShareService {

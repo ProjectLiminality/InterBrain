@@ -574,7 +574,7 @@ export class URIHandlerService {
 			}
 
 			// Clone via GitHub service
-			const { githubService } = await import('../github-publishing/service');
+			const { githubService } = await import('../github-publishing/services/github-service');
 			const githubUrl = `https://${repoPath}`;
 			await githubService.clone(githubUrl, destinationPath);
 

@@ -5,51 +5,64 @@
 ## Philosophy
 "GitHub for sharing, Radicle for collaboration" - GitHub provides fallback when Radicle unavailable and public broadcast via Pages.
 
-## Key Files
+## Directory Structure
 
-### Core Service Layer
-- **`service.ts`** - Main GitHubService class implementing complete share/unpublish workflow
-  - Creates public repos, enables Pages, manages submodules recursively
-  - Builds static DreamSong sites using viewer bundle
-  - Link resolver for cross-DreamNode navigation on Pages
-  - Exports: `GitHubService`, `githubService` singleton
+```
+github-publishing/
+├── services/
+│   ├── github-service.ts      # Core GitHub CLI + Pages workflow
+│   ├── batch-share-service.ts # Multi-node batch publishing
+│   ├── share-link-service.ts  # Obsidian URI generation
+│   └── network-service.ts     # Placeholder for Windows P2P
+├── dreamsong-standalone/      # React viewer source for Pages
+├── commands.ts                # Obsidian command registration
+├── settings-section.ts        # Feature-owned settings UI
+├── index.ts                   # Barrel export
+└── README.md
+```
 
-### Batch Operations
-- **`batch-share-service.ts`** - Ensures multiple nodes have GitHub URLs before email sharing
-  - Batch publishing with serialized git operations (prevents race conditions)
-  - Exports: `GitHubBatchShareService`, `initializeGitHubBatchShareService()`, `getGitHubBatchShareService()`
+## Services
 
-- **`share-link-service.ts`** - Generates Obsidian URIs for single-node sharing
-  - Integrates with Radicle for collaboration handshake
-  - Exports: `ShareLinkService`
+### github-service.ts
+Main GitHubService class implementing complete share/unpublish workflow:
+- Creates public repos, enables Pages, manages submodules recursively
+- Builds static DreamSong sites using viewer bundle
+- Link resolver for cross-DreamNode navigation on Pages
 
-### Command Registration
-- **`commands.ts`** - Registers 3 Obsidian commands:
-  - "Share DreamNode via GitHub" - Creates repo + Pages with recursive submodule handling
-  - "Unpublish DreamNode from GitHub" - Deletes remote repo + cleans metadata
-  - "Clone DreamNode from GitHub" - Supports Obsidian URI protocol
-  - Exports: `registerGitHubCommands()`
+### batch-share-service.ts
+Ensures multiple nodes have GitHub URLs before email sharing:
+- Batch publishing with serialized git operations (prevents race conditions)
 
-### Standalone Viewer
-- **`dreamsong-standalone/`** - Pre-built React app for GitHub Pages
-  - `main.tsx` - Renders DreamSong from embedded JSON data
-  - `vite.config.ts` - Builds static site with relative paths
-  - Built bundle lives in plugin root at `viewer-bundle/`
+### share-link-service.ts
+Generates Obsidian URIs for single-node sharing:
+- Integrates with Radicle for collaboration handshake
 
-### Future Implementation
-- **`network-service.ts`** - Placeholder for Windows peer-to-peer alternative
-  - Will mirror RadicleService API with GitHub backend
-  - Currently returns "coming soon" errors
+### network-service.ts
+Placeholder for Windows peer-to-peer alternative:
+- Will mirror RadicleService API with GitHub backend
+- Currently returns "coming soon" errors
 
-### Feature Exports
-- **`index.ts`** - Central exports for GitHub publishing functionality
+## Commands
+
+Three Obsidian commands registered:
+- "Share DreamNode via GitHub" - Creates repo + Pages with recursive submodule handling
+- "Unpublish DreamNode from GitHub" - Deletes remote repo + cleans metadata
+- "Clone DreamNode from GitHub" - Supports Obsidian URI protocol
 
 ## Main Exports
+
 ```typescript
-import { registerGitHubCommands } from './commands';
-import { GitHubService, githubService } from './service';
-import { GitHubBatchShareService, initializeGitHubBatchShareService } from './batch-share-service';
-import { ShareLinkService } from './share-link-service';
+// Commands
+export { registerGitHubCommands } from './commands';
+
+// Services
+export { GitHubService } from './services/github-service';
+export { GitHubBatchShareService } from './services/batch-share-service';
+export { ShareLinkService } from './services/share-link-service';
+export { GitHubNetworkService } from './services/network-service';
+
+// Settings
+export { createGitHubSettingsSection, checkGitHubStatus } from './settings-section';
 ```
 
 ## Dependencies

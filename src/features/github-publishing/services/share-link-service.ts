@@ -5,10 +5,10 @@
  */
 
 import { App, Notice } from 'obsidian';
-import { DreamNode } from '../dreamnode';
-import { URIHandlerService } from '../uri-handler';
-import { serviceManager } from '../../core/services/service-manager';
-import { getRadicleBatchInitService } from '../social-resonance-filter/services/batch-init-service';
+import { DreamNode } from '../../dreamnode';
+import { URIHandlerService } from '../../uri-handler';
+import { serviceManager } from '../../../core/services/service-manager';
+import { getRadicleBatchInitService } from '../../social-resonance-filter/services/batch-init-service';
 
 export class ShareLinkService {
 	private app: App;
@@ -55,8 +55,6 @@ export class ShareLinkService {
 				throw new Error(`Failed to read UUID from .udd file: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
 
-			console.log(`🔗 [ShareLink] Generating share link for "${node.name}" (UUID: ${nodeUuid})...`);
-
 			const vaultName = this.app.vault.getName();
 
 			// Get Radicle service
@@ -76,20 +74,14 @@ export class ShareLinkService {
 				const identity = await radicleService.getIdentity();
 				senderDid = identity.did;
 				senderName = identity.alias || 'Friend';
-				console.log(`👤 [ShareLink] Sender identity: ${senderName} (${senderDid})`);
-			} catch (error) {
-				console.warn('⚠️ [ShareLink] Could not get Radicle identity:', error);
+			} catch {
+				// Could not get Radicle identity - continue without it
 			}
 
 			// Get sender's email from settings (optional)
 			senderEmail = this.plugin.settings?.userEmail || undefined;
-			if (senderEmail) {
-				console.log(`📧 [ShareLink] Sender email: ${senderEmail}`);
-			}
 
 			// Ensure node has Radicle ID (initialize if needed)
-			console.log(`🔮 [ShareLink] Ensuring node has Radicle ID...`);
-
 			let radicleId: string | null = null;
 
 			try {
@@ -98,18 +90,14 @@ export class ShareLinkService {
 				radicleId = uuidToRadicleIdMap.get(nodeUuid) || null;
 
 				if (radicleId) {
-					console.log(`✅ [ShareLink] Node has Radicle ID: ${radicleId}`);
-
 					// Publish to network and add delegate if recipient DID provided
-					console.log(`📡 [ShareLink] Publishing to Radicle network...`);
 					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
 
 					// Call share synchronously (wait for completion)
 					await radicleService.share(absoluteRepoPath, undefined, recipientDid);
-					console.log(`✅ [ShareLink] Successfully published "${node.name}" to Radicle network`);
 				}
 			} catch (error) {
-				console.error('❌ [ShareLink] Failed to ensure Radicle ID:', error);
+				console.error('[ShareLink] Failed to ensure Radicle ID:', error);
 				throw error;
 			}
 
@@ -125,13 +113,13 @@ export class ShareLinkService {
 				// Fallback: UUID (if Radicle init somehow failed but didn't throw)
 				uri = URIHandlerService.generateSingleNodeLink(vaultName, nodeUuid, senderDid, senderName, senderEmail);
 				identifier = nodeUuid;
-				console.warn(`⚠️ [ShareLink] Using UUID fallback (Radicle init may have failed)`);
+				console.warn('[ShareLink] Using UUID fallback (Radicle init may have failed)');
 			}
 
 			return { uri, identifier };
 
 		} catch (error) {
-			console.error('Failed to generate share link:', error);
+			console.error('[ShareLink] Failed to generate share link:', error);
 			throw new Error(`Share link generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
@@ -153,11 +141,10 @@ export class ShareLinkService {
 
 			// Show success notification
 			if (recipientDid) {
-				new Notice(`📡 "${node.name}" shared with recipient! Link copied.`);
+				new Notice(`"${node.name}" shared with recipient! Link copied.`);
 			} else {
-				new Notice(`📋 Share link copied to clipboard!`);
+				new Notice(`Share link copied to clipboard!`);
 			}
-			console.log(`✅ [ShareLink] Link copied: ${uri}`);
 
 			// FIRE-AND-FORGET: Trigger background seeding for public discoverability
 			// This runs async without blocking the clipboard copy operation
@@ -168,12 +155,11 @@ export class ShareLinkService {
 				const path = require('path');
 				const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
 
-				console.log(`🌐 [ShareLink] Triggering background seeding for public network discoverability...`);
 				radicleService.seedInBackground(absoluteRepoPath, identifier);
 			}
 
 		} catch (error) {
-			console.error('Failed to copy share link:', error);
+			console.error('[ShareLink] Failed to copy share link:', error);
 			throw new Error(`Share link copy failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}

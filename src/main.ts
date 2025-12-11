@@ -53,7 +53,7 @@ import { initializeAudioStreamingService } from './features/dreamweaving/service
 import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
 import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
-import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
+import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -771,7 +771,7 @@ export default class InterBrainPlugin extends Plugin {
             'did:key:z6Mk... (optional)'
           );
 
-          const { ShareLinkService } = await import('./features/github-publishing/share-link-service');
+          const { ShareLinkService } = await import('./features/github-publishing/services/share-link-service');
           const shareLinkService = new ShareLinkService(this.app, this);
 
           // Pass recipientDid if provided (will be undefined if empty string)

@@ -1,7 +1,7 @@
 import { Plugin, Notice, Modal, TFile } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { githubService } from './service';
+import { githubService } from './services/github-service';
 import { serviceManager } from '../../core/services/service-manager';
 
 /**
@@ -149,7 +149,7 @@ export function registerGitHubCommands(
     const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', plugin.manifest.id);
     githubService.setPluginDir(pluginDir);
   } else {
-    console.warn('GitHubCommands: Could not determine vault path for plugin directory');
+    console.warn('[GitHubCommands] Could not determine vault path for plugin directory');
   }
 
   // Share DreamNode via GitHub - Creates public repo + GitHub Pages
@@ -162,7 +162,6 @@ export function registerGitHubCommands(
         const selectedNode = store.selectedNode;
 
         if (!selectedNode) {
-          console.log('GitHubCommands: No DreamNode selected for GitHub sharing');
           uiService.showError('Please select a DreamNode first');
           return;
         }
@@ -179,11 +178,8 @@ export function registerGitHubCommands(
         const path = require('path');
         const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
 
-        console.log(`GitHubCommands: Sharing DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
-
         // Check if GitHub CLI is available
         const availabilityCheck = await githubService.isAvailable();
-        console.log(`GitHubCommands: GitHub CLI availability: ${availabilityCheck.available}`);
 
         if (!availabilityCheck.available) {
           uiService.showError(availabilityCheck.error || 'GitHub CLI not available');
@@ -195,39 +191,20 @@ export function registerGitHubCommands(
         const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
 
         if (canvasFile instanceof TFile) {
-          console.log(`GitHubCommands: Syncing canvas submodules before confirmation...`);
-
           try {
             const submoduleManager = serviceManager.getSubmoduleManagerService();
 
-            if (!submoduleManager) {
-              console.warn('GitHubCommands: Submodule manager not available, skipping sync');
-            } else {
-              const syncResult = await submoduleManager.syncCanvasSubmodules(canvasPath);
-
-              if (syncResult.success) {
-                const newImports = syncResult.submodulesImported.filter((r: any) => r.success && !r.alreadyExisted);
-                if (newImports.length > 0) {
-                  console.log(`GitHubCommands: Synced ${newImports.length} new submodule(s)`);
-                } else {
-                  console.log(`GitHubCommands: All submodules already synced`);
-                }
-              } else {
-                console.warn(`GitHubCommands: Submodule sync failed: ${syncResult.error}`);
-                // Continue with share even if sync fails
-              }
+            if (submoduleManager) {
+              await submoduleManager.syncCanvasSubmodules(canvasPath);
             }
           } catch (syncError) {
-            console.error('GitHubCommands: Submodule sync error:', syncError);
+            console.error('[GitHubCommands] Submodule sync error:', syncError);
             // Continue with share even if sync fails
           }
-        } else {
-          console.log(`GitHubCommands: No DreamSong.canvas found, skipping submodule sync`);
         }
 
         // Step 2: Discover submodules and show confirmation (now with updated submodules)
         const submodules = await githubService.getSubmodules(fullRepoPath);
-        console.log(`GitHubCommands: Discovered ${submodules.length} submodule(s)`);
 
         const confirmed = await confirmRecursiveShare(
           plugin,
@@ -236,19 +213,15 @@ export function registerGitHubCommands(
         );
 
         if (!confirmed) {
-          console.log('GitHubCommands: User cancelled share operation');
           return;
         }
 
         // Show progress indicator
         const notice = new Notice('Sharing DreamNode to GitHub...', 0);
-        console.log(`GitHubCommands: Starting GitHub share workflow for ${selectedNode.name}...`);
 
         try {
           // Step 3: Complete share workflow
           const result = await githubService.shareDreamNode(fullRepoPath, selectedNode.id);
-
-          console.log(`GitHubCommands: Successfully shared to GitHub:`, result);
 
           // Update .udd file with GitHub URLs
           const fs = require('fs').promises;
@@ -264,7 +237,6 @@ export function registerGitHubCommands(
             }
 
             await fs.writeFile(uddPath, JSON.stringify(udd, null, 2));
-            console.log(`GitHubCommands: Updated .udd file with GitHub URLs`);
 
             // Commit .udd update using child_process directly
             const { exec } = require('child_process');
@@ -275,19 +247,13 @@ export function registerGitHubCommands(
               await execAsync('git add .udd && git commit -m "Update .udd with GitHub URLs" && git push github main', {
                 cwd: fullRepoPath
               });
-              console.log(`GitHubCommands: Pushed .udd update to GitHub`);
             } catch (gitError) {
-              console.error('GitHubCommands: Failed to push .udd update:', gitError);
+              console.error('[GitHubCommands] Failed to push .udd update:', gitError);
               // Non-critical - repo already created
             }
           } catch (error) {
-            console.error('GitHubCommands: Failed to update .udd file:', error);
+            console.error('[GitHubCommands] Failed to update .udd file:', error);
           }
-
-          // TODO: Build and deploy static DreamSong site
-          // This requires a different approach - cannot run Vite inside Obsidian
-          // For now, we'll skip this and implement it in a future iteration
-          console.log(`GitHubCommands: Static site building deferred - requires separate build process`);
 
           // Update in-memory store to reflect GitHub URLs immediately
           const store = useInterBrainStore.getState();
@@ -300,7 +266,6 @@ export function registerGitHubCommands(
               githubPagesUrl: result.pagesUrl || store.selectedNode.githubPagesUrl
             };
             store.setSelectedNode(updatedNode);
-            console.log(`GitHubCommands: Updated selectedNode with GitHub URLs`);
           }
 
           // Update dreamNodes store
@@ -315,7 +280,6 @@ export function registerGitHubCommands(
               }
             };
             store.updateDreamNode(selectedNode.id, updatedNodeData);
-            console.log(`GitHubCommands: Updated dreamNodes with GitHub URLs`);
           }
 
           // Copy Obsidian URI to clipboard
@@ -328,17 +292,16 @@ export function registerGitHubCommands(
             : `DreamNode shared!\n\nRepository: ${result.repoUrl}\n\nObsidian URI copied to clipboard.`;
 
           new Notice(successMessage, 10000);
-          console.log(`GitHubCommands: Share workflow complete with immediate UI update`);
 
         } catch (error) {
           notice.hide();
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`GitHubCommands: Share workflow failed:`, error);
+          console.error('[GitHubCommands] Share workflow failed:', error);
           uiService.showError(`Failed to share DreamNode: ${errorMessage}`);
         }
 
       } catch (error) {
-        console.error('GitHubCommands: Unexpected error:', error);
+        console.error('[GitHubCommands] Unexpected error:', error);
         uiService.showError('An unexpected error occurred');
       }
     }
@@ -354,7 +317,6 @@ export function registerGitHubCommands(
         const selectedNode = store.selectedNode;
 
         if (!selectedNode) {
-          console.log('GitHubCommands: No DreamNode selected for unpublishing');
           uiService.showError('Please select a DreamNode first');
           return;
         }
@@ -371,11 +333,8 @@ export function registerGitHubCommands(
         const path = require('path');
         const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
 
-        console.log(`GitHubCommands: Unpublishing DreamNode: ${selectedNode.name} at ${fullRepoPath}`);
-
         // Check if GitHub CLI is available
         const availabilityCheck = await githubService.isAvailable();
-        console.log(`GitHubCommands: GitHub CLI availability: ${availabilityCheck.available}`);
 
         if (!availabilityCheck.available) {
           uiService.showError(availabilityCheck.error || 'GitHub CLI not available');
@@ -409,7 +368,7 @@ export function registerGitHubCommands(
             }
           }
         } catch (error) {
-          console.error('GitHubCommands: Failed to read .udd file:', error);
+          console.error('[GitHubCommands] Failed to read .udd file:', error);
         }
 
         if (!isPublished) {
@@ -425,19 +384,15 @@ export function registerGitHubCommands(
         );
 
         if (!confirmed) {
-          console.log('GitHubCommands: User cancelled unpublish operation');
           return;
         }
 
         // Show progress indicator
         const notice = new Notice('Unpublishing DreamNode from GitHub...', 0);
-        console.log(`GitHubCommands: Starting GitHub unpublish workflow for ${selectedNode.name}...`);
 
         try {
           // Complete unpublish workflow
           await githubService.unpublishDreamNode(fullRepoPath, selectedNode.id, vaultPath);
-
-          console.log(`GitHubCommands: Successfully unpublished from GitHub`);
 
           // Update in-memory store to clear GitHub URLs immediately
           const store = useInterBrainStore.getState();
@@ -450,7 +405,6 @@ export function registerGitHubCommands(
               githubPagesUrl: undefined
             };
             store.setSelectedNode(updatedNode);
-            console.log(`GitHubCommands: Cleared selectedNode GitHub URLs`);
           }
 
           // Update dreamNodes store
@@ -465,23 +419,21 @@ export function registerGitHubCommands(
               }
             };
             store.updateDreamNode(selectedNode.id, updatedNodeData);
-            console.log(`GitHubCommands: Cleared dreamNodes GitHub URLs`);
           }
 
           // Success notification
           notice.hide();
           new Notice(`DreamNode unpublished from GitHub successfully!`, 5000);
-          console.log(`GitHubCommands: Unpublish workflow complete with immediate UI update`);
 
         } catch (error) {
           notice.hide();
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`GitHubCommands: Unpublish workflow failed:`, error);
+          console.error('[GitHubCommands] Unpublish workflow failed:', error);
           uiService.showError(`Failed to unpublish DreamNode: ${errorMessage}`);
         }
 
       } catch (error) {
-        console.error('GitHubCommands: Unexpected error:', error);
+        console.error('[GitHubCommands] Unexpected error:', error);
         uiService.showError('An unexpected error occurred');
       }
     }
@@ -564,28 +516,22 @@ export function registerGitHubCommands(
 
         // Show progress
         const notice = new Notice('Cloning DreamNode from GitHub...', 0);
-        console.log(`GitHubCommands: Cloning from ${githubUrl} to ${destinationPath}`);
 
         try {
           await githubService.clone(githubUrl, destinationPath);
 
           notice.hide();
           new Notice(`DreamNode cloned successfully!`, 5000);
-          console.log(`GitHubCommands: Clone complete`);
-
-          // Reload DreamNodes to show new clone
-          // Note: reloadDreamNodes method may need to be implemented
-          console.log(`GitHubCommands: Clone complete, DreamNode should appear after vault scan`);
 
         } catch (error) {
           notice.hide();
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`GitHubCommands: Clone failed:`, error);
+          console.error('[GitHubCommands] Clone failed:', error);
           uiService.showError(`Failed to clone: ${errorMessage}`);
         }
 
       } catch (error) {
-        console.error('GitHubCommands: Unexpected error:', error);
+        console.error('[GitHubCommands] Unexpected error:', error);
         uiService.showError('An unexpected error occurred');
       }
     }

@@ -2,7 +2,7 @@ import { App, Notice } from 'obsidian';
 import { DreamNode } from '../../dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
 import { URIHandlerService } from '../../uri-handler';
-import { ShareLinkService } from '../../github-publishing/share-link-service';
+import { ShareLinkService } from '../../github-publishing/services/share-link-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { getPDFGeneratorService } from './pdf-generator-service';
