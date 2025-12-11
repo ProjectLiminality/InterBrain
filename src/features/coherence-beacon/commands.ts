@@ -1,75 +1,33 @@
+/**
+ * Coherence Beacon Commands
+ *
+ * User-facing command for checking coherence beacons.
+ * Beacons signal supermodule relationships - when your DreamNode
+ * is referenced by another DreamNode.
+ */
+
 import { Notice } from 'obsidian';
 import type InterBrainPlugin from '../../main';
 import { CoherenceBeaconModal } from './ui/coherence-beacon-modal';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 
-// Removed unused imports
-
 export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
-  // Command: Push current DreamNode to network (Intelligent: Radicle → GitHub → Other)
-  plugin.addCommand({
-    id: 'push-to-network',
-    name: 'Push Current DreamNode to Network',
-    callback: async () => {
-      try {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-
-        if (!selectedNode) {
-          new Notice('No DreamNode selected');
-          return;
-        }
-
-        new Notice(`📤 Detecting available remote for ${selectedNode.name}...`);
-
-        // Use intelligent push that detects available remotes
-        const { GitSyncService } = await import('../social-resonance-filter/services/git-sync-service');
-        const gitSyncService = new GitSyncService(plugin.app);
-
-        // Get Radicle passphrase from settings for automatic node start
-        const passphrase = (plugin as any).settings?.radiclePassphrase || undefined;
-        const result = await gitSyncService.pushToAvailableRemote(selectedNode.repoPath, passphrase);
-
-        // Show success with remote type
-        const remoteTypeLabel =
-          result.type === 'dual' ? 'Radicle + GitHub' :
-          result.type === 'radicle' ? 'Radicle' :
-          result.type === 'github' ? 'GitHub' :
-          'remote';
-        new Notice(`✓ Pushed ${selectedNode.name} to ${remoteTypeLabel}!`);
-
-        console.log(`CoherenceBeaconCommands: Pushed to ${result.remote} (${result.type})`);
-
-      } catch (error) {
-        console.error('Error pushing to network:', error);
-        new Notice(`Failed to push: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-  });
-
   // Command: Check current DreamNode for coherence beacons
   plugin.addCommand({
     id: 'check-coherence-beacons',
-    name: 'Check Current DreamNode for Updates',
+    name: 'Check Current DreamNode for Coherence Beacons',
     callback: async () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+
+      if (!selectedNode) {
+        new Notice('No DreamNode selected');
+        return;
+      }
+
+      new Notice(`Checking ${selectedNode.name} for relationship beacons...`);
+
       try {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-
-        if (!selectedNode) {
-          new Notice('No DreamNode selected');
-          return;
-        }
-
-        // Special case: If this is the InterBrain DreamNode itself, pull from GitHub and rebuild
-        if (selectedNode.name === 'InterBrain') {
-          await pullAndRebuildInterBrain(plugin, selectedNode.repoPath);
-          return;
-        }
-
-        new Notice(`Checking ${selectedNode.name} for updates...`);
-
-        // Check for beacons
         const beacons = await plugin.coherenceBeaconService.checkForBeacons(selectedNode.repoPath);
 
         if (beacons.length === 0) {
@@ -88,9 +46,9 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
                 try {
                   new Notice(`Cloning ${beacon.title}...`);
                   await plugin.coherenceBeaconService.acceptBeacon(selectedNode.repoPath, beacon);
-                  new Notice(`Successfully cloned ${beacon.title}! 🌟`);
+                  new Notice(`Successfully cloned ${beacon.title}!`);
                 } catch (error) {
-                  console.error('Failed to accept beacon:', error);
+                  console.error('[CoherenceBeacon] Failed to accept beacon:', error);
                   new Notice(`Failed to clone ${beacon.title}: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 } finally {
                   resolve();
@@ -107,45 +65,10 @@ export function registerCoherenceBeaconCommands(plugin: InterBrainPlugin) {
             modal.open();
           });
         }
-
       } catch (error) {
-        console.error('Error checking for beacons:', error);
-        new Notice('Failed to check for updates');
+        console.error('[CoherenceBeacon] Check failed:', error);
+        new Notice('Failed to check for relationship beacons');
       }
     }
   });
-}
-
-/**
- * Pull latest changes from GitHub and rebuild the InterBrain plugin
- */
-async function pullAndRebuildInterBrain(plugin: InterBrainPlugin, repoPath: string): Promise<void> {
-  new Notice('Pulling latest InterBrain updates from GitHub...');
-
-  try {
-    // Use GitSyncService for pull, GitOperationsService for build
-    const { GitSyncService } = await import('../social-resonance-filter/services/git-sync-service');
-    const { GitOperationsService } = await import('../dreamnode/utils/git-operations');
-    const gitSyncService = new GitSyncService(plugin.app);
-    const gitOpsService = new GitOperationsService(plugin.app);
-
-    // Pull updates
-    await gitSyncService.pullUpdates(repoPath);
-
-    const buildNotice = new Notice('Building InterBrain plugin...', 0);
-
-    // Build the plugin
-    await gitOpsService.buildDreamNode(repoPath);
-
-    buildNotice.hide();
-    new Notice('✅ InterBrain updated and rebuilt! Reload plugin to see changes.');
-
-    // Show helpful instruction
-    setTimeout(() => {
-      new Notice('💡 Use Plugin Reloader hotkey to reload InterBrain');
-    }, 1000);
-  } catch (error) {
-    console.error('Pull and rebuild error:', error);
-    new Notice(`❌ Failed to update InterBrain: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
 }

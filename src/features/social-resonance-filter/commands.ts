@@ -350,4 +350,43 @@ export function registerRadicleCommands(
       }
     }
   });
+
+  // Push current DreamNode to network (Intelligent: Radicle → GitHub → Other)
+  plugin.addCommand({
+    id: 'push-to-network',
+    name: 'Push Current DreamNode to Network',
+    callback: async () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+
+      if (!selectedNode) {
+        new Notice('No DreamNode selected');
+        return;
+      }
+
+      new Notice(`Detecting available remote for ${selectedNode.name}...`);
+
+      try {
+        const { GitSyncService } = await import('./services/git-sync-service');
+        const gitSyncService = new GitSyncService(plugin.app);
+
+        // Get Radicle passphrase from settings for automatic node start
+        const passphrase = await passphraseManager.getPassphrase();
+        if (passphrase === null) return;
+
+        const result = await gitSyncService.pushToAvailableRemote(selectedNode.repoPath, passphrase || undefined);
+
+        // Show success with remote type
+        const remoteTypeLabel =
+          result.type === 'dual' ? 'Radicle + GitHub' :
+          result.type === 'radicle' ? 'Radicle' :
+          result.type === 'github' ? 'GitHub' :
+          'remote';
+        new Notice(`Pushed ${selectedNode.name} to ${remoteTypeLabel}!`);
+      } catch (error) {
+        console.error('[RadicleCommands] Push failed:', error);
+        new Notice(`Failed to push: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  });
 }

@@ -1,84 +1,96 @@
-# Coherence Beacon Feature
+# Coherence Beacon
 
-**Purpose**: Detects and manages "coherence beacons" - metadata in git commits signaling when one DreamNode becomes a submodule of another, enabling decentralized discovery of who is using your ideas.
+**Purpose**: Detects and handles relationship discovery via commit metadata - when your DreamNode becomes a submodule of another DreamNode, the beacon signals this so you can clone the parent.
 
-## Key Files
+## Core Concept
 
-- **`service.ts`** (695 lines) - Core beacon logic: detects `COHERENCE_BEACON` metadata in git commits, clones supermodules from Radicle network, manages atomic accept/reject operations with full submodule recursion
-- **`commands.ts`** (152 lines) - Obsidian command registration: "Push to Network" (intelligent remote detection), "Check for Updates" (beacon discovery + modal flow), InterBrain self-update handler
-- **`ui/coherence-beacon-modal.ts`** (98 lines) - User decision modal: presents beacon info, explains clone consequences, handles accept/reject callbacks
-- **`index.ts`** (3 lines) - Public exports
+A "coherence beacon" is metadata embedded in git commits that signals supermodule relationships:
+
+```
+COHERENCE_BEACON: {"type":"supermodule","radicleId":"rad:z123...","title":"ParentNode"}
+```
+
+When a peer adds your DreamNode as a submodule in their project, they include this beacon in the commit. When you receive this commit (via dreamnode-updater), the coherence beacon system:
+
+1. **Detects** the beacon metadata in the commit
+2. **Presents** a modal explaining the relationship and consequences
+3. **Clones** the parent DreamNode (and nested submodules) if accepted
+4. **Establishes** peer relationships in the liminal web
+5. **Merges** the beacon commit to complete the relationship
+
+## Directory Structure
+
+```
+coherence-beacon/
+├── ui/
+│   └── coherence-beacon-modal.ts  # Accept/reject decision modal
+├── service.ts                      # Beacon detection, parsing, acceptance
+├── commands.ts                     # Check for beacons command
+├── index.ts                        # Barrel export
+└── README.md
+```
+
+## Integration Flow
+
+```
+social-resonance-filter (git fetch from peers)
+        ↓
+dreamnode-updater (preview/summarize commits)
+        ↓ hands off beacon commits
+coherence-beacon (this feature)
+        ↓ if accepted, uses
+uri-handler (clone from Radicle)
+        ↓ uses
+dreamnode (establish relationships)
+```
 
 ## Main Exports
 
 ```typescript
+// Service
+export { CoherenceBeaconService, type CoherenceBeacon } from './service';
+
+// Commands
 export { registerCoherenceBeaconCommands } from './commands';
-export { CoherenceBeaconService } from './service';
+
+// UI
+export { CoherenceBeaconModal } from './ui/coherence-beacon-modal';
 ```
 
-## Architecture Notes
+## Entry Points
 
-**Service Layer**:
-- Parses git log for `COHERENCE_BEACON: {"type":"supermodule","radicleId":"...","title":"..."}` JSON in commit messages
-- Uses `rad sync --fetch` for Radicle network synchronization
-- Implements atomic beacon acceptance: ALL clones succeed before merging beacon commit (retryable on failure)
-- Recursive submodule cloning: both nested (git submodules) and sovereign (vault root clones)
-- Bidirectional relationship tracking: establishes liminal-web connections between cloned nodes and source peer's Dreamer node
-- Rejection tracking: stores rejected beacons in `.git/interbrain-rejected-beacons.json` to prevent re-prompting
-
-**Command Integration**:
-- `push-to-network`: Uses `GitSyncService` to intelligently push to available remotes (Radicle, GitHub, or both)
-- `check-coherence-beacons`: Fetches beacons, presents modal per beacon, handles acceptance workflow
-- Special case: `InterBrain` DreamNode updates via GitHub pull + rebuild
-
-**UX Flow**:
-1. User runs "Check for Updates" on selected DreamNode
-2. Service fetches from Radicle, parses commits for beacons
-3. For each unrejected beacon, modal presents supermodule info
-4. Accept: Clone supermodule + all nested submodules + establish peer relationships + merge beacon commit
-5. Reject: Record rejection locally, never show again
-
-## Issues & Flags
-
-- **Heavy Node.js dependencies**: Uses `child_process.exec` for all git/rad operations (no git library abstraction)
-- **Long service file**: 695 lines could be split into smaller modules (e.g., `beacon-parser.ts`, `submodule-cloner.ts`, `peer-relationships.ts`)
-- **Error handling**: Network failures during accept show helpful retry messages but leave partial clones (acceptable by design)
-- **PATH manipulation**: Hardcoded Radicle binary path detection (`~/.radicle/bin/rad`, `/usr/local/bin/rad`) - could be configuration
-- **Git protocol workaround**: Sets `GIT_ALLOW_PROTOCOL=file:rad` to enable rad:// URLs in submodules (security consideration)
+| Entry Point | Caller | Description |
+|-------------|--------|-------------|
+| `checkCommitsForBeacons()` | dreamnode-updater | Primary: parses pulled commits for beacons |
+| `checkForBeacons()` | check-coherence-beacons command | Manual: fetches + parses for beacons |
 
 ## Responsibility Boundaries
 
 ### What This Feature Owns
-- **Beacon detection**: Parsing `COHERENCE_BEACON` metadata in git commits
-- **Beacon acceptance**: Clone supermodules, establish relationships
-- **Beacon rejection**: Track rejected beacons to prevent re-prompting
-- **User decision modal**: Present beacon info, accept/reject UI
+- Beacon detection and parsing (commit metadata)
+- Modal UI for accept/reject decisions
+- Beacon acceptance orchestration (clone → relationships → merge)
+- Rejection tracking (local .git file)
 
 ### What This Feature Does NOT Own
-- **Network operations** → `social-resonance-filter` (fetch, pull, push)
-- **Update preview UI** → `dreamnode-updater` (summaries, preview modal)
-- **Radicle CLI** → `social-resonance-filter` (P2P plumbing)
+- Network operations (fetch/push) → `social-resonance-filter`
+- Update preview/summary UI → `dreamnode-updater`
+- Clone operations → `uri-handler` → `social-resonance-filter`
+- Relationship persistence → `dreamnode`
 
-### Integration Point
+## Atomic Acceptance
 
-Called BY `dreamnode-updater` after applying updates:
-```typescript
-// In dreamnode-updater/commands.ts after pullUpdates:
-const beacons = await coherenceBeaconService.checkCommitsForBeacons(
-  selectedNode.repoPath,
-  updateStatus.commits
-);
-if (beacons.length > 0) {
-  // Present CoherenceBeaconModal for each beacon
-}
-```
+Beacon acceptance is atomic - the commit is only merged if all clones succeed:
 
-## Dependencies
+1. Clone supermodule DreamNode
+2. Initialize nested submodules (recursive)
+3. Establish peer relationships
+4. Cherry-pick beacon commit (only after success)
 
-- `GitSyncService` (social-resonance-filter) - Push/pull operations
-- `GitDreamNodeService` (dreamnode) - Relationship management via liminal-web.json
-- `GitOperationsService` (dreamnode) - Build operations for InterBrain self-update
-- `UDDService` (dreamnode) - Reading/writing .udd metadata
-- `RadicleService` (social-resonance-filter) - Radicle network integration
-- `VaultService` (core) - Vault path resolution
-- `URIHandlerService` (uri-handler) - Radicle cloning via `rad://` URLs
+If any step fails, the beacon remains unmerged and can be retried later.
+
+## Dependents
+
+Features that call into this one:
+- `dreamnode-updater` - calls `checkCommitsForBeacons()` after pulling
+- `main.ts` - registers commands and creates service instance
