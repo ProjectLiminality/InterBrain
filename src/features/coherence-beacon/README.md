@@ -48,7 +48,7 @@ dreamnode (establish relationships)
 
 ```typescript
 // Service
-export { CoherenceBeaconService, type CoherenceBeacon } from './service';
+export { CoherenceBeaconService, type CoherenceBeacon, type BeaconRejectionInfo } from './service';
 
 // Commands
 export { registerCoherenceBeaconCommands } from './commands';
@@ -70,13 +70,16 @@ export { CoherenceBeaconModal } from './ui/coherence-beacon-modal';
 - Beacon detection and parsing (commit metadata)
 - Modal UI for accept/reject decisions
 - Beacon acceptance orchestration (clone → relationships → merge)
-- Rejection tracking (local .git file)
+- Rejection info returned to caller (future: unified tracking in dreamnode-updater)
 
 ### What This Feature Does NOT Own
 - Network operations (fetch/push) → `social-resonance-filter`
 - Update preview/summary UI → `dreamnode-updater`
 - Clone operations → `uri-handler` → `social-resonance-filter`
 - Relationship persistence → `dreamnode`
+- Gitmodules parsing → `dreamnode/utils/vault-scanner`
+- Dreamer lookup → `dreamnode/utils/vault-scanner`
+- Rejection persistence → caller's responsibility (dreamnode-updater)
 
 ## Atomic Acceptance
 

@@ -245,3 +245,93 @@ export async function calculateFileHash(filePath: string): Promise<string | unde
     return undefined;
   }
 }
+
+// ============================================================================
+// GITMODULES PARSING
+// ============================================================================
+
+/**
+ * Parsed submodule entry from .gitmodules
+ */
+export interface ParsedSubmodule {
+  name: string;
+  path: string;
+  url: string;
+}
+
+/**
+ * Parse .gitmodules file content into structured data
+ */
+export function parseGitmodulesContent(content: string): ParsedSubmodule[] {
+  const submodules: ParsedSubmodule[] = [];
+  const pattern = /\[submodule "([^"]+)"\]\s+path\s*=\s*([^\n]+)\s+url\s*=\s*([^\n]+)/g;
+
+  let match;
+  while ((match = pattern.exec(content)) !== null) {
+    submodules.push({
+      name: match[1].trim(),
+      path: match[2].trim(),
+      url: match[3].trim()
+    });
+  }
+
+  return submodules;
+}
+
+/**
+ * Read and parse .gitmodules from a DreamNode directory
+ * Returns empty array if no .gitmodules exists
+ */
+export async function readGitmodules(dirPath: string): Promise<ParsedSubmodule[]> {
+  try {
+    const gitmodulesPath = path.join(dirPath, '.gitmodules');
+    const content = await fsPromises.readFile(gitmodulesPath, 'utf-8');
+    return parseGitmodulesContent(content);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get just the submodule names from a DreamNode directory
+ */
+export async function getSubmoduleNames(dirPath: string): Promise<string[]> {
+  const submodules = await readGitmodules(dirPath);
+  return submodules.map(s => s.name);
+}
+
+// ============================================================================
+// DREAMER LOOKUP
+// ============================================================================
+
+/**
+ * Result of finding a Dreamer node
+ */
+export interface DreamerLookupResult {
+  dirPath: string;
+  dirName: string;
+  uuid: string;
+}
+
+/**
+ * Find a Dreamer node by its DID in the vault
+ * Returns null if no matching Dreamer found
+ */
+export async function findDreamerByDID(
+  vaultPath: string,
+  did: string
+): Promise<DreamerLookupResult | null> {
+  const { discovered } = await discoverDreamNodes(vaultPath);
+
+  for (const node of discovered) {
+    if (node.udd.type === 'dreamer' && node.udd.did === did) {
+      return {
+        dirPath: node.dirPath,
+        dirName: node.dirName,
+        uuid: node.udd.uuid
+      };
+    }
+  }
+
+  return null;
+}

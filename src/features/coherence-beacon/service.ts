@@ -6,6 +6,10 @@
  *
  * Primary entry point: checkCommitsForBeacons() - called by dreamnode-updater
  * after pulling commits, which hands off beacon commits for user decision.
+ *
+ * REJECTION TRACKING: Currently placeholder - returns rejection info to caller.
+ * Future: Unified commit rejection system in dreamnode-updater will handle
+ * tracking rejected commits (both regular and beacon commits) in one place.
  */
 
 const { exec } = require('child_process');
@@ -17,6 +21,13 @@ import { RadicleService } from '../social-resonance-filter/services/radicle-serv
 import { VaultService } from '../../core/services/vault-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { getURIHandlerService } from '../uri-handler';
+import {
+  findDreamerByDID,
+  getSubmoduleNames,
+  readGitmodules,
+  fileExists
+} from '../dreamnode/utils/vault-scanner';
+import { UDDService } from '../dreamnode/services/udd-service';
 
 export interface CoherenceBeacon {
   type: 'supermodule';
@@ -26,14 +37,24 @@ export interface CoherenceBeacon {
   commitMessage: string;
 }
 
+/**
+ * Result of beacon rejection - returned to caller for tracking
+ */
+export interface BeaconRejectionInfo {
+  commitHash: string;
+  radicleId: string;
+  title: string;
+  rejectedAt: string;
+}
+
 export class CoherenceBeaconService {
   private vaultPath: string = '';
   private gitDreamNodeService: GitDreamNodeService;
 
   constructor(
     private app: App,
-    private vaultService: VaultService,
-    private radicleService: RadicleService,
+    private _vaultService: VaultService,
+    private _radicleService: RadicleService,
     plugin: Plugin
   ) {
     this.initializeVaultPath(app);
@@ -87,8 +108,7 @@ export class CoherenceBeaconService {
       }
 
       // Parse commits for beacons
-      const beacons = this.parseCommitsForBeacons(logOutput);
-      return this.filterRejectedBeacons(beacons, fullPath);
+      return this.parseCommitsForBeacons(logOutput);
     } catch (error) {
       console.error('[CoherenceBeacon] Error checking for beacons:', error);
       throw error;
@@ -100,12 +120,9 @@ export class CoherenceBeaconService {
    * Primary entry point - called by dreamnode-updater after pulling commits.
    */
   async checkCommitsForBeacons(
-    dreamNodePath: string,
+    _dreamNodePath: string,
     commits: Array<{ hash: string; subject: string; body: string }>
   ): Promise<CoherenceBeacon[]> {
-    const path = require('path');
-    const fullPath = path.join(this.vaultPath, dreamNodePath);
-
     const beacons: CoherenceBeacon[] = [];
     const BEACON_REGEX = /COHERENCE_BEACON:\s*({.*?})/g;
 
@@ -132,7 +149,7 @@ export class CoherenceBeaconService {
       }
     }
 
-    return this.filterRejectedBeacons(beacons, fullPath);
+    return beacons;
   }
 
   /**
@@ -148,14 +165,11 @@ export class CoherenceBeaconService {
       const { stdout: currentCommitMsg } = await execAsync('git log -1 --format="%b"', { cwd: fullPath });
       if (currentCommitMsg.includes(`COHERENCE_BEACON: {"type":"supermodule","radicleId":"${beacon.radicleId}"`)) {
         // Verify DreamNode exists
-        const fs = require('fs').promises;
         const dreamNodeUddPath = path.join(this.vaultPath, beacon.title, '.udd');
-        try {
-          await fs.access(dreamNodeUddPath);
+        if (await fileExists(dreamNodeUddPath)) {
           return; // Already fully applied
-        } catch {
-          // Beacon commit exists but DreamNode not cloned - continue
         }
+        // Beacon commit exists but DreamNode not cloned - continue
       }
 
       // PHASE 1: Clone supermodule
@@ -175,10 +189,10 @@ export class CoherenceBeaconService {
 
       const clonedNodePath = path.join(this.vaultPath, beacon.title);
 
-      // PHASE 2: Initialize submodules
+      // PHASE 2: Initialize submodules (using dreamnode utilities)
       await this.initializeSubmodules(clonedNodePath);
 
-      // PHASE 3: Establish peer relationships
+      // PHASE 3: Establish peer relationships (using dreamnode utilities)
       const sourcePeerDID = await this.getSourcePeerDID(fullPath);
       if (sourcePeerDID) {
         await this.establishPeerRelationships(beacon.title, sourcePeerDID);
@@ -201,29 +215,24 @@ export class CoherenceBeaconService {
   }
 
   /**
-   * Reject a beacon: record rejection to prevent re-prompting.
+   * Reject a beacon: returns rejection info for caller to track.
+   *
+   * NOTE: This is a placeholder for a future unified rejection system.
+   * Currently returns rejection info that the caller (dreamnode-updater)
+   * should track. In the future, dreamnode-updater will maintain a
+   * unified system for tracking all rejected commits.
+   *
+   * @returns Rejection info for the caller to persist/track
    */
-  async rejectBeacon(dreamNodePath: string, beacon: CoherenceBeacon): Promise<void> {
-    const path = require('path');
-    const fs = require('fs').promises;
-    const fullPath = path.join(this.vaultPath, dreamNodePath);
-    const rejectionFile = path.join(fullPath, '.git', 'interbrain-rejected-beacons.json');
-
-    try {
-      let rejections: Record<string, string> = {};
-      try {
-        const content = await fs.readFile(rejectionFile, 'utf-8');
-        rejections = JSON.parse(content);
-      } catch {
-        // File doesn't exist yet
-      }
-
-      rejections[beacon.commitHash] = new Date().toISOString();
-      await fs.writeFile(rejectionFile, JSON.stringify(rejections, null, 2), 'utf-8');
-    } catch (error) {
-      console.error('[CoherenceBeacon] Failed to record rejection:', error);
-      // Don't fail - rejection tracking is not critical
-    }
+  async rejectBeacon(_dreamNodePath: string, beacon: CoherenceBeacon): Promise<BeaconRejectionInfo> {
+    // Return rejection info - caller is responsible for tracking
+    // Future: dreamnode-updater will handle unified commit rejection tracking
+    return {
+      commitHash: beacon.commitHash,
+      radicleId: beacon.radicleId,
+      title: beacon.title,
+      rejectedAt: new Date().toISOString()
+    };
   }
 
   // ===== Private Helper Methods =====
@@ -231,7 +240,6 @@ export class CoherenceBeaconService {
   private async getRadCommand(): Promise<string> {
     const os = require('os');
     const path = require('path');
-    const fs = require('fs').promises;
 
     const homeDir = os.homedir();
     const possiblePaths = [
@@ -241,11 +249,8 @@ export class CoherenceBeaconService {
     ];
 
     for (const radPath of possiblePaths) {
-      try {
-        await fs.access(radPath);
+      if (await fileExists(radPath)) {
         return radPath;
-      } catch {
-        continue;
       }
     }
     return 'rad';
@@ -281,53 +286,41 @@ export class CoherenceBeaconService {
     return beacons;
   }
 
-  private async filterRejectedBeacons(beacons: CoherenceBeacon[], fullPath: string): Promise<CoherenceBeacon[]> {
-    const path = require('path');
-    const fs = require('fs').promises;
-    const rejectionFile = path.join(fullPath, '.git', 'interbrain-rejected-beacons.json');
-
-    try {
-      const content = await fs.readFile(rejectionFile, 'utf-8');
-      const rejections: Record<string, string> = JSON.parse(content);
-      return beacons.filter(beacon => !(beacon.commitHash in rejections));
-    } catch {
-      return beacons;
-    }
-  }
-
+  /**
+   * Initialize submodules for a cloned DreamNode.
+   * Uses dreamnode/utils/vault-scanner for gitmodules parsing.
+   */
   private async initializeSubmodules(clonedNodePath: string): Promise<void> {
     const path = require('path');
-    const fs = require('fs').promises;
-    const gitmodulesPath = path.join(clonedNodePath, '.gitmodules');
 
-    try {
-      await fs.access(gitmodulesPath);
-    } catch {
+    // Use dreamnode utility to parse gitmodules
+    const submodules = await readGitmodules(clonedNodePath);
+
+    if (submodules.length === 0) {
       return; // No submodules
     }
 
-    // Parse .gitmodules for submodules needing sovereign clones
-    const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
-    const submodulePattern = /\[submodule "([^"]+)"\]\s+path = ([^\n]+)\s+url = rad:\/\/([^\n]+)/g;
-    let match;
+    // Clone any missing sovereign copies (Radicle submodules only)
+    for (const submodule of submodules) {
+      if (!submodule.url.startsWith('rad://')) {
+        continue; // Skip non-Radicle submodules
+      }
 
-    while ((match = submodulePattern.exec(gitmodulesContent)) !== null) {
-      const submoduleName = match[1];
-      const radicleId = `rad:${match[3].trim()}`;
+      const radicleId = `rad:${submodule.url.replace('rad://', '')}`;
 
       // Check if sovereign exists at vault root
-      const vaultRootPath = path.join(this.vaultPath, submoduleName);
-      try {
-        await fs.access(path.join(vaultRootPath, '.git'));
-      } catch {
+      const vaultRootPath = path.join(this.vaultPath, submodule.name);
+      const gitPath = path.join(vaultRootPath, '.git');
+
+      if (!(await fileExists(gitPath))) {
         // Clone missing sovereign
         try {
           const uriHandler = getURIHandlerService();
           await uriHandler.cloneFromRadicle(radicleId, false);
           // Recursively handle nested submodules
-          await this.initializeSubmodules(path.join(this.vaultPath, submoduleName));
+          await this.initializeSubmodules(path.join(this.vaultPath, submodule.name));
         } catch (cloneError) {
-          console.error(`[CoherenceBeacon] Failed to clone submodule ${submoduleName}:`, cloneError);
+          console.error(`[CoherenceBeacon] Failed to clone submodule ${submodule.name}:`, cloneError);
         }
       }
     }
@@ -365,59 +358,36 @@ export class CoherenceBeaconService {
     }
   }
 
+  /**
+   * Establish peer relationships between cloned nodes and source peer's Dreamer.
+   * Uses dreamnode utilities for vault scanning and gitmodules parsing.
+   */
   private async establishPeerRelationships(rootNodeName: string, peerDID: string): Promise<void> {
+    const path = require('path');
+
     try {
-      const { UDDService } = await import('../dreamnode/services/udd-service');
-      const path = require('path');
-      const fs = require('fs').promises;
+      // Use dreamnode utility to find Dreamer by DID
+      const dreamer = await findDreamerByDID(this.vaultPath, peerDID);
 
-      // Find Dreamer node for this peer
-      const vaultEntries = await fs.readdir(this.vaultPath, { withFileTypes: true });
-      let dreamerNodePath: string | null = null;
-      let dreamerUUID: string | null = null;
-
-      for (const entry of vaultEntries) {
-        if (!entry.isDirectory()) continue;
-        const nodePath = path.join(this.vaultPath, entry.name);
-        try {
-          const udd = await UDDService.readUDD(nodePath);
-          if (udd.type === 'dreamer' && udd.did === peerDID) {
-            dreamerNodePath = nodePath;
-            dreamerUUID = udd.uuid;
-            break;
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      if (!dreamerNodePath || !dreamerUUID) {
-        return; // No Dreamer node found
+      if (!dreamer) {
+        return; // No Dreamer node found for this peer
       }
 
       // Collect all nodes to relate (root + submodules)
       const nodesToRelate: string[] = [rootNodeName];
       const rootNodePath = path.join(this.vaultPath, rootNodeName);
-      const gitmodulesPath = path.join(rootNodePath, '.gitmodules');
 
-      try {
-        const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
-        const submodulePattern = /\[submodule "([^"]+)"\]/g;
-        let match;
-        while ((match = submodulePattern.exec(gitmodulesContent)) !== null) {
-          nodesToRelate.push(match[1]);
-        }
-      } catch {
-        // No submodules
-      }
+      // Use dreamnode utility to get submodule names
+      const submoduleNames = await getSubmoduleNames(rootNodePath);
+      nodesToRelate.push(...submoduleNames);
 
-      // Add relationships
+      // Add relationships using GitDreamNodeService
       for (const nodeName of nodesToRelate) {
         const nodePath = path.join(this.vaultPath, nodeName);
         try {
           const udd = await UDDService.readUDD(nodePath);
           if (udd.uuid) {
-            await this.gitDreamNodeService.addRelationship(udd.uuid, dreamerUUID);
+            await this.gitDreamNodeService.addRelationship(udd.uuid, dreamer.uuid);
           }
         } catch {
           // Skip nodes without valid UDD
