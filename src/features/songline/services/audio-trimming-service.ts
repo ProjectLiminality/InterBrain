@@ -108,11 +108,6 @@ export class AudioTrimmingService {
 
     const duration = endTime - startTime;
 
-    console.log(`[AudioTrim] Trimming audio:`);
-    console.log(`  Source: ${sourceAudioPath}`);
-    console.log(`  Output: ${outputAudioPath}`);
-    console.log(`  Time range: ${startTime}s -> ${endTime}s (duration: ${duration}s)`);
-
     // Use ffmpeg to extract audio segment
     // -i: input file
     // -ss: start time (in seconds)
@@ -192,17 +187,8 @@ export class AudioTrimmingService {
    * Check if ffmpeg is available on the system
    */
   async checkFfmpegAvailable(): Promise<boolean> {
-    console.log('[AudioTrim] Checking for ffmpeg availability...');
     const ffmpegPath = await this.findFfmpegPath();
-    const available = ffmpegPath !== null;
-
-    if (available) {
-      console.log(`[AudioTrim] ✓ ffmpeg available at: ${ffmpegPath}`);
-    } else {
-      console.log('[AudioTrim] ✗ ffmpeg not found');
-    }
-
-    return available;
+    return ffmpegPath !== null;
   }
 }
 

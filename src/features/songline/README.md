@@ -6,24 +6,35 @@
 
 Instead of static text definitions, Songlines preserve authentic voice and context by extracting audio clips from conversations that define/describe DreamNodes. Each "perspective" is a sovereign audio clip stored directly in the DreamNode's repository.
 
-## Key Files
+## Directory Structure
+
+```
+songline/
+├── services/                           # Service layer
+│   ├── perspective-service.ts          # Manages perspectives.json files
+│   ├── conversations-service.ts        # Manages conversation history
+│   ├── audio-recording-service.ts      # Recording path coordination
+│   └── audio-trimming-service.ts       # ffmpeg integration for clip extraction
+├── components/                         # React components
+│   ├── PerspectivesSection.tsx         # Perspectives collection UI
+│   ├── AudioClipPlayer.tsx             # Individual clip playback
+│   └── ConversationsSection.tsx        # Full conversation history UI
+├── index.ts                            # Barrel export
+└── README.md                           # This file
+```
+
+## Main Exports
 
 ### Services
-
-- **`services/perspective-service.ts`** - Manages `perspectives.json` files (read/write perspectives, UUID generation, timestamp conversion)
-- **`services/conversations-service.ts`** - Manages full conversation recordings and transcripts (loads from `conversations/` directories with caching)
-- **`services/audio-recording-service.ts`** - Coordinates recording during conversations (generates output paths, ensures directories exist)
-- **`services/audio-trimming-service.ts`** - Extracts sovereign clips from full conversations using ffmpeg (temporal slicing, not masking)
+- `PerspectiveService` - Read/write perspectives, timestamp conversion utilities
+- `ConversationsService` - Load conversations and transcripts with caching
+- `AudioRecordingService` - Path generation and directory management for recordings
+- `AudioTrimmingService` - ffmpeg wrapper for temporal slicing
 
 ### Components
-
-- **`components/PerspectivesSection.tsx`** - UI section displaying collection of perspectives for a DreamNode
-- **`components/AudioClipPlayer.tsx`** - Playback UI for individual sovereign clips (play/pause, transcript toggle)
-- **`components/ConversationsSection.tsx`** - UI section displaying full conversation history with lazy loading
-
-### Exports
-
-- **`index.ts`** - Central export file for all services and components
+- `PerspectivesSection` - Displays collection of perspective audio clips
+- `AudioClipPlayer` - Playback UI with transcript toggle
+- `ConversationsSection` - Full conversation history with lazy loading
 
 ## Data Structure
 

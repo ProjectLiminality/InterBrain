@@ -53,18 +53,15 @@ export class ConversationsServiceImpl implements ConversationsService {
 			// Clear transcript cache entries for this node
 			const nodeCacheKeys = Array.from(this.transcriptsCache.keys()).filter(key => key.startsWith(nodeId));
 			nodeCacheKeys.forEach(key => this.transcriptsCache.delete(key));
-			console.log(`[Conversations] Cleared cache for node: ${nodeId}`);
 		} else {
 			this.conversationsCache.clear();
 			this.transcriptsCache.clear();
-			console.log('[Conversations] Cleared entire cache');
 		}
 	}
 
 	async loadConversations(dreamerNode: DreamNode): Promise<Conversation[]> {
 		// Check cache first
 		if (this.conversationsCache.has(dreamerNode.id)) {
-			console.log(`[Conversations] Cache hit for ${dreamerNode.name}`);
 			return this.conversationsCache.get(dreamerNode.id)!;
 		}
 
@@ -159,7 +156,6 @@ export class ConversationsServiceImpl implements ConversationsService {
 
 			// Cache the result
 			this.conversationsCache.set(dreamerNode.id, convos);
-			console.log(`[Conversations] Loaded and cached ${convos.length} conversations for ${dreamerNode.name}`);
 
 			return convos;
 		} catch (error) {
@@ -173,7 +169,6 @@ export class ConversationsServiceImpl implements ConversationsService {
 	async loadTranscript(transcriptPath: string): Promise<string> {
 		// Check cache first
 		if (this.transcriptsCache.has(transcriptPath)) {
-			console.log(`[Conversations] Transcript cache hit for ${transcriptPath}`);
 			return this.transcriptsCache.get(transcriptPath)!;
 		}
 
@@ -192,7 +187,6 @@ export class ConversationsServiceImpl implements ConversationsService {
 
 			// Cache the result
 			this.transcriptsCache.set(transcriptPath, conversationText);
-			console.log(`[Conversations] Loaded and cached transcript: ${transcriptPath}`);
 
 			return conversationText;
 		} catch (error) {

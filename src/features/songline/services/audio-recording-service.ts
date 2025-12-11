@@ -77,7 +77,6 @@ export class AudioRecordingServiceImpl implements AudioRecordingService {
 		} catch {
 			// Create directory
 			await fs.mkdir(conversationsDir, { recursive: true });
-			console.log(`[AudioRecording] Created conversations directory: ${conversationsDir}`);
 		}
 	}
 

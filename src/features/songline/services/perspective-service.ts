@@ -74,10 +74,8 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 	clearCache(nodeId?: string): void {
 		if (nodeId) {
 			this.cache.delete(nodeId);
-			console.log(`[Perspective] Cleared cache for node: ${nodeId}`);
 		} else {
 			this.cache.clear();
-			console.log('[Perspective] Cleared entire cache');
 		}
 	}
 
@@ -134,7 +132,6 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 	async loadPerspectives(dreamNode: DreamNode): Promise<Perspective[]> {
 		// Check cache first
 		if (this.cache.has(dreamNode.id)) {
-			console.log(`[Perspective] Cache hit for ${dreamNode.name}`);
 			return this.cache.get(dreamNode.id)!;
 		}
 
@@ -153,7 +150,6 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 
 			// Cache the result
 			this.cache.set(dreamNode.id, perspectives);
-			console.log(`[Perspective] Loaded and cached ${perspectives.length} perspectives for ${dreamNode.name}`);
 
 			return perspectives;
 		} catch (error: any) {
