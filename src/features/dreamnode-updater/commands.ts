@@ -1,226 +1,24 @@
 /**
  * Update Management Commands
  *
- * Commands for checking, previewing, and applying updates to DreamNodes
+ * User-facing commands for checking, previewing, and applying updates to DreamNodes.
+ * This is the UI/UX layer - actual sync logic lives in social-resonance-filter.
  */
 
 import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
-import { getUpdateSummaryService, initializeUpdateSummaryService } from './update-summary-service';
+import { getUpdateSummaryService, initializeUpdateSummaryService } from './services/update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { GitSyncService } from '../social-resonance-filter/services/git-sync-service';
+import { GitSyncService, type CommitInfo } from '../social-resonance-filter/services/git-sync-service';
+import {
+  type SubmoduleUpdate,
+  checkSubmoduleUpdatesFromNetwork,
+  updateSubmodulesFromStandalone
+} from '../social-resonance-filter/utils/submodule-sync';
 import { GitOperationsService } from '../dreamnode/utils/git-operations';
 import { UpdatePreviewModal } from './ui/update-preview-modal';
 
 const path = require('path');
-const fs = require('fs').promises;
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
-
-interface SubmoduleUpdate {
-  name: string;
-  path: string;
-  commitsAhead: number;
-}
-
-/**
- * Update submodules by pulling from their standalone versions
- */
-async function updateSubmodules(
-  selectedNode: any,
-  submoduleUpdates: SubmoduleUpdate[],
-  uiService: UIService
-): Promise<void> {
-  const adapter = (window as any).app.vault.adapter;
-  const vaultPath = adapter.basePath || '';
-  const parentPath = path.join(vaultPath, selectedNode.repoPath);
-
-  for (const submodule of submoduleUpdates) {
-    try {
-      const submodulePath = path.join(parentPath, submodule.path);
-      const standalonePath = path.join(vaultPath, submodule.name);
-
-      console.log(`[SubmoduleUpdate] Updating ${submodule.name} submodule from standalone...`);
-
-      // Pull standalone commits into submodule
-      // Use git pull with relative path to standalone
-      const relativePath = path.relative(submodulePath, standalonePath);
-      await execAsync(`git pull ${relativePath} main`, { cwd: submodulePath });
-
-      console.log(`[SubmoduleUpdate] ✓ Updated ${submodule.name} submodule`);
-    } catch (error) {
-      console.error(`[SubmoduleUpdate] Failed to update ${submodule.name}:`, error);
-      uiService.showError(`Failed to update ${submodule.name} submodule`);
-    }
-  }
-
-  // Update parent's submodule pointers and commit
-  try {
-    // Stage all submodule pointer updates
-    for (const submodule of submoduleUpdates) {
-      await execAsync(`git add ${submodule.path}`, { cwd: parentPath });
-    }
-
-    // Commit the submodule pointer updates
-    const submoduleNames = submoduleUpdates.map(s => s.name).join(', ');
-    await execAsync(
-      `git commit -m "[submodules] Update ${submoduleNames} from standalone versions"`,
-      { cwd: parentPath }
-    );
-
-    uiService.showSuccess(`Updated ${submoduleUpdates.length} submodule(s) and committed changes`);
-
-    // Trigger vault rescan to update UI
-    const { serviceManager } = await import('../../core/services/service-manager');
-    await serviceManager.scanVault();
-  } catch (error) {
-    console.error('[SubmoduleUpdate] Failed to commit submodule updates:', error);
-    uiService.showError('Failed to commit submodule updates');
-  }
-}
-
-/**
- * Check if submodules have updates from their standalone network versions
- * Workflow: Alice updates Circle (standalone) → shares to network →
- *           Alice runs "Check for Updates" on Cylinder → sees Circle submodule has updates
- * Returns array of submodules with updates
- */
-async function checkSubmoduleUpdatesFromNetwork(
-  selectedNode: any,
-  _gitSyncService: GitSyncService,
-  _store: any,
-  _uiService: UIService
-): Promise<SubmoduleUpdate[]> {
-  const submoduleUpdates: SubmoduleUpdate[] = [];
-  try {
-    const adapter = (window as any).app.vault.adapter;
-    const vaultPath = adapter.basePath || '';
-    const parentPath = path.join(vaultPath, selectedNode.repoPath);
-
-    // Parse .gitmodules to find submodules
-    const gitmodulesPath = path.join(parentPath, '.gitmodules');
-    try {
-      await fs.access(gitmodulesPath);
-    } catch {
-      // No .gitmodules file - no submodules to check
-      return submoduleUpdates;
-    }
-
-    const gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
-    const submodules = parseGitmodules(gitmodulesContent);
-
-    if (submodules.length === 0) {
-      return submoduleUpdates;
-    }
-
-    console.log(`[SubmoduleUpdates] Checking ${submodules.length} submodules for updates...`);
-
-    // Check each submodule for updates from standalone version
-    for (const submodule of submodules) {
-      const submodulePath = path.join(parentPath, submodule.path);
-      const standalonePath = path.join(vaultPath, submodule.name);
-
-      // Check if both standalone and submodule exist
-      try {
-        await fs.access(standalonePath);
-        await fs.access(submodulePath);
-      } catch {
-        console.log(`[SubmoduleUpdates] Standalone or submodule ${submodule.name} not found - skipping`);
-        continue;
-      }
-
-      // Compare commit hashes: standalone vs submodule
-      try {
-        const standaloneHead = await execAsync('git rev-parse HEAD', { cwd: standalonePath });
-        const submoduleHead = await execAsync('git rev-parse HEAD', { cwd: submodulePath });
-
-        const standaloneCommit = standaloneHead.stdout.trim();
-        const submoduleCommit = submoduleHead.stdout.trim();
-
-        if (standaloneCommit !== submoduleCommit) {
-          // Check if standalone is ahead of submodule
-          try {
-            const { stdout: commitsAhead } = await execAsync(
-              `git rev-list --count ${submoduleCommit}..${standaloneCommit}`,
-              { cwd: standalonePath }
-            );
-
-            const numCommitsAhead = parseInt(commitsAhead.trim());
-
-            if (numCommitsAhead > 0) {
-              console.log(`[SubmoduleUpdates] ${submodule.name} standalone is ${numCommitsAhead} commits ahead of submodule`);
-
-              // Add to submodule updates list
-              submoduleUpdates.push({
-                name: submodule.name,
-                path: submodule.path,
-                commitsAhead: numCommitsAhead
-              });
-            }
-          } catch (error) {
-            console.warn(`[SubmoduleUpdates] Could not compare commits for ${submodule.name}:`, error);
-          }
-        }
-      } catch (error) {
-        console.warn(`[SubmoduleUpdates] Failed to check ${submodule.name}:`, error);
-      }
-    }
-  } catch (error) {
-    console.error('[SubmoduleUpdates] Error checking submodules:', error);
-  }
-
-  return submoduleUpdates;
-}
-
-/**
- * Parse .gitmodules file to extract submodule information
- */
-function parseGitmodules(content: string): Array<{path: string, url: string, name: string}> {
-  const submodules: Array<{path: string, url: string, name: string}> = [];
-  const lines = content.split('\n');
-
-  let currentSubmodule: any = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Start of new submodule section
-    if (trimmed.startsWith('[submodule ')) {
-      if (currentSubmodule && currentSubmodule.path && currentSubmodule.url) {
-        submodules.push(currentSubmodule);
-      }
-      const nameMatch = trimmed.match(/\[submodule "([^"]+)"\]/);
-      currentSubmodule = {
-        name: nameMatch ? nameMatch[1] : '',
-        path: '',
-        url: ''
-      };
-    }
-    // Path entry
-    else if (trimmed.startsWith('path = ') && currentSubmodule) {
-      currentSubmodule.path = trimmed.substring(7).trim();
-    }
-    // URL entry
-    else if (trimmed.startsWith('url = ') && currentSubmodule) {
-      currentSubmodule.url = trimmed.substring(6).trim();
-
-      // Extract name from Radicle URL if not already set
-      if (!currentSubmodule.name && currentSubmodule.url.includes('rad://')) {
-        // For Radicle URLs, the name should match the standalone repo name
-        // We'll infer it from the path since that's how we clone them
-        currentSubmodule.name = path.basename(currentSubmodule.path);
-      }
-    }
-  }
-
-  // Don't forget the last submodule
-  if (currentSubmodule && currentSubmodule.path && currentSubmodule.url) {
-    submodules.push(currentSubmodule);
-  }
-
-  return submodules;
-}
 
 export function registerUpdateCommands(plugin: Plugin, uiService: UIService): void {
   const gitSyncService = new GitSyncService(plugin.app);
@@ -264,21 +62,22 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
     id: 'preview-updates',
     name: 'Preview Updates for Selected DreamNode',
     callback: async () => {
-      console.log('[UpdatePreview] Command triggered');
       const store = useInterBrainStore.getState();
       const selectedNode = store.selectedNode;
 
       if (!selectedNode) {
-        console.log('[UpdatePreview] No node selected');
         uiService.showError('Please select a DreamNode first');
         return;
       }
 
-      console.log('[UpdatePreview] Selected node:', selectedNode.name, selectedNode.id);
-
       // Always fetch first to ensure we have latest update status (root + submodules)
       const fetchNotice = uiService.showLoading('Checking for updates...');
       let submoduleUpdates: SubmoduleUpdate[] = [];
+
+      // Get vault path for submodule checking
+      const adapter = (window as any).app.vault.adapter;
+      const vaultPath = adapter.basePath || '';
+      const parentPath = path.join(vaultPath, selectedNode.repoPath);
 
       try {
         // Check root repo for updates
@@ -289,8 +88,8 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
           store.clearNodeUpdateStatus(selectedNode.id);
         }
 
-        // NEW: Check submodules for updates from their standalone repos
-        submoduleUpdates = await checkSubmoduleUpdatesFromNetwork(selectedNode, gitSyncService, store, uiService);
+        // Check submodules for updates from their standalone repos
+        submoduleUpdates = await checkSubmoduleUpdatesFromNetwork(parentPath, vaultPath);
 
       } catch (error) {
         console.error('[UpdatePreview] Fetch failed:', error);
@@ -301,22 +100,19 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       fetchNotice.hide();
 
       const updateStatus = store.getNodeUpdateStatus(selectedNode.id);
-      console.log('[UpdatePreview] Update status:', updateStatus);
-      console.log('[UpdatePreview] Submodule updates:', submoduleUpdates);
 
       // Check if EITHER root has updates OR submodules have updates
       const hasRootUpdates = updateStatus && updateStatus.hasUpdates;
       const hasSubmoduleUpdates = submoduleUpdates && submoduleUpdates.length > 0;
 
       if (!hasRootUpdates && !hasSubmoduleUpdates) {
-        console.log('[UpdatePreview] No updates available');
         uiService.showInfo(`${selectedNode.name} is up to date`);
         return;
       }
 
       // If only submodules have updates (no root updates), show simple dialog
       if (!hasRootUpdates && hasSubmoduleUpdates) {
-        const submoduleList = submoduleUpdates.map(s => `  • ${s.name}: ${s.commitsAhead} commit(s)`).join('\n');
+        const submoduleList = submoduleUpdates.map(s => `  - ${s.name}: ${s.commitsAhead} commit(s)`).join('\n');
         const confirmed = await uiService.showConfirmDialog(
           'Submodule Updates Available',
           `${selectedNode.name} has no direct updates, but these submodules have updates:\n\n${submoduleList}\n\nUpdate submodules now?`,
@@ -325,34 +121,45 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         );
 
         if (confirmed) {
-          await updateSubmodules(selectedNode, submoduleUpdates, uiService);
+          const updateNotice = uiService.showLoading('Updating submodules...');
+          try {
+            const result = await updateSubmodulesFromStandalone(parentPath, vaultPath, submoduleUpdates);
+            updateNotice.hide();
+
+            if (result.success) {
+              uiService.showSuccess(`Updated ${result.updated.length} submodule(s)`);
+              // Trigger vault rescan to update UI
+              const { serviceManager } = await import('../../core/services/service-manager');
+              await serviceManager.scanVault();
+            } else {
+              uiService.showError(`Updated ${result.updated.length}, failed: ${result.failed.join(', ')}`);
+            }
+          } catch (error) {
+            updateNotice.hide();
+            console.error('[UpdatePreview] Submodule update failed:', error);
+            uiService.showError('Failed to update submodules');
+          }
         }
         return;
       }
-
-      console.log('[UpdatePreview] Found updates:', updateStatus?.commits?.length || 0, 'commits');
 
       const loadingNotice = uiService.showLoading('Generating update summary...');
       try {
         // Initialize summary service with API key from settings if available
         const settings = (plugin as any).settings;
         const apiKey = settings?.claudeApiKey;
-        console.log('[UpdatePreview] API key available:', !!apiKey);
 
         if (apiKey) {
           initializeUpdateSummaryService(apiKey);
         }
 
         const summaryService = getUpdateSummaryService();
-        console.log('[UpdatePreview] Generating summary...');
         const summary = await summaryService.generateUpdateSummary(updateStatus!);
-        console.log('[UpdatePreview] Summary generated:', summary);
 
         // Hide loading notice before showing modal
         loadingNotice.hide();
 
         // Show modal with update preview
-        console.log('[UpdatePreview] Opening modal...');
         const modal = new UpdatePreviewModal(
           plugin.app,
           selectedNode.name,
@@ -360,8 +167,6 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
           summary,
           // On Accept
           async () => {
-            console.log('[UpdatePreview] User accepted update');
-
             // Check if this is a read-only repo with divergent branches
             const divergentCheck = await gitSyncService.checkDivergentBranches(selectedNode.repoPath);
             const isReadOnly = await gitSyncService.isReadOnlyRepo(selectedNode.repoPath);
@@ -380,12 +185,10 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
               );
 
               if (!confirmed) {
-                console.log('[UpdatePreview] User aborted update due to divergent branches');
                 return;
               }
 
               // User confirmed - reset to remote
-              console.log('[UpdatePreview] Resetting read-only repo to remote');
               const resetNotice = uiService.showLoading(`Resetting ${selectedNode.name} to remote...`);
               try {
                 await gitSyncService.resetToRemote(selectedNode.repoPath);
@@ -401,15 +204,13 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
             const applyNotice = uiService.showLoading(`Updating ${selectedNode.name}...`);
             try {
               // Pull updates - cherry-pick peer commits or fast-forward from upstream
-              // Extract commit hashes from updateStatus for cherry-picking
-              const commitHashes = updateStatus!.commits.map(c => c.hash);
+              const commitHashes = updateStatus!.commits.map((c: CommitInfo) => c.hash);
               await gitSyncService.pullUpdates(selectedNode.repoPath, commitHashes);
 
               // Check for coherence beacons in the commits we just pulled
               applyNotice.hide();
               const checkingNotice = uiService.showLoading('Checking for new relationships...');
               try {
-                // Use the commits we already fetched (from updateStatus) instead of re-fetching
                 const beacons = await (plugin as any).coherenceBeaconService.checkCommitsForBeacons(
                   selectedNode.repoPath,
                   updateStatus!.commits
@@ -417,8 +218,6 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                 checkingNotice.hide();
 
                 if (beacons.length > 0) {
-                  console.log(`[UpdatePreview] Found ${beacons.length} coherence beacon(s)`);
-
                   // Import modal dynamically to avoid circular dependencies
                   const { CoherenceBeaconModal } = await import('../coherence-beacon/ui/coherence-beacon-modal');
 
@@ -434,7 +233,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                           try {
                             new Notice(`Cloning ${beacon.title}...`);
                             await (plugin as any).coherenceBeaconService.acceptBeacon(selectedNode.repoPath, beacon);
-                            new Notice(`Successfully cloned ${beacon.title}! 🌟`);
+                            new Notice(`Successfully cloned ${beacon.title}!`);
                           } catch (error) {
                             console.error('Failed to accept beacon:', error);
                             new Notice(`Failed to clone ${beacon.title}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -453,8 +252,6 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                       beaconModal.open();
                     });
                   }
-                } else {
-                  console.log('[UpdatePreview] No coherence beacons found');
                 }
               } catch (beaconError) {
                 checkingNotice.hide();
@@ -469,7 +266,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
                   await gitOpsService.buildDreamNode(selectedNode.repoPath);
                   buildNotice.hide();
 
-                  // Auto-reload plugin after build using lightweight reload
+                  // Auto-reload plugin after build
                   const reloadNotice = uiService.showLoading('Reloading plugin...');
                   try {
                     const plugins = (plugin.app as any).plugins;
@@ -501,13 +298,11 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
           },
           // On Reject
           () => {
-            console.log('[UpdatePreview] User rejected update');
             uiService.showInfo('Update cancelled');
           }
         );
 
         modal.open();
-        console.log('[UpdatePreview] Modal opened');
       } catch (error) {
         console.error('[UpdatePreview] Error:', error);
         loadingNotice.hide();
@@ -516,7 +311,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
     }
   });
 
-  // Apply updates to selected DreamNode
+  // Apply updates to selected DreamNode (direct apply without preview)
   plugin.addCommand({
     id: 'apply-updates',
     name: 'Apply Updates to Selected DreamNode',
@@ -580,62 +375,4 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       }
     }
   });
-}
-
-/**
- * Generate markdown for update preview
- * NOTE: Currently unused - kept for potential future use
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function generateUpdatePreviewMarkdown(
-  nodeName: string,
-  updateStatus: import('../social-resonance-filter/services/git-sync-service').FetchResult,
-  summary: import('./update-summary-service').UpdateSummary
-): string {
-  const { commits, filesChanged, insertions, deletions } = updateStatus;
-
-  return `# Updates Available for ${nodeName}
-
-## Summary
-
-**${summary.overallImpact}**
-
-### What's New
-${summary.userFacingChanges}
-
-### Technical Improvements
-${summary.technicalImprovements}
-
----
-
-## Update Details
-
-- **Commits**: ${commits.length}
-- **Files Changed**: ${filesChanged}
-- **Lines Added**: ${insertions}
-- **Lines Removed**: ${deletions}
-
-## Commit History
-
-${commits.map((commit: any, i: number) => {
-  const date = new Date(commit.timestamp * 1000).toLocaleDateString();
-  return `### ${i + 1}. ${commit.subject}
-
-**Author**: ${commit.author} (${commit.email})
-**Date**: ${date}
-
-${commit.body || '_No additional details_'}
-`;
-}).join('\n\n')}
-
----
-
-## Next Steps
-
-To apply these updates:
-1. Run the command: **Apply Updates to Selected DreamNode**
-2. Or use the hotkey (if configured)
-
-_This preview was automatically generated. You can close this tab after reviewing._
-`;
 }

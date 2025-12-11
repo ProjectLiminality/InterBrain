@@ -55,7 +55,6 @@ import { initializeMediaLoadingService } from './features/dreamnode/services/med
 import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
-import { initializeUpdateCheckerService } from './features/dreamnode-updater/update-checker-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 
 export default class InterBrainPlugin extends Plugin {
@@ -279,9 +278,6 @@ export default class InterBrainPlugin extends Plugin {
       this.app.commands.executeCommandById('interbrain:scan-vault-dreamsong-relationships');
     }, 600); // Wait for vault scan to complete (after update checker)
 
-    // Initialize update checker service (but don't auto-fetch - user triggers via command)
-    // Batch checking removed for performance - use "Check for Updates" on selected node
-    initializeUpdateCheckerService(this.app);
   }
 
   private initializeServices(): void {

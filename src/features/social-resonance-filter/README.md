@@ -15,6 +15,8 @@ The "filter" in Social Resonance Filter refers to how commit propagation works:
 social-resonance-filter/
 ├── services/
 │   └── git-sync-service.ts      # Network-oriented git: fetch, pull, push, peer sync
+├── utils/
+│   └── submodule-sync.ts        # Submodule update detection and sync
 ├── radicle-service.ts           # Radicle CLI wrapper: init, clone, share, follow
 ├── passphrase-manager.ts        # Radicle auth with smart node detection
 ├── batch-init-service.ts        # Mass Radicle initialization
@@ -29,14 +31,15 @@ social-resonance-filter/
 ### What This Feature Owns (P2P Plumbing)
 - **Radicle CLI operations**: init, clone, share, follow, delegate, seed
 - **Git sync operations**: fetch, pull, push with peer awareness
+- **Submodule sync**: Detect and update submodules from standalone network versions
 - **Passphrase management**: Smart detection of running node
 - **Remote reconciliation**: Sync git remotes with liminal-web.json peers
 - **Routing table queries**: Discover who has accepted your DreamNodes
 
 ### What This Feature Does NOT Own
-- **Update workflow UI** → `dreamnode-updater` (modals, LLM summaries)
-- **Coherence beacon detection** → `coherence-beacon` (relationship discovery)
-- **GitHub publishing workflow** → `github-publishing` (public sharing)
+- **Update workflow UI** -> `dreamnode-updater` (modals, LLM summaries)
+- **Coherence beacon detection** -> `coherence-beacon` (relationship discovery)
+- **GitHub publishing workflow** -> `github-publishing` (public sharing)
 
 ## Main Exports
 
@@ -50,6 +53,11 @@ RadicleService: isAvailable, init, clone, share, getSeeders, followPeer, addDele
 GitSyncService: fetchUpdates, pullUpdates, pushToAvailableRemote, checkDivergentBranches
 PassphraseManager: getPassphrase, isPassphraseSet
 getRadicleBatchInitService(): RadicleBatchInitService
+
+// Utilities
+parseGitmodules(content): ParsedSubmodule[]
+checkSubmoduleUpdatesFromNetwork(parentPath, vaultPath): SubmoduleUpdate[]
+updateSubmodulesFromStandalone(parentPath, vaultPath, updates): { success, updated, failed }
 ```
 
 ## Architecture Notes
@@ -69,16 +77,23 @@ Searches for `rad` binary in: PATH, `~/.radicle/bin/rad`, `/usr/local/bin/rad`, 
 ### Dual Remote Mode
 When both Radicle and GitHub remotes exist:
 - Push to **both** (GitHub for publishing, Radicle for collaboration)
-- Priority: Radicle → GitHub → origin → first available
+- Priority: Radicle -> GitHub -> origin -> first available
 
 ### Gap Detection
-- Batch init detects .udd without radicleId but with git remote → repairs
+- Batch init detects .udd without radicleId but with git remote -> repairs
 - Clone normalizes titles and persists radicleId to .udd
+
+### Submodule Sync Flow
+When a DreamNode has submodules that diverged from their standalone versions:
+1. `checkSubmoduleUpdatesFromNetwork()` compares standalone vs submodule HEAD
+2. Reports which submodules have commits ahead
+3. `updateSubmodulesFromStandalone()` pulls from standalone into submodule
+4. Commits updated submodule pointers in parent repo
 
 ## Dependents
 
 Features that call into this one:
-- `dreamnode-updater` - uses GitSyncService.fetchUpdates()
+- `dreamnode-updater` - uses GitSyncService.fetchUpdates(), submodule-sync utilities
 - `coherence-beacon` - uses GitSyncService for push operations
 - `github-publishing` - uses RadicleBatchInitService
 - `dreamweaving` - uses RadicleService for submodule URLs

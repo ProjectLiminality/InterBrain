@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import type { FetchResult } from '../social-resonance-filter/services/git-sync-service';
+import type { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
 
 // Re-export type for convenience
 export type { FetchResult };
