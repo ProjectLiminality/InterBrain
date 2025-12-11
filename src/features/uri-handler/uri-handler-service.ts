@@ -462,12 +462,7 @@ export class URIHandlerService {
 	 * Public method to allow reuse by CoherenceBeaconService and other features
 	 */
 	public async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
-		const path = require('path');
-		const fs = require('fs').promises;
-		const execAsync = require('util').promisify(require('child_process').exec);
-
 		try {
-			// Get vault path
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
 
@@ -485,57 +480,26 @@ export class URIHandlerService {
 				new Notice(`Cloning from Radicle network...`, 3000);
 			}
 
+			// RadicleService.clone() handles: clone, directory rename, submodule init, .udd update
 			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase);
-			let finalRepoName = cloneResult.repoName;
 
-			// Strip UUID suffix from directory name if present (backend uses it for uniqueness)
-			if (!cloneResult.alreadyExisted) {
-				const cleanName = cloneResult.repoName.replace(/-[a-f0-9]{7}$/i, '');
-				if (cleanName !== cloneResult.repoName) {
-					const oldPath = path.join(vaultPath, cloneResult.repoName);
-					const newPath = path.join(vaultPath, cleanName);
-
-					await fs.rename(oldPath, newPath);
-					finalRepoName = cleanName;
-
-					// Initialize submodules if any
-					try {
-						await execAsync('git submodule update --init --recursive', { cwd: newPath });
-					} catch {
-						// No submodules or init failed - non-critical
-					}
-				}
-			}
-
-			// Already existed - focus and return
 			if (cloneResult.alreadyExisted) {
 				if (!silent) {
-					new Notice(`DreamNode "${finalRepoName}" already cloned!`);
-					await this.autoFocusNode(finalRepoName, silent);
+					new Notice(`DreamNode "${cloneResult.repoName}" already cloned!`);
+					await this.autoFocusNode(cloneResult.repoName, silent);
 				}
 				return 'skipped';
 			}
 
 			if (!silent) {
-				new Notice(`Cloned "${finalRepoName}" successfully!`);
-			}
-
-			// Write Radicle ID to .udd file using UDDService
-			try {
-				const repoPath = path.join(vaultPath, finalRepoName);
-				const udd = await UDDService.readUDD(repoPath);
-				if (!udd.radicleId) {
-					await UDDService.setRadicleId(repoPath, radicleId);
-				}
-			} catch {
-				// Non-critical - node may not have .udd yet
+				new Notice(`Cloned "${cloneResult.repoName}" successfully!`);
 			}
 
 			// Auto-refresh: Make the newly cloned node appear immediately
 			if (!silent) {
 				try {
 					await this.dreamNodeService.scanVault();
-					await this.indexNewNode(finalRepoName);
+					await this.indexNewNode(cloneResult.repoName);
 
 					const relationshipService = new DreamSongRelationshipService(this.plugin);
 					const scanResult = await relationshipService.scanVaultForDreamSongRelationships();
@@ -543,7 +507,7 @@ export class URIHandlerService {
 					if (scanResult.success) {
 						const store = useInterBrainStore.getState();
 						store.requestNavigation({ type: 'applyLayout' });
-						setTimeout(() => this.autoFocusNode(finalRepoName, silent), 100);
+						setTimeout(() => this.autoFocusNode(cloneResult.repoName, silent), 100);
 					}
 				} catch {
 					// Non-critical - node was cloned successfully
@@ -579,9 +543,6 @@ export class URIHandlerService {
 	 * Clone a DreamNode from GitHub
 	 */
 	private async cloneFromGitHub(repoPath: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
-		const path = require('path');
-		const crypto = require('crypto');
-
 		try {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
@@ -597,10 +558,10 @@ export class URIHandlerService {
 			}
 
 			const repoName = match[1].replace(/\.git$/, '');
-			const destinationPath = path.join(vaultPath, repoName);
+			const destinationPath = `${vaultPath}/${repoName}`;
 
-			// Check if already exists
-			if (UDDService.uddExists(destinationPath) || require('fs').existsSync(destinationPath)) {
+			// Check if already exists - use Obsidian vault API
+			if (await this.app.vault.adapter.exists(repoName)) {
 				if (!silent) {
 					new Notice(`DreamNode "${repoName}" already cloned!`);
 					await this.autoFocusNode(repoName, silent);
@@ -620,7 +581,8 @@ export class URIHandlerService {
 			// Create .udd file for InterBrain compatibility using UDDService
 			try {
 				if (!UDDService.uddExists(destinationPath)) {
-					const uuid = crypto.randomUUID();
+					// Use Web Crypto API for UUID generation (available in Electron)
+					const uuid = globalThis.crypto.randomUUID();
 					const title = await this.normalizeRepoNameToTitle(repoName);
 
 					await UDDService.createUDD(destinationPath, {

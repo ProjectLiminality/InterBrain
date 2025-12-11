@@ -719,7 +719,25 @@ export class RadicleServiceImpl implements RadicleService {
       console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
     }
 
-    // OPTIMIZATION: Save Radicle ID to .udd file for instant future lookups
+    // POST-CLONE CLEANUP: Strip UUID suffix from directory name if present
+    // Radicle backend adds UUID suffix for uniqueness (e.g., "Name-abc1234" → "Name")
+    const cleanName = repoName.replace(/-[a-f0-9]{7}$/i, '');
+    if (cleanName !== repoName) {
+      const oldPath = path.join(destinationPath, repoName);
+      const newPath = path.join(destinationPath, cleanName);
+      await fs.promises.rename(oldPath, newPath);
+      repoName = cleanName;
+    }
+
+    // Initialize submodules if any
+    try {
+      const repoPath = path.join(destinationPath, repoName);
+      await execAsync('git submodule update --init --recursive', { cwd: repoPath, env });
+    } catch {
+      // No submodules or init failed - non-critical
+    }
+
+    // Save Radicle ID to .udd file for instant future lookups
     // Also normalize title to human-readable format if needed
     try {
       const repoPath = path.join(destinationPath, repoName);
