@@ -7,7 +7,7 @@ import { SubmoduleManagerService } from '../../features/dreamweaving/services/su
 import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../../features/drag-and-drop';
-import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance-filter/radicle-service';
+import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance-filter/services/radicle-service';
 
 /**
  * Service interface that both mock and real implementations will follow

@@ -1,5 +1,5 @@
 import { App, Notice, Plugin } from 'obsidian';
-import { RadicleService } from '../social-resonance-filter/radicle-service';
+import { RadicleService } from '../social-resonance-filter/services/radicle-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { DreamSongRelationshipService } from '../dreamweaving/services/dreamsong-relationship-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
@@ -527,7 +527,7 @@ export class URIHandlerService {
 	 */
 	private async ensureRadicleNodeRunning(): Promise<string | null> {
 		// Import PassphraseManager for consistent passphrase handling
-		const { PassphraseManager } = await import('../social-resonance-filter/passphrase-manager');
+		const { PassphraseManager } = await import('../social-resonance-filter/services/passphrase-manager');
 		const { UIService } = await import('../../core/services/ui-service');
 
 		// Create temporary instances for passphrase management

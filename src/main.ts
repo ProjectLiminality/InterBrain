@@ -2,7 +2,7 @@ import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
 import { VaultService } from './core/services/vault-service';
-import { PassphraseManager } from './features/social-resonance-filter/passphrase-manager';
+import { PassphraseManager } from './features/social-resonance-filter/services/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
@@ -26,7 +26,6 @@ import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSugg
 import { registerRadicleCommands } from './features/social-resonance-filter/commands';
 import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
-import { registerHousekeepingCommands } from './features/social-resonance-filter/housekeeping-commands';
 import { registerDreamerUpdateCommands } from './features/dreamnode-updater/dreamer-update-commands';
 import { registerRelationshipCommands } from './features/liminal-web-layout';
 import { registerUpdateCommands } from './features/dreamnode-updater/commands';
@@ -53,7 +52,7 @@ import { initializeConversationsService } from './features/songline/services/con
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
 import { initializeURIHandlerService } from './features/uri-handler';
-import { initializeRadicleBatchInitService } from './features/social-resonance-filter/batch-init-service';
+import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 
@@ -357,9 +356,6 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register Coherence Beacon commands (network discovery)
     registerCoherenceBeaconCommands(this);
-
-    // Register housekeeping commands (system maintenance)
-    registerHousekeepingCommands(this);
 
     // Register Dreamer update commands (check all projects from peer)
     registerDreamerUpdateCommands(this);
