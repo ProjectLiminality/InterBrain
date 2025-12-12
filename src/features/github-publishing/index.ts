@@ -1,7 +1,6 @@
 export { registerGitHubCommands } from './commands';
 export { GitHubService } from './services/github-service';
 export { GitHubBatchShareService } from './services/batch-share-service';
-export { GitHubNetworkService } from './services/network-service';
 export { ShareLinkService } from './services/share-link-service';
 
 // Settings section

@@ -135,16 +135,11 @@ export function registerGitHubCommands(
   plugin: Plugin,
   uiService: UIService
 ): void {
-  // Set plugin directory for GitHubService (needed for viewer bundle path)
   const path = require('path');
-  const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-  let vaultPath = '';
-  if (typeof adapter.path === 'string') {
-    vaultPath = adapter.path;
-  } else if (typeof adapter.basePath === 'string') {
-    vaultPath = adapter.basePath;
-  }
+  const vaultService = serviceManager.getVaultService();
 
+  // Set plugin directory for GitHubService (needed for viewer bundle path)
+  const vaultPath = vaultService?.getVaultPath() || '';
   if (vaultPath) {
     const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', plugin.manifest.id);
     githubService.setPluginDir(pluginDir);
@@ -166,17 +161,8 @@ export function registerGitHubCommands(
           return;
         }
 
-        // Get vault path and resolve full repo path
-        const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-        let vaultPath = '';
-        if (typeof adapter.path === 'string') {
-          vaultPath = adapter.path;
-        } else if (typeof adapter.basePath === 'string') {
-          vaultPath = adapter.basePath;
-        }
-
-        const path = require('path');
-        const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+        // Resolve full repo path using VaultService
+        const fullRepoPath = vaultService?.getFullPath(selectedNode.repoPath) || selectedNode.repoPath;
 
         // Check if GitHub CLI is available
         const availabilityCheck = await githubService.isAvailable();
@@ -321,17 +307,8 @@ export function registerGitHubCommands(
           return;
         }
 
-        // Get vault path and resolve full repo path
-        const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-        let vaultPath = '';
-        if (typeof adapter.path === 'string') {
-          vaultPath = adapter.path;
-        } else if (typeof adapter.basePath === 'string') {
-          vaultPath = adapter.basePath;
-        }
-
-        const path = require('path');
-        const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+        // Resolve full repo path using VaultService
+        const fullRepoPath = vaultService?.getFullPath(selectedNode.repoPath) || selectedNode.repoPath;
 
         // Check if GitHub CLI is available
         const availabilityCheck = await githubService.isAvailable();
@@ -392,7 +369,8 @@ export function registerGitHubCommands(
 
         try {
           // Complete unpublish workflow
-          await githubService.unpublishDreamNode(fullRepoPath, selectedNode.id, vaultPath);
+          const currentVaultPath = vaultService?.getVaultPath() || '';
+          await githubService.unpublishDreamNode(fullRepoPath, selectedNode.id, currentVaultPath);
 
           // Update in-memory store to clear GitHub URLs immediately
           const store = useInterBrainStore.getState();
@@ -494,15 +472,6 @@ export function registerGitHubCommands(
           return; // User cancelled
         }
 
-        // Get vault path
-        const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-        let vaultPath = '';
-        if (typeof adapter.path === 'string') {
-          vaultPath = adapter.path;
-        } else if (typeof adapter.basePath === 'string') {
-          vaultPath = adapter.basePath;
-        }
-
         // Extract repo name for destination
         const match = githubUrl.match(/github\.com\/[^/]+\/([^/\s]+)/);
         if (!match) {
@@ -511,8 +480,7 @@ export function registerGitHubCommands(
         }
 
         const repoName = match[1].replace(/\.git$/, '');
-        const path = require('path');
-        const destinationPath = path.join(vaultPath, repoName);
+        const destinationPath = vaultService?.getFullPath(repoName) || repoName;
 
         // Show progress
         const notice = new Notice('Cloning DreamNode from GitHub...', 0);

@@ -2,6 +2,8 @@ import { Notice, Plugin } from 'obsidian';
 import { DreamNode } from '../../dreamnode';
 import { githubService } from './github-service';
 import { GitDreamNodeService } from '../../dreamnode/services/git-dreamnode-service';
+import { UDDService } from '../../dreamnode/services/udd-service';
+import { serviceManager } from '../../../core/services/service-manager';
 
 /**
  * GitHub Batch Share Service
@@ -110,29 +112,17 @@ export class GitHubBatchShareService {
 	}
 
 	/**
-	 * Read GitHub URL from .udd file
+	 * Read GitHub URL from .udd file using UDDService
 	 */
 	private async getGitHubUrlFromUdd(node: DreamNode): Promise<string | null> {
 		try {
-			const path = require('path');
-			const fs = require('fs').promises;
-			const adapter = this.plugin.app.vault.adapter as any;
-			const vaultPath = adapter.basePath || '';
-			const uddPath = path.join(vaultPath, node.repoPath, '.udd');
+			const vaultService = serviceManager.getVaultService();
+			const fullRepoPath = vaultService?.getFullPath(node.repoPath) || node.repoPath;
 
-			try {
-				const uddContent = await fs.readFile(uddPath, 'utf-8');
-				const udd = JSON.parse(uddContent);
-
-				if (udd.githubRepoUrl) {
-					return udd.githubRepoUrl;
-				}
-			} catch {
-				// Could not read .udd - this is expected for new nodes
-			}
-
-			return null;
+			const udd = await UDDService.readUDD(fullRepoPath);
+			return (udd as any).githubRepoUrl || null;
 		} catch {
+			// Could not read .udd - this is expected for new nodes
 			return null;
 		}
 	}
@@ -150,16 +140,14 @@ export class GitHubBatchShareService {
 			throw new Error(availabilityCheck.error || 'GitHub CLI not available');
 		}
 
-		// Get vault path
-		const adapter = this.plugin.app.vault.adapter as any;
-		const vaultPath = adapter.basePath || '';
-		const path = require('path');
+		// Get VaultService for path resolution
+		const vaultService = serviceManager.getVaultService();
 
 		// CRITICAL: Serialize sharing to prevent race conditions
 		// Process nodes one at a time to avoid git/GitHub conflicts
 		for (const node of nodes) {
 			try {
-				const fullRepoPath = path.join(vaultPath, node.repoPath);
+				const fullRepoPath = vaultService?.getFullPath(node.repoPath) || node.repoPath;
 
 				// Share to GitHub (creates repo, pushes, builds Pages)
 				const shareResult = await githubService.shareDreamNode(

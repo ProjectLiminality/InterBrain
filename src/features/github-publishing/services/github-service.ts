@@ -16,6 +16,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { sanitizeTitleToPascalCase } from '../../dreamnode/utils/title-sanitization';
 import { URIHandlerService } from '../../uri-handler';
+import { UDDService } from '../../dreamnode/services/udd-service';
 
 const execAsync = promisify(exec);
 
@@ -130,19 +131,18 @@ export class GitHubService {
 
   /**
    * Read .udd file from DreamNode
+   * Delegates to UDDService for canonical .udd operations
    */
   private async readUDD(dreamNodePath: string): Promise<any> {
-    const uddPath = path.join(dreamNodePath, '.udd');
-    const content = fs.readFileSync(uddPath, 'utf-8');
-    return JSON.parse(content);
+    return UDDService.readUDD(dreamNodePath);
   }
 
   /**
    * Write .udd file to DreamNode
+   * Delegates to UDDService for canonical .udd operations
    */
   private async writeUDD(dreamNodePath: string, udd: any): Promise<void> {
-    const uddPath = path.join(dreamNodePath, '.udd');
-    fs.writeFileSync(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
+    await UDDService.writeUDD(dreamNodePath, udd);
   }
 
   /**
@@ -659,28 +659,16 @@ export class GitHubService {
       }
 
       const submoduleDirName = submoduleMatch[2]; // "VectorEquilibrium"
+      const submodulePath = path.join(vaultPath, submoduleDirName);
 
-      // Read .udd file from submodule directory
-      const uddPath = path.join(vaultPath, submoduleDirName, '.udd');
-
-      if (!fs.existsSync(uddPath)) {
-        // CRITICAL ERROR: Missing .udd file
+      // Check if .udd exists using UDDService
+      if (!UDDService.uddExists(submodulePath)) {
         console.error(`❌ [GitHubService] CORRUPTED DREAMNODE: ${submoduleDirName} is missing .udd metadata file`);
-        console.error(`   Expected .udd at: ${uddPath}`);
-        console.error(`   Media will be non-clickable until .udd is restored`);
         return null;
       }
 
-      // Parse .udd file to extract UUID
-      const uddContent = fs.readFileSync(uddPath, 'utf-8');
-      const udd = JSON.parse(uddContent);
-
-      if (!udd.uuid) {
-        console.error(`❌ [GitHubService] CORRUPTED DREAMNODE: ${submoduleDirName} .udd file is missing UUID field`);
-        return null;
-      }
-
-      return udd.uuid;
+      // Get UUID using UDDService
+      return await UDDService.getUUID(submodulePath);
 
     } catch (error) {
       console.error(`❌ [GitHubService] FAILED to resolve UUID from .udd file for ${filename}:`, error);

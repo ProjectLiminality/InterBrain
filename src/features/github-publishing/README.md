@@ -12,8 +12,7 @@ github-publishing/
 ├── services/
 │   ├── github-service.ts      # Core GitHub CLI + Pages workflow
 │   ├── batch-share-service.ts # Multi-node batch publishing
-│   ├── share-link-service.ts  # Obsidian URI generation
-│   └── network-service.ts     # Placeholder for Windows P2P
+│   └── share-link-service.ts  # Obsidian URI generation
 ├── dreamsong-standalone/      # React viewer source for Pages
 │   ├── index.html             # HTML template with data injection
 │   ├── main.tsx               # React entry point
@@ -41,11 +40,6 @@ Ensures multiple nodes have GitHub URLs before email sharing:
 Generates Obsidian URIs for single-node sharing:
 - Integrates with Radicle for collaboration handshake
 
-### network-service.ts
-Placeholder for Windows peer-to-peer alternative:
-- Will mirror RadicleService API with GitHub backend
-- Currently returns "coming soon" errors
-
 ## Commands
 
 Three Obsidian commands registered:
@@ -63,7 +57,6 @@ export { registerGitHubCommands } from './commands';
 export { GitHubService } from './services/github-service';
 export { GitHubBatchShareService } from './services/batch-share-service';
 export { ShareLinkService } from './services/share-link-service';
-export { GitHubNetworkService } from './services/network-service';
 
 // Settings
 export { createGitHubSettingsSection, checkGitHubStatus } from './settings-section';
@@ -71,15 +64,13 @@ export { createGitHubSettingsSection, checkGitHubStatus } from './settings-secti
 
 ## Dependencies
 - GitHub CLI (`gh`) for repo operations and API calls
-- Node.js fs/path/child_process for file operations and git commands
 - Obsidian Plugin API for commands and UI
 - DreamWeaving feature for canvas parsing and DreamSong rendering
+- DreamNode feature for UDDService (canonical .udd operations)
 - URI Handler feature for canonical Obsidian URI generation
+- Core VaultService for path resolution
 
 ## Flags
-
-### Technical Debt
-- **network-service.ts is stub** - Placeholder implementation with no functionality
 
 ### Potential Issues
 - **Recursive submodule sharing** - Deep hierarchies may cause performance issues or circular dependencies
