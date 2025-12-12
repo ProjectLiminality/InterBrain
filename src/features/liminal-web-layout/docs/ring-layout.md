@@ -12,7 +12,7 @@ The algorithm uses a **42-node coordinate system** with **intelligent selection 
 
 ## Interactive Visualizer
 
-**[🎯 Launch Interactive Ring Layout Visualizer](../interactive/ring-layout-visualizer.html)**
+**[🎯 Launch Interactive Ring Layout Visualizer](./ring-layout-visualizer.html)**
 
 The visualizer demonstrates:
 - **Dynamic positioning**: How 1-36 nodes are placed with perfect geometric precision
@@ -46,7 +46,7 @@ Three different distances create visual hierarchy:
 
 ## Technical Implementation
 
-The algorithm is implemented in `/src/dreamspace/layouts/RingLayout.ts` with these key functions:
+The algorithm is implemented in `../RingLayout.ts` with these key functions:
 
 - `calculateRingLayoutPositions()` - Main positioning function for liminal web mode
 - `calculateRingLayoutPositionsForSearch()` - Search results positioning  

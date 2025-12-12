@@ -50,6 +50,10 @@ export { DEFAULT_OLLAMA_CONFIG } from './types';
 export { registerSemanticSearchCommands } from './commands';
 ```
 
+## Ownership
+
+**Semantic-search owns** the vector index (`SearchSlice.vectorData`), embedding generation, and search result ranking. It provides the search infrastructure that the `search` feature slice uses for UI.
+
 ## Architecture
 
 **Service Layer Pattern**: Interface-based services (`IEmbeddingService`, `IIndexingService`) with production implementations using Ollama API.

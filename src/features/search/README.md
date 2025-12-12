@@ -51,7 +51,7 @@ Exports: `registerSearchCommands`, `SearchNode3D`, `SearchOrchestrator`
 - `useInterBrainStore` (search interface state)
 - `dreamNodeStyles` (visual consistency with DreamNode)
 
-## Issues/Notes
+## Notes
 - ✅ Clean implementation, no obvious dead code
 - SearchOrchestrator's 1s polling + 300ms debounce = efficient semantic search throttling
 - Animation timing carefully tuned to prevent visual glitches during transitions

@@ -14,13 +14,13 @@ The constellation layout is a **5-phase mathematical pipeline** that converts re
 
 ## Interactive Demonstrations
 
-**[🎯 Local Cluster Layout](../interactive/constellation/local-cluster-layout.html)**
+**[🎯 Local Cluster Layout](./local-cluster-layout.html)**
 Demonstrates force-directed positioning within individual clusters using the Fruchterman-Reingold algorithm.
 
-**[🌍 Global Cluster Positioning](../interactive/constellation/global-cluster-positioning.html)**
+**[🌍 Global Cluster Positioning](./global-cluster-positioning.html)**
 Shows how cluster centers are distributed across the sphere using Fibonacci distribution.
 
-**[🌌 Full Constellation System](../interactive/constellation/full-constellation-system.html)**
+**[🌌 Full Constellation System](./full-constellation-system.html)**
 Complete integrated system with all phases working together. Supports custom JSON data input.
 
 ## Algorithm Phases

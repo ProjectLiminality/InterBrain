@@ -1,42 +1,39 @@
 # InterBrain Documentation
 
-Welcome to the comprehensive documentation for **InterBrain** - an innovative knowledge management system that transcends traditional "Second Brain" paradigms.
-
-## Quick Navigation
-
-### 🏗️ Architecture
-- [**Overview**](architecture/overview.md) - Technical architecture and design philosophy
-- [**Git User Experience**](architecture/git-user-experience.md) - How we make git accessible to everyone
-
-### 🚀 Development
-- [**Roadmap**](development/roadmap.md) - 3-month development plan
-- [**Issue Hierarchy**](development/issue-hierarchy.md) - Project structure and relationships
-- [**Development Kanban**](development/kanban.md) - Refined development structure (51 items)
-
-### 🧮 Algorithms
-- [**Ring Layout Algorithm**](algorithms/ring-layout.md) - Honeycomb positioning system with interactive demo
-- [**Constellation Layout Algorithm**](algorithms/constellation-layout.md) - Force-directed 3D relationship positioning with interactive demos
-
-## What is InterBrain?
-
-The InterBrain is evolving from a standalone Electron app to a native Obsidian plugin, ultimately forming the foundation for DreamOS - a decentralized, AI-powered operating system for collective sensemaking.
-
-### Core Concepts
-- **Dream Nodes**: Git repositories representing either ideas (Dreams) or people (Dreamers)
-- **Dream Talk**: Concise, symbolic representations of ideas
-- **Dream Song**: Elaborate explanations with references to other Dream Talks
-- **Liminal Web**: Self-organizing knowledge based on social relationships
+Welcome to **InterBrain** - an innovative knowledge gardening system that transcends traditional "Second Brain" paradigms.
 
 ## Getting Started
 
-1. Read the [Architecture Overview](architecture/overview.md) to understand our technical approach
-2. Check the [Roadmap](development/roadmap.md) to see where we're headed
-3. Explore the [Development Kanban](development/kanban.md) for our AI-centered development approach
+See the **[main README](../README.md)** for:
+- Installation guide
+- Core concepts (Dream Nodes, Dream Talk, Dream Song, Liminal Web)
+- Key features with visual demonstrations
+- Real-world applications
 
-## Community
+## Source Documentation
 
-This project follows an **AI-first development** approach, designed for optimal collaboration between humans and AI assistants. All documentation is structured to support both human understanding and AI context comprehension.
+Documentation lives with the code in a hierarchical README structure:
+
+### Entry Points
+- **[src/core/README.md](../src/core/README.md)** - Core infrastructure and services
+- **[src/features/README.md](../src/features/README.md)** - Feature catalog and vertical slice patterns
+
+### Feature Documentation
+Each feature slice contains its own README with:
+- Purpose and ownership boundaries
+- Directory structure and main exports
+- Commands (where applicable)
+- Integration points and dependencies
+
+Algorithm documentation with interactive visualizers:
+- **src/features/liminal-web-layout/docs/** - Ring layout algorithm
+- **src/features/constellation-layout/docs/** - Constellation layout algorithm
+- **src/features/social-resonance-filter/docs/** - Radicle P2P philosophy
+
+## For AI Developers
+
+See **[CLAUDE.md](../CLAUDE.md)** for AI-first development patterns and project conventions.
 
 ---
 
-*Built with ❤️ by the Project Liminality community*
+*Built with love by the Project Liminality community*

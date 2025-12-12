@@ -8,12 +8,22 @@
 liminal-web-layout/
 ├── store/
 │   └── slice.ts              # Zustand slice for selected node and navigation history
+├── docs/
+│   ├── ring-layout.md        # Algorithm documentation with mathematical foundations
+│   └── ring-layout-visualizer.html  # Interactive algorithm demo
 ├── RingLayout.ts             # Core 3D positioning algorithm (hexagonal rings)
 ├── relationship-graph.ts     # In-memory graph database for relationship queries
 ├── commands.ts               # Command palette commands for relationship maintenance
 ├── index.ts                  # Barrel export
 └── README.md
 ```
+
+## Algorithm Documentation
+
+**[📐 Ring Layout Algorithm](./docs/ring-layout.md)** - Detailed documentation including:
+- Mathematical foundations (golden ratio, hexagonal geometry)
+- Interactive visualizer for the 42-coordinate system
+- Boolean mask patterns for node positioning
 
 ## Main Exports
 
@@ -34,6 +44,10 @@ export type { RelationshipGraph } from './relationship-graph';
 // Commands
 export { registerRelationshipCommands } from './commands';
 ```
+
+## Ownership
+
+**Liminal-web-layout owns** the ring layout algorithm (`RingLayout.ts`), navigation history state, and selected node tracking. Used by SpatialOrchestrator for liminal-web, search, edit, and copilot spatial modes.
 
 ## Key Components
 

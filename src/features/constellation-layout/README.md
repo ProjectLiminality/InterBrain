@@ -16,17 +16,16 @@ constellation-layout/
 │   └── SphereRotationControls.tsx # Virtual trackball with quaternion math and momentum
 ├── utils/
 │   ├── Clustering.ts             # Connected components detection (DFS)
-│   ├── Clustering.test.ts
 │   ├── ClusterRefinement.ts      # Spring-mass simulation for overlap elimination
-│   ├── ClusterRefinement.test.ts
 │   ├── ForceDirected.ts          # Fruchterman-Reingold algorithm
-│   ├── ForceDirected.test.ts
 │   ├── SphericalProjection.ts    # Exponential map: 2D tangent → 3D sphere
-│   ├── SphericalProjection.test.ts
 │   ├── FibonacciSphereLayout.ts  # Golden ratio sphere distribution
-│   ├── FibonacciSphereLayout.test.ts
-│   ├── DynamicViewScaling.ts     # Apple Watch-style distance scaling
-│   └── DynamicViewScaling.test.ts
+│   └── DynamicViewScaling.ts     # Apple Watch-style distance scaling
+├── docs/
+│   ├── constellation-layout.md          # Algorithm documentation
+│   ├── full-constellation-system.html   # Interactive full system demo
+│   ├── global-cluster-positioning.html  # Fibonacci sphere demo
+│   └── local-cluster-layout.html        # Force-directed demo
 ├── assets/
 │   └── star.png                  # Star image for night sky visualization
 ├── ConstellationLayout.ts        # Main orchestrator (calls utils pipeline)
@@ -36,6 +35,13 @@ constellation-layout/
 ├── index.ts                      # Barrel export
 └── README.md
 ```
+
+## Algorithm Documentation
+
+**[🌌 Constellation Layout Algorithm](./docs/constellation-layout.md)** - Comprehensive documentation including:
+- 5-phase mathematical pipeline (clustering, positioning, force-direction, projection, refinement)
+- Three interactive visualizers for each algorithm phase
+- JSON data format specification for custom inputs
 
 ## Main Exports
 
@@ -80,6 +86,10 @@ export type { DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge } from '.
 6. **Refinement** (`utils/ClusterRefinement.ts`) → Spring-mass simulation for overlap elimination
 7. **Store** → Persist computed positions to Zustand (localStorage)
 
+## Ownership
+
+**Constellation-layout owns** the computed 3D positions for nodes on the sphere surface. It **consumes** relationship graph data from the dreamweaving slice (source of truth for DreamSong relationships).
+
 ## Key Components
 
 ### `store/slice.ts` - State Management
@@ -88,8 +98,6 @@ Zustand slice managing:
 - **fibonacciConfig**: Sphere layout configuration
 - **debugWireframeSphere**, **debugIntersectionPoint**: Debug visualization flags
 - Persistence serialization for localStorage caching
-
-Note: Relationship graph data is owned by dreamweaving slice, not here.
 
 ### `components/SphereRotationControls.tsx` - Rotation Controls
 Google Earth-style virtual trackball:

@@ -161,17 +161,21 @@ With ever more powerful, local, multi-modal models on the horizon and deeper int
 
 ![](media/AiderIntegration.gif)
 
-### 💬 Conversational Co-Pilot (TBD)
+### 💬 Conversational Co-Pilot
 
-Through realtime transcription of free flowing conversations (video call or in-person) combined with the existing semantic search functionality, the system will constantly filter for the most relevant DreamNodes, making them readily available for reference and sharing during the dialogue - all without interrupting the flow! Say goodbye to awkward interruptions due to not finding a reference!
-And the best part: referencing a DreamNode (implicitly or explicitly) automatically offers your peer to clone it. Which means sharing an idea and collaborating on it is the same thing in this system.
+An AI-powered conversation mode where you can invoke DreamNodes by name during natural dialogue. Type a message, and the copilot responds with context from your knowledge graph. Mention a DreamNode by name (e.g., "tell me about MyIdea") and it gets pulled into the conversation context.
+
+The foundation for a future realtime transcription system that will filter relevant DreamNodes during live conversations - making knowledge readily available without interrupting the flow.
 
 ![](media/ConversationalCopilot.gif)
 
-### 🎵 Songlines (TBD)
+### 🎵 Songlines (Future)
 
-Everytime an idea is shared during a conversation, and thus the corresponding DreamNode is cloned, the relevant clip of the conversation is automatically added to the DreamNode as yet another way of expressing the idea. This way every DreamNode remembers the path it travels in a unique set of conversation clips - its Songline!
-Not only do Songlines allow for an organic, decentralized and emergent replacement for static textbook definitions, they also constitute an invaluable source of community-generated and -owned data for representing knowledge in the most effortless yet high bandwidth way. In anticipation of local, multi-modal LLMs with effectively infinite context windows these Songlines may turn out to be a game changer in terms of leveraging collective knowledge and wisdom into actionable projects.
+A vision for the future: every time an idea is shared during a conversation, the relevant audio clip is automatically added to the DreamNode. Each DreamNode remembers the path it travels in a unique set of conversation clips - its Songline.
+
+Songlines would provide an organic, decentralized replacement for static definitions - community-generated data representing knowledge in the most effortless yet high-bandwidth way. With local multi-modal LLMs and infinite context windows, Songlines could become a game changer for leveraging collective wisdom.
+
+*Foundation exists via realtime-transcription feature; full Songline capture is future work.*
 
 ![](media/SongLines.gif)
 
@@ -180,6 +184,12 @@ Not only do Songlines allow for an organic, decentralized and emergent replaceme
 Easily open any given DreamNode in your favorite git client of your choice.
 
 ![](media/GitClientIntegration.gif)
+
+### 🌐 GitHub Publishing
+
+Share your DreamNodes with the world via GitHub Pages. With one action, publish a DreamNode to GitHub - the system creates a repository, generates an interactive viewer bundle, and deploys it to GitHub Pages. Recipients can view the DreamTalk and DreamSong in their browser, and easily clone it into their own InterBrain.
+
+*Complements the peer-to-peer Radicle sharing for cases where you want public, web-accessible sharing.*
 
 ### 📊 Organic Content Visualization
 
@@ -281,10 +291,9 @@ InterBrain addresses the echo chamber problem through a unique **holographic app
 
 Interested in contributing or understanding the technical architecture?
 
-- **Architecture Overview**: See [docs/architecture-details.md](docs/architecture-details.md)
-- **Radicle Integration**: See [docs/radicle-architecture.md](docs/radicle-architecture.md)
-- **Development Guide**: See [docs/development/](docs/development/)
-- **Technical Patterns**: See [docs/technical-patterns.md](docs/technical-patterns.md)
+- **AI Development Guide**: See [CLAUDE.md](CLAUDE.md) for AI-first development patterns
+- **Core Architecture**: See [src/core/README.md](src/core/README.md) for infrastructure and services
+- **Feature Catalog**: See [src/features/README.md](src/features/README.md) for vertical slice architecture
 - **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License

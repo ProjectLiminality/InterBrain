@@ -77,7 +77,7 @@ export { createGitHubSettingsSection, checkGitHubStatus } from './settings-secti
 - **Media file collision handling** - Uses simple counter suffix strategy (may not be robust for large albums)
 - **Link resolver scalability** - Builds UUID→URL map by reading all submodule .udd files (could be slow for large networks)
 
-## Architecture Notes
+## Notes
 - Commands delegate to services (never direct git operations)
 - Service layer handles all GitHub CLI and git operations
 - Batch operations serialize to prevent race conditions

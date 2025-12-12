@@ -66,7 +66,6 @@ core/
 ├── store/          → Zustand store + slice composition
 ├── components/     → DreamspaceCanvas, SpatialOrchestrator, DreamspaceView
 ├── services/       → VaultService, LeafManagerService, UIService, ServiceManager
-├── layout/         → ring-layout algorithm (pure function)
 ├── hooks/          → useEscapeKeyHandler, useOptionKeyHandlers
 ├── context/        → OrchestratorContext (spatial orchestrator ref)
 ├── commands/       → camera-commands
@@ -80,9 +79,7 @@ core/
 
 **Canvas**: `components/DreamspaceCanvas.tsx` (~670 lines) - R3F canvas, user input, overlay mounting. Delegates drop logic to `features/drag-and-drop`.
 
-**Orchestrator**: `components/SpatialOrchestrator.tsx` (~935 lines) - Node positioning, layout animations, interrupt-capable movement.
-
-**Ring Layout**: `layout/ring-layout.ts` - Pure algorithm for honeycomb positioning. 3 rings (6/12/18 slots). Used by liminal-web, edit, copilot modes.
+**Orchestrator**: `components/SpatialOrchestrator.tsx` (~935 lines) - Node positioning, layout animations, interrupt-capable movement. Uses ring layout from `liminal-web-layout` feature.
 
 ## Services
 
@@ -94,7 +91,7 @@ core/
 
 **UIService** (`services/ui-service.ts`) - Notices, modals, user prompts.
 
-## For AI Agents
+## Notes
 
 When working in features:
 1. **Never import `fs` directly** - use VaultService
@@ -104,5 +101,4 @@ When working in features:
 
 When working in core:
 1. Keep it minimal - resist feature-specific code
-2. New layout modes should use `ring-layout` as foundation
-3. Test pure logic (ring-layout has 17 tests)
+2. Layout algorithms live in feature slices (e.g., `liminal-web-layout`, `constellation-layout`)

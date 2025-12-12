@@ -61,7 +61,7 @@ DreamerNode/
 - **Trimmed clips** stored in the **DreamNode** (what you talked about)
 - Each perspective clip is sovereign - physically trimmed, not temporally masked
 
-## Architecture Notes
+## Notes
 
 - **Sovereign Storage**: Each perspective clip is physically trimmed and stored directly in the relevant DreamNode's repository
 - **Temporal Slicing**: Uses ffmpeg to create independent audio files (not temporal masking)

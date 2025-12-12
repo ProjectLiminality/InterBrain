@@ -197,6 +197,9 @@ export class DreamNodeConversionService {
       '.obsidian',
       'plugins',
       this.pluginId,
+      'src',
+      'features',
+      'dreamnode',
       'DreamNode-template'
     );
     await execAsync(`git init --template="${templatePath}" "${folderPath}"`);

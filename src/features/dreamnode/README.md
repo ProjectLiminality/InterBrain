@@ -15,13 +15,14 @@ DreamNodes are git-backed repositories representing either ideas (Dreams) or peo
 ```
 dreamnode/
 ├── store/
-│   └── slice.ts              # Zustand state (dreamNodes Map, flip state, creator mode)
+│   └── slice.ts              # Zustand state (dreamNodes Map, flip state)
 ├── types/
 │   └── dreamnode.ts          # Core interfaces (DreamNode, UDDFile, GitStatus, etc.)
 ├── services/
 │   ├── git-dreamnode-service.ts   # CRUD orchestrator with git + store sync
 │   ├── udd-service.ts             # .udd file read/write
-│   └── media-loading-service.ts   # Lazy media loading by camera distance
+│   ├── media-loading-service.ts   # Lazy media loading by camera distance
+│   └── dreamnode-conversion-service.ts # Convert existing folders to DreamNodes
 ├── utils/
 │   ├── git-utils.ts          # Stateless git commands (status, stash, commit)
 │   ├── vault-scanner.ts      # Filesystem discovery (scan, validate, read)
@@ -36,6 +37,11 @@ dreamnode/
 ├── styles/
 │   ├── dreamNodeStyles.ts    # Colors, dimensions, glows
 │   └── dreamNodeAnimations.css
+├── DreamNode-template/       # Git template for new DreamNode repos
+│   ├── hooks/                # Git hooks (pre-commit, post-commit)
+│   ├── udd                   # Template .udd file
+│   ├── LICENSE               # AGPL license
+│   └── README.md             # Template README
 ├── commands.ts               # Obsidian command palette (flip, fullscreen)
 ├── test-utils.ts             # Mock factories for testing
 ├── index.ts                  # Barrel export
@@ -73,6 +79,18 @@ export { DreamSongSide } from './components/DreamSongSide';
 // Commands
 export { registerDreamNodeCommands } from './commands';
 ```
+
+## Commands
+
+| Command | Hotkey | Description |
+|---------|--------|-------------|
+| Flip Selected DreamNode | `Ctrl+J` | Toggle between DreamTalk and DreamSong |
+| Flip DreamNode to Front | - | Show DreamTalk side |
+| Flip DreamNode to Back | - | Show DreamSong side |
+| Open DreamTalk Full-Screen | - | Full-screen DreamTalk media |
+| Open DreamSong Full-Screen | - | Open DreamSong in Obsidian tab |
+| Reveal Containing DreamNode | - | Focus DreamNode containing current file |
+| Convert Folder to DreamNode | - | Initialize folder as DreamNode repository |
 
 ## Architecture
 
@@ -121,3 +139,4 @@ export { registerDreamNodeCommands } from './commands';
 - **Media loading**: Eager metadata, lazy data (by camera distance)
 - **Radicle failures**: Don't block node creation (graceful degradation)
 - **Legacy `git-operations.ts`**: Deprecated, use `gitUtils` namespace
+- **⚠️ Creator Mode**: DEPRECATED - The `creatorMode` state in the store slice is leftover from an early UX experiment and will be removed in a future update. Do not build new features on this pattern.

@@ -38,6 +38,17 @@ export { default as DreamNodeEditor3D } from './DreamNodeEditor3D';
 export { default as RelationshipSearchInput } from './RelationshipSearchInput';
 ```
 
+## Commands
+
+| Command | Hotkey | Description |
+|---------|--------|-------------|
+| Enter Edit Mode | `Ctrl+E` | Open editor for selected DreamNode |
+| Exit Edit Mode | `Escape` | Close editor without saving |
+| Save Edit Mode Changes | `Ctrl+S` | Save changes and exit |
+| Cancel Edit Mode Changes | - | Discard changes and exit |
+| Search Related Nodes | `Ctrl+R` | Toggle relationship search in edit mode |
+| Find Similar Related Nodes | - | Semantic search for relationship candidates |
+
 ## Workflow
 
 1. **Enter**: User selects node in liminal-web layout, presses `Ctrl+E`

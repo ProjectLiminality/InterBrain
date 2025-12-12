@@ -7,9 +7,6 @@ export * from './store';
 // Services
 export * from './services';
 
-// Layout algorithms
-export * from './layout';
-
 // Context
 export { OrchestratorContext, useOrchestrator } from './context/orchestrator-context';
 

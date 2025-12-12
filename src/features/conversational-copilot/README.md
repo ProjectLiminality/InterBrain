@@ -156,7 +156,7 @@ Perspective clip creation requires ffmpeg:
 - **Python Dependency**: Requires Whisper transcription service running
 - **Claude API Required**: No AI summary fallback if API key missing (graceful degradation in place)
 
-## Architecture Notes
+## Notes
 
 - **Service Layer Pattern**: All business logic in singleton services
 - **Zustand State Management**: Copilot mode state integrated with core store
