@@ -513,7 +513,7 @@ export class GitHubService {
         throw new Error('Plugin directory not set. GitHubService.setPluginDir() must be called during plugin initialization.');
       }
 
-      const viewerBundlePath = path.join(this.pluginDir, 'viewer-bundle', 'index.html');
+      const viewerBundlePath = path.join(this.pluginDir, 'src/features/github-publishing/viewer-bundle', 'index.html');
 
 
       if (!fs.existsSync(viewerBundlePath)) {
@@ -534,7 +534,7 @@ export class GitHubService {
       fs.writeFileSync(indexPath, html);
 
       // Copy assets directory (JS, CSS, images)
-      const viewerAssetsDir = path.join(this.pluginDir, 'viewer-bundle', 'assets');
+      const viewerAssetsDir = path.join(this.pluginDir, 'src/features/github-publishing/viewer-bundle', 'assets');
       const buildAssetsDir = path.join(buildDir, 'assets');
 
       if (fs.existsSync(viewerAssetsDir)) {
