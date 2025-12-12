@@ -124,7 +124,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		);
 
 		// ============================================================
-		// GitHub Sharing Section (feature-owned)
+		// GitHub Publishing Section (feature-owned)
 		// ============================================================
 		createGitHubSettingsSection(
 			containerEl,
@@ -195,7 +195,7 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			{ name: 'Transcription', status: this.systemStatus.transcription, sectionId: 'transcription-section' },
 			{ name: 'Web Link Analyzer', status: this.systemStatus.webLinkAnalyzer, sectionId: 'web-link-analyzer-section' },
 			{ name: 'Radicle Network', status: this.systemStatus.radicle, sectionId: 'radicle-section' },
-			{ name: 'GitHub Sharing', status: this.systemStatus.github, sectionId: 'github-section' },
+			{ name: 'GitHub Publishing', status: this.systemStatus.github, sectionId: 'github-section' },
 			{ name: 'Claude API', status: this.systemStatus.claudeApi, sectionId: 'ai-section' }
 		];
 

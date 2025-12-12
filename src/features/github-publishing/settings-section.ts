@@ -1,8 +1,8 @@
 /**
- * GitHub Sharing Settings Section
+ * GitHub Publishing Settings Section
  *
- * Feature-owned settings UI for GitHub-based sharing (fallback when Radicle unavailable).
- * Rendered within the main settings panel.
+ * Feature-owned settings UI for publishing DreamSongs to GitHub Pages.
+ * Mirrors DreamNode repos to GitHub and creates static DreamSong sites.
  */
 
 import type InterBrainPlugin from '../../main';
@@ -15,21 +15,42 @@ interface GitHubIdentity {
 }
 
 /**
+ * Get environment with extended PATH for gh CLI detection
+ * Obsidian/Electron may not have the full shell PATH
+ */
+function getExtendedEnv(): Record<string, string> {
+	const nodeProcess = (globalThis as any).process;
+	const env = { ...nodeProcess?.env };
+
+	// Add common gh install locations to PATH
+	const extraPaths = [
+		'/opt/homebrew/bin',      // macOS ARM Homebrew
+		'/usr/local/bin',         // macOS Intel Homebrew / Linux
+		'/usr/bin',               // System
+		`${env.HOME}/.local/bin`, // Linux user installs
+	].filter(Boolean);
+
+	env.PATH = [...extraPaths, env.PATH].join(':');
+	return env;
+}
+
+/**
  * Get GitHub identity (username and gh version)
  */
 async function getGitHubIdentity(): Promise<GitHubIdentity | null> {
 	const { exec } = require('child_process');
 	const { promisify } = require('util');
 	const execAsync = promisify(exec);
+	const env = getExtendedEnv();
 
 	try {
 		// Get gh version
-		const versionResult = await execAsync('gh --version');
+		const versionResult = await execAsync('gh --version', { env });
 		const versionMatch = versionResult.stdout.match(/gh version ([\d.]+)/);
 		const ghVersion = versionMatch ? versionMatch[1] : 'unknown';
 
 		// Get authenticated username via gh api
-		const userResult = await execAsync('gh api user --jq .login');
+		const userResult = await execAsync('gh api user --jq .login', { env });
 		const username = userResult.stdout.trim();
 
 		if (username) {
@@ -48,12 +69,13 @@ export async function checkGitHubStatus(): Promise<FeatureStatus> {
 	const { exec } = require('child_process');
 	const { promisify } = require('util');
 	const execAsync = promisify(exec);
+	const env = getExtendedEnv();
 
 	try {
 		// Step 1: Check if gh CLI is installed
 		let ghVersion: string | null = null;
 		try {
-			const versionResult = await execAsync('gh --version');
+			const versionResult = await execAsync('gh --version', { env });
 			const versionMatch = versionResult.stdout.match(/gh version ([\d.]+)/);
 			ghVersion = versionMatch ? versionMatch[1] : 'installed';
 		} catch {
@@ -68,7 +90,7 @@ export async function checkGitHubStatus(): Promise<FeatureStatus> {
 
 		// Step 2: Check if authenticated
 		try {
-			const userResult = await execAsync('gh api user --jq .login');
+			const userResult = await execAsync('gh api user --jq .login', { env });
 			const username = userResult.stdout.trim();
 
 			if (username) {
@@ -108,14 +130,14 @@ export async function checkGitHubStatus(): Promise<FeatureStatus> {
 }
 
 /**
- * Create the GitHub sharing settings section
+ * Create the GitHub publishing settings section
  */
 export function createGitHubSettingsSection(
 	containerEl: HTMLElement,
 	_plugin: InterBrainPlugin,
 	status: FeatureStatus | undefined
 ): void {
-	const header = containerEl.createEl('h2', { text: '📤 GitHub Sharing (Fallback)' });
+	const header = containerEl.createEl('h2', { text: '🧬 GitHub Publishing' });
 	header.id = 'github-section';
 
 	if (status) {
@@ -123,7 +145,7 @@ export function createGitHubSettingsSection(
 	}
 
 	containerEl.createEl('p', {
-		text: 'GitHub is used automatically when Radicle is unavailable or on Windows. Creates GitHub repositories and GitHub Pages sites for DreamNodes.',
+		text: 'Publish DreamSongs as static GitHub Pages sites. Also mirrors DreamNode repositories to GitHub as open source.',
 		cls: 'setting-item-description'
 	});
 
