@@ -219,17 +219,36 @@ export function createRadicleSettingsSection(
 				await stopRadicleNode(radicleService, nodeStatusDiv);
 			}));
 
-	// Installation instructions
+	// Installation instructions - link to install script section
 	const platform = (window as any).process?.platform || 'unknown';
 	if (status?.status === 'not-installed' && platform !== 'win32') {
-		const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
-		installDiv.createEl('p', { text: '📦 Not installed? Install Radicle:' });
-		installDiv.createEl('a', {
-			text: 'https://radicle.xyz',
-			href: 'https://radicle.xyz'
-		});
-		installDiv.createEl('p', { text: 'Then run: rad auth' });
+		createInstallScriptLink(containerEl, 'Radicle');
 	}
+}
+
+/**
+ * Create link to install script section
+ */
+function createInstallScriptLink(containerEl: HTMLElement, dependencyName: string): void {
+	const linkDiv = containerEl.createDiv({ cls: 'interbrain-install-link' });
+	linkDiv.style.marginTop = '12px';
+
+	const linkText = linkDiv.createEl('p');
+	linkText.createSpan({ text: '💡 ' });
+
+	const link = linkText.createEl('a', {
+		text: 'Re-run the install script',
+		href: '#install-script-section'
+	});
+	link.addEventListener('click', (e) => {
+		e.preventDefault();
+		const section = document.getElementById('install-script-section');
+		if (section) {
+			section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	});
+
+	linkText.createSpan({ text: ` to set up ${dependencyName}.` });
 }
 
 /**

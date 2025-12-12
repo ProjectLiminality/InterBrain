@@ -101,15 +101,35 @@ export function createSemanticSearchSettingsSection(
 			plugin.app.commands.executeCommandById('interbrain:index-all-nodes');
 		}));
 
-	// Installation instructions
+	// Installation instructions - link to install script section
 	if (status?.status === 'not-installed') {
-		const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
-		installDiv.createEl('p', { text: '📦 Not installed? Follow these steps:' });
-		installDiv.createEl('ol').createEl('li', { text: 'Install Ollama: ' })
-			.createEl('a', { text: 'https://ollama.ai', href: 'https://ollama.ai' });
-		installDiv.lastElementChild?.createEl('li', { text: 'Run: ollama pull nomic-embed-text' });
-		installDiv.lastElementChild?.createEl('li', { text: 'Click "Check Status" above to verify' });
+		createInstallScriptLink(containerEl, 'Ollama');
 	}
+}
+
+/**
+ * Create link to install script section
+ */
+function createInstallScriptLink(containerEl: HTMLElement, dependencyName: string): void {
+	const linkDiv = containerEl.createDiv({ cls: 'interbrain-install-link' });
+	linkDiv.style.marginTop = '12px';
+
+	const linkText = linkDiv.createEl('p');
+	linkText.createSpan({ text: '💡 ' });
+
+	const link = linkText.createEl('a', {
+		text: 'Re-run the install script',
+		href: '#install-script-section'
+	});
+	link.addEventListener('click', (e) => {
+		e.preventDefault();
+		const section = document.getElementById('install-script-section');
+		if (section) {
+			section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	});
+
+	linkText.createSpan({ text: ` to set up ${dependencyName}.` });
 }
 
 /**

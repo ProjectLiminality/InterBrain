@@ -224,16 +224,44 @@ export function createTranscriptionSettingsSection(
 			}));
 
 		// Installation instructions
-		if (status?.status !== 'ready') {
+		if (status?.status === 'not-installed') {
+			// Python not installed - link to install script
+			createInstallScriptLink(containerEl, 'Python');
+		} else if (status?.status !== 'ready') {
+			// Python installed but venv needs setup
 			const installDiv = containerEl.createDiv({ cls: 'interbrain-install-instructions' });
 			installDiv.createEl('p', { text: '📦 Automatic setup:' });
 			const ol = installDiv.createEl('ol');
-			ol.createEl('li', { text: 'Transcription auto-setup runs on first launch' });
-			ol.createEl('li', { text: 'Or click "Setup Environment" button above to run manually' });
+			ol.createEl('li', { text: 'Click "Setup Environment" button above to run setup' });
 			ol.createEl('li', { text: 'Setup creates venv and downloads Whisper model (1-2 minutes)' });
 			ol.createEl('li', { text: 'Once complete, use "Start Transcription" anytime' });
 		}
 	}
+}
+
+/**
+ * Create link to install script section
+ */
+function createInstallScriptLink(containerEl: HTMLElement, dependencyName: string): void {
+	const linkDiv = containerEl.createDiv({ cls: 'interbrain-install-link' });
+	linkDiv.style.marginTop = '12px';
+
+	const linkText = linkDiv.createEl('p');
+	linkText.createSpan({ text: '💡 ' });
+
+	const link = linkText.createEl('a', {
+		text: 'Re-run the install script',
+		href: '#install-script-section'
+	});
+	link.addEventListener('click', (e) => {
+		e.preventDefault();
+		const section = document.getElementById('install-script-section');
+		if (section) {
+			section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	});
+
+	linkText.createSpan({ text: ` to set up ${dependencyName}.` });
 }
 
 /**

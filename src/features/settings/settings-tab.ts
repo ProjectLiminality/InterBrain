@@ -318,7 +318,11 @@ export class InterBrainSettingTab extends PluginSettingTab {
 	 * Advanced Section (global)
 	 */
 	private createAdvancedSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: '🔧 Advanced' });
+		const header = containerEl.createEl('h2', { text: '🔧 Advanced' });
+		header.id = 'advanced-section';
+
+		// Install Script (for missing dependencies)
+		this.createInstallScriptSection(containerEl);
 
 		// Reset settings button
 		new Setting(containerEl)
@@ -350,6 +354,62 @@ export class InterBrainSettingTab extends PluginSettingTab {
 						window.alert('Diagnostics copied to clipboard!');
 					}
 				}));
+	}
+
+	/**
+	 * Install Script Section - canonical way to install missing dependencies
+	 */
+	private createInstallScriptSection(containerEl: HTMLElement): void {
+		const installDiv = containerEl.createDiv({ cls: 'interbrain-install-script-section' });
+		installDiv.id = 'install-script-section';
+
+		installDiv.createEl('h4', { text: '📦 Install Script' });
+		installDiv.createEl('p', {
+			text: 'Missing dependencies? Re-run the install script to set up Radicle, GitHub CLI, and other requirements:',
+			cls: 'setting-item-description'
+		});
+
+		const scriptContainer = installDiv.createDiv({ cls: 'install-script-container' });
+		scriptContainer.style.display = 'flex';
+		scriptContainer.style.alignItems = 'center';
+		scriptContainer.style.gap = '8px';
+		scriptContainer.style.marginTop = '8px';
+		scriptContainer.style.marginBottom = '16px';
+
+		const installCommand = 'bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)';
+
+		const codeEl = scriptContainer.createEl('code', {
+			text: installCommand,
+			cls: 'install-script-command'
+		});
+		codeEl.style.padding = '8px 12px';
+		codeEl.style.borderRadius = '4px';
+		codeEl.style.fontSize = '12px';
+		codeEl.style.flex = '1';
+		codeEl.style.overflowX = 'auto';
+
+		const copyButton = scriptContainer.createEl('button', {
+			text: '📋 Copy',
+			cls: 'install-script-copy-button'
+		});
+		copyButton.addEventListener('click', () => {
+			navigator.clipboard.writeText(installCommand).then(() => {
+				copyButton.textContent = '✅ Copied!';
+				setTimeout(() => {
+					copyButton.textContent = '📋 Copy';
+				}, 2000);
+			}).catch(() => {
+				copyButton.textContent = '❌ Failed';
+				setTimeout(() => {
+					copyButton.textContent = '📋 Copy';
+				}, 2000);
+			});
+		});
+
+		installDiv.createEl('p', {
+			text: 'The script is idempotent and safe to run multiple times.',
+			cls: 'setting-item-description'
+		});
 	}
 
 	/**
