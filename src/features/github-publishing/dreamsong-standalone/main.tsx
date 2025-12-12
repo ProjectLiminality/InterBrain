@@ -79,7 +79,7 @@ function App() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', width: '100%' }}>
+    <div style={{ width: '100%' }}>
       <DreamSong
         blocks={data.blocks}
         sourceDreamNodeId={data.dreamNodeId}
