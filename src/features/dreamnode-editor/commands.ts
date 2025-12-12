@@ -161,6 +161,7 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
         store.setEditModeSearchResults(searchResults.map(result => result.node));
         store.setSearchResults(searchResults.map(result => result.node));
         store.setEditModeSearchActive(true);
+        store.setSpatialLayout('edit-search');
 
         uiService.hideProgress();
 
@@ -278,6 +279,7 @@ export function registerEditModeCommands(plugin: Plugin, uiService: UIService): 
         store.setEditModeSearchResults(searchResults.map(result => result.node));
         store.setSearchResults(searchResults.map(result => result.node));
         store.setEditModeSearchActive(true);
+        store.setSpatialLayout('edit-search');
 
         uiService.hideProgress();
 

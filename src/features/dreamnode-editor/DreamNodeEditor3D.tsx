@@ -39,7 +39,8 @@ export default function DreamNodeEditor3D() {
     setEditModeValidationErrors,
     setEditModeSearchActive,
     setEditModeSearchResults,
-    exitEditMode
+    exitEditMode,
+    setSpatialLayout
   } = useInterBrainStore();
 
   const { editingNode, validationErrors, newDreamTalkFile } = editMode;
@@ -97,6 +98,12 @@ export default function DreamNodeEditor3D() {
     if (editingNode && titleInputRef.current) {
       titleInputRef.current.focus();
     }
+  }, [editingNode?.id]);
+
+  // Reset previewMedia when editing a different node
+  useEffect(() => {
+    // Clear preview when switching to a different node
+    setPreviewMedia(null);
   }, [editingNode?.id]);
 
   // Handle pre-filled dreamTalkMedia
@@ -285,6 +292,7 @@ export default function DreamNodeEditor3D() {
     if (editMode.isSearchingRelationships) {
       // Turning OFF - show pending relationships only
       setEditModeSearchActive(false);
+      setSpatialLayout('edit'); // Return to edit mode layout
 
       const pendingRelationshipIds = editMode.pendingRelationships;
       if (pendingRelationshipIds.length > 0 && editingNode) {
@@ -305,8 +313,9 @@ export default function DreamNodeEditor3D() {
         setEditModeSearchResults([]);
       }
     } else {
-      // Turning ON
+      // Turning ON - switch to edit-search layout
       setEditModeSearchActive(true);
+      setSpatialLayout('edit-search');
     }
   };
 

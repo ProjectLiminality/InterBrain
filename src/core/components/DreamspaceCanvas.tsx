@@ -328,6 +328,12 @@ export default function DreamspaceCanvas() {
 
     // Handle edit mode relationship toggling
     if (store.editMode.isActive && store.editMode.editingNode) {
+      // IMPORTANT: Prevent clicking the center editing node itself
+      if (store.editMode.editingNode.id === node.id) {
+        console.log(`Edit mode: Cannot toggle relationship with self (center node: ${node.name})`);
+        return;
+      }
+
       // In edit mode, clicking a node toggles its relationship status
       store.togglePendingRelationship(node.id);
       console.log(`Edit mode: Toggled relationship with "${node.name}"`);
