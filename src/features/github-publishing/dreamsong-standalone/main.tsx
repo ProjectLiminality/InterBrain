@@ -50,7 +50,6 @@ function App() {
   // Handler for media clicks - resolves to appropriate hosted URL
   const handleMediaClick = (sourceDreamNodeId: string) => {
     if (!data.linkResolver) {
-      console.log('No link resolver available for:', sourceDreamNodeId);
       return;
     }
 
@@ -74,8 +73,7 @@ function App() {
       return;
     }
 
-    // No hosted version available
-    console.log('DreamNode not hosted anywhere:', sourceDreamNodeId);
+    // No hosted version available - media is not clickable
   };
 
   return (

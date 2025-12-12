@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { sanitizeTitleToPascalCase } from '../../dreamnode/utils/title-sanitization';
+import { URIHandlerService } from '../../uri-handler';
 
 const execAsync = promisify(exec);
 
@@ -337,17 +338,10 @@ export class GitHubService {
 
   /**
    * Generate Obsidian URI for cloning from GitHub
+   * Delegates to URIHandlerService for canonical URL generation
    */
   generateObsidianURI(repoUrl: string): string {
-    // Extract repo path (e.g., "user/dreamnode-uuid")
-    const match = repoUrl.match(/github\.com\/([^/]+\/[^/\s]+)/);
-    if (!match) {
-      throw new Error(`Invalid GitHub URL: ${repoUrl}`);
-    }
-
-    const repoPath = match[1].replace(/\.git$/, '');
-
-    return `obsidian://interbrain-clone?repo=github.com/${repoPath}`;
+    return URIHandlerService.generateGitHubCloneLink('', repoUrl);
   }
 
   /**

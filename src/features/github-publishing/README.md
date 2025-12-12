@@ -15,6 +15,10 @@ github-publishing/
 │   ├── share-link-service.ts  # Obsidian URI generation
 │   └── network-service.ts     # Placeholder for Windows P2P
 ├── dreamsong-standalone/      # React viewer source for Pages
+│   ├── index.html             # HTML template with data injection
+│   ├── main.tsx               # React entry point
+│   └── vite.config.ts         # Vite build config
+├── viewer-bundle/             # Built assets (output of build-github-viewer)
 ├── commands.ts                # Obsidian command registration
 ├── settings-section.ts        # Feature-owned settings UI
 ├── index.ts                   # Barrel export
@@ -70,12 +74,11 @@ export { createGitHubSettingsSection, checkGitHubStatus } from './settings-secti
 - Node.js fs/path/child_process for file operations and git commands
 - Obsidian Plugin API for commands and UI
 - DreamWeaving feature for canvas parsing and DreamSong rendering
+- URI Handler feature for canonical Obsidian URI generation
 
 ## Flags
 
 ### Technical Debt
-- **Static site building inside Obsidian** - `service.ts` builds Vite sites in plugin context (non-ideal, works but brittle)
-- **Missing viewer bundle validation** - No check if `viewer-bundle/` is up-to-date with source code
 - **network-service.ts is stub** - Placeholder implementation with no functionality
 
 ### Potential Issues
