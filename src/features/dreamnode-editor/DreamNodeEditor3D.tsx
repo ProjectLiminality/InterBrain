@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { setIcon } from 'obsidian';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle, isValidDreamTalkMedia, DropZone, ValidationError, validateDreamNodeTitle, isTitleValid } from '../dreamnode';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle, isValidDreamTalkMedia, DropZone, ValidationError, validateDreamNodeTitle, isTitleValid } from '../dreamnode';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { UIService } from '../../core/services/ui-service';
@@ -359,7 +359,7 @@ export default function DreamNodeEditor3D() {
                 position: 'relative',
                 opacity: animatedOpacity,
                 transition: dreamNodeStyles.transitions.creation,
-                boxShadow: getNodeGlow(editingNode.type, 15),
+                boxShadow: getGoldenGlow(15),
                 fontFamily: dreamNodeStyles.typography.fontFamily
               }}
               onDragOver={handleDragOver}

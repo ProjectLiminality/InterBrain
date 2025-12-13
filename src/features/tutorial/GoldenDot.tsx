@@ -112,7 +112,7 @@ export const GoldenDot: React.FC<GoldenDotProps> = ({
   to,
   controlPoints,
   duration = 2,
-  size = 80,
+  size = 160,
   onComplete,
   visible = true,
   easing = 'easeInOut',

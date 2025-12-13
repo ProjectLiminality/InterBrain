@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { DreamNode } from '../types/dreamnode';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from '../styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { DreamSong } from '../../dreamweaving/components/DreamSong'; // Use pure DreamSong for 3D back side (embedded context)
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { useDreamSongData } from '../../dreamweaving/hooks/useDreamSongData';
@@ -17,6 +17,7 @@ interface DreamSongSideProps {
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
+  glowIntensity?: number; // Distance-scaled glow intensity
   // dreamSongData and isLoadingDreamSong removed - handled by hook
   // isVisible removed - relying on CSS backface-visibility for optimization
   onMouseEnter: () => void;
@@ -36,6 +37,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   shouldShowFullscreenButton,
   nodeSize: _nodeSize,
   borderWidth,
+  glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
   // dreamSongData and isLoadingDreamSong removed - using hook
   // isVisible parameter removed for simplicity
   onMouseEnter,
@@ -72,8 +74,9 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     dreamNode.id
   );
   const nodeColors = getNodeColors(dreamNode.type);
-  const gitState = getGitVisualState(dreamNode.gitStatus);
-  const gitStyle = getGitStateStyle(gitState);
+
+  // Unified golden glow: hover OR relationship pending
+  const shouldGlow = isHovered || isPendingRelationship;
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
@@ -103,26 +106,12 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         width: '100%',
         height: '100%',
         borderRadius: dreamNodeStyles.dimensions.borderRadius,
-        border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+        border: `${borderWidth}px solid ${nodeColors.border}`,
         background: nodeColors.fill,
         overflow: 'hidden',
         cursor: 'pointer !important',
-        transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        animation: gitStyle.animation,
-        boxShadow: (() => {
-          // Priority 1: Git status glow (always highest priority)
-          if (gitStyle.glowIntensity > 0) {
-            return getGitGlow(gitState, gitStyle.glowIntensity);
-          }
-
-          // Priority 2: Relationship glow (edit mode OR copilot mode)
-          if (isPendingRelationship) {
-            return getEditModeGlow(25); // Strong gold glow for relationships
-          }
-
-          // Priority 3: Hover glow (fallback)
-          return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-        })(),
+        transition: dreamNodeStyles.transitions.default,
+        boxShadow: shouldGlow ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const

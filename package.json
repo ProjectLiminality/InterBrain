@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "build": "vite build && npm run build-github-viewer && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
+    "build:dev": "vite build && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
     "build-github-viewer": "cd src/features/github-publishing/dreamsong-standalone && vite build --config vite.config.ts --outDir ../viewer-bundle",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",

@@ -1,6 +1,6 @@
 import React from 'react';
 import { DreamNode, MediaFile } from '../types/dreamnode';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from '../styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 import { PDFPreview } from './PDFPreview';
@@ -15,6 +15,7 @@ interface DreamTalkSideProps {
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
+  glowIntensity?: number; // Distance-scaled glow intensity
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: (e: React.MouseEvent) => void;
@@ -32,6 +33,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   shouldShowFullscreenButton,
   nodeSize,
   borderWidth,
+  glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -40,8 +42,9 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   onFullScreenClick
 }) => {
   const nodeColors = getNodeColors(dreamNode.type);
-  const gitState = getGitVisualState(dreamNode.gitStatus);
-  const gitStyle = getGitStateStyle(gitState);
+
+  // Unified golden glow: hover OR relationship pending
+  const shouldGlow = isHovered || isPendingRelationship;
 
   return (
     <div
@@ -50,26 +53,12 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         width: '100%',
         height: '100%',
         borderRadius: dreamNodeStyles.dimensions.borderRadius,
-        border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+        border: `${borderWidth}px solid ${nodeColors.border}`,
         background: nodeColors.fill,
         overflow: 'hidden',
         cursor: 'pointer !important',
-        transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        animation: gitStyle.animation,
-        boxShadow: (() => {
-          // Priority 1: Git status glow (always highest priority)
-          if (gitStyle.glowIntensity > 0) {
-            return getGitGlow(gitState, gitStyle.glowIntensity);
-          }
-
-          // Priority 2: Relationship glow (edit mode OR copilot mode)
-          if (isPendingRelationship) {
-            return getEditModeGlow(25); // Strong gold glow for relationships
-          }
-
-          // Priority 3: Hover glow (fallback)
-          return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-        })(),
+        transition: dreamNodeStyles.transitions.default,
+        boxShadow: shouldGlow ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const

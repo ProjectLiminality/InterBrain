@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../dreamnode/styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../dreamnode/styles/dreamNodeStyles';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 interface SearchNode3DProps {
@@ -297,7 +297,7 @@ export default function SearchNode3D({
               position: 'relative',
               opacity: animatedOpacity,
               transition: dreamNodeStyles.transitions.creation,
-              boxShadow: getNodeGlow('dream', 15), // Blue dream glow
+              boxShadow: getGoldenGlow(15),
               fontFamily: dreamNodeStyles.typography.fontFamily
             }}
             onDragOver={handleDragOver}
