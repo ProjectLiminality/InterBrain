@@ -29,6 +29,7 @@ import {
 import { openNodeContent } from '../../features/conversational-copilot/utils/open-node-content';
 import { OrchestratorContext } from '../context/orchestrator-context';
 import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
+import { TutorialOverlay } from '../../features/tutorial';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -632,6 +633,9 @@ export default function DreamspaceCanvas() {
 
           {/* DreamNode editor - render when edit mode is active */}
           <DreamNodeEditor3D />
+
+          {/* Tutorial overlay - onboarding system with Manim-style animations */}
+          <TutorialOverlay />
         </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}

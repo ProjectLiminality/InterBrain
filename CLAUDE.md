@@ -59,6 +59,7 @@ Each feature README contains: Purpose, Directory Structure, Main Exports, Comman
 | `settings` | Plugin settings tab |
 | `dreamnode-updater` | Update preview and apply workflow |
 | `uri-handler` | interbrain:// protocol handling |
+| `tutorial` | Onboarding with Manim-style text animations |
 
 ## Technology Stack
 

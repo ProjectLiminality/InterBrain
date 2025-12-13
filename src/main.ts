@@ -35,6 +35,7 @@ import {
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
 import { registerFaceTimeCommands } from './features/video-calling/commands';
+import { registerTutorialCommands } from './features/tutorial';
 import { FaceTimeService } from './features/video-calling/service';
 import { CanvasParserService } from './features/dreamweaving/services/canvas-parser-service';
 import { SubmoduleManagerService } from './features/dreamweaving/services/submodule-manager-service';
@@ -375,6 +376,9 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize and register real-time transcription
     initializeRealtimeTranscriptionService(this);
     registerTranscriptionCommands(this);
+
+    // Register tutorial commands (onboarding system)
+    registerTutorialCommands(this, this.uiService);
     
     // Open DreamSpace command
     this.addCommand({

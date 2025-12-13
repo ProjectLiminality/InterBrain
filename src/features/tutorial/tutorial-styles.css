@@ -1,0 +1,146 @@
+/**
+ * Tutorial Styles
+ *
+ * Styles for tutorial modal and animations
+ */
+
+/* Obsidian Modal Styles */
+.tutorial-modal .modal {
+  max-width: 800px;
+}
+
+.tutorial-modal-content {
+  padding: 3rem;
+  text-align: center;
+}
+
+.tutorial-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tutorial-buttons {
+  margin-top: 2rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+/* Fade in animation for description */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* === 3D Space Styles (for future use) === */
+
+.tutorial-tooltip {
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 2rem 3rem;
+  min-width: 400px;
+  max-width: 600px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.manim-text-container {
+  margin-bottom: 1rem;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tutorial-description {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-top: 1rem;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.tutorial-skip {
+  margin-top: 1.5rem;
+  padding: 0.5rem 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tutorial-skip:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.tutorial-skip:active {
+  transform: scale(0.95);
+}
+
+/* Navigation controls (for future multi-step navigation) */
+.tutorial-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+  gap: 1rem;
+}
+
+.tutorial-nav button {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: white;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tutorial-nav button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.tutorial-nav button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Progress indicator */
+.tutorial-progress {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.tutorial-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.tutorial-progress-dot.active {
+  background: white;
+  transform: scale(1.3);
+}

@@ -1,0 +1,178 @@
+/**
+ * TutorialService - Manages tutorial state and progression
+ *
+ * Tracks:
+ * - First-time user detection
+ * - Current tutorial step
+ * - Tutorial completion status
+ *
+ * Uses localStorage for persistence across sessions
+ */
+
+export interface TutorialStep {
+  id: string;
+  title: string;
+  description: string;
+  position?: [number, number, number]; // 3D position for tooltip
+  targetNodeId?: string; // If highlighting a specific node
+  duration?: number; // Auto-advance after N seconds
+}
+
+export class TutorialService {
+  private static STORAGE_KEY = 'interbrain-tutorial-state';
+  private currentStep: number = -1; // -1 = inactive, 0+ = active tutorial step
+  private onStepChangeCallbacks: Array<(step: TutorialStep | null) => void> = [];
+
+  /**
+   * Tutorial steps definition
+   */
+  private steps: TutorialStep[] = [
+    {
+      id: 'welcome',
+      title: 'Enter Liminal Space',
+      description: 'Welcome to the space between thoughts',
+      position: [0, 0, -25],
+      duration: 4000 // Show for 4 seconds
+    },
+    {
+      id: 'dreamspace-intro',
+      title: 'This is the DreamSpace',
+      description: 'A 3D canvas for your ideas to live and breathe',
+      position: [0, 2, -25],
+      duration: 5000
+    },
+    {
+      id: 'create-node',
+      title: 'Create Your First Dream',
+      description: 'Press Space to enter creation mode',
+      position: [0, -1, -25],
+      duration: 10000
+    }
+  ];
+
+  /**
+   * Check if user has completed tutorial
+   */
+  hasCompletedTutorial(): boolean {
+    const state = this.loadState();
+    return state.completed || false;
+  }
+
+  /**
+   * Check if tutorial should auto-start
+   *
+   * TEMP: Always return true for testing
+   */
+  shouldAutoStart(): boolean {
+    return true; // TEMP: Always show tutorial for testing
+    // return !this.hasCompletedTutorial(); // Normal behavior
+  }
+
+  /**
+   * Start tutorial from beginning
+   */
+  start(): void {
+    this.currentStep = 0;
+    this.saveState({ completed: false, currentStep: 0 });
+    this.notifyStepChange();
+  }
+
+  /**
+   * Advance to next step
+   */
+  next(): void {
+    if (this.currentStep < this.steps.length - 1) {
+      this.currentStep++;
+      this.saveState({ completed: false, currentStep: this.currentStep });
+      this.notifyStepChange();
+    } else {
+      this.complete();
+    }
+  }
+
+  /**
+   * Go to previous step
+   */
+  previous(): void {
+    if (this.currentStep > 0) {
+      this.currentStep--;
+      this.saveState({ completed: false, currentStep: this.currentStep });
+      this.notifyStepChange();
+    }
+  }
+
+  /**
+   * Skip tutorial
+   */
+  skip(): void {
+    this.complete();
+  }
+
+  /**
+   * Complete tutorial
+   */
+  complete(): void {
+    this.saveState({ completed: true, currentStep: this.steps.length });
+    this.currentStep = -1; // Return to inactive state
+    this.notifyStepChange(); // null step indicates completion
+  }
+
+  /**
+   * Get current step
+   */
+  getCurrentStep(): TutorialStep | null {
+    if (this.currentStep >= 0 && this.currentStep < this.steps.length) {
+      return this.steps[this.currentStep];
+    }
+    return null;
+  }
+
+  /**
+   * Subscribe to step changes
+   */
+  onStepChange(callback: (step: TutorialStep | null) => void): () => void {
+    this.onStepChangeCallbacks.push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.onStepChangeCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onStepChangeCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Reset tutorial (for testing)
+   */
+  reset(): void {
+    globalThis.localStorage.removeItem(TutorialService.STORAGE_KEY);
+    this.currentStep = -1; // Return to inactive state
+  }
+
+  // Private methods
+
+  private notifyStepChange(): void {
+    const step = this.getCurrentStep();
+    this.onStepChangeCallbacks.forEach(callback => callback(step));
+  }
+
+  private loadState(): { completed: boolean; currentStep: number } {
+    const stored = globalThis.localStorage.getItem(TutorialService.STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error('Failed to load tutorial state:', e);
+      }
+    }
+    return { completed: false, currentStep: 0 };
+  }
+
+  private saveState(state: { completed: boolean; currentStep: number }): void {
+    globalThis.localStorage.setItem(TutorialService.STORAGE_KEY, JSON.stringify(state));
+  }
+}
+
+// Singleton instance
+export const tutorialService = new TutorialService();
