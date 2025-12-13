@@ -5,6 +5,97 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-12-13 - Vertical Slice Architecture Refactoring
+
+### Overview
+
+Complete architectural overhaul reorganizing the codebase into self-contained feature slices. This release establishes a foundation optimized for AI-assisted development and long-term maintainability.
+
+### Architecture Transformation
+
+**Vertical Slice Pattern**
+- Reorganized from scattered files to 21 self-contained feature slices
+- Each feature owns its store slice, services, components, and documentation
+- Established `src/core/` for shared infrastructure (store, services, hooks, components)
+- Eliminated cross-feature dependencies through clear boundary ownership
+
+**Feature Catalog**
+| Feature | Purpose |
+|---------|---------|
+| `dreamnode` | Core types, services, git operations, 3D visualization |
+| `dreamnode-creator` | Node creation workflow (renamed from proto-node) |
+| `dreamnode-editor` | Node editing workflow (renamed from edit-mode) |
+| `constellation-layout` | Fibonacci sphere distribution + cluster generation |
+| `liminal-web-layout` | Focused node with ring relationships |
+| `dreamweaving` | Canvas parsing, submodules, DreamSong playback |
+| `semantic-search` | Vector embeddings and similarity search |
+| `conversational-copilot` | AI conversation mode |
+| `social-resonance-filter` | Radicle P2P integration (renamed from social-resonance) |
+| `coherence-beacon` | Relationship discovery via git hooks |
+| `github-publishing` | GitHub Pages sharing (renamed from github-sharing) |
+| `action-buttons` | Radial menu (renamed from radial-buttons) |
+| `dreamnode-updater` | Update workflow (renamed from updates) |
+| + 8 more features |
+
+### Documentation Overhaul
+
+**README Cascade**
+- Root README → core/README → features/README → individual feature READMEs
+- Every feature has standardized README with: Purpose, Directory Structure, Main Exports, Commands, Dependencies, Notes
+- Algorithm documentation moved to feature boundaries (ring-layout → liminal-web-layout, constellation → constellation-layout)
+
+**CLAUDE.md Condensation**
+- Reduced from ~533 to ~188 lines
+- Focused on: Feature overview, GitHub CLI commands, essential patterns
+- Removed outdated epic progress and deprecated patterns
+
+### Code Quality
+
+**Test Coverage**
+- 348 tests passing (up from 238 in v0.8.0)
+- Added comprehensive tests for: drag-and-drop utilities, ring layout algorithm, constellation layout utilities
+- Zero lint warnings, zero TypeScript errors
+
+**Bug Fixes**
+- Fix hooks order violations in DreamNodeCreator3D and DreamNodeEditor3D
+- Fix copilot mode option key handling race condition
+- Fix transcription/web-link-analyzer status checks when services not initialized
+- Fix plugin unload error when transcription service not initialized
+- Fix dreamnode-editor: wrong image display, search display, self-toggle
+
+### Extracted & Consolidated
+
+**New Core Infrastructure**
+- `core/hooks/` - useEscapeKeyHandler, useOptionKeyState
+- `core/components/` - Shared UI components
+- `core/store/` - Zustand store with feature slice composition
+- OrchestratorContext replacing custom DOM events
+
+**Feature Extractions**
+- Songline feature extracted from conversational-copilot
+- Drag-and-drop feature with comprehensive url-utils
+- Settings feature owning its panel sections
+- URI Handler as standalone feature
+
+### Renamed for Clarity
+
+| Old Name | New Name | Reason |
+|----------|----------|--------|
+| proto-node | dreamnode-creator | Clearer purpose |
+| edit-mode | dreamnode-editor | Parallel naming |
+| radial-buttons | action-buttons | More descriptive |
+| github-sharing | github-publishing | Accurate function |
+| social-resonance | social-resonance-filter | Reflects filtering role |
+| updates | dreamnode-updater | Feature-scoped naming |
+
+### Deprecated
+
+- **Creator Mode**: The `creatorMode` state in dreamnode store slice is deprecated and will be removed in a future update
+
+### Breaking Changes
+
+None for end users. Internal architecture changes only.
+
 ## [0.8.0] - 2025-10-24 - Epic 8: Coherence Beacon System (Complete)
 
 ### Added
