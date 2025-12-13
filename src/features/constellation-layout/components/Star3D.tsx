@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Html } from '@react-three/drei';
-import starImage from '../assets/star.png';
 
 interface Star3DProps {
   position: [number, number, number];
@@ -16,7 +15,7 @@ interface Star3DProps {
  * - Consistent sizing and appearance
  * - Used to occlude distant DreamNodes
  */
-export default function Star3D({ position, size = 5000 }: Star3DProps) {
+export default function Star3D({ position, size = 7500 }: Star3DProps) {
   // Calculate position with small offset toward camera (origin)
   // This places the star slightly closer than the DreamNode at the same anchor
   const STAR_OFFSET = 50; // Units closer to camera than anchor position
@@ -54,18 +53,22 @@ export default function Star3D({ position, size = 5000 }: Star3DProps) {
         height: `${size}px` // Let content determine size
       }}
     >
-      <img
-        src={starImage}
-        alt=""
+      <div
         style={{
           width: `${size}px`,
           height: `${size}px`,
-          opacity: 1,
-          filter: 'brightness(1)',
-          objectFit: 'fill', // Changed from 'contain' to 'fill' to use full container
-          // No hover effects or transitions - pure static visual
+          borderRadius: '50%',
+          // Pure CSS radial gradient - white center fading to transparent
+          background: `radial-gradient(circle,
+            rgba(255, 255, 255, 1) 0%,
+            rgba(255, 255, 255, 0.8) 5%,
+            rgba(255, 255, 255, 0.5) 12%,
+            rgba(255, 255, 255, 0.25) 22%,
+            rgba(255, 255, 255, 0.1) 35%,
+            rgba(255, 255, 255, 0.03) 55%,
+            rgba(255, 255, 255, 0) 80%
+          )`,
         }}
-        draggable={false}
       />
     </Html>
   );

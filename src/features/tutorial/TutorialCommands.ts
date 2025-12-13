@@ -52,4 +52,59 @@ export function registerTutorialCommands(plugin: Plugin, uiService: UIService): 
       uiService.showInfo('Tutorial skipped');
     }
   });
+
+  // Test Golden Dot - Arc (Debug)
+  plugin.addCommand({
+    id: 'test-golden-dot',
+    name: 'Test Golden Dot - Arc (Debug)',
+    callback: () => {
+      console.log('✨ Testing golden dot animation (arc)');
+
+      // Animate from left to right with default arc
+      tutorialService.animateGoldenDot({
+        from: [-15, 0, -30],
+        to: [15, 0, -30],
+        duration: 3,
+        size: 100,
+        easing: 'easeInOut'
+      });
+
+      uiService.showInfo('Golden dot test (arc) - watch DreamSpace');
+    }
+  });
+
+  // Test Golden Dot - Linear (Debug)
+  plugin.addCommand({
+    id: 'test-golden-dot-linear',
+    name: 'Test Golden Dot - Linear (Debug)',
+    callback: () => {
+      console.log('✨ Testing golden dot animation (linear)');
+
+      const from: [number, number, number] = [-15, 0, -30];
+      const to: [number, number, number] = [15, 0, -30];
+
+      // Linear path: control points on the line between from and to
+      const cp1: [number, number, number] = [
+        from[0] + (to[0] - from[0]) * 0.33,
+        from[1] + (to[1] - from[1]) * 0.33,
+        from[2] + (to[2] - from[2]) * 0.33,
+      ];
+      const cp2: [number, number, number] = [
+        from[0] + (to[0] - from[0]) * 0.66,
+        from[1] + (to[1] - from[1]) * 0.66,
+        from[2] + (to[2] - from[2]) * 0.66,
+      ];
+
+      tutorialService.animateGoldenDot({
+        from,
+        to,
+        controlPoints: [cp1, cp2],
+        duration: 3,
+        size: 100,
+        easing: 'easeInOut'
+      });
+
+      uiService.showInfo('Golden dot test (linear) - watch DreamSpace');
+    }
+  });
 }

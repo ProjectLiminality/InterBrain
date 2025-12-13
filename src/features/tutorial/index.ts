@@ -2,7 +2,7 @@
 
 // Service & types
 export { tutorialService, TutorialService } from './TutorialService';
-export type { TutorialStep } from './TutorialService';
+export type { TutorialStep, GoldenDotAnimation } from './TutorialService';
 
 // Commands
 export { registerTutorialCommands } from './TutorialCommands';
@@ -11,3 +11,4 @@ export { registerTutorialCommands } from './TutorialCommands';
 export { TutorialOverlay } from './TutorialOverlay';
 export { TutorialModal } from './TutorialModal';
 export { ManimText } from './ManimText';
+export { GoldenDot } from './GoldenDot';

@@ -18,10 +18,23 @@ export interface TutorialStep {
   duration?: number; // Auto-advance after N seconds
 }
 
+export interface GoldenDotAnimation {
+  from: [number, number, number];
+  to: [number, number, number];
+  controlPoints?: [number, number, number][];
+  duration?: number;
+  size?: number;
+  easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+}
+
 export class TutorialService {
   private static STORAGE_KEY = 'interbrain-tutorial-state';
   private currentStep: number = -1; // -1 = inactive, 0+ = active tutorial step
   private onStepChangeCallbacks: Array<(step: TutorialStep | null) => void> = [];
+
+  // Golden dot state (decoupled from tutorial steps)
+  private goldenDotAnimation: GoldenDotAnimation | null = null;
+  private onGoldenDotCallbacks: Array<(animation: GoldenDotAnimation | null) => void> = [];
 
   /**
    * Tutorial steps definition
@@ -150,7 +163,52 @@ export class TutorialService {
     this.currentStep = -1; // Return to inactive state
   }
 
-  // Private methods
+  // ============ Golden Dot Methods (Decoupled) ============
+
+  /**
+   * Trigger a golden dot animation
+   */
+  animateGoldenDot(animation: GoldenDotAnimation): void {
+    this.goldenDotAnimation = animation;
+    this.notifyGoldenDotChange();
+  }
+
+  /**
+   * Clear golden dot (called when animation completes)
+   */
+  clearGoldenDot(): void {
+    this.goldenDotAnimation = null;
+    this.notifyGoldenDotChange();
+  }
+
+  /**
+   * Get current golden dot animation
+   */
+  getGoldenDotAnimation(): GoldenDotAnimation | null {
+    return this.goldenDotAnimation;
+  }
+
+  /**
+   * Subscribe to golden dot changes
+   */
+  onGoldenDotChange(callback: (animation: GoldenDotAnimation | null) => void): () => void {
+    this.onGoldenDotCallbacks.push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.onGoldenDotCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onGoldenDotCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  private notifyGoldenDotChange(): void {
+    const animation = this.goldenDotAnimation;
+    this.onGoldenDotCallbacks.forEach(callback => callback(animation));
+  }
+
+  // ============ Private Methods ============
 
   private notifyStepChange(): void {
     const step = this.getCurrentStep();
