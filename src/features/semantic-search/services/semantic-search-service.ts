@@ -1,6 +1,6 @@
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { VectorData } from './indexing-service';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { IEmbeddingService, VectorUtils, TextProcessor } from './embedding-service';
 import { ollamaEmbeddingService } from './ollama-embedding-service';
 
@@ -318,24 +318,11 @@ export class SemanticSearchService {
   }
   
   /**
-   * Get all available nodes based on current data mode
+   * Get all available nodes from store
    */
   private async getAllAvailableNodes(): Promise<DreamNode[]> {
     const store = useInterBrainStore.getState();
-    
-    if (store.dataMode === 'real') {
-      return Array.from(store.realNodes.values()).map(data => data.node);
-    } else {
-      // Get from mock data configuration (import dynamically to avoid circular deps)
-      try {
-        // Dynamic import to avoid circular dependencies
-        const { getMockDataForConfig } = await import('../../../mock/dreamnode-mock-data');
-        return getMockDataForConfig(store.mockDataConfig);
-      } catch {
-        console.error('SemanticSearchService: Failed to get mock data');
-        return [];
-      }
-    }
+    return Array.from(store.dreamNodes.values()).map(data => data.node);
   }
   
   /**

@@ -1,6 +1,6 @@
 import type InterBrainPlugin from '../../../main';
 import { getRealtimeTranscriptionService } from '../services/transcription-service';
-import { UIService } from '../../../services/ui-service';
+import { UIService } from '../../../core/services/ui-service';
 
 /**
  * Register real-time transcription commands
@@ -66,8 +66,13 @@ export function registerTranscriptionCommands(plugin: InterBrainPlugin): void {
 
 /**
  * Cleanup transcription service on plugin unload
+ * Safe to call even if service was never initialized
  */
 export function cleanupTranscriptionService(): void {
-	const transcriptionService = getRealtimeTranscriptionService();
-	transcriptionService.cleanup();
+	try {
+		const transcriptionService = getRealtimeTranscriptionService();
+		transcriptionService.cleanup();
+	} catch {
+		// Service was never initialized - nothing to clean up
+	}
 }

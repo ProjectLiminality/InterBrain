@@ -1,5 +1,5 @@
-import { DreamNode } from '../../../types/dreamnode';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { DreamNode } from '../../dreamnode';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { IEmbeddingService, TextProcessor } from './embedding-service';
 import { ollamaEmbeddingService } from './ollama-embedding-service';
 
@@ -369,7 +369,7 @@ export class IndexingService implements IIndexingService {
     // Add README content if present and VaultService is available
     try {
       // Get VaultService from serviceManager when needed
-      const { serviceManager } = await import('../../../services/service-manager');
+      const { serviceManager } = await import('../../../core/services/service-manager');
       const vaultService = serviceManager.getVaultService();
 
       if (vaultService) {
@@ -509,25 +509,15 @@ export class IndexingService implements IIndexingService {
   }
   
   /**
-   * Helper: Get all nodes based on current data mode
+   * Helper: Get all nodes from store
    */
   private async getAllNodes(): Promise<DreamNode[]> {
     const store = useInterBrainStore.getState();
-    
-    console.log(`IndexingService: Getting nodes in ${store.dataMode} mode`);
-    
-    if (store.dataMode === 'real') {
-      // Get from real nodes
-      const nodes = Array.from(store.realNodes.values()).map(data => data.node);
-      console.log(`IndexingService: Found ${nodes.length} nodes in real store:`, nodes.map(n => n.name).join(', '));
-      return nodes;
-    } else {
-      // Get from mock data configuration (same source as DreamspaceCanvas)
-      const { getMockDataForConfig } = await import('../../../mock/dreamnode-mock-data');
-      const nodes = getMockDataForConfig(store.mockDataConfig);
-      console.log(`IndexingService: Found ${nodes.length} mock nodes:`, nodes.map(n => n.name).join(', '));
-      return nodes;
-    }
+
+    // Get from real nodes
+    const nodes = Array.from(store.dreamNodes.values()).map(data => data.node);
+    console.log(`IndexingService: Found ${nodes.length} nodes in store:`, nodes.map(n => n.name).join(', '));
+    return nodes;
   }
 }
 

@@ -1,67 +1,166 @@
 # Conversational Copilot Feature
 
-Real-time transcription and semantic search system for conversation-driven knowledge discovery. This feature creates a distinct copilot mode that reuses existing edit mode infrastructure while providing a conversation-focused user experience.
+Real-time video call assistant that transcribes conversations, performs semantic search, tracks DreamNode invocations, and generates AI-powered summaries with shareable exports.
 
-## Architecture
+## Purpose
 
-### Code Reuse Strategy
-- **Fork existing edit mode**: Reuses ~80% of edit mode infrastructure
-- **Leverages relationship edit search**: Uses existing search field and honeycomb layout
-- **Reuses proven animations**: Fly-in/out patterns from edit-search mode
-- **Minimal new components**: Focus on transcription buffer and copilot-specific logic
+Transforms video calls into documented conversations by:
+- Real-time speech-to-text transcription (delegates to `realtime-transcription` feature)
+- Semantic search as you speak (finds relevant DreamNodes)
+- Recording DreamNode invocations during conversation
+- AI-powered post-call summaries with Claude Haiku
+- Beautiful PDF + email exports with deep links
+- Perspective creation (delegates to `songline` feature for audio clips)
 
-### Core Components
+## Directory Structure
 
-#### Commands (`commands.ts`)
-- **Start Conversation Mode**: Enter copilot from selected person in liminal-web
-- **End Conversation Mode**: Exit copilot back to liminal-web
-- **Toggle Copilot Search Field**: Debug command for search field visibility
+```
+conversational-copilot/
+├── store/
+│   └── slice.ts                        # Zustand state (copilot mode, shared nodes)
+├── services/
+│   ├── transcription-service.ts        # Markdown file creation + semantic search monitoring
+│   ├── conversation-recording-service.ts  # DreamNode invocation tracking
+│   ├── conversation-summary-service.ts    # Claude API for AI summaries
+│   ├── email-export-service.ts            # Apple Mail draft generation
+│   ├── pdf-generator-service.ts           # PDF document creation
+│   └── llm-provider.ts                    # LLM provider abstraction
+├── utils/
+│   └── open-node-content.ts            # Node content opening logic
+├── commands.ts                         # Command palette registration
+└── README.md                           # This file
+```
 
-#### Transcription Buffer (planned)
-- 500-character FIFO buffer with Web Speech API integration
-- 5-second debounced semantic search updates
-- Manual dictation activation (Fn key twice)
+## Responsibility Boundaries
 
-#### Layout Integration (planned)
-- Person node at center (static positioning like edit mode)
-- Honeycomb search results around person
-- Spacebar press-and-hold for show/hide results
-- Reuses existing SpatialOrchestrator animations
+### What This Feature Owns
+- **Copilot mode state**: Active/inactive, conversation partner, shared node tracking
+- **Transcript file management**: Creates markdown file in `conversations/` directory
+- **Semantic search during conversation**: Monitors transcript changes, runs FIFO buffer search
+- **Invocation tracking**: Records which DreamNodes were clicked during conversation
+- **AI summary generation**: Calls Claude API to generate summaries and clip suggestions
+- **Export pipeline**: PDF generation, Apple Mail drafts, share link creation
 
-## User Workflow
+### What This Feature Delegates
 
-1. **Select person** in liminal-web mode (must be dreamer type)
-2. **Run command**: "Start Conversation Mode"
-3. **Auto-focus**: Search field ready for dictation input
-4. **Start dictation**: User presses Fn key twice (macOS native)
-5. **Real-time updates**: Search results update every 5 seconds when speech changes buffer
-6. **View results**: Hold spacebar to show frozen snapshot of results
-7. **Navigate**: Release spacebar to hide, click result to open DreamSong
-8. **Exit**: Run "End Conversation Mode" or use escape key
+**To `realtime-transcription` feature:**
+- Actual audio capture and transcription (Python whisper_streaming)
+- Audio file recording (MP3 output)
 
-## Integration Points
+**To `songline` feature:**
+- Perspective storage (`perspectives.json` in DreamNodes)
+- Audio clip trimming (ffmpeg integration)
+- Clip filename generation
+- Perspective service (CRUD operations)
 
-- **Store State**: Uses `copilotMode` state in Zustand store
-- **Spatial Layout**: Extends SpatialOrchestrator with 'copilot' layout
-- **Semantic Search**: Leverages existing semantic search service
-- **Edit Mode Patterns**: Reuses search field, animations, and layout logic
+**To `social-resonance` feature:**
+- Radicle identity operations
+- Share link generation
 
-## Development Features
+## Data Flow
 
-- **Debug Toggle**: Show/hide search field for development/testing
-- **Visual Indicators**: Listening status using Obsidian Notice system
-- **Error Handling**: Graceful fallbacks for speech recognition failures
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Start Conversation Mode                       │
+├─────────────────────────────────────────────────────────────────┤
+│ 1. Create transcript file (this feature)                        │
+│ 2. Start Python transcription (realtime-transcription)          │
+│ 3. Start invocation recording (this feature)                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      During Conversation                         │
+├─────────────────────────────────────────────────────────────────┤
+│ • Python writes to transcript.md (realtime-transcription)       │
+│ • This feature monitors file changes → semantic search          │
+│ • User clicks DreamNodes → invocations recorded (this feature)  │
+│ • Invocation markers embedded in transcript (this feature)      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     End Conversation Mode                        │
+├─────────────────────────────────────────────────────────────────┤
+│ 1. Stop Python transcription (realtime-transcription)           │
+│ 2. Generate AI summary + clip suggestions (this feature)        │
+│ 3. Create PDF with DreamNode images (this feature)              │
+│ 4. Generate share links (social-resonance)                      │
+│ 5. Open Apple Mail draft (this feature)                         │
+│ 6. Create perspectives from clip suggestions (songline)         │
+│ 7. Persist bidirectional relationships (this feature)           │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## Performance Targets
+## File Storage
 
-- **Search Latency**: <500ms consistently
-- **Animation Performance**: 60fps during layout transitions
-- **Buffer Updates**: 5-second debounced semantic search
-- **Buffer Size**: 500 characters (FIFO rolling window)
+### Where Things Go
 
-## Future Extensions
+| Content Type | Location | Owner |
+|--------------|----------|-------|
+| Transcript `.md` | `DreamerNode/conversations/` | This feature |
+| Full audio `.mp3` | `DreamerNode/conversations/` | realtime-transcription |
+| `perspectives.json` | `DreamNode/` (ideas) | songline |
+| Trimmed clips `.mp3` | `DreamNode/perspectives/` | songline |
 
-- **Advanced Speech Recognition**: Explore automated dictation activation
-- **Enhanced Visual Feedback**: Custom listening indicators
-- **Search Result Filtering**: Person-specific relationship weighting
-- **Export Functionality**: Save conversation transcripts as DreamNodes
+## Main Exports
+
+### Commands
+```typescript
+registerConversationalCopilotCommands(plugin, uiService)
+```
+
+### State Management
+```typescript
+copilotMode: {
+  isActive: boolean
+  conversationPartner: DreamNode | null
+  sharedNodeIds: string[]
+  frozenSearchResults: DreamNode[]
+}
+```
+
+### Services (Singleton Pattern)
+```typescript
+getTranscriptionService()           // Markdown file + semantic search
+getConversationRecordingService()   // Invocation tracking
+getConversationSummaryService()     // AI summary generation
+getEmailExportService()             // Apple Mail + PDF creation
+getPDFGeneratorService()            // PDF document generation
+```
+
+## Prerequisites
+
+### Radicle Authentication
+Email export requires Radicle authentication for share link generation:
+```bash
+rad auth
+```
+This registers your SSH key with ssh-agent. Without this, the email export will fail with:
+```
+error: radicle key is not registered; run `rad auth` to register it with ssh-agent
+```
+
+### Python Environment
+Real-time transcription requires the Python environment from `realtime-transcription` feature.
+
+### ffmpeg
+Perspective clip creation requires ffmpeg:
+- macOS: `brew install ffmpeg`
+- Ubuntu/Debian: `sudo apt install ffmpeg`
+- Windows: Download from ffmpeg.org
+
+## Known Limitations
+
+- **macOS Only**: AppleScript for Apple Mail (no cross-platform email yet)
+- **Python Dependency**: Requires Whisper transcription service running
+- **Claude API Required**: No AI summary fallback if API key missing (graceful degradation in place)
+
+## Notes
+
+- **Service Layer Pattern**: All business logic in singleton services
+- **Zustand State Management**: Copilot mode state integrated with core store
+- **Event-Driven**: File monitoring via Obsidian Vault events
+- **Throttling**: 5-second cooldown on semantic search
+- **FIFO Buffer**: Last 500 chars of transcript for search queries
+- **Graceful Degradation**: Works without API key (basic email with no AI summary)

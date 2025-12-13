@@ -18,7 +18,7 @@ export type {
   IIndexingService
 } from '../services/indexing-service';
 
-// Re-export search types  
+// Re-export search types
 export type {
   SearchResult,
   SearchOptions

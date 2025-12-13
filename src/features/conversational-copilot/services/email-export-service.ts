@@ -1,10 +1,10 @@
 import { App, Notice } from 'obsidian';
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
-import { URIHandlerService } from '../../../services/uri-handler-service';
-import { ShareLinkService } from '../../../services/share-link-service';
-import { serviceManager } from '../../../services/service-manager';
-import { useInterBrainStore } from '../../../store/interbrain-store';
+import { URIHandlerService } from '../../uri-handler';
+import { ShareLinkService } from '../../github-publishing/services/share-link-service';
+import { serviceManager } from '../../../core/services/service-manager';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { getPDFGeneratorService } from './pdf-generator-service';
 import * as os from 'os';
 import * as path from 'path';
@@ -76,7 +76,7 @@ export class EmailExportService {
 
 			for (const inv of invocations) {
 				try {
-					const nodeData = useInterBrainStore.getState().realNodes.get(inv.dreamUUID);
+					const nodeData = useInterBrainStore.getState().dreamNodes.get(inv.dreamUUID);
 					if (!nodeData?.node) {
 						console.warn(`⚠️ [EmailExport] Node not found in store: ${inv.dreamUUID} (${inv.nodeName})`);
 						continue;

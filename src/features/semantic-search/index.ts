@@ -11,8 +11,8 @@ export { OllamaHealthService, createOllamaHealthService } from './services/ollam
 export { indexingService } from './services/indexing-service';
 export { semanticSearchService } from './services/semantic-search-service';
 
-// Store slice
-export { createOllamaConfigSlice } from './store/ollama-config-slice';
+// Store slice (full search slice with ollamaConfig, vectorData, searchResults, etc.)
+export { createSearchSlice, SearchSlice, extractSearchPersistenceData, restoreSearchPersistenceData } from './store/slice';
 
 // Types and configurations
 export type {
@@ -30,6 +30,12 @@ export { DEFAULT_OLLAMA_CONFIG } from './types';
 
 // Command registration
 export { registerSemanticSearchCommands } from './commands';
+
+// Settings section
+export {
+	createSemanticSearchSettingsSection,
+	checkSemanticSearchStatus
+} from './settings-section';
 
 // Version info
 export const SEMANTIC_SEARCH_VERSION = '1.0.0';

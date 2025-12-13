@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useInterBrainStore } from '../../store/interbrain-store';
-import { DreamNode } from '../../types/dreamnode';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { DreamNode } from '../dreamnode';
 
 interface SearchResult {
   node: DreamNode;

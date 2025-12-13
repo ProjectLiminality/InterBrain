@@ -1,83 +1,74 @@
 import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
-import * as fs from 'fs';
-import * as path from 'path';
-import { UIService } from './services/ui-service';
-import { GitService } from './services/git-service';
-import { VaultService } from './services/vault-service';
-import { GitTemplateService } from './services/git-template-service';
-import { PassphraseManager } from './services/passphrase-manager';
-import { serviceManager } from './services/service-manager';
-import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './dreamspace/DreamspaceView';
-import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './dreamspace/DreamSongFullScreenView';
-import { LinkFileView, LINK_FILE_VIEW_TYPE } from './views/LinkFileView';
-import { LeafManagerService } from './services/leaf-manager-service';
-import { useInterBrainStore } from './store/interbrain-store';
-import { DEFAULT_FIBONACCI_CONFIG, calculateFibonacciSpherePositions } from './dreamspace/FibonacciSphereLayout';
-import { DreamNode } from './types/dreamnode';
-import { buildRelationshipGraph, logNodeRelationships, getRelationshipStats } from './utils/relationship-graph';
-import { getMockDataForConfig } from './mock/dreamnode-mock-data';
-import { calculateRingLayoutPositions, getRingLayoutStats, DEFAULT_RING_CONFIG } from './dreamspace/layouts/RingLayout';
+import { UIService } from './core/services/ui-service';
+import { GitOperationsService } from './features/dreamnode/utils/git-operations';
+import { VaultService } from './core/services/vault-service';
+import { PassphraseManager } from './features/social-resonance-filter/services/passphrase-manager';
+import { serviceManager } from './core/services/service-manager';
+import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
+import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
+import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/components/LinkFileView';
+import { LeafManagerService } from './core/services/leaf-manager-service';
+import { useInterBrainStore } from './core/store/interbrain-store';
+import { calculateFibonacciSpherePositions } from './features/constellation-layout';
+import {
+  DreamNode,
+  registerDreamNodeCommands,
+  revealContainingDreamNode,
+  convertFolderToDreamNode
+} from './features/dreamnode';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
-import { registerSearchInterfaceCommands } from './commands/search-interface-commands';
-import { registerEditModeCommands } from './commands/edit-mode-commands';
+import { registerCameraCommands } from './core/commands/camera-commands';
+import { registerSearchCommands } from './features/search';
+import { registerConstellationDebugCommands } from './features/constellation-layout';
+import { registerEditModeCommands } from './features/dreamnode-editor';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
-import { registerDreamweavingCommands } from './commands/dreamweaving-commands';
-import { registerRadicleCommands } from './commands/radicle-commands';
-import { registerGitHubCommands } from './commands/github-commands';
-import { registerCoherenceBeaconCommands } from './commands/coherence-beacon-commands';
-import { registerHousekeepingCommands } from './commands/housekeeping-commands';
-import { registerDreamerUpdateCommands } from './commands/dreamer-update-commands';
-import { registerFullScreenCommands } from './commands/fullscreen-commands';
-import { registerMigrationCommands } from './commands/migration-commands';
-import { registerRelationshipCommands } from './commands/relationship-commands';
-import { registerUpdateCommands } from './commands/update-commands';
+import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
+import { registerRadicleCommands } from './features/social-resonance-filter/commands';
+import { registerGitHubCommands } from './features/github-publishing/commands';
+import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
+import { registerDreamerUpdateCommands } from './features/dreamnode-updater/dreamer-update-commands';
+import { registerRelationshipCommands } from './features/liminal-web-layout';
+import { registerUpdateCommands } from './features/dreamnode-updater/commands';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
 	initializeRealtimeTranscriptionService
 } from './features/realtime-transcription';
-import { ConstellationCommands } from './commands/constellation-commands';
-import { RadialButtonCommands } from './commands/radial-button-commands';
-import { registerLinkFileCommands, enhanceFileSuggestions } from './commands/link-file-commands';
-import { registerFaceTimeCommands } from './commands/facetime-commands';
-import { FaceTimeService } from './services/facetime-service';
-import { CanvasParserService } from './services/canvas-parser-service';
-import { SubmoduleManagerService } from './services/submodule-manager-service';
-import { CanvasObserverService } from './services/canvas-observer-service';
-import { CoherenceBeaconService } from './services/coherence-beacon-service';
+import { registerFaceTimeCommands } from './features/video-calling/commands';
+import { FaceTimeService } from './features/video-calling/service';
+import { CanvasParserService } from './features/dreamweaving/services/canvas-parser-service';
+import { SubmoduleManagerService } from './features/dreamweaving/services/submodule-manager-service';
+import { CanvasObserverService } from './features/dreamweaving/services/canvas-observer-service';
+import { CoherenceBeaconService } from './features/coherence-beacon/service';
 import { initializeTranscriptionService } from './features/conversational-copilot/services/transcription-service';
 import { initializeConversationRecordingService } from './features/conversational-copilot/services/conversation-recording-service';
 import { initializeConversationSummaryService } from './features/conversational-copilot/services/conversation-summary-service';
 import { initializeEmailExportService } from './features/conversational-copilot/services/email-export-service';
 import { initializePDFGeneratorService } from './features/conversational-copilot/services/pdf-generator-service';
-import { initializeAudioRecordingService } from './features/conversational-copilot/services/audio-recording-service';
-import { initializePerspectiveService } from './features/conversational-copilot/services/perspective-service';
-import { initializeAudioTrimmingService } from './features/conversational-copilot/services/audio-trimming-service';
-import { initializeConversationsService } from './features/conversational-copilot/services/conversations-service';
+import { initializeAudioRecordingService } from './features/songline/services/audio-recording-service';
+import { initializePerspectiveService } from './features/songline/services/perspective-service';
+import { initializeAudioTrimmingService } from './features/songline/services/audio-trimming-service';
+import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
-import { initializeMediaLoadingService } from './services/media-loading-service';
-import { initializeURIHandlerService } from './services/uri-handler-service';
-import { initializeRadicleBatchInitService } from './services/radicle-batch-init-service';
-import { initializeGitHubBatchShareService } from './services/github-batch-share-service';
-import { initializeUpdateCheckerService } from './services/update-checker-service';
-import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './settings/InterBrainSettings';
+import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
+import { initializeURIHandlerService } from './features/uri-handler';
+import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
+import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
+import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
 
   // Service instances
   private uiService!: UIService;
-  private gitService!: GitService;
+  private gitOpsService!: GitOperationsService;
   private vaultService!: VaultService;
-  private gitTemplateService!: GitTemplateService;
   private passphraseManager!: PassphraseManager;
   private faceTimeService!: FaceTimeService;
   private canvasParserService!: CanvasParserService;
   private submoduleManagerService!: SubmoduleManagerService;
   public coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
-  private constellationCommands!: ConstellationCommands;
-  private radialButtonCommands!: RadialButtonCommands;
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
@@ -104,13 +95,6 @@ export default class InterBrainPlugin extends Plugin {
     // These will initialize in background after plugin loads
     this.initializeBackgroundServices();
 
-    // Auto-generate mock relationships if not present (ensures deterministic behavior)
-    const store = useInterBrainStore.getState();
-    if (!store.mockRelationshipData) {
-      console.log('Generating initial mock relationships for deterministic behavior...');
-      store.generateMockRelationships();
-    }
-    
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
@@ -163,7 +147,7 @@ export default class InterBrainPlugin extends Plugin {
       setTimeout(() => {
         const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
-        const nodeData = store.realNodes.get(uuidToSelect);
+        const nodeData = store.dreamNodes.get(uuidToSelect);
 
         if (nodeData) {
           console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
@@ -177,7 +161,7 @@ export default class InterBrainPlugin extends Plugin {
             console.log(`[InterBrain] Retrying node selection after brief delay...`);
             setTimeout(() => {
               const retryStore = useInterBrainStore.getState();
-              const retryNodeData = retryStore.realNodes.get(uuidToSelect);
+              const retryNodeData = retryStore.dreamNodes.get(uuidToSelect);
 
               if (retryNodeData) {
                 console.log(`[InterBrain] Auto-selecting node (retry): ${retryNodeData.node.name} (${uuidToSelect})`);
@@ -217,7 +201,7 @@ export default class InterBrainPlugin extends Plugin {
         // Find and select the InterBrain node by UUID
         const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
-        const nodeData = store.realNodes.get(interbrainUUID);
+        const nodeData = store.dreamNodes.get(interbrainUUID);
 
         if (nodeData) {
           console.log('[InterBrain] Selecting InterBrain node');
@@ -247,9 +231,10 @@ export default class InterBrainPlugin extends Plugin {
    */
   private async runTranscriptionAutoSetup(): Promise<void> {
     const vaultPath = (this.app.vault.adapter as any).basePath;
+    const pluginPath = `${vaultPath}/.obsidian/plugins/${this.manifest.id}`;
     const { exec } = require('child_process');
 
-    exec(`cd "${vaultPath}/InterBrain/src/features/realtime-transcription/scripts" && bash setup.sh`,
+    exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
       async (error: Error | null, stdout: string, stderr: string) => {
         if (error) {
           console.error('[InterBrain] Transcription setup error:', error);
@@ -292,25 +277,12 @@ export default class InterBrainPlugin extends Plugin {
       this.app.commands.executeCommandById('interbrain:scan-vault-dreamsong-relationships');
     }, 600); // Wait for vault scan to complete (after update checker)
 
-    // Start auto-fetch for updates after vault scan completes
-    setTimeout(() => {
-      console.log('[Plugin] Starting auto-fetch for DreamNode updates...');
-      const updateChecker = initializeUpdateCheckerService(this.app);
-
-      // Run auto-fetch in background (non-blocking)
-      updateChecker.checkAllDreamNodesForUpdates().then(() => {
-        console.log('[Plugin] Auto-fetch complete');
-      }).catch((error) => {
-        console.error('[Plugin] Auto-fetch failed:', error);
-      });
-    }, 500); // Wait for vault scan to complete
   }
 
   private initializeServices(): void {
     this.uiService = new UIService(this.app);
-    this.gitService = new GitService(this.app);
+    this.gitOpsService = new GitOperationsService(this.app);
     this.vaultService = new VaultService(this.app.vault, this.app);
-    this.gitTemplateService = new GitTemplateService(this.app.vault);
     this.passphraseManager = new PassphraseManager(this.uiService, this);
     this.faceTimeService = new FaceTimeService();
 
@@ -331,12 +303,6 @@ export default class InterBrainPlugin extends Plugin {
     this.leafManagerService = new LeafManagerService(this.app);
     this.canvasObserverService = new CanvasObserverService(this.app);
 
-    // Initialize constellation commands
-    this.constellationCommands = new ConstellationCommands(this);
-
-    // Initialize radial button commands
-    this.radialButtonCommands = new RadialButtonCommands(this);
-
     // Make services accessible to ServiceManager BEFORE initialization
     // Note: Using 'any' here is legitimate - we're extending the plugin with dynamic properties
     (this as any).vaultService = this.vaultService;
@@ -352,8 +318,17 @@ export default class InterBrainPlugin extends Plugin {
     // Register semantic search commands
     registerSemanticSearchCommands(this, this.uiService);
 
-    // Register search interface commands (search-as-dreamnode UI)
-    registerSearchInterfaceCommands(this, this.uiService);
+    // Register DreamNode commands (flip animations, fullscreen views)
+    registerDreamNodeCommands(this, this.uiService);
+
+    // Register search commands (search toggle)
+    registerSearchCommands(this, this.uiService);
+
+    // Register camera commands (flying controls, camera reset)
+    registerCameraCommands(this, this.uiService);
+
+    // Register constellation debug commands (wireframe sphere, intersection point)
+    registerConstellationDebugCommands(this, this.uiService);
 
     // Register edit mode commands (unified editing with relationship management)
     registerEditModeCommands(this, this.uiService);
@@ -382,29 +357,14 @@ export default class InterBrainPlugin extends Plugin {
     // Register Coherence Beacon commands (network discovery)
     registerCoherenceBeaconCommands(this);
 
-    // Register housekeeping commands (system maintenance)
-    registerHousekeepingCommands(this);
-
     // Register Dreamer update commands (check all projects from peer)
     registerDreamerUpdateCommands(this);
-
-    // Register migration commands (PascalCase naming migration)
-    registerMigrationCommands(this);
 
     // Register relationship commands (bidirectional sync)
     registerRelationshipCommands(this);
 
     // Register update commands (auto-fetch and update management)
     registerUpdateCommands(this, this.uiService);
-
-    // Register full-screen commands
-    registerFullScreenCommands(this, this.uiService);
-
-    // Register constellation commands (DreamSong relationship analysis)
-    this.constellationCommands.registerCommands(this);
-
-    // Register radial button debug commands
-    this.radialButtonCommands.registerCommands(this);
 
     // Register link file commands (.link file support)
     registerLinkFileCommands(this, this.uiService);
@@ -464,9 +424,7 @@ export default class InterBrainPlugin extends Plugin {
           const loadingNotice = this.uiService.showLoading('Exiting creator mode...');
           try {
             // Stash any uncommitted changes when exiting creator mode
-            if (serviceManager.getMode() === 'real') {
-              await this.gitService.stashChanges(selectedNode.repoPath);
-            }
+            await this.gitOpsService.stashChanges(selectedNode.repoPath);
             store.setCreatorMode(false);
             this.uiService.showSuccess('Exited creator mode - changes stashed');
           } catch (error) {
@@ -482,9 +440,7 @@ export default class InterBrainPlugin extends Plugin {
           const loadingNotice = this.uiService.showLoading('Entering creator mode...');
           try {
             // Pop any existing stash when entering creator mode
-            if (serviceManager.getMode() === 'real') {
-              await this.gitService.popStash(selectedNode.repoPath);
-            }
+            await this.gitOpsService.popStash(selectedNode.repoPath);
             store.setCreatorMode(true, selectedNode.id);
             this.uiService.showSuccess(`Creator mode active for: ${selectedNode.name}`);
           } catch (error) {
@@ -515,6 +471,7 @@ export default class InterBrainPlugin extends Plugin {
           console.log(`💾 [Save Changes] Starting save workflow for: ${currentNode.name}`);
           const { exec } = require('child_process');
           const { promisify } = require('util');
+          const path = require('path');
           const execAsync = promisify(exec);
           const fullRepoPath = path.join(this.vaultService.getVaultPath(), currentNode.repoPath);
 
@@ -574,28 +531,18 @@ export default class InterBrainPlugin extends Plugin {
             return;
           }
 
-          // STEP 4: Commit remaining changes (with AI-generated message or fallback)
+          // STEP 4: Commit remaining changes
           console.log(`💾 [Save Changes] Step 4: Committing remaining changes...`);
           const commitNotice = this.uiService.showLoading('Creating commit...');
 
           try {
-            // Try AI-generated commit message first
-            await this.gitService.commitWithAI(currentNode.repoPath);
+            const commitMessage = `Save changes in ${currentNode.name}`;
+            await execAsync(`git commit -m "${commitMessage}"`, { cwd: fullRepoPath });
             commitNotice.hide();
-            console.log(`💾 [Save Changes] ✓ Changes committed with AI-generated message`);
+            console.log(`💾 [Save Changes] ✓ Changes committed`);
           } catch (commitError) {
-            console.warn(`💾 [Save Changes] AI commit failed, using fallback message:`, commitError);
-
-            // Fallback: Use simple generic commit message if AI fails
-            try {
-              const fallbackMessage = `Save changes in ${currentNode.name}`;
-              await execAsync(`git commit -m "${fallbackMessage}"`, { cwd: fullRepoPath });
-              commitNotice.hide();
-              console.log(`💾 [Save Changes] ✓ Changes committed with fallback message`);
-            } catch (fallbackError) {
-              commitNotice.hide();
-              throw fallbackError;
-            }
+            commitNotice.hide();
+            throw commitError;
           }
 
           // STEP 5: Exit creator mode after successful save
@@ -666,10 +613,10 @@ export default class InterBrainPlugin extends Plugin {
         const newState = useInterBrainStore.getState();
         console.log('Creation mode activated - state:', {
           isCreating: newState.creationState.isCreating,
-          protoNode: newState.creationState.protoNode,
+          draft: newState.creationState.draft,
           position: spawnPosition
         });
-        console.log('Proto-node should appear in DreamSpace');
+        console.log('DreamNodeCreator should appear in DreamSpace');
       }
     });
 
@@ -690,16 +637,6 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Toggle DreamNode selection
-    this.addCommand({
-      id: 'toggle-dreamnode-selection',
-      name: 'Toggle DreamNode selection',
-      callback: () => {
-        console.log('Toggle selection command executed');
-        this.uiService.showPlaceholder('Selection UI coming soon!');
-      }
-    });
-
     // Open DreamNode in Finder command
     this.addCommand({
       id: 'open-dreamnode-in-finder',
@@ -713,15 +650,9 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        // Only available in real mode (mock nodes don't have file paths)
-        if (serviceManager.getMode() !== 'real') {
-          this.uiService.showError('Open in Finder only available in real mode');
-          return;
-        }
-
         try {
           // Use git service to open the repository folder in Finder
-          await this.gitService.openInFinder(currentNode.repoPath);
+          await this.gitOpsService.openInFinder(currentNode.repoPath);
           this.uiService.showSuccess(`Opened ${currentNode.name} in Finder`);
         } catch (error) {
           console.error('Failed to open in Finder:', error);
@@ -743,15 +674,9 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        // Only available in real mode (mock nodes don't have file paths)
-        if (serviceManager.getMode() !== 'real') {
-          this.uiService.showError('Open in Terminal only available in real mode');
-          return;
-        }
-
         try {
           // Use git service to open terminal at the repository folder and run claude --continue
-          await this.gitService.openInTerminal(currentNode.repoPath);
+          await this.gitOpsService.openInTerminal(currentNode.repoPath);
           this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude --continue`);
         } catch (error) {
           console.error('Failed to open in Terminal:', error);
@@ -846,7 +771,7 @@ export default class InterBrainPlugin extends Plugin {
             'did:key:z6Mk... (optional)'
           );
 
-          const { ShareLinkService } = await import('./services/share-link-service');
+          const { ShareLinkService } = await import('./features/github-publishing/services/share-link-service');
           const shareLinkService = new ShareLinkService(this.app, this);
 
           // Pass recipientDid if provided (will be undefined if empty string)
@@ -859,79 +784,11 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Debug: Toggle wireframe sphere
-    this.addCommand({
-      id: 'toggle-debug-wireframe-sphere',
-      name: 'Toggle Debug Wireframe Sphere',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const newState = !store.debugWireframeSphere;
-        store.setDebugWireframeSphere(newState);
-        this.uiService.showSuccess(`Debug wireframe sphere ${newState ? 'enabled' : 'disabled'}`);
-      }
-    });
-
-    // Debug: Toggle intersection point
-    this.addCommand({
-      id: 'toggle-debug-intersection-point',
-      name: 'Toggle Debug Intersection Point',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const newState = !store.debugIntersectionPoint;
-        store.setDebugIntersectionPoint(newState);
-        this.uiService.showSuccess(`Debug intersection point ${newState ? 'enabled' : 'disabled'}`);
-      }
-    });
-
-    // Debug: Toggle flying camera controls
-    this.addCommand({
-      id: 'toggle-debug-flying-controls',
-      name: 'Toggle Debug Flying Camera Controls',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const newState = !store.debugFlyingControls;
-        store.setDebugFlyingControls(newState);
-        this.uiService.showSuccess(`Debug flying controls ${newState ? 'enabled' : 'disabled'}`);
-      }
-    });
-
-    // Toggle between mock and real data mode
-    this.addCommand({
-      id: 'toggle-data-mode',
-      name: 'Toggle Data Mode (Mock ↔ Real)',
-      callback: async () => {
-        const currentMode = serviceManager.getMode();
-        const newMode = currentMode === 'mock' ? 'real' : 'mock';
-        
-        const loadingNotice = this.uiService.showLoading(`Switching to ${newMode} mode...`);
-        try {
-          await serviceManager.setMode(newMode);
-          this.uiService.showSuccess(`Switched to ${newMode} mode`);
-          
-          // Trigger UI refresh
-          const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-          if (dreamspaceLeaf && dreamspaceLeaf.view instanceof DreamspaceView) {
-            // The view will automatically re-render based on store changes
-            console.log(`Data mode switched to ${newMode} - UI should update`);
-          }
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Failed to switch mode');
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
-    // Scan vault for DreamNodes (real mode only)
+    // Scan vault for DreamNodes
     this.addCommand({
       id: 'scan-vault',
       name: 'Scan Vault for DreamNodes',
       callback: async () => {
-        if (serviceManager.getMode() !== 'real') {
-          this.uiService.showError('Vault scan only available in real mode');
-          return;
-        }
-
         const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
         try {
           const stats = await serviceManager.scanVault();
@@ -942,7 +799,7 @@ export default class InterBrainPlugin extends Plugin {
 
             // Trigger two-phase media loading after vault scan
             try {
-              const { getMediaLoadingService } = await import('./services/media-loading-service');
+              const { getMediaLoadingService } = await import('./features/dreamnode/services/media-loading-service');
               const mediaLoadingService = getMediaLoadingService();
               mediaLoadingService.loadAllNodesByDistance();
             } catch (error) {
@@ -1005,121 +862,6 @@ export default class InterBrainPlugin extends Plugin {
         await plugins.disablePlugin('interbrain');
         await plugins.enablePlugin('interbrain');
         console.log(`[Refresh] Plugin reload complete`);
-      }
-    });
-
-    // Reset data store
-    this.addCommand({
-      id: 'reset-data-store',
-      name: 'Reset Data Store',
-      callback: () => {
-        const mode = serviceManager.getMode();
-        const confirmMsg = mode === 'mock' 
-          ? 'Reset all mock data?' 
-          : 'Clear real data store? (Vault files will remain unchanged)';
-        
-        if (globalThis.confirm(confirmMsg)) {
-          serviceManager.resetData();
-          this.uiService.showSuccess(`${mode} data store reset`);
-        }
-      }
-    });
-
-    // Generate mock relationships command
-    this.addCommand({
-      id: 'generate-mock-relationships',
-      name: 'Generate Mock Relationships (Bidirectional)',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.generateMockRelationships();
-        
-        const relationships = store.mockRelationshipData;
-        if (relationships) {
-          const nodeCount = relationships.size;
-          const connectionCount = Array.from(relationships.values()).reduce((sum, conns) => sum + conns.length, 0);
-          this.uiService.showSuccess(`Generated relationships for ${nodeCount} nodes with ${connectionCount} total connections`);
-        }
-      }
-    });
-    
-    // Clear mock relationships command
-    this.addCommand({
-      id: 'clear-mock-relationships',
-      name: 'Clear Mock Relationships',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.clearMockRelationships();
-        this.uiService.showSuccess('Mock relationships cleared - using default generation');
-      }
-    });
-    
-    // Mock data: Cycle through single node, fibonacci-12, fibonacci-50, and fibonacci-100
-    this.addCommand({
-      id: 'toggle-mock-data',
-      name: 'Toggle Mock Data (Single → 12 → 50 → 100)',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentConfig = store.mockDataConfig;
-        let newConfig: 'single-node' | 'fibonacci-12' | 'fibonacci-50' | 'fibonacci-100';
-        let displayName: string;
-        
-        switch (currentConfig) {
-          case 'single-node':
-            newConfig = 'fibonacci-12';
-            displayName = 'Fibonacci 12 Nodes';
-            break;
-          case 'fibonacci-12':
-            newConfig = 'fibonacci-50';
-            displayName = 'Fibonacci 50 Nodes';
-            break;
-          case 'fibonacci-50':
-            newConfig = 'fibonacci-100';
-            displayName = 'Fibonacci 100 Nodes';
-            break;
-          case 'fibonacci-100':
-          default:
-            newConfig = 'single-node';
-            displayName = 'Single Node';
-            break;
-        }
-        
-        store.setMockDataConfig(newConfig);
-        this.uiService.showSuccess(`Mock data: ${displayName}`);
-      }
-    });
-
-    // Test command: Select mock DreamNode
-    this.addCommand({
-      id: 'select-mock-dreamnode',
-      name: '[TEST] Select Mock DreamNode',
-      callback: () => {
-        const mockNode: DreamNode = {
-          id: 'test-123',
-          name: 'Test DreamNode',
-          type: 'dream' as const,
-          position: [0, 0, 0],
-          dreamTalkMedia: [],
-          dreamSongContent: [],
-          liminalWebConnections: [],
-          repoPath: '/test/path',
-          hasUnsavedChanges: false
-        };
-        const store = useInterBrainStore.getState();
-        store.setSelectedNode(mockNode);
-        this.uiService.showSuccess(`Selected: ${mockNode.name}`);
-        console.log('Mock node selected - Zustand state should be updated');
-      }
-    });
-
-    // Test command: Clear selection
-    this.addCommand({
-      id: 'clear-dreamnode-selection',
-      name: '[TEST] Clear DreamNode Selection',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.setSelectedNode(null);
-        this.uiService.showSuccess('Selection cleared');
-        console.log('Selection cleared - Zustand state should be null');
       }
     });
 
@@ -1214,154 +956,6 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Camera command: Reset camera position
-    this.addCommand({
-      id: 'camera-reset',
-      name: 'Reset Camera Position',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        // Reset to origin for proper Dynamic View Scaling geometry
-        store.setCameraPosition([0, 0, 0]);
-        store.setCameraTarget([0, 0, 0]);
-        store.setCameraTransition(false);
-        this.uiService.showSuccess('Camera position reset');
-        console.log('Camera reset to default position');
-      }
-    });
-
-    // Fibonacci sphere layout commands
-    this.addCommand({
-      id: 'fibonacci-expand-sphere',
-      name: 'Expand Fibonacci Sphere',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentRadius = store.fibonacciConfig.radius;
-        const newRadius = Math.min(currentRadius * 1.5, 5000); // Max radius of 5000
-        store.setFibonacciConfig({ radius: newRadius });
-        this.uiService.showSuccess(`Sphere expanded to radius ${Math.round(newRadius)}`);
-        console.log('Fibonacci sphere radius increased to:', newRadius);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-contract-sphere',
-      name: 'Contract Fibonacci Sphere',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentRadius = store.fibonacciConfig.radius;
-        const newRadius = Math.max(currentRadius / 1.5, 200); // Min radius of 200
-        store.setFibonacciConfig({ radius: newRadius });
-        this.uiService.showSuccess(`Sphere contracted to radius ${Math.round(newRadius)}`);
-        console.log('Fibonacci sphere radius decreased to:', newRadius);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-reset-config',
-      name: 'Reset Fibonacci Sphere to Default',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        store.resetFibonacciConfig();
-        this.uiService.showSuccess('Fibonacci sphere reset to default configuration');
-        console.log('Fibonacci sphere configuration reset to default:', DEFAULT_FIBONACCI_CONFIG);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-increase-nodes',
-      name: 'Increase Node Count',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentCount = store.fibonacciConfig.nodeCount;
-        const newCount = Math.min(currentCount + 6, 100); // Max 100 nodes
-        store.setFibonacciConfig({ nodeCount: newCount });
-        this.uiService.showSuccess(`Node count increased to ${newCount}`);
-        console.log('Fibonacci sphere node count increased to:', newCount);
-      }
-    });
-
-    this.addCommand({
-      id: 'fibonacci-decrease-nodes',
-      name: 'Decrease Node Count',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const currentCount = store.fibonacciConfig.nodeCount;
-        const newCount = Math.max(currentCount - 6, 6); // Min 6 nodes
-        store.setFibonacciConfig({ nodeCount: newCount });
-        this.uiService.showSuccess(`Node count decreased to ${newCount}`);
-        console.log('Fibonacci sphere node count decreased to:', newCount);
-      }
-    });
-
-    // Git Template System Commands
-    this.addCommand({
-      id: 'create-dreamnode-from-template',
-      name: 'Create DreamNode from Git Template',
-      callback: async () => {
-        console.log('Create DreamNode from template command executed');
-        this.uiService.showPlaceholder('Git template creation coming soon! Use mock creation for now.');
-        
-        // TODO: Implement template-based creation workflow
-        // 1. Prompt user for title and type
-        // 2. Select location in vault for new DreamNode
-        // 3. Generate UUID
-        // 4. Call gitTemplateService.initializeFromTemplate()
-        // 5. Integrate with existing DreamSpace UI
-      }
-    });
-
-    this.addCommand({
-      id: 'validate-dreamnode-template',
-      name: 'Validate DreamNode Template',
-      callback: async () => {
-        console.log('Validate template command executed');
-        const loadingNotice = this.uiService.showLoading('Validating DreamNode template...');
-        
-        try {
-          const validation = this.gitTemplateService.validateTemplate();
-          if (validation.valid) {
-            this.uiService.showSuccess('Template is valid and ready for use');
-            console.log('Template validation successful');
-          } else {
-            this.uiService.showError(`Template validation failed: ${validation.errors.join(', ')}`);
-            console.error('Template validation errors:', validation.errors);
-          }
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Unknown validation error');
-          console.error('Template validation error:', error);
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
-    this.addCommand({
-      id: 'check-dreamnode-coherence',
-      name: 'Check DreamNode Template Coherence',
-      callback: async () => {
-        console.log('Check template coherence command executed');
-        const loadingNotice = this.uiService.showLoading('Scanning vault for DreamNodes...');
-        
-        try {
-          const results = await this.gitTemplateService.scanVaultCoherence();
-          
-          if (results.total === 0) {
-            this.uiService.showSuccess('No DreamNodes found in vault');
-          } else if (results.incoherent.length === 0) {
-            this.uiService.showSuccess(`All ${results.total} DreamNodes are coherent with template`);
-          } else {
-            this.uiService.showError(`Found ${results.incoherent.length} incoherent DreamNodes out of ${results.total} total`);
-            console.log('Incoherent DreamNodes:', results.incoherent);
-          }
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Coherence check failed');
-          console.error('Coherence check error:', error);
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
     // Refresh Git Status command
     this.addCommand({
       id: 'refresh-git-status',
@@ -1375,16 +969,6 @@ export default class InterBrainPlugin extends Plugin {
           
           if (service.refreshGitStatus) {
             const result = await service.refreshGitStatus();
-            
-            if (serviceManager.getMode() === 'mock') {
-              // In mock mode, also trigger UI update
-              if (typeof globalThis.CustomEvent !== 'undefined') {
-                globalThis.dispatchEvent(new globalThis.CustomEvent('mock-nodes-changed', {
-                  detail: { source: 'git-status-refresh' }
-                }));
-              }
-            }
-            
             this.uiService.showSuccess(`Git status refreshed: ${result.updated} updated, ${result.errors} errors`);
             console.log('Git status refresh result:', result);
           } else {
@@ -1395,346 +979,6 @@ export default class InterBrainPlugin extends Plugin {
           console.error('Git status refresh error:', error);
         } finally {
           loadingNotice.hide();
-        }
-      }
-    });
-
-    this.addCommand({
-      id: 'update-dreamnode-coherence',
-      name: 'Update DreamNode Template Coherence',
-      callback: async () => {
-        console.log('Update template coherence command executed');
-        const loadingNotice = this.uiService.showLoading('Updating DreamNode coherence...');
-        
-        try {
-          // First scan for incoherent nodes
-          const scanResults = await this.gitTemplateService.scanVaultCoherence();
-          
-          if (scanResults.incoherent.length === 0) {
-            this.uiService.showSuccess('All DreamNodes are already coherent');
-            return;
-          }
-          
-          // Note: Actual coherence update would require shell commands
-          // For now, just report what would be updated
-          this.uiService.showError(
-            `Found ${scanResults.incoherent.length} incoherent DreamNodes. ` +
-            'Manual update required (git hooks cannot be updated via Obsidian API)'
-          );
-          
-          // Log details for manual fixing
-          for (const node of scanResults.incoherent) {
-            console.log(`Incoherent DreamNode: ${node.path}`);
-            console.log(`  Issues: ${node.issues.join(', ')}`);
-          }
-          
-        } catch (error) {
-          this.uiService.showError(error instanceof Error ? error.message : 'Coherence update failed');
-          console.error('Coherence update error:', error);
-        } finally {
-          loadingNotice.hide();
-        }
-      }
-    });
-
-    // Step 3.5: Simple move-to-center command to test dual-mode positioning
-    this.addCommand({
-      id: 'move-selected-node-to-center',
-      name: 'Move Selected Node to Center',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        // Check if DreamSpace is open
-        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
-          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
-          return;
-        }
-        
-        // Call global canvas function (simple approach for now)
-        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { moveSelectedNodeToCenter(): boolean } }).__interbrainCanvas;
-        if (canvasAPI && canvasAPI.moveSelectedNodeToCenter) {
-          const success = canvasAPI.moveSelectedNodeToCenter();
-          if (success) {
-            this.uiService.showSuccess(`Moving ${selectedNode.name} to center`);
-          } else {
-            this.uiService.showError('Failed to move node - ref not found');
-          }
-        } else {
-          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
-        }
-      }
-    });
-
-    // Step 4: Test focused layout via SpatialOrchestrator
-    this.addCommand({
-      id: 'test-focused-layout-orchestrator',
-      name: 'Test: Focus on Selected Node (Orchestrator)',
-      callback: () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        // Check if DreamSpace is open
-        const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-        if (!dreamspaceLeaf || !(dreamspaceLeaf.view instanceof DreamspaceView)) {
-          this.uiService.showError('DreamSpace view not found - please open DreamSpace first');
-          return;
-        }
-        
-        // Call global canvas function to trigger focused layout
-        const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { focusOnNode(nodeId: string): boolean } }).__interbrainCanvas;
-        if (canvasAPI && canvasAPI.focusOnNode) {
-          const success = canvasAPI.focusOnNode(selectedNode.id);
-          if (success) {
-            this.uiService.showSuccess(`Focusing on ${selectedNode.name} with liminal web layout`);
-          } else {
-            this.uiService.showError('Failed to focus - orchestrator not ready');
-          }
-        } else {
-          this.uiService.showError('Canvas API not available - DreamSpace may not be fully loaded');
-        }
-      }
-    });
-
-    // Test command for relationship queries
-    this.addCommand({
-      id: 'test-relationship-queries',
-      name: 'Test: Query Node Relationships',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        try {
-          // Get all nodes using same method as DreamspaceCanvas
-          const store = useInterBrainStore.getState();
-          const dataMode = store.dataMode;
-          const mockDataConfig = store.mockDataConfig;
-          
-          let allNodes: DreamNode[] = [];
-          if (dataMode === 'mock') {
-            // Get static mock data with persistent relationships
-            const mockRelationshipData = store.mockRelationshipData;
-            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-            const service = serviceManager.getActive();
-            const dynamicNodes = await service.list();
-            allNodes = [...staticNodes, ...dynamicNodes];
-          } else {
-            // Real mode - get from store
-            const realNodes = store.realNodes;
-            allNodes = Array.from(realNodes.values()).map(data => data.node);
-          }
-          
-          // console.log('DEBUG: Total nodes found:', allNodes.length); // Debug removed for production
-          // console.log('DEBUG: Data mode:', dataMode, 'Mock config:', mockDataConfig); // Debug removed for production
-          // console.log('DEBUG: First few nodes:', allNodes.slice(0, 3).map(n => ({ // Debug removed for production
-          //   id: n.id,
-          //   type: n.type,
-          //   connections: n.liminalWebConnections.length,
-          //   connectionIds: n.liminalWebConnections.slice(0, 2)
-          // })));
-          
-          // Build relationship graph
-          const graph = buildRelationshipGraph(allNodes);
-          
-          // Log stats
-          const stats = getRelationshipStats(graph);
-          console.log('=== Relationship Graph Stats ===');
-          console.log(`Total nodes: ${stats.totalNodes}`);
-          console.log(`Dreams: ${stats.dreamNodes}, Dreamers: ${stats.dreamerNodes}`);
-          console.log(`Average connections: ${stats.averageConnections.toFixed(1)}`);
-          console.log(`Max connections: ${stats.maxConnections}`);
-          console.log(`Nodes with no connections: ${stats.nodesWithNoConnections}`);
-          
-          // Log relationships for selected node
-          logNodeRelationships(graph, selectedNode.id);
-          
-          this.uiService.showSuccess(`Logged relationships for ${selectedNode.name} to console`);
-        } catch (error) {
-          console.error('Relationship query error:', error);
-          this.uiService.showError('Failed to query relationships');
-        }
-      }
-    });
-
-    // Test command for focused layout position calculation
-    this.addCommand({
-      id: 'test-focused-layout-positions',
-      name: 'Test: Calculate Focused Layout Positions',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        const selectedNode = store.selectedNode;
-        
-        if (!selectedNode) {
-          this.uiService.showError('Please select a DreamNode first');
-          return;
-        }
-        
-        try {
-          // Get all nodes using same method as DreamspaceCanvas
-          const dataMode = store.dataMode;
-          const mockDataConfig = store.mockDataConfig;
-          
-          let allNodes: DreamNode[] = [];
-          if (dataMode === 'mock') {
-            const mockRelationshipData = store.mockRelationshipData;
-            const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-            const service = serviceManager.getActive();
-            const dynamicNodes = await service.list();
-            allNodes = [...staticNodes, ...dynamicNodes];
-          } else {
-            const realNodes = store.realNodes;
-            allNodes = Array.from(realNodes.values()).map(data => data.node);
-          }
-          
-          // Build relationship graph
-          const graph = buildRelationshipGraph(allNodes);
-          
-          // Calculate ring layout positions
-          const positions = calculateRingLayoutPositions(selectedNode.id, graph, DEFAULT_RING_CONFIG);
-          const stats = getRingLayoutStats(positions);
-          
-          console.log(`\n=== Ring Layout for ${selectedNode.name} (${selectedNode.type}) ===`);
-          // console.log('DEBUG: Selected node ID:', selectedNode.id); // Debug removed for production
-          // console.log('DEBUG: Center node ID from calculation:', positions.centerNode?.nodeId || 'None'); // Debug removed for production
-          console.log('Layout Stats:', stats);
-          
-          if (positions.centerNode) {
-            console.log('\nCenter Position:', positions.centerNode.position);
-          }
-          
-          console.log(`\nRing 1 (${positions.ring1Nodes.length} nodes):`);
-          positions.ring1Nodes.forEach((node, i) => {
-            const nodeData = graph.nodes.get(node.nodeId);
-            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-          });
-          
-          console.log(`\nRing 2 (${positions.ring2Nodes.length} nodes):`);
-          positions.ring2Nodes.forEach((node, i) => {
-            const nodeData = graph.nodes.get(node.nodeId);
-            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-          });
-          
-          console.log(`\nRing 3 (${positions.ring3Nodes.length} nodes):`);
-          positions.ring3Nodes.forEach((node, i) => {
-            const nodeData = graph.nodes.get(node.nodeId);
-            console.log(`  ${i + 1}. ${nodeData?.name} (${nodeData?.type}) at ${node.position.map(p => p.toFixed(1)).join(', ')}`);
-          });
-          
-          console.log(`\nSphere nodes (remain on sphere): ${positions.sphereNodes.length}`);
-          
-          this.uiService.showSuccess(`Calculated focused layout for ${selectedNode.name} - check console`);
-        } catch (error) {
-          console.error('Position calculation error:', error);
-          this.uiService.showError(error instanceof Error ? error.message : 'Failed to calculate positions');
-        }
-      }
-    });
-
-    // Test Ring Layout with Dense Relationships
-    this.addCommand({
-      id: 'test-ring-layout-dense',
-      name: 'Test: Ring Layout with Dense Relationships (50 nodes)',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        
-        // Switch to mock mode with dense data
-        store.setDataMode('mock');
-        store.setMockDataConfig('fibonacci-50');
-        
-        // Wait a bit for state to update
-        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
-        
-        // Auto-select first dreamer node for testing
-        const mockNodes = getMockDataForConfig('fibonacci-50');
-        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
-        
-        if (firstDreamer) {
-          store.setSelectedNode(firstDreamer);
-          this.uiService.showSuccess(`Set up dense relationship test (50 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
-          console.log(`\n=== Ring Layout Test: Dense Relationships ===`);
-          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
-          console.log(`Total nodes: 50 with enhanced relationships (10-30 per node)`);
-          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
-        } else {
-          this.uiService.showError('No dreamer nodes found in mock data');
-        }
-      }
-    });
-
-    // Test Ring Layout with Medium Relationships  
-    this.addCommand({
-      id: 'test-ring-layout-medium',
-      name: 'Test: Ring Layout with Medium Relationships (12 nodes)',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        
-        // Switch to mock mode with medium data
-        store.setDataMode('mock');
-        store.setMockDataConfig('fibonacci-12');
-        
-        // Wait a bit for state to update
-        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
-        
-        // Auto-select first dreamer node for testing
-        const mockNodes = getMockDataForConfig('fibonacci-12');
-        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
-        
-        if (firstDreamer) {
-          store.setSelectedNode(firstDreamer);
-          this.uiService.showSuccess(`Set up medium relationship test (12 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
-          console.log(`\n=== Ring Layout Test: Medium Relationships ===`);
-          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
-          console.log(`Total nodes: 12 with enhanced relationships (5-15 per node)`);
-          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
-        } else {
-          this.uiService.showError('No dreamer nodes found in mock data');
-        }
-      }
-    });
-
-    // Test Ring Layout with Sparse Relationships
-    this.addCommand({
-      id: 'test-ring-layout-sparse',
-      name: 'Test: Ring Layout with Sparse Relationships (100 nodes)',
-      callback: async () => {
-        const store = useInterBrainStore.getState();
-        
-        // Switch to mock mode with sparse data (many nodes, but still 10-30 relationships each)
-        store.setDataMode('mock');
-        store.setMockDataConfig('fibonacci-100');
-        
-        // Wait a bit for state to update
-        await new Promise(resolve => globalThis.setTimeout(resolve, 100));
-        
-        // Auto-select first dreamer node for testing
-        const mockNodes = getMockDataForConfig('fibonacci-100');
-        const firstDreamer = mockNodes.find(node => node.type === 'dreamer');
-        
-        if (firstDreamer) {
-          store.setSelectedNode(firstDreamer);
-          this.uiService.showSuccess(`Set up sparse relationship test (100 nodes) - selected ${firstDreamer.name}. Use 'Focus on Selected Node' to see ring layout.`);
-          console.log(`\n=== Ring Layout Test: Sparse Relationships ===`);
-          console.log(`Selected node: ${firstDreamer.name} (${firstDreamer.id})`);
-          console.log(`Total nodes: 100 with enhanced relationships (10-30 per node)`);
-          console.log(`Use 'Focus on Selected Node' command to trigger ring layout visualization`);
-        } else {
-          this.uiService.showError('No dreamer nodes found in mock data');
         }
       }
     });
@@ -1773,50 +1017,27 @@ export default class InterBrainPlugin extends Plugin {
           store.setRestoringFromHistory(true);
           
           try {
-            // Restore the layout state via SpatialOrchestrator (proper way)
+            // Restore the layout state via store-based navigation
             if (previousEntry.layout === 'constellation') {
-              // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { interruptAndReturnToConstellation(): boolean } }).__interbrainCanvas;
-              if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
-                const success = canvasAPI.interruptAndReturnToConstellation();
-                if (success) {
-                  store.setSelectedNode(null); // Update store to match
-                } else {
-                  this.uiService.showError('Failed to return to constellation - SpatialOrchestrator not ready');
-                  return;
-                }
-              } else {
-                this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                return;
-              }
+              // Going to constellation - request navigation with interruption
+              store.setSelectedNode(null);
+              store.requestNavigation({ type: 'constellation', interrupt: true });
             } else if (previousEntry.layout === 'liminal-web' && previousEntry.nodeId) {
               // Going to liminal-web - need to find and focus on the node
               const allNodes = await this.getAllAvailableNodes();
               const targetNode = allNodes.find(node => node.id === previousEntry.nodeId);
-              
+
               if (targetNode) {
-                // First update store (required for SpatialOrchestrator to work)
+                // Update store and request navigation
                 store.setSelectedNode(targetNode);
-                
-                // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
-                if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
-                  const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
-                  if (!success) {
-                    this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
-                    return;
-                  }
-                } else {
-                  this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                  return;
-                }
+                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case - skip to next valid entry
                 console.warn(`Node ${previousEntry.nodeId} no longer exists, skipping undo step`);
                 this.uiService.showError('Target node no longer exists - skipped to previous state');
               }
             }
-            
+
             // Restore visual state (flip state and scroll position) after layout restoration
             store.restoreVisualState(previousEntry);
           } finally {
@@ -1865,43 +1086,20 @@ export default class InterBrainPlugin extends Plugin {
           store.setRestoringFromHistory(true);
           
           try {
-            // Restore the layout state via SpatialOrchestrator (proper way)
+            // Restore the layout state via store-based navigation
             if (nextEntry.layout === 'constellation') {
-              // Going to constellation - use SpatialOrchestrator (with interruption support)
-              const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
-              if (canvasAPI && canvasAPI.interruptAndReturnToConstellation) {
-                const success = canvasAPI.interruptAndReturnToConstellation();
-                if (success) {
-                  store.setSelectedNode(null); // Update store to match
-                } else {
-                  this.uiService.showError('Failed to return to constellation - SpatialOrchestrator not ready');
-                  return;
-                }
-              } else {
-                this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                return;
-              }
+              // Going to constellation - request navigation with interruption
+              store.setSelectedNode(null);
+              store.requestNavigation({ type: 'constellation', interrupt: true });
             } else if (nextEntry.layout === 'liminal-web' && nextEntry.nodeId) {
               // Going to liminal-web - need to find and focus on the node
               const allNodes = await this.getAllAvailableNodes();
               const targetNode = allNodes.find(node => node.id === nextEntry.nodeId);
-              
+
               if (targetNode) {
-                // First update store (required for SpatialOrchestrator to work)
+                // Update store and request navigation
                 store.setSelectedNode(targetNode);
-                
-                // Then trigger visual transition via SpatialOrchestrator (with interruption support)
-                const canvasAPI = (globalThis as unknown as { __interbrainCanvas?: { [key: string]: (...args: unknown[]) => boolean } }).__interbrainCanvas;
-                if (canvasAPI && canvasAPI.interruptAndFocusOnNode) {
-                  const success = canvasAPI.interruptAndFocusOnNode(targetNode.id);
-                  if (!success) {
-                    this.uiService.showError('Failed to focus on node - SpatialOrchestrator not ready');
-                    return;
-                  }
-                } else {
-                  this.uiService.showError('Canvas API not available - DreamSpace may not be open');
-                  return;
-                }
+                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case
                 console.warn(`Node ${nextEntry.nodeId} no longer exists, skipping redo step`);
@@ -1939,7 +1137,7 @@ export default class InterBrainPlugin extends Plugin {
             .setTitle('Reveal in DreamSpace')
             .setIcon('target')
             .onClick(async () => {
-              await this.revealContainingDreamNode(file);
+              await revealContainingDreamNode(this, this.uiService, file);
             });
         });
 
@@ -1950,7 +1148,8 @@ export default class InterBrainPlugin extends Plugin {
               .setTitle('Convert to DreamNode')
               .setIcon('git-fork')
               .onClick(async () => {
-                await this.convertToDreamNode(file);
+                const passphrase = (this as any).settings?.radiclePassphrase;
+                await convertFolderToDreamNode(this, this.uiService, file, passphrase);
               });
           });
         }
@@ -1958,395 +1157,12 @@ export default class InterBrainPlugin extends Plugin {
     );
   }
 
-  /**
-   * Intelligently find and reveal the containing DreamNode for any file or folder
-   */
-  private async revealContainingDreamNode(file: TAbstractFile): Promise<void> {
-    const vaultPath = (this.app.vault.adapter as any).basePath;
-
-    console.log('[RevealDreamNode] Starting search for:', file.path);
-
-    // Find the containing DreamNode by searching for .udd file
-    const dreamNodePath = await this.findContainingDreamNode(file, vaultPath);
-
-    console.log('[RevealDreamNode] Found DreamNode path:', dreamNodePath);
-
-    if (!dreamNodePath) {
-      this.uiService.showInfo('No DreamNode found for this item');
-      return;
-    }
-
-    // Read the UUID from the .udd file
-    const uddPath = path.join(dreamNodePath, '.udd');
-    let uuid: string;
-
-    try {
-      const uddContent = fs.readFileSync(uddPath, 'utf-8');
-      const uddData = JSON.parse(uddContent);
-      uuid = uddData.uuid;
-      console.log('[RevealDreamNode] Read UUID from .udd:', uuid);
-    } catch (error) {
-      console.error('[RevealDreamNode] Failed to read UUID from .udd:', error);
-      this.uiService.showError('Failed to read DreamNode UUID');
-      return;
-    }
-
-    if (!uuid) {
-      console.error('[RevealDreamNode] No UUID found in .udd file');
-      this.uiService.showError('Invalid DreamNode: missing UUID');
-      return;
-    }
-
-    // Find the DreamNode by UUID (which is the node ID)
-    const store = useInterBrainStore.getState();
-    const nodeData = store.realNodes.get(uuid);
-
-    if (!nodeData) {
-      console.error('[RevealDreamNode] No matching node found for UUID:', uuid);
-      console.log('[RevealDreamNode] Available UUIDs:', Array.from(store.realNodes.keys()));
-      this.uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
-      return;
-    }
-
-    const targetNode = nodeData.node;
-    console.log('[RevealDreamNode] Found target node:', targetNode.name);
-
-    // Open DreamSpace if not already open
-    const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
-    if (!dreamspaceLeaf) {
-      const leaf = this.app.workspace.getLeaf(true);
-      await leaf.setViewState({
-        type: DREAMSPACE_VIEW_TYPE,
-        active: true
-      });
-      this.app.workspace.revealLeaf(leaf);
-      // Wait a bit for DreamSpace to initialize
-      await new Promise(resolve => setTimeout(resolve, 300));
-    } else {
-      // Focus existing DreamSpace
-      this.app.workspace.revealLeaf(dreamspaceLeaf);
-    }
-
-    // Select the node
-    store.setSelectedNode(targetNode);
-
-    // Switch to liminal-web layout to show the selected node
-    if (store.spatialLayout !== 'liminal-web') {
-      store.setSpatialLayout('liminal-web');
-    }
-
-    this.uiService.showInfo(`Revealed: ${targetNode.name}`);
-  }
-
-  /**
-   * Find the containing DreamNode by searching upward for .udd file
-   * Returns the absolute path to the DreamNode folder, or null if not found
-   */
-  private async findContainingDreamNode(file: TAbstractFile, vaultPath: string): Promise<string | null> {
-    // Start from the file's directory (or the folder itself if it's a folder)
-    let currentPath: string;
-
-    if (file instanceof TFolder) {
-      // For folders: first check if this folder has .udd directly inside
-      currentPath = path.join(vaultPath, file.path);
-      const uddInFolder = path.join(currentPath, '.udd');
-      console.log('[FindDreamNode] Checking folder for .udd:', uddInFolder);
-      if (fs.existsSync(uddInFolder)) {
-        console.log('[FindDreamNode] Found .udd in folder!');
-        return currentPath;
-      }
-      // If not, check parent (same level as this folder)
-      currentPath = path.dirname(currentPath);
-      console.log('[FindDreamNode] Not found in folder, moving to parent:', currentPath);
-    } else {
-      // For files: start from parent directory
-      currentPath = path.join(vaultPath, path.dirname(file.path));
-      console.log('[FindDreamNode] File detected, starting from parent:', currentPath);
-    }
-
-    // Walk up the tree looking for .udd file
-    let iterations = 0;
-    while (currentPath.startsWith(vaultPath)) {
-      iterations++;
-      const uddPath = path.join(currentPath, '.udd');
-      console.log(`[FindDreamNode] Iteration ${iterations}: Checking ${uddPath}`);
-
-      if (fs.existsSync(uddPath)) {
-        console.log('[FindDreamNode] Found .udd file!');
-        return currentPath;
-      }
-
-      // Move up one directory
-      const parentPath = path.dirname(currentPath);
-
-      // Stop if we've reached the vault root or can't go higher
-      if (parentPath === currentPath || parentPath === vaultPath) {
-        console.log('[FindDreamNode] Reached vault root, stopping');
-        break;
-      }
-
-      currentPath = parentPath;
-    }
-
-    console.log('[FindDreamNode] No .udd file found after', iterations, 'iterations');
-    return null;
-  }
-
-  /**
-   * Convert a regular directory into a DreamNode (idempotent)
-   * Fills in any missing pieces: .git repo, .udd file, hooks, README, LICENSE
-   */
-  private async convertToDreamNode(folder: TFolder): Promise<void> {
-    const vaultPath = (this.app.vault.adapter as any).basePath;
-    const folderPath = path.join(vaultPath, folder.path);
-    const folderName = path.basename(folder.path);
-
-    // Set up execAsync for git operations
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    console.log('[ConvertToDreamNode] Starting conversion for:', folderPath);
-
-    try {
-      // Check what's already present
-      const hasGit = fs.existsSync(path.join(folderPath, '.git'));
-      const hasUdd = fs.existsSync(path.join(folderPath, '.udd'));
-      const hasReadme = fs.existsSync(path.join(folderPath, 'README.md'));
-      const hasLicense = fs.existsSync(path.join(folderPath, 'LICENSE'));
-
-      console.log('[ConvertToDreamNode] Current state:', { hasGit, hasUdd, hasReadme, hasLicense });
-
-      // Generate or read UUID
-      let uuid: string;
-      let title: string = folderName;
-      let type: 'dream' | 'dreamer' = 'dream';
-
-      if (hasUdd) {
-        // Read existing .udd file
-        const uddContent = fs.readFileSync(path.join(folderPath, '.udd'), 'utf-8');
-        const uddData = JSON.parse(uddContent);
-        uuid = uddData.uuid;
-        title = uddData.title || folderName;
-        type = uddData.type || 'dream';
-        console.log('[ConvertToDreamNode] Using existing UUID from .udd:', uuid);
-      } else {
-        // Generate new UUID
-        const crypto = require('crypto');
-        uuid = crypto.randomUUID();
-        console.log('[ConvertToDreamNode] Generated new UUID:', uuid);
-      }
-
-      // Initialize git if not present
-      if (!hasGit) {
-        console.log('[ConvertToDreamNode] Initializing git with template...');
-        const templatePath = path.join(vaultPath, '.obsidian', 'plugins', this.manifest.id, 'DreamNode-template');
-        await execAsync(`git init --template="${templatePath}" "${folderPath}"`);
-
-        // Make hooks executable
-        const hooksDir = path.join(folderPath, '.git', 'hooks');
-        if (fs.existsSync(hooksDir)) {
-          await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: folderPath });
-          await execAsync(`chmod +x "${path.join(hooksDir, 'post-commit')}"`, { cwd: folderPath });
-          console.log('[ConvertToDreamNode] Made hooks executable');
-        }
-      }
-
-      // Create/update .udd file
-      if (!hasUdd) {
-        console.log('[ConvertToDreamNode] Creating .udd file...');
-        const uddContent = {
-          uuid,
-          title,
-          type,
-          dreamTalk: '',
-          liminalWebRelationships: type === 'dreamer' ? ['550e8400-e29b-41d4-a716-446655440000'] : [],
-          submodules: [],
-          supermodules: []
-        };
-        fs.writeFileSync(path.join(folderPath, '.udd'), JSON.stringify(uddContent, null, 2));
-      } else {
-        // Validate existing .udd has all required fields
-        const uddPath = path.join(folderPath, '.udd');
-        const uddContent = JSON.parse(fs.readFileSync(uddPath, 'utf-8'));
-        let updated = false;
-
-        // Ensure all required fields exist
-        if (!uddContent.liminalWebRelationships) {
-          uddContent.liminalWebRelationships = type === 'dreamer' ? ['550e8400-e29b-41d4-a716-446655440000'] : [];
-          updated = true;
-        }
-        if (!uddContent.submodules) {
-          uddContent.submodules = [];
-          updated = true;
-        }
-        if (!uddContent.supermodules) {
-          uddContent.supermodules = [];
-          updated = true;
-        }
-        if (!uddContent.dreamTalk) {
-          uddContent.dreamTalk = '';
-          updated = true;
-        }
-
-        if (updated) {
-          fs.writeFileSync(uddPath, JSON.stringify(uddContent, null, 2));
-          console.log('[ConvertToDreamNode] Updated .udd with missing fields');
-        }
-      }
-
-      // Create README if not present
-      if (!hasReadme) {
-        console.log('[ConvertToDreamNode] Creating README.md...');
-        const readmeContent = `# ${title}\n\nA DreamNode in the InterBrain network.\n`;
-        fs.writeFileSync(path.join(folderPath, 'README.md'), readmeContent);
-      }
-
-      // Create LICENSE if not present
-      if (!hasLicense) {
-        console.log('[ConvertToDreamNode] Creating LICENSE...');
-        const licenseContent = `GNU AFFERO GENERAL PUBLIC LICENSE
-Version 3, 19 November 2007
-
-This DreamNode is licensed under the GNU AGPL v3.
-See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
-`;
-        fs.writeFileSync(path.join(folderPath, 'LICENSE'), licenseContent);
-      }
-
-      // Commit changes if there are any uncommitted files
-      const gitStatus = await execAsync('git status --porcelain', { cwd: folderPath });
-      if (gitStatus.stdout.trim()) {
-        console.log('[ConvertToDreamNode] Committing DreamNode initialization...');
-        await execAsync('git add -A', { cwd: folderPath });
-        try {
-          await execAsync(`git commit -m "Convert to DreamNode: ${title}"`, { cwd: folderPath });
-        } catch (commitError: any) {
-          // Verify commit succeeded (hooks may output to stderr)
-          try {
-            await execAsync('git rev-parse HEAD', { cwd: folderPath });
-            console.log('[ConvertToDreamNode] Commit verified successful');
-          } catch {
-            throw commitError;
-          }
-        }
-      } else {
-        console.log('[ConvertToDreamNode] No uncommitted changes, skipping commit');
-      }
-
-      // Initialize Radicle if not already initialized
-      const hasRadicle = fs.existsSync(path.join(folderPath, '.rad'));
-      if (!hasRadicle) {
-        console.log('[ConvertToDreamNode] Initializing Radicle repository...');
-        try {
-          const settings = (this as any).settings;
-          const passphrase = settings?.radiclePassphrase;
-          const process = require('process');
-          const env = { ...process.env };
-          if (passphrase) {
-            env.RAD_PASSPHRASE = passphrase;
-          }
-
-          const nodeTypeLabel = type === 'dreamer' ? 'DreamerNode' : 'DreamNode';
-          const timestamp = new Date().toISOString();
-          const description = `${nodeTypeLabel} ${timestamp}`;
-
-          const { spawn } = require('child_process');
-          const radCommand = 'rad'; // Assume rad is in PATH
-
-          const radInitPromise = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-            const child = spawn(radCommand, [
-              'init',
-              folderPath,
-              '--private',
-              '--name', folderName,
-              '--default-branch', 'main',
-              '--description', description,
-              '--no-confirm',
-              '--no-seed'
-            ], {
-              env,
-              cwd: folderPath,
-              stdio: ['pipe', 'pipe', 'pipe']
-            });
-
-            let stdout = '';
-            let stderr = '';
-
-            child.stdout?.on('data', (data: any) => {
-              stdout += data.toString();
-            });
-
-            child.stderr?.on('data', (data: any) => {
-              stderr += data.toString();
-            });
-
-            child.on('close', (code: number) => {
-              if (code === 0) {
-                resolve({ stdout, stderr });
-              } else {
-                reject(new Error(`rad init exited with code ${code}`));
-              }
-            });
-
-            child.on('error', reject);
-            child.stdin?.end();
-          });
-
-          const radResult = await radInitPromise;
-
-          // Extract and save RID
-          const ridMatch = radResult.stdout.match(/rad:z[a-zA-Z0-9]+/);
-          if (ridMatch) {
-            const radicleId = ridMatch[0];
-            const uddPath = path.join(folderPath, '.udd');
-            const uddContent = JSON.parse(fs.readFileSync(uddPath, 'utf-8'));
-            uddContent.radicleId = radicleId;
-            fs.writeFileSync(uddPath, JSON.stringify(uddContent, null, 2));
-
-            await execAsync('git add .udd', { cwd: folderPath });
-            await execAsync('git commit -m "Add Radicle ID to DreamNode"', { cwd: folderPath });
-            console.log('[ConvertToDreamNode] Added Radicle ID:', radicleId);
-          }
-        } catch (radError) {
-          console.warn('[ConvertToDreamNode] Radicle init failed (continuing anyway):', radError);
-        }
-      }
-
-      // Refresh the vault to pick up the new DreamNode
-      console.log('[ConvertToDreamNode] Rescanning vault...');
-      await serviceManager.scanVault();
-
-      this.uiService.showInfo(`Successfully converted "${title}" to DreamNode`);
-      console.log('[ConvertToDreamNode] Conversion complete!');
-
-    } catch (error) {
-      console.error('[ConvertToDreamNode] Conversion failed:', error);
-      this.uiService.showError(`Failed to convert to DreamNode: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
   // Helper method to get all available nodes (used by undo/redo)
   private async getAllAvailableNodes(): Promise<DreamNode[]> {
     try {
       const store = useInterBrainStore.getState();
-      const dataMode = store.dataMode;
-      const mockDataConfig = store.mockDataConfig;
-      
-      let allNodes: DreamNode[] = [];
-      if (dataMode === 'mock') {
-        // Get static mock data with persistent relationships
-        const mockRelationshipData = store.mockRelationshipData;
-        const staticNodes = getMockDataForConfig(mockDataConfig, mockRelationshipData || undefined);
-        const service = serviceManager.getActive();
-        const dynamicNodes = await service.list();
-        allNodes = [...staticNodes, ...dynamicNodes];
-      } else {
-        // Real mode - get from store
-        const realNodes = store.realNodes;
-        allNodes = Array.from(realNodes.values()).map(data => data.node);
-      }
-      
+      const dreamNodesMap = store.dreamNodes;
+      const allNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
       return allNodes;
     } catch (error) {
       console.error('Failed to get available nodes:', error);

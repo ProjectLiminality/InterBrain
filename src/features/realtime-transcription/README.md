@@ -1,17 +1,44 @@
 # Real-Time Transcription Feature
 
-A self-contained feature for real-time speech transcription using whisper_streaming with LocalAgreement-2 policy.
+Real-time speech-to-text transcription using whisper_streaming with LocalAgreement-2 policy.
 
-## Overview
+## Purpose
 
-This feature provides seamless voice-to-text capture during conversations, meetings, and ideation sessions. Transcripts appear in markdown files with timestamps, ready for semantic search indexing and DreamNode integration.
+Seamless voice-to-text capture during conversations, meetings, and ideation sessions. Transcripts written to markdown files with timestamps.
 
-## Architecture
+## Key Files
 
-- **Python CLI Script**: `scripts/interbrain-transcribe.py` - Captures and transcribes audio
-- **TypeScript Service**: `services/transcription-service.ts` - Process management and path resolution
-- **Obsidian Commands**: `commands/transcription-commands.ts` - Start/Stop commands
-- **Zustand Store**: `store/transcription-store.ts` - State management for process lifecycle
+- **`index.ts`**: Feature exports (service initialization, commands, types)
+- **`services/transcription-service.ts`**: Singleton service managing Python subprocess lifecycle
+- **`commands/transcription-commands.ts`**: Obsidian command palette commands (start/stop)
+- **`types/transcription-types.ts`**: TypeScript interfaces for transcription process state
+- **`scripts/interbrain-transcribe.py`**: Python CLI that captures and transcribes audio
+- **`scripts/setup.sh`**: Virtual environment setup script (self-contained dependencies)
+- **`scripts/run-with-libs.sh`**: macOS wrapper to set library paths for gettext
+
+## Main Exports
+
+```typescript
+// Service (singleton pattern)
+initializeRealtimeTranscriptionService(plugin: InterBrainPlugin)
+getRealtimeTranscriptionService(): TranscriptionService
+
+// Commands
+registerTranscriptionCommands(plugin: InterBrainPlugin)
+cleanupTranscriptionService()
+
+// Types
+ITranscriptionService
+TranscriptionProcess
+TranscriptionConfig
+```
+
+## Architecture Notes
+
+- **Self-contained virtual environment**: Python dependencies isolated in `scripts/venv/`
+- **Singleton service**: Prevents multiple instances from losing track of running processes
+- **Plugin path resolution**: Uses symlink-resolved paths to locate Python scripts
+- **Graceful shutdown**: SIGTERM with 2s timeout, then SIGKILL fallback
 
 ## Installation
 

@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'child_process';
 import type InterBrainPlugin from '../../../main';
-import { UIService } from '../../../services/ui-service';
+import { UIService } from '../../../core/services/ui-service';
 import type { ITranscriptionService, TranscriptionConfig } from '../types/transcription-types';
 
 /**
@@ -91,6 +91,37 @@ export class TranscriptionService implements ITranscriptionService {
 			console.warn('[Transcription] Error checking for venv:', error);
 		}
 		return null;
+	}
+
+	/**
+	 * Check if venv exists for transcription (used by settings status)
+	 */
+	checkVenvExists(): boolean {
+		const path = require('path');
+		const fs = require('fs');
+
+		try {
+			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+			const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
+			const realPluginDir = fs.realpathSync(pluginDir);
+
+			const scriptsDir = path.join(
+				realPluginDir,
+				'src',
+				'features',
+				'realtime-transcription',
+				'scripts'
+			);
+
+			// eslint-disable-next-line no-undef
+			const venvPath = process.platform === 'win32'
+				? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
+				: path.join(scriptsDir, 'venv', 'bin', 'python3');
+
+			return fs.existsSync(venvPath);
+		} catch {
+			return false;
+		}
 	}
 
 	/**

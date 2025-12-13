@@ -1,5 +1,5 @@
 import { App, TFile } from 'obsidian';
-import { DreamNode } from '../../../types/dreamnode';
+import { DreamNode } from '../../dreamnode';
 import { getTranscriptionService } from './transcription-service';
 import { getRealtimeTranscriptionService } from '../../realtime-transcription';
 
@@ -62,11 +62,8 @@ export class ConversationRecordingService {
 	 * Record a DreamNode invocation
 	 */
 	async recordInvocation(node: DreamNode): Promise<void> {
-		console.log(`🎙️ [ConversationRecording] recordInvocation called for: ${node.name}`);
-		console.log(`🎙️ [ConversationRecording] isRecording state: ${this.isRecording}`);
-
 		if (!this.isRecording) {
-			console.warn(`⚠️ [ConversationRecording] Not recording, ignoring invocation of ${node.name}`);
+			console.warn(`⚠️ [Copilot] Not recording, ignoring invocation of ${node.name}`);
 			return;
 		}
 
@@ -77,13 +74,10 @@ export class ConversationRecordingService {
 		};
 
 		this.invocations.push(invocationEvent);
-		console.log(`✅ [ConversationRecording] Recorded invocation #${this.invocations.length}: ${node.name} at ${invocationEvent.timestamp.toLocaleTimeString()}`);
-		console.log(`📝 [ConversationRecording] Total invocations so far: ${this.invocations.length}`);
+		console.log(`🎙️ [Copilot] Invocation #${this.invocations.length}: ${node.name}`);
 
 		// Embed invocation marker in transcript
-		console.log(`📝 [ConversationRecording] About to embed invocation in transcript`);
 		await this.embedInvocationInTranscript(node);
-		console.log(`✅ [ConversationRecording] Embedding complete`);
 	}
 
 	/**
@@ -91,24 +85,16 @@ export class ConversationRecordingService {
 	 */
 	private async embedInvocationInTranscript(node: DreamNode): Promise<void> {
 		try {
-			console.log(`📝 [ConversationRecording] embedInvocationInTranscript starting for: ${node.name}`);
-
 			const transcriptionService = getTranscriptionService();
-			console.log(`📝 [ConversationRecording] Got transcription service:`, !!transcriptionService);
-
 			const transcriptionFile = (transcriptionService as any).transcriptionFile as TFile | null;
-			console.log(`📝 [ConversationRecording] Transcription file:`, transcriptionFile?.path || 'null');
 
 			if (!transcriptionFile) {
-				console.warn(`⚠️ [ConversationRecording] No active transcript file to embed invocation`);
+				console.warn(`⚠️ [Copilot] No active transcript file to embed invocation`);
 				return;
 			}
 
 			// Read current content
-			console.log(`📝 [ConversationRecording] Reading current transcript content...`);
 			const currentContent = await this.app.vault.read(transcriptionFile);
-			console.log(`📝 [ConversationRecording] Current content length: ${currentContent.length} chars`);
-			console.log(`📝 [ConversationRecording] Last 100 chars: "${currentContent.slice(-100)}"`);
 
 			// Calculate relative timestamp matching Python format
 			const pythonTranscriptionService = getRealtimeTranscriptionService();
@@ -128,17 +114,11 @@ export class ConversationRecordingService {
 
 			const invocationMarker = `[${timestamp}] 🔮 Invoked: ${node.name}\n\n`;
 			const updatedContent = currentContent + invocationMarker;
-			console.log(`📝 [ConversationRecording] Appending marker: "${invocationMarker.trim()}"`);
-			console.log(`📝 [ConversationRecording] New content length: ${updatedContent.length} chars`);
 
 			// Write back to file
-			console.log(`📝 [ConversationRecording] Writing updated content to file...`);
 			await this.app.vault.modify(transcriptionFile, updatedContent);
-
-			console.log(`✅ [ConversationRecording] Successfully embedded invocation marker in transcript: "${invocationMarker}"`);
 		} catch (error) {
-			console.error('❌ [ConversationRecording] Failed to embed invocation in transcript:', error);
-			console.error('❌ [ConversationRecording] Error stack:', (error as Error).stack);
+			console.error('❌ [Copilot] Failed to embed invocation in transcript:', error);
 		}
 	}
 
