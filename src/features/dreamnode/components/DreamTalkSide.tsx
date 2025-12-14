@@ -43,8 +43,9 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
 }) => {
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Unified golden glow: hover OR relationship pending
-  const shouldGlow = isHovered || isPendingRelationship;
+  // Treat pending relationship as forced hover state
+  // This shows name overlay and glow for related nodes in edit mode
+  const effectiveHover = isHovered || isPendingRelationship;
 
   return (
     <div
@@ -58,7 +59,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         overflow: 'hidden',
         cursor: 'pointer !important',
         transition: dreamNodeStyles.transitions.default,
-        boxShadow: shouldGlow ? getGoldenGlow(glowIntensity) : 'none',
+        boxShadow: effectiveHover ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
@@ -75,8 +76,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
           {/* Fade-to-black overlay */}
           <div style={getMediaOverlayStyle()} />
 
-          {/* Hover overlay with name */}
-          {isHovered && (
+          {/* Hover overlay with name - shows for hover OR pending relationship */}
+          {effectiveHover && (
             <div
               style={{
                 position: 'absolute',
@@ -89,7 +90,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: isHovered ? 1 : 0,
+                opacity: 1,
                 transition: 'opacity 0.2s ease-in-out',
                 pointerEvents: 'none',
                 zIndex: 10

@@ -106,7 +106,8 @@ import {
 } from '../../features/liminal-web-layout/store/slice';
 
 // Type alias for spatial layout modes (the active view mode)
-export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
+// Note: 'edit' is for metadata editing, 'relationship-edit' is for relationship editing (peer-level modes)
+export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'relationship-edit' | 'copilot';
 
 // Re-export types for backward compatibility
 export type { CopilotModeState };

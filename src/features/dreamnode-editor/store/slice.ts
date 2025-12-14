@@ -12,6 +12,9 @@ export interface EditModeValidationErrors {
 
 /**
  * Edit mode state types
+ *
+ * Used by both 'edit' (metadata editing) and 'relationship-edit' (relationship editing) modes.
+ * The spatialLayout determines which mode is active - this slice just tracks the editing state.
  */
 export interface EditModeState {
   isActive: boolean;
@@ -21,7 +24,7 @@ export interface EditModeState {
   searchResults: DreamNode[]; // Search results for relationship discovery
   validationErrors: EditModeValidationErrors; // Validation errors for edit mode
   newDreamTalkFile?: globalThis.File; // New media file for DreamTalk editing
-  isSearchingRelationships: boolean; // Toggle state for relationship search interface
+  // Note: isSearchingRelationships removed - now uses spatialLayout === 'relationship-edit' instead
 }
 
 /**
@@ -33,8 +36,7 @@ export const INITIAL_EDIT_MODE_STATE: EditModeState = {
   originalRelationships: [],
   pendingRelationships: [],
   searchResults: [],
-  validationErrors: {},
-  isSearchingRelationships: false
+  validationErrors: {}
 };
 
 /**
@@ -47,7 +49,7 @@ export interface EditModeSlice {
   updateEditingNodeMetadata: (updates: Partial<DreamNode>) => void;
   setEditModeNewDreamTalkFile: (file: globalThis.File | undefined) => void;
   setEditModeSearchResults: (results: DreamNode[]) => void;
-  setEditModeSearchActive: (active: boolean) => void;
+  // Note: setEditModeSearchActive removed - now use setSpatialLayout('relationship-edit') instead
   togglePendingRelationship: (nodeId: string) => void;
   savePendingRelationships: () => void;
   setEditModeValidationErrors: (errors: EditModeValidationErrors) => void;
@@ -84,8 +86,7 @@ export const createEditModeSlice: StateCreator<
       originalRelationships: [...node.liminalWebConnections],
       pendingRelationships: [...node.liminalWebConnections],
       searchResults: [],
-      validationErrors: {},
-      isSearchingRelationships: false
+      validationErrors: {}
     }
   } as Partial<EditModeSliceStore>)),
 
@@ -116,16 +117,7 @@ export const createEditModeSlice: StateCreator<
     }
   } as Partial<EditModeSliceStore>)),
 
-  setEditModeSearchActive: (active) => set((state) => ({
-    editMode: {
-      ...state.editMode,
-      isSearchingRelationships: active,
-      // Clear search results when exiting edit-search mode to prevent persistence
-      searchResults: active ? state.editMode.searchResults : []
-    },
-    // Also clear main search results when exiting edit-search to clean up spatial layout
-    searchResults: active ? state.searchResults : []
-  } as Partial<EditModeSliceStore>)),
+  // Note: setEditModeSearchActive removed - use setSpatialLayout('relationship-edit') instead
 
   togglePendingRelationship: (nodeId) => set((state) => {
     const currentPending = state.editMode.pendingRelationships;

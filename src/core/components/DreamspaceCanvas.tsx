@@ -8,7 +8,7 @@ import { Star3D, SphereRotationControls, ConstellationEdges, shouldShowConstella
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
-import { DreamNodeEditor3D } from '../../features/dreamnode-editor';
+import { DreamNodeEditor3D, RelationshipEditor3D } from '../../features/dreamnode-editor';
 import { RadialButtonRing3D } from '../../features/action-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/action-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../../features/dreamnode';
@@ -149,28 +149,42 @@ export default function DreamspaceCanvas() {
     const store = useInterBrainStore.getState();
 
     switch (spatialLayout) {
-      case 'search':
-      case 'edit-search': {
+      case 'search': {
         // Hide radial buttons when entering search mode (incompatible mode)
         if (store.radialButtonUI.isActive) {
           store.setRadialButtonUIActive(false);
         }
 
-        // Both search and edit-search use the same visual architecture
+        // Search mode uses honeycomb layout for results
         if (searchResults && searchResults.length > 0) {
-          // Check if we're in edit mode - need special handling to maintain stable lists
-          if (store.editMode.isActive && store.editMode.editingNode) {
-            console.log(`DreamspaceCanvas: Switching to edit mode search results with ${searchResults.length} results`);
-            spatialOrchestratorRef.current.showEditModeSearchResults(store.editMode.editingNode.id, searchResults);
-          } else {
-            console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
-            spatialOrchestratorRef.current.showSearchResults(searchResults);
-          }
+          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
+          spatialOrchestratorRef.current.showSearchResults(searchResults);
         } else if (store.searchInterface.isActive) {
           console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
           // Use liminal web architecture: move all constellation nodes to sphere surface
           // SearchNode acts like the focused node at center position [0, 0, -50]
           spatialOrchestratorRef.current.moveAllToSphereForSearch();
+        }
+        break;
+      }
+
+      case 'relationship-edit': {
+        // Hide radial buttons when entering relationship edit mode (incompatible mode)
+        if (store.radialButtonUI.isActive) {
+          store.setRadialButtonUIActive(false);
+        }
+
+        // Relationship edit mode - center node with related/search nodes in honeycomb
+        if (store.editMode.isActive && store.editMode.editingNode) {
+          console.log(`DreamspaceCanvas: Switching to relationship edit mode for ${store.editMode.editingNode.name}`);
+          spatialOrchestratorRef.current.focusOnNode(store.editMode.editingNode.id);
+
+          // Show existing relationships if any
+          if (searchResults && searchResults.length > 0) {
+            spatialOrchestratorRef.current.showEditModeSearchResults(store.editMode.editingNode.id, searchResults);
+          }
+        } else {
+          console.warn('[Canvas-Layout] relationship-edit mode triggered but no editingNode available');
         }
         break;
       }
@@ -181,7 +195,7 @@ export default function DreamspaceCanvas() {
           store.setRadialButtonUIActive(false);
         }
 
-        // Edit mode - similar to liminal-web but in edit state
+        // Edit mode (metadata) - similar to liminal-web but in edit state
         if (selectedNode) {
           // Use the same focus logic as liminal-web for now
           spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
@@ -327,24 +341,31 @@ export default function DreamspaceCanvas() {
       return; // Prevent liminal-web navigation
     }
 
-    // Handle edit mode relationship toggling
-    if (store.editMode.isActive && store.editMode.editingNode) {
+    // Handle relationship edit mode toggling
+    // Only toggle relationships in 'relationship-edit' mode, not regular 'edit' mode
+    if (store.spatialLayout === 'relationship-edit' && store.editMode.isActive && store.editMode.editingNode) {
       // IMPORTANT: Prevent clicking the center editing node itself
       if (store.editMode.editingNode.id === node.id) {
-        console.log(`Edit mode: Cannot toggle relationship with self (center node: ${node.name})`);
+        console.log(`Relationship edit: Cannot toggle relationship with self (center node: ${node.name})`);
         return;
       }
 
-      // In edit mode, clicking a node toggles its relationship status
+      // In relationship-edit mode, clicking a node toggles its relationship status
       store.togglePendingRelationship(node.id);
-      console.log(`Edit mode: Toggled relationship with "${node.name}"`);
+      console.log(`Relationship edit: Toggled relationship with "${node.name}"`);
 
       // Trigger immediate reordering for priority-based positioning
       if (spatialOrchestratorRef.current) {
         spatialOrchestratorRef.current.reorderEditModeSearchResults();
       }
 
-      return; // Don't do normal click handling in edit mode
+      return; // Don't do normal click handling in relationship-edit mode
+    }
+
+    // Suppress click in regular edit mode (metadata editing)
+    if (store.spatialLayout === 'edit' && store.editMode.isActive) {
+      console.log(`Edit mode: Ignoring click on ${node.name} (metadata editing doesn't affect other nodes)`);
+      return;
     }
     
     // Normal click handling (not in edit mode)
@@ -631,8 +652,11 @@ export default function DreamspaceCanvas() {
           {/* Search mode overlay - self-contained search functionality */}
           <SearchModeOverlay />
 
-          {/* DreamNode editor - render when edit mode is active */}
+          {/* DreamNode editor - render when in 'edit' layout (metadata editing) */}
           <DreamNodeEditor3D />
+
+          {/* Relationship editor - render when in 'relationship-edit' layout */}
+          <RelationshipEditor3D />
 
           {/* Tutorial overlay - onboarding system with Manim-style animations */}
           <TutorialOverlay />

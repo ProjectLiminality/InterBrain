@@ -11,4 +11,4 @@ export * from './services/editor-service';
 
 // Components
 export { default as DreamNodeEditor3D } from './DreamNodeEditor3D';
-export { default as RelationshipSearchInput } from './RelationshipSearchInput';
+export { default as RelationshipEditor3D } from './RelationshipEditor3D';

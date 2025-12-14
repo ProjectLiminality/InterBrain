@@ -140,8 +140,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const isPendingRelationship: boolean = useInterBrainStore(state => {
     const nodeId = dreamNode.id;
 
-    // Edit mode relationships
-    if (state.editMode?.pendingRelationships?.includes(nodeId)) {
+    // Relationship-edit mode only: show glow for pending relationships
+    // Regular 'edit' mode is for metadata only - no relationship interaction
+    if (state.spatialLayout === 'relationship-edit' &&
+        state.editMode?.pendingRelationships?.includes(nodeId)) {
       return true;
     }
 
@@ -243,6 +245,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Handle mouse events
   const handleMouseEnter = () => {
     if (isDragging) return;
+    // Suppress hover for center node in relationship-edit mode (search bar covers it)
+    if (spatialLayout === 'relationship-edit' && selectedNode?.id === dreamNode.id) {
+      return;
+    }
     setIsHovered(true);
     onHover?.(dreamNode, true);
   };
@@ -565,7 +571,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       : currentPosition[2];
 
     // Update target hover scale based on distance (distance-invariant ring thickness)
-    targetHoverScale.current = isHovered ? getDistanceScaledHoverScale(currentZ) : 1;
+    // Treat pending relationship as forced hover state
+    const effectiveHover = isHovered || isPendingRelationship;
+    targetHoverScale.current = effectiveHover ? getDistanceScaledHoverScale(currentZ) : 1;
 
     // Smooth hover scale animation (lerp towards target)
     if (hoverGroupRef.current) {

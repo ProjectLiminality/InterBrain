@@ -1,28 +1,26 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { setIcon } from 'obsidian';
-import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle, isValidDreamTalkMedia, DropZone, ValidationError, validateDreamNodeTitle, isTitleValid } from '../dreamnode';
+import { dreamNodeStyles, getNodeColors, getMediaContainerStyle, getMediaOverlayStyle, isValidDreamTalkMedia, DropZone, ValidationError, validateDreamNodeTitle, isTitleValid } from '../dreamnode';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { UIService } from '../../core/services/ui-service';
 import { saveEditModeChanges, getFreshNodeData, cancelEditMode } from './services/editor-service';
-import RelationshipSearchInput from './RelationshipSearchInput';
-import { serviceManager } from '../../core/services/service-manager';
-import type { DreamNode } from '../dreamnode';
 
 const uiService = new UIService();
 
 /**
  * DreamNodeEditor3D - Self-contained in-space editing UI for DreamNodes
  *
- * This component:
- * - Renders when edit mode is active (checks store state internally)
+ * This component handles METADATA editing only:
+ * - Renders when spatialLayout is 'edit' (checks store state internally)
  * - Shows at the center position overlaying the selected node
  * - Handles title editing and contact info (dreamer only)
  * - Manages media upload/drag-drop
- * - Toggles relationship search interface
  * - Calls EditorService for persistence
+ *
+ * Note: Relationship editing is handled by a separate RelationshipEditor3D component
+ * in the 'relationship-edit' layout mode. This separation keeps concerns clean.
  *
  * Note: Node type (dream/dreamer) is immutable after creation as it
  * defines the relationship ontology in the liminal web.
@@ -34,13 +32,11 @@ export default function DreamNodeEditor3D() {
   // Store state and actions
   const {
     editMode,
+    spatialLayout,
     updateEditingNodeMetadata,
     setEditModeNewDreamTalkFile,
     setEditModeValidationErrors,
-    setEditModeSearchActive,
-    setEditModeSearchResults,
-    exitEditMode,
-    setSpatialLayout
+    exitEditMode
   } = useInterBrainStore();
 
   const { editingNode, validationErrors, newDreamTalkFile } = editMode;
@@ -156,8 +152,9 @@ export default function DreamNodeEditor3D() {
     updateEditingNodeMetadata({ name: title });
   }, [updateEditingNodeMetadata]);
 
-  // Don't render if edit mode is not active
-  if (!editMode.isActive || !editingNode) {
+  // Only render in 'edit' layout mode (metadata editing)
+  // Relationship editing uses 'relationship-edit' layout with RelationshipEditor3D
+  if (spatialLayout !== 'edit' || !editMode.isActive || !editingNode) {
     return null;
   }
 
@@ -269,6 +266,8 @@ export default function DreamNodeEditor3D() {
       useInterBrainStore.getState().setSpatialLayout('liminal-web');
 
       if (orchestrator) {
+        // Clear stale edit mode data before transitioning
+        orchestrator.clearEditModeData();
         orchestrator.animateToLiminalWebFromEdit(freshNode.id);
       }
 
@@ -284,39 +283,11 @@ export default function DreamNodeEditor3D() {
     if (previewMedia) {
       globalThis.URL.revokeObjectURL(previewMedia);
     }
-    cancelEditMode();
-  };
-
-  // Toggle relationship search
-  const handleToggleRelationshipSearch = async () => {
-    if (editMode.isSearchingRelationships) {
-      // Turning OFF - show pending relationships only
-      setEditModeSearchActive(false);
-      setSpatialLayout('edit'); // Return to edit mode layout
-
-      const pendingRelationshipIds = editMode.pendingRelationships;
-      if (pendingRelationshipIds.length > 0 && editingNode) {
-        const dreamNodeService = serviceManager.getActive();
-        const relatedNodes = await Promise.all(
-          pendingRelationshipIds.map(id => dreamNodeService.get(id))
-        );
-        const validRelatedNodes = relatedNodes.filter((node): node is DreamNode => node !== null);
-        setEditModeSearchResults(validRelatedNodes);
-
-        if (orchestrator) {
-          orchestrator.clearEditModeData();
-          globalThis.setTimeout(() => {
-            orchestrator.showEditModeSearchResults(editingNode.id, validRelatedNodes);
-          }, 10);
-        }
-      } else {
-        setEditModeSearchResults([]);
-      }
-    } else {
-      // Turning ON - switch to edit-search layout
-      setEditModeSearchActive(true);
-      setSpatialLayout('edit-search');
+    // Clear stale edit mode data from orchestrator
+    if (orchestrator) {
+      orchestrator.clearEditModeData();
     }
+    cancelEditMode();
   };
 
   // Keyboard handler
@@ -359,7 +330,7 @@ export default function DreamNodeEditor3D() {
                 position: 'relative',
                 opacity: animatedOpacity,
                 transition: dreamNodeStyles.transitions.creation,
-                boxShadow: getGoldenGlow(15),
+                // No glow effect - clean editor appearance
                 fontFamily: dreamNodeStyles.typography.fontFamily
               }}
               onDragOver={handleDragOver}
@@ -461,10 +432,8 @@ export default function DreamNodeEditor3D() {
             <ActionButtons
               onCancel={handleCancel}
               onSave={handleSave}
-              onToggleSearch={handleToggleRelationshipSearch}
               isDisabled={isSaveDisabled}
               isAnimating={isAnimating}
-              isSearchActive={editMode.isSearchingRelationships}
               nodeSize={nodeSize}
               nodeType={editingNode.type}
               hasError={!!validationErrors.title}
@@ -474,11 +443,6 @@ export default function DreamNodeEditor3D() {
           </div>
         </Html>
       </group>
-
-      {/* Relationship Search Interface */}
-      {editMode.isSearchingRelationships && (
-        <RelationshipSearchInput position={centerPosition} />
-      )}
     </group>
   );
 }
@@ -573,13 +537,11 @@ function ContactFields({ email, phone, did, radicleId, onEmailChange, onPhoneCha
   );
 }
 
-function ActionButtons({ onCancel, onSave, onToggleSearch, isDisabled, isAnimating, isSearchActive, nodeSize, nodeType, hasError, opacity, nodeColors }: {
+function ActionButtons({ onCancel, onSave, isDisabled, isAnimating, nodeSize, nodeType, hasError, opacity, nodeColors }: {
   onCancel: () => void;
   onSave: () => void;
-  onToggleSearch: () => void;
   isDisabled: boolean;
   isAnimating: boolean;
-  isSearchActive: boolean;
   nodeSize: number;
   nodeType: 'dream' | 'dreamer';
   hasError: boolean;
@@ -644,32 +606,6 @@ function ActionButtons({ onCancel, onSave, onToggleSearch, isDisabled, isAnimati
       >
         {isAnimating ? 'Saving...' : 'Save'}
       </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleSearch(); }}
-        onMouseDown={(e) => e.stopPropagation()}
-        disabled={isAnimating}
-        style={{
-          padding: basePadding,
-          border: `1px solid ${isSearchActive ? nodeColors.border : 'rgba(255,255,255,0.5)'}`,
-          background: isSearchActive ? 'rgba(255,255,255,0.1)' : 'transparent',
-          color: isAnimating ? 'rgba(255,255,255,0.5)' : 'white',
-          fontSize,
-          fontFamily: dreamNodeStyles.typography.fontFamily,
-          borderRadius,
-          cursor: isAnimating ? 'not-allowed' : 'pointer',
-          transition: dreamNodeStyles.transitions.default,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-        title="Toggle relationship search"
-        ref={(el) => {
-          if (el) {
-            el.innerHTML = '';
-            setIcon(el, 'lucide-git-compare-arrows');
-          }
-        }}
-      />
     </div>
   );
 }

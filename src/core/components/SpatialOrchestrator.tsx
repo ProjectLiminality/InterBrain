@@ -289,7 +289,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Only update to liminal-web if not in a mode that manages its own layout
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
+        if (currentLayout !== 'edit' && currentLayout !== 'relationship-edit' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
 
@@ -339,7 +339,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         focusedNodeId.current = nodeId;
 
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
+        if (currentLayout !== 'edit' && currentLayout !== 'relationship-edit' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
 

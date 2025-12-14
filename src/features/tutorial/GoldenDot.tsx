@@ -51,13 +51,6 @@ function generateDefaultControlPoints(
   from: [number, number, number],
   to: [number, number, number]
 ): [[number, number, number], [number, number, number]] {
-  // Calculate midpoint
-  const mid: [number, number, number] = [
-    (from[0] + to[0]) / 2,
-    (from[1] + to[1]) / 2,
-    (from[2] + to[2]) / 2,
-  ];
-
   // Calculate distance for arc height
   const dx = to[0] - from[0];
   const dy = to[1] - from[1];

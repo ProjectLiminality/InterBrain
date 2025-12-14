@@ -220,7 +220,7 @@ describe('SpatialOrchestrator State Machine', () => {
       // Mock focusOnNode with edit mode check
       const focusOnNode = (_nodeId: string) => {
         const currentLayout = mockStore.spatialLayout
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search') {
+        if (currentLayout !== 'edit' && currentLayout !== 'relationship-edit') {
           mockSetSpatialLayout('liminal-web')
         }
       }

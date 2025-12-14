@@ -75,8 +75,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   );
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Unified golden glow: hover OR relationship pending
-  const shouldGlow = isHovered || isPendingRelationship;
+  // Treat pending relationship as forced hover state
+  const effectiveHover = isHovered || isPendingRelationship;
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
@@ -111,7 +111,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         overflow: 'hidden',
         cursor: 'pointer !important',
         transition: dreamNodeStyles.transitions.default,
-        boxShadow: shouldGlow ? getGoldenGlow(glowIntensity) : 'none',
+        boxShadow: effectiveHover ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
