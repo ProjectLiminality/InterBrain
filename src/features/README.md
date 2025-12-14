@@ -168,6 +168,7 @@ export { registerDreamNodeCommands } from './commands';
 | [settings](./settings/README.md) | Plugin settings tab (thin orchestrator) | Low |
 | [dreamnode-updater](./dreamnode-updater/README.md) | DreamNode update workflow (preview, apply) | Low |
 | [uri-handler](./uri-handler/README.md) | interbrain:// protocol handling | Low |
+| [feedback](./feedback/README.md) | Bug reporting and feedback system | Low |
 
 ## Creating a New Feature
 

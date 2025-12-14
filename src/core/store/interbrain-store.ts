@@ -105,6 +105,15 @@ import {
   NavigationHistoryState,
 } from '../../features/liminal-web-layout/store/slice';
 
+import {
+  FeedbackSlice,
+  createFeedbackSlice,
+  extractFeedbackPersistenceData,
+  restoreFeedbackPersistenceData,
+  FeedbackState,
+  AutoReportPreference,
+} from '../../features/feedback/store/slice';
+
 // Type alias for spatial layout modes (the active view mode)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'edit-search' | 'copilot';
 
@@ -114,6 +123,7 @@ export type { EditModeState, EditModeValidationErrors };
 export type { CreationState, DraftDreamNode, ValidationErrors };
 export type { SearchInterfaceState };
 export type { NavigationHistoryEntry, NavigationHistoryState };
+export type { FeedbackState, AutoReportPreference };
 
 // ============================================================================
 // CORE STATE TYPES
@@ -200,7 +210,8 @@ export interface InterBrainState extends
   RadialButtonsSlice,
   UpdatesSlice,
   DragAndDropSlice,
-  LiminalWebSlice {}
+  LiminalWebSlice,
+  FeedbackSlice {}
 
 // ============================================================================
 // CORE SLICE CREATOR
@@ -317,6 +328,7 @@ export const useInterBrainStore = create<InterBrainState>()(
       ...createUpdatesSlice(set, get, api),
       ...createDragAndDropSlice(set, get, api),
       ...createLiminalWebSlice(set, get, api),
+      ...createFeedbackSlice(set, get, api),
     }),
     {
       name: 'interbrain-storage',
@@ -325,6 +337,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         ...extractSearchPersistenceData(state),
         ...extractConstellationPersistenceData(state),
         ...extractDreamweavingPersistenceData(state),
+        ...extractFeedbackPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as {
@@ -347,6 +360,11 @@ export const useInterBrainStore = create<InterBrainState>()(
           } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
+          feedbackPreferences?: {
+            autoReportPreference?: AutoReportPreference;
+            includeLogs?: boolean;
+            includeState?: boolean;
+          };
         };
 
         // Support migration from legacy realNodes to dreamNodes
@@ -361,6 +379,7 @@ export const useInterBrainStore = create<InterBrainState>()(
           ...restoreSearchPersistenceData(persistedData),
           ...restoreConstellationPersistenceData(persistedData),
           ...restoreDreamweavingPersistenceData(persistedData),
+          ...restoreFeedbackPersistenceData(persistedData),
         };
       },
     }

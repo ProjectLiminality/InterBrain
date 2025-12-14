@@ -27,7 +27,24 @@ export interface SystemStatus {
 	claudeApi: FeatureStatus;
 }
 
+// Singleton instance for runtime access
+let cachedSettings: { claudeApiKey: string; radiclePassphrase: string } | null = null;
+
 export class SettingsStatusService {
+	/**
+	 * Store settings for runtime access by other services
+	 */
+	static setSettings(settings: { claudeApiKey: string; radiclePassphrase: string }): void {
+		cachedSettings = settings;
+	}
+
+	/**
+	 * Get cached settings (for services that need API key)
+	 */
+	getSettings(): { claudeApiKey: string; radiclePassphrase: string } | null {
+		return cachedSettings;
+	}
+
 	/**
 	 * Get comprehensive status of all InterBrain features
 	 * Delegates to feature-owned status checkers
@@ -109,3 +126,6 @@ export class SettingsStatusService {
 		}
 	}
 }
+
+// Singleton export for services that need settings access
+export const settingsStatusService = new SettingsStatusService();

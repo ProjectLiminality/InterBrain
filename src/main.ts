@@ -55,6 +55,12 @@ import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
+import { SettingsStatusService } from './features/settings/settings-status-service';
+import {
+  registerFeedbackCommands,
+  errorCaptureService,
+  showFeedbackModal,
+} from './features/feedback';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
@@ -74,6 +80,15 @@ export default class InterBrainPlugin extends Plugin {
   async onload() {
     // Load settings
     await this.loadSettings();
+
+    // Cache settings for services that need runtime access
+    SettingsStatusService.setSettings({
+      claudeApiKey: this.settings.claudeApiKey,
+      radiclePassphrase: this.settings.radiclePassphrase,
+    });
+
+    // Initialize error capture for bug reporting
+    this.initializeErrorCapture();
 
     // Add settings tab
     this.addSettingTab(new InterBrainSettingTab(this.app, this));
@@ -251,6 +266,49 @@ export default class InterBrainPlugin extends Plugin {
     );
   }
 
+  /**
+   * Initialize error capture for bug reporting
+   * Captures console logs and error events, respecting user preferences
+   */
+  private initializeErrorCapture(): void {
+    errorCaptureService.initialize({
+      onError: (error) => {
+        const store = useInterBrainStore.getState();
+        const preference = store.feedback.autoReportPreference;
+
+        if (preference === 'never') {
+          // Just log, don't prompt
+          console.log('[ErrorCapture] Error captured but auto-report is disabled');
+          return;
+        }
+
+        if (preference === 'always') {
+          // Auto-submit (requires canSendReport check in feedbackService)
+          if (store.canSendReport()) {
+            store.openFeedbackModal(error);
+            // Note: For true "always send", we could call feedbackService.submitReport directly
+            // But opening the modal gives user a chance to add context
+          }
+          return;
+        }
+
+        // Default: 'ask' - show modal if we can send
+        if (store.canSendReport()) {
+          store.openFeedbackModal(error);
+          showFeedbackModal(this.app);
+        }
+      },
+    });
+
+    // Register cleanup on plugin unload
+    this.register(() => {
+      errorCaptureService.cleanup();
+    });
+
+    // Reset session report count when plugin reloads
+    useInterBrainStore.getState().resetSessionReportCount();
+  }
+
   private initializeBackgroundServices(): void {
     // Defer heavy copilot/songline services to background
     // These aren't needed until user actually opens those features
@@ -375,6 +433,9 @@ export default class InterBrainPlugin extends Plugin {
     // Initialize and register real-time transcription
     initializeRealtimeTranscriptionService(this);
     registerTranscriptionCommands(this);
+
+    // Register feedback commands (bug reporting)
+    registerFeedbackCommands(this);
     
     // Open DreamSpace command
     this.addCommand({
