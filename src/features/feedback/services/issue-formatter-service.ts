@@ -6,6 +6,7 @@
  * 2. AI-refined format: Uses Claude API to generate better titles, summaries
  */
 
+import { requestUrl } from 'obsidian';
 import { CapturedError } from '../store/slice';
 
 // ============================================================================
@@ -165,7 +166,9 @@ class IssueFormatterService {
 
     const prompt = this.buildPrompt(data);
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Use Obsidian's requestUrl to avoid CORS issues
+    const response = await requestUrl({
+      url: 'https://api.anthropic.com/v1/messages',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -173,7 +176,7 @@ class IssueFormatterService {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5',
         max_tokens: 1500,
         messages: [
           {
@@ -182,13 +185,14 @@ class IssueFormatterService {
           },
         ],
       }),
+      throw: false, // Don't throw on error status codes
     });
 
-    if (!response.ok) {
+    if (response.status !== 200) {
       throw new Error(`Claude API error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result = response.json;
     const content = result.content?.[0]?.text;
 
     if (!content) {
