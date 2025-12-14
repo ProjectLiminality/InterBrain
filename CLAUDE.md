@@ -91,7 +91,11 @@ src/
 1. Features own their state, services, and components
 2. Commands delegate to services (never direct git operations)
 3. UI calls commands via `executeCommandById()`, not services directly
-4. Node.js `fs` API preferred (VaultService is thin wrapper)
+4. **File System Access**:
+   - For vault files: Use `VaultService` from `src/core/services/vault-service.ts`
+   - For temp files outside vault (e.g., `/tmp/`): Use `require('fs')` directly
+   - **Never** use `import('fs')` - dynamic imports don't resolve in Electron
+   - VaultService is the canonical wrapper for vault-relative fs operations
 5. **Anti-pattern**: Never use CSS transforms for 3D positioning in R3F
 
 ## Essential Commands

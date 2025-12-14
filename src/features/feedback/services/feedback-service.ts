@@ -338,8 +338,9 @@ ${data.userDescription || 'No description provided'}
     body: string
   ): Promise<string> {
     // Use a temp file to avoid shell escaping issues with the body
+    // Note: Using require('fs') for Node.js fs in Electron (dynamic import doesn't work)
     const tempFile = `/tmp/interbrain-issue-${Date.now()}.md`;
-    const fs = await import('fs');
+    const fs = require('fs');
     await fs.promises.writeFile(tempFile, body, 'utf-8');
 
     try {
