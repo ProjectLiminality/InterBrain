@@ -29,7 +29,7 @@ import {
 import { openNodeContent } from '../../features/conversational-copilot/utils/open-node-content';
 import { OrchestratorContext } from '../context/orchestrator-context';
 import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
-import { TutorialOverlay } from '../../features/tutorial';
+import { TutorialOverlay, TutorialRunner } from '../../features/tutorial';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -91,6 +91,12 @@ export default function DreamspaceCanvas() {
   // Search results for search mode display
   const searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
+
+  // Tutorial state
+  const tutorialIsActive = useInterBrainStore(state => state.tutorial.isActive);
+  const endTutorial = useInterBrainStore(state => state.endTutorial);
+  const skipTutorial = useInterBrainStore(state => state.skipTutorial);
+  const markTutorialComplete = useInterBrainStore(state => state.markTutorialComplete);
 
   // Copilot mode state for transcription buffer
   const copilotMode = useInterBrainStore(state => state.copilotMode);
@@ -658,8 +664,20 @@ export default function DreamspaceCanvas() {
           {/* Relationship editor - render when in 'relationship-edit' layout */}
           <RelationshipEditor3D />
 
-          {/* Tutorial overlay - onboarding system with Manim-style animations */}
+          {/* Tutorial overlay - onboarding system with Manim-style animations (legacy) */}
           <TutorialOverlay />
+
+          {/* MVP Tutorial Runner - new step-based tutorial system */}
+          <TutorialRunner
+            isActive={tutorialIsActive}
+            onComplete={() => {
+              markTutorialComplete();
+              endTutorial();
+            }}
+            onSkip={() => {
+              skipTutorial();
+            }}
+          />
         </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}

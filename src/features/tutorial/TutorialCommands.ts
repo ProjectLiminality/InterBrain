@@ -2,16 +2,41 @@ import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
 import { tutorialService } from './TutorialService';
 import { TutorialModal } from './TutorialModal';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
 /**
  * Register tutorial commands for onboarding system
  */
 export function registerTutorialCommands(plugin: Plugin, uiService: UIService): void {
 
-  // Start Tutorial in 3D space
+  // Start MVP Tutorial (new system)
+  plugin.addCommand({
+    id: 'start-mvp-tutorial',
+    name: 'Start MVP Tutorial',
+    callback: () => {
+      console.log('🎓 Starting MVP tutorial');
+      const store = useInterBrainStore.getState();
+      store.startTutorial();
+      uiService.showInfo('Tutorial started - watch DreamSpace');
+    }
+  });
+
+  // Stop MVP Tutorial
+  plugin.addCommand({
+    id: 'stop-mvp-tutorial',
+    name: 'Stop MVP Tutorial',
+    callback: () => {
+      console.log('⏹️ Stopping MVP tutorial');
+      const store = useInterBrainStore.getState();
+      store.endTutorial();
+      uiService.showInfo('Tutorial stopped');
+    }
+  });
+
+  // Start Tutorial in 3D space (legacy)
   plugin.addCommand({
     id: 'start-tutorial',
-    name: 'Start Tutorial',
+    name: 'Start Tutorial (Legacy)',
     callback: () => {
       console.log('🎓 Starting tutorial in 3D space');
       tutorialService.start();

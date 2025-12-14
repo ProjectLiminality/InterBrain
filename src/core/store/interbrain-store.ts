@@ -105,6 +105,13 @@ import {
   NavigationHistoryState,
 } from '../../features/liminal-web-layout/store/slice';
 
+import {
+  TutorialSlice,
+  createTutorialSlice,
+  extractTutorialPersistenceData,
+  restoreTutorialPersistenceData,
+} from '../../features/tutorial/store/slice';
+
 // Type alias for spatial layout modes (the active view mode)
 // Note: 'edit' is for metadata editing, 'relationship-edit' is for relationship editing (peer-level modes)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'relationship-edit' | 'copilot';
@@ -201,7 +208,8 @@ export interface InterBrainState extends
   RadialButtonsSlice,
   UpdatesSlice,
   DragAndDropSlice,
-  LiminalWebSlice {}
+  LiminalWebSlice,
+  TutorialSlice {}
 
 // ============================================================================
 // CORE SLICE CREATOR
@@ -318,6 +326,7 @@ export const useInterBrainStore = create<InterBrainState>()(
       ...createUpdatesSlice(set, get, api),
       ...createDragAndDropSlice(set, get, api),
       ...createLiminalWebSlice(set, get, api),
+      ...createTutorialSlice(set, get),
     }),
     {
       name: 'interbrain-storage',
@@ -326,6 +335,7 @@ export const useInterBrainStore = create<InterBrainState>()(
         ...extractSearchPersistenceData(state),
         ...extractConstellationPersistenceData(state),
         ...extractDreamweavingPersistenceData(state),
+        ...extractTutorialPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
         const persistedData = persisted as {
@@ -348,6 +358,8 @@ export const useInterBrainStore = create<InterBrainState>()(
           } | null;
           vectorData?: [string, VectorData][];
           ollamaConfig?: OllamaConfig;
+          // Tutorial completion state
+          hasCompleted?: boolean;
         };
 
         // Support migration from legacy realNodes to dreamNodes
@@ -362,6 +374,7 @@ export const useInterBrainStore = create<InterBrainState>()(
           ...restoreSearchPersistenceData(persistedData),
           ...restoreConstellationPersistenceData(persistedData),
           ...restoreDreamweavingPersistenceData(persistedData),
+          ...restoreTutorialPersistenceData(current as TutorialSlice, persistedData),
         };
       },
     }
