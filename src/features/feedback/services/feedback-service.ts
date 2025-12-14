@@ -379,6 +379,10 @@ ${data.error?.stack || 'No stack trace'}
 
   /**
    * Generate an AI-refined comment for duplicate issues
+   *
+   * Design principle: AI ENHANCES, never REPLACES raw data.
+   * - AI summary at top for human readability
+   * - Full raw data in collapsible section for completeness
    */
   private async generateAiComment(data: FeedbackData): Promise<string> {
     const { requestUrl } = await import('obsidian');
@@ -393,26 +397,17 @@ ${data.error?.stack || 'No stack trace'}
 
     const prompt = `You are analyzing an additional occurrence of a known bug in InterBrain (an Obsidian plugin).
 
-This error was already reported. Generate a helpful comment that adds value to the existing issue.
-
-Focus on:
-1. Any NEW information this occurrence provides
-2. Patterns (is this the same environment? Different conditions?)
-3. Whether this confirms or adds nuance to the original report
+This error was already reported. Generate a BRIEF analysis (3-5 sentences max) that highlights:
+1. Whether this confirms the original report or adds new information
+2. Any notable environmental differences (if apparent)
+3. Pattern significance (e.g., "confirms reproducibility" or "suggests edge case")
 
 Error: ${data.error?.message || 'No error message'}
-Stack trace (abbreviated): ${data.error?.stack?.slice(0, 300) || 'None'}
 User description: ${data.userDescription}
 Platform: ${data.systemInfo.platform}
 Plugin version: ${data.systemInfo.pluginVersion}
 
-Generate a concise, helpful comment in markdown format. Start with "## Additional Report" and include:
-- A brief summary of what this occurrence adds
-- Any notable differences or confirmations
-- Environment info
-- Timestamp
-
-Keep it concise but informative.`;
+Respond with ONLY the analysis paragraph, no headers or formatting. Be concise.`;
 
     const response = await requestUrl({
       url: 'https://api.anthropic.com/v1/messages',
@@ -424,7 +419,7 @@ Keep it concise but informative.`;
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 800,
+        max_tokens: 300,
         messages: [{ role: 'user', content: prompt }],
       }),
       throw: false,
@@ -435,13 +430,57 @@ Keep it concise but informative.`;
     }
 
     const result = response.json;
-    const content = result.content?.[0]?.text;
+    const aiAnalysis = result.content?.[0]?.text;
 
-    if (!content) {
+    if (!aiAnalysis) {
       throw new Error('No content in response');
     }
 
-    return content + '\n\n---\n*AI-refined by InterBrain Feedback System*';
+    // Build comment with AI summary + full raw data
+    // AI enhances but never replaces - all raw data preserved
+    return `## Additional Report
+
+**AI Analysis:** ${aiAnalysis}
+
+**User Description:**
+${data.userDescription || '_No description provided_'}
+
+**Environment:**
+- Plugin: ${data.systemInfo.pluginVersion}
+- Obsidian: ${data.systemInfo.obsidianVersion}
+- Platform: ${data.systemInfo.platform}
+
+**Timestamp:** ${new Date().toISOString()}
+
+<details>
+<summary>Full Stack Trace</summary>
+
+\`\`\`
+${data.error?.stack || 'No stack trace available'}
+\`\`\`
+
+</details>
+
+${data.consoleLogs ? `<details>
+<summary>Console Logs</summary>
+
+\`\`\`
+${data.consoleLogs}
+\`\`\`
+
+</details>
+
+` : ''}${data.storeState ? `<details>
+<summary>Store State</summary>
+
+\`\`\`json
+${data.storeState}
+\`\`\`
+
+</details>
+
+` : ''}---
+*AI-refined by InterBrain Feedback System*`;
   }
 
   /**
