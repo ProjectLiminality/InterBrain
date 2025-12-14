@@ -117,7 +117,7 @@ class FeedbackService {
       const duplicateUrl = await this.checkForDuplicate(feedbackData);
       if (duplicateUrl) {
         // Add comment to existing issue instead
-        await this.addCommentToIssue(duplicateUrl, feedbackData);
+        await this.addCommentToIssue(duplicateUrl, feedbackData, options.useAiRefinement);
         store.recordReportSent();
         return {
           success: true,
@@ -307,27 +307,141 @@ class FeedbackService {
    */
   private async addCommentToIssue(
     issueUrl: string,
-    data: FeedbackData
+    data: FeedbackData,
+    useAiRefinement: boolean
   ): Promise<void> {
-    const comment = `## Additional Report
+    let comment: string;
+
+    if (useAiRefinement) {
+      // Use AI to generate a refined comment
+      try {
+        comment = await this.generateAiComment(data);
+      } catch (err) {
+        console.warn('[FeedbackService] AI comment generation failed, using raw:', err);
+        comment = this.generateRawComment(data);
+      }
+    } else {
+      comment = this.generateRawComment(data);
+    }
+
+    // Extract issue number from URL
+    const issueNumber = issueUrl.split('/').pop();
+
+    // Use temp file to avoid escaping issues with complex markdown
+    const tempFile = `/tmp/interbrain-comment-${Date.now()}.md`;
+    const fs = require('fs');
+    await fs.promises.writeFile(tempFile, comment, 'utf-8');
+
+    try {
+      const env = getExtendedEnv();
+      await execAsync(
+        `gh issue comment ${issueNumber} --repo ${this.REPO} --body-file "${tempFile}"`,
+        { env }
+      );
+    } finally {
+      try {
+        await fs.promises.unlink(tempFile);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  /**
+   * Generate a raw comment (no AI)
+   */
+  private generateRawComment(data: FeedbackData): string {
+    return `## Additional Report
 
 Another user encountered this issue.
 
 **User Description:**
 ${data.userDescription || 'No description provided'}
 
+**Environment:**
+- Plugin: ${data.systemInfo.pluginVersion}
+- Platform: ${data.systemInfo.platform}
+
 **Timestamp:** ${new Date().toISOString()}
+
+<details>
+<summary>Stack Trace</summary>
+
+\`\`\`
+${data.error?.stack || 'No stack trace'}
+\`\`\`
+
+</details>
 
 ---
 *Auto-added by InterBrain Feedback System*`;
+  }
 
-    // Extract issue number from URL
-    const issueNumber = issueUrl.split('/').pop();
-    const env = getExtendedEnv();
-    await execAsync(
-      `gh issue comment ${issueNumber} --repo ${this.REPO} --body "${comment.replace(/"/g, '\\"')}"`,
-      { env }
+  /**
+   * Generate an AI-refined comment for duplicate issues
+   */
+  private async generateAiComment(data: FeedbackData): Promise<string> {
+    const { requestUrl } = await import('obsidian');
+    const { settingsStatusService } = await import(
+      '../../settings/settings-status-service'
     );
+
+    const apiKey = settingsStatusService.getSettings()?.claudeApiKey;
+    if (!apiKey) {
+      throw new Error('No API key available');
+    }
+
+    const prompt = `You are analyzing an additional occurrence of a known bug in InterBrain (an Obsidian plugin).
+
+This error was already reported. Generate a helpful comment that adds value to the existing issue.
+
+Focus on:
+1. Any NEW information this occurrence provides
+2. Patterns (is this the same environment? Different conditions?)
+3. Whether this confirms or adds nuance to the original report
+
+Error: ${data.error?.message || 'No error message'}
+Stack trace (abbreviated): ${data.error?.stack?.slice(0, 300) || 'None'}
+User description: ${data.userDescription}
+Platform: ${data.systemInfo.platform}
+Plugin version: ${data.systemInfo.pluginVersion}
+
+Generate a concise, helpful comment in markdown format. Start with "## Additional Report" and include:
+- A brief summary of what this occurrence adds
+- Any notable differences or confirmations
+- Environment info
+- Timestamp
+
+Keep it concise but informative.`;
+
+    const response = await requestUrl({
+      url: 'https://api.anthropic.com/v1/messages',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      throw: false,
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`Claude API error: ${response.status}`);
+    }
+
+    const result = response.json;
+    const content = result.content?.[0]?.text;
+
+    if (!content) {
+      throw new Error('No content in response');
+    }
+
+    return content + '\n\n---\n*AI-refined by InterBrain Feedback System*';
   }
 
   /**
