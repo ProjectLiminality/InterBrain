@@ -583,19 +583,46 @@ else
     success "Git found ($(git --version))"
 fi
 
-# Check for Node.js
-if ! command_exists node; then
+# Check for Node.js (Vite requires Node.js 20.19+ or 22.12+)
+NEED_NODE_UPGRADE=false
+MIN_NODE_MAJOR=22
+MIN_NODE_MINOR=12
+
+if command_exists node; then
+    NODE_VERSION=$(node --version | sed 's/v//')
+    NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
+    NODE_MINOR=$(echo "$NODE_VERSION" | cut -d. -f2)
+
+    # Check if version is sufficient (22.12+ recommended for best compatibility)
+    if [ "$NODE_MAJOR" -lt 20 ]; then
+        NEED_NODE_UPGRADE=true
+    elif [ "$NODE_MAJOR" -eq 20 ] && [ "$NODE_MINOR" -lt 19 ]; then
+        NEED_NODE_UPGRADE=true
+    fi
+
+    if [ "$NEED_NODE_UPGRADE" = true ]; then
+        warning "Node.js $NODE_VERSION found but Vite requires 20.19+ or 22.12+"
+        echo "   Upgrading Node.js..."
+    else
+        success "Node.js found (v$NODE_VERSION)"
+    fi
+else
+    NEED_NODE_UPGRADE=true
     echo "Installing Node.js..."
+fi
+
+if [ "$NEED_NODE_UPGRADE" = true ]; then
     if [[ "$OSTYPE" == "darwin"* ]]; then
         brew install node
         refresh_shell_env
     else
-        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+        # Use NodeSource for latest LTS (currently 22.x)
+        info "Installing Node.js 22.x LTS..."
+        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
         sudo apt-get install -y nodejs
     fi
-    success "Node.js installed"
-else
-    success "Node.js found ($(node --version))"
+    refresh_shell_env
+    success "Node.js installed ($(node --version))"
 fi
 
 # TEST: Simulate failure before GitHub CLI (no gh available for issue creation)
