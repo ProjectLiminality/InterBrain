@@ -992,15 +992,38 @@ echo "--------------------------"
 
 cd "$INTERBRAIN_PATH"
 
-# Install dependencies with spinner
-npm install --silent > /dev/null 2>&1 &
+# Install dependencies with spinner (capture output to log for debugging)
+echo "[DEBUG] Running npm install..." >> "$LOG_FILE"
+npm install --silent >> "$LOG_FILE" 2>&1 &
 show_spinner $! "Installing Node.js dependencies..."
 wait $!
+NPM_INSTALL_EXIT=$?
+echo "[DEBUG] npm install exit code: $NPM_INSTALL_EXIT" >> "$LOG_FILE"
 
-# Build with spinner
-npm run build > /dev/null 2>&1 &
-show_spinner $! "Building InterBrain plugin..."
-wait $!
+if [ $NPM_INSTALL_EXIT -ne 0 ]; then
+    error "npm install failed (check log for details)"
+    echo ""
+    echo "Last 20 lines of log:"
+    tail -20 "$LOG_FILE"
+    exit 1
+fi
+
+# Build with spinner (capture output to log for debugging)
+echo "[DEBUG] Running npm run build..." >> "$LOG_FILE"
+npm run build >> "$LOG_FILE" 2>&1 &
+BUILD_PID=$!
+show_spinner $BUILD_PID "Building InterBrain plugin..."
+wait $BUILD_PID
+NPM_BUILD_EXIT=$?
+echo "[DEBUG] npm run build exit code: $NPM_BUILD_EXIT" >> "$LOG_FILE"
+
+if [ $NPM_BUILD_EXIT -ne 0 ]; then
+    error "npm run build failed (check log for details)"
+    echo ""
+    echo "Last 30 lines of build output:"
+    tail -30 "$LOG_FILE"
+    exit 1
+fi
 
 success "Plugin built successfully"
 
