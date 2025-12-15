@@ -269,6 +269,10 @@ export default class InterBrainPlugin extends Plugin {
   /**
    * Initialize error capture for bug reporting
    * Captures console logs and error events, respecting user preferences
+   *
+   * Rate limiting is GLOBAL (not per-error) to prevent error loops from
+   * spamming the user with modals. After sending a report, no modal will
+   * appear for 30 seconds regardless of whether it's the same or different error.
    */
   private initializeErrorCapture(): void {
     errorCaptureService.initialize({
@@ -282,21 +286,24 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        if (preference === 'always') {
-          // Auto-submit (requires canSendReport check in feedbackService)
-          if (store.canSendReport()) {
-            store.openFeedbackModal(error);
-            // Note: For true "always send", we could call feedbackService.submitReport directly
-            // But opening the modal gives user a chance to add context
-          }
+        // Check rate limiting - applies globally to prevent modal spam
+        if (!store.canSendReport()) {
+          // Silent suppression - user already sent a report recently
+          // We don't show a notice every time to avoid spam during error loops
+          console.log('[ErrorCapture] Error captured but rate limited (cooldown active)');
           return;
         }
 
-        // Default: 'ask' - show modal if we can send
-        if (store.canSendReport()) {
+        if (preference === 'always') {
           store.openFeedbackModal(error);
-          showFeedbackModal(this.app);
+          // Note: For true "always send", we could call feedbackService.submitReport directly
+          // But opening the modal gives user a chance to add context
+          return;
         }
+
+        // Default: 'ask' - show modal
+        store.openFeedbackModal(error);
+        showFeedbackModal(this.app);
       },
     });
 
