@@ -8,6 +8,7 @@ import type InterBrainPlugin from '../../main';
 import { showFeedbackModal } from './components/FeedbackModal';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { errorCaptureService } from './services/error-capture-service';
+import { serviceManager } from '../../core/services/service-manager';
 
 /**
  * Register feedback-related commands
@@ -130,6 +131,54 @@ export function registerFeedbackCommands(plugin: InterBrainPlugin): void {
     callback: () => {
       errorCaptureService.clearLogs();
       console.log('[Feedback Test] Log buffer cleared');
+    },
+  });
+
+  // Test: Debug environment detection
+  plugin.addCommand({
+    id: 'test-feedback-debug-env',
+    name: '[Test] Debug Environment Detection',
+    callback: () => {
+      console.log('[Feedback Test] === Environment Detection Debug ===');
+
+      // Manifest
+      const manifest = serviceManager.getManifest();
+      console.log('[Feedback Test] serviceManager.getManifest():', manifest);
+
+      // App object
+      const app = serviceManager.getApp() as any;
+      console.log('[Feedback Test] serviceManager.getApp():', app ? 'exists' : 'null');
+      if (app) {
+        console.log('[Feedback Test] app keys:', Object.keys(app).slice(0, 20));
+        console.log('[Feedback Test] app.version:', app.version);
+        console.log('[Feedback Test] app.appVersion:', app.appVersion);
+        console.log('[Feedback Test] app.appId:', app.appId);
+      }
+
+      // UserAgent
+      const userAgent = globalThis.navigator?.userAgent || '';
+      console.log('[Feedback Test] navigator.userAgent:', userAgent);
+
+      // Platform
+      const platform = globalThis.navigator?.platform || '';
+      console.log('[Feedback Test] navigator.platform:', platform);
+
+      // Process (Node.js in Electron)
+      const nodeProcess = (globalThis as any).process;
+      console.log('[Feedback Test] process.arch:', nodeProcess?.arch);
+      console.log('[Feedback Test] process.platform:', nodeProcess?.platform);
+
+      // Parse attempts
+      const obsidianMatch = userAgent.match(/Obsidian\/(\d+\.\d+\.\d+)/);
+      console.log('[Feedback Test] Obsidian version from userAgent:', obsidianMatch?.[1] || 'not found');
+
+      const macMatch = userAgent.match(/Mac OS X (\d+[._]\d+(?:[._]\d+)?)/);
+      console.log('[Feedback Test] macOS version from userAgent:', macMatch?.[1]?.replace(/_/g, '.') || 'not found');
+
+      const electronMatch = userAgent.match(/Electron\/(\d+\.\d+)/);
+      console.log('[Feedback Test] Electron version from userAgent:', electronMatch?.[1] || 'not found');
+
+      console.log('[Feedback Test] === End Debug ===');
     },
   });
 }

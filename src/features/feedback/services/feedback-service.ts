@@ -205,8 +205,9 @@ class FeedbackService {
    */
   private getObsidianVersion(): string {
     // Try to get from userAgent first (most reliable)
+    // Note: userAgent shows "obsidian/1.8.10" (lowercase)
     const userAgent = globalThis.navigator?.userAgent || '';
-    const obsidianMatch = userAgent.match(/Obsidian\/(\d+\.\d+\.\d+)/);
+    const obsidianMatch = userAgent.match(/obsidian\/(\d+\.\d+\.\d+)/i);
     if (obsidianMatch) {
       return obsidianMatch[1];
     }
