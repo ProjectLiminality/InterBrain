@@ -20,6 +20,22 @@ import { ClaudeProvider, createClaudeProvider } from './claude-provider';
 import { OllamaInferenceProvider, createOllamaInferenceProvider } from './ollama-inference';
 
 /**
+ * Strip <think>...</think> tags from any AI response
+ * Safety net in case provider-level stripping fails or is bypassed
+ */
+function stripThinkingTags(content: string): string {
+	// Remove <think>...</think> blocks (including newlines within)
+	let result = content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+
+	// Also handle unclosed <think> tags (model cut off mid-thought)
+	if (result.includes('<think>')) {
+		result = result.replace(/<think>[\s\S]*/g, '').trim();
+	}
+
+	return result;
+}
+
+/**
  * Extended inference options
  */
 export interface InferenceOptions extends CompletionOptions {
@@ -172,10 +188,15 @@ export class InferenceService {
 			}
 
 			try {
+				console.log(`[AI Magic] Using provider: ${provider.name}`);
 				const response = await provider.generateCompletion(messages, {
 					...options,
 					model: options?.model || model
 				});
+
+				// Safety net: strip thinking tags from any response
+				// Some models include <think>...</think> blocks
+				const cleanedContent = stripThinkingTags(response.content);
 
 				// Notify user if fallback was used
 				if (i > 0 && originalProvider) {
@@ -184,6 +205,7 @@ export class InferenceService {
 
 				return {
 					...response,
+					content: cleanedContent,
 					usedFallback: i > 0,
 					originalProvider: i > 0 ? originalProvider : undefined
 				};
