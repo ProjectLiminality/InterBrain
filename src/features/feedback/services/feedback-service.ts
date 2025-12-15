@@ -10,10 +10,12 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { requestUrl } from 'obsidian';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { serviceManager } from '../../../core/services/service-manager';
 import { errorCaptureService } from './error-capture-service';
 import { issueFormatterService, FeedbackData } from './issue-formatter-service';
+import { settingsStatusService } from '../../settings/settings-status-service';
 import { CapturedError } from '../store/slice';
 
 const execAsync = promisify(exec);
@@ -447,11 +449,6 @@ ${data.error?.stack || 'No stack trace'}
    * - Full raw data in collapsible section for completeness
    */
   private async generateAiComment(data: FeedbackData): Promise<string> {
-    const { requestUrl } = await import('obsidian');
-    const { settingsStatusService } = await import(
-      '../../settings/settings-status-service'
-    );
-
     const apiKey = settingsStatusService.getSettings()?.claudeApiKey;
     if (!apiKey) {
       throw new Error('No API key available');
