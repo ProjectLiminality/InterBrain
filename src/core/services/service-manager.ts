@@ -163,6 +163,21 @@ export class ServiceManager {
   }
 
   /**
+   * Get plugin manifest information (version, id, etc.)
+   */
+  getManifest(): { id: string; version: string; name: string } | null {
+    if (!this.plugin) {
+      return null;
+    }
+    const manifest = this.plugin.manifest;
+    return {
+      id: manifest.id,
+      version: manifest.version,
+      name: manifest.name,
+    };
+  }
+
+  /**
    * Check if web link analyzer is enabled and ready
    */
   isWebLinkAnalyzerReady(): boolean {

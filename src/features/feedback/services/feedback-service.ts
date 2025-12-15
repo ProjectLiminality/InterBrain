@@ -186,18 +186,80 @@ class FeedbackService {
    */
   private getSystemInfo(): SystemInfo {
     const app = serviceManager.getApp() as any;
-    const manifest = app?.plugins?.manifests?.['interbrain'];
+    const manifest = serviceManager.getManifest();
 
-    // Get platform info from navigator (works in Electron environment)
-    const platform = globalThis.navigator?.platform || 'unknown';
-    const userAgent = globalThis.navigator?.userAgent || '';
+    // Parse platform info for human-readable output
+    const platformInfo = this.getPlatformInfo();
 
     return {
       pluginVersion: manifest?.version || 'unknown',
-      obsidianVersion: app?.appVersion || 'unknown',
-      platform: platform,
-      platformVersion: userAgent,
+      obsidianVersion: app?.version || 'unknown',
+      platform: platformInfo.os,
+      platformVersion: platformInfo.details,
     };
+  }
+
+  /**
+   * Get detailed platform information
+   */
+  private getPlatformInfo(): { os: string; details: string } {
+    const userAgent = globalThis.navigator?.userAgent || '';
+    const platform = globalThis.navigator?.platform || '';
+
+    // Detect OS from userAgent (more reliable than navigator.platform)
+    let os = 'Unknown';
+    let details = '';
+
+    if (userAgent.includes('Mac OS X')) {
+      os = 'macOS';
+      // Extract version: "Mac OS X 10_15_7" or "Mac OS X 14_1"
+      const match = userAgent.match(/Mac OS X (\d+[._]\d+(?:[._]\d+)?)/);
+      if (match) {
+        details = match[1].replace(/_/g, '.');
+      }
+      // Detect Apple Silicon vs Intel
+      if (platform === 'MacIntel') {
+        // Check if running under Rosetta or native ARM
+        // In Electron, we can check process.arch if available
+        const nodeProcess = (globalThis as any).process;
+        if (nodeProcess?.arch === 'arm64') {
+          details += ' (Apple Silicon)';
+        } else if (nodeProcess?.arch === 'x64') {
+          details += ' (Intel)';
+        }
+      }
+    } else if (userAgent.includes('Windows')) {
+      os = 'Windows';
+      const match = userAgent.match(/Windows NT (\d+\.\d+)/);
+      if (match) {
+        // Map NT version to Windows version
+        const ntVersion = match[1];
+        const windowsVersions: Record<string, string> = {
+          '10.0': '10/11',
+          '6.3': '8.1',
+          '6.2': '8',
+          '6.1': '7',
+        };
+        details = windowsVersions[ntVersion] || ntVersion;
+      }
+    } else if (userAgent.includes('Linux')) {
+      os = 'Linux';
+      if (userAgent.includes('Ubuntu')) {
+        details = 'Ubuntu';
+      } else if (userAgent.includes('Fedora')) {
+        details = 'Fedora';
+      } else if (userAgent.includes('Arch')) {
+        details = 'Arch';
+      }
+    }
+
+    // Add Electron/Obsidian info if available
+    const electronMatch = userAgent.match(/Electron\/(\d+\.\d+)/);
+    if (electronMatch) {
+      details += details ? ` | Electron ${electronMatch[1]}` : `Electron ${electronMatch[1]}`;
+    }
+
+    return { os, details };
   }
 
   /**
