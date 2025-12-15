@@ -1,7 +1,7 @@
 import { App, TFile } from 'obsidian';
 import { DreamNode } from '../../dreamnode';
 import { InvocationEvent } from './conversation-recording-service';
-import { createLLMProvider, LLMMessage } from './llm-provider';
+import { generateAI, AIMessage } from '../../ai-magic';
 
 /**
  * Clip suggestion from LLM for a specific invoked DreamNode
@@ -41,13 +41,12 @@ export class ConversationSummaryService {
 	async generateSummary(
 		transcriptFile: TFile,
 		invocations: InvocationEvent[],
-		conversationPartner: DreamNode,
-		apiKey: string
+		conversationPartner: DreamNode
 	): Promise<ConversationSummaryResult> {
 		try {
 			// Read transcript content
 			const transcriptContent = await this.app.vault.read(transcriptFile);
-			return await this.generateSummaryFromContent(transcriptContent, invocations, conversationPartner, apiKey);
+			return await this.generateSummaryFromContent(transcriptContent, invocations, conversationPartner);
 		} catch (error) {
 			console.error('Failed to generate conversation summary:', error);
 			throw new Error(`Summary generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -60,8 +59,7 @@ export class ConversationSummaryService {
 	async generateSummaryFromContent(
 		transcriptContent: string,
 		invocations: InvocationEvent[],
-		conversationPartner: DreamNode,
-		apiKey: string
+		conversationPartner: DreamNode
 	): Promise<ConversationSummaryResult> {
 		try {
 			// Extract actual conversation text (skip metadata header)
@@ -78,21 +76,19 @@ export class ConversationSummaryService {
 			// Build user message
 			const userMessage = this.buildUserMessage(conversationText, invocations);
 
-			// Create LLM provider
-			const llmProvider = createLLMProvider('claude', apiKey);
-
-			// Generate summary and clips
-			const messages: LLMMessage[] = [
+			// Generate summary and clips using ai-magic service
+			const messages: AIMessage[] = [
 				{ role: 'system', content: systemPrompt },
 				{ role: 'user', content: userMessage }
 			];
 
-			const response = await llmProvider.generateCompletion(messages, {
-				maxTokens: 3000,  // Increased for clip suggestions
+			// Use 'standard' complexity - summaries benefit from quality
+			const response = await generateAI(messages, 'standard', {
+				maxTokens: 3000,
 				temperature: 0.7
 			});
 
-			console.log(`✅ [ConversationSummary] Generated summary and clips (${response.usage?.outputTokens} tokens)`);
+			console.log(`✅ [ConversationSummary] Generated summary and clips via ${response.provider} (${response.usage?.outputTokens} tokens)`);
 
 			// Parse response to extract summary and clips
 			return this.parseResponse(response.content, invocations);

@@ -5,7 +5,7 @@
  * Translates technical commit messages into plain English focused on UX impact
  */
 
-import { ClaudeProvider, LLMMessage } from '../../conversational-copilot/services/llm-provider';
+import { generateAI, AIMessage, getInferenceService } from '../../ai-magic';
 import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
 
 export interface UpdateSummary {
@@ -15,33 +15,23 @@ export interface UpdateSummary {
 }
 
 export class UpdateSummaryService {
-  private llmProvider: ClaudeProvider | null = null;
-
-  constructor(apiKey?: string) {
-    if (apiKey) {
-      this.llmProvider = new ClaudeProvider(apiKey);
-    }
-  }
-
-  /**
-   * Set or update the API key for LLM provider
-   */
-  setApiKey(apiKey: string): void {
-    this.llmProvider = new ClaudeProvider(apiKey);
-  }
-
   /**
    * Generate a user-friendly summary of updates
+   * Uses ai-magic service for intelligent provider routing
    */
   async generateUpdateSummary(fetchResult: FetchResult): Promise<UpdateSummary> {
-    if (!this.llmProvider) {
-      // Fallback to simple formatting if no LLM available
+    // Check if any AI provider is available
+    const inferenceService = getInferenceService();
+    const aiAvailable = await inferenceService.isAnyProviderAvailable();
+
+    if (!aiAvailable) {
+      // Fallback to simple formatting if no AI available
       return this.generateFallbackSummary(fetchResult);
     }
 
     try {
       const prompt = this.buildPrompt(fetchResult);
-      const messages: LLMMessage[] = [
+      const messages: AIMessage[] = [
         {
           role: 'system',
           content: 'You are a helpful assistant that translates technical git commit messages into user-friendly summaries. Focus on what users will experience, not technical implementation details.'
@@ -52,15 +42,16 @@ export class UpdateSummaryService {
         }
       ];
 
-      const response = await this.llmProvider.generateCompletion(messages, {
-        model: 'claude-haiku-4-5', // Fast, cost-effective model for summaries
+      // Use 'trivial' complexity - summaries are quick tasks
+      const response = await generateAI(messages, 'trivial', {
         maxTokens: 1024,
         temperature: 0.7
       });
 
+      console.log(`[UpdateSummary] Generated via ${response.provider}`);
       return this.parseResponse(response.content);
     } catch (error) {
-      console.error('[UpdateSummary] LLM generation failed, using fallback:', error);
+      console.error('[UpdateSummary] AI generation failed, using fallback:', error);
       return this.generateFallbackSummary(fetchResult);
     }
   }
@@ -221,18 +212,15 @@ Keep it concise, friendly, and focused on user experience. Use simple language.`
 // Singleton instance
 let updateSummaryService: UpdateSummaryService | null = null;
 
-export function initializeUpdateSummaryService(apiKey?: string): UpdateSummaryService {
+export function initializeUpdateSummaryService(): UpdateSummaryService {
   if (!updateSummaryService) {
-    updateSummaryService = new UpdateSummaryService(apiKey);
-  } else if (apiKey) {
-    updateSummaryService.setApiKey(apiKey);
+    updateSummaryService = new UpdateSummaryService();
   }
   return updateSummaryService;
 }
 
 export function getUpdateSummaryService(): UpdateSummaryService {
   if (!updateSummaryService) {
-    // Initialize with no API key - will use fallback summaries
     updateSummaryService = new UpdateSummaryService();
   }
   return updateSummaryService;

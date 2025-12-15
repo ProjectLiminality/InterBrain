@@ -145,14 +145,8 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
 
       const loadingNotice = uiService.showLoading('Generating update summary...');
       try {
-        // Initialize summary service with API key from settings if available
-        const settings = (plugin as any).settings;
-        const apiKey = settings?.claudeApiKey;
-
-        if (apiKey) {
-          initializeUpdateSummaryService(apiKey);
-        }
-
+        // Initialize and use summary service (uses ai-magic for provider routing)
+        initializeUpdateSummaryService();
         const summaryService = getUpdateSummaryService();
         const summary = await summaryService.generateUpdateSummary(updateStatus!);
 
