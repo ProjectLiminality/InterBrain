@@ -16,6 +16,7 @@ import { createWebLinkAnalyzerSettingsSection } from '../web-link-analyzer/setti
 import { createRadicleSettingsSection } from '../social-resonance-filter/settings-section';
 import { createGitHubSettingsSection } from '../github-publishing/settings-section';
 import { createFeedbackSettingsSection } from '../feedback/settings-section';
+import { createAIMagicSettingsSection } from '../ai-magic/settings-section';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
@@ -81,9 +82,14 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		this.createStatusOverview(containerEl);
 
 		// ============================================================
-		// AI Integration Section (global - API key used by multiple features)
+		// AI Magic Section (feature-owned - unified AI provider management)
 		// ============================================================
-		this.createAISection(containerEl);
+		createAIMagicSettingsSection(
+			containerEl,
+			this.plugin,
+			this.systemStatus?.aiMagic,
+			refreshDisplay
+		);
 
 		// ============================================================
 		// Semantic Search Section (feature-owned)
@@ -200,12 +206,12 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		if (!this.systemStatus) return;
 
 		const features = [
+			{ name: 'AI Magic', status: this.systemStatus.aiMagic, sectionId: 'ai-magic-section' },
 			{ name: 'Semantic Search', status: this.systemStatus.semanticSearch, sectionId: 'semantic-search-section' },
 			{ name: 'Transcription', status: this.systemStatus.transcription, sectionId: 'transcription-section' },
 			{ name: 'Web Link Analyzer', status: this.systemStatus.webLinkAnalyzer, sectionId: 'web-link-analyzer-section' },
 			{ name: 'Radicle Network', status: this.systemStatus.radicle, sectionId: 'radicle-section' },
-			{ name: 'GitHub Publishing', status: this.systemStatus.github, sectionId: 'github-section' },
-			{ name: 'Claude API', status: this.systemStatus.claudeApi, sectionId: 'ai-section' }
+			{ name: 'GitHub Publishing', status: this.systemStatus.github, sectionId: 'github-section' }
 		];
 
 		features.forEach(feature => {
@@ -241,43 +247,6 @@ export class InterBrainSettingTab extends PluginSettingTab {
 				.onClick(async () => {
 					await this.display(); // Reload entire settings panel
 				}));
-	}
-
-	/**
-	 * AI Integration Section (global - API key used by multiple features)
-	 */
-	private createAISection(containerEl: HTMLElement): void {
-		const header = containerEl.createEl('h2', { text: '🤖 AI Integration' });
-		header.id = 'ai-section';
-
-		const status = this.systemStatus?.claudeApi;
-		if (status) {
-			this.createStatusDisplay(containerEl, status);
-		}
-
-		new Setting(containerEl)
-			.setName('Claude API Key')
-			.setDesc('Your Anthropic API key for conversation summaries and semantic analysis')
-			.addText(text => {
-				text
-					.setPlaceholder('sk-ant-...')
-					.setValue(this.plugin.settings.claudeApiKey)
-					.onChange(async (value) => {
-						this.plugin.settings.claudeApiKey = value;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.type = 'password';
-				return text;
-			});
-
-		// Add link to get API key
-		containerEl.createEl('p', {
-			text: 'Get your API key: ',
-			cls: 'setting-item-description'
-		}).createEl('a', {
-			text: 'https://console.anthropic.com/settings/keys',
-			href: 'https://console.anthropic.com/settings/keys'
-		});
 	}
 
 	/**

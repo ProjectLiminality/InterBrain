@@ -36,3 +36,6 @@ export {
 	createAIMagicSettingsSection,
 	checkAIMagicStatus
 } from './settings-section';
+
+// Commands
+export { registerAIMagicCommands } from './commands';

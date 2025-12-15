@@ -155,27 +155,34 @@ interface InferenceService {
 5. **Settings**: Create unified settings section
 6. **Update Consumers**: Point all AI consumers to `ai-magic` service
 
-## Open Questions
+## Decisions Made
 
-### For David to decide:
+- **Tier naming**: High/Medium/Low (simple and clear)
+- **Default behavior**: Remote-first for private beta (higher quality, less error-prone)
+- **Model curation**: Curated list in main UI + advanced section for custom model identifiers
+- **Fallback behavior**: Notify user via Notice when fallback is used
 
-1. **Tier naming**: "High/Medium/Low" vs "Powerful/Balanced/Efficient" vs "Large/Medium/Small"?
+## Roadmap
 
-2. **Default behavior**: When both local and remote are available, default to:
-   - Local first (privacy-focused)
-   - Remote first (quality-focused)
-   - User must choose
+### Phase 1 (Current)
+- [x] Core provider infrastructure
+- [x] Claude provider
+- [x] Ollama inference provider
+- [x] Unified routing service
+- [x] Settings UI
+- [x] Test commands
 
-3. **Model curation**: Should we hard-code our recommended models, or let users pick any Ollama model?
-   - Curated list = simpler UX, tested combinations
-   - Open choice = flexibility, power users
+### Phase 2 (TODO)
+- [ ] Refactor web-link-analyzer to use ai-magic service (currently uses Python + Claude directly)
+- [ ] Update conversational-copilot to use ai-magic
+- [ ] Update dreamnode-updater to use ai-magic
+- [ ] Update feedback service to use ai-magic
+- [ ] OpenRouter provider implementation
 
-4. **Fallback behavior**: If local model fails mid-request, should we:
-   - Fail and notify user
-   - Silently fall back to remote (if available)
-   - Ask user
-
-5. **Cost awareness**: Should we show estimated API costs in settings?
+### Phase 3 (Future)
+- [ ] Cost tracking/estimation
+- [ ] Usage statistics
+- [ ] Model performance benchmarking
 
 ## Dependencies
 
@@ -186,4 +193,4 @@ interface InferenceService {
 ## Notes
 
 - Embeddings remain in `semantic-search` - different use case, different API
-- Python-based web-link-analyzer will need updating to use this service (or keep using Claude directly via Python anthropic package)
+- Python-based web-link-analyzer uses Claude directly via Python anthropic package - refactor planned for Phase 2

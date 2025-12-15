@@ -61,6 +61,10 @@ import {
   errorCaptureService,
   showFeedbackModal,
 } from './features/feedback';
+import {
+  registerAIMagicCommands,
+  initializeInferenceService
+} from './features/ai-magic';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
@@ -85,6 +89,11 @@ export default class InterBrainPlugin extends Plugin {
     SettingsStatusService.setSettings({
       claudeApiKey: this.settings.claudeApiKey,
       radiclePassphrase: this.settings.radiclePassphrase,
+    });
+
+    // Initialize AI Magic inference service with Claude API key
+    initializeInferenceService({
+      claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined
     });
 
     // Initialize error capture for bug reporting
@@ -451,6 +460,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register feedback commands (bug reporting)
     registerFeedbackCommands(this);
+
+    // Register AI Magic commands (provider testing)
+    registerAIMagicCommands(this);
     
     // Open DreamSpace command
     this.addCommand({

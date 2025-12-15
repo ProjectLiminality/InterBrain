@@ -9,10 +9,7 @@ import { Setting } from 'obsidian';
 import type InterBrainPlugin from '../../main';
 import type { FeatureStatus } from '../settings/settings-status-service';
 import { SettingsStatusService } from '../settings/settings-status-service';
-import {
-	getInferenceService,
-	initializeInferenceService
-} from './services/inference-service';
+import { getInferenceService } from './services/inference-service';
 import {
 	HardwareTier,
 	ProviderStatus,
@@ -110,24 +107,26 @@ export function createAIMagicSettingsSection(
 	});
 
 	// Provider Status Overview
-	createProviderStatusSection(containerEl, plugin);
+	createProviderStatusSection(containerEl);
 
 	// Remote Providers Section
-	createRemoteProvidersSection(containerEl, plugin, refreshDisplay);
+	createRemoteProvidersSection(containerEl, plugin);
 
 	// Local AI (Ollama) Section
 	createLocalAISection(containerEl, plugin, refreshDisplay);
 
 	// Preferences Section
-	createPreferencesSection(containerEl, plugin);
+	createPreferencesSection(containerEl);
+
+	// Advanced Section (collapsible)
+	createAdvancedSection(containerEl, plugin, refreshDisplay);
 }
 
 /**
  * Create provider status overview
  */
 async function createProviderStatusSection(
-	containerEl: HTMLElement,
-	_plugin: InterBrainPlugin
+	containerEl: HTMLElement
 ): Promise<void> {
 	const section = containerEl.createDiv({ cls: 'interbrain-provider-status-section' });
 	section.createEl('h4', { text: 'Provider Status' });
@@ -141,7 +140,7 @@ async function createProviderStatusSection(
 		for (const providerStatus of statuses) {
 			createProviderStatusItem(statusGrid, providerStatus);
 		}
-	} catch (error) {
+	} catch {
 		statusGrid.createEl('p', {
 			text: 'Error loading provider status',
 			cls: 'interbrain-status-error'
@@ -177,8 +176,7 @@ function createProviderStatusItem(container: HTMLElement, status: ProviderStatus
  */
 function createRemoteProvidersSection(
 	containerEl: HTMLElement,
-	plugin: InterBrainPlugin,
-	refreshDisplay?: () => Promise<void>
+	plugin: InterBrainPlugin
 ): void {
 	containerEl.createEl('h4', { text: 'Remote Providers' });
 
@@ -202,10 +200,11 @@ function createRemoteProvidersSection(
 			return text;
 		});
 
-	// Link to get API key
-	const linkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
-	linkPara.createSpan({ text: 'Get your API key: ' });
-	linkPara.createEl('a', {
+	// Link to get Claude API key
+	const claudeLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
+	claudeLinkPara.style.marginBottom = '16px';
+	claudeLinkPara.createSpan({ text: 'Get your Claude API key: ' });
+	claudeLinkPara.createEl('a', {
 		text: 'console.anthropic.com/settings/keys',
 		href: 'https://console.anthropic.com/settings/keys'
 	});
@@ -220,6 +219,14 @@ function createRemoteProvidersSection(
 				.setDisabled(true);
 			return text;
 		});
+
+	// Link to OpenRouter
+	const openRouterLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
+	openRouterLinkPara.createSpan({ text: 'Get OpenRouter API key: ' });
+	openRouterLinkPara.createEl('a', {
+		text: 'openrouter.ai/keys',
+		href: 'https://openrouter.ai/keys'
+	});
 }
 
 /**
@@ -261,12 +268,12 @@ function createLocalAISection(
 		.setName('Quick Setup')
 		.setDesc('Install Ollama and pull recommended models')
 		.addButton(button => button
-			.setButtonText('Setup Guide')
+			.setButtonText('Download Ollama')
 			.onClick(() => {
-				window.open('https://ollama.ai', '_blank');
+				window.open('https://ollama.ai/download', '_blank');
 			}))
 		.addButton(button => button
-			.setButtonText('Check Ollama Status')
+			.setButtonText('Check Status')
 			.onClick(async () => {
 				const status = await ollamaProvider?.getStatus();
 				if (status) {
@@ -276,6 +283,14 @@ function createLocalAISection(
 					window.alert(message);
 				}
 			}));
+
+	// Link to Ollama
+	const ollamaLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
+	ollamaLinkPara.createSpan({ text: 'Download and documentation: ' });
+	ollamaLinkPara.createEl('a', {
+		text: 'ollama.ai',
+		href: 'https://ollama.ai'
+	});
 }
 
 /**
@@ -366,8 +381,7 @@ function createModelSelectionSection(
  * Create preferences section
  */
 function createPreferencesSection(
-	containerEl: HTMLElement,
-	plugin: InterBrainPlugin
+	containerEl: HTMLElement
 ): void {
 	containerEl.createEl('h4', { text: 'Preferences' });
 
@@ -376,7 +390,7 @@ function createPreferencesSection(
 
 	new Setting(containerEl)
 		.setName('Prefer Local AI')
-		.setDesc('Use Ollama when available, fall back to Claude if needed')
+		.setDesc('Use Ollama when available, fall back to Claude if needed. When disabled (default), uses Claude for higher quality.')
 		.addToggle(toggle => toggle
 			.setValue(config.preferLocal)
 			.onChange(async (value) => {
@@ -391,6 +405,93 @@ function createPreferencesSection(
 			.onChange(async (value) => {
 				service.updateConfig({ offlineMode: value });
 			}));
+
+	// Info about privacy and resilience
+	const infoDiv = containerEl.createDiv({ cls: 'interbrain-info-note' });
+	infoDiv.style.marginTop = '12px';
+	infoDiv.style.padding = '12px';
+	infoDiv.style.borderRadius = '4px';
+	infoDiv.createEl('p', {
+		text: 'Local AI benefits: Your data stays on your machine. Works offline. Reduces network dependence.',
+		cls: 'setting-item-description'
+	});
+}
+
+/**
+ * Create advanced section for power users
+ */
+function createAdvancedSection(
+	containerEl: HTMLElement,
+	plugin: InterBrainPlugin,
+	refreshDisplay?: () => Promise<void>
+): void {
+	const details = containerEl.createEl('details', { cls: 'interbrain-advanced-section' });
+	details.style.marginTop = '16px';
+
+	const summary = details.createEl('summary', { text: '⚙️ Advanced Settings' });
+	summary.style.cursor = 'pointer';
+	summary.style.fontWeight = 'bold';
+
+	const content = details.createDiv();
+	content.style.padding = '12px 0';
+
+	content.createEl('p', {
+		text: 'For power users who want to use custom Ollama models.',
+		cls: 'setting-item-description'
+	});
+
+	const service = getInferenceService();
+	const ollamaProvider = service.getOllamaProvider();
+
+	// Custom model input
+	new Setting(content)
+		.setName('Custom Ollama Model')
+		.setDesc('Enter a model identifier to use (e.g., "codellama:13b"). Must be pulled via terminal first.')
+		.addText(text => {
+			text
+				.setPlaceholder('e.g., codellama:13b')
+				.onChange(async (value) => {
+					if (value && ollamaProvider) {
+						// Update all complexity tiers to use custom model
+						ollamaProvider.updateConfig({
+							models: {
+								trivial: value,
+								standard: value,
+								complex: value
+							}
+						});
+					}
+				});
+			return text;
+		})
+		.addButton(button => button
+			.setButtonText('Apply')
+			.onClick(async () => {
+				if (refreshDisplay) await refreshDisplay();
+			}));
+
+	// Show currently configured models
+	if (ollamaProvider) {
+		const modelInfo = content.createDiv();
+		modelInfo.style.marginTop = '12px';
+		modelInfo.style.padding = '8px';
+		modelInfo.style.borderRadius = '4px';
+
+		const config = service.getConfig();
+		const ollamaConfig = config.ollama;
+		if (ollamaConfig?.models) {
+			modelInfo.createEl('p', {
+				text: `Current models: Trivial=${ollamaConfig.models.trivial || 'default'}, Standard=${ollamaConfig.models.standard || 'default'}, Complex=${ollamaConfig.models.complex || 'default'}`,
+				cls: 'setting-item-description'
+			});
+		}
+	}
+
+	// How to pull custom models
+	content.createEl('p', {
+		text: 'To pull a custom model, run in terminal: ollama pull <model-name>',
+		cls: 'setting-item-description'
+	});
 }
 
 /**

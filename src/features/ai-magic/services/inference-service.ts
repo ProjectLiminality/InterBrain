@@ -5,6 +5,7 @@
  * based on task complexity, availability, and user preferences.
  */
 
+import { Notice } from 'obsidian';
 import {
 	AIProvider,
 	AIMessage,
@@ -51,7 +52,7 @@ export class InferenceService {
 
 	constructor(config?: Partial<AIMagicConfig>) {
 		this.config = {
-			preferLocal: config?.preferLocal ?? true,
+			preferLocal: config?.preferLocal ?? false, // Remote-first for private beta (higher quality, less error-prone)
 			offlineMode: config?.offlineMode ?? false,
 			claude: config?.claude,
 			ollama: config?.ollama
@@ -174,6 +175,11 @@ export class InferenceService {
 					...options,
 					model: options?.model || model
 				});
+
+				// Notify user if fallback was used
+				if (i > 0 && originalProvider) {
+					new Notice(`AI: ${originalProvider} unavailable, used ${provider.name} instead`);
+				}
 
 				return {
 					...response,
