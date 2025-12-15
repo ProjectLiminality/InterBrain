@@ -1,196 +1,183 @@
 # AI Magic Feature Slice
 
-Unified AI provider management for InterBrain. Handles both local (Ollama) and remote (Claude, OpenRouter) inference with intelligent routing based on task complexity.
+Unified AI provider management for InterBrain. Handles both local (Ollama) and remote (Claude) inference with intelligent routing and automatic fallback.
 
-## Purpose
+## Current Status (2024-12-15)
 
-Centralize all AI inference logic into a single feature slice with:
-- **Provider Registry**: Manage multiple AI providers (local + remote)
-- **Unified Interface**: Single `generateCompletion()` call routes to appropriate provider
-- **Tier System**: Match task complexity to model capability/cost
-- **Settings UI**: One-stop configuration for all AI features
+**Core Feature: COMPLETE** - Ready for private beta testing.
 
-## Directory Structure
+### What's Working
+- Claude provider (remote)
+- Ollama provider (local) with automatic hardware detection
+- Unified inference service with provider routing
+- Automatic fallback with user notification
+- Settings panel with one-click model installation
+- All consumers migrated to ai-magic service
+- Thinking tag stripping for qwen3 model output
+
+### Known Issues Being Investigated
+- **Semantic deduplication in feedback service**: When using Ollama for AI-refined feedback, the deduplication may fail due to model response format. The safety net for thinking tags was added, but needs more testing. Check console for `[AI Magic] Using provider:` to verify which provider is active.
+
+### Not Yet Implemented
+- OpenRouter provider (placeholder in settings)
+- web-link-analyzer migration (uses Python + Claude directly, lower priority)
+- Cost tracking / usage statistics
+
+## Architecture
+
+### Directory Structure
 
 ```
 ai-magic/
 ├── store/
-│   └── slice.ts              # Provider config, active providers, tier preferences
+│   └── slice.ts              # Zustand state for AI config
 ├── services/
-│   ├── provider-registry.ts  # Central registry of all providers
-│   ├── inference-service.ts  # Unified LLM inference interface
-│   ├── ollama-inference.ts   # Ollama chat/generate API
-│   ├── claude-provider.ts    # Anthropic API provider
-│   └── openrouter-provider.ts # OpenRouter for model variety (future)
-├── types.ts                  # Shared types and interfaces
-├── settings-section.ts       # AI settings UI in InterBrain settings
+│   ├── inference-service.ts  # Unified routing + fallback logic
+│   ├── ollama-inference.ts   # Ollama chat API + thinking tag stripping
+│   └── claude-provider.ts    # Anthropic API provider
+├── types.ts                  # Core types, hardware detection, model configs
+├── settings-section.ts       # Settings panel UI
+├── commands.ts               # Test commands for debugging
 ├── index.ts                  # Barrel export
 └── README.md
 ```
 
-## AI Usage in InterBrain
+### Key Files
 
-Current consumers of AI inference:
+| File | Purpose |
+|------|---------|
+| `types.ts` | `TaskComplexity`, `HardwareTier`, `detectHardwareTier()`, curated model lists |
+| `inference-service.ts` | `generateAI()` - main entry point, provider routing, fallback |
+| `ollama-inference.ts` | Ollama `/api/chat` integration, thinking tag stripping |
+| `claude-provider.ts` | Anthropic API integration |
+| `settings-section.ts` | Full settings UI with status, model pulling, preferences |
 
-| Consumer | Feature | Use Case | Complexity |
-|----------|---------|----------|------------|
-| `conversational-copilot` | Conversation summaries | Summarize conversation with invoked nodes | Trivial |
-| `dreamnode-updater` | Update summaries | Translate git commits to user-friendly text | Trivial |
-| `web-link-analyzer` | URL enrichment | Analyze web pages, generate DreamNode titles | Standard |
-| `feedback` | Issue refinement | Improve bug report titles, detect duplicates | Standard |
+## Hardware Tier System
 
-Note: `semantic-search` uses Ollama for **embeddings** (different API), not inference. That stays separate.
+Simplified to 2 tiers based on automatic RAM detection:
 
-## Tier System
+| Tier | RAM Threshold | Default Model | Use Case |
+|------|---------------|---------------|----------|
+| **High** | 32GB+ | qwen3:32b (~20GB) | Powerful reasoning |
+| **Standard** | <32GB | llama3.2:3b (~2GB) | Fast, efficient |
 
-### Task Complexity Tiers
+Hardware is auto-detected via `os.totalmem()`. Users can override in advanced settings.
 
-| Tier | Use Case | Examples |
-|------|----------|----------|
-| **Trivial** | Simple text transformation | Summaries, formatting, extraction |
-| **Standard** | Moderate reasoning | Analysis, classification, generation |
-| **Complex** | Deep reasoning (future) | Multi-step planning, complex synthesis |
+## Provider Routing
 
-### Provider Mapping
+### Priority Order
+1. **Remote-first** (default for private beta): Claude → Ollama fallback
+2. **Local-first** (user preference): Ollama → Claude fallback
+3. **Offline mode**: Ollama only, no API calls
 
-**Remote (API) Providers:**
-| Tier | Claude | OpenRouter |
-|------|--------|------------|
-| Trivial | claude-haiku-4-5 | TBD |
-| Standard | claude-sonnet-4-5 | TBD |
-| Complex | claude-opus-4-5 | TBD |
+### Complexity Mapping
+| Complexity | Claude Model | Ollama Model |
+|------------|--------------|--------------|
+| trivial | claude-haiku-4-5 | (tier default) |
+| standard | claude-sonnet-4-5 | (tier default) |
+| complex | claude-opus-4-5 | (tier default) |
 
-**Local (Ollama) Providers:**
+Note: Ollama uses the same model for all complexity levels (per-tier simplification).
 
-Based on system RAM, users select a tier they can run:
+## Consumers
 
-| Tier | RAM Requirement | Recommended Models |
-|------|-----------------|-------------------|
-| **High** | 64GB+ | llama3.1:70b, qwen2.5:72b |
-| **Medium** | 16GB+ | llama3.1:8b, mistral:7b, qwen2.5:14b |
-| **Low** | 8GB+ | llama3.2:3b, phi3:mini, gemma2:2b |
+All migrated to use `generateAI()` from ai-magic:
 
-The system maps task complexity to available local tier:
-- User with High tier: Trivial→Low, Standard→Medium, Complex→High
-- User with Medium tier: Trivial→Low, Standard→Medium, Complex→Medium (best effort)
-- User with Low tier: All tasks use Low tier models
+| Consumer | File | Complexity | Notes |
+|----------|------|------------|-------|
+| conversational-copilot | `conversation-summary-service.ts` | standard | Conversation summaries |
+| dreamnode-updater | `update-summary-service.ts` | trivial | Git commit summaries |
+| feedback | `feedback-service.ts` | trivial | Dedup, issue refinement |
+| feedback | `issue-formatter-service.ts` | trivial | Issue formatting |
+
+**NOT migrated** (intentionally):
+- `web-link-analyzer` - Uses Python backend with Claude SDK directly. Lower priority.
+- `semantic-search` - Uses Ollama for **embeddings**, different API entirely.
+
+## Usage
+
+### Basic Inference
+```typescript
+import { generateAI } from '../ai-magic';
+
+const response = await generateAI(
+  [{ role: 'user', content: 'Summarize this...' }],
+  'trivial',  // complexity: 'trivial' | 'standard' | 'complex'
+  { maxTokens: 500 }
+);
+
+console.log(response.content);  // Clean response (thinking tags stripped)
+console.log(response.provider); // 'Claude' or 'Ollama'
+```
+
+### Check Provider Availability
+```typescript
+import { getInferenceService } from '../ai-magic';
+
+const service = getInferenceService();
+const available = await service.isAnyProviderAvailable();
+const statuses = await service.getProvidersStatus();
+```
+
+## Test Commands
+
+Available in Obsidian command palette:
+
+- `AI Magic: Test Claude` - Test remote provider
+- `AI Magic: Test Ollama` - Test local provider
+- `AI Magic: Test Auto-routing` - Test fallback logic
+- `AI Magic: Check Provider Status` - Show all provider statuses
+
+## Debugging
+
+### Console Logs
+- `[AI Magic] Detected system RAM: XX.X GB` - Hardware detection
+- `[AI Magic] Using provider: Claude/Ollama` - Which provider handles request
+- `Provider X failed: ...` - Fallback triggered
+
+### Common Issues
+
+1. **Thinking tags in output** (`<think>...</think>`)
+   - Should be auto-stripped by inference service
+   - If still appearing, check if response is being processed outside ai-magic
+
+2. **Wrong provider being used**
+   - Check "Prefer Local AI" setting
+   - Verify Ollama is running (`ollama serve`)
+   - Check provider status in settings
+
+3. **Semantic deduplication creating duplicates**
+   - AI response may not match expected format
+   - Check console for `[FeedbackService] AI returned unexpected response:`
 
 ## Configuration
 
-### Settings UI Design
+Settings stored in plugin settings:
+- `claudeApiKey` - Anthropic API key
+- `preferLocal` - Use Ollama first when available
+- `offlineMode` - Never make API calls
 
-```
-🤖 AI Magic
-├── Provider Status (at-a-glance health of all providers)
-│   ├── ✅ Claude API: Ready
-│   ├── 🟡 Ollama: Model needed
-│   └── ⚫ OpenRouter: Not configured
-│
-├── Remote Providers
-│   ├── Claude API Key: [sk-ant-***]
-│   │   └── Get API key: console.anthropic.com
-│   └── OpenRouter API Key: [optional]
-│
-├── Local AI (Ollama)
-│   ├── Status: ✅ Running / 🔴 Not running
-│   ├── Hardware Tier: [High ▼] (based on your 64GB RAM)
-│   │   └── "High tier enables the most capable local models"
-│   ├── Models
-│   │   ├── Complex Tasks: [llama3.1:70b ▼] [Pull]
-│   │   ├── Standard Tasks: [llama3.1:8b ▼] [Pull]
-│   │   └── Trivial Tasks: [llama3.2:3b ▼] [Pull]
-│   └── One-Click Setup: [Setup Ollama + Models]
-│
-├── Provider Preferences
-│   ├── Prefer Local AI when available: [✓]
-│   │   └── "Uses Ollama when running, falls back to Claude"
-│   └── Offline Mode: [✓]
-│       └── "Only use local AI, never make API calls"
-│
-└── Privacy Note
-    "Local AI runs entirely on your machine. Your data never
-    leaves your computer when using Ollama."
-```
+Ollama config (auto-detected):
+- `hardwareTier` - 'standard' or 'high' based on RAM
+- `baseUrl` - Default: http://localhost:11434
 
-## Key Interfaces
+## Future Work
 
-```typescript
-// Task complexity hint for routing
-type TaskComplexity = 'trivial' | 'standard' | 'complex';
+### Short Term
+- [ ] More testing of Ollama + feedback deduplication
+- [ ] Consider adding retry logic for transient failures
 
-// Provider capabilities
-interface AIProvider {
-  name: string;
-  type: 'local' | 'remote';
-  isAvailable(): Promise<boolean>;
-  generateCompletion(
-    messages: Message[],
-    options?: CompletionOptions
-  ): Promise<CompletionResponse>;
-}
-
-// Unified inference call
-interface InferenceService {
-  // Main entry point - routes based on complexity and availability
-  generate(
-    messages: Message[],
-    complexity: TaskComplexity,
-    options?: InferenceOptions
-  ): Promise<CompletionResponse>;
-
-  // Direct provider access if needed
-  getProvider(name: string): AIProvider | undefined;
-
-  // Status
-  getAvailableProviders(): Promise<ProviderStatus[]>;
-}
-```
-
-## Migration Plan
-
-1. **Extract**: Move `llm-provider.ts` from `conversational-copilot` to `ai-magic`
-2. **Enhance**: Add Ollama inference support (chat API, not embeddings)
-3. **Registry**: Create provider registry with availability checking
-4. **Routing**: Implement complexity-based routing
-5. **Settings**: Create unified settings section
-6. **Update Consumers**: Point all AI consumers to `ai-magic` service
-
-## Decisions Made
-
-- **Tier naming**: High/Medium/Low (simple and clear)
-- **Default behavior**: Remote-first for private beta (higher quality, less error-prone)
-- **Model curation**: Curated list in main UI + advanced section for custom model identifiers
-- **Fallback behavior**: Notify user via Notice when fallback is used
-
-## Roadmap
-
-### Phase 1 (Current)
-- [x] Core provider infrastructure
-- [x] Claude provider
-- [x] Ollama inference provider
-- [x] Unified routing service
-- [x] Settings UI
-- [x] Test commands
-
-### Phase 2 (TODO)
-- [ ] Refactor web-link-analyzer to use ai-magic service (currently uses Python + Claude directly)
-- [ ] Update conversational-copilot to use ai-magic
-- [ ] Update dreamnode-updater to use ai-magic
-- [ ] Update feedback service to use ai-magic
+### Medium Term
 - [ ] OpenRouter provider implementation
+- [ ] web-link-analyzer migration (if needed)
 
-### Phase 3 (Future)
-- [ ] Cost tracking/estimation
-- [ ] Usage statistics
+### Long Term
+- [ ] Cost tracking / token budgets
+- [ ] Usage statistics dashboard
 - [ ] Model performance benchmarking
 
 ## Dependencies
 
-- Ollama (for local inference)
-- Anthropic API (for Claude)
-- OpenRouter API (future, for model variety)
-
-## Notes
-
-- Embeddings remain in `semantic-search` - different use case, different API
-- Python-based web-link-analyzer uses Claude directly via Python anthropic package - refactor planned for Phase 2
+- **Ollama** - Local inference (optional but recommended)
+- **Anthropic API** - Claude access (requires API key)
+- **Obsidian** - `requestUrl` for CORS-free API calls, `Notice` for user feedback
