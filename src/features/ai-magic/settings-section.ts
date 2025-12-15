@@ -10,11 +10,11 @@ import type InterBrainPlugin from '../../main';
 import type { FeatureStatus } from '../settings/settings-status-service';
 import { SettingsStatusService } from '../settings/settings-status-service';
 import { getInferenceService } from './services/inference-service';
+import { getSystemRAMInfo } from './services/ollama-inference';
 import {
-	HardwareTier,
 	ProviderStatus,
 	CURATED_OLLAMA_MODELS,
-	CuratedModel
+	HIGH_TIER_RAM_THRESHOLD_GB
 } from './types';
 
 /**
@@ -231,10 +231,11 @@ function createRemoteProvidersSection(
 
 /**
  * Create local AI (Ollama) section
+ * Simplified: auto-detects hardware, shows appropriate model with one-click pull
  */
 function createLocalAISection(
 	containerEl: HTMLElement,
-	plugin: InterBrainPlugin,
+	_plugin: InterBrainPlugin,
 	refreshDisplay?: () => Promise<void>
 ): void {
 	containerEl.createEl('h4', { text: 'Local AI (Ollama)' });
@@ -242,31 +243,80 @@ function createLocalAISection(
 	const service = getInferenceService();
 	const ollamaProvider = service.getOllamaProvider();
 
-	// Hardware Tier Selection
-	new Setting(containerEl)
-		.setName('Hardware Tier')
-		.setDesc('Select based on your system RAM. Determines which local models are available.')
-		.addDropdown(dropdown => {
-			dropdown
-				.addOption('high', 'High (64GB+ RAM) - Most capable models')
-				.addOption('medium', 'Medium (16GB+ RAM) - Balanced performance')
-				.addOption('low', 'Low (8GB+ RAM) - Efficient models')
-				.setValue(ollamaProvider?.getHardwareTier() || 'medium')
-				.onChange(async (value) => {
-					const tier = value as HardwareTier;
-					ollamaProvider?.setHardwareTier(tier);
-					// Refresh to show updated model recommendations
-					if (refreshDisplay) await refreshDisplay();
-				});
+	// Get hardware info
+	const ramInfo = getSystemRAMInfo();
+	const currentTier = ollamaProvider?.getHardwareTier() || ramInfo.tier;
+
+	// Show detected hardware
+	const hardwareInfo = containerEl.createDiv({ cls: 'interbrain-hardware-info' });
+	hardwareInfo.style.padding = '12px';
+	hardwareInfo.style.marginBottom = '16px';
+	hardwareInfo.style.borderRadius = '4px';
+
+	const tierIcon = ramInfo.meetsHighTier ? '🚀' : '💻';
+	const tierLabel = ramInfo.meetsHighTier ? 'High Performance' : 'Standard';
+	hardwareInfo.createEl('p', {
+		text: `${tierIcon} Detected: ${ramInfo.totalGB.toFixed(0)} GB RAM → ${tierLabel} tier`,
+		cls: 'setting-item-description'
+	});
+
+	if (ramInfo.meetsHighTier) {
+		hardwareInfo.createEl('p', {
+			text: 'Your system can run larger, more capable local models.',
+			cls: 'setting-item-description'
 		});
+	} else {
+		hardwareInfo.createEl('p', {
+			text: `High performance tier requires ${HIGH_TIER_RAM_THRESHOLD_GB}GB+ RAM.`,
+			cls: 'setting-item-description'
+		});
+	}
 
-	// Model Selection (curated list)
-	createModelSelectionSection(containerEl, plugin, refreshDisplay);
+	// Show recommended model for this tier
+	const recommendedModel = CURATED_OLLAMA_MODELS.find(m => m.tier === currentTier);
+	if (recommendedModel) {
+		const modelSection = containerEl.createDiv({ cls: 'interbrain-model-recommendation' });
+		modelSection.style.marginBottom = '16px';
 
-	// One-click setup
+		new Setting(modelSection)
+			.setName(`Recommended: ${recommendedModel.name}`)
+			.setDesc(`${recommendedModel.description} (${recommendedModel.size})`)
+			.addButton(button => {
+				button
+					.setButtonText(`Pull ${recommendedModel.id}`)
+					.setCta()
+					.onClick(async () => {
+						button.setButtonText('Pulling...');
+						button.setDisabled(true);
+
+						try {
+							const success = await ollamaProvider?.pullModel(recommendedModel.id, (status) => {
+								console.log('Ollama pull:', status);
+							});
+
+							if (success) {
+								button.setButtonText('✅ Pulled!');
+								if (refreshDisplay) await refreshDisplay();
+							} else {
+								button.setButtonText('❌ Failed');
+							}
+						} catch (error) {
+							button.setButtonText('❌ Error');
+							console.error('Model pull failed:', error);
+						}
+
+						globalThis.setTimeout(() => {
+							button.setButtonText(`Pull ${recommendedModel.id}`);
+							button.setDisabled(false);
+						}, 3000);
+					});
+			});
+	}
+
+	// Quick setup buttons
 	new Setting(containerEl)
-		.setName('Quick Setup')
-		.setDesc('Install Ollama and pull recommended models')
+		.setName('Setup')
+		.setDesc('Install Ollama to enable local AI')
 		.addButton(button => button
 			.setButtonText('Download Ollama')
 			.onClick(() => {
@@ -291,90 +341,6 @@ function createLocalAISection(
 		text: 'ollama.ai',
 		href: 'https://ollama.ai'
 	});
-}
-
-/**
- * Create model selection with curated recommendations
- */
-function createModelSelectionSection(
-	containerEl: HTMLElement,
-	plugin: InterBrainPlugin,
-	refreshDisplay?: () => Promise<void>
-): void {
-	const service = getInferenceService();
-	const ollamaProvider = service.getOllamaProvider();
-	const currentTier = ollamaProvider?.getHardwareTier() || 'medium';
-
-	// Filter models appropriate for current tier
-	const appropriateModels = CURATED_OLLAMA_MODELS.filter(m => {
-		if (currentTier === 'high') return true; // All models available
-		if (currentTier === 'medium') return m.tier !== 'high';
-		return m.tier === 'low'; // Low tier only gets low models
-	});
-
-	// Group by complexity
-	const complexityGroups: Record<string, CuratedModel[]> = {
-		complex: appropriateModels.filter(m => m.complexity === 'complex'),
-		standard: appropriateModels.filter(m => m.complexity === 'standard'),
-		trivial: appropriateModels.filter(m => m.complexity === 'trivial')
-	};
-
-	const modelSection = containerEl.createDiv({ cls: 'interbrain-model-selection' });
-	modelSection.createEl('p', {
-		text: 'Recommended models for your hardware tier:',
-		cls: 'setting-item-description'
-	});
-
-	const modelList = modelSection.createEl('ul');
-	modelList.style.listStyle = 'none';
-	modelList.style.paddingLeft = '0';
-
-	for (const [complexity, models] of Object.entries(complexityGroups)) {
-		if (models.length === 0) continue;
-
-		const complexityLabel = complexity.charAt(0).toUpperCase() + complexity.slice(1);
-		const li = modelList.createEl('li');
-		li.style.marginBottom = '8px';
-
-		li.createEl('strong', { text: `${complexityLabel} tasks: ` });
-
-		const modelNames = models.map(m => `${m.name} (${m.size})`).join(', ');
-		li.createSpan({ text: modelNames, cls: 'setting-item-description' });
-
-		// Pull button for first recommended model
-		const primaryModel = models[0];
-		const pullBtn = li.createEl('button', {
-			text: `Pull ${primaryModel.id}`,
-			cls: 'mod-cta'
-		});
-		pullBtn.style.marginLeft = '8px';
-		pullBtn.style.fontSize = '12px';
-		pullBtn.addEventListener('click', async () => {
-			pullBtn.textContent = 'Pulling...';
-			pullBtn.disabled = true;
-
-			try {
-				const success = await ollamaProvider?.pullModel(primaryModel.id, (status) => {
-					console.log('Ollama pull:', status);
-				});
-
-				if (success) {
-					pullBtn.textContent = '✅ Pulled!';
-					if (refreshDisplay) await refreshDisplay();
-				} else {
-					pullBtn.textContent = '❌ Failed';
-				}
-			} catch (error) {
-				pullBtn.textContent = '❌ Error';
-				console.error('Model pull failed:', error);
-			}
-
-			globalThis.setTimeout(() => {
-				pullBtn.textContent = `Pull ${primaryModel.id}`;
-				pullBtn.disabled = false;
-			}, 3000);
-		});
-	}
 }
 
 /**

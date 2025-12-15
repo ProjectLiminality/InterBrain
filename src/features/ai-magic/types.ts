@@ -16,9 +16,11 @@ export type ProviderType = 'local' | 'remote';
 
 /**
  * Hardware tier for local model selection
- * Determines which Ollama models are appropriate for the user's system
+ * Automatically detected based on system RAM
+ * - standard: Works on most machines (8GB+ RAM)
+ * - high: For powerful machines (32GB+ RAM) - enables larger models
  */
-export type HardwareTier = 'high' | 'medium' | 'low';
+export type HardwareTier = 'standard' | 'high';
 
 /**
  * Message format for LLM conversations
@@ -117,7 +119,7 @@ export interface ClaudeConfig {
  */
 export interface OllamaConfig {
 	baseUrl?: string; // Default: http://localhost:11434
-	hardwareTier: HardwareTier;
+	hardwareTier?: HardwareTier; // Auto-detected if not specified
 	models?: {
 		trivial?: string;
 		standard?: string;
@@ -155,6 +157,7 @@ export interface AIMagicConfig {
 
 /**
  * Curated model recommendations for Ollama
+ * Simplified: one model per tier
  */
 export interface CuratedModel {
 	id: string;
@@ -162,81 +165,51 @@ export interface CuratedModel {
 	description: string;
 	size: string;
 	tier: HardwareTier;
-	complexity: TaskComplexity;
+}
+
+/**
+ * RAM threshold for high tier (in GB)
+ * Machines with 32GB+ RAM get access to larger models
+ */
+export const HIGH_TIER_RAM_THRESHOLD_GB = 32;
+
+/**
+ * Detect hardware tier based on system RAM
+ * Returns 'high' if system has 32GB+ RAM, otherwise 'standard'
+ */
+export function detectHardwareTier(): HardwareTier {
+	try {
+		// In Electron/Node context, we can access os module
+		const os = require('os');
+		const totalMemoryGB = os.totalmem() / (1024 * 1024 * 1024);
+		console.log(`[AI Magic] Detected system RAM: ${totalMemoryGB.toFixed(1)} GB`);
+		return totalMemoryGB >= HIGH_TIER_RAM_THRESHOLD_GB ? 'high' : 'standard';
+	} catch {
+		console.warn('[AI Magic] Could not detect system RAM, defaulting to standard tier');
+		return 'standard';
+	}
 }
 
 /**
  * Default curated models for Ollama
+ * One model per tier for simplicity
  */
 export const CURATED_OLLAMA_MODELS: CuratedModel[] = [
-	// High tier (64GB+ RAM)
+	// High tier (32GB+ RAM) - more capable model
 	{
-		id: 'llama3.1:70b',
-		name: 'Llama 3.1 70B',
-		description: 'Most capable open model, excellent reasoning',
-		size: '~40GB',
-		tier: 'high',
-		complexity: 'complex'
+		id: 'qwen3:32b',
+		name: 'Qwen 3 32B',
+		description: 'Powerful reasoning model for complex tasks',
+		size: '~20GB',
+		tier: 'high'
 	},
-	{
-		id: 'qwen2.5:72b',
-		name: 'Qwen 2.5 72B',
-		description: 'Excellent multilingual and coding capabilities',
-		size: '~40GB',
-		tier: 'high',
-		complexity: 'complex'
-	},
-
-	// Medium tier (16GB+ RAM)
-	{
-		id: 'llama3.1:8b',
-		name: 'Llama 3.1 8B',
-		description: 'Great balance of capability and speed',
-		size: '~5GB',
-		tier: 'medium',
-		complexity: 'standard'
-	},
-	{
-		id: 'mistral:7b',
-		name: 'Mistral 7B',
-		description: 'Fast and capable, good for general tasks',
-		size: '~4GB',
-		tier: 'medium',
-		complexity: 'standard'
-	},
-	{
-		id: 'qwen2.5:14b',
-		name: 'Qwen 2.5 14B',
-		description: 'Strong reasoning in compact size',
-		size: '~9GB',
-		tier: 'medium',
-		complexity: 'standard'
-	},
-
-	// Low tier (8GB+ RAM)
+	// Standard tier (8GB+ RAM) - efficient model that works everywhere
 	{
 		id: 'llama3.2:3b',
 		name: 'Llama 3.2 3B',
-		description: 'Efficient and fast for simple tasks',
+		description: 'Fast and efficient for most tasks',
 		size: '~2GB',
-		tier: 'low',
-		complexity: 'trivial'
-	},
-	{
-		id: 'phi3:mini',
-		name: 'Phi-3 Mini',
-		description: 'Microsoft\'s efficient small model',
-		size: '~2GB',
-		tier: 'low',
-		complexity: 'trivial'
-	},
-	{
-		id: 'gemma2:2b',
-		name: 'Gemma 2 2B',
-		description: 'Google\'s compact open model',
-		size: '~1.5GB',
-		tier: 'low',
-		complexity: 'trivial'
+		tier: 'standard'
 	}
 ];
 
@@ -251,22 +224,18 @@ export const CLAUDE_MODELS = {
 
 /**
  * Default Ollama models by hardware tier
- * Maps hardware tier to recommended models for each complexity level
+ * Simplified: high tier uses qwen3:32b, standard uses llama3.2:3b
+ * All complexity levels use the same model per tier (simplicity)
  */
 export const DEFAULT_OLLAMA_MODELS: Record<HardwareTier, Record<TaskComplexity, string>> = {
 	high: {
-		trivial: 'llama3.2:3b',
-		standard: 'llama3.1:8b',
-		complex: 'llama3.1:70b'
+		trivial: 'qwen3:32b',
+		standard: 'qwen3:32b',
+		complex: 'qwen3:32b'
 	},
-	medium: {
-		trivial: 'llama3.2:3b',
-		standard: 'llama3.1:8b',
-		complex: 'llama3.1:8b' // Best effort with medium tier
-	},
-	low: {
+	standard: {
 		trivial: 'llama3.2:3b',
 		standard: 'llama3.2:3b',
-		complex: 'llama3.2:3b' // All tasks use small model
+		complex: 'llama3.2:3b'
 	}
 };

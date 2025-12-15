@@ -28,7 +28,8 @@ export {
 
 export {
 	OllamaInferenceProvider,
-	createOllamaInferenceProvider
+	createOllamaInferenceProvider,
+	getSystemRAMInfo
 } from './services/ollama-inference';
 
 // Settings

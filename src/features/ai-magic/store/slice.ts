@@ -31,14 +31,13 @@ export interface AIMagicSlice {
 
 /**
  * Default AI Magic configuration
+ * Hardware tier is auto-detected, so we don't set a default here
  */
 export const DEFAULT_AI_MAGIC_CONFIG: AIMagicConfig = {
-	preferLocal: true,
+	preferLocal: false, // Remote-first for private beta
 	offlineMode: false,
 	claude: undefined,
-	ollama: {
-		hardwareTier: 'medium'
-	}
+	ollama: undefined // Will auto-detect hardware tier
 };
 
 /**

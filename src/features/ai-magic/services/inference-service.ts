@@ -71,9 +71,10 @@ export class InferenceService {
 		}
 
 		// Always initialize Ollama (it checks availability dynamically)
+		// Hardware tier will auto-detect if not specified
 		this.ollamaProvider = createOllamaInferenceProvider({
 			baseUrl: this.config.ollama?.baseUrl,
-			hardwareTier: this.config.ollama?.hardwareTier || 'medium',
+			hardwareTier: this.config.ollama?.hardwareTier,
 			models: this.config.ollama?.models
 		});
 	}

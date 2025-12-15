@@ -14,7 +14,9 @@ import {
 	TaskComplexity,
 	HardwareTier,
 	OllamaConfig,
-	DEFAULT_OLLAMA_MODELS
+	DEFAULT_OLLAMA_MODELS,
+	detectHardwareTier,
+	HIGH_TIER_RAM_THRESHOLD_GB
 } from '../types';
 
 /**
@@ -65,7 +67,8 @@ export class OllamaInferenceProvider implements AIProvider {
 
 	constructor(config: OllamaConfig) {
 		this.baseUrl = (config.baseUrl || 'http://localhost:11434').replace(/\/$/, '');
-		this.hardwareTier = config.hardwareTier || 'medium';
+		// Auto-detect hardware tier if not specified
+		this.hardwareTier = config.hardwareTier || detectHardwareTier();
 		this.models = {
 			trivial: config.models?.trivial || DEFAULT_OLLAMA_MODELS[this.hardwareTier].trivial,
 			standard: config.models?.standard || DEFAULT_OLLAMA_MODELS[this.hardwareTier].standard,
@@ -157,12 +160,13 @@ export class OllamaInferenceProvider implements AIProvider {
 			};
 		}
 
+		const tierLabel = this.hardwareTier === 'high' ? 'High Performance' : 'Standard';
 		return {
 			name: this.name,
 			type: this.type,
 			status: 'ready',
-			message: `Ready (${this.hardwareTier} tier)`,
-			details: `Local AI running on ${this.baseUrl}`,
+			message: `Ready (${tierLabel})`,
+			details: `Using ${this.models.standard} on ${this.baseUrl}`,
 			models: availableModels
 		};
 	}
@@ -301,8 +305,30 @@ export class OllamaInferenceProvider implements AIProvider {
  */
 export function createOllamaInferenceProvider(config?: Partial<OllamaConfig>): OllamaInferenceProvider {
 	return new OllamaInferenceProvider({
-		hardwareTier: config?.hardwareTier || 'medium',
+		hardwareTier: config?.hardwareTier, // Will auto-detect if not provided
 		baseUrl: config?.baseUrl,
 		models: config?.models
 	});
+}
+
+/**
+ * Get system RAM info for display
+ */
+export function getSystemRAMInfo(): { totalGB: number; tier: HardwareTier; meetsHighTier: boolean } {
+	try {
+		const os = require('os');
+		const totalGB = os.totalmem() / (1024 * 1024 * 1024);
+		const tier = detectHardwareTier();
+		return {
+			totalGB,
+			tier,
+			meetsHighTier: totalGB >= HIGH_TIER_RAM_THRESHOLD_GB
+		};
+	} catch {
+		return {
+			totalGB: 0,
+			tier: 'standard',
+			meetsHighTier: false
+		};
+	}
 }
