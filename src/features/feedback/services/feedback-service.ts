@@ -187,7 +187,6 @@ class FeedbackService {
    * Get system information
    */
   private getSystemInfo(): SystemInfo {
-    const app = serviceManager.getApp() as any;
     const manifest = serviceManager.getManifest();
 
     // Parse platform info for human-readable output
@@ -195,10 +194,29 @@ class FeedbackService {
 
     return {
       pluginVersion: manifest?.version || 'unknown',
-      obsidianVersion: app?.version || 'unknown',
+      obsidianVersion: this.getObsidianVersion(),
       platform: platformInfo.os,
       platformVersion: platformInfo.details,
     };
+  }
+
+  /**
+   * Get Obsidian version from userAgent or runtime
+   */
+  private getObsidianVersion(): string {
+    // Try to get from userAgent first (most reliable)
+    const userAgent = globalThis.navigator?.userAgent || '';
+    const obsidianMatch = userAgent.match(/Obsidian\/(\d+\.\d+\.\d+)/);
+    if (obsidianMatch) {
+      return obsidianMatch[1];
+    }
+
+    // Fallback: try undocumented app properties
+    const app = serviceManager.getApp() as any;
+    if (app?.version) return app.version;
+    if (app?.appVersion) return app.appVersion;
+
+    return 'unknown';
   }
 
   /**
