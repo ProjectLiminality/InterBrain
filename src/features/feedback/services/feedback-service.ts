@@ -274,12 +274,6 @@ class FeedbackService {
       }
     }
 
-    // Add Electron/Obsidian info if available
-    const electronMatch = userAgent.match(/Electron\/(\d+\.\d+)/);
-    if (electronMatch) {
-      details += details ? ` | Electron ${electronMatch[1]}` : `Electron ${electronMatch[1]}`;
-    }
-
     return { os, details };
   }
 
