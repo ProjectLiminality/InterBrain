@@ -51,6 +51,15 @@ interface OllamaListResponse {
 }
 
 /**
+ * Strip <think>...</think> tags from model output
+ * Some models (like qwen3) include reasoning in these tags by default
+ */
+function stripThinkingTags(content: string): string {
+	// Remove <think>...</think> blocks (including newlines within)
+	return content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+}
+
+/**
  * Ollama Inference Provider
  * Uses Ollama's /api/chat endpoint for conversational AI
  */
@@ -269,8 +278,11 @@ export class OllamaInferenceProvider implements AIProvider {
 
 			const data: OllamaChatResponse = await response.json();
 
+			// Strip thinking tags from models that include them (e.g., qwen3)
+			const content = stripThinkingTags(data.message.content);
+
 			return {
-				content: data.message.content,
+				content,
 				provider: this.name,
 				model,
 				usage: {
