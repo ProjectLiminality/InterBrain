@@ -258,22 +258,19 @@ class ErrorCaptureService {
       return;
     }
 
-    // Check for duplicate (deduplication)
+    // Track error hash for duplicate detection (used by issue submission, not modal)
     const hash = this.hashError(error);
     const lastSeen = this.seenErrorHashes.get(hash);
     const now = Date.now();
+    const isDuplicate = lastSeen && now - lastSeen < ERROR_HASH_EXPIRY_MS;
 
-    if (lastSeen && now - lastSeen < ERROR_HASH_EXPIRY_MS) {
-      // Same error recently seen, skip
-      return;
+    if (!isDuplicate) {
+      this.seenErrorHashes.set(hash, now);
+      this.cleanupOldHashes();
     }
 
-    this.seenErrorHashes.set(hash, now);
-
-    // Clean up old hashes
-    this.cleanupOldHashes();
-
-    // Notify callback
+    // Always notify callback - let modal throttle handle rate limiting
+    // The callback is responsible for deciding whether to show modal
     this.callbacks?.onError(error);
   }
 

@@ -57,10 +57,11 @@ export function registerFeedbackCommands(plugin: InterBrainPlugin): void {
     name: '[Test] Reset Rate Limits',
     callback: () => {
       const store = useInterBrainStore.getState();
-      store.resetSessionReportCount();
+      store.resetSessionCounts();
       console.log('[Feedback Test] Rate limits reset');
-      console.log('[Feedback Test] Session report count:', store.feedback.sessionReportCount);
-      console.log('[Feedback Test] Last report timestamp:', store.feedback.lastReportTimestamp);
+      console.log('[Feedback Test] Modal throttle:', store.feedback.lastModalTimestamp);
+      console.log('[Feedback Test] Submit throttle:', store.feedback.lastSubmitTimestamp);
+      console.log('[Feedback Test] Session submit count:', store.feedback.sessionSubmitCount);
     },
   });
 
@@ -70,17 +71,21 @@ export function registerFeedbackCommands(plugin: InterBrainPlugin): void {
     name: '[Test] Check Rate Limit Status',
     callback: () => {
       const store = useInterBrainStore.getState();
-      const canSend = store.canSendReport();
-      const { sessionReportCount, lastReportTimestamp } = store.feedback;
+      const { feedback } = store;
 
       console.log('[Feedback Test] Rate limit status:');
-      console.log('  - Can send report:', canSend);
-      console.log('  - Session report count:', sessionReportCount);
-      console.log('  - Last report timestamp:', lastReportTimestamp);
-      if (lastReportTimestamp) {
-        const timeSince = Date.now() - lastReportTimestamp;
-        console.log('  - Time since last report:', Math.round(timeSince / 1000), 'seconds');
+      console.log('  === Modal Throttle (30s) ===');
+      console.log('  - Can show modal:', store.canShowModal());
+      console.log('  - Last modal timestamp:', feedback.lastModalTimestamp);
+      if (feedback.lastModalTimestamp) {
+        const timeSince = Date.now() - feedback.lastModalTimestamp;
+        const remaining = Math.max(0, 30 - Math.round(timeSince / 1000));
+        console.log('  - Time since last modal:', Math.round(timeSince / 1000), 'seconds');
+        console.log('  - Cooldown remaining:', remaining, 'seconds');
       }
+      console.log('  === Session Limit (10/session) ===');
+      console.log('  - Can submit report:', store.canSubmitReport());
+      console.log('  - Session submit count:', feedback.sessionSubmitCount, '/ 10');
     },
   });
 
@@ -106,7 +111,7 @@ export function registerFeedbackCommands(plugin: InterBrainPlugin): void {
       }
 
       console.log('[Feedback Test] Final state:');
-      console.log('  - Session report count:', store.feedback.sessionReportCount);
+      console.log('  - Session submit count:', store.feedback.sessionSubmitCount);
     },
   });
 

@@ -286,32 +286,31 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        // Check rate limiting - applies globally to prevent modal spam
-        if (!store.canSendReport()) {
-          // Show notice once per cooldown period, then silent
-          if (store.shouldShowCooldownNotice()) {
+        // Check modal throttle - prevents modal spam during error loops
+        if (!store.canShowModal()) {
+          // Show notice once per throttle period, then silent
+          if (store.shouldShowModalThrottleNotice()) {
             const secondsRemaining = Math.ceil(
-              (30000 - (Date.now() - (store.feedback.lastReportTimestamp || 0))) / 1000
+              (30000 - (Date.now() - (store.feedback.lastModalTimestamp || 0))) / 1000
             );
             new Notice(
-              `Error captured. Report available in ${secondsRemaining}s.`,
-              3000
+              `Additional error captured. To prevent dialog spam, the report dialog will be available again in ${secondsRemaining}s. You can also report manually via Command Palette → "Report a Bug".`,
+              5000
             );
-            store.markCooldownNoticeShown();
+            store.markModalThrottleNoticeShown();
           }
-          console.log('[ErrorCapture] Error captured but rate limited (cooldown active)');
           return;
         }
 
         if (preference === 'always') {
           store.openFeedbackModal(error);
-          // Note: For true "always send", we could call feedbackService.submitReport directly
-          // But opening the modal gives user a chance to add context
+          store.recordModalShown();
           return;
         }
 
         // Default: 'ask' - show modal
         store.openFeedbackModal(error);
+        store.recordModalShown();
         showFeedbackModal(this.app);
       },
     });
@@ -321,8 +320,8 @@ export default class InterBrainPlugin extends Plugin {
       errorCaptureService.cleanup();
     });
 
-    // Reset session report count when plugin reloads
-    useInterBrainStore.getState().resetSessionReportCount();
+    // Reset session counts when plugin reloads
+    useInterBrainStore.getState().resetSessionCounts();
   }
 
   private initializeBackgroundServices(): void {

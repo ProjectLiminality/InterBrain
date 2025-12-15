@@ -16,6 +16,7 @@ import { CapturedError } from '../store/slice';
 export interface FeedbackData {
   error?: CapturedError;
   userDescription: string;
+  reproductionSteps?: string; // Optional user-provided steps (AI should NOT make these up)
   systemInfo: {
     pluginVersion: string;
     obsidianVersion: string;
@@ -25,6 +26,7 @@ export interface FeedbackData {
   consoleLogs?: string;
   storeState?: string;
   navigationHistory?: string[];
+  errorHash?: string; // Computed hash for cross-user deduplication
 }
 
 export interface RefinedIssue {
@@ -37,6 +39,63 @@ export interface RefinedIssue {
 // ============================================================================
 
 class IssueFormatterService {
+  /**
+   * Compute a stable error hash for cross-user deduplication.
+   * Hash is based on error message + normalized stack frame.
+   * This allows different users hitting the same bug to be grouped together.
+   *
+   * IMPORTANT: Line numbers in bundled code change between builds, so we
+   * normalize them out for plugin code while keeping them for source files.
+   */
+  computeErrorHash(error: CapturedError | undefined): string | null {
+    if (!error) return null;
+
+    // Extract first meaningful stack frame (skip the error message line)
+    const stackLines = error.stack?.split('\n') || [];
+    let firstFrame = '';
+    for (const line of stackLines) {
+      // Match patterns like "at functionName (file.js:123:45)" or "at file.js:123:45"
+      if (line.includes(':') && (line.includes('at ') || line.match(/:\d+:\d+/))) {
+        firstFrame = line.trim();
+        if (firstFrame) break;
+      }
+    }
+
+    // Normalize the stack frame for stable hashing across builds/versions:
+    // 1. For bundled plugin code (plugin:interbrain:XXXX), strip line numbers
+    //    because they change with every build
+    // 2. For regular source files, keep file:line but strip column (minor variance)
+    let normalizedFrame = firstFrame
+      .replace(/^\s*at\s+/, '') // Remove "at " prefix
+      .replace(/\(eval at [^)]+\),?\s*/, '') // Remove eval wrapper
+      .trim();
+
+    // Handle plugin:interbrain:XXXX:YYY format - strip all line/col numbers
+    // These change between builds, defeating cross-version deduplication
+    if (normalizedFrame.includes('plugin:interbrain')) {
+      normalizedFrame = normalizedFrame.replace(/plugin:interbrain:\d+(:\d+)?/g, 'plugin:interbrain');
+    }
+
+    // For regular files: keep filename and line, strip column
+    // file.js:123:45 → file.js:123
+    normalizedFrame = normalizedFrame
+      .replace(/\(.*[/\\]([^/\\]+:\d+)(:\d+)?\)/, '$1') // Extract file:line from parens
+      .replace(/.*[/\\]([^/\\]+:\d+)(:\d+)?$/, '$1'); // Extract from bare path
+
+    // Create hash input: message + normalized stack location
+    const hashInput = `${error.message}|${normalizedFrame}`;
+
+    // Simple but consistent hash (djb2 algorithm)
+    let hash = 5381;
+    for (let i = 0; i < hashInput.length; i++) {
+      hash = (hash * 33) ^ hashInput.charCodeAt(i);
+    }
+
+    // Convert to hex string with prefix for searchability
+    const hashHex = (hash >>> 0).toString(16).padStart(8, '0');
+    return `IB-ERR-${hashHex}`;
+  }
+
   /**
    * Format feedback data as raw markdown
    */
@@ -55,6 +114,13 @@ class IssueFormatterService {
     sections.push('**User Description:**');
     sections.push(data.userDescription || '_No description provided_');
     sections.push('');
+
+    // Reproduction steps (only if user provided)
+    if (data.reproductionSteps) {
+      sections.push('**Reproduction Steps:**');
+      sections.push(data.reproductionSteps);
+      sections.push('');
+    }
 
     // Environment
     sections.push('**Environment:**');
@@ -100,6 +166,12 @@ class IssueFormatterService {
     if (data.navigationHistory && data.navigationHistory.length > 0) {
       sections.push('**Navigation History:**');
       sections.push(data.navigationHistory.map((id) => `- ${id}`).join('\n'));
+      sections.push('');
+    }
+
+    // Error hash for cross-user deduplication
+    if (data.errorHash) {
+      sections.push(`**Error ID:** \`${data.errorHash}\``);
       sections.push('');
     }
 
@@ -207,19 +279,21 @@ class IssueFormatterService {
    * Build the prompt for Claude
    */
   private buildPrompt(data: FeedbackData): string {
+    // Note: We intentionally do NOT ask AI to generate reproduction steps or investigation areas.
+    // - Reproduction steps should only come from user (if provided)
+    // - Investigation areas require codebase knowledge we don't have
     return `You are analyzing a bug report for InterBrain, an Obsidian plugin for knowledge gardening.
 
 Please analyze this bug report and provide:
-1. A concise title (max 60 chars)
-2. A 1-2 sentence summary
+1. A concise title (max 60 chars) - describe the core issue
+2. A 1-2 sentence summary - what is happening and when
 3. Category: Bug / UX Issue / Performance / Crash
 4. Estimated complexity: Trivial / Minor / Moderate / Complex
-5. Inferred reproduction steps (if possible)
-6. Suggested investigation areas
 
 Error: ${data.error?.message || 'No error message'}
 Stack trace: ${data.error?.stack?.slice(0, 500) || 'None'}
 User description: ${data.userDescription}
+${data.reproductionSteps ? `User-provided reproduction steps: ${data.reproductionSteps}` : ''}
 
 Environment:
 - InterBrain plugin version: ${data.systemInfo.pluginVersion}
@@ -230,13 +304,7 @@ Respond in this exact format:
 TITLE: [your title]
 SUMMARY: [your summary]
 CATEGORY: [category]
-COMPLEXITY: [complexity]
-STEPS:
-1. [step]
-2. [step]
-INVESTIGATION:
-- [area to investigate]
-- [area to investigate]`;
+COMPLEXITY: [complexity]`;
   }
 
   /**
@@ -248,15 +316,11 @@ INVESTIGATION:
     const summaryMatch = content.match(/SUMMARY:\s*(.+)/);
     const categoryMatch = content.match(/CATEGORY:\s*(.+)/);
     const complexityMatch = content.match(/COMPLEXITY:\s*(.+)/);
-    const stepsMatch = content.match(/STEPS:\n([\s\S]*?)(?=INVESTIGATION:|$)/);
-    const investigationMatch = content.match(/INVESTIGATION:\n([\s\S]*?)$/);
 
     const title = titleMatch?.[1]?.trim() || this.generateSimpleTitle(data);
     const summary = summaryMatch?.[1]?.trim() || data.userDescription;
     const category = categoryMatch?.[1]?.trim() || 'Bug';
     const complexity = complexityMatch?.[1]?.trim() || 'Unknown';
-    const steps = stepsMatch?.[1]?.trim() || 'Unable to determine';
-    const investigation = investigationMatch?.[1]?.trim() || 'General debugging';
 
     // Build refined body
     const sections: string[] = [];
@@ -266,20 +330,24 @@ INVESTIGATION:
     sections.push(`**Category:** ${category}\n`);
     sections.push(`**Estimated Complexity:** ${complexity}\n`);
 
-    sections.push('**Reproduction Steps:**');
-    sections.push(steps);
-    sections.push('');
-
-    if (data.error) {
-      sections.push('**Expected vs Actual:**');
-      sections.push('- Expected: Normal operation');
-      sections.push(`- Actual: ${data.error.message}`);
+    // Only include reproduction steps if user provided them (never AI-generated)
+    if (data.reproductionSteps) {
+      sections.push('**Reproduction Steps:**');
+      sections.push(data.reproductionSteps);
       sections.push('');
     }
 
-    sections.push('**Suggested Investigation:**');
-    sections.push(investigation);
-    sections.push('');
+    if (data.error) {
+      sections.push('**Error:**');
+      sections.push(`\`${data.error.message}\``);
+      sections.push('');
+    }
+
+    // Error hash for cross-user deduplication
+    if (data.errorHash) {
+      sections.push(`**Error ID:** \`${data.errorHash}\``);
+      sections.push('');
+    }
 
     // Raw data in collapsible
     sections.push('<details>');

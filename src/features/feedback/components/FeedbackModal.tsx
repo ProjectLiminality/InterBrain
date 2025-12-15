@@ -16,6 +16,7 @@ import { settingsStatusService } from '../../settings/settings-status-service';
 
 export class FeedbackModal extends Modal {
   private userDescription: string = '';
+  private reproductionSteps: string = '';
   private includeLogs: boolean;
   private includeState: boolean;
   private isSubmitting: boolean = false;
@@ -71,6 +72,25 @@ export class FeedbackModal extends Modal {
         ta.inputEl.style.width = '100%';
         ta.onChange((value) => {
           this.userDescription = value;
+        });
+      });
+
+    // Reproduction steps (optional)
+    contentEl.createEl('p', {
+      text: 'Steps to reproduce (optional)',
+      cls: 'interbrain-feedback-optional-label',
+    });
+
+    new Setting(contentEl)
+      .setClass('interbrain-feedback-description')
+      .addTextArea((ta) => {
+        ta.setPlaceholder(
+          '1. Open...\n2. Click...\n3. Observe...'
+        );
+        ta.inputEl.rows = 3;
+        ta.inputEl.style.width = '100%';
+        ta.onChange((value) => {
+          this.reproductionSteps = value;
         });
       });
 
@@ -176,14 +196,15 @@ export class FeedbackModal extends Modal {
           includeLogs: this.includeLogs,
           includeState: this.includeState,
           useAiRefinement: useAi,
+          reproductionSteps: this.reproductionSteps || undefined,
         }
       );
 
       if (result.success) {
-        new Notice(
-          `Issue submitted successfully!\n${result.issueUrl || ''}`,
-          5000
-        );
+        const message = result.wasDuplicate
+          ? `Your report was added to an existing issue.\n${result.issueUrl || ''}`
+          : `Issue submitted successfully!\n${result.issueUrl || ''}`;
+        new Notice(message, 5000);
         this.close();
       } else {
         new Notice(`Failed to submit: ${result.error}`, 5000);

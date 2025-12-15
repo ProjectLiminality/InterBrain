@@ -48,6 +48,7 @@ export interface SubmitResult {
   success: boolean;
   issueUrl?: string;
   error?: string;
+  wasDuplicate?: boolean; // True if report was added to existing issue
 }
 
 export interface SystemInfo {
@@ -87,30 +88,18 @@ class FeedbackService {
       includeLogs: boolean;
       includeState: boolean;
       useAiRefinement: boolean;
+      reproductionSteps?: string;
     }
   ): Promise<SubmitResult> {
     try {
-      // Check rate limiting with specific feedback
+      // Check session limit (no time cooldown - modal throttle handles spam prevention)
       const store = useInterBrainStore.getState();
-      const { feedback } = store;
 
-      if (feedback.sessionReportCount >= 10) {
+      if (!store.canSubmitReport()) {
         return {
           success: false,
           error: 'Session limit reached (10 reports). Please restart Obsidian to send more.',
         };
-      }
-
-      if (feedback.lastReportTimestamp) {
-        const secondsRemaining = Math.ceil(
-          (30000 - (Date.now() - feedback.lastReportTimestamp)) / 1000
-        );
-        if (secondsRemaining > 0) {
-          return {
-            success: false,
-            error: `Please wait ${secondsRemaining} seconds before sending another report.`,
-          };
-        }
       }
 
       // Check gh CLI availability
@@ -130,15 +119,23 @@ class FeedbackService {
       );
 
       // Check for duplicate issues
-      const duplicateUrl = await this.checkForDuplicate(feedbackData);
+      // Strategy 1: Hash-based (reliable, automatic) - for errors with stack traces
+      // Strategy 2: AI semantic (when no hash but AI refinement enabled) - for manual reports
+      let duplicateUrl = await this.checkForDuplicateByHash(feedbackData);
+
+      if (!duplicateUrl && !feedbackData.errorHash && options.useAiRefinement) {
+        // No hash available (manual report) - use AI semantic deduplication
+        duplicateUrl = await this.checkForDuplicateByAi(feedbackData);
+      }
+
       if (duplicateUrl) {
-        // Add comment to existing issue instead
+        // Add comment to existing issue instead of creating duplicate
         await this.addCommentToIssue(duplicateUrl, feedbackData, options.useAiRefinement);
         store.recordReportSent();
         return {
           success: true,
           issueUrl: duplicateUrl,
-          error: 'Added comment to existing issue',
+          wasDuplicate: true,
         };
       }
 
@@ -178,14 +175,20 @@ class FeedbackService {
   private collectFeedbackData(
     error: CapturedError | null,
     userDescription: string,
-    options: { includeLogs: boolean; includeState: boolean }
+    options: { includeLogs: boolean; includeState: boolean; reproductionSteps?: string }
   ): FeedbackData {
     const systemInfo = this.getSystemInfo();
     const navigationHistory = this.getNavigationHistory();
 
+    // Compute error hash for cross-user deduplication
+    const errorHash = error
+      ? issueFormatterService.computeErrorHash(error)
+      : null;
+
     return {
       error: error || undefined,
       userDescription,
+      reproductionSteps: options.reproductionSteps || undefined,
       systemInfo,
       consoleLogs: options.includeLogs
         ? errorCaptureService.getLogsAsString()
@@ -194,6 +197,7 @@ class FeedbackService {
         ? this.getSanitizedStoreState()
         : undefined,
       navigationHistory,
+      errorHash: errorHash || undefined,
     };
   }
 
@@ -366,31 +370,200 @@ class FeedbackService {
   }
 
   /**
-   * Check if a similar issue already exists
+   * Check if a similar issue already exists using error hash.
+   * This enables cross-user deduplication - Alice and Bob hitting the same
+   * bug will have the same error hash, allowing their reports to be grouped.
    */
-  private async checkForDuplicate(
+  private async checkForDuplicateByHash(
     data: FeedbackData
   ): Promise<string | null> {
-    if (!data.error) return null;
+    if (!data.errorHash) return null;
 
     try {
-      // Search for issues with similar error message
-      const searchQuery = data.error.message.slice(0, 50).replace(/"/g, '\\"');
+      // Search for issues containing this exact error hash
+      // The hash format IB-ERR-XXXXXXXX is unique enough to avoid false positives
       const env = getExtendedEnv();
       const { stdout } = await execAsync(
-        `gh issue list --repo ${this.REPO} --state open --search "${searchQuery}" --json url --limit 1`,
+        `gh issue list --repo ${this.REPO} --state open --search "${data.errorHash}" --json url --limit 1`,
         { env }
       );
 
       const issues = JSON.parse(stdout);
       if (issues.length > 0) {
+        console.log(`[FeedbackService] Found duplicate by hash ${data.errorHash}:`, issues[0].url);
         return issues[0].url;
       }
-    } catch {
-      // Search failed, proceed with new issue
+    } catch (err) {
+      console.warn('[FeedbackService] Hash-based duplicate check failed:', err);
     }
 
     return null;
+  }
+
+  /**
+   * Check if a similar issue already exists using AI semantic matching.
+   * Used for manual reports without stack traces where hash-based dedup isn't possible.
+   * This bridges the gap by using AI to do what humans do: search before posting.
+   *
+   * Flow:
+   * 1. Generate AI title + summary for the new report
+   * 2. Compare against existing issues (which may be AI-refined or raw)
+   * 3. AI determines if semantically the same bug
+   */
+  private async checkForDuplicateByAi(
+    data: FeedbackData
+  ): Promise<string | null> {
+    const apiKey = settingsStatusService.getSettings()?.claudeApiKey;
+    if (!apiKey) return null;
+
+    try {
+      // Step 1: Generate AI title + summary for the new report
+      const refinedReport = await this.generateAiTitleAndSummary(data, apiKey);
+      if (!refinedReport) {
+        console.warn('[FeedbackService] Could not generate AI summary for dedup');
+        return null;
+      }
+
+      // Step 2: Fetch recent open issues
+      const env = getExtendedEnv();
+      const { stdout } = await execAsync(
+        `gh issue list --repo ${this.REPO} --state open --label bug --json number,title,body --limit 20`,
+        { env }
+      );
+
+      const issues = JSON.parse(stdout);
+      if (issues.length === 0) return null;
+
+      // Step 3: Build comparison - extract title + summary/description from existing issues
+      // Issues may be AI-refined (have "**Summary:**") or raw (just user description)
+      const existingIssues = issues.map((issue: { number: number; title: string; body: string }) => {
+        const body = issue.body || '';
+        // Try to extract AI summary if present
+        const summaryMatch = body.match(/\*\*Summary:\*\*\s*([^\n]+)/);
+        const summary = summaryMatch?.[1]?.trim();
+        // Fall back to first 200 chars of body (user description in raw format)
+        const description = summary || body.slice(0, 200);
+        return `#${issue.number}: ${issue.title}\n${description}`;
+      }).join('\n\n---\n\n');
+
+      // Step 4: Ask AI to compare refined report against existing issues
+      const prompt = `You are helping deduplicate bug reports for InterBrain (an Obsidian plugin).
+
+NEW REPORT (AI-refined title and summary):
+Title: ${refinedReport.title}
+Summary: ${refinedReport.summary}
+
+EXISTING OPEN BUG REPORTS:
+${existingIssues}
+
+Task: Determine if the NEW REPORT describes the SAME problem as any existing issue.
+- Match only if clearly the same bug/problem (same behavior, same functionality area)
+- Don't match if just vaguely related or in the same general area
+- Consider that existing issues may be phrased differently but describe the same underlying bug
+
+Respond with ONLY one of:
+- The issue number (e.g., "42") if this is a duplicate
+- "NEW" if this is a novel issue
+
+Your response:`;
+
+      const response = await requestUrl({
+        url: 'https://api.anthropic.com/v1/messages',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          max_tokens: 50,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        throw: false,
+      });
+
+      if (response.status !== 200) {
+        console.warn('[FeedbackService] AI dedup comparison error:', response.status);
+        return null;
+      }
+
+      const result = response.json;
+      const aiResponse = result.content?.[0]?.text?.trim();
+
+      if (!aiResponse || aiResponse.toUpperCase() === 'NEW') {
+        return null;
+      }
+
+      // Extract issue number
+      const issueNumber = parseInt(aiResponse, 10);
+      if (isNaN(issueNumber)) {
+        console.warn('[FeedbackService] AI returned unexpected response:', aiResponse);
+        return null;
+      }
+
+      const matchedIssue = issues.find((i: { number: number }) => i.number === issueNumber);
+      if (matchedIssue) {
+        const issueUrl = `https://github.com/${this.REPO}/issues/${issueNumber}`;
+        console.log(`[FeedbackService] AI found semantic duplicate: ${issueUrl}`);
+        return issueUrl;
+      }
+    } catch (err) {
+      console.warn('[FeedbackService] AI semantic dedup failed:', err);
+    }
+
+    return null;
+  }
+
+  /**
+   * Generate just title and summary for deduplication comparison
+   * (lighter than full formatWithAi, focused on what we need for matching)
+   */
+  private async generateAiTitleAndSummary(
+    data: FeedbackData,
+    apiKey: string
+  ): Promise<{ title: string; summary: string } | null> {
+    const prompt = `Analyze this bug report and provide a concise title and summary.
+
+User description: ${data.userDescription}
+${data.error?.message ? `Error: ${data.error.message}` : ''}
+
+Respond in this exact format:
+TITLE: [concise title, max 60 chars]
+SUMMARY: [1-2 sentence summary of what's happening]`;
+
+    try {
+      const response = await requestUrl({
+        url: 'https://api.anthropic.com/v1/messages',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          max_tokens: 200,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        throw: false,
+      });
+
+      if (response.status !== 200) return null;
+
+      const content = response.json?.content?.[0]?.text;
+      if (!content) return null;
+
+      const titleMatch = content.match(/TITLE:\s*(.+)/);
+      const summaryMatch = content.match(/SUMMARY:\s*(.+)/);
+
+      return {
+        title: titleMatch?.[1]?.trim() || data.userDescription.slice(0, 60),
+        summary: summaryMatch?.[1]?.trim() || data.userDescription,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

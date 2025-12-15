@@ -6,6 +6,11 @@
  * - Modal visibility state
  * - Current error context for reporting
  * - Rate limiting state
+ *
+ * Rate Limiting Design:
+ * - MODAL throttle: 30s cooldown after modal shown (prevents error loop spam)
+ * - SESSION limit: Max 10 submissions per session (prevents GitHub spam)
+ * No time cooldown on submissions since modal throttle already prevents rapid fire.
  */
 
 import { StateCreator } from 'zustand';
@@ -42,10 +47,13 @@ export interface FeedbackState {
   isModalOpen: boolean;
   currentError: CapturedError | null;
 
-  // Rate limiting (runtime)
-  lastReportTimestamp: number | null;
-  sessionReportCount: number;
-  cooldownNoticeShown: boolean; // Prevents spam: only show cooldown notice once per cooldown period
+  // Modal throttle (runtime) - prevents modal spam during error loops
+  lastModalTimestamp: number | null;
+  modalThrottleNoticeShown: boolean;
+
+  // Submit throttle (runtime) - prevents GitHub spam
+  lastSubmitTimestamp: number | null;
+  sessionSubmitCount: number;
 }
 
 // ============================================================================
@@ -64,22 +72,32 @@ export interface FeedbackSlice {
   openFeedbackModal: (error?: CapturedError) => void;
   closeFeedbackModal: () => void;
 
-  // Reporting
-  recordReportSent: () => void;
-  canSendReport: () => boolean;
-  resetSessionReportCount: () => void;
+  // Modal throttle (for error detection)
+  canShowModal: () => boolean;
+  recordModalShown: () => void;
+  shouldShowModalThrottleNotice: () => boolean;
+  markModalThrottleNoticeShown: () => void;
 
-  // Cooldown notice
-  markCooldownNoticeShown: () => void;
+  // Submit throttle (for GitHub submission)
+  canSubmitReport: () => boolean;
+  recordReportSubmitted: () => void;
+  getSubmitCooldownSeconds: () => number;
+  resetSessionCounts: () => void;
+
+  // Legacy alias for compatibility
+  canSendReport: () => boolean;
+  recordReportSent: () => void;
+  resetSessionReportCount: () => void;
   shouldShowCooldownNotice: () => boolean;
+  markCooldownNoticeShown: () => void;
 }
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const RATE_LIMIT_MS = 30000; // 30 seconds between reports
-const MAX_REPORTS_PER_SESSION = 10;
+const MODAL_THROTTLE_MS = 30000; // 30 seconds between modals
+const MAX_SUBMITS_PER_SESSION = 10; // No time cooldown, just session limit
 
 // ============================================================================
 // INITIAL STATE
@@ -91,9 +109,10 @@ const initialFeedbackState: FeedbackState = {
   includeState: true,
   isModalOpen: false,
   currentError: null,
-  lastReportTimestamp: null,
-  sessionReportCount: 0,
-  cooldownNoticeShown: false,
+  lastModalTimestamp: null,
+  modalThrottleNoticeShown: false,
+  lastSubmitTimestamp: null,
+  sessionSubmitCount: 0,
 };
 
 // ============================================================================
@@ -141,70 +160,89 @@ export const createFeedbackSlice: StateCreator<
       },
     })),
 
-  recordReportSent: () =>
-    set((state) => ({
-      feedback: {
-        ...state.feedback,
-        lastReportTimestamp: Date.now(),
-        sessionReportCount: state.feedback.sessionReportCount + 1,
-      },
-    })),
+  // ========== MODAL THROTTLE ==========
 
-  canSendReport: () => {
+  canShowModal: () => {
     const { feedback } = get();
-    const now = Date.now();
+    if (!feedback.lastModalTimestamp) return true;
 
-    // Check session limit
-    if (feedback.sessionReportCount >= MAX_REPORTS_PER_SESSION) {
-      return false;
-    }
-
-    // Check rate limit
-    if (feedback.lastReportTimestamp) {
-      const timeSinceLastReport = now - feedback.lastReportTimestamp;
-      if (timeSinceLastReport < RATE_LIMIT_MS) {
-        return false;
-      }
-    }
-
-    return true;
+    const timeSinceLastModal = Date.now() - feedback.lastModalTimestamp;
+    return timeSinceLastModal >= MODAL_THROTTLE_MS;
   },
 
-  resetSessionReportCount: () =>
+  recordModalShown: () =>
     set((state) => ({
       feedback: {
         ...state.feedback,
-        sessionReportCount: 0,
-        lastReportTimestamp: null,
-        cooldownNoticeShown: false,
+        lastModalTimestamp: Date.now(),
+        modalThrottleNoticeShown: false, // Reset for next throttle period
       },
     })),
 
-  markCooldownNoticeShown: () =>
-    set((state) => ({
-      feedback: { ...state.feedback, cooldownNoticeShown: true },
-    })),
-
-  shouldShowCooldownNotice: () => {
+  shouldShowModalThrottleNotice: () => {
     const { feedback } = get();
-    const now = Date.now();
+    if (!feedback.lastModalTimestamp) return false;
 
-    // Only show if we're in cooldown AND haven't shown notice yet
-    if (!feedback.lastReportTimestamp) return false;
+    const timeSinceLastModal = Date.now() - feedback.lastModalTimestamp;
+    const inThrottle = timeSinceLastModal < MODAL_THROTTLE_MS;
 
-    const timeSinceLastReport = now - feedback.lastReportTimestamp;
-    const inCooldown = timeSinceLastReport < RATE_LIMIT_MS;
-
-    // If cooldown expired, reset the flag
-    if (!inCooldown && feedback.cooldownNoticeShown) {
+    // If throttle expired, reset the flag
+    if (!inThrottle && feedback.modalThrottleNoticeShown) {
       set((state) => ({
-        feedback: { ...state.feedback, cooldownNoticeShown: false },
+        feedback: { ...state.feedback, modalThrottleNoticeShown: false },
       }));
       return false;
     }
 
-    return inCooldown && !feedback.cooldownNoticeShown;
+    return inThrottle && !feedback.modalThrottleNoticeShown;
   },
+
+  markModalThrottleNoticeShown: () =>
+    set((state) => ({
+      feedback: { ...state.feedback, modalThrottleNoticeShown: true },
+    })),
+
+  // ========== SUBMIT THROTTLE ==========
+
+  canSubmitReport: () => {
+    const { feedback } = get();
+    // Only check session limit - no time cooldown since modal is already throttled
+    return feedback.sessionSubmitCount < MAX_SUBMITS_PER_SESSION;
+  },
+
+  recordReportSubmitted: () =>
+    set((state) => ({
+      feedback: {
+        ...state.feedback,
+        lastSubmitTimestamp: Date.now(),
+        sessionSubmitCount: state.feedback.sessionSubmitCount + 1,
+      },
+    })),
+
+  getSubmitCooldownSeconds: () => {
+    // No time cooldown - kept for API compatibility but always returns 0
+    return 0;
+  },
+
+  resetSessionCounts: () =>
+    set((state) => ({
+      feedback: {
+        ...state.feedback,
+        lastModalTimestamp: null,
+        modalThrottleNoticeShown: false,
+        lastSubmitTimestamp: null,
+        sessionSubmitCount: 0,
+      },
+    })),
+
+  // ========== LEGACY ALIASES ==========
+  // For backwards compatibility with existing code
+
+  canSendReport: () => get().canSubmitReport(),
+  recordReportSent: () => get().recordReportSubmitted(),
+  resetSessionReportCount: () => get().resetSessionCounts(),
+  shouldShowCooldownNotice: () => get().shouldShowModalThrottleNotice(),
+  markCooldownNoticeShown: () => get().markModalThrottleNoticeShown(),
 });
 
 // ============================================================================
