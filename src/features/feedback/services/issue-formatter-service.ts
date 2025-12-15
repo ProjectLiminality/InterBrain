@@ -58,9 +58,9 @@ class IssueFormatterService {
 
     // Environment
     sections.push('**Environment:**');
-    sections.push(`- InterBrain Version: ${data.systemInfo.pluginVersion}`);
-    sections.push(`- Obsidian Version: ${data.systemInfo.obsidianVersion}`);
-    sections.push(`- Platform: ${data.systemInfo.platform}`);
+    sections.push(`- InterBrain: v${data.systemInfo.pluginVersion}`);
+    sections.push(`- Obsidian: v${data.systemInfo.obsidianVersion}`);
+    sections.push(`- Platform: ${data.systemInfo.platform}${data.systemInfo.platformVersion ? ` (${data.systemInfo.platformVersion})` : ''}`);
     sections.push('');
 
     // Stack trace
@@ -220,8 +220,11 @@ Please analyze this bug report and provide:
 Error: ${data.error?.message || 'No error message'}
 Stack trace: ${data.error?.stack?.slice(0, 500) || 'None'}
 User description: ${data.userDescription}
-Platform: ${data.systemInfo.platform}
-Plugin version: ${data.systemInfo.pluginVersion}
+
+Environment:
+- InterBrain plugin version: ${data.systemInfo.pluginVersion}
+- Obsidian version: ${data.systemInfo.obsidianVersion}
+- Operating system: ${data.systemInfo.platform} ${data.systemInfo.platformVersion || ''}
 
 Respond in this exact format:
 TITLE: [your title]

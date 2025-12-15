@@ -169,7 +169,7 @@ export function registerFeedbackCommands(plugin: InterBrainPlugin): void {
       console.log('[Feedback Test] process.platform:', nodeProcess?.platform);
 
       // Parse attempts
-      const obsidianMatch = userAgent.match(/Obsidian\/(\d+\.\d+\.\d+)/);
+      const obsidianMatch = userAgent.match(/obsidian\/(\d+\.\d+\.\d+)/i);
       console.log('[Feedback Test] Obsidian version from userAgent:', obsidianMatch?.[1] || 'not found');
 
       const macMatch = userAgent.match(/Mac OS X (\d+[._]\d+(?:[._]\d+)?)/);

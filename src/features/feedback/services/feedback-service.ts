@@ -442,8 +442,9 @@ Another user encountered this issue.
 ${data.userDescription || 'No description provided'}
 
 **Environment:**
-- Plugin: ${data.systemInfo.pluginVersion}
-- Platform: ${data.systemInfo.platform}
+- InterBrain: v${data.systemInfo.pluginVersion}
+- Obsidian: v${data.systemInfo.obsidianVersion}
+- Platform: ${data.systemInfo.platform}${data.systemInfo.platformVersion ? ` (${data.systemInfo.platformVersion})` : ''}
 
 **Timestamp:** ${new Date().toISOString()}
 
@@ -482,8 +483,11 @@ This error was already reported. Generate a BRIEF analysis (3-5 sentences max) t
 
 Error: ${data.error?.message || 'No error message'}
 User description: ${data.userDescription}
-Platform: ${data.systemInfo.platform}
-Plugin version: ${data.systemInfo.pluginVersion}
+
+Environment:
+- InterBrain plugin version: ${data.systemInfo.pluginVersion}
+- Obsidian version: ${data.systemInfo.obsidianVersion}
+- Operating system: ${data.systemInfo.platform} ${data.systemInfo.platformVersion || ''}
 
 Respond with ONLY the analysis paragraph, no headers or formatting. Be concise.`;
 
@@ -524,9 +528,9 @@ Respond with ONLY the analysis paragraph, no headers or formatting. Be concise.`
 ${data.userDescription || '_No description provided_'}
 
 **Environment:**
-- Plugin: ${data.systemInfo.pluginVersion}
-- Obsidian: ${data.systemInfo.obsidianVersion}
-- Platform: ${data.systemInfo.platform}
+- InterBrain: v${data.systemInfo.pluginVersion}
+- Obsidian: v${data.systemInfo.obsidianVersion}
+- Platform: ${data.systemInfo.platform}${data.systemInfo.platformVersion ? ` (${data.systemInfo.platformVersion})` : ''}
 
 **Timestamp:** ${new Date().toISOString()}
 
