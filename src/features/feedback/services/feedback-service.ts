@@ -90,13 +90,27 @@ class FeedbackService {
     }
   ): Promise<SubmitResult> {
     try {
-      // Check rate limiting
+      // Check rate limiting with specific feedback
       const store = useInterBrainStore.getState();
-      if (!store.canSendReport()) {
+      const { feedback } = store;
+
+      if (feedback.sessionReportCount >= 10) {
         return {
           success: false,
-          error: 'Rate limit exceeded. Please wait before sending another report.',
+          error: 'Session limit reached (10 reports). Please restart Obsidian to send more.',
         };
+      }
+
+      if (feedback.lastReportTimestamp) {
+        const secondsRemaining = Math.ceil(
+          (30000 - (Date.now() - feedback.lastReportTimestamp)) / 1000
+        );
+        if (secondsRemaining > 0) {
+          return {
+            success: false,
+            error: `Please wait ${secondsRemaining} seconds before sending another report.`,
+          };
+        }
       }
 
       // Check gh CLI availability
