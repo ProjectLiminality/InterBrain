@@ -56,7 +56,15 @@ interface OllamaListResponse {
  */
 function stripThinkingTags(content: string): string {
 	// Remove <think>...</think> blocks (including newlines within)
-	return content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+	let result = content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+
+	// Also handle unclosed <think> tags (model cut off mid-thought)
+	// This can happen if the model's response is truncated
+	if (result.includes('<think>')) {
+		result = result.replace(/<think>[\s\S]*/g, '').trim();
+	}
+
+	return result;
 }
 
 /**
