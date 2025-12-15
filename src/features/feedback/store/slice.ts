@@ -45,6 +45,7 @@ export interface FeedbackState {
   // Rate limiting (runtime)
   lastReportTimestamp: number | null;
   sessionReportCount: number;
+  cooldownNoticeShown: boolean; // Prevents spam: only show cooldown notice once per cooldown period
 }
 
 // ============================================================================
@@ -67,6 +68,10 @@ export interface FeedbackSlice {
   recordReportSent: () => void;
   canSendReport: () => boolean;
   resetSessionReportCount: () => void;
+
+  // Cooldown notice
+  markCooldownNoticeShown: () => void;
+  shouldShowCooldownNotice: () => boolean;
 }
 
 // ============================================================================
@@ -88,6 +93,7 @@ const initialFeedbackState: FeedbackState = {
   currentError: null,
   lastReportTimestamp: null,
   sessionReportCount: 0,
+  cooldownNoticeShown: false,
 };
 
 // ============================================================================
@@ -170,8 +176,35 @@ export const createFeedbackSlice: StateCreator<
         ...state.feedback,
         sessionReportCount: 0,
         lastReportTimestamp: null,
+        cooldownNoticeShown: false,
       },
     })),
+
+  markCooldownNoticeShown: () =>
+    set((state) => ({
+      feedback: { ...state.feedback, cooldownNoticeShown: true },
+    })),
+
+  shouldShowCooldownNotice: () => {
+    const { feedback } = get();
+    const now = Date.now();
+
+    // Only show if we're in cooldown AND haven't shown notice yet
+    if (!feedback.lastReportTimestamp) return false;
+
+    const timeSinceLastReport = now - feedback.lastReportTimestamp;
+    const inCooldown = timeSinceLastReport < RATE_LIMIT_MS;
+
+    // If cooldown expired, reset the flag
+    if (!inCooldown && feedback.cooldownNoticeShown) {
+      set((state) => ({
+        feedback: { ...state.feedback, cooldownNoticeShown: false },
+      }));
+      return false;
+    }
+
+    return inCooldown && !feedback.cooldownNoticeShown;
+  },
 });
 
 // ============================================================================

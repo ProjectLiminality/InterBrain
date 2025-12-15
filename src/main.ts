@@ -288,8 +288,18 @@ export default class InterBrainPlugin extends Plugin {
 
         // Check rate limiting - applies globally to prevent modal spam
         if (!store.canSendReport()) {
-          // Silent suppression - user already sent a report recently
-          // We don't show a notice every time to avoid spam during error loops
+          // Show notice once per cooldown period, then silent
+          if (store.shouldShowCooldownNotice()) {
+            const { Notice } = require('obsidian');
+            const secondsRemaining = Math.ceil(
+              (30000 - (Date.now() - (store.feedback.lastReportTimestamp || 0))) / 1000
+            );
+            new Notice(
+              `Error captured. Report available in ${secondsRemaining}s.`,
+              3000
+            );
+            store.markCooldownNoticeShown();
+          }
           console.log('[ErrorCapture] Error captured but rate limited (cooldown active)');
           return;
         }
