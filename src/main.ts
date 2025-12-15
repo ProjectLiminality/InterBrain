@@ -1,4 +1,4 @@
-import { Plugin, TFolder, TAbstractFile, Menu } from 'obsidian';
+import { Plugin, TFolder, TAbstractFile, Menu, Notice } from 'obsidian';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
 import { VaultService } from './core/services/vault-service';
@@ -290,7 +290,6 @@ export default class InterBrainPlugin extends Plugin {
         if (!store.canSendReport()) {
           // Show notice once per cooldown period, then silent
           if (store.shouldShowCooldownNotice()) {
-            const { Notice } = require('obsidian');
             const secondsRemaining = Math.ceil(
               (30000 - (Date.now() - (store.feedback.lastReportTimestamp || 0))) / 1000
             );
