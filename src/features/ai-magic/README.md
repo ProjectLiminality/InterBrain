@@ -1,14 +1,17 @@
 # AI Magic Feature Slice
 
-Unified AI provider management for InterBrain. Handles both local (Ollama) and remote (Claude) inference with intelligent routing and automatic fallback.
+Unified AI provider management for InterBrain. Handles both local (Ollama) and remote (Claude, OpenAI, Groq, xAI) inference with intelligent routing and automatic fallback.
 
-## Current Status (2024-12-15)
+## Current Status (2024-12-16)
 
 **Core Feature: COMPLETE** - Ready for private beta testing.
 
 ### What's Working
-- Claude provider (remote)
-- Ollama provider (local) with automatic hardware detection
+- **Claude provider** (remote) - Highest quality, recommended
+- **Groq provider** (remote) - Blazing fast inference (sub-second)
+- **OpenAI provider** (remote) - GPT-4o models
+- **xAI Grok provider** (remote) - Advanced AI from xAI
+- **Ollama provider** (local) - Automatic hardware detection, privacy-first
 - Unified inference service with provider routing
 - Automatic fallback with user notification
 - Settings panel with one-click model installation
@@ -19,8 +22,8 @@ Unified AI provider management for InterBrain. Handles both local (Ollama) and r
 - **Semantic deduplication in feedback service**: When using Ollama for AI-refined feedback, the deduplication may fail due to model response format. The safety net for thinking tags was added, but needs more testing. Check console for `[AI Magic] Using provider:` to verify which provider is active.
 
 ### Not Yet Implemented
-- OpenRouter provider (placeholder in settings)
-- web-link-analyzer migration (uses Python + Claude directly, lower priority)
+- Google Gemini provider (different API format, needs custom adapter)
+- web-link-analyzer migration (uses Python + Claude SDK directly, lower priority)
 - Cost tracking / usage statistics
 
 ## Architecture
@@ -30,15 +33,16 @@ Unified AI provider management for InterBrain. Handles both local (Ollama) and r
 ```
 ai-magic/
 ├── store/
-│   └── slice.ts              # Zustand state for AI config
+│   └── slice.ts                    # Zustand state for AI config
 ├── services/
-│   ├── inference-service.ts  # Unified routing + fallback logic
-│   ├── ollama-inference.ts   # Ollama chat API + thinking tag stripping
-│   └── claude-provider.ts    # Anthropic API provider
-├── types.ts                  # Core types, hardware detection, model configs
-├── settings-section.ts       # Settings panel UI
-├── commands.ts               # Test commands for debugging
-├── index.ts                  # Barrel export
+│   ├── inference-service.ts        # Unified routing + fallback logic
+│   ├── ollama-inference.ts         # Ollama chat API + thinking tag stripping
+│   ├── claude-provider.ts          # Anthropic API provider
+│   └── openai-compatible-provider.ts  # OpenAI, Groq, xAI (shared implementation)
+├── types.ts                        # Core types, hardware detection, model configs
+├── settings-section.ts             # Settings panel UI
+├── commands.ts                     # Test commands for debugging
+├── index.ts                        # Barrel export
 └── README.md
 ```
 
@@ -50,6 +54,7 @@ ai-magic/
 | `inference-service.ts` | `generateAI()` - main entry point, provider routing, fallback |
 | `ollama-inference.ts` | Ollama `/api/chat` integration, thinking tag stripping |
 | `claude-provider.ts` | Anthropic API integration |
+| `openai-compatible-provider.ts` | OpenAI, Groq, xAI - one implementation, different configs |
 | `settings-section.ts` | Full settings UI with status, model pulling, preferences |
 
 ## Hardware Tier System
@@ -66,16 +71,28 @@ Hardware is auto-detected via `os.totalmem()`. Users can override in advanced se
 ## Provider Routing
 
 ### Priority Order
-1. **Remote-first** (default for private beta): Claude → Ollama fallback
-2. **Local-first** (user preference): Ollama → Claude fallback
+1. **Remote-first** (default for private beta): Claude → Groq → OpenAI → xAI → Ollama
+2. **Local-first** (user preference): Ollama → Claude → Groq → OpenAI → xAI
 3. **Offline mode**: Ollama only, no API calls
 
+### Remote Providers
+
+| Provider | Speed | Quality | Models |
+|----------|-------|---------|--------|
+| **Claude** | ⚡⚡ | ⭐⭐⭐ | claude-haiku/sonnet/opus |
+| **Groq** | ⚡⚡⚡ | ⭐⭐ | llama-3.1-8b/70b |
+| **OpenAI** | ⚡⚡ | ⭐⭐⭐ | gpt-4o-mini/gpt-4o |
+| **xAI** | ⚡⚡ | ⭐⭐ | grok-beta |
+
+All remote providers use the OpenAI-compatible API format (except Claude which has its own API).
+
 ### Complexity Mapping
-| Complexity | Claude Model | Ollama Model |
-|------------|--------------|--------------|
-| trivial | claude-haiku-4-5 | (tier default) |
-| standard | claude-sonnet-4-5 | (tier default) |
-| complex | claude-opus-4-5 | (tier default) |
+
+| Complexity | Claude Model | Groq Model | OpenAI Model | xAI Model |
+|------------|--------------|------------|--------------|-----------|
+| trivial | claude-haiku-4-5 | llama-3.1-8b-instant | gpt-4o-mini | grok-beta |
+| standard | claude-sonnet-4-5 | llama-3.1-70b-versatile | gpt-4o | grok-beta |
+| complex | claude-opus-4-5 | llama-3.1-70b-versatile | gpt-4o | grok-beta |
 
 Note: Ollama uses the same model for all complexity levels (per-tier simplification).
 
@@ -107,7 +124,7 @@ const response = await generateAI(
 );
 
 console.log(response.content);  // Clean response (thinking tags stripped)
-console.log(response.provider); // 'Claude' or 'Ollama'
+console.log(response.provider); // 'Claude', 'Ollama', 'OpenAI', 'Groq', or 'xAI Grok'
 ```
 
 ### Check Provider Availability
@@ -121,18 +138,21 @@ const statuses = await service.getProvidersStatus();
 
 ## Test Commands
 
-Available in Obsidian command palette:
+Available in Obsidian command palette (one test command per provider):
 
-- `AI Magic: Test Claude` - Test remote provider
-- `AI Magic: Test Ollama` - Test local provider
+- `AI Magic: Test Claude Provider` - Test Anthropic Claude
+- `AI Magic: Test Groq Provider` - Test Groq (blazing fast)
+- `AI Magic: Test OpenAI Provider` - Test OpenAI GPT
+- `AI Magic: Test xAI Grok Provider` - Test xAI Grok
+- `AI Magic: Test Ollama Provider` - Test local Ollama
 - `AI Magic: Test Auto-routing` - Test fallback logic
-- `AI Magic: Check Provider Status` - Show all provider statuses
+- `AI Magic: Check All Providers Status` - Show all provider statuses
 
 ## Debugging
 
 ### Console Logs
 - `[AI Magic] Detected system RAM: XX.X GB` - Hardware detection
-- `[AI Magic] Using provider: Claude/Ollama` - Which provider handles request
+- `[AI Magic] Using provider: Claude/Ollama/OpenAI/Groq/xAI Grok` - Which provider handles request
 - `Provider X failed: ...` - Fallback triggered
 
 ### Common Issues
@@ -154,6 +174,9 @@ Available in Obsidian command palette:
 
 Settings stored in plugin settings:
 - `claudeApiKey` - Anthropic API key
+- `openaiApiKey` - OpenAI API key
+- `groqApiKey` - Groq API key
+- `xaiApiKey` - xAI API key
 - `preferLocal` - Use Ollama first when available
 - `offlineMode` - Never make API calls
 
@@ -168,7 +191,7 @@ Ollama config (auto-detected):
 - [ ] Consider adding retry logic for transient failures
 
 ### Medium Term
-- [ ] OpenRouter provider implementation
+- [ ] Google Gemini provider (needs custom adapter - different API format)
 - [ ] web-link-analyzer migration (if needed)
 
 ### Long Term
@@ -180,4 +203,7 @@ Ollama config (auto-detected):
 
 - **Ollama** - Local inference (optional but recommended)
 - **Anthropic API** - Claude access (requires API key)
+- **OpenAI API** - GPT access (requires API key)
+- **Groq API** - Fast inference (requires API key)
+- **xAI API** - Grok access (requires API key)
 - **Obsidian** - `requestUrl` for CORS-free API calls, `Notice` for user feedback

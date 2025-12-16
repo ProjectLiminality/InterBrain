@@ -18,6 +18,12 @@ import {
 } from '../types';
 import { ClaudeProvider, createClaudeProvider } from './claude-provider';
 import { OllamaInferenceProvider, createOllamaInferenceProvider } from './ollama-inference';
+import {
+	OpenAICompatibleProvider,
+	createOpenAIProvider,
+	createGroqProvider,
+	createXAIProvider
+} from './openai-compatible-provider';
 
 /**
  * Strip <think>...</think> tags from any AI response
@@ -64,6 +70,9 @@ export interface InferenceResult extends AIResponse {
 export class InferenceService {
 	private claudeProvider: ClaudeProvider | null = null;
 	private ollamaProvider: OllamaInferenceProvider | null = null;
+	private openaiProvider: OpenAICompatibleProvider | null = null;
+	private groqProvider: OpenAICompatibleProvider | null = null;
+	private xaiProvider: OpenAICompatibleProvider | null = null;
 	private config: AIMagicConfig;
 
 	constructor(config?: Partial<AIMagicConfig>) {
@@ -93,6 +102,19 @@ export class InferenceService {
 			hardwareTier: this.config.ollama?.hardwareTier,
 			models: this.config.ollama?.models
 		});
+
+		// Initialize OpenAI-compatible providers if API keys provided
+		if (this.config.openai?.apiKey) {
+			this.openaiProvider = createOpenAIProvider(this.config.openai.apiKey);
+		}
+
+		if (this.config.groq?.apiKey) {
+			this.groqProvider = createGroqProvider(this.config.groq.apiKey);
+		}
+
+		if (this.config.xai?.apiKey) {
+			this.xaiProvider = createXAIProvider(this.config.xai.apiKey);
+		}
 	}
 
 	/**
@@ -119,6 +141,36 @@ export class InferenceService {
 			this.ollamaProvider?.updateConfig(config.ollama);
 			this.config.ollama = { ...this.config.ollama, ...config.ollama };
 		}
+		if (config.openai) {
+			if (config.openai.apiKey) {
+				if (this.openaiProvider) {
+					this.openaiProvider.setApiKey(config.openai.apiKey);
+				} else {
+					this.openaiProvider = createOpenAIProvider(config.openai.apiKey);
+				}
+			}
+			this.config.openai = { ...this.config.openai, ...config.openai };
+		}
+		if (config.groq) {
+			if (config.groq.apiKey) {
+				if (this.groqProvider) {
+					this.groqProvider.setApiKey(config.groq.apiKey);
+				} else {
+					this.groqProvider = createGroqProvider(config.groq.apiKey);
+				}
+			}
+			this.config.groq = { ...this.config.groq, ...config.groq };
+		}
+		if (config.xai) {
+			if (config.xai.apiKey) {
+				if (this.xaiProvider) {
+					this.xaiProvider.setApiKey(config.xai.apiKey);
+				} else {
+					this.xaiProvider = createXAIProvider(config.xai.apiKey);
+				}
+			}
+			this.config.xai = { ...this.config.xai, ...config.xai };
+		}
 	}
 
 	/**
@@ -126,6 +178,27 @@ export class InferenceService {
 	 */
 	setClaudeApiKey(apiKey: string): void {
 		this.updateConfig({ claude: { apiKey } });
+	}
+
+	/**
+	 * Set OpenAI API key
+	 */
+	setOpenAIApiKey(apiKey: string): void {
+		this.updateConfig({ openai: { apiKey } });
+	}
+
+	/**
+	 * Set Groq API key
+	 */
+	setGroqApiKey(apiKey: string): void {
+		this.updateConfig({ groq: { apiKey } });
+	}
+
+	/**
+	 * Set xAI API key
+	 */
+	setXAIApiKey(apiKey: string): void {
+		this.updateConfig({ xai: { apiKey } });
 	}
 
 	/**
@@ -231,8 +304,14 @@ export class InferenceService {
 	): Promise<Array<{ provider: AIProvider; model: string }>> {
 		const providers: Array<{ provider: AIProvider; model: string }> = [];
 
-		const ollamaAvailable = await this.ollamaProvider?.isAvailable();
-		const claudeAvailable = await this.claudeProvider?.isAvailable();
+		// Check availability of all providers in parallel
+		const [ollamaAvailable, claudeAvailable, openaiAvailable, groqAvailable, xaiAvailable] = await Promise.all([
+			this.ollamaProvider?.isAvailable() ?? false,
+			this.claudeProvider?.isAvailable() ?? false,
+			this.openaiProvider?.isAvailable() ?? false,
+			this.groqProvider?.isAvailable() ?? false,
+			this.xaiProvider?.isAvailable() ?? false
+		]);
 
 		// Offline mode: only local
 		if (this.config.offlineMode) {
@@ -254,18 +333,56 @@ export class InferenceService {
 					model: this.ollamaProvider.getModelForComplexity(complexity)
 				});
 			}
+			// Add remote providers as fallback (Claude first as primary remote, then others)
 			if (claudeAvailable && this.claudeProvider) {
 				providers.push({
 					provider: this.claudeProvider,
 					model: this.claudeProvider.getModelForComplexity(complexity)
 				});
 			}
+			if (groqAvailable && this.groqProvider) {
+				providers.push({
+					provider: this.groqProvider,
+					model: this.groqProvider.getModelForComplexity(complexity)
+				});
+			}
+			if (openaiAvailable && this.openaiProvider) {
+				providers.push({
+					provider: this.openaiProvider,
+					model: this.openaiProvider.getModelForComplexity(complexity)
+				});
+			}
+			if (xaiAvailable && this.xaiProvider) {
+				providers.push({
+					provider: this.xaiProvider,
+					model: this.xaiProvider.getModelForComplexity(complexity)
+				});
+			}
 		} else {
 			// Remote first, local fallback
+			// Priority: Claude (best quality) > Groq (blazing fast) > OpenAI > xAI > Ollama (local)
 			if (claudeAvailable && this.claudeProvider) {
 				providers.push({
 					provider: this.claudeProvider,
 					model: this.claudeProvider.getModelForComplexity(complexity)
+				});
+			}
+			if (groqAvailable && this.groqProvider) {
+				providers.push({
+					provider: this.groqProvider,
+					model: this.groqProvider.getModelForComplexity(complexity)
+				});
+			}
+			if (openaiAvailable && this.openaiProvider) {
+				providers.push({
+					provider: this.openaiProvider,
+					model: this.openaiProvider.getModelForComplexity(complexity)
+				});
+			}
+			if (xaiAvailable && this.xaiProvider) {
+				providers.push({
+					provider: this.xaiProvider,
+					model: this.xaiProvider.getModelForComplexity(complexity)
 				});
 			}
 			if (ollamaAvailable && this.ollamaProvider) {
@@ -285,6 +402,7 @@ export class InferenceService {
 	async getProvidersStatus(): Promise<ProviderStatus[]> {
 		const statuses: ProviderStatus[] = [];
 
+		// Claude
 		if (this.claudeProvider) {
 			statuses.push(await this.claudeProvider.getStatus());
 		} else {
@@ -297,8 +415,48 @@ export class InferenceService {
 			});
 		}
 
+		// Ollama (local)
 		if (this.ollamaProvider) {
 			statuses.push(await this.ollamaProvider.getStatus());
+		}
+
+		// OpenAI
+		if (this.openaiProvider) {
+			statuses.push(await this.openaiProvider.getStatus());
+		} else {
+			statuses.push({
+				name: 'OpenAI',
+				type: 'remote',
+				status: 'not_configured',
+				message: 'API key not configured',
+				details: 'Add your OpenAI API key to enable GPT models'
+			});
+		}
+
+		// Groq
+		if (this.groqProvider) {
+			statuses.push(await this.groqProvider.getStatus());
+		} else {
+			statuses.push({
+				name: 'Groq',
+				type: 'remote',
+				status: 'not_configured',
+				message: 'API key not configured',
+				details: 'Add your Groq API key for blazing fast inference'
+			});
+		}
+
+		// xAI Grok
+		if (this.xaiProvider) {
+			statuses.push(await this.xaiProvider.getStatus());
+		} else {
+			statuses.push({
+				name: 'xAI Grok',
+				type: 'remote',
+				status: 'not_configured',
+				message: 'API key not configured',
+				details: 'Add your xAI API key to enable Grok'
+			});
 		}
 
 		return statuses;
@@ -308,16 +466,19 @@ export class InferenceService {
 	 * Check if any provider is available
 	 */
 	async isAnyProviderAvailable(): Promise<boolean> {
-		const [ollamaAvailable, claudeAvailable] = await Promise.all([
+		const [ollamaAvailable, claudeAvailable, openaiAvailable, groqAvailable, xaiAvailable] = await Promise.all([
 			this.ollamaProvider?.isAvailable() ?? false,
-			this.claudeProvider?.isAvailable() ?? false
+			this.claudeProvider?.isAvailable() ?? false,
+			this.openaiProvider?.isAvailable() ?? false,
+			this.groqProvider?.isAvailable() ?? false,
+			this.xaiProvider?.isAvailable() ?? false
 		]);
 
 		if (this.config.offlineMode) {
 			return ollamaAvailable;
 		}
 
-		return ollamaAvailable || claudeAvailable;
+		return ollamaAvailable || claudeAvailable || openaiAvailable || groqAvailable || xaiAvailable;
 	}
 
 	/**
@@ -330,6 +491,15 @@ export class InferenceService {
 		}
 		if (normalized === 'ollama' && this.ollamaProvider) {
 			return this.ollamaProvider;
+		}
+		if (normalized === 'openai' && this.openaiProvider) {
+			return this.openaiProvider;
+		}
+		if (normalized === 'groq' && this.groqProvider) {
+			return this.groqProvider;
+		}
+		if ((normalized === 'xai' || normalized === 'grok') && this.xaiProvider) {
+			return this.xaiProvider;
 		}
 		return undefined;
 	}

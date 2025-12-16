@@ -180,10 +180,12 @@ function createRemoteProvidersSection(
 ): void {
 	containerEl.createEl('h4', { text: 'Remote Providers' });
 
-	// Claude API Key
+	const service = getInferenceService();
+
+	// Claude API Key (primary)
 	new Setting(containerEl)
 		.setName('Claude API Key')
-		.setDesc('Your Anthropic API key for remote AI inference')
+		.setDesc('Anthropic Claude - highest quality AI inference (recommended)')
 		.addText(text => {
 			text
 				.setPlaceholder('sk-ant-...')
@@ -191,16 +193,12 @@ function createRemoteProvidersSection(
 				.onChange(async (value) => {
 					plugin.settings.claudeApiKey = value;
 					await plugin.saveSettings();
-
-					// Update inference service
-					const service = getInferenceService();
 					service.setClaudeApiKey(value);
 				});
 			text.inputEl.type = 'password';
 			return text;
 		});
 
-	// Link to get Claude API key
 	const claudeLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
 	claudeLinkPara.style.marginBottom = '16px';
 	claudeLinkPara.createSpan({ text: 'Get your Claude API key: ' });
@@ -209,23 +207,79 @@ function createRemoteProvidersSection(
 		href: 'https://console.anthropic.com/settings/keys'
 	});
 
-	// OpenRouter (future placeholder)
+	// Groq API Key (blazing fast)
 	new Setting(containerEl)
-		.setName('OpenRouter API Key')
-		.setDesc('Coming soon: Access to many models via OpenRouter')
+		.setName('Groq API Key')
+		.setDesc('Groq - blazing fast inference (sub-second responses)')
 		.addText(text => {
 			text
-				.setPlaceholder('Coming soon...')
-				.setDisabled(true);
+				.setPlaceholder('gsk_...')
+				.setValue(plugin.settings.groqApiKey || '')
+				.onChange(async (value) => {
+					plugin.settings.groqApiKey = value;
+					await plugin.saveSettings();
+					service.setGroqApiKey(value);
+				});
+			text.inputEl.type = 'password';
 			return text;
 		});
 
-	// Link to OpenRouter
-	const openRouterLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
-	openRouterLinkPara.createSpan({ text: 'Get OpenRouter API key: ' });
-	openRouterLinkPara.createEl('a', {
-		text: 'openrouter.ai/keys',
-		href: 'https://openrouter.ai/keys'
+	const groqLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
+	groqLinkPara.style.marginBottom = '16px';
+	groqLinkPara.createSpan({ text: 'Get your Groq API key: ' });
+	groqLinkPara.createEl('a', {
+		text: 'console.groq.com/keys',
+		href: 'https://console.groq.com/keys'
+	});
+
+	// OpenAI API Key
+	new Setting(containerEl)
+		.setName('OpenAI API Key')
+		.setDesc('OpenAI GPT models (GPT-4o)')
+		.addText(text => {
+			text
+				.setPlaceholder('sk-...')
+				.setValue(plugin.settings.openaiApiKey || '')
+				.onChange(async (value) => {
+					plugin.settings.openaiApiKey = value;
+					await plugin.saveSettings();
+					service.setOpenAIApiKey(value);
+				});
+			text.inputEl.type = 'password';
+			return text;
+		});
+
+	const openaiLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
+	openaiLinkPara.style.marginBottom = '16px';
+	openaiLinkPara.createSpan({ text: 'Get your OpenAI API key: ' });
+	openaiLinkPara.createEl('a', {
+		text: 'platform.openai.com/api-keys',
+		href: 'https://platform.openai.com/api-keys'
+	});
+
+	// xAI Grok API Key
+	new Setting(containerEl)
+		.setName('xAI Grok API Key')
+		.setDesc('xAI Grok - advanced AI from xAI')
+		.addText(text => {
+			text
+				.setPlaceholder('xai-...')
+				.setValue(plugin.settings.xaiApiKey || '')
+				.onChange(async (value) => {
+					plugin.settings.xaiApiKey = value;
+					await plugin.saveSettings();
+					service.setXAIApiKey(value);
+				});
+			text.inputEl.type = 'password';
+			return text;
+		});
+
+	const xaiLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
+	xaiLinkPara.style.marginBottom = '16px';
+	xaiLinkPara.createSpan({ text: 'Get your xAI API key: ' });
+	xaiLinkPara.createEl('a', {
+		text: 'console.x.ai',
+		href: 'https://console.x.ai'
 	});
 }
 

@@ -29,6 +29,33 @@ export function registerAIMagicCommands(plugin: Plugin): void {
 		}
 	});
 
+	// Test OpenAI Provider
+	plugin.addCommand({
+		id: 'ai-magic-test-openai',
+		name: 'AI Magic: Test OpenAI Provider',
+		callback: async () => {
+			await testProvider('openai');
+		}
+	});
+
+	// Test Groq Provider
+	plugin.addCommand({
+		id: 'ai-magic-test-groq',
+		name: 'AI Magic: Test Groq Provider',
+		callback: async () => {
+			await testProvider('groq');
+		}
+	});
+
+	// Test xAI Grok Provider
+	plugin.addCommand({
+		id: 'ai-magic-test-xai',
+		name: 'AI Magic: Test xAI Grok Provider',
+		callback: async () => {
+			await testProvider('xai');
+		}
+	});
+
 	// Test Auto-routing (uses preferred provider)
 	plugin.addCommand({
 		id: 'ai-magic-test-auto',
@@ -49,11 +76,22 @@ export function registerAIMagicCommands(plugin: Plugin): void {
 }
 
 /**
+ * Provider display names
+ */
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+	claude: 'Claude',
+	ollama: 'Ollama',
+	openai: 'OpenAI',
+	groq: 'Groq',
+	xai: 'xAI Grok'
+};
+
+/**
  * Test a specific provider
  */
-async function testProvider(providerName: 'claude' | 'ollama'): Promise<void> {
+async function testProvider(providerName: 'claude' | 'ollama' | 'openai' | 'groq' | 'xai'): Promise<void> {
 	const service = getInferenceService();
-	const displayName = providerName === 'claude' ? 'Claude' : 'Ollama';
+	const displayName = PROVIDER_DISPLAY_NAMES[providerName] || providerName;
 
 	new Notice(`Testing ${displayName}...`);
 

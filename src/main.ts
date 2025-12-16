@@ -91,9 +91,12 @@ export default class InterBrainPlugin extends Plugin {
       radiclePassphrase: this.settings.radiclePassphrase,
     });
 
-    // Initialize AI Magic inference service with Claude API key
+    // Initialize AI Magic inference service with all configured API keys
     initializeInferenceService({
-      claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined
+      claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined,
+      openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
+      groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
+      xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
     });
 
     // Initialize error capture for bug reporting

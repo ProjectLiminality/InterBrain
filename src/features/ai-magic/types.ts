@@ -128,9 +128,33 @@ export interface OllamaConfig {
 }
 
 /**
- * Configuration for OpenRouter provider (future)
+ * Configuration for OpenAI provider
  */
-export interface OpenRouterConfig {
+export interface OpenAIConfig {
+	apiKey: string;
+	models?: {
+		trivial?: string;
+		standard?: string;
+		complex?: string;
+	};
+}
+
+/**
+ * Configuration for Groq provider (blazing fast inference)
+ */
+export interface GroqConfig {
+	apiKey: string;
+	models?: {
+		trivial?: string;
+		standard?: string;
+		complex?: string;
+	};
+}
+
+/**
+ * Configuration for xAI Grok provider
+ */
+export interface XAIConfig {
 	apiKey: string;
 	models?: {
 		trivial?: string;
@@ -151,8 +175,12 @@ export interface AIMagicConfig {
 	claude?: ClaudeConfig;
 	/** Ollama configuration */
 	ollama?: OllamaConfig;
-	/** OpenRouter configuration (future) */
-	openRouter?: OpenRouterConfig;
+	/** OpenAI configuration */
+	openai?: OpenAIConfig;
+	/** Groq configuration (fast inference) */
+	groq?: GroqConfig;
+	/** xAI Grok configuration */
+	xai?: XAIConfig;
 }
 
 /**

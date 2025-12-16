@@ -20,6 +20,9 @@ import { createAIMagicSettingsSection } from '../ai-magic/settings-section';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
+	openaiApiKey: string;
+	groqApiKey: string;
+	xaiApiKey: string;
 	radiclePassphrase: string;
 	userEmail: string;
 	hasLaunchedBefore: boolean;
@@ -31,6 +34,9 @@ export interface InterBrainSettings {
 
 export const DEFAULT_SETTINGS: InterBrainSettings = {
 	claudeApiKey: '',
+	openaiApiKey: '',
+	groqApiKey: '',
+	xaiApiKey: '',
 	radiclePassphrase: '',
 	userEmail: '',
 	hasLaunchedBefore: false,
