@@ -1,7 +1,7 @@
 {
   "id": "interbrain",
   "name": "InterBrain",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "minAppVersion": "0.15.0",
   "description": "An Obsidian plugin that transforms Personal Knowledge Management into Collective Knowledge Gardening, transcending the traditional Second Brain paradigm.",
   "author": "Project Liminality",

@@ -5,6 +5,24 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2025-12-16 - Feedback System & Multi-Provider AI
+
+### Added
+
+**Feedback System** (Feature Slice)
+- Automated bug reporting with GitHub integration via `gh` CLI
+- Automatic error capture (uncaught exceptions, unhandled rejections)
+- Manual "Report a Bug" command for user-initiated reports
+- **Two-tier deduplication**:
+  - Hash-based: Deterministic dedup via error fingerprint (`IB-ERR-XXXXXXXX`)
+  - AI semantic: Cross-user dedup for user-described issues (uses Claude)
+- AI refinement option: Generates concise title, summary, category, and complexity
+- Privacy-first: API keys redacted, only vault-relative paths, no PII
+- Rate limiting: Modal throttle (30s), session limit (10), local dedup (60s)
+
+**Distributed Compute Philosophy**
+Users who opt into AI refinement contribute their own compute (API key) to maintain a clean issue tracker. This automates the cultural norm of "search before posting."
+
 ## [0.10.0] - 2025-12-16 - Multi-Provider AI Magic
 
 ### Added
