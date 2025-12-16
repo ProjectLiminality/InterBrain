@@ -84,16 +84,31 @@ export const TutorialOverlay: React.FC = () => {
     <>
       {/* Golden Dot - sovereign animation element */}
       {goldenDot && (
-        <GoldenDot
-          from={goldenDot.from}
-          to={goldenDot.to}
-          controlPoints={goldenDot.controlPoints}
-          duration={goldenDot.duration}
-          size={goldenDot.size}
-          easing={goldenDot.easing}
-          onComplete={handleGoldenDotComplete}
-          visible={true}
-        />
+        'fromNodeId' in goldenDot && goldenDot.fromNodeId ? (
+          // Node-based animation
+          <GoldenDot
+            fromNodeId={goldenDot.fromNodeId}
+            toNodeId={goldenDot.toNodeId}
+            controlPoints={goldenDot.controlPoints}
+            duration={goldenDot.duration}
+            size={goldenDot.size}
+            easing={goldenDot.easing}
+            onComplete={handleGoldenDotComplete}
+            visible={true}
+          />
+        ) : (
+          // Position-based animation
+          <GoldenDot
+            from={(goldenDot as any).from}
+            to={(goldenDot as any).to}
+            controlPoints={goldenDot.controlPoints}
+            duration={goldenDot.duration}
+            size={goldenDot.size}
+            easing={goldenDot.easing}
+            onComplete={handleGoldenDotComplete}
+            visible={true}
+          />
+        )
       )}
 
       {/* Tutorial Text - sovereign animation element */}

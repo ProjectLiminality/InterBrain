@@ -1,12 +1,33 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import { useInterBrainStore } from '../../core/store/interbrain-store';
 
-interface GoldenDotProps {
+/**
+ * Props for position-based GoldenDot (direct coordinates)
+ */
+interface PositionBasedProps {
   /** Starting position in 3D space */
   from: [number, number, number];
   /** Ending position in 3D space */
   to: [number, number, number];
+  fromNodeId?: never;
+  toNodeId?: never;
+}
+
+/**
+ * Props for node-based GoldenDot (resolves positions from store)
+ */
+interface NodeBasedProps {
+  /** Starting node ID - position resolved from store */
+  fromNodeId: string;
+  /** Ending node ID - position resolved from store */
+  toNodeId: string;
+  from?: never;
+  to?: never;
+}
+
+interface CommonProps {
   /** Optional control points for Bezier curve (if omitted, creates smooth arc) */
   controlPoints?: [number, number, number][];
   /** Duration of movement in seconds */
@@ -20,6 +41,8 @@ interface GoldenDotProps {
   /** Easing function: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut' */
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
 }
+
+type GoldenDotProps = CommonProps & (PositionBasedProps | NodeBasedProps);
 
 /**
  * Cubic Bezier interpolation for smooth 3D movement
@@ -100,16 +123,44 @@ const easingFunctions = {
  *
  * Sovereign asset for tutorial feature - decoupled from ManimText
  */
-export const GoldenDot: React.FC<GoldenDotProps> = ({
-  from,
-  to,
-  controlPoints,
-  duration = 2,
-  size = 160,
-  onComplete,
-  visible = true,
-  easing = 'easeInOut',
-}) => {
+/**
+ * Hook to get node position from store by node ID
+ */
+function useNodePosition(nodeId: string | undefined): [number, number, number] | null {
+  return useInterBrainStore((state) => {
+    if (!nodeId) return null;
+    const nodeData = state.dreamNodes.get(nodeId);
+    return nodeData?.node.position ?? null;
+  });
+}
+
+export const GoldenDot: React.FC<GoldenDotProps> = (props) => {
+  const {
+    controlPoints,
+    duration = 2,
+    size = 160,
+    onComplete,
+    visible = true,
+    easing = 'easeInOut',
+  } = props;
+
+  // Resolve positions - either from props or from store via node IDs
+  const fromNodePosition = useNodePosition('fromNodeId' in props ? props.fromNodeId : undefined);
+  const toNodePosition = useNodePosition('toNodeId' in props ? props.toNodeId : undefined);
+
+  // Determine actual from/to positions
+  const from: [number, number, number] = useMemo(() => {
+    if ('from' in props && props.from) return props.from;
+    if (fromNodePosition) return fromNodePosition;
+    return [0, 0, 0]; // Fallback
+  }, [props, fromNodePosition]);
+
+  const to: [number, number, number] = useMemo(() => {
+    if ('to' in props && props.to) return props.to;
+    if (toNodePosition) return toNodePosition;
+    return [0, 0, 0]; // Fallback
+  }, [props, toNodePosition]);
+
   const [position, setPosition] = useState<[number, number, number]>(from);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isVisible, setIsVisible] = useState(visible);
@@ -123,6 +174,11 @@ export const GoldenDot: React.FC<GoldenDotProps> = ({
 
   // Reset animation when from/to changes
   useEffect(() => {
+    // Don't start animation if positions aren't resolved yet
+    if (from[0] === 0 && from[1] === 0 && from[2] === 0 &&
+        to[0] === 0 && to[1] === 0 && to[2] === 0) {
+      return;
+    }
     setPosition(from);
     setIsAnimating(true);
     setIsVisible(visible);

@@ -18,14 +18,35 @@ export interface TutorialStep {
   duration?: number; // Auto-advance after N seconds
 }
 
-export interface GoldenDotAnimation {
+/**
+ * Position-based golden dot animation
+ */
+export interface GoldenDotPositionAnimation {
   from: [number, number, number];
   to: [number, number, number];
+  fromNodeId?: never;
+  toNodeId?: never;
   controlPoints?: [number, number, number][];
   duration?: number;
   size?: number;
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
 }
+
+/**
+ * Node-based golden dot animation (resolves positions from store)
+ */
+export interface GoldenDotNodeAnimation {
+  fromNodeId: string;
+  toNodeId: string;
+  from?: never;
+  to?: never;
+  controlPoints?: [number, number, number][];
+  duration?: number;
+  size?: number;
+  easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+}
+
+export type GoldenDotAnimation = GoldenDotPositionAnimation | GoldenDotNodeAnimation;
 
 export class TutorialService {
   private static STORAGE_KEY = 'interbrain-tutorial-state';
@@ -166,10 +187,33 @@ export class TutorialService {
   // ============ Golden Dot Methods (Decoupled) ============
 
   /**
-   * Trigger a golden dot animation
+   * Trigger a golden dot animation (position-based or node-based)
    */
   animateGoldenDot(animation: GoldenDotAnimation): void {
     this.goldenDotAnimation = animation;
+    this.notifyGoldenDotChange();
+  }
+
+  /**
+   * Trigger a golden dot animation between two nodes by ID
+   * Convenience method for node-based animations
+   */
+  animateGoldenDotBetweenNodes(
+    fromNodeId: string,
+    toNodeId: string,
+    options?: {
+      duration?: number;
+      size?: number;
+      easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+    }
+  ): void {
+    this.goldenDotAnimation = {
+      fromNodeId,
+      toNodeId,
+      duration: options?.duration,
+      size: options?.size,
+      easing: options?.easing,
+    };
     this.notifyGoldenDotChange();
   }
 

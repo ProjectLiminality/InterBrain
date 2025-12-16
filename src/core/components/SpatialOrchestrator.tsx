@@ -76,6 +76,9 @@ export interface SpatialOrchestratorRef {
 
   /** Calculate forward position on sphere accounting for current rotation */
   calculateForwardPositionOnSphere: () => [number, number, number];
+
+  /** Get a node's current rendered position (from DreamNode3D ref) */
+  getNodeCurrentPosition: (nodeId: string) => [number, number, number] | null;
 }
 
 interface SpatialOrchestratorProps {
@@ -918,6 +921,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
 
       return [forwardPosition.x, forwardPosition.y, forwardPosition.z];
+    },
+
+    getNodeCurrentPosition: (nodeId: string): [number, number, number] | null => {
+      const nodeRef = nodeRefs.current.get(nodeId);
+      if (!nodeRef?.current) {
+        console.warn(`[SpatialOrchestrator] No ref found for node: ${nodeId}`);
+        return null;
+      }
+      return nodeRef.current.getCurrentPosition();
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 

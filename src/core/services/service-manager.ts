@@ -8,6 +8,7 @@ import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../../features/drag-and-drop';
 import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance-filter/services/radicle-service';
+import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
 
 /**
  * Service interface that both mock and real implementations will follow
@@ -70,6 +71,7 @@ export class ServiceManager {
   private canvasParserService: CanvasParserService | null = null;
   private leafManagerService: LeafManagerService | null = null;
   private submoduleManagerService: SubmoduleManagerService | null = null;
+  private spatialOrchestratorRef: SpatialOrchestratorRef | null = null;
 
   constructor() {
     this.indexingService = indexingService;
@@ -253,7 +255,21 @@ export class ServiceManager {
   getRadicleService(): RadicleService {
     return this.radicleService;
   }
-  
+
+  /**
+   * Set the SpatialOrchestrator ref (called from DreamspaceCanvas)
+   */
+  setSpatialOrchestratorRef(ref: SpatialOrchestratorRef | null): void {
+    this.spatialOrchestratorRef = ref;
+  }
+
+  /**
+   * Get the SpatialOrchestrator ref for position queries
+   */
+  getSpatialOrchestrator(): SpatialOrchestratorRef | null {
+    return this.spatialOrchestratorRef;
+  }
+
   /**
    * Perform vault scan
    */

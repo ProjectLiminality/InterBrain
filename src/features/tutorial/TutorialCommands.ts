@@ -1,5 +1,6 @@
 import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
+import { serviceManager } from '../../core/services/service-manager';
 import { tutorialService } from './TutorialService';
 import { TutorialModal } from './TutorialModal';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
@@ -130,6 +131,70 @@ export function registerTutorialCommands(plugin: Plugin, uiService: UIService): 
       });
 
       uiService.showInfo('Golden dot test (linear) - watch DreamSpace');
+    }
+  });
+
+  // Test Golden Dot - Node to Node (Debug)
+  plugin.addCommand({
+    id: 'test-golden-dot-nodes',
+    name: 'Test Golden Dot - Random Dreamers (Debug)',
+    callback: () => {
+      console.log('✨ Testing golden dot animation between random Dreamer nodes');
+
+      const store = useInterBrainStore.getState();
+
+      // Filter to only Dreamer nodes (type === 'dreamer')
+      const dreamerIds = Array.from(store.dreamNodes.entries())
+        .filter(([_, data]) => data.node.type === 'dreamer')
+        .map(([id]) => id);
+
+      if (dreamerIds.length < 2) {
+        uiService.showError('Need at least 2 Dreamer nodes for this test');
+        return;
+      }
+
+      // Pick two random different Dreamer nodes
+      const shuffled = dreamerIds.sort(() => Math.random() - 0.5);
+      const fromNodeId = shuffled[0];
+      const toNodeId = shuffled[1];
+
+      const fromNode = store.dreamNodes.get(fromNodeId);
+      const toNode = store.dreamNodes.get(toNodeId);
+
+      // Get actual rendered positions from orchestrator (not store positions)
+      const orchestrator = serviceManager.getSpatialOrchestrator();
+      if (!orchestrator) {
+        console.error('✨ SpatialOrchestrator not available');
+        uiService.showError('Orchestrator not ready - try again after view is loaded');
+        return;
+      }
+
+      const fromPos = orchestrator.getNodeCurrentPosition(fromNodeId);
+      const toPos = orchestrator.getNodeCurrentPosition(toNodeId);
+
+      if (!fromPos || !toPos) {
+        console.error('✨ Missing rendered positions:', { fromPos, toPos });
+        uiService.showError('Node positions not available - nodes may not be rendered');
+        return;
+      }
+
+      // Use actual rendered positions
+      const from: [number, number, number] = fromPos;
+      const to: [number, number, number] = toPos;
+
+      console.log(`✨ Animating from "${fromNode?.node.name}" to "${toNode?.node.name}"`);
+      console.log(`✨ From position (rendered):`, from);
+      console.log(`✨ To position (rendered):`, to);
+
+      tutorialService.animateGoldenDot({
+        from,
+        to,
+        duration: 2,
+        size: 120,
+        easing: 'easeInOut'
+      });
+
+      uiService.showInfo(`Golden dot: ${fromNode?.node.name} → ${toNode?.node.name}`);
     }
   });
 }

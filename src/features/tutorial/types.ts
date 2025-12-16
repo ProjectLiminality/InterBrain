@@ -28,10 +28,20 @@ export interface TutorialStep {
     duration?: number;
   };
 
-  /** Golden dot animation */
+  /** Golden dot animation - position-based */
   goldenDot?: {
     from: [number, number, number];
     to: [number, number, number];
+    /** Optional Bezier control points */
+    controlPoints?: [number, number, number][];
+    duration?: number;
+    easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  };
+
+  /** Golden dot animation - node-based (resolves positions from store) */
+  goldenDotNodes?: {
+    fromNodeId: string;
+    toNodeId: string;
     /** Optional Bezier control points */
     controlPoints?: [number, number, number][];
     duration?: number;

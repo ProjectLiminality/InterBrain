@@ -142,7 +142,13 @@ export default function DreamspaceCanvas() {
           spatialOrchestratorRef.current?.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
         }
       });
+      // Also register orchestrator with service manager for global access (e.g., tutorial commands)
+      serviceManager.setSpatialOrchestratorRef(spatialOrchestratorRef.current);
     }
+    // Cleanup on unmount
+    return () => {
+      serviceManager.setSpatialOrchestratorRef(null);
+    };
   }, [dreamNodes.length, spatialOrchestratorRef.current]); // Re-register when nodes change OR orchestrator becomes ready
   
   // Note: Global __interbrainCanvas API has been replaced with store-based navigation.
