@@ -1,6 +1,6 @@
 {
   "name": "interbrain",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "An Obsidian plugin that transforms Personal Knowledge Management into Collective Knowledge Gardening, transcending the traditional Second Brain paradigm",
   "main": "main.js",
   "scripts": {

@@ -5,6 +5,33 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2025-12-16 - Multi-Provider AI Magic
+
+### Added
+
+**AI Magic Feature Slice**
+- Unified AI provider management with intelligent routing and automatic fallback
+- **5 providers**: Claude, OpenAI, Groq, xAI Grok, Ollama (local)
+- Default provider selection via radio buttons in settings
+- Offline mode toggle for local-only inference
+- Hardware tier auto-detection for Ollama model selection
+- Thinking tag stripping for qwen3 and similar models
+
+**Provider Details**
+| Provider | Type | Models |
+|----------|------|--------|
+| Claude | Remote | haiku, sonnet, opus |
+| OpenAI | Remote | gpt-4o-mini, gpt-4o |
+| Groq | Remote | llama-3.1-8b, llama-3.1-70b |
+| xAI Grok | Remote | grok-3-mini, grok-4 |
+| Ollama | Local | llama3.2:3b, qwen3:32b |
+
+### Changed
+
+- Migrated all AI consumers to unified `generateAI()` interface
+- Removed legacy `llm-provider.ts` from conversational-copilot
+- Simplified settings UI with provider-specific sections
+
 ## [0.9.0] - 2025-12-13 - Vertical Slice Architecture Refactoring
 
 ### Overview
