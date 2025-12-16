@@ -10,13 +10,12 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { requestUrl } from 'obsidian';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { serviceManager } from '../../../core/services/service-manager';
 import { errorCaptureService } from './error-capture-service';
 import { issueFormatterService, FeedbackData } from './issue-formatter-service';
-import { settingsStatusService } from '../../settings/settings-status-service';
 import { CapturedError } from '../store/slice';
+import { generateAI, getInferenceService } from '../../ai-magic';
 
 const execAsync = promisify(exec);
 
@@ -413,12 +412,14 @@ class FeedbackService {
   private async checkForDuplicateByAi(
     data: FeedbackData
   ): Promise<string | null> {
-    const apiKey = settingsStatusService.getSettings()?.claudeApiKey;
-    if (!apiKey) return null;
+    // Check if AI is available
+    const inferenceService = getInferenceService();
+    const aiAvailable = await inferenceService.isAnyProviderAvailable();
+    if (!aiAvailable) return null;
 
     try {
       // Step 1: Generate AI title + summary for the new report
-      const refinedReport = await this.generateAiTitleAndSummary(data, apiKey);
+      const refinedReport = await this.generateAiTitleAndSummary(data);
       if (!refinedReport) {
         console.warn('[FeedbackService] Could not generate AI summary for dedup');
         return null;
@@ -467,29 +468,13 @@ Respond with ONLY one of:
 
 Your response:`;
 
-      const response = await requestUrl({
-        url: 'https://api.anthropic.com/v1/messages',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5',
-          max_tokens: 50,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-        throw: false,
-      });
+      const response = await generateAI(
+        [{ role: 'user', content: prompt }],
+        'trivial',
+        { maxTokens: 50 }
+      );
 
-      if (response.status !== 200) {
-        console.warn('[FeedbackService] AI dedup comparison error:', response.status);
-        return null;
-      }
-
-      const result = response.json;
-      const aiResponse = result.content?.[0]?.text?.trim();
+      const aiResponse = response.content.trim();
 
       if (!aiResponse || aiResponse.toUpperCase() === 'NEW') {
         return null;
@@ -520,8 +505,7 @@ Your response:`;
    * (lighter than full formatWithAi, focused on what we need for matching)
    */
   private async generateAiTitleAndSummary(
-    data: FeedbackData,
-    apiKey: string
+    data: FeedbackData
   ): Promise<{ title: string; summary: string } | null> {
     const prompt = `Analyze this bug report and provide a concise title and summary.
 
@@ -533,25 +517,13 @@ TITLE: [concise title, max 60 chars]
 SUMMARY: [1-2 sentence summary of what's happening]`;
 
     try {
-      const response = await requestUrl({
-        url: 'https://api.anthropic.com/v1/messages',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5',
-          max_tokens: 200,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-        throw: false,
-      });
+      const response = await generateAI(
+        [{ role: 'user', content: prompt }],
+        'trivial',
+        { maxTokens: 200 }
+      );
 
-      if (response.status !== 200) return null;
-
-      const content = response.json?.content?.[0]?.text;
+      const content = response.content;
       if (!content) return null;
 
       const titleMatch = content.match(/TITLE:\s*(.+)/);
@@ -650,11 +622,6 @@ ${data.error?.stack || 'No stack trace'}
    * - Full raw data in collapsible section for completeness
    */
   private async generateAiComment(data: FeedbackData): Promise<string> {
-    const apiKey = settingsStatusService.getSettings()?.claudeApiKey;
-    if (!apiKey) {
-      throw new Error('No API key available');
-    }
-
     const prompt = `You are analyzing an additional occurrence of a known bug in InterBrain (an Obsidian plugin).
 
 This error was already reported. Generate a BRIEF analysis (3-5 sentences max) that highlights:
@@ -672,28 +639,13 @@ Environment:
 
 Respond with ONLY the analysis paragraph, no headers or formatting. Be concise.`;
 
-    const response = await requestUrl({
-      url: 'https://api.anthropic.com/v1/messages',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-      throw: false,
-    });
+    const response = await generateAI(
+      [{ role: 'user', content: prompt }],
+      'trivial',
+      { maxTokens: 300 }
+    );
 
-    if (response.status !== 200) {
-      throw new Error(`Claude API error: ${response.status}`);
-    }
-
-    const result = response.json;
-    const aiAnalysis = result.content?.[0]?.text;
+    const aiAnalysis = response.content;
 
     if (!aiAnalysis) {
       throw new Error('No content in response');

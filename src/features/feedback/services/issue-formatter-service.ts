@@ -3,11 +3,11 @@
  *
  * Supports two modes:
  * 1. Raw format: Simple structured markdown with all data
- * 2. AI-refined format: Uses Claude API to generate better titles, summaries
+ * 2. AI-refined format: Uses AI to generate better titles, summaries
  */
 
-import { requestUrl } from 'obsidian';
 import { CapturedError } from '../store/slice';
+import { generateAI, getInferenceService } from '../../ai-magic';
 
 // ============================================================================
 // TYPES
@@ -223,49 +223,25 @@ class IssueFormatterService {
   }
 
   /**
-   * Call Claude API for issue refinement
+   * Call AI for issue refinement via ai-magic service
    */
   private async callClaudeApi(data: FeedbackData): Promise<RefinedIssue | null> {
-    // Import settings service to check for API key
-    const { settingsStatusService } = await import(
-      '../../settings/settings-status-service'
-    );
-
-    const apiKey = settingsStatusService.getSettings()?.claudeApiKey;
-    if (!apiKey) {
-      return null; // No API key, can't use AI
+    // Check if any AI provider is available
+    const inferenceService = getInferenceService();
+    const aiAvailable = await inferenceService.isAnyProviderAvailable();
+    if (!aiAvailable) {
+      return null; // No AI available
     }
 
     const prompt = this.buildPrompt(data);
 
-    // Use Obsidian's requestUrl to avoid CORS issues
-    const response = await requestUrl({
-      url: 'https://api.anthropic.com/v1/messages',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 1500,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      }),
-      throw: false, // Don't throw on error status codes
-    });
+    const response = await generateAI(
+      [{ role: 'user', content: prompt }],
+      'trivial',
+      { maxTokens: 1500 }
+    );
 
-    if (response.status !== 200) {
-      throw new Error(`Claude API error: ${response.status}`);
-    }
-
-    const result = response.json;
-    const content = result.content?.[0]?.text;
+    const content = response.content;
 
     if (!content) {
       return null;

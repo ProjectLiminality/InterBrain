@@ -10,6 +10,7 @@ import { checkTranscriptionStatus } from '../realtime-transcription/settings-sec
 import { checkWebLinkAnalyzerStatus } from '../web-link-analyzer/settings-section';
 import { checkRadicleStatus } from '../social-resonance-filter/settings-section';
 import { checkGitHubStatus } from '../github-publishing/settings-section';
+import { checkAIMagicStatus } from '../ai-magic/settings-section';
 
 export interface FeatureStatus {
 	available: boolean;
@@ -24,7 +25,7 @@ export interface SystemStatus {
 	webLinkAnalyzer: FeatureStatus;
 	radicle: FeatureStatus;
 	github: FeatureStatus;
-	claudeApi: FeatureStatus;
+	aiMagic: FeatureStatus;
 }
 
 // Singleton instance for runtime access
@@ -50,13 +51,13 @@ export class SettingsStatusService {
 	 * Delegates to feature-owned status checkers
 	 */
 	async getSystemStatus(claudeApiKey: string, radiclePassphrase?: string): Promise<SystemStatus> {
-		const [semanticSearch, transcription, webLinkAnalyzer, radicle, github, claudeApi] = await Promise.all([
+		const [semanticSearch, transcription, webLinkAnalyzer, radicle, github, aiMagic] = await Promise.all([
 			checkSemanticSearchStatus(),
 			checkTranscriptionStatus(),
 			checkWebLinkAnalyzerStatus(claudeApiKey),
 			checkRadicleStatus(radiclePassphrase),
 			checkGitHubStatus(),
-			this.checkClaudeApi(claudeApiKey)
+			checkAIMagicStatus(claudeApiKey)
 		]);
 
 		return {
@@ -65,38 +66,7 @@ export class SettingsStatusService {
 			webLinkAnalyzer,
 			radicle,
 			github,
-			claudeApi
-		};
-	}
-
-	/**
-	 * Check Claude API configuration (stays here as it's a global setting)
-	 */
-	private async checkClaudeApi(apiKey: string): Promise<FeatureStatus> {
-		if (!apiKey || apiKey.trim() === '') {
-			return {
-				available: false,
-				status: 'warning',
-				message: 'API key not configured',
-				details: 'Add your Anthropic API key to enable AI features'
-			};
-		}
-
-		// Basic validation: should start with sk-ant-
-		if (!apiKey.startsWith('sk-ant-')) {
-			return {
-				available: false,
-				status: 'error',
-				message: 'Invalid API key format',
-				details: 'Anthropic API keys should start with sk-ant-'
-			};
-		}
-
-		return {
-			available: true,
-			status: 'ready',
-			message: 'API key configured',
-			details: 'Conversation summaries and analysis enabled'
+			aiMagic
 		};
 	}
 

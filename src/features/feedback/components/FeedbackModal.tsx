@@ -207,6 +207,7 @@ export class FeedbackModal extends Modal {
         new Notice(message, 5000);
         this.close();
       } else {
+        console.error('[FeedbackModal] Submit failed:', result.error);
         new Notice(`Failed to submit: ${result.error}`, 5000);
         // Re-enable buttons
         buttons.forEach((btn) => {
@@ -216,6 +217,7 @@ export class FeedbackModal extends Modal {
         this.isSubmitting = false;
       }
     } catch (err) {
+      console.error('[FeedbackModal] Submit error:', err);
       new Notice(
         `Error submitting report: ${err instanceof Error ? err.message : String(err)}`,
         5000

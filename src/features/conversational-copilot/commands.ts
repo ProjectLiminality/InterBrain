@@ -10,6 +10,7 @@ import { getRealtimeTranscriptionService } from '../realtime-transcription';
 import { getAudioRecordingService } from '../songline/services/audio-recording-service';
 import { getPerspectiveService } from '../songline/services/perspective-service';
 import { getAudioTrimmingService } from '../songline/services/audio-trimming-service';
+import { getInferenceService } from '../ai-magic';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -181,17 +182,16 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
 
         if (partnerToFocus && (transcriptContent || invocations.length > 0)) {
           try {
-            // Get plugin settings for API key
-            const settings = (plugin as any).settings;
-            console.log(`📧 [Copilot-Exit] Plugin settings:`, !!settings);
-            const apiKey = settings?.claudeApiKey;
-            console.log(`📧 [Copilot-Exit] API key configured:`, apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO');
+            // Check if any AI provider is available (Claude or Ollama)
+            const inferenceService = getInferenceService();
+            const aiAvailable = await inferenceService.isAnyProviderAvailable();
+            console.log(`📧 [Copilot-Exit] AI provider available:`, aiAvailable ? 'YES' : 'NO');
 
             let aiSummary = '';
             const clipSuggestions: any[] = [];
 
-            if (!apiKey) {
-              console.warn(`⚠️ [Copilot-Exit] No Claude API key configured - using basic summary`);
+            if (!aiAvailable) {
+              console.warn(`⚠️ [Copilot-Exit] No AI provider available - using basic summary`);
               uiService.showInfo('Creating email with shared DreamNodes (AI summary disabled)');
               // Fallback: No AI summary, just list shared nodes
               aiSummary = ''; // Empty string will trigger basic template in email service
@@ -206,8 +206,7 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
               const result = await summaryService.generateSummaryFromContent(
                 transcriptContent,
                 invocations,
-                partnerToFocus,
-                apiKey
+                partnerToFocus
               );
 
               aiSummary = result.summary;
