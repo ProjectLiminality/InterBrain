@@ -78,10 +78,14 @@ export class InferenceService {
 
 	constructor(config?: Partial<AIMagicConfig>) {
 		this.config = {
+			defaultProvider: config?.defaultProvider,
 			preferLocal: config?.preferLocal ?? false, // Remote-first for private beta (higher quality, less error-prone)
 			offlineMode: config?.offlineMode ?? false,
 			claude: config?.claude,
-			ollama: config?.ollama
+			ollama: config?.ollama,
+			openai: config?.openai,
+			groq: config?.groq,
+			xai: config?.xai
 		};
 
 		this.initializeProviders();
