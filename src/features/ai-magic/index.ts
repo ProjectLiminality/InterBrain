@@ -2,7 +2,7 @@
  * AI Magic Feature Slice
  *
  * Unified AI provider management for InterBrain.
- * Handles local (Ollama) and remote (Claude, OpenRouter) inference.
+ * Handles local (Ollama) and remote (Claude, OpenAI, Groq, xAI) inference.
  */
 
 // Types
@@ -31,6 +31,14 @@ export {
 	createOllamaInferenceProvider,
 	getSystemRAMInfo
 } from './services/ollama-inference';
+
+export {
+	OpenAICompatibleProvider,
+	createOpenAIProvider,
+	createGroqProvider,
+	createXAIProvider,
+	PROVIDER_DEFAULTS
+} from './services/openai-compatible-provider';
 
 // Settings
 export {

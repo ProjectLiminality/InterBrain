@@ -10,13 +10,15 @@ Unified AI provider management for InterBrain. Handles both local (Ollama) and r
 - **Claude provider** (remote) - Highest quality, recommended
 - **Groq provider** (remote) - Blazing fast inference (sub-second)
 - **OpenAI provider** (remote) - GPT-4o models
-- **xAI Grok provider** (remote) - Advanced AI from xAI
+- **xAI Grok provider** (remote) - grok-3-mini, grok-4 models
 - **Ollama provider** (local) - Automatic hardware detection, privacy-first
 - Unified inference service with provider routing
+- **Default provider selection** - Radio buttons to choose your preferred provider
 - Automatic fallback with user notification
 - Settings panel with one-click model installation
 - All consumers migrated to ai-magic service
 - Thinking tag stripping for qwen3 model output
+- Offline mode (local-only) toggle
 
 ### Known Issues Being Investigated
 - **Semantic deduplication in feedback service**: When using Ollama for AI-refined feedback, the deduplication may fail due to model response format. The safety net for thinking tags was added, but needs more testing. Check console for `[AI Magic] Using provider:` to verify which provider is active.
