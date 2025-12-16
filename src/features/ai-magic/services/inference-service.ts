@@ -14,7 +14,8 @@ import {
 	ProviderStatus,
 	TaskComplexity,
 	AIMagicConfig,
-	HardwareTier
+	HardwareTier,
+	ProviderKey
 } from '../types';
 import { ClaudeProvider, createClaudeProvider } from './claude-provider';
 import { OllamaInferenceProvider, createOllamaInferenceProvider } from './ollama-inference';
@@ -238,7 +239,15 @@ export class InferenceService {
 
 		// Force specific provider if requested
 		if (options?.forceProvider) {
-			const forced = providers.find(p => p.provider.name.toLowerCase() === options.forceProvider?.toLowerCase());
+			const forceKey = options.forceProvider.toLowerCase();
+			// Match by provider name or key aliases (e.g., 'xai' matches 'xAI Grok')
+			const forced = providers.find(p => {
+				const providerName = p.provider.name.toLowerCase();
+				return providerName === forceKey ||
+					providerName.startsWith(forceKey) ||
+					(forceKey === 'xai' && providerName.includes('grok')) ||
+					(forceKey === 'grok' && providerName.includes('grok'));
+			});
 			if (forced) {
 				const response = await forced.provider.generateCompletion(messages, {
 					...options,
@@ -299,23 +308,23 @@ export class InferenceService {
 	 * Get providers in order of preference
 	 */
 	private async getProviderOrder(
-		preferLocal: boolean,
+		_preferLocal: boolean, // Legacy parameter, kept for API compatibility
 		complexity: TaskComplexity
 	): Promise<Array<{ provider: AIProvider; model: string }>> {
 		const providers: Array<{ provider: AIProvider; model: string }> = [];
 
 		// Check availability of all providers in parallel
-		const [ollamaAvailable, claudeAvailable, openaiAvailable, groqAvailable, xaiAvailable] = await Promise.all([
-			this.ollamaProvider?.isAvailable() ?? false,
-			this.claudeProvider?.isAvailable() ?? false,
-			this.openaiProvider?.isAvailable() ?? false,
-			this.groqProvider?.isAvailable() ?? false,
-			this.xaiProvider?.isAvailable() ?? false
-		]);
+		const availability: Record<ProviderKey, boolean> = {
+			ollama: await this.ollamaProvider?.isAvailable() ?? false,
+			claude: await this.claudeProvider?.isAvailable() ?? false,
+			openai: await this.openaiProvider?.isAvailable() ?? false,
+			groq: await this.groqProvider?.isAvailable() ?? false,
+			xai: await this.xaiProvider?.isAvailable() ?? false
+		};
 
 		// Offline mode: only local
 		if (this.config.offlineMode) {
-			if (ollamaAvailable && this.ollamaProvider) {
+			if (availability.ollama && this.ollamaProvider) {
 				providers.push({
 					provider: this.ollamaProvider,
 					model: this.ollamaProvider.getModelForComplexity(complexity)
@@ -324,76 +333,48 @@ export class InferenceService {
 			return providers;
 		}
 
-		// Build ordered list
-		if (preferLocal) {
-			// Local first, remote fallback
-			if (ollamaAvailable && this.ollamaProvider) {
+		// Helper to add a provider if available
+		const addProvider = (key: ProviderKey) => {
+			const providerMap: Record<ProviderKey, AIProvider | null> = {
+				claude: this.claudeProvider,
+				ollama: this.ollamaProvider,
+				openai: this.openaiProvider,
+				groq: this.groqProvider,
+				xai: this.xaiProvider
+			};
+			const provider = providerMap[key];
+			if (availability[key] && provider) {
 				providers.push({
-					provider: this.ollamaProvider,
-					model: this.ollamaProvider.getModelForComplexity(complexity)
+					provider,
+					model: provider.getModelForComplexity(complexity)
 				});
 			}
-			// Add remote providers as fallback (Claude first as primary remote, then others)
-			if (claudeAvailable && this.claudeProvider) {
-				providers.push({
-					provider: this.claudeProvider,
-					model: this.claudeProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (groqAvailable && this.groqProvider) {
-				providers.push({
-					provider: this.groqProvider,
-					model: this.groqProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (openaiAvailable && this.openaiProvider) {
-				providers.push({
-					provider: this.openaiProvider,
-					model: this.openaiProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (xaiAvailable && this.xaiProvider) {
-				providers.push({
-					provider: this.xaiProvider,
-					model: this.xaiProvider.getModelForComplexity(complexity)
-				});
-			}
-		} else {
-			// Remote first, local fallback
-			// Priority: Claude (best quality) > Groq (blazing fast) > OpenAI > xAI > Ollama (local)
-			if (claudeAvailable && this.claudeProvider) {
-				providers.push({
-					provider: this.claudeProvider,
-					model: this.claudeProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (groqAvailable && this.groqProvider) {
-				providers.push({
-					provider: this.groqProvider,
-					model: this.groqProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (openaiAvailable && this.openaiProvider) {
-				providers.push({
-					provider: this.openaiProvider,
-					model: this.openaiProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (xaiAvailable && this.xaiProvider) {
-				providers.push({
-					provider: this.xaiProvider,
-					model: this.xaiProvider.getModelForComplexity(complexity)
-				});
-			}
-			if (ollamaAvailable && this.ollamaProvider) {
-				providers.push({
-					provider: this.ollamaProvider,
-					model: this.ollamaProvider.getModelForComplexity(complexity)
-				});
+		};
+
+		// Default fallback order (when default provider fails or isn't set)
+		const fallbackOrder: ProviderKey[] = ['claude', 'groq', 'openai', 'xai', 'ollama'];
+
+		// Add default provider first if set and available
+		const defaultProvider = this.config.defaultProvider;
+		if (defaultProvider && availability[defaultProvider]) {
+			addProvider(defaultProvider);
+		}
+
+		// Add remaining providers in fallback order
+		for (const key of fallbackOrder) {
+			if (key !== defaultProvider) {
+				addProvider(key);
 			}
 		}
 
 		return providers;
+	}
+
+	/**
+	 * Set the default provider
+	 */
+	setDefaultProvider(provider: ProviderKey): void {
+		this.config.defaultProvider = provider;
 	}
 
 	/**

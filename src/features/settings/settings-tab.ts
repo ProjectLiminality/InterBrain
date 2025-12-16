@@ -23,6 +23,8 @@ export interface InterBrainSettings {
 	openaiApiKey: string;
 	groqApiKey: string;
 	xaiApiKey: string;
+	defaultAIProvider: string;  // 'claude' | 'ollama' | 'openai' | 'groq' | 'xai'
+	offlineMode: boolean;
 	radiclePassphrase: string;
 	userEmail: string;
 	hasLaunchedBefore: boolean;
@@ -37,6 +39,8 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	openaiApiKey: '',
 	groqApiKey: '',
 	xaiApiKey: '',
+	defaultAIProvider: 'claude',  // Claude as default (highest quality)
+	offlineMode: false,
 	radiclePassphrase: '',
 	userEmail: '',
 	hasLaunchedBefore: false,

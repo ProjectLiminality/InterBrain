@@ -93,6 +93,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Initialize AI Magic inference service with all configured API keys
     initializeInferenceService({
+      defaultProvider: (this.settings.defaultAIProvider || 'claude') as any,
+      offlineMode: this.settings.offlineMode ?? false,
+      preferLocal: false, // Legacy field, ignored
       claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined,
       openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
       groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,

@@ -40,16 +40,18 @@ export async function checkAIMagicStatus(claudeApiKey: string): Promise<FeatureS
 			available: false,
 			status: 'not-installed',
 			message: 'No AI providers configured',
-			details: 'Configure Claude API key or start Ollama for AI features'
+			details: 'Configure an API key or start Ollama for AI features'
 		};
 	}
 
-	if (readyProviders.length === 2) {
+	// At least one provider is ready
+	if (hasLocal && hasRemote) {
+		const remoteCount = readyProviders.filter(s => s.type === 'remote').length;
 		return {
 			available: true,
 			status: 'ready',
-			message: 'All providers ready',
-			details: 'Both local (Ollama) and remote (Claude) AI available'
+			message: `${readyProviders.length} providers ready`,
+			details: `Local AI + ${remoteCount} remote provider${remoteCount > 1 ? 's' : ''} available`
 		};
 	}
 
@@ -58,16 +60,17 @@ export async function checkAIMagicStatus(claudeApiKey: string): Promise<FeatureS
 			available: true,
 			status: 'ready',
 			message: 'Local AI ready',
-			details: 'Ollama running. Add Claude API key for remote fallback.'
+			details: 'Ollama running. Add an API key for remote fallback.'
 		};
 	}
 
 	if (hasRemote && !hasLocal) {
+		const remoteCount = readyProviders.length;
 		return {
 			available: true,
-			status: 'warning',
-			message: 'Remote AI only',
-			details: 'Claude configured. Start Ollama for offline/private AI.'
+			status: 'ready',
+			message: `${remoteCount} remote provider${remoteCount > 1 ? 's' : ''} ready`,
+			details: 'Start Ollama for offline/private AI.'
 		};
 	}
 
@@ -106,8 +109,8 @@ export function createAIMagicSettingsSection(
 		cls: 'setting-item-description'
 	});
 
-	// Provider Status Overview
-	createProviderStatusSection(containerEl);
+	// Provider Status Overview (with default provider selection)
+	createProviderStatusSection(containerEl, plugin);
 
 	// Remote Providers Section
 	createRemoteProvidersSection(containerEl, plugin);
@@ -116,17 +119,26 @@ export function createAIMagicSettingsSection(
 	createLocalAISection(containerEl, plugin, refreshDisplay);
 
 	// Preferences Section
-	createPreferencesSection(containerEl);
-
-	// Advanced Section (collapsible)
-	createAdvancedSection(containerEl, plugin, refreshDisplay);
+	createPreferencesSection(containerEl, plugin);
 }
 
 /**
- * Create provider status overview
+ * Map provider display names to provider keys
+ */
+const PROVIDER_NAME_TO_KEY: Record<string, string> = {
+	'Claude': 'claude',
+	'Ollama': 'ollama',
+	'OpenAI': 'openai',
+	'Groq': 'groq',
+	'xAI Grok': 'xai'
+};
+
+/**
+ * Create provider status overview with default provider selection
  */
 async function createProviderStatusSection(
-	containerEl: HTMLElement
+	containerEl: HTMLElement,
+	plugin: InterBrainPlugin
 ): Promise<void> {
 	const section = containerEl.createDiv({ cls: 'interbrain-provider-status-section' });
 	section.createEl('h4', { text: 'Provider Status' });
@@ -136,9 +148,10 @@ async function createProviderStatusSection(
 	try {
 		const service = getInferenceService();
 		const statuses = await service.getProvidersStatus();
+		const currentDefault = plugin.settings.defaultAIProvider || 'claude';
 
 		for (const providerStatus of statuses) {
-			createProviderStatusItem(statusGrid, providerStatus);
+			createProviderStatusItem(statusGrid, providerStatus, currentDefault, plugin, service);
 		}
 	} catch {
 		statusGrid.createEl('p', {
@@ -149,10 +162,44 @@ async function createProviderStatusSection(
 }
 
 /**
- * Create individual provider status item
+ * Create individual provider status item with default selection radio
  */
-function createProviderStatusItem(container: HTMLElement, status: ProviderStatus): void {
+function createProviderStatusItem(
+	container: HTMLElement,
+	status: ProviderStatus,
+	currentDefault: string,
+	plugin: InterBrainPlugin,
+	service: ReturnType<typeof getInferenceService>
+): void {
 	const item = container.createDiv({ cls: 'status-item' });
+	item.style.display = 'flex';
+	item.style.alignItems = 'center';
+	item.style.gap = '8px';
+
+	const providerKey = PROVIDER_NAME_TO_KEY[status.name] || status.name.toLowerCase();
+	const isReady = status.status === 'ready';
+	const isDefault = currentDefault === providerKey;
+
+	// Radio button for default selection (only shown if ready)
+	const radioContainer = item.createDiv();
+	radioContainer.style.width = '20px';
+
+	if (isReady) {
+		const radio = radioContainer.createEl('input', {
+			type: 'radio',
+			attr: {
+				name: 'default-ai-provider',
+				value: providerKey
+			}
+		});
+		radio.checked = isDefault;
+		radio.style.cursor = 'pointer';
+		radio.addEventListener('change', async () => {
+			plugin.settings.defaultAIProvider = providerKey;
+			await plugin.saveSettings();
+			service.setDefaultProvider(providerKey as any);
+		});
+	}
 
 	const icon = status.status === 'ready' ? '✅' :
 		status.status === 'unavailable' ? '🔴' :
@@ -160,10 +207,22 @@ function createProviderStatusItem(container: HTMLElement, status: ProviderStatus
 
 	const typeLabel = status.type === 'local' ? '(Local)' : '(Remote)';
 
-	item.createSpan({
+	const labelContainer = item.createDiv();
+	labelContainer.style.flex = '1';
+
+	labelContainer.createSpan({
 		text: `${icon} ${status.name} ${typeLabel}`,
 		cls: 'status-label'
 	});
+
+	if (isDefault && isReady) {
+		const defaultBadge = labelContainer.createSpan({
+			text: ' ★ Default',
+			cls: 'status-default-badge'
+		});
+		defaultBadge.style.color = 'var(--text-accent)';
+		defaultBadge.style.fontSize = '0.85em';
+	}
 
 	item.createSpan({
 		text: status.message,
@@ -395,84 +454,33 @@ function createLocalAISection(
 		text: 'ollama.ai',
 		href: 'https://ollama.ai'
 	});
-}
 
-/**
- * Create preferences section
- */
-function createPreferencesSection(
-	containerEl: HTMLElement
-): void {
-	containerEl.createEl('h4', { text: 'Preferences' });
-
-	const service = getInferenceService();
-	const config = service.getConfig();
-
-	new Setting(containerEl)
-		.setName('Prefer Local AI')
-		.setDesc('Use Ollama when available, fall back to Claude if needed. When disabled (default), uses Claude for higher quality.')
-		.addToggle(toggle => toggle
-			.setValue(config.preferLocal)
-			.onChange(async (value) => {
-				service.updateConfig({ preferLocal: value });
-			}));
-
-	new Setting(containerEl)
-		.setName('Offline Mode')
-		.setDesc('Never make API calls - only use local AI (requires Ollama)')
-		.addToggle(toggle => toggle
-			.setValue(config.offlineMode)
-			.onChange(async (value) => {
-				service.updateConfig({ offlineMode: value });
-			}));
-
-	// Info about privacy and resilience
-	const infoDiv = containerEl.createDiv({ cls: 'interbrain-info-note' });
-	infoDiv.style.marginTop = '12px';
-	infoDiv.style.padding = '12px';
-	infoDiv.style.borderRadius = '4px';
-	infoDiv.createEl('p', {
-		text: 'Local AI benefits: Your data stays on your machine. Works offline. Reduces network dependence.',
-		cls: 'setting-item-description'
-	});
-}
-
-/**
- * Create advanced section for power users
- */
-function createAdvancedSection(
-	containerEl: HTMLElement,
-	plugin: InterBrainPlugin,
-	refreshDisplay?: () => Promise<void>
-): void {
-	const details = containerEl.createEl('details', { cls: 'interbrain-advanced-section' });
+	// Advanced Ollama settings (collapsible)
+	const details = containerEl.createEl('details', { cls: 'interbrain-advanced-ollama' });
 	details.style.marginTop = '16px';
 
-	const summary = details.createEl('summary', { text: '⚙️ Advanced Settings' });
+	const summary = details.createEl('summary', { text: '⚙️ Advanced Ollama Settings' });
 	summary.style.cursor = 'pointer';
 	summary.style.fontWeight = 'bold';
+	summary.style.fontSize = '0.9em';
 
-	const content = details.createDiv();
-	content.style.padding = '12px 0';
+	const advancedContent = details.createDiv();
+	advancedContent.style.padding = '12px 0';
 
-	content.createEl('p', {
+	advancedContent.createEl('p', {
 		text: 'For power users who want to use custom Ollama models.',
 		cls: 'setting-item-description'
 	});
 
-	const service = getInferenceService();
-	const ollamaProvider = service.getOllamaProvider();
-
 	// Custom model input
-	new Setting(content)
-		.setName('Custom Ollama Model')
-		.setDesc('Enter a model identifier to use (e.g., "codellama:13b"). Must be pulled via terminal first.')
+	new Setting(advancedContent)
+		.setName('Custom Model')
+		.setDesc('Enter a model identifier (e.g., "codellama:13b"). Must be pulled via terminal first.')
 		.addText(text => {
 			text
 				.setPlaceholder('e.g., codellama:13b')
 				.onChange(async (value) => {
 					if (value && ollamaProvider) {
-						// Update all complexity tiers to use custom model
 						ollamaProvider.updateConfig({
 							models: {
 								trivial: value,
@@ -492,26 +500,45 @@ function createAdvancedSection(
 
 	// Show currently configured models
 	if (ollamaProvider) {
-		const modelInfo = content.createDiv();
-		modelInfo.style.marginTop = '12px';
-		modelInfo.style.padding = '8px';
-		modelInfo.style.borderRadius = '4px';
-
 		const config = service.getConfig();
 		const ollamaConfig = config.ollama;
 		if (ollamaConfig?.models) {
+			const modelInfo = advancedContent.createDiv();
+			modelInfo.style.marginTop = '8px';
 			modelInfo.createEl('p', {
-				text: `Current models: Trivial=${ollamaConfig.models.trivial || 'default'}, Standard=${ollamaConfig.models.standard || 'default'}, Complex=${ollamaConfig.models.complex || 'default'}`,
+				text: `Current: ${ollamaConfig.models.standard || 'default'}`,
 				cls: 'setting-item-description'
 			});
 		}
 	}
 
-	// How to pull custom models
-	content.createEl('p', {
+	advancedContent.createEl('p', {
 		text: 'To pull a custom model, run in terminal: ollama pull <model-name>',
 		cls: 'setting-item-description'
 	});
+}
+
+/**
+ * Create preferences section
+ */
+function createPreferencesSection(
+	containerEl: HTMLElement,
+	plugin: InterBrainPlugin
+): void {
+	containerEl.createEl('h4', { text: 'Preferences' });
+
+	const service = getInferenceService();
+
+	new Setting(containerEl)
+		.setName('Offline Mode')
+		.setDesc('Never make API calls - only use local AI (requires Ollama). Data never leaves your machine.')
+		.addToggle(toggle => toggle
+			.setValue(plugin.settings.offlineMode ?? false)
+			.onChange(async (value) => {
+				plugin.settings.offlineMode = value;
+				await plugin.saveSettings();
+				service.updateConfig({ offlineMode: value });
+			}));
 }
 
 /**

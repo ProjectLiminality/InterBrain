@@ -164,10 +164,17 @@ export interface XAIConfig {
 }
 
 /**
+ * Provider identifiers for default provider selection
+ */
+export type ProviderKey = 'claude' | 'ollama' | 'openai' | 'groq' | 'xai';
+
+/**
  * Full AI Magic configuration stored in settings
  */
 export interface AIMagicConfig {
-	/** Prefer local AI when available */
+	/** Default provider to use (if available) */
+	defaultProvider?: ProviderKey;
+	/** Prefer local AI when available (legacy, use defaultProvider instead) */
 	preferLocal: boolean;
 	/** Offline mode - never make API calls */
 	offlineMode: boolean;
