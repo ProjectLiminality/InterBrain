@@ -86,11 +86,11 @@ export const PROVIDER_DEFAULTS: Record<string, Omit<OpenAICompatibleConfig, 'api
 	},
 	xai: {
 		name: 'xAI Grok',
-		baseUrl: 'https://api.x.ai',
+		baseUrl: 'https://api.x.ai/v1',
 		models: {
-			trivial: 'grok-beta',
-			standard: 'grok-beta',
-			complex: 'grok-beta'
+			trivial: 'grok-3-mini-fast',
+			standard: 'grok-3-mini',
+			complex: 'grok-4'
 		}
 	}
 };
@@ -219,8 +219,13 @@ export class OpenAICompatibleProvider implements AIProvider {
 			: this.apiKey;
 
 		try {
+			// Build URL - baseUrl may or may not include /v1
+			const url = this.baseUrl.endsWith('/v1')
+				? `${this.baseUrl}/chat/completions`
+				: `${this.baseUrl}/v1/chat/completions`;
+
 			const response = await requestUrl({
-				url: `${this.baseUrl}/v1/chat/completions`,
+				url,
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
