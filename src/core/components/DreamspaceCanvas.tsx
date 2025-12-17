@@ -713,7 +713,6 @@ export default function DreamspaceCanvas() {
         onEnter={() => {
           hideTutorialPortal();
         }}
-        logoPath="src/features/tutorial/assets/ProjectLiminalityLogo.png"
       />
     </div>
   );

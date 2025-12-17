@@ -1,6 +1,20 @@
 import React, { useMemo } from 'react';
 import { Html } from '@react-three/drei';
 
+/**
+ * CSS radial gradient for star glow effect
+ * Exported for reuse in other components (e.g., TutorialPortalOverlay)
+ */
+export const STAR_GRADIENT = `radial-gradient(circle,
+  rgba(255, 255, 255, 1) 0%,
+  rgba(255, 255, 255, 0.8) 5%,
+  rgba(255, 255, 255, 0.5) 12%,
+  rgba(255, 255, 255, 0.25) 22%,
+  rgba(255, 255, 255, 0.1) 35%,
+  rgba(255, 255, 255, 0.03) 55%,
+  rgba(255, 255, 255, 0) 80%
+)`;
+
 interface Star3DProps {
   position: [number, number, number];
   size?: number;
@@ -58,16 +72,7 @@ export default function Star3D({ position, size = 7500 }: Star3DProps) {
           width: `${size}px`,
           height: `${size}px`,
           borderRadius: '50%',
-          // Pure CSS radial gradient - white center fading to transparent
-          background: `radial-gradient(circle,
-            rgba(255, 255, 255, 1) 0%,
-            rgba(255, 255, 255, 0.8) 5%,
-            rgba(255, 255, 255, 0.5) 12%,
-            rgba(255, 255, 255, 0.25) 22%,
-            rgba(255, 255, 255, 0.1) 35%,
-            rgba(255, 255, 255, 0.03) 55%,
-            rgba(255, 255, 255, 0) 80%
-          )`,
+          background: STAR_GRADIENT,
         }}
       />
     </Html>

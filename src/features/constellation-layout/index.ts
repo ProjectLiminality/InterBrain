@@ -11,7 +11,7 @@ export { registerConstellationDebugCommands } from './commands';
 export { default as ConstellationEdges, shouldShowConstellationEdges, useConstellationStats } from './components/ConstellationEdges';
 export { default as DreamSongThread3D, groupEdgesByDreamSong, sortEdgesBySequence, extractDreamNodeIdFromPath } from './components/DreamSongThread3D';
 export { default as Edge3D, isValidEdge, calculateArcMidpoint } from './components/Edge3D';
-export { default as Star3D } from './components/Star3D';
+export { default as Star3D, STAR_GRADIENT } from './components/Star3D';
 export { default as SphereRotationControls } from './components/SphereRotationControls';
 
 // Orchestrator
