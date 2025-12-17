@@ -1,33 +1,73 @@
 # Tutorial Feature
 
-Onboarding system with Manim-style text animations for first-time user experience.
+Onboarding system with Manim-style text animations and portal entry experience for first-time users.
 
 ## Purpose
 
-Provides a guided introduction to InterBrain/DreamSpace with elegant 3Blue1Brown-style text animations that draw and fill in 3D space.
+Provides a guided introduction to InterBrain/DreamSpace with:
+- Portal overlay entry screen with Project Liminality logo
+- Ambient music during onboarding
+- Elegant 3Blue1Brown-style text animations in 3D space
+- GoldenDot attention-steering animations between nodes
 
 ## Directory Structure
 
 ```
 tutorial/
-├── index.ts              # Barrel exports
-├── TutorialService.ts    # State management & step progression
-├── TutorialCommands.ts   # Obsidian command registrations
-├── TutorialOverlay.tsx   # 3D overlay rendered in DreamSpace
-├── TutorialModal.ts      # Native Obsidian modal alternative
-├── ManimText.tsx         # SVG text animation component
-├── tutorial-styles.css   # Styling for tutorial UI
-├── fonts/                # TeX Gyre Termes font files
-└── TUTORIAL_DESIGN.md    # Design vision document
+├── index.ts                    # Barrel exports
+├── types.ts                    # Type definitions (TutorialStep, TutorialState, etc.)
+├── store/slice.ts              # Zustand store slice
+├── TutorialService.ts          # Legacy service (step progression, callbacks)
+├── TutorialCommands.ts         # Obsidian command registrations
+├── TutorialRunner.tsx          # Step execution orchestrator
+├── TutorialOverlay.tsx         # 3D overlay rendered in DreamSpace
+├── TutorialPortalOverlay.tsx   # Full-screen portal entry experience
+├── TutorialModal.ts            # Native Obsidian modal alternative
+├── ManimText.tsx               # SVG text animation component
+├── GoldenDot.tsx               # Attention-steering dot animation
+├── settings-section.ts         # Settings tab section (music attribution)
+├── components/
+│   └── ProjectLiminalityLogo.tsx  # SVG logo with animatable elements
+├── services/
+│   ├── music-service.ts        # Audio playback with fade in/out
+│   └── demo-vault-service.ts   # Demo node management (WIP)
+├── utils/
+│   ├── projection.ts           # 3D-to-2D projection utilities
+│   └── hit-detection.ts        # Raycasting hit detection
+├── steps/
+│   └── mvp-steps.ts            # Tutorial step definitions
+├── assets/
+│   └── TutorialMusic.mp3       # Ambient music track
+├── fonts/                      # TeX Gyre Termes font files
+├── tutorial-styles.css         # Tutorial UI styling
+├── TUTORIAL_MVP.md             # MVP specification
+└── TUTORIAL_VISION_FULL.md     # Full vision document
 ```
 
 ## Main Exports
 
-- `registerTutorialCommands(plugin, uiService)` - Register Obsidian commands
-- `TutorialOverlay` - React component for 3D space rendering
+### Components
+- `TutorialPortalOverlay` - Full-screen portal entry with logo, stars, and animation
+- `TutorialOverlay` - 3D space overlay for ManimText and GoldenDot
 - `TutorialModal` - Obsidian modal for 2D rendering
-- `tutorialService` - Singleton service for state management
-- `ManimText` - Reusable SVG text animation component
+- `TutorialRunner` - Step execution orchestrator
+- `ManimText` - SVG text animation (stroke draw → fill → stroke fade)
+- `GoldenDot` - Attention-steering dot between nodes
+- `ProjectLiminalityLogo` - SVG logo with animatable opacity props
+
+### Services
+- `tutorialService` - Legacy singleton for state/callbacks
+- `musicService` - Audio playback with fade controls
+- `demoVaultService` - Demo node symlink management (WIP)
+
+### Store
+- `createTutorialSlice` - Zustand slice for tutorial state
+- `TutorialSlice` - TypeScript interface
+
+### Utilities
+- `registerTutorialCommands(plugin)` - Register Obsidian commands
+- `createTutorialSettingsSection()` - Settings tab section
+- Projection utilities for 3D positioning
 
 ## Commands
 
@@ -38,71 +78,63 @@ tutorial/
 | `interbrain:reset-tutorial` | Reset tutorial state (debug) |
 | `interbrain:skip-tutorial` | Skip/complete tutorial |
 
+## Portal Overlay
+
+The `TutorialPortalOverlay` provides the entry experience:
+
+### Features
+- Project Liminality SVG logo with blue/red circles and white "A" lines
+- Logo tilts toward mouse cursor (like DreamNodes)
+- Hover: logo straightens, scales slightly, shows "Enter DreamSpace" text
+- Click: staggered animation (fade then scale), music starts, reveals DreamSpace
+- Star field background with proper masking during portal animation
+
+### Animation Timing
+- **Fade-out** (red circle, lines, backing): 0% → 50% of duration
+- **Scale-up** (logo, hole): 25% → 100% of duration
+- Total duration: 1500ms
+
 ## Dependencies
 
-- `framer-motion` - Animation library for SVG path animations
-- `opentype.js` - Font parsing to convert text to SVG paths
-- `@react-three/drei` - Billboard and Html components for 3D positioning
+- `framer-motion` - SVG path animations for ManimText
+- `opentype.js` - Font parsing for text-to-SVG conversion
+- `@react-three/drei` - Billboard and Html for 3D positioning
 
 ## Integration Points
 
 - **main.ts**: Commands registered via `registerTutorialCommands()`
-- **DreamspaceCanvas.tsx**: `<TutorialOverlay />` rendered inside Canvas
+- **DreamspaceCanvas.tsx**: `<TutorialOverlay />` and `<TutorialPortalOverlay />` rendered
+- **interbrain-store.ts**: Tutorial slice integrated
+- **SettingsTab.ts**: Music attribution section
+
+## Current Status
+
+### Completed
+- [x] Portal overlay with SVG logo and animations
+- [x] Music service with fade in/out
+- [x] Music attribution in settings
+- [x] Star field with proper masking
+- [x] ManimText component
+- [x] GoldenDot component
+- [x] Tutorial store slice
+- [x] Basic step definitions
+
+### In Progress / TODO
+- [ ] Connect portal to tutorial flow (currently just animates)
+- [ ] First-startup detection (show portal automatically)
+- [ ] Demo vault node symlinking
+- [ ] Full tutorial step sequence
+- [ ] Tutorial completion persistence
+
+## Music Attribution
+
+Tutorial music: "Grant's Etude" by Vincent Rubinetti from "The Music of 3Blue1Brown"
+- Bandcamp: https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
+- License: Used with attribution per artist guidelines
 
 ## Notes
 
 - Uses localStorage for tutorial completion persistence
-- ManimText creates three-phase animation: stroke draw → fill reveal → stroke fade
-- Tutorial steps auto-advance based on duration property
 - Font files (TeX Gyre Termes) bundled for consistent typography
-
-## GoldenDot Animation System
-
-The GoldenDot component provides attention-steering animations between DreamNodes.
-
-### Current Implementation
-
-- **Hit detection**: Uses raycasting (same as cursor hover) to detect when the dot enters/exits node hit spheres
-- **Glow handoff**: Dot opacity tied to hit detection - fades out when inside a hit sphere, triggering node glow
-- **Edge positioning**: Dot starts/ends at node edges (not centers) via `calculateProjectedEdgePositions()`
-- **Perspective projection**: 3D positions projected to Z=-30 plane for correct visual alignment
-
-### Known Limitations
-
-The hit detection approach introduces slight input lag on hover state transitions. For production-quality animations, consider:
-
-1. **Hardcoded timing**: Pre-calculate when glow states should trigger based on animation progress (t value) rather than runtime hit detection
-2. **Synchronous glow/opacity**: Drive both dot opacity and node glow from the same animation progress value
-3. **CSS-only transitions**: Remove hit detection entirely and use pure CSS keyframe animations for guaranteed smoothness
-
-The current system is good for prototyping and works well enough for tutorial purposes, but a hardcoded approach would give full control over timing and eliminate any responsiveness issues.
-
-## TODO: Tutorial Music
-
-### Permission Status: PENDING
-
-The tutorial should have ambient music playing (from "The Music of 3Blue1Brown" by Vincent Rubinetti).
-
-**Before enabling music playback:**
-
-1. [ ] Update YouTube video descriptions to credit Vincent Rubinetti for past videos using his music
-2. [ ] Fill out the official permission form: https://vincerubinetti.github.io/using-the-music-of-3blue1brown/
-   - Request covers: retroactive permission for past educational/unmonetized YouTube videos
-   - Request covers: future YouTube videos
-   - Request covers: InterBrain tutorial system (open source software)
-   - Be transparent about prior usage without knowing about the form
-   - Confirm attribution will be provided in all contexts
-3. [ ] Wait for approval before bundling music in the plugin
-
-**Technical implementation (can proceed in parallel):**
-
-- [ ] Add music playback service (HTML5 Audio API)
-- [ ] Start music when tutorial begins
-- [ ] Loop if tutorial takes longer than track duration (~5 min)
-- [ ] Stop music when tutorial ends or is skipped
-- [ ] Add attribution in plugin settings: "Tutorial music: [Track] by Vincent Rubinetti from 'The Music of 3Blue1Brown'" with link to https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
-
-**Resources:**
-- Bandcamp: https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
-- Permission form: https://vincerubinetti.github.io/using-the-music-of-3blue1brown/
-- Vincent's website: https://vincentrubinetti.com/
+- Portal overlay uses React Portal to escape container constraints
+- Star filtering uses constant offset for proper alignment with blue circle

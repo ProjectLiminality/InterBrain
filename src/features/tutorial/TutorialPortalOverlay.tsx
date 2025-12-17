@@ -67,10 +67,10 @@ interface TutorialPortalOverlayProps {
 const PORTAL_TRANSITION_DURATION = 1500;
 
 // Staggered animation timing (as fractions of total duration)
-// Fade-out: 0% → 75% (first 3/4)
+// Fade-out: 0% → 50% (first half)
 // Scale-up: 25% → 100% (last 3/4)
 const FADE_START = 0;
-const FADE_END = 0.75;
+const FADE_END = 0.5;
 const SCALE_START = 0.25;
 const SCALE_END = 1.0;
 
