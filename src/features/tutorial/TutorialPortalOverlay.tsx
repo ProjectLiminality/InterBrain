@@ -43,10 +43,9 @@ function generateStarField(count: number, seed: number = 42): Array<{
     const x = seededRandom(i, 1) * 100; // 0-100%
     const y = seededRandom(i, 2) * 100; // 0-100%
 
-    // Size distribution: tighter range, all viewport-relative
-    // Base size 0.3vh to 0.8vh (much tighter variation)
+    // Size distribution: viewport-relative
     const sizeRandom = seededRandom(i, 3);
-    const sizeVh = 0.6 + sizeRandom * 1.0; // 0.6-1.6vh range (2x larger)
+    const sizeVh = 1.2 + sizeRandom * 2.0; // 1.2-3.2vh range
 
     // Opacity: slight variation
     const opacity = 0.4 + seededRandom(i, 4) * 0.5;
@@ -224,6 +223,10 @@ export const TutorialPortalOverlay: React.FC<TutorialPortalOverlayProps> = ({
   // Logo is logoSizeVh tall, so the base hole radius in vh is: logoSizeVh * 0.4825
   const baseHoleRadiusVh = logoSizeVh * 0.4825;
 
+  // For star filtering, use the OUTER edge of the blue circle (49 + 0.75 = 49.75)
+  // This ensures stars disappear right at the visible edge of the blue circle
+  const blueCircleOuterRadiusVh = logoSizeVh * 0.4975;
+
   const overlayContent = (
     <div
       ref={containerRef}
@@ -305,20 +308,29 @@ export const TutorialPortalOverlay: React.FC<TutorialPortalOverlayProps> = ({
         }}
       >
         {stars.map((star, i) => {
-          // Calculate if star is outside the current hole
-          // Star position is in % (0-100), center is at 50%, 50%
-          // Hole radius as percentage of viewport height
-          const holeRadiusPercent = baseHoleRadiusVh * animatedScale;
+          // Only filter stars when entering portal (animation in progress)
+          // Before click, show all stars - the black hole cover hides them anyway
+          if (isEntering) {
+            // Calculate if star is outside the current hole
+            // Star position is in % (0-100), center is at 50%, 50%
+            //
+            // Filter radius tuned to match the visible blue circle edge
+            // Use constant offset (not scaling factor) so it scales proportionally with blue circle
+            const holeRadiusAsPercentOfHeight = (blueCircleOuterRadiusVh * animatedScale) - 10;
 
-          // Distance from center in viewport-relative units
-          const dx = star.x - 50;
-          const dy = star.y - 50;
-          const distancePercent = Math.sqrt(dx * dx + dy * dy);
+            // Star distance from center (50%, 50%) in percentage units
+            // Note: This treats x and y equally, which works for square viewports
+            // For non-square, the circle appears elliptical in star-space, but
+            // since the logo is centered and vh-based, we compare against height
+            const dx = star.x - 50;
+            const dy = star.y - 50;
+            const distancePercent = Math.sqrt(dx * dx + dy * dy);
 
-          // Only render stars outside the hole (with small buffer for edge softness)
-          const isOutsideHole = distancePercent > holeRadiusPercent * 0.95;
+            // Only render stars outside the hole
+            const isOutsideHole = distancePercent > holeRadiusAsPercentOfHeight;
 
-          if (!isOutsideHole) return null;
+            if (!isOutsideHole) return null;
+          }
 
           return (
             <div
