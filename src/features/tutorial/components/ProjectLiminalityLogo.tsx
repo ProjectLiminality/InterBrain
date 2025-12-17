@@ -134,35 +134,6 @@ export const ProjectLiminalityLogo: React.FC<ProjectLiminalityLogoProps> = ({
 };
 
 /**
- * Blue circle only - useful for masking
- */
-export const LogoBlueCircle: React.FC<{
-  size?: string | number;
-  fill?: boolean;
-  opacity?: number;
-  style?: React.CSSProperties;
-}> = ({ size = '100%', fill = false, opacity = 1, style }) => {
-  return (
-    <svg
-      viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
-      width={size}
-      height={size}
-      style={style}
-    >
-      <circle
-        cx={BLUE_CENTER.x}
-        cy={BLUE_CENTER.y}
-        r={fill ? BLUE_RADIUS + BLUE_STROKE_WIDTH / 2 : BLUE_RADIUS}
-        fill={fill ? LOGO_BLUE : 'none'}
-        stroke={fill ? 'none' : LOGO_BLUE}
-        strokeWidth={fill ? 0 : BLUE_STROKE_WIDTH}
-        opacity={opacity}
-      />
-    </svg>
-  );
-};
-
-/**
  * Export constants for external use (e.g., creating masks)
  */
 export const LOGO_DIMENSIONS = {

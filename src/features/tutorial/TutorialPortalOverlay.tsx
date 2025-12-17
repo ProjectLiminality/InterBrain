@@ -14,15 +14,10 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import ReactDOM from 'react-dom';
 import { serviceManager } from '../../core/services/service-manager';
 import { musicService } from './services/music-service';
-import { useInterBrainStore } from '../../core/store/interbrain-store';
+// TODO: Re-enable when tutorial flow is connected
+// import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { STAR_GRADIENT } from '../constellation-layout';
 import { ProjectLiminalityLogo, LOGO_DIMENSIONS } from './components/ProjectLiminalityLogo';
-
-// Debug flag - set to true to show PNG overlay for proportion comparison
-const DEBUG_SHOW_PNG_OVERLAY = false;
-
-// Debug flag - set to true to make black background transparent to test masking
-const DEBUG_TRANSPARENT_BACKGROUND = true;
 
 /**
  * Generate a deterministic but organic-looking star field
@@ -90,31 +85,12 @@ export const TutorialPortalOverlay: React.FC<TutorialPortalOverlayProps> = ({
   const [animatedFade, setAnimatedFade] = useState(1); // Animated opacity for fade elements (1 = visible, 0 = hidden)
   const [tiltX, setTiltX] = useState(0);
   const [tiltY, setTiltY] = useState(0);
-  const [pngUrl, setPngUrl] = useState<string | null>(null); // For debug overlay
   const containerRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
 
-  const startTutorial = useInterBrainStore(state => state.startTutorial);
-
   // Generate star field once (memoized)
   const stars = useMemo(() => generateStarField(80, 42), []);
-
-  // Load PNG for debug overlay
-  useEffect(() => {
-    if (!DEBUG_SHOW_PNG_OVERLAY) return;
-    const app = serviceManager.getApp();
-    if (app) {
-      try {
-        const url = app.vault.adapter.getResourcePath(
-          '.obsidian/plugins/interbrain/src/features/tutorial/assets/ProjectLiminalityLogo.png'
-        );
-        setPngUrl(url);
-      } catch (error) {
-        console.warn('[TutorialPortal] Failed to load PNG for debug:', error);
-      }
-    }
-  }, []);
 
   // Animate scale and fade with staggered timing when entering portal
   useEffect(() => {
@@ -412,21 +388,6 @@ export const TutorialPortalOverlay: React.FC<TutorialPortalOverlayProps> = ({
             pointerEvents: 'none',
           }}
         />
-        {/* Debug: PNG overlay for proportion comparison */}
-        {DEBUG_SHOW_PNG_OVERLAY && pngUrl && (
-          <img
-            src={pngUrl}
-            alt="PNG reference"
-            style={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              pointerEvents: 'none',
-              opacity: 0.5, // Semi-transparent to see both
-            }}
-          />
-        )}
       </div>
 
       {/* Enter DreamSpace text - absolutely positioned below logo center */}

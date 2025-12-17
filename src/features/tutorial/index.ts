@@ -51,3 +51,4 @@ export { ManimText } from './ManimText';
 export { GoldenDot } from './GoldenDot';
 export { TutorialRunner } from './TutorialRunner';
 export { TutorialPortalOverlay } from './TutorialPortalOverlay';
+export { ProjectLiminalityLogo, LOGO_DIMENSIONS, LOGO_BLUE, LOGO_RED } from './components/ProjectLiminalityLogo';
