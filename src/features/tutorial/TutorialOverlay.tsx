@@ -93,6 +93,7 @@ export const TutorialOverlay: React.FC = () => {
             duration={goldenDot.duration}
             size={goldenDot.size}
             easing={goldenDot.easing}
+            hitDetectionNodeIds={goldenDot.hitDetectionNodeIds}
             onComplete={handleGoldenDotComplete}
             visible={true}
           />
@@ -105,6 +106,7 @@ export const TutorialOverlay: React.FC = () => {
             duration={goldenDot.duration}
             size={goldenDot.size}
             easing={goldenDot.easing}
+            hitDetectionNodeIds={goldenDot.hitDetectionNodeIds}
             onComplete={handleGoldenDotComplete}
             visible={true}
           />

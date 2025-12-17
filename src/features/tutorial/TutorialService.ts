@@ -30,6 +30,8 @@ export interface GoldenDotPositionAnimation {
   duration?: number;
   size?: number;
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  /** Node IDs to track for hit detection (triggers hover state) */
+  hitDetectionNodeIds?: string[];
 }
 
 /**
@@ -44,6 +46,8 @@ export interface GoldenDotNodeAnimation {
   duration?: number;
   size?: number;
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  /** Node IDs to track for hit detection (triggers hover state) */
+  hitDetectionNodeIds?: string[];
 }
 
 export type GoldenDotAnimation = GoldenDotPositionAnimation | GoldenDotNodeAnimation;

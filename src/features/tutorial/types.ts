@@ -36,6 +36,8 @@ export interface TutorialStep {
     controlPoints?: [number, number, number][];
     duration?: number;
     easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+    /** Node IDs to track for hit detection (triggers hover state automatically) */
+    hitDetectionNodeIds?: string[];
   };
 
   /** Golden dot animation - node-based (resolves positions from store) */
@@ -46,6 +48,8 @@ export interface TutorialStep {
     controlPoints?: [number, number, number][];
     duration?: number;
     easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+    /** Node IDs to track for hit detection (triggers hover state automatically) */
+    hitDetectionNodeIds?: string[];
   };
 
   /** Node to highlight with golden glow */

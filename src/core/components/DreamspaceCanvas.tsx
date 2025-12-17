@@ -144,6 +144,8 @@ export default function DreamspaceCanvas() {
       });
       // Also register orchestrator with service manager for global access (e.g., tutorial commands)
       serviceManager.setSpatialOrchestratorRef(spatialOrchestratorRef.current);
+      // Register hit sphere refs for tutorial hit detection
+      serviceManager.setHitSphereRefs(hitSphereRefs);
     }
     // Cleanup on unmount
     return () => {

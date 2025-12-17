@@ -55,3 +55,24 @@ tutorial/
 - ManimText creates three-phase animation: stroke draw → fill reveal → stroke fade
 - Tutorial steps auto-advance based on duration property
 - Font files (TeX Gyre Termes) bundled for consistent typography
+
+## GoldenDot Animation System
+
+The GoldenDot component provides attention-steering animations between DreamNodes.
+
+### Current Implementation
+
+- **Hit detection**: Uses raycasting (same as cursor hover) to detect when the dot enters/exits node hit spheres
+- **Glow handoff**: Dot opacity tied to hit detection - fades out when inside a hit sphere, triggering node glow
+- **Edge positioning**: Dot starts/ends at node edges (not centers) via `calculateProjectedEdgePositions()`
+- **Perspective projection**: 3D positions projected to Z=-30 plane for correct visual alignment
+
+### Known Limitations
+
+The hit detection approach introduces slight input lag on hover state transitions. For production-quality animations, consider:
+
+1. **Hardcoded timing**: Pre-calculate when glow states should trigger based on animation progress (t value) rather than runtime hit detection
+2. **Synchronous glow/opacity**: Drive both dot opacity and node glow from the same animation progress value
+3. **CSS-only transitions**: Remove hit detection entirely and use pure CSS keyframe animations for guaranteed smoothness
+
+The current system is good for prototyping and works well enough for tutorial purposes, but a hardcoded approach would give full control over timing and eliminate any responsiveness issues.

@@ -26,6 +26,16 @@ export { demoVaultService, DemoVaultService, DEMO_VAULT_CONFIG } from './service
 // Step definitions
 export { MVP_TUTORIAL_STEPS, getStepsBySegment, getStepById } from './steps/mvp-steps';
 
+// Utilities
+export {
+  projectToZPlane,
+  projectToZPlaneWithOffset,
+  projectMidpointToZPlane,
+  calculateEdgePositions,
+  calculateProjectedEdgePositions,
+} from './utils/projection';
+export { checkHitSphereIntersection, createHitDetectionTracker } from './utils/hit-detection';
+
 // Commands
 export { registerTutorialCommands } from './TutorialCommands';
 

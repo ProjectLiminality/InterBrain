@@ -11,6 +11,7 @@ interface DreamTalkSideProps {
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
+  isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
@@ -29,6 +30,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   isHovered,
   isEditModeActive: _isEditModeActive,
   isPendingRelationship,
+  isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
   nodeSize,
@@ -43,9 +45,9 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
 }) => {
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Treat pending relationship as forced hover state
-  // This shows name overlay and glow for related nodes in edit mode
-  const effectiveHover = isHovered || isPendingRelationship;
+  // Treat pending relationship or tutorial highlight as forced hover state
+  // This shows name overlay and glow for related nodes in edit mode or tutorial
+  const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
 
   return (
     <div

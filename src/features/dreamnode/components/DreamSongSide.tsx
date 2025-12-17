@@ -13,6 +13,7 @@ interface DreamSongSideProps {
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
+  isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
@@ -33,6 +34,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   isHovered,
   isEditModeActive: _isEditModeActive,
   isPendingRelationship,
+  isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
   nodeSize: _nodeSize,
@@ -75,8 +77,8 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   );
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Treat pending relationship as forced hover state
-  const effectiveHover = isHovered || isPendingRelationship;
+  // Treat pending relationship or tutorial highlight as forced hover state
+  const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);

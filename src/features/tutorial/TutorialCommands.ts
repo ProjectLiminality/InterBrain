@@ -4,6 +4,7 @@ import { serviceManager } from '../../core/services/service-manager';
 import { tutorialService } from './TutorialService';
 import { TutorialModal } from './TutorialModal';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { calculateProjectedEdgePositions } from './utils/projection';
 
 /**
  * Register tutorial commands for onboarding system
@@ -178,21 +179,47 @@ export function registerTutorialCommands(plugin: Plugin, uiService: UIService): 
         return;
       }
 
-      // Use actual rendered positions
-      const from: [number, number, number] = fromPos;
-      const to: [number, number, number] = toPos;
+      // Calculate edge positions (at hit sphere boundaries) and project to Z=-30
+      // This ensures:
+      // 1. Dot starts/ends at node edges, not centers
+      // 2. The slow easing animation happens outside the node's visual footprint
+      // 3. Hit detection still works (positions are slightly inside boundaries)
+      const DOT_Z_PLANE = -30;
+      const { from, to } = calculateProjectedEdgePositions(fromPos, toPos, DOT_Z_PLANE);
 
       console.log(`✨ Animating from "${fromNode?.node.name}" to "${toNode?.node.name}"`);
-      console.log(`✨ From position (rendered):`, from);
-      console.log(`✨ To position (rendered):`, to);
+      console.log(`✨ From node position:`, fromPos);
+      console.log(`✨ To node position:`, toPos);
+      console.log(`✨ Edge-projected from:`, from);
+      console.log(`✨ Edge-projected to:`, to);
 
-      tutorialService.animateGoldenDot({
-        from,
-        to,
-        duration: 2,
-        size: 120,
-        easing: 'easeInOut'
-      });
+      // Timing constants
+      const START_DELAY = 1000;  // Show start node glow for 1s before dot moves
+      const DOT_DURATION = 3;    // Dot travel time in seconds
+      const END_DELAY = 1000;    // Show end node glow for 1s after dot arrives
+
+      // Pre-highlight start node before animation begins
+      store.setHighlightedNodeId(fromNodeId);
+
+      // After start delay, begin the dot animation
+      setTimeout(() => {
+        tutorialService.animateGoldenDot({
+          from,
+          to,
+          duration: DOT_DURATION,
+          size: 120,
+          easing: 'easeInOut',
+          // Hit detection will automatically trigger hover on these nodes
+          hitDetectionNodeIds: [fromNodeId, toNodeId]
+        });
+
+        // After dot arrives, keep end glow for END_DELAY then clear
+        setTimeout(() => {
+          setTimeout(() => {
+            store.setHighlightedNodeId(null);
+          }, END_DELAY);
+        }, DOT_DURATION * 1000);
+      }, START_DELAY);
 
       uiService.showInfo(`Golden dot: ${fromNode?.node.name} → ${toNode?.node.name}`);
     }

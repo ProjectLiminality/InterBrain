@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Html } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { createHitDetectionTracker } from './utils/hit-detection';
 
 /**
  * Props for position-based GoldenDot (direct coordinates)
@@ -40,6 +41,10 @@ interface CommonProps {
   visible?: boolean;
   /** Easing function: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut' */
   easing?: 'linear' | 'easeInOut' | 'easeIn' | 'easeOut';
+  /** Node IDs to track for hit detection (triggers hover state on enter/exit) */
+  hitDetectionNodeIds?: string[];
+  /** Whether to auto-manage hover state via hit detection (default: true if hitDetectionNodeIds provided) */
+  autoHover?: boolean;
 }
 
 type GoldenDotProps = CommonProps & (PositionBasedProps | NodeBasedProps);
@@ -142,7 +147,15 @@ export const GoldenDot: React.FC<GoldenDotProps> = (props) => {
     onComplete,
     visible = true,
     easing = 'easeInOut',
+    hitDetectionNodeIds,
+    autoHover = true,
   } = props;
+
+  // Get camera for hit detection raycasting
+  const { camera } = useThree();
+
+  // Get store actions for hover state management
+  const setHighlightedNodeId = useInterBrainStore(state => state.setHighlightedNodeId);
 
   // Resolve positions - either from props or from store via node IDs
   const fromNodePosition = useNodePosition('fromNodeId' in props ? props.fromNodeId : undefined);
@@ -164,8 +177,18 @@ export const GoldenDot: React.FC<GoldenDotProps> = (props) => {
   const [position, setPosition] = useState<[number, number, number]>(from);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isVisible, setIsVisible] = useState(visible);
+  const [isInsideHitSphere, setIsInsideHitSphere] = useState(true); // Start invisible (assume inside start node)
   const startTimeRef = useRef<number | null>(null);
   const hasCompletedRef = useRef(false);
+  const hasCheckedInitialHit = useRef(false); // Track if we've done initial hit check
+
+  // Create hit detection tracker if node IDs are provided
+  const hitDetectionTracker = useMemo(() => {
+    if (hitDetectionNodeIds && hitDetectionNodeIds.length > 0) {
+      return createHitDetectionTracker(hitDetectionNodeIds);
+    }
+    return null;
+  }, [hitDetectionNodeIds]);
 
   // Compute control points (use provided or generate defaults)
   const [cp1, cp2] = controlPoints?.length === 2
@@ -182,9 +205,14 @@ export const GoldenDot: React.FC<GoldenDotProps> = (props) => {
     setPosition(from);
     setIsAnimating(true);
     setIsVisible(visible);
+    setIsInsideHitSphere(true); // Start invisible (will be validated on first frame)
     startTimeRef.current = null;
     hasCompletedRef.current = false;
-  }, [from, to, visible]);
+    hasCheckedInitialHit.current = false;
+
+    // Reset hit detection tracker for new animation
+    hitDetectionTracker?.reset();
+  }, [from, to, visible, hitDetectionTracker]);
 
   // Animation loop using R3F's useFrame
   useFrame((_, delta) => {
@@ -206,16 +234,50 @@ export const GoldenDot: React.FC<GoldenDotProps> = (props) => {
     const newPosition = cubicBezier(easedT, from, cp1, cp2, to);
     setPosition(newPosition);
 
+    // Hit detection for hover state management and opacity
+    if (hitDetectionTracker && autoHover) {
+      const { intersectedNodeId, didEnter, didExit } = hitDetectionTracker.update(newPosition, camera);
+
+      // On first frame, set initial highlight if starting inside a node
+      if (!hasCheckedInitialHit.current) {
+        hasCheckedInitialHit.current = true;
+        if (intersectedNodeId) {
+          setHighlightedNodeId(intersectedNodeId);
+          setIsInsideHitSphere(true);
+        }
+      }
+
+      if (didEnter) {
+        // Dot entered a node's hit sphere - trigger hover and fade dot
+        setHighlightedNodeId(didEnter);
+        setIsInsideHitSphere(true);
+      } else if (didExit) {
+        // Dot exited a node's hit sphere - clear hover and restore dot
+        setHighlightedNodeId(null);
+        setIsInsideHitSphere(false);
+      }
+    }
+
     // Check for completion
     if (rawT >= 1 && !hasCompletedRef.current) {
       hasCompletedRef.current = true;
       setIsAnimating(false);
       setIsVisible(false); // Vanish at destination
+
+      // Clear any lingering hover state on completion
+      if (hitDetectionTracker && autoHover) {
+        setHighlightedNodeId(null);
+        hitDetectionTracker.reset();
+      }
+
       onComplete?.();
     }
   });
 
   if (!isVisible) return null;
+
+  // Opacity drops to 0 when inside a hit sphere (glow handoff to node)
+  const dotOpacity = isInsideHitSphere ? 0 : 1;
 
   return (
     <Html
@@ -230,6 +292,8 @@ export const GoldenDot: React.FC<GoldenDotProps> = (props) => {
         maxHeight: 'none',
         width: `${size}px`,
         height: `${size}px`,
+        opacity: dotOpacity,
+        transition: 'opacity 0.15s ease-out', // Quick fade for seamless handoff
       }}
     >
       <div

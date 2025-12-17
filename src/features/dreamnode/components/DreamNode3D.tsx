@@ -127,7 +127,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Check global drag state
   const isDragging = useInterBrainStore(state => state.isDragging);
-  
+
+  // Tutorial highlight state - allows programmatic hover effect
+  const isTutorialHighlighted = useInterBrainStore(state =>
+    state.tutorial.highlightedNodeId === dreamNode.id
+  );
+
   // Flip state management
   const flipState = useInterBrainStore(state => state.flipState);
   const setFlippedNode = useInterBrainStore(state => state.setFlippedNode);
@@ -571,8 +576,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       : currentPosition[2];
 
     // Update target hover scale based on distance (distance-invariant ring thickness)
-    // Treat pending relationship as forced hover state
-    const effectiveHover = isHovered || isPendingRelationship;
+    // Treat pending relationship or tutorial highlight as forced hover state
+    const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
     targetHoverScale.current = effectiveHover ? getDistanceScaledHoverScale(currentZ) : 1;
 
     // Smooth hover scale animation (lerp towards target)
@@ -757,6 +762,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 isHovered={isHovered}
                 isEditModeActive={isEditModeActive}
                 isPendingRelationship={isPendingRelationship}
+                isTutorialHighlighted={isTutorialHighlighted}
                 shouldShowFlipButton={shouldShowFlipButton}
                 shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
                 nodeSize={nodeSize}
@@ -801,6 +807,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   isHovered={isHovered}
                   isEditModeActive={isEditModeActive}
                   isPendingRelationship={isPendingRelationship}
+                  isTutorialHighlighted={isTutorialHighlighted}
                   shouldShowFlipButton={shouldShowFlipButton}
                   shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
                   nodeSize={nodeSize}

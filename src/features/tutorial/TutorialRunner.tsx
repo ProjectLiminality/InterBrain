@@ -239,6 +239,7 @@ export const TutorialRunner: React.FC<TutorialRunnerProps> = ({
           controlPoints={currentStep.goldenDot.controlPoints}
           duration={currentStep.goldenDot.duration || 2}
           easing={currentStep.goldenDot.easing || 'easeInOut'}
+          hitDetectionNodeIds={currentStep.goldenDot.hitDetectionNodeIds}
           onComplete={() => setShowGoldenDot(false)}
         />
       )}
