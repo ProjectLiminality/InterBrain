@@ -29,7 +29,7 @@ import {
 import { openNodeContent } from '../../features/conversational-copilot/utils/open-node-content';
 import { OrchestratorContext } from '../context/orchestrator-context';
 import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
-import { TutorialOverlay, TutorialRunner } from '../../features/tutorial';
+import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -94,9 +94,11 @@ export default function DreamspaceCanvas() {
 
   // Tutorial state
   const tutorialIsActive = useInterBrainStore(state => state.tutorial.isActive);
+  const showPortal = useInterBrainStore(state => state.tutorial.showPortal);
   const endTutorial = useInterBrainStore(state => state.endTutorial);
   const skipTutorial = useInterBrainStore(state => state.skipTutorial);
   const markTutorialComplete = useInterBrainStore(state => state.markTutorialComplete);
+  const hideTutorialPortal = useInterBrainStore(state => state.hideTutorialPortal);
 
   // Copilot mode state for transcription buffer
   const copilotMode = useInterBrainStore(state => state.copilotMode);
@@ -704,6 +706,15 @@ export default function DreamspaceCanvas() {
         {/* Ambient lighting for any 3D elements (minimal) */}
         <ambientLight intensity={0.1} />
       </Canvas>
+
+      {/* Tutorial Portal Overlay - full-screen entry experience */}
+      <TutorialPortalOverlay
+        isVisible={showPortal}
+        onEnter={() => {
+          hideTutorialPortal();
+        }}
+        logoPath="src/features/tutorial/assets/ProjectLiminalityLogo.png"
+      />
     </div>
   );
 }

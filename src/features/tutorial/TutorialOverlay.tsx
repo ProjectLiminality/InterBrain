@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Html, Billboard } from '@react-three/drei';
 import { ManimText } from './ManimText';
 import { GoldenDot } from './GoldenDot';
-import { tutorialService, TutorialStep, GoldenDotAnimation } from './TutorialService';
+import { tutorialService, TutorialStep, GoldenDotAnimation, TextAnimation } from './TutorialService';
 import './tutorial-styles.css';
 
 /**
@@ -15,6 +15,7 @@ export const TutorialOverlay: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<TutorialStep | null>(null);
   const [showAnimation, setShowAnimation] = useState(false);
   const [goldenDot, setGoldenDot] = useState<GoldenDotAnimation | null>(null);
+  const [textAnimation, setTextAnimation] = useState<TextAnimation | null>(null);
 
   useEffect(() => {
     console.log('🎓 [TutorialOverlay] Mounting and subscribing to tutorial service');
@@ -61,9 +62,22 @@ export const TutorialOverlay: React.FC = () => {
       setGoldenDot(dotAnimation);
     }
 
+    // Subscribe to text animation changes
+    const unsubscribeText = tutorialService.onTextAnimationChange((animation) => {
+      console.log('📝 [TutorialOverlay] Text animation changed:', animation);
+      setTextAnimation(animation);
+    });
+
+    // Load current text animation on mount
+    const currentTextAnimation = tutorialService.getTextAnimation();
+    if (currentTextAnimation) {
+      setTextAnimation(currentTextAnimation);
+    }
+
     return () => {
       unsubscribe();
       unsubscribeGoldenDot();
+      unsubscribeText();
     };
   }, []);
 
@@ -74,11 +88,11 @@ export const TutorialOverlay: React.FC = () => {
   };
 
   // Render nothing if no active tutorial elements
-  if (!currentStep && !goldenDot) {
+  if (!currentStep && !goldenDot && !textAnimation) {
     return null;
   }
 
-  console.log('🎓 [TutorialOverlay] Rendering - step:', currentStep?.title, 'goldenDot:', !!goldenDot);
+  console.log('🎓 [TutorialOverlay] Rendering - step:', currentStep?.title, 'goldenDot:', !!goldenDot, 'text:', !!textAnimation);
 
   return (
     <>
@@ -113,7 +127,7 @@ export const TutorialOverlay: React.FC = () => {
         )
       )}
 
-      {/* Tutorial Text - sovereign animation element */}
+      {/* Tutorial Text - sovereign animation element (from steps) */}
       {currentStep && (
         <group position={currentStep.position || [0, 0, -25]}>
           <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
@@ -145,6 +159,35 @@ export const TutorialOverlay: React.FC = () => {
             </Html>
           </Billboard>
         </group>
+      )}
+
+      {/* Standalone Text Animation - decoupled from tutorial steps */}
+      {textAnimation && (
+        <Html
+          position={textAnimation.position}
+          center
+          transform
+          sprite
+          distanceFactor={10}
+          style={{
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <div style={{
+            background: 'transparent',
+            whiteSpace: 'nowrap',
+          }}>
+            <ManimText
+              key={`${textAnimation.text}-${textAnimation.position.join(',')}`}
+              text={textAnimation.text}
+              strokeDuration={1.5}
+              fillDelay={0.2}
+              fadeStroke={true}
+              fontSize={textAnimation.fontSize || 48}
+            />
+          </div>
+        </Html>
       )}
     </>
   );

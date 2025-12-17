@@ -18,6 +18,7 @@ import { TutorialAction } from './types';
 import { MVP_TUTORIAL_STEPS } from './steps/mvp-steps';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
+import { musicService } from './services/music-service';
 
 interface TutorialRunnerProps {
   /** Whether tutorial is active */
@@ -189,6 +190,28 @@ export const TutorialRunner: React.FC<TutorialRunnerProps> = ({
       }
     };
   }, [isActive, currentStepIndex, currentStep, executeAction, advanceStep, setHighlightedNodeId]);
+
+  // Handle music playback based on tutorial active state
+  useEffect(() => {
+    if (isActive) {
+      // Initialize and start music when tutorial becomes active
+      const app = serviceManager.getApp();
+      if (app) {
+        musicService.initialize(app);
+        musicService.play(2000); // 2 second fade-in
+      }
+    } else {
+      // Stop music when tutorial ends
+      musicService.stop(1500); // 1.5 second fade-out
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (!isActive) {
+        musicService.cleanup();
+      }
+    };
+  }, [isActive]);
 
   // Reset when becoming inactive
   useEffect(() => {

@@ -22,6 +22,8 @@ export interface TutorialSlice {
   setHighlightedNodeId: (nodeId: string | null) => void;
   setTutorialPhase: (phase: 'download' | 'personalize' | null) => void;
   markTutorialComplete: () => void;
+  showTutorialPortal: () => void;
+  hideTutorialPortal: () => void;
 }
 
 export const createTutorialSlice = (set: any, _get: any): TutorialSlice => ({
@@ -32,6 +34,7 @@ export const createTutorialSlice = (set: any, _get: any): TutorialSlice => ({
     phase: null,
     demoNodeIds: [],
     highlightedNodeId: null,
+    showPortal: false,
   },
 
   startTutorial: () => set((state: any) => ({
@@ -89,6 +92,20 @@ export const createTutorialSlice = (set: any, _get: any): TutorialSlice => ({
     tutorial: {
       ...state.tutorial,
       hasCompleted: true,
+    }
+  })),
+
+  showTutorialPortal: () => set((state: any) => ({
+    tutorial: {
+      ...state.tutorial,
+      showPortal: true,
+    }
+  })),
+
+  hideTutorialPortal: () => set((state: any) => ({
+    tutorial: {
+      ...state.tutorial,
+      showPortal: false,
     }
   })),
 });

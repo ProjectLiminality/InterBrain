@@ -124,6 +124,9 @@ export interface TutorialState {
 
   /** Node currently highlighted with golden glow */
   highlightedNodeId: string | null;
+
+  /** Whether the portal overlay is showing (pre-tutorial entry screen) */
+  showPortal: boolean;
 }
 
 /**

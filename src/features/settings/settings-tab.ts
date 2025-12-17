@@ -15,6 +15,7 @@ import { createTranscriptionSettingsSection } from '../realtime-transcription/se
 import { createWebLinkAnalyzerSettingsSection } from '../web-link-analyzer/settings-section';
 import { createRadicleSettingsSection } from '../social-resonance-filter/settings-section';
 import { createGitHubSettingsSection } from '../github-publishing/settings-section';
+import { createTutorialSettingsSection } from '../tutorial/settings-section';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
@@ -141,6 +142,11 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		// Advanced Section (global)
 		// ============================================================
 		this.createAdvancedSection(containerEl);
+
+		// ============================================================
+		// Tutorial & Credits Section (feature-owned)
+		// ============================================================
+		createTutorialSettingsSection(containerEl);
 	}
 
 	/**

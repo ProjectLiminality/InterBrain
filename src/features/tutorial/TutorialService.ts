@@ -52,6 +52,20 @@ export interface GoldenDotNodeAnimation {
 
 export type GoldenDotAnimation = GoldenDotPositionAnimation | GoldenDotNodeAnimation;
 
+/**
+ * Text animation configuration
+ */
+export interface TextAnimation {
+  /** Text content to display */
+  text: string;
+  /** 3D position for the text */
+  position: [number, number, number];
+  /** Font size (default 48) */
+  fontSize?: number;
+  /** Duration to show text in ms (0 = indefinite until cleared) */
+  duration?: number;
+}
+
 export class TutorialService {
   private static STORAGE_KEY = 'interbrain-tutorial-state';
   private currentStep: number = -1; // -1 = inactive, 0+ = active tutorial step
@@ -60,6 +74,11 @@ export class TutorialService {
   // Golden dot state (decoupled from tutorial steps)
   private goldenDotAnimation: GoldenDotAnimation | null = null;
   private onGoldenDotCallbacks: Array<(animation: GoldenDotAnimation | null) => void> = [];
+
+  // Text animation state (decoupled from tutorial steps)
+  private textAnimation: TextAnimation | null = null;
+  private onTextAnimationCallbacks: Array<(animation: TextAnimation | null) => void> = [];
+  private textAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Tutorial steps definition
@@ -254,6 +273,68 @@ export class TutorialService {
   private notifyGoldenDotChange(): void {
     const animation = this.goldenDotAnimation;
     this.onGoldenDotCallbacks.forEach(callback => callback(animation));
+  }
+
+  // ============ Text Animation Methods (Decoupled) ============
+
+  /**
+   * Show a text animation at a specific position
+   */
+  showText(animation: TextAnimation): void {
+    // Clear any existing timer
+    if (this.textAnimationTimer) {
+      globalThis.clearTimeout(this.textAnimationTimer);
+      this.textAnimationTimer = null;
+    }
+
+    this.textAnimation = animation;
+    this.notifyTextAnimationChange();
+
+    // Auto-clear after duration if specified
+    if (animation.duration && animation.duration > 0) {
+      this.textAnimationTimer = setTimeout(() => {
+        this.clearText();
+      }, animation.duration);
+    }
+  }
+
+  /**
+   * Clear the current text animation
+   */
+  clearText(): void {
+    if (this.textAnimationTimer) {
+      globalThis.clearTimeout(this.textAnimationTimer);
+      this.textAnimationTimer = null;
+    }
+    this.textAnimation = null;
+    this.notifyTextAnimationChange();
+  }
+
+  /**
+   * Get current text animation
+   */
+  getTextAnimation(): TextAnimation | null {
+    return this.textAnimation;
+  }
+
+  /**
+   * Subscribe to text animation changes
+   */
+  onTextAnimationChange(callback: (animation: TextAnimation | null) => void): () => void {
+    this.onTextAnimationCallbacks.push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.onTextAnimationCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onTextAnimationCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  private notifyTextAnimationChange(): void {
+    const animation = this.textAnimation;
+    this.onTextAnimationCallbacks.forEach(callback => callback(animation));
   }
 
   // ============ Private Methods ============

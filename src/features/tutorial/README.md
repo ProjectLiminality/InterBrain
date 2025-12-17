@@ -76,3 +76,33 @@ The hit detection approach introduces slight input lag on hover state transition
 3. **CSS-only transitions**: Remove hit detection entirely and use pure CSS keyframe animations for guaranteed smoothness
 
 The current system is good for prototyping and works well enough for tutorial purposes, but a hardcoded approach would give full control over timing and eliminate any responsiveness issues.
+
+## TODO: Tutorial Music
+
+### Permission Status: PENDING
+
+The tutorial should have ambient music playing (from "The Music of 3Blue1Brown" by Vincent Rubinetti).
+
+**Before enabling music playback:**
+
+1. [ ] Update YouTube video descriptions to credit Vincent Rubinetti for past videos using his music
+2. [ ] Fill out the official permission form: https://vincerubinetti.github.io/using-the-music-of-3blue1brown/
+   - Request covers: retroactive permission for past educational/unmonetized YouTube videos
+   - Request covers: future YouTube videos
+   - Request covers: InterBrain tutorial system (open source software)
+   - Be transparent about prior usage without knowing about the form
+   - Confirm attribution will be provided in all contexts
+3. [ ] Wait for approval before bundling music in the plugin
+
+**Technical implementation (can proceed in parallel):**
+
+- [ ] Add music playback service (HTML5 Audio API)
+- [ ] Start music when tutorial begins
+- [ ] Loop if tutorial takes longer than track duration (~5 min)
+- [ ] Stop music when tutorial ends or is skipped
+- [ ] Add attribution in plugin settings: "Tutorial music: [Track] by Vincent Rubinetti from 'The Music of 3Blue1Brown'" with link to https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
+
+**Resources:**
+- Bandcamp: https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
+- Permission form: https://vincerubinetti.github.io/using-the-music-of-3blue1brown/
+- Vincent's website: https://vincentrubinetti.com/

@@ -4,7 +4,8 @@ import { serviceManager } from '../../core/services/service-manager';
 import { tutorialService } from './TutorialService';
 import { TutorialModal } from './TutorialModal';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
-import { calculateProjectedEdgePositions } from './utils/projection';
+import { calculateProjectedEdgePositions, calculateTextPositionNextToNode } from './utils/projection';
+import { musicService } from './services/music-service';
 
 /**
  * Register tutorial commands for onboarding system
@@ -222,6 +223,116 @@ export function registerTutorialCommands(plugin: Plugin, uiService: UIService): 
       }, START_DELAY);
 
       uiService.showInfo(`Golden dot: ${fromNode?.node.name} → ${toNode?.node.name}`);
+    }
+  });
+
+  // Test Text Next to Node (Debug)
+  plugin.addCommand({
+    id: 'test-text-next-to-node',
+    name: 'Test Text Next to Node (Debug)',
+    callback: () => {
+      console.log('📝 Testing text animation next to random Dreamer node');
+
+      const store = useInterBrainStore.getState();
+
+      // Filter to only Dreamer nodes
+      const dreamerIds = Array.from(store.dreamNodes.entries())
+        .filter(([_, data]) => data.node.type === 'dreamer')
+        .map(([id]) => id);
+
+      if (dreamerIds.length === 0) {
+        uiService.showError('No Dreamer nodes found');
+        return;
+      }
+
+      // Pick a random Dreamer node
+      const randomIndex = Math.floor(Math.random() * dreamerIds.length);
+      const nodeId = dreamerIds[randomIndex];
+      const nodeData = store.dreamNodes.get(nodeId);
+
+      // Get actual rendered position from orchestrator
+      const orchestrator = serviceManager.getSpatialOrchestrator();
+      if (!orchestrator) {
+        console.error('📝 SpatialOrchestrator not available');
+        uiService.showError('Orchestrator not ready - try again after view is loaded');
+        return;
+      }
+
+      const nodePos = orchestrator.getNodeCurrentPosition(nodeId);
+      if (!nodePos) {
+        console.error('📝 Node position not available');
+        uiService.showError('Node position not available - node may not be rendered');
+        return;
+      }
+
+      // Calculate text position next to node (perspective-correct)
+      const TEXT_Z_PLANE = -30;
+      const textPosition = calculateTextPositionNextToNode(nodePos, TEXT_Z_PLANE, 'right', 12);
+
+      console.log(`📝 Showing "Click me!" next to "${nodeData?.node.name}"`);
+      console.log(`📝 Node position:`, nodePos);
+      console.log(`📝 Text position:`, textPosition);
+
+      // Also highlight the node for visual reference
+      store.setHighlightedNodeId(nodeId);
+
+      // Show the text animation
+      tutorialService.showText({
+        text: 'Click me!',
+        position: textPosition,
+        fontSize: 36,
+        duration: 5000, // Show for 5 seconds
+      });
+
+      // Clear highlight after text disappears
+      setTimeout(() => {
+        store.setHighlightedNodeId(null);
+      }, 5000);
+
+      uiService.showInfo(`Text shown next to ${nodeData?.node.name}`);
+    }
+  });
+
+  // Test Music Playback (Debug)
+  plugin.addCommand({
+    id: 'test-music',
+    name: 'Test Music Playback (Debug)',
+    callback: () => {
+      console.log('🎵 Testing tutorial music playback');
+
+      const app = serviceManager.getApp();
+      if (!app) {
+        uiService.showError('App not available');
+        return;
+      }
+
+      // Initialize and play using Obsidian's resource path API
+      musicService.initialize(app);
+      musicService.play(2000); // 2 second fade-in
+
+      uiService.showInfo('Music started - run "Stop Music" to stop');
+    }
+  });
+
+  // Stop Music Playback (Debug)
+  plugin.addCommand({
+    id: 'stop-music',
+    name: 'Stop Music Playback (Debug)',
+    callback: () => {
+      console.log('🎵 Stopping tutorial music');
+      musicService.stop(1500); // 1.5 second fade-out
+      uiService.showInfo('Music stopping with fade-out');
+    }
+  });
+
+  // Show Tutorial Portal (Entry Screen)
+  plugin.addCommand({
+    id: 'show-tutorial-portal',
+    name: 'Show Tutorial Portal',
+    callback: () => {
+      console.log('🌀 Showing tutorial portal');
+      const store = useInterBrainStore.getState();
+      store.showTutorialPortal();
     }
   });
 }
