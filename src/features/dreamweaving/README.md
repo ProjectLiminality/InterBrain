@@ -151,6 +151,73 @@ Zustand state slice for:
 - **social-resonance**: Provides RadicleService for submodule URLs
 - **drag-and-drop**: Provides .link file parsing utilities
 
+## .link File Rendering Pipeline
+
+InterBrain provides custom rendering for `.link` files (URL bookmarks stored as JSON) across multiple contexts:
+
+### File Format
+```json
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "type": "youtube",
+  "title": "Video Title",
+  "videoId": "VIDEO_ID",
+  "embedUrl": "https://www.youtube.com/embed/VIDEO_ID",
+  "thumbnail": "https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg",
+  "created": "2025-01-01T00:00:00.000Z"
+}
+```
+
+### Rendering Contexts
+
+| Context | Component | Behavior |
+|---------|-----------|----------|
+| **Editor View** | `LinkFileView.ts` | Full preview with thumbnail, metadata, and action buttons |
+| **Canvas Card** | `CanvasObserverService` | Thumbnail with play button → expands to iframe on click |
+| **DreamSong UI** | `DreamSong.tsx` | Embedded YouTube iframe (16:9 aspect ratio) |
+| **DreamTalk Node** | `DreamTalkSide.tsx` | Circular thumbnail with play icon overlay |
+
+### Data Flow
+```
+.link file on disk (JSON)
+    ↓
+parseLinkFileContent() → LinkFileMetadata
+    ↓
+Four Rendering Paths:
+
+1. EDITOR VIEW (when .link file is opened in Obsidian)
+   → LinkFileView extends TextFileView
+   → renderYouTubePreview() / renderWebsitePreview()
+   → Click opens URL in browser
+
+2. CANVAS CARD (file node on Obsidian canvas)
+   → CanvasObserverService (MutationObserver)
+   → Replaces canvas-node-content innerHTML
+   → Click play button → replaces with iframe (autoplay)
+
+3. DREAMSONG PLAYBACK (canvas story flow in DreamSong UI)
+   → media-resolver.ts resolveLinkFileInfo()
+   → DreamSong.tsx renderMediaElement()
+   → Embedded iframe with youtube-nocookie.com
+
+4. DREAMTALK THUMBNAIL (3D sphere node front face)
+   → DreamTalkSide.tsx MediaRenderer()
+   → Circular thumbnail with red play button overlay
+   → Click navigates to node
+```
+
+### YouTube Embedding Notes
+- Uses `youtube-nocookie.com` for privacy-enhanced embedding
+- Some videos have embedding disabled by uploaders (shows "Video unavailable")
+- Autoplay enabled when expanding from thumbnail on canvas
+- 16:9 aspect ratio maintained in DreamSong UI
+
+### Key Files
+- `components/LinkFileView.ts` - Obsidian editor view registration
+- `services/canvas-observer-service.ts` - Canvas thumbnail replacement
+- `dreamsong/media-resolver.ts` - Media path resolution for DreamSong
+- `../../drag-and-drop/link-file-utils.ts` - Parsing utilities
+
 ## Technical Notes
 
 - **Two Parsing Systems**: `dreamsong/` (pure functions for UI) and `dreamsong-parser-service.ts` (with caching for relationship extraction)

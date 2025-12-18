@@ -247,8 +247,10 @@ export class CanvasObserverService {
   private createThumbnailHTML(metadata: LinkFileMetadata, thumbnailUrl: string, _fileName: string): string {
     // const fileNameWithoutExtension = fileName.replace('.link', ''); // For future use
 
-    if (metadata.type === 'youtube') {
-      // YouTube video with play button
+    if (metadata.type === 'youtube' && metadata.videoId) {
+      // YouTube video with play button that expands to iframe on click
+      // Using youtube-nocookie.com for privacy-enhanced embedding
+      const embedUrl = `https://www.youtube-nocookie.com/embed/${metadata.videoId}?autoplay=1`;
       return `
         <div class="link-thumbnail-container" style="
           position: relative;
@@ -283,7 +285,11 @@ export class CanvasObserverService {
             transition: all 0.2s ease;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             z-index: 10;
-          " onclick="window.open('${metadata.url}', '_blank'); event.stopPropagation();"
+          " onclick="
+             event.stopPropagation();
+             var container = this.parentElement;
+             container.innerHTML = '<iframe src=\\'${embedUrl}\\' style=\\'width: 100%; height: 100%; border: none; border-radius: 4px;\\' allow=\\'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\\' allowfullscreen></iframe>';
+           "
              onmouseenter="this.style.transform='translate(-50%, -50%) scale(1.1)'; this.style.background='rgba(255, 0, 0, 1)';"
              onmouseleave="this.style.transform='translate(-50%, -50%) scale(1)'; this.style.background='rgba(255, 0, 0, 0.9)';">
             ▶
