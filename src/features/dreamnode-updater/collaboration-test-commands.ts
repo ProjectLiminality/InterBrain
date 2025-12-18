@@ -150,10 +150,16 @@ async function setupTestEnvironment(
           // First, create the "original" commit message with provenance
           // In real scenario, this would come from cherry-pick -x
           const fakeOriginalHash = `abc${commit.author}${Date.now().toString(16)}`.slice(0, 12);
-          const commitMsg = `${commit.subject}\n\n(cherry picked from commit ${fakeOriginalHash})`;
-          await execAsync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { cwd: workPath });
+          const bodyText = commit.body ? `\n\n${commit.body}` : '';
+          const commitMsg = `${commit.subject}${bodyText}\n\n(cherry picked from commit ${fakeOriginalHash})`;
+          // Use heredoc for multiline commit message
+          const heredocCmd = `git commit -m "$(cat <<'COMMITMSG'\n${commitMsg}\nCOMMITMSG\n)"`;
+          await execAsync(heredocCmd, { cwd: workPath });
         } else {
-          await execAsync(`git commit -m "${commit.subject}"`, { cwd: workPath });
+          const bodyText = commit.body ? `\n\n${commit.body}` : '';
+          const commitMsg = `${commit.subject}${bodyText}`;
+          const heredocCmd = `git commit -m "$(cat <<'COMMITMSG'\n${commitMsg}\nCOMMITMSG\n)"`;
+          await execAsync(heredocCmd, { cwd: workPath });
         }
 
         await execAsync('git push origin main', { cwd: workPath });
@@ -336,17 +342,14 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
 
         notice.hide();
 
-        if (peerGroups.length === 0 || peerGroups.every(g => g.commits.length === 0)) {
-          uiService.showInfo('No pending commits from peers.');
-          return;
-        }
-
-        // Show the modal
+        // Always show the modal - even with no pending commits
+        // This allows access to rejection history
         const config: CherryPickPreviewConfig = {
           dreamNodePath: selectedNode.repoPath,
           dreamNodeUuid: selectedNode.id,
           dreamNodeName: selectedNode.name,
           peerGroups,
+          allPeers: peers, // Pass all peers for rejection history access
           onAccept: async (commits, peerRepoPath) => {
             new Notice(`Accepted ${commits.length} commit(s) from ${peerRepoPath}`);
             console.log('[CherryPick] Accepted:', commits);

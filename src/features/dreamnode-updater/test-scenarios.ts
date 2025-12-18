@@ -5,10 +5,11 @@
  * - Obsidian UI test commands (manual testing)
  * - Vitest automated tests
  *
- * Each scenario defines the initial state of commits and peers.
- * The testing pathway diverges after setup:
- * - UI tests: User interacts manually
- * - Automated tests: Script runs accept/reject sequences
+ * Contains one comprehensive scenario that covers all test cases:
+ * - Multiple peers (Bob, Charlie)
+ * - Unique commits from each peer
+ * - Shared/relayed commits (same commit from multiple peers)
+ * - Rich commit messages with subject + body
  */
 
 /**
@@ -17,8 +18,10 @@
 export interface TestCommit {
   /** Who authored this commit originally */
   author: string;
-  /** Commit subject line */
+  /** Commit subject line (first line, shown in compact view) */
   subject: string;
+  /** Commit body (detailed description, shown when expanded) */
+  body?: string;
   /** File changes - key is filename, value is content */
   files: Record<string, string>;
   /** Which peers are offering/relaying this commit */
@@ -58,7 +61,7 @@ export interface TestScenario {
 }
 
 // ============================================
-// PEER DEFINITIONS (reusable across scenarios)
+// PEER DEFINITIONS
 // ============================================
 
 export const PEER_BOB: TestPeer = {
@@ -83,171 +86,220 @@ export const PEER_ALICE: TestPeer = {
 };
 
 // ============================================
-// TEST SCENARIOS
+// COMPREHENSIVE TEST SCENARIO
 // ============================================
 
 /**
- * Basic scenario: Each peer has one unique commit
- * Tests: Basic accept/reject flow, deduplication filtering
+ * Comprehensive test scenario covering all collaboration cases:
+ *
+ * 1. Bob's unique commit - Only Bob offers this
+ * 2. Charlie's unique commit - Only Charlie offers this
+ * 3. Alice's shared commit - Both Bob AND Charlie relay this (tests deduplication)
+ *
+ * This allows testing:
+ * - Accept/reject individual commits
+ * - Preview mode with file changes
+ * - Deduplication UI ("Also from: ...")
+ * - Hover coupling between duplicate commits
+ * - Rejection history and restore
  */
-export const SCENARIO_BASIC: TestScenario = {
-  name: 'basic',
-  description: 'Each peer has one unique commit modifying README',
-  initialReadme: `# Collaboration Test Node
+export const SCENARIO_COMPREHENSIVE: TestScenario = {
+  name: 'comprehensive',
+  description: 'All-in-one scenario: unique commits + shared/relayed commits for full testing',
+  initialReadme: `# Shared Project
 
-This is a test DreamNode for collaboration UI testing.
+Welcome to our collaborative DreamNode!
 
 ## Contributors
 
-(none yet)
+This section will be updated as people contribute.
+
+## Project Status
+
+Just getting started...
 `,
   peers: [PEER_BOB, PEER_CHARLIE],
   commits: [
+    // =========================================
+    // COMMIT 1: Bob's unique contribution
+    // =========================================
     {
       author: 'bob',
-      subject: "Add Bob's section to README",
-      files: {
-        'README.md': `# Collaboration Test Node
+      subject: "Add Bob's introduction section",
+      body: `This commit adds a personal introduction section for Bob.
 
-This is a test DreamNode for collaboration UI testing.
+The section includes:
+- A brief bio
+- Bob's interests and expertise
+- How to reach Bob for collaboration
+
+This is a unique contribution that only Bob is offering.
+You should see this commit ONLY under Bob's peer group.`,
+      files: {
+        'README.md': `# Shared Project
+
+Welcome to our collaborative DreamNode!
 
 ## Contributors
 
-### Bob's Contribution
+This section will be updated as people contribute.
 
-Hello from Bob! I added this section to demonstrate collaboration.
+### Bob
+
+Hi, I'm Bob! I'm passionate about decentralized systems and
+knowledge gardening. Feel free to reach out if you want to
+collaborate on any distributed tech projects.
+
+**Interests:** P2P networks, Git internals, Obsidian plugins
+
+## Project Status
+
+Just getting started...
 `
       },
       relayedBy: ['bob']
     },
+
+    // =========================================
+    // COMMIT 2: Charlie's unique contribution
+    // =========================================
     {
       author: 'charlie',
-      subject: "Add Charlie's section to README",
-      files: {
-        'README.md': `# Collaboration Test Node
+      subject: "Add Charlie's introduction section",
+      body: `This commit adds a personal introduction section for Charlie.
 
-This is a test DreamNode for collaboration UI testing.
+Charlie's section includes:
+- Background information
+- Areas of expertise
+- Collaboration preferences
+
+This is a unique contribution that only Charlie is offering.
+You should see this commit ONLY under Charlie's peer group.`,
+      files: {
+        'README.md': `# Shared Project
+
+Welcome to our collaborative DreamNode!
 
 ## Contributors
 
-### Charlie's Contribution
+This section will be updated as people contribute.
 
-Greetings from Charlie! This is my addition to the project.
+### Charlie
+
+Hey there! I'm Charlie. I focus on UI/UX design and making
+complex systems feel intuitive. Always happy to help with
+design reviews or brainstorming sessions.
+
+**Expertise:** Design systems, User research, Prototyping
+
+## Project Status
+
+Just getting started...
 `
       },
       relayedBy: ['charlie']
-    }
-  ]
-};
+    },
 
-/**
- * Relay scenario: Alice's commit is relayed by both Bob and Charlie
- * Tests: Duplicate detection, "Also from" UI, provenance tracking
- */
-export const SCENARIO_RELAY: TestScenario = {
-  name: 'relay',
-  description: "Alice's commit relayed by both Bob and Charlie (tests deduplication)",
-  initialReadme: `# Collaboration Test Node
-
-This is a test DreamNode for collaboration UI testing.
-
-## History
-
-Project started.
-`,
-  peers: [PEER_BOB, PEER_CHARLIE],
-  commits: [
+    // =========================================
+    // COMMIT 3: Alice's commit relayed by BOTH peers
+    // =========================================
     {
       author: 'alice',
-      subject: "Add Alice's important update",
+      subject: "Add project vision statement",
+      body: `This commit adds a vision statement for the project.
+
+Alice wrote this vision statement and shared it with the community.
+Both Bob and Charlie are relaying this commit to you.
+
+IMPORTANT: This tests DEDUPLICATION!
+- You should see this commit appear ONCE in the modal
+- It should show "Also from: charlie" (or bob) to indicate both peers have it
+- Hovering should highlight the duplicate indicator
+- Accepting from one peer should work for both`,
       files: {
-        'README.md': `# Collaboration Test Node
+        'README.md': `# Shared Project
 
-This is a test DreamNode for collaboration UI testing.
+Welcome to our collaborative DreamNode!
 
-## History
+## Vision
 
-Project started.
+> "We believe that knowledge grows best when shared freely
+> and organized through genuine human connections rather
+> than rigid hierarchies." — Alice
 
-### Alice's Update
+This project explores new ways of collaborative thinking
+and distributed knowledge management.
 
-This critical update comes from Alice and should appear only once,
-even though both Bob and Charlie are relaying it to you.
+## Contributors
+
+This section will be updated as people contribute.
+
+## Project Status
+
+Just getting started...
 `
       },
       relayedBy: ['bob', 'charlie'],
       originalAuthor: 'alice'
     },
+
+    // =========================================
+    // COMMIT 4: Bob adds a resources section
+    // =========================================
     {
       author: 'bob',
-      subject: "Bob's own contribution",
+      subject: "Add resources and links section",
+      body: `Adding a resources section with helpful links.
+
+This commit creates a new section in the README with:
+- Links to related projects
+- Documentation references
+- Community resources
+
+Another unique Bob contribution to test multiple commits per peer.`,
       files: {
-        'bob-notes.md': '# Bob Notes\n\nSome notes from Bob.\n'
-      },
-      relayedBy: ['bob']
-    }
-  ]
-};
+        'README.md': `# Shared Project
 
-/**
- * Mixed scenario: Combination of unique and relayed commits
- * Tests: Full UI with mixed commit types
- */
-export const SCENARIO_MIXED: TestScenario = {
-  name: 'mixed',
-  description: 'Mix of unique commits and relayed commits',
-  initialReadme: `# Collaboration Test Node
+Welcome to our collaborative DreamNode!
 
-A shared project for testing the collaboration workflow.
-`,
-  peers: [PEER_BOB, PEER_CHARLIE],
-  commits: [
-    // Alice's commit relayed by both
-    {
-      author: 'alice',
-      subject: 'Shared foundation from Alice',
-      files: {
-        'README.md': `# Collaboration Test Node
+## Contributors
 
-A shared project for testing the collaboration workflow.
+This section will be updated as people contribute.
 
-## Foundation
+### Bob
 
-This foundation was laid by Alice and is shared by the community.
+Hi, I'm Bob! I'm passionate about decentralized systems and
+knowledge gardening. Feel free to reach out if you want to
+collaborate on any distributed tech projects.
+
+**Interests:** P2P networks, Git internals, Obsidian plugins
+
+## Resources
+
+### Related Projects
+- [InterBrain](https://github.com/ProjectLiminality/InterBrain) - Knowledge gardening system
+- [Radicle](https://radicle.xyz) - P2P code collaboration
+
+### Documentation
+- [Git Internals](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain)
+- [Obsidian Plugin Development](https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin)
+
+## Project Status
+
+Just getting started...
 `
       },
-      relayedBy: ['bob', 'charlie'],
-      originalAuthor: 'alice'
-    },
-    // Bob's unique commit
-    {
-      author: 'bob',
-      subject: "Bob's unique feature",
-      files: {
-        'bob-feature.md': '# Bob Feature\n\nA feature only Bob is offering.\n'
-      },
       relayedBy: ['bob']
-    },
-    // Charlie's unique commit
-    {
-      author: 'charlie',
-      subject: "Charlie's unique feature",
-      files: {
-        'charlie-feature.md': '# Charlie Feature\n\nA feature only Charlie is offering.\n'
-      },
-      relayedBy: ['charlie']
     }
   ]
 };
 
-// Default scenario for quick testing
-export const DEFAULT_SCENARIO = SCENARIO_BASIC;
+// Default scenario - use the comprehensive one
+export const DEFAULT_SCENARIO = SCENARIO_COMPREHENSIVE;
 
-// All scenarios for iteration
+// All scenarios (just one now, but keeping array for compatibility)
 export const ALL_SCENARIOS: TestScenario[] = [
-  SCENARIO_BASIC,
-  SCENARIO_RELAY,
-  SCENARIO_MIXED
+  SCENARIO_COMPREHENSIVE
 ];
 
 /**

@@ -139,13 +139,13 @@ export class PreviewBanner {
       });
     } else {
       const acceptBtn = container.createEl('button', {
-        text: '✓ Keep',
+        text: '✓ Accept',
         cls: 'preview-banner-btn preview-banner-btn-accept'
       });
       acceptBtn.addEventListener('click', () => this.handleAccept());
 
       const rejectBtn = container.createEl('button', {
-        text: '✗ Revert',
+        text: '✗ Reject',
         cls: 'preview-banner-btn preview-banner-btn-reject'
       });
       rejectBtn.addEventListener('click', () => this.handleReject());

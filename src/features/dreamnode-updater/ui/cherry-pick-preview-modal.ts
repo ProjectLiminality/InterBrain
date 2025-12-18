@@ -5,8 +5,9 @@
  * Features:
  * - Groups commits by peer (Dreamer)
  * - Checkboxes for individual commit selection
- * - Per-commit and per-peer accept/reject actions
+ * - Per-commit and per-peer accept/reject/preview actions
  * - Preview mode with stash support
+ * - Rejection history with restore capability
  */
 
 /* eslint-disable no-undef */
@@ -32,6 +33,8 @@ export interface CherryPickPreviewConfig {
   dreamNodeName: string;
   /** Commits grouped by peer */
   peerGroups: PeerCommitGroup[];
+  /** All known peers (for rejection history even when no pending commits) */
+  allPeers?: Array<{ uuid: string; name: string; repoPath: string }>;
   /** Callback when commits are accepted */
   onAccept: (acceptedCommits: PendingCommit[], peerRepoPath: string) => Promise<void>;
   /** Callback when commits are rejected */
@@ -51,7 +54,7 @@ export class CherryPickPreviewModal extends Modal {
   private selectionState: Map<string, CommitSelectionState> = new Map();
   private isProcessing = false;
   private rejectionHistory: Map<string, RejectedCommit[]> = new Map();
-  private isHistoryExpanded = false;
+  private isHistoryExpanded = true; // Start expanded so users see it
 
   constructor(app: App, config: CherryPickPreviewConfig) {
     super(app);
@@ -85,13 +88,19 @@ export class CherryPickPreviewModal extends Modal {
     const memoryService = getCollaborationMemoryService();
     this.rejectionHistory.clear();
 
-    for (const group of this.config.peerGroups) {
+    // Use allPeers if available (covers case when no pending commits)
+    // Otherwise fall back to peerGroups
+    const peersToCheck = this.config.allPeers
+      ? this.config.allPeers.map(p => ({ peerRepoPath: p.repoPath, peerName: p.name }))
+      : this.config.peerGroups.map(g => ({ peerRepoPath: g.peerRepoPath, peerName: g.peerName }));
+
+    for (const peer of peersToCheck) {
       const history = await memoryService.getRejectionHistory(
-        group.peerRepoPath,
+        peer.peerRepoPath,
         this.config.dreamNodeUuid
       );
       if (history.length > 0) {
-        this.rejectionHistory.set(group.peerRepoPath, history);
+        this.rejectionHistory.set(peer.peerRepoPath, history);
       }
     }
   }
@@ -114,58 +123,126 @@ export class CherryPickPreviewModal extends Modal {
       cls: 'cherry-pick-modal-title'
     });
 
-    // Subtitle with count
+    // Calculate totals
     const totalCommits = this.config.peerGroups.reduce((sum, g) => sum + g.commits.length, 0);
     const selectedCount = Array.from(this.selectionState.values()).filter(s => s.selected).length;
+    const totalRejected = Array.from(this.rejectionHistory.values()).reduce((sum, h) => sum + h.length, 0);
 
-    contentEl.createEl('p', {
-      text: `${selectedCount} of ${totalCommits} commit(s) selected from ${this.config.peerGroups.length} peer(s)`,
-      cls: 'cherry-pick-modal-subtitle'
-    });
-
-    // Peer groups
-    const groupsContainer = contentEl.createDiv({ cls: 'cherry-pick-peer-groups' });
-
-    for (const group of this.config.peerGroups) {
-      this.renderPeerGroup(groupsContainer, group);
+    // Subtitle with counts
+    if (totalCommits > 0) {
+      contentEl.createEl('p', {
+        text: `${selectedCount} of ${totalCommits} pending commit(s) selected`,
+        cls: 'cherry-pick-modal-subtitle'
+      });
     }
 
-    // Rejection history section (collapsible)
-    this.renderRejectionHistory(contentEl);
+    // === PENDING COMMITS SECTION ===
+    const pendingSection = contentEl.createDiv({ cls: 'cherry-pick-section' });
 
-    // Action buttons
-    this.renderActionButtons(contentEl);
+    const pendingHeader = pendingSection.createDiv({ cls: 'cherry-pick-section-header' });
+    pendingHeader.createEl('h3', {
+      text: `📥 Pending Updates`,
+      cls: 'cherry-pick-section-title'
+    });
+    if (totalCommits > 0) {
+      pendingHeader.createEl('span', {
+        text: `${totalCommits}`,
+        cls: 'cherry-pick-section-badge'
+      });
+    }
+
+    if (totalCommits === 0) {
+      // Empty state for pending
+      const emptyEl = pendingSection.createDiv({ cls: 'cherry-pick-empty-inline' });
+      emptyEl.createEl('span', {
+        text: '✓ All caught up! No pending updates from peers.',
+        cls: 'cherry-pick-empty-text'
+      });
+    } else {
+      // Peer groups
+      const groupsContainer = pendingSection.createDiv({ cls: 'cherry-pick-peer-groups' });
+      for (const group of this.config.peerGroups) {
+        if (group.commits.length > 0) {
+          this.renderPeerGroup(groupsContainer, group, 'pending');
+        }
+      }
+
+      // Action buttons for pending commits
+      this.renderActionButtons(pendingSection);
+    }
+
+    // === REJECTION HISTORY SECTION ===
+    const historySection = contentEl.createDiv({ cls: 'cherry-pick-section cherry-pick-history-section' });
+
+    const historyHeader = historySection.createDiv({
+      cls: 'cherry-pick-section-header cherry-pick-section-header-collapsible'
+    });
+    historyHeader.createEl('span', {
+      text: this.isHistoryExpanded ? '▼' : '▶',
+      cls: 'cherry-pick-section-toggle'
+    });
+    historyHeader.createEl('h3', {
+      text: `🚫 Previously Rejected`,
+      cls: 'cherry-pick-section-title'
+    });
+    if (totalRejected > 0) {
+      historyHeader.createEl('span', {
+        text: `${totalRejected}`,
+        cls: 'cherry-pick-section-badge cherry-pick-section-badge-muted'
+      });
+    }
+
+    historyHeader.addEventListener('click', () => {
+      this.isHistoryExpanded = !this.isHistoryExpanded;
+      this.renderContent();
+    });
+
+    if (this.isHistoryExpanded) {
+      if (totalRejected === 0) {
+        const emptyEl = historySection.createDiv({ cls: 'cherry-pick-empty-inline' });
+        emptyEl.createEl('span', {
+          text: 'No rejected commits.',
+          cls: 'cherry-pick-empty-text'
+        });
+      } else {
+        // Group rejected commits by peer - same UI as pending
+        const historyContainer = historySection.createDiv({ cls: 'cherry-pick-peer-groups' });
+        this.renderRejectionGroups(historyContainer);
+      }
+    }
   }
 
-  private renderPeerGroup(container: HTMLElement, group: PeerCommitGroup) {
+  private renderPeerGroup(container: HTMLElement, group: PeerCommitGroup, mode: 'pending' | 'rejected') {
     const groupEl = container.createDiv({ cls: 'cherry-pick-peer-group' });
 
     // Peer header with select all toggle
     const headerEl = groupEl.createDiv({ cls: 'cherry-pick-peer-header' });
 
-    const peerCheckbox = headerEl.createEl('input', {
-      type: 'checkbox',
-      cls: 'cherry-pick-peer-checkbox'
-    }) as HTMLInputElement;
+    if (mode === 'pending') {
+      const peerCheckbox = headerEl.createEl('input', {
+        type: 'checkbox',
+        cls: 'cherry-pick-peer-checkbox'
+      }) as HTMLInputElement;
 
-    // Check if all commits from this peer are selected
-    const peerCommitHashes = group.commits.map(c => c.originalHash);
-    const allSelected = peerCommitHashes.every(h => this.selectionState.get(h)?.selected);
-    const someSelected = peerCommitHashes.some(h => this.selectionState.get(h)?.selected);
+      // Check if all commits from this peer are selected
+      const peerCommitHashes = group.commits.map(c => c.originalHash);
+      const allSelected = peerCommitHashes.every(h => this.selectionState.get(h)?.selected);
+      const someSelected = peerCommitHashes.some(h => this.selectionState.get(h)?.selected);
 
-    peerCheckbox.checked = allSelected;
-    peerCheckbox.indeterminate = someSelected && !allSelected;
+      peerCheckbox.checked = allSelected;
+      peerCheckbox.indeterminate = someSelected && !allSelected;
 
-    peerCheckbox.addEventListener('change', () => {
-      const newState = peerCheckbox.checked;
-      for (const hash of peerCommitHashes) {
-        const state = this.selectionState.get(hash);
-        if (state) {
-          state.selected = newState;
+      peerCheckbox.addEventListener('change', () => {
+        const newState = peerCheckbox.checked;
+        for (const hash of peerCommitHashes) {
+          const state = this.selectionState.get(hash);
+          if (state) {
+            state.selected = newState;
+          }
         }
-      }
-      this.renderContent();
-    });
+        this.renderContent();
+      });
+    }
 
     headerEl.createEl('span', {
       text: `📡 ${group.peerName}`,
@@ -178,58 +255,139 @@ export class CherryPickPreviewModal extends Modal {
     });
 
     // Per-peer quick actions
-    const peerActionsEl = headerEl.createDiv({ cls: 'cherry-pick-peer-actions' });
+    if (mode === 'pending') {
+      const peerActionsEl = headerEl.createDiv({ cls: 'cherry-pick-peer-actions' });
 
-    const acceptAllBtn = peerActionsEl.createEl('button', {
-      text: '✓ Accept All',
-      cls: 'cherry-pick-btn cherry-pick-btn-accept-small'
-    });
-    acceptAllBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await this.acceptPeerCommits(group);
-    });
+      const previewAllBtn = peerActionsEl.createEl('button', {
+        text: '👁',
+        cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-preview-icon',
+        attr: { title: 'Preview all from this peer' }
+      });
+      previewAllBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.previewPeerCommits(group);
+      });
 
-    const rejectAllBtn = peerActionsEl.createEl('button', {
-      text: '✗ Reject All',
-      cls: 'cherry-pick-btn cherry-pick-btn-reject-small'
-    });
-    rejectAllBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await this.rejectPeerCommits(group);
-    });
+      const acceptAllBtn = peerActionsEl.createEl('button', {
+        text: '✓',
+        cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-accept-icon',
+        attr: { title: 'Accept all from this peer' }
+      });
+      acceptAllBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.acceptPeerCommits(group);
+      });
+
+      const rejectAllBtn = peerActionsEl.createEl('button', {
+        text: '✗',
+        cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-reject-icon',
+        attr: { title: 'Reject all from this peer' }
+      });
+      rejectAllBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.rejectPeerCommits(group);
+      });
+    }
 
     // Commit list
     const commitsEl = groupEl.createDiv({ cls: 'cherry-pick-commits-list' });
 
     for (const commit of group.commits) {
-      this.renderCommit(commitsEl, commit, group.peerRepoPath);
+      this.renderCommit(commitsEl, commit, group.peerRepoPath, mode);
     }
   }
 
-  private renderCommit(container: HTMLElement, commit: PendingCommit, peerRepoPath: string) {
+  private renderRejectionGroups(container: HTMLElement) {
+    // Group by peer, similar to pending commits
+    for (const [peerRepoPath, history] of this.rejectionHistory.entries()) {
+      // Find peer name
+      let peerName = 'Unknown peer';
+      if (this.config.allPeers) {
+        const allPeer = this.config.allPeers.find(p => p.repoPath === peerRepoPath);
+        if (allPeer) peerName = allPeer.name;
+      }
+      if (peerName === 'Unknown peer') {
+        const groupPeer = this.config.peerGroups.find(g => g.peerRepoPath === peerRepoPath);
+        if (groupPeer) peerName = groupPeer.peerName;
+      }
+
+      const groupEl = container.createDiv({ cls: 'cherry-pick-peer-group cherry-pick-peer-group-rejected' });
+
+      // Header
+      const headerEl = groupEl.createDiv({ cls: 'cherry-pick-peer-header' });
+      headerEl.createEl('span', {
+        text: `📡 ${peerName}`,
+        cls: 'cherry-pick-peer-name'
+      });
+      headerEl.createEl('span', {
+        text: `(${history.length} rejected)`,
+        cls: 'cherry-pick-peer-count'
+      });
+
+      // Restore all button
+      const peerActionsEl = headerEl.createDiv({ cls: 'cherry-pick-peer-actions' });
+      const restoreAllBtn = peerActionsEl.createEl('button', {
+        text: '↩ Restore All',
+        cls: 'cherry-pick-btn cherry-pick-btn-restore-small'
+      });
+      restoreAllBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.restoreAllFromPeer(peerRepoPath, history);
+      });
+
+      // Commit list
+      const commitsEl = groupEl.createDiv({ cls: 'cherry-pick-commits-list' });
+
+      for (const rejected of history) {
+        this.renderRejectedCommit(commitsEl, rejected, peerRepoPath);
+      }
+    }
+  }
+
+  private renderCommit(container: HTMLElement, commit: PendingCommit, peerRepoPath: string, mode: 'pending' | 'rejected') {
     const state = this.selectionState.get(commit.originalHash);
-    if (!state) return;
+    if (!state && mode === 'pending') return;
 
     const isShared = commit.offeredByNames.length > 1;
     const commitEl = container.createDiv({
-      cls: `cherry-pick-commit ${state.selected ? 'selected' : ''} ${isShared ? 'cherry-pick-commit-shared' : ''}`
+      cls: `cherry-pick-commit ${mode === 'pending' && state?.selected ? 'selected' : ''} ${isShared ? 'cherry-pick-commit-shared' : ''}`
     });
 
-    // Checkbox
-    const checkbox = commitEl.createEl('input', {
-      type: 'checkbox',
-      cls: 'cherry-pick-commit-checkbox'
-    }) as HTMLInputElement;
-    checkbox.checked = state.selected;
-    checkbox.addEventListener('change', () => {
-      state.selected = checkbox.checked;
-      this.renderContent();
-    });
+    // Checkbox (only for pending)
+    if (mode === 'pending' && state) {
+      const checkbox = commitEl.createEl('input', {
+        type: 'checkbox',
+        cls: 'cherry-pick-commit-checkbox'
+      }) as HTMLInputElement;
+      checkbox.checked = state.selected;
+      checkbox.addEventListener('change', () => {
+        state.selected = checkbox.checked;
+        this.renderContent();
+      });
+    }
 
     // Commit info
     const infoEl = commitEl.createDiv({ cls: 'cherry-pick-commit-info' });
 
-    infoEl.createEl('div', {
+    // Subject line with expand toggle if body exists
+    const hasBody = commit.body && commit.body.trim().length > 0;
+    // Filter out cherry-pick provenance from body for display
+    const displayBody = hasBody
+      ? commit.body.replace(/\n*\(cherry picked from commit [a-f0-9]+\)\s*$/i, '').trim()
+      : '';
+    const showExpandable = displayBody.length > 0;
+
+    const subjectRow = infoEl.createDiv({ cls: 'cherry-pick-commit-subject-row' });
+
+    if (showExpandable) {
+      const expandToggle = subjectRow.createSpan({
+        text: '▶',
+        cls: 'cherry-pick-commit-expand-toggle'
+      });
+      expandToggle.setAttribute('data-expanded', 'false');
+    }
+
+    subjectRow.createSpan({
       text: commit.subject,
       cls: 'cherry-pick-commit-subject'
     });
@@ -242,18 +400,42 @@ export class CherryPickPreviewModal extends Modal {
       cls: 'cherry-pick-commit-meta'
     });
 
+    // Expandable body
+    if (showExpandable) {
+      const bodyEl = infoEl.createDiv({
+        cls: 'cherry-pick-commit-body cherry-pick-commit-body-collapsed'
+      });
+      bodyEl.createEl('pre', {
+        text: displayBody,
+        cls: 'cherry-pick-commit-body-text'
+      });
+
+      // Toggle expand/collapse on subject row click
+      subjectRow.classList.add('cherry-pick-commit-subject-expandable');
+      subjectRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const toggle = subjectRow.querySelector('.cherry-pick-commit-expand-toggle');
+        const isExpanded = toggle?.getAttribute('data-expanded') === 'true';
+
+        if (toggle) {
+          toggle.textContent = isExpanded ? '▶' : '▼';
+          toggle.setAttribute('data-expanded', isExpanded ? 'false' : 'true');
+        }
+        bodyEl.classList.toggle('cherry-pick-commit-body-collapsed', isExpanded);
+        bodyEl.classList.toggle('cherry-pick-commit-body-expanded', !isExpanded);
+      });
+    }
+
     if (commit.offeredByNames.length > 1) {
       const alsoFromEl = infoEl.createDiv({ cls: 'cherry-pick-commit-also-from' });
       alsoFromEl.createSpan({ text: 'Also from: ' });
 
-      // Create clickable peer name spans
       const otherPeers = commit.offeredByNames.slice(1);
       otherPeers.forEach((peerName, index) => {
         const peerSpan = alsoFromEl.createSpan({
           text: peerName,
           cls: 'cherry-pick-also-from-peer'
         });
-        // Add data attribute for peer identification
         peerSpan.setAttribute('data-peer-name', peerName);
 
         if (index < otherPeers.length - 1) {
@@ -263,128 +445,86 @@ export class CherryPickPreviewModal extends Modal {
     }
 
     // Per-commit actions
-    const actionsEl = commitEl.createDiv({ cls: 'cherry-pick-commit-actions' });
+    if (mode === 'pending') {
+      const actionsEl = commitEl.createDiv({ cls: 'cherry-pick-commit-actions' });
 
-    const acceptBtn = actionsEl.createEl('button', {
-      text: '✓',
-      cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-accept-icon',
-      attr: { title: 'Accept this commit' }
-    });
-    acceptBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await this.acceptSingleCommit(commit, peerRepoPath);
-    });
-
-    const rejectBtn = actionsEl.createEl('button', {
-      text: '✗',
-      cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-reject-icon',
-      attr: { title: 'Reject this commit' }
-    });
-    rejectBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await this.rejectSingleCommit(commit, peerRepoPath);
-    });
-  }
-
-  private renderRejectionHistory(container: HTMLElement) {
-    // Count total rejected commits across all peers
-    let totalRejected = 0;
-    for (const history of this.rejectionHistory.values()) {
-      totalRejected += history.length;
-    }
-
-    if (totalRejected === 0) return;
-
-    const historySection = container.createDiv({ cls: 'cherry-pick-rejection-history' });
-
-    // Collapsible header
-    const headerEl = historySection.createDiv({ cls: 'cherry-pick-history-header' });
-    headerEl.createSpan({
-      text: this.isHistoryExpanded ? '▼' : '▶',
-      cls: 'cherry-pick-history-toggle'
-    });
-    headerEl.createSpan({
-      text: `Previously Rejected (${totalRejected})`,
-      cls: 'cherry-pick-history-title'
-    });
-
-    headerEl.addEventListener('click', () => {
-      this.isHistoryExpanded = !this.isHistoryExpanded;
-      this.renderContent();
-    });
-
-    if (!this.isHistoryExpanded) return;
-
-    // Render rejected commits by peer
-    const contentEl = historySection.createDiv({ cls: 'cherry-pick-history-content' });
-
-    for (const [peerRepoPath, history] of this.rejectionHistory.entries()) {
-      // Find peer name
-      const peer = this.config.peerGroups.find(g => g.peerRepoPath === peerRepoPath);
-      const peerName = peer?.peerName || 'Unknown peer';
-
-      const peerSection = contentEl.createDiv({ cls: 'cherry-pick-history-peer' });
-      peerSection.createEl('div', {
-        text: `From ${peerName}:`,
-        cls: 'cherry-pick-history-peer-name'
+      const previewBtn = actionsEl.createEl('button', {
+        text: '👁',
+        cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-preview-icon',
+        attr: { title: 'Preview this commit' }
+      });
+      previewBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.previewSingleCommit(commit);
       });
 
-      for (const rejected of history) {
-        const commitEl = peerSection.createDiv({ cls: 'cherry-pick-history-commit' });
+      const acceptBtn = actionsEl.createEl('button', {
+        text: '✓',
+        cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-accept-icon',
+        attr: { title: 'Accept this commit' }
+      });
+      acceptBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.acceptSingleCommit(commit, peerRepoPath);
+      });
 
-        const infoEl = commitEl.createDiv({ cls: 'cherry-pick-history-commit-info' });
-        infoEl.createEl('span', {
-          text: rejected.subject,
-          cls: 'cherry-pick-history-commit-subject'
-        });
-
-        const date = new Date(rejected.rejectedAt).toLocaleDateString();
-        infoEl.createEl('span', {
-          text: ` · rejected ${date}`,
-          cls: 'cherry-pick-history-commit-date'
-        });
-
-        const unrejectBtn = commitEl.createEl('button', {
-          text: '↩ Restore',
-          cls: 'cherry-pick-btn cherry-pick-btn-unreject'
-        });
-        unrejectBtn.addEventListener('click', async () => {
-          await this.unrejectCommit(peerRepoPath, rejected.originalHash);
-        });
-      }
+      const rejectBtn = actionsEl.createEl('button', {
+        text: '✗',
+        cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-reject-icon',
+        attr: { title: 'Reject this commit' }
+      });
+      rejectBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.rejectSingleCommit(commit, peerRepoPath);
+      });
     }
   }
 
-  private async unrejectCommit(peerRepoPath: string, originalHash: string) {
-    const memoryService = getCollaborationMemoryService();
-    const success = await memoryService.unreject(
-      peerRepoPath,
-      this.config.dreamNodeUuid,
-      originalHash
-    );
+  private renderRejectedCommit(container: HTMLElement, rejected: RejectedCommit, peerRepoPath: string) {
+    const commitEl = container.createDiv({ cls: 'cherry-pick-commit cherry-pick-commit-rejected' });
 
-    if (success) {
-      // Reload history and re-render
-      await this.loadRejectionHistory();
-      this.renderContent();
-    }
+    // Commit info
+    const infoEl = commitEl.createDiv({ cls: 'cherry-pick-commit-info' });
+
+    infoEl.createEl('div', {
+      text: rejected.subject,
+      cls: 'cherry-pick-commit-subject'
+    });
+
+    const date = new Date(rejected.rejectedAt).toLocaleDateString();
+    infoEl.createEl('div', {
+      text: `Rejected ${date}`,
+      cls: 'cherry-pick-commit-meta'
+    });
+
+    // Restore action
+    const actionsEl = commitEl.createDiv({ cls: 'cherry-pick-commit-actions cherry-pick-commit-actions-visible' });
+
+    const restoreBtn = actionsEl.createEl('button', {
+      text: '↩',
+      cls: 'cherry-pick-btn cherry-pick-btn-icon cherry-pick-btn-restore-icon',
+      attr: { title: 'Restore this commit to pending' }
+    });
+    restoreBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await this.restoreCommit(peerRepoPath, rejected.originalHash);
+    });
   }
 
   private renderActionButtons(container: HTMLElement) {
     const buttonContainer = container.createDiv({ cls: 'cherry-pick-modal-buttons' });
 
-    // Preview button
     new Setting(buttonContainer)
       .addButton((btn) =>
         btn
-          .setButtonText('Preview Selected')
+          .setButtonText('👁 Preview Selected')
           .onClick(async () => {
             await this.startPreview();
           })
       )
       .addButton((btn) =>
         btn
-          .setButtonText('Accept Selected')
+          .setButtonText('✓ Accept Selected')
           .setCta()
           .onClick(async () => {
             await this.acceptSelected();
@@ -392,17 +532,10 @@ export class CherryPickPreviewModal extends Modal {
       )
       .addButton((btn) =>
         btn
-          .setButtonText('Reject Selected')
+          .setButtonText('✗ Reject Selected')
           .setWarning()
           .onClick(async () => {
             await this.rejectSelected();
-          })
-      )
-      .addButton((btn) =>
-        btn
-          .setButtonText('Later')
-          .onClick(() => {
-            this.close();
           })
       );
   }
@@ -423,6 +556,54 @@ export class CherryPickPreviewModal extends Modal {
       peerRepoPath,
       commits
     }));
+  }
+
+  private async previewSingleCommit(commit: PendingCommit) {
+    this.isProcessing = true;
+    this.showProcessing('Starting preview...');
+
+    try {
+      const workflowService = getCherryPickWorkflowService();
+      const result = await workflowService.startPreview(
+        this.config.dreamNodePath,
+        this.config.dreamNodeUuid,
+        [commit]
+      );
+
+      if (result.success) {
+        this.showPreviewBannerAndClose([commit]);
+      } else {
+        this.showMessage(result.message, true);
+        this.isProcessing = false;
+      }
+    } catch (error: any) {
+      this.showMessage(`Preview failed: ${error.message}`, true);
+      this.isProcessing = false;
+    }
+  }
+
+  private async previewPeerCommits(group: PeerCommitGroup) {
+    this.isProcessing = true;
+    this.showProcessing('Starting preview...');
+
+    try {
+      const workflowService = getCherryPickWorkflowService();
+      const result = await workflowService.startPreview(
+        this.config.dreamNodePath,
+        this.config.dreamNodeUuid,
+        group.commits
+      );
+
+      if (result.success) {
+        this.showPreviewBannerAndClose(group.commits);
+      } else {
+        this.showMessage(result.message, true);
+        this.isProcessing = false;
+      }
+    } catch (error: any) {
+      this.showMessage(`Preview failed: ${error.message}`, true);
+      this.isProcessing = false;
+    }
   }
 
   private async startPreview() {
@@ -447,55 +628,7 @@ export class CherryPickPreviewModal extends Modal {
       );
 
       if (result.success) {
-        // Close modal and show non-blocking banner
-        this.isProcessing = false;
-
-        // Store what we need for the banner callbacks
-        const selectedGroups = this.getSelectedCommits();
-        const peerRepoPath = selectedGroups[0]?.peerRepoPath || '';
-
-        // Show the thin bottom banner with callbacks
-        showPreviewBanner({
-          onAccept: async () => {
-            const workflowService = getCherryPickWorkflowService();
-            const previewState = workflowService.getPreviewState();
-
-            if (!previewState) {
-              console.error('[CherryPickModal] No preview state for accept');
-              return;
-            }
-
-            const acceptResult = await workflowService.acceptPreview(peerRepoPath);
-            if (acceptResult.success) {
-              await this.config.onAccept(previewState.previewedCommits, peerRepoPath);
-            } else {
-              console.error('[CherryPickModal] Accept failed:', acceptResult.message);
-            }
-          },
-          onReject: async () => {
-            const workflowService = getCherryPickWorkflowService();
-            const previewState = workflowService.getPreviewState();
-
-            if (!previewState) {
-              console.error('[CherryPickModal] No preview state for reject');
-              return;
-            }
-
-            const rejectResult = await workflowService.rejectPreview(peerRepoPath);
-            if (rejectResult.success) {
-              await this.config.onReject(previewState.previewedCommits, peerRepoPath);
-            } else {
-              console.error('[CherryPickModal] Reject failed:', rejectResult.message);
-            }
-          },
-          onCancel: async () => {
-            const workflowService = getCherryPickWorkflowService();
-            await workflowService.cancelPreview();
-          }
-        });
-
-        // Close the modal - user can interact with dream space
-        this.close();
+        this.showPreviewBannerAndClose(allSelected);
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -506,143 +639,56 @@ export class CherryPickPreviewModal extends Modal {
     }
   }
 
-  private showPreviewMode() {
-    const { contentEl } = this;
-    contentEl.empty();
+  private showPreviewBannerAndClose(commits: PendingCommit[]) {
+    // Close modal and show non-blocking banner
+    this.isProcessing = false;
 
-    contentEl.createEl('h2', { text: 'Preview Mode Active' });
+    // Store what we need for the banner callbacks
+    const selectedGroups = this.getSelectedCommits();
+    const peerRepoPath = selectedGroups[0]?.peerRepoPath || '';
 
-    const infoEl = contentEl.createDiv({ cls: 'cherry-pick-preview-info' });
-    infoEl.createEl('p', {
-      text: 'The selected commits have been applied to your DreamNode. ' +
-            'Explore the changes in your vault, then decide whether to keep or revert them.'
+    // Show the thin bottom banner with callbacks
+    showPreviewBanner({
+      onAccept: async () => {
+        const workflowService = getCherryPickWorkflowService();
+        const previewState = workflowService.getPreviewState();
+
+        if (!previewState) {
+          console.error('[CherryPickModal] No preview state for accept');
+          return;
+        }
+
+        const acceptResult = await workflowService.acceptPreview(peerRepoPath);
+        if (acceptResult.success) {
+          await this.config.onAccept(previewState.previewedCommits, peerRepoPath);
+        } else {
+          console.error('[CherryPickModal] Accept failed:', acceptResult.message);
+        }
+      },
+      onReject: async () => {
+        const workflowService = getCherryPickWorkflowService();
+        const previewState = workflowService.getPreviewState();
+
+        if (!previewState) {
+          console.error('[CherryPickModal] No preview state for reject');
+          return;
+        }
+
+        const rejectResult = await workflowService.rejectPreview(peerRepoPath);
+        if (rejectResult.success) {
+          await this.config.onReject(previewState.previewedCommits, peerRepoPath);
+        } else {
+          console.error('[CherryPickModal] Reject failed:', rejectResult.message);
+        }
+      },
+      onCancel: async () => {
+        const workflowService = getCherryPickWorkflowService();
+        await workflowService.cancelPreview();
+      }
     });
 
-    const workflowService = getCherryPickWorkflowService();
-    const previewState = workflowService.getPreviewState();
-
-    if (previewState) {
-      infoEl.createEl('p', {
-        text: `📊 ${previewState.commitCount} commit(s) applied`,
-        cls: 'cherry-pick-preview-stats'
-      });
-
-      if (previewState.didStash) {
-        infoEl.createEl('p', {
-          text: '💾 Your uncommitted changes have been stashed and will be restored after.',
-          cls: 'cherry-pick-preview-stash-notice'
-        });
-      }
-    }
-
-    // Preview action buttons
-    const buttonContainer = contentEl.createDiv({ cls: 'cherry-pick-modal-buttons' });
-
-    new Setting(buttonContainer)
-      .addButton((btn) =>
-        btn
-          .setButtonText('Keep Changes')
-          .setCta()
-          .onClick(async () => {
-            await this.acceptPreview();
-          })
-      )
-      .addButton((btn) =>
-        btn
-          .setButtonText('Revert Changes')
-          .setWarning()
-          .onClick(async () => {
-            await this.rejectPreview();
-          })
-      )
-      .addButton((btn) =>
-        btn
-          .setButtonText('Cancel Preview')
-          .onClick(async () => {
-            await this.cancelPreview();
-          })
-      );
-  }
-
-  private async acceptPreview() {
-    this.showProcessing('Accepting changes...');
-
-    try {
-      const workflowService = getCherryPickWorkflowService();
-      const previewState = workflowService.getPreviewState();
-
-      if (!previewState) {
-        this.showMessage('No preview active', true);
-        return;
-      }
-
-      // Use the first peer's repo path for memory storage
-      const selectedGroups = this.getSelectedCommits();
-      const peerRepoPath = selectedGroups[0]?.peerRepoPath || '';
-
-      const result = await workflowService.acceptPreview(peerRepoPath);
-
-      if (result.success) {
-        // Call the onAccept callback
-        await this.config.onAccept(previewState.previewedCommits, peerRepoPath);
-        this.isProcessing = false;
-        this.close();
-      } else {
-        this.showMessage(result.message, true);
-      }
-    } catch (error: any) {
-      this.showMessage(`Accept failed: ${error.message}`, true);
-    }
-  }
-
-  private async rejectPreview() {
-    this.showProcessing('Reverting changes...');
-
-    try {
-      const workflowService = getCherryPickWorkflowService();
-      const previewState = workflowService.getPreviewState();
-
-      if (!previewState) {
-        this.showMessage('No preview active', true);
-        return;
-      }
-
-      // Use the first peer's repo path for memory storage
-      const selectedGroups = this.getSelectedCommits();
-      const peerRepoPath = selectedGroups[0]?.peerRepoPath || '';
-
-      const result = await workflowService.rejectPreview(peerRepoPath);
-
-      if (result.success) {
-        // Call the onReject callback
-        await this.config.onReject(previewState.previewedCommits, peerRepoPath);
-        this.isProcessing = false;
-        this.close();
-      } else {
-        this.showMessage(result.message, true);
-      }
-    } catch (error: any) {
-      this.showMessage(`Reject failed: ${error.message}`, true);
-    }
-  }
-
-  private async cancelPreview() {
-    this.showProcessing('Cancelling preview...');
-
-    try {
-      const workflowService = getCherryPickWorkflowService();
-      const result = await workflowService.cancelPreview();
-
-      if (result.success) {
-        this.isProcessing = false;
-        // Go back to selection view
-        this.renderContent();
-      } else {
-        this.showMessage(result.message, true);
-      }
-    } catch (error: any) {
-      this.showMessage(`Cancel failed: ${error.message}`, true);
-    }
+    // Close the modal - user can interact with dream space
+    this.close();
   }
 
   private async acceptSelected() {
@@ -736,12 +782,11 @@ export class CherryPickPreviewModal extends Modal {
       if (result.success) {
         await this.config.onAccept(group.commits, group.peerRepoPath);
 
-        // Remove these commits from selection state and re-render
+        // Remove these commits from selection state and config
         for (const commit of group.commits) {
           this.selectionState.delete(commit.originalHash);
         }
 
-        // Remove empty peer group from config
         const groupIndex = this.config.peerGroups.findIndex(g => g.peerUuid === group.peerUuid);
         if (groupIndex >= 0) {
           this.config.peerGroups.splice(groupIndex, 1);
@@ -749,8 +794,7 @@ export class CherryPickPreviewModal extends Modal {
 
         this.isProcessing = false;
 
-        // Close if no more commits
-        if (this.config.peerGroups.length === 0) {
+        if (this.config.peerGroups.length === 0 && this.rejectionHistory.size === 0) {
           this.close();
         } else {
           this.renderContent();
@@ -780,12 +824,12 @@ export class CherryPickPreviewModal extends Modal {
       if (result.success) {
         await this.config.onReject(group.commits, group.peerRepoPath);
 
-        // Remove these commits from selection state
+        // Remove from selection state
         for (const commit of group.commits) {
           this.selectionState.delete(commit.originalHash);
         }
 
-        // Remove empty peer group from config
+        // Remove peer group from config
         const groupIndex = this.config.peerGroups.findIndex(g => g.peerUuid === group.peerUuid);
         if (groupIndex >= 0) {
           this.config.peerGroups.splice(groupIndex, 1);
@@ -793,12 +837,9 @@ export class CherryPickPreviewModal extends Modal {
 
         this.isProcessing = false;
 
-        // Close if no more commits
-        if (this.config.peerGroups.length === 0) {
-          this.close();
-        } else {
-          this.renderContent();
-        }
+        // Reload rejection history and re-render
+        await this.loadRejectionHistory();
+        this.renderContent();
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -843,7 +884,7 @@ export class CherryPickPreviewModal extends Modal {
 
         this.isProcessing = false;
 
-        if (this.config.peerGroups.length === 0) {
+        if (this.config.peerGroups.length === 0 && this.rejectionHistory.size === 0) {
           this.close();
         } else {
           this.renderContent();
@@ -891,11 +932,9 @@ export class CherryPickPreviewModal extends Modal {
 
         this.isProcessing = false;
 
-        if (this.config.peerGroups.length === 0) {
-          this.close();
-        } else {
-          this.renderContent();
-        }
+        // Reload rejection history and re-render
+        await this.loadRejectionHistory();
+        this.renderContent();
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -903,6 +942,77 @@ export class CherryPickPreviewModal extends Modal {
     } catch (error: any) {
       this.showMessage(`Reject failed: ${error.message}`, true);
       this.isProcessing = false;
+    }
+  }
+
+  private async restoreCommit(peerRepoPath: string, originalHash: string) {
+    const memoryService = getCollaborationMemoryService();
+    const success = await memoryService.unreject(
+      peerRepoPath,
+      this.config.dreamNodeUuid,
+      originalHash
+    );
+
+    if (success) {
+      // Reload rejection history
+      await this.loadRejectionHistory();
+
+      // Re-fetch pending commits to include the restored one
+      await this.refreshPendingCommits();
+
+      this.renderContent();
+    }
+  }
+
+  private async restoreAllFromPeer(peerRepoPath: string, history: RejectedCommit[]) {
+    const memoryService = getCollaborationMemoryService();
+
+    for (const rejected of history) {
+      await memoryService.unreject(
+        peerRepoPath,
+        this.config.dreamNodeUuid,
+        rejected.originalHash
+      );
+    }
+
+    // Reload rejection history
+    await this.loadRejectionHistory();
+
+    // Re-fetch pending commits to include restored ones
+    await this.refreshPendingCommits();
+
+    this.renderContent();
+  }
+
+  private async refreshPendingCommits() {
+    // Re-fetch pending commits from workflow service
+    const workflowService = getCherryPickWorkflowService();
+
+    const peers = this.config.allPeers || this.config.peerGroups.map(g => ({
+      uuid: g.peerUuid,
+      name: g.peerName,
+      repoPath: g.peerRepoPath
+    }));
+
+    const newPeerGroups = await workflowService.getPendingCommits(
+      this.config.dreamNodePath,
+      this.config.dreamNodeUuid,
+      peers
+    );
+
+    // Update config with new peer groups
+    this.config.peerGroups = newPeerGroups;
+
+    // Rebuild selection state
+    this.selectionState.clear();
+    for (const group of newPeerGroups) {
+      for (const commit of group.commits) {
+        this.selectionState.set(commit.originalHash, {
+          commit,
+          selected: true,
+          peerRepoPath: group.peerRepoPath
+        });
+      }
     }
   }
 
@@ -952,18 +1062,94 @@ export class CherryPickPreviewModal extends Modal {
 
       .cherry-pick-modal-subtitle {
         color: var(--text-muted);
+        margin-bottom: 1em;
+        font-size: 0.9em;
+      }
+
+      /* Section styling */
+      .cherry-pick-section {
         margin-bottom: 1.5em;
       }
 
+      .cherry-pick-section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        margin-bottom: 0.75em;
+      }
+
+      .cherry-pick-section-header-collapsible {
+        cursor: pointer;
+        padding: 0.5em;
+        margin: -0.5em;
+        border-radius: 4px;
+        transition: background 0.15s;
+      }
+
+      .cherry-pick-section-header-collapsible:hover {
+        background: var(--background-modifier-hover);
+      }
+
+      .cherry-pick-section-toggle {
+        font-size: 0.8em;
+        width: 1em;
+        color: var(--text-muted);
+      }
+
+      .cherry-pick-section-title {
+        margin: 0;
+        font-size: 1em;
+        font-weight: 600;
+        color: var(--text-normal);
+      }
+
+      .cherry-pick-section-badge {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        font-size: 0.75em;
+        padding: 0.15em 0.5em;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+
+      .cherry-pick-section-badge-muted {
+        background: var(--background-modifier-border);
+        color: var(--text-muted);
+      }
+
+      /* Empty state */
+      .cherry-pick-empty-inline {
+        padding: 1em;
+        background: var(--background-secondary);
+        border-radius: 8px;
+        text-align: center;
+      }
+
+      .cherry-pick-empty-text {
+        color: var(--text-muted);
+        font-size: 0.9em;
+      }
+
+      /* History section */
+      .cherry-pick-history-section {
+        border-top: 1px solid var(--background-modifier-border);
+        padding-top: 1em;
+      }
+
       .cherry-pick-peer-groups {
-        margin-bottom: 1.5em;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75em;
       }
 
       .cherry-pick-peer-group {
         background: var(--background-secondary);
         border-radius: 8px;
-        margin-bottom: 1em;
         overflow: hidden;
+      }
+
+      .cherry-pick-peer-group-rejected {
+        opacity: 0.85;
       }
 
       .cherry-pick-peer-header {
@@ -992,7 +1178,7 @@ export class CherryPickPreviewModal extends Modal {
 
       .cherry-pick-peer-actions {
         display: flex;
-        gap: 0.5em;
+        gap: 0.25em;
         margin-left: auto;
       }
 
@@ -1010,12 +1196,20 @@ export class CherryPickPreviewModal extends Modal {
         transition: background 0.15s;
       }
 
+      .cherry-pick-commit:last-child {
+        margin-bottom: 0;
+      }
+
       .cherry-pick-commit:hover {
         background: var(--background-modifier-hover);
       }
 
       .cherry-pick-commit.selected {
         background: var(--background-modifier-hover);
+      }
+
+      .cherry-pick-commit-rejected {
+        opacity: 0.9;
       }
 
       .cherry-pick-commit-checkbox {
@@ -1027,10 +1221,65 @@ export class CherryPickPreviewModal extends Modal {
         min-width: 0;
       }
 
+      .cherry-pick-commit-subject-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.35em;
+        margin-bottom: 0.25em;
+      }
+
+      .cherry-pick-commit-subject-expandable {
+        cursor: pointer;
+      }
+
+      .cherry-pick-commit-subject-expandable:hover .cherry-pick-commit-subject {
+        color: var(--text-accent);
+      }
+
+      .cherry-pick-commit-expand-toggle {
+        font-size: 0.7em;
+        color: var(--text-muted);
+        user-select: none;
+        margin-top: 0.2em;
+        transition: color 0.15s;
+      }
+
+      .cherry-pick-commit-subject-expandable:hover .cherry-pick-commit-expand-toggle {
+        color: var(--text-accent);
+      }
+
       .cherry-pick-commit-subject {
         font-weight: 500;
-        margin-bottom: 0.25em;
         word-break: break-word;
+      }
+
+      .cherry-pick-commit-body {
+        overflow: hidden;
+        transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+      }
+
+      .cherry-pick-commit-body-collapsed {
+        max-height: 0;
+        opacity: 0;
+      }
+
+      .cherry-pick-commit-body-expanded {
+        max-height: 500px;
+        opacity: 1;
+      }
+
+      .cherry-pick-commit-body-text {
+        font-size: 0.8em;
+        color: var(--text-muted);
+        background: var(--background-primary);
+        padding: 0.75em;
+        border-radius: 4px;
+        margin: 0.5em 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: inherit;
+        line-height: 1.5;
+        border-left: 2px solid var(--background-modifier-border);
       }
 
       .cherry-pick-commit-meta {
@@ -1062,7 +1311,7 @@ export class CherryPickPreviewModal extends Modal {
         color: var(--text-on-accent);
       }
 
-      /* Shared commit indicator - visual badge */
+      /* Shared commit indicator */
       .cherry-pick-commit-shared {
         position: relative;
       }
@@ -1089,49 +1338,49 @@ export class CherryPickPreviewModal extends Modal {
         opacity: 1;
       }
 
+      .cherry-pick-commit-actions-visible {
+        opacity: 1;
+      }
+
       .cherry-pick-btn {
         border: none;
         border-radius: 4px;
         padding: 0.25em 0.5em;
         cursor: pointer;
         font-size: 0.85em;
-        transition: background 0.15s;
+        transition: background 0.15s, transform 0.1s;
       }
 
-      .cherry-pick-btn-accept-small {
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
+      .cherry-pick-btn:hover {
+        transform: translateY(-1px);
       }
 
-      .cherry-pick-btn-accept-small:hover {
-        background: var(--interactive-accent-hover);
-      }
-
-      .cherry-pick-btn-reject-small {
-        background: var(--background-modifier-error);
-        color: var(--text-on-accent);
-      }
-
-      .cherry-pick-btn-reject-small:hover {
-        opacity: 0.9;
+      .cherry-pick-btn:active {
+        transform: translateY(0);
       }
 
       .cherry-pick-btn-icon {
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         padding: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         background: var(--background-modifier-border);
+        font-size: 0.9em;
       }
 
       .cherry-pick-btn-icon:hover {
         background: var(--background-modifier-border-hover);
       }
 
-      .cherry-pick-btn-accept-icon:hover {
+      .cherry-pick-btn-preview-icon:hover {
         background: var(--interactive-accent);
+        color: var(--text-on-accent);
+      }
+
+      .cherry-pick-btn-accept-icon:hover {
+        background: var(--interactive-success);
         color: var(--text-on-accent);
       }
 
@@ -1140,29 +1389,36 @@ export class CherryPickPreviewModal extends Modal {
         color: var(--text-on-accent);
       }
 
+      .cherry-pick-btn-restore-icon {
+        background: var(--background-modifier-border);
+      }
+
+      .cherry-pick-btn-restore-icon:hover {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+      }
+
+      .cherry-pick-btn-restore-small {
+        background: var(--background-modifier-border);
+        color: var(--text-muted);
+        font-size: 0.8em;
+      }
+
+      .cherry-pick-btn-restore-small:hover {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+      }
+
       .cherry-pick-modal-buttons {
-        margin-top: 1.5em;
+        margin-top: 1em;
         display: flex;
         justify-content: flex-end;
         gap: 0.5em;
       }
 
-      .cherry-pick-preview-info {
-        background: var(--background-secondary);
-        padding: 1.5em;
-        border-radius: 8px;
-        margin: 1.5em 0;
-      }
-
-      .cherry-pick-preview-stats {
-        font-size: 1.1em;
-        font-weight: 500;
-        margin-bottom: 0.5em;
-      }
-
-      .cherry-pick-preview-stash-notice {
-        color: var(--text-muted);
-        font-size: 0.9em;
+      .cherry-pick-modal-buttons .setting-item {
+        border: none;
+        padding: 0;
       }
 
       .cherry-pick-spinner {
@@ -1194,90 +1450,6 @@ export class CherryPickPreviewModal extends Modal {
 
       .cherry-pick-message-error {
         background: var(--background-modifier-error);
-        color: var(--text-on-accent);
-      }
-
-      /* Rejection history styles */
-      .cherry-pick-rejection-history {
-        margin-top: 1.5em;
-        padding-top: 1em;
-        border-top: 1px solid var(--background-modifier-border);
-      }
-
-      .cherry-pick-history-header {
-        display: flex;
-        align-items: center;
-        gap: 0.5em;
-        cursor: pointer;
-        padding: 0.5em;
-        border-radius: 4px;
-        color: var(--text-muted);
-        transition: background 0.15s;
-      }
-
-      .cherry-pick-history-header:hover {
-        background: var(--background-modifier-hover);
-      }
-
-      .cherry-pick-history-toggle {
-        font-size: 0.8em;
-        width: 1em;
-        text-align: center;
-      }
-
-      .cherry-pick-history-title {
-        font-size: 0.9em;
-      }
-
-      .cherry-pick-history-content {
-        margin-top: 0.5em;
-        padding-left: 1em;
-      }
-
-      .cherry-pick-history-peer {
-        margin-bottom: 1em;
-      }
-
-      .cherry-pick-history-peer-name {
-        font-size: 0.85em;
-        color: var(--text-faint);
-        margin-bottom: 0.5em;
-      }
-
-      .cherry-pick-history-commit {
-        display: flex;
-        align-items: center;
-        gap: 0.5em;
-        padding: 0.5em;
-        border-radius: 4px;
-        margin-bottom: 0.25em;
-        background: var(--background-secondary);
-      }
-
-      .cherry-pick-history-commit-info {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .cherry-pick-history-commit-subject {
-        font-size: 0.9em;
-        color: var(--text-normal);
-      }
-
-      .cherry-pick-history-commit-date {
-        font-size: 0.8em;
-        color: var(--text-faint);
-      }
-
-      .cherry-pick-btn-unreject {
-        background: var(--background-modifier-border);
-        color: var(--text-muted);
-        font-size: 0.8em;
-        padding: 0.2em 0.5em;
-      }
-
-      .cherry-pick-btn-unreject:hover {
-        background: var(--interactive-accent);
         color: var(--text-on-accent);
       }
     `;
