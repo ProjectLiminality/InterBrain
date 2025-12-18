@@ -300,62 +300,37 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
         );
       
       case 'video':
-        // Special handling for .link files (YouTube thumbnails)
-        if (media.isLinkFile && media.linkMetadata?.type === 'youtube') {
+        // Special handling for .link files (YouTube embedded player)
+        if (media.isLinkFile && media.linkMetadata?.type === 'youtube' && media.linkMetadata.videoId) {
+          const embedUrl = media.linkMetadata.embedUrl || `https://www.youtube.com/embed/${media.linkMetadata.videoId}`;
           return (
             <div
               style={{
                 ...containerStyle,
                 position: 'relative',
-                display: 'inline-block'
+                width: '100%',
+                paddingBottom: '56.25%', // 16:9 aspect ratio
+                height: 0,
+                overflow: 'hidden',
+                borderRadius: '8px'
               }}
               onClick={clickHandler}
             >
-              <img
-                className={styles.dreamSongMedia}
-                src={media.src} // This is the thumbnail URL
-                alt={media.alt}
-                loading="lazy"
-              />
-              {/* YouTube play button overlay */}
-              <div
+              <iframe
+                src={embedUrl}
+                title={media.alt || 'YouTube video'}
                 style={{
                   position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '60px',
-                  height: '60px',
-                  backgroundColor: 'rgba(255, 0, 0, 0.9)',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontSize: '24px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                  transition: 'all 0.2s ease',
-                  zIndex: 10
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  borderRadius: '8px'
                 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (media.linkMetadata?.url) {
-                    window.open(media.linkMetadata.url, '_blank');
-                  }
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.1)';
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.9)';
-                }}
-              >
-                ▶
-              </div>
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
             </div>
           );
         }
