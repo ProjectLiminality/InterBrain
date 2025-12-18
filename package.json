@@ -13,7 +13,9 @@
     "check-all": "npm run lint && npm run typecheck && npm run test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:collaboration": "npx tsx src/features/social-resonance-filter/__tests__/collaboration/run-local-test.ts",
+    "test:collaboration:reset": "npx tsx src/features/social-resonance-filter/__tests__/collaboration/run-local-test.ts --reset"
   },
   "repository": {
     "type": "git",
