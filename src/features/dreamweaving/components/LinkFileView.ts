@@ -47,7 +47,8 @@ export class LinkFileView extends TextFileView {
 
   clear(): void {
     this.linkMetadata = null;
-    this.rawData = '';
+    // NOTE: Do NOT clear rawData here - it's needed for getViewData() when Obsidian saves
+    // Only clear UI elements
     const container = this.containerEl.querySelector('.link-preview-container');
     if (container) {
       container.remove();
