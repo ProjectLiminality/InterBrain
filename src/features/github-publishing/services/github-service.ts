@@ -787,7 +787,6 @@ export class GitHubService {
       // Rebuild GitHub Pages with latest code (includes UUID resolution)
       try {
         const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
-        const { getMimeType } = await import('../../dreamweaving/dreamsong/media-resolver');
         const files = fs.readdirSync(submodulePath);
         const canvasFiles = files.filter(f => f.endsWith('.canvas'));
         let blocks: any[] = [];
@@ -805,29 +804,16 @@ export class GitHubService {
               if (resolvedUuid) {
                 block.media.sourceDreamNodeId = resolvedUuid;
               }
+              // Store absolute path for file copy (NOT base64 embedding - avoids huge HTML files)
               const mediaPath = path.join(vaultPath, block.media.src);
               if (fs.existsSync(mediaPath)) {
-                const buffer = fs.readFileSync(mediaPath);
-                const base64 = buffer.toString('base64');
-                const mimeType = getMimeType(block.media.src);
-                block.media.src = `data:${mimeType};base64,${base64}`;
+                block.media._absolutePath = mediaPath;
               }
             }
           }
         } else if (udd.dreamTalk) {
-          const dreamTalkPath = path.join(submodulePath, udd.dreamTalk);
-          if (fs.existsSync(dreamTalkPath)) {
-            const buffer = fs.readFileSync(dreamTalkPath);
-            const base64 = buffer.toString('base64');
-            const mimeType = getMimeType(udd.dreamTalk);
-            blocks = [{
-              id: 'dreamtalk-fallback',
-              type: 'media',
-              media: { src: `data:${mimeType};base64,${base64}`, type: mimeType.startsWith('video/') ? 'video' : 'image', alt: udd.title },
-              text: '',
-              edges: []
-            }];
-          }
+          // DreamTalk-only nodes are handled by buildStaticSite via udd.dreamTalk
+          blocks = [];
         }
 
         await this.buildStaticSite(submodulePath, udd.uuid, udd.title, blocks);
