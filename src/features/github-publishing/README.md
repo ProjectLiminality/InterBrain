@@ -78,6 +78,9 @@ export { createGitHubSettingsSection, checkGitHubStatus } from './settings-secti
 - **Media file collision handling** - Uses simple counter suffix strategy (may not be robust for large albums)
 - **Link resolver scalability** - Builds UUID→URL map by reading all submodule .udd files (could be slow for large networks)
 
+### Known Issues
+- **Favicon not generating** - Sharp image library may not load correctly in Obsidian's Electron environment. Favicon generation silently fails, resulting in missing favicons on GitHub Pages sites. Needs investigation into sharp/Electron compatibility.
+
 ## Notes
 - Commands delegate to services (never direct git operations)
 - Service layer handles all GitHub CLI and git operations
