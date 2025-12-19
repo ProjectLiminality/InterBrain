@@ -337,6 +337,8 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
         }
 
         // Regular video handling
+        // Note: We use an overlay div for DreamNode selection instead of onClickCapture
+        // because preventDefault() on video elements breaks Safari playback
         return (
           <div
             style={{
@@ -348,22 +350,8 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
               className={styles.dreamSongMedia}
               src={media.src}
               controls
-              preload="metadata"
+              preload="auto"
               playsInline
-              onClickCapture={(e) => {
-                // Prevent default video click behavior and handle DreamNode selection
-                e.preventDefault();
-                e.stopPropagation();
-
-                // Calculate click position relative to video
-                const rect = e.currentTarget.getBoundingClientRect();
-                const relativeY = (e.clientY - rect.top) / rect.height;
-
-                // Only handle clicks outside the controls area (bottom ~20%)
-                if (relativeY < 0.8 && clickHandler) {
-                  clickHandler(e);
-                }
-              }}
             >
               Your browser does not support video playback.
             </video>
