@@ -377,7 +377,7 @@
   text-align: center;
 }
 
-/* Responsive adjustments for mobile devices */
+/* Responsive adjustments - tablet */
 @media (max-width: 1200px) {
   .dreamSongBlockMediaText .dreamSongMediaText {
     flex-direction: column !important;
@@ -403,11 +403,88 @@
   }
 
   .dreamSongText {
-    font-size: 20px;
+    font-size: 20px !important;
   }
 
-  .dreamsong-container {
+  .dreamSongContainer {
     padding: 10px;
+  }
+}
+
+/* Responsive adjustments - mobile */
+@media (max-width: 600px) {
+  .dreamSongContainer {
+    padding: 12px 8px;
+  }
+
+  .dreamSongHeader {
+    margin-bottom: 1rem;
+  }
+
+  .dreamSongTitle {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .dreamSongSeparator {
+    width: 100%;
+  }
+
+  .dreamSongBlock {
+    margin-bottom: 40px;
+    max-width: 100%;
+  }
+
+  .dreamSongMediaContainer,
+  .dreamSongTextContainer {
+    max-width: 100%;
+  }
+
+  .dreamSongText {
+    font-size: 14px !important;
+    line-height: 1.6;
+  }
+
+  .dreamSongText h1 { font-size: 1.4rem; }
+  .dreamSongText h2 { font-size: 1.25rem; }
+  .dreamSongText h3 { font-size: 1.1rem; }
+
+  .dreamSongText blockquote {
+    padding-left: 8px;
+    font-size: 13px;
+  }
+
+  .dreamTalkSection {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .viewOnWebButton {
+    top: 10px;
+    right: 10px;
+  }
+
+  .dreamSongBlockText .dreamSongTextOnly {
+    max-width: 100%;
+  }
+
+  .dreamSongBlockMedia .dreamSongMediaOnly {
+    max-width: 100%;
+  }
+}
+
+/* Responsive adjustments - small mobile */
+@media (max-width: 400px) {
+  .dreamSongTitle {
+    font-size: 1.25rem;
+  }
+
+  .dreamSongText {
+    font-size: 13px !important;
+  }
+
+  .dreamSongBlock {
+    margin-bottom: 30px;
   }
 }
 
