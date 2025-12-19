@@ -224,3 +224,29 @@ Four Rendering Paths:
 - **macOS Case Sensitivity**: Directory is `dreamsong/` (lowercase) - avoid imports with `DreamSong/`
 - **Flip-Flop Layout**: Media-text pairs alternate left/right alignment
 - **Hash-Based Updates**: Only re-render when canvas structure actually changes
+
+## Future Improvements
+
+### Image Clusters / Grid Elements
+Support undirected edges between multiple media nodes (without text nodes) to create image clusters rendered as grid layouts in DreamSong:
+
+```
+Canvas layout:               DreamSong output:
+┌───────┐   ┌───────┐       ┌─────────────────┐
+│ img1  │───│ img2  │       │ ┌─────┬─────┐   │
+└───────┘   └───────┘       │ │img1 │img2 │   │
+    │           │           │ ├─────┼─────┤   │
+    └─────┬─────┘           │ │img3 │img4 │   │
+          │                 │ └─────┴─────┘   │
+      ┌───┴───┐             └─────────────────┘
+      │       │
+┌───────┐ ┌───────┐
+│ img3  │─│ img4  │
+└───────┘ └───────┘
+```
+
+**Implementation approach:**
+1. Detect connected components of file nodes linked only by undirected edges
+2. Group into cluster if no text nodes are connected
+3. Render as responsive CSS grid (auto-fill columns)
+4. Maintain aspect ratios, handle mixed media types

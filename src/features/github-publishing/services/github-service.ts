@@ -71,6 +71,39 @@ export class GitHubService {
   }
 
   /**
+   * Generate favicon from an image using sharp
+   * Creates a 32x32 PNG favicon suitable for browsers
+   */
+  private async generateFavicon(srcPath: string, destPath: string): Promise<boolean> {
+    const sharp = this.getSharp();
+    if (!sharp) {
+      return false;
+    }
+
+    const ext = path.extname(srcPath).toLowerCase();
+
+    // Only generate favicon from image files
+    if (!['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+      return false;
+    }
+
+    try {
+      await sharp(srcPath)
+        .resize(32, 32, {
+          fit: 'cover',
+          position: 'center'
+        })
+        .png()
+        .toFile(destPath);
+
+      return true;
+    } catch (error) {
+      console.warn(`GitHubService: Failed to generate favicon from ${srcPath}:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Optimize an image file using sharp
    * Returns the output path (may have different extension if converted to webp)
    */
@@ -679,6 +712,9 @@ export class GitHubService {
             size: fs.statSync(path.join(mediaDir, uniqueFilename)).size
           }];
 
+          // Generate favicon from DreamTalk image
+          const faviconPath = path.join(buildDir, 'favicon.png');
+          await this.generateFavicon(dreamTalkPath, faviconPath);
         }
       }
 
