@@ -337,8 +337,7 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
         }
 
         // Regular video handling
-        // Note: We use an overlay div for DreamNode selection instead of onClickCapture
-        // because preventDefault() on video elements breaks Safari playback
+        // Autoplay muted for ambient video experience, with controls for user interaction
         return (
           <div
             style={{
@@ -352,24 +351,36 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
               controls
               preload="auto"
               playsInline
+              autoPlay
+              loop
             >
               Your browser does not support video playback.
             </video>
 
-            {/* Transparent overlay for DreamNode selection (avoiding controls area) */}
+            {/* Corner navigation badge for DreamNode links (doesn't block video controls) */}
             {isClickable && (
               <div
                 style={{
                   position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: '20%', // Leave space for video controls
+                  top: '8px',
+                  right: '8px',
                   zIndex: 1,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  background: 'rgba(0, 0, 0, 0.6)',
+                  borderRadius: '4px',
+                  padding: '6px 10px',
+                  fontSize: '12px',
+                  color: 'white',
+                  opacity: 0.8,
+                  transition: 'opacity 0.2s'
                 }}
                 onClick={clickHandler}
-              />
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                title="View source DreamNode"
+              >
+                ↗ Source
+              </div>
             )}
           </div>
         );
