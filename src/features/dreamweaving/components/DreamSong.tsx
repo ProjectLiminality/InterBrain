@@ -302,8 +302,8 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
       case 'video':
         // Special handling for .link files (YouTube embedded player)
         if (media.isLinkFile && media.linkMetadata?.type === 'youtube' && media.linkMetadata.videoId) {
-          // Use youtube-nocookie.com for privacy-enhanced embedding (also more permissive for iframe embedding)
-          const embedUrl = `https://www.youtube-nocookie.com/embed/${media.linkMetadata.videoId}`;
+          // Use standard youtube.com/embed with origin parameter for Electron compatibility
+          const embedUrl = `https://www.youtube.com/embed/${media.linkMetadata.videoId}?origin=https://obsidian.md`;
           return (
             <div
               style={{

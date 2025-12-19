@@ -249,8 +249,8 @@ export class CanvasObserverService {
 
     if (metadata.type === 'youtube' && metadata.videoId) {
       // YouTube video with play button that expands to iframe on click
-      // Using youtube-nocookie.com for privacy-enhanced embedding
-      const embedUrl = `https://www.youtube-nocookie.com/embed/${metadata.videoId}?autoplay=1`;
+      // Using standard youtube.com/embed with origin parameter to help with Electron context
+      const embedUrl = `https://www.youtube.com/embed/${metadata.videoId}?autoplay=1&origin=https://obsidian.md`;
       return `
         <div class="link-thumbnail-container" style="
           position: relative;
