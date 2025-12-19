@@ -357,31 +357,6 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
               Your browser does not support video playback.
             </video>
 
-            {/* Corner navigation badge for DreamNode links (doesn't block video controls) */}
-            {isClickable && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  zIndex: 1,
-                  cursor: 'pointer',
-                  background: 'rgba(0, 0, 0, 0.6)',
-                  borderRadius: '4px',
-                  padding: '6px 10px',
-                  fontSize: '12px',
-                  color: 'white',
-                  opacity: 0.8,
-                  transition: 'opacity 0.2s'
-                }}
-                onClick={clickHandler}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
-                title="View source DreamNode"
-              >
-                ↗ Source
-              </div>
-            )}
           </div>
         );
       
