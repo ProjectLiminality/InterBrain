@@ -353,7 +353,7 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
         }
 
         // Regular video handling
-        // Autoplay muted for ambient video experience, with controls for user interaction
+        // No autoplay - user clicks to play with sound for full vibe experience
         return (
           <div
             style={{
@@ -367,7 +367,6 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
               controls
               preload="auto"
               playsInline
-              autoPlay
               loop
             >
               Your browser does not support video playback.

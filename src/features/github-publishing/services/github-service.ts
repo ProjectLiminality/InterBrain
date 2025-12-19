@@ -45,7 +45,7 @@ interface SubmoduleInfo {
 export class GitHubService {
   private ghPath: string | null = null;
   private pluginDir: string | null = null;
-  private sharp: any = null;
+  private sharp: any = undefined; // undefined = not yet loaded, null = failed to load
 
   /**
    * Set the plugin directory path (must be called during plugin initialization)
@@ -718,6 +718,23 @@ export class GitHubService {
         }
       }
 
+      // Fallback: Generate favicon from first canvas image if no DreamTalk
+      const faviconPath = path.join(buildDir, 'favicon.png');
+      if (!fs.existsSync(faviconPath)) {
+        // Find first image in blocks
+        for (const block of blocks) {
+          if (block.media?.src && block.media.type === 'image') {
+            const imgPath = block.media.src.startsWith('./media/')
+              ? path.join(buildDir, block.media.src)
+              : null;
+            if (imgPath && fs.existsSync(imgPath)) {
+              await this.generateFavicon(imgPath, faviconPath);
+              break;
+            }
+          }
+        }
+      }
+
       // Build link resolver map
       const linkResolver = await this.buildLinkResolver(dreamNodePath);
 
@@ -936,10 +953,17 @@ export class GitHubService {
       try {
         if (!ghPagesExists && !remoteGhPagesExists) {
           // First time: create orphan gh-pages branch
+          // Get current branch name BEFORE switching (git checkout - doesn't work for orphan branches)
+          const { stdout: currentBranch } = await execAsync(
+            `git rev-parse --abbrev-ref HEAD`,
+            { cwd: dreamNodePath }
+          );
+          const branchToReturn = currentBranch.trim();
+
           await execAsync(`git checkout --orphan gh-pages`, { cwd: dreamNodePath });
           await execAsync(`git reset --hard`, { cwd: dreamNodePath });
           await execAsync(`git commit --allow-empty -m "Initialize gh-pages branch"`, { cwd: dreamNodePath });
-          await execAsync(`git checkout -`, { cwd: dreamNodePath }); // Go back to previous branch
+          await execAsync(`git checkout "${branchToReturn}"`, { cwd: dreamNodePath }); // Return to original branch
         } else if (!ghPagesExists && remoteGhPagesExists) {
           // Remote exists but not local: fetch it
           await execAsync(`git fetch github gh-pages:gh-pages`, { cwd: dreamNodePath });
