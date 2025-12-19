@@ -1,9 +1,9 @@
 # GitHub Publishing Feature
 
-**Purpose**: Fallback sharing mechanism for Windows users and public broadcast layer via GitHub + GitHub Pages
+**Purpose**: Public broadcast layer via GitHub Pages for DreamSong publishing
 
 ## Philosophy
-"GitHub for sharing, Radicle for collaboration" - GitHub provides fallback when Radicle unavailable and public broadcast via Pages.
+"Radicle for collaboration, GitHub Pages for publishing" - Radicle enables peer collaboration on DreamNodes, while GitHub Pages provides public broadcasting of DreamSongs to the web.
 
 ## Directory Structure
 
@@ -42,10 +42,11 @@ Generates Obsidian URIs for single-node sharing:
 
 ## Commands
 
-Three Obsidian commands registered:
-- "Share DreamNode via GitHub" - Creates repo + Pages with recursive submodule handling
-- "Unpublish DreamNode from GitHub" - Deletes remote repo + cleans metadata
-- "Clone DreamNode from GitHub" - Supports Obsidian URI protocol
+Four Obsidian commands registered:
+- **Publish DreamNode to GitHub** - Creates repo + Pages with recursive submodule handling
+- **Unpublish DreamNode from GitHub Pages** - Deletes remote repo + cleans metadata
+- **Update GitHub Pages** - Rebuilds static site without recreating repo (fast path)
+- **Clone DreamNode from GitHub** - Supports Obsidian URI protocol
 
 ## Main Exports
 
@@ -83,3 +84,30 @@ export { createGitHubSettingsSection, checkGitHubStatus } from './settings-secti
 - Batch operations serialize to prevent race conditions
 - .udd file is source of truth for GitHub URLs (githubRepoUrl, githubPagesUrl)
 - Static sites deployed to orphan `gh-pages` branch (no source code pollution)
+
+## Future Improvements
+
+### Unified "Share Changes" Experience
+Currently, the "Share Changes" button (push-to-network) only pushes git commits but doesn't rebuild GitHub Pages. The vision is a unified experience:
+
+1. **Single "Share Changes" action** that intelligently handles both:
+   - **Radicle**: Push commits to peer network (if Radicle collaboration active)
+   - **GitHub Pages**: Rebuild and deploy static site (if published)
+
+2. **Intelligent behavior based on node state**:
+   - Only Radicle active → Push to Radicle
+   - Only GitHub Pages published → Rebuild Pages
+   - Both active → Push to Radicle AND rebuild Pages
+   - Neither → No-op or prompt to set up sharing
+
+3. **Implementation path**:
+   - Extend `push-to-network` command to call `rebuildGitHubPages()` when `githubPagesUrl` exists
+   - Or create new unified command that orchestrates both
+
+### Media Optimization Pipeline
+Automatically optimize media during publishing:
+- **Images**: Convert to WebP, resize to max display dimensions
+- **Videos**: Transcode to H.264 baseline with `faststart` flag for streaming
+- **Keep originals**: In DreamNode for local quality, optimized versions only on Pages
+
+Requires: `sharp` (images), `ffmpeg` (video)

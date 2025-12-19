@@ -377,6 +377,61 @@ export class GitHubService {
   }
 
   /**
+   * Rebuild GitHub Pages for an already-published DreamNode
+   * This is the fast path - only rebuilds the static site, doesn't touch repo
+   */
+  async rebuildGitHubPages(dreamNodePath: string): Promise<void> {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Read .udd to get metadata
+    const uddPath = path.join(dreamNodePath, '.udd');
+    if (!fs.existsSync(uddPath)) {
+      throw new Error('DreamNode metadata (.udd) not found');
+    }
+
+    const uddContent = fs.readFileSync(uddPath, 'utf-8');
+    const udd = JSON.parse(uddContent);
+
+    if (!udd.githubRepoUrl) {
+      throw new Error('DreamNode is not published to GitHub');
+    }
+
+    // Parse canvas to get blocks with absolute paths
+    const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
+
+    const files = fs.readdirSync(dreamNodePath);
+    const canvasFiles = files.filter((f: string) => f.endsWith('.canvas'));
+    let blocks: any[] = [];
+
+    if (canvasFiles.length > 0) {
+      const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
+      const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
+      const canvasData = JSON.parse(canvasContent);
+      blocks = parseCanvasToBlocks(canvasData, udd.uuid);
+
+      const vaultPath = path.dirname(dreamNodePath);
+      for (const block of blocks) {
+        if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
+          const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
+          if (resolvedUuid) {
+            block.media.sourceDreamNodeId = resolvedUuid;
+          }
+          // Store absolute path for file copy
+          const mediaPath = path.join(vaultPath, block.media.src);
+          if (fs.existsSync(mediaPath)) {
+            block.media._absolutePath = mediaPath;
+          }
+        }
+      }
+    }
+    // Empty blocks array for DreamTalk-only nodes - buildStaticSite handles via udd.dreamTalk
+
+    // Rebuild and deploy
+    await this.buildStaticSite(dreamNodePath, udd.uuid, udd.title, blocks);
+  }
+
+  /**
    * Build static DreamSong site for GitHub Pages
    * @param blocks - DreamSongBlocks with media._absolutePath for files to copy
    * @param vaultPath - Path to vault for resolving relative media paths

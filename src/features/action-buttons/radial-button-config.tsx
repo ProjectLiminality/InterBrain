@@ -257,20 +257,20 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     label: 'Create DreamSong Canvas'
   },
   {
-    id: 'github-share',
+    id: 'github-publish',
     iconName: 'lucide-github',
-    commandId: 'interbrain:share-dreamnode-github',
-    label: 'Share to GitHub',
+    commandId: 'interbrain:publish-dreamnode-github',
+    label: 'Publish to GitHub',
     // Only show for dream-type nodes
     shouldShow: (node) => node?.type === 'dream',
     // Dynamic label and command based on publish state
     getDynamicLabel: (node) => {
-      return node?.githubRepoUrl ? 'Unpublish from GitHub' : 'Share to GitHub';
+      return node?.githubRepoUrl ? 'Unpublish from GitHub' : 'Publish to GitHub';
     },
     getDynamicCommand: (node) => {
       return node?.githubRepoUrl
         ? 'interbrain:unpublish-dreamnode-github'
-        : 'interbrain:share-dreamnode-github';
+        : 'interbrain:publish-dreamnode-github';
     }
   },
   {

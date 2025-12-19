@@ -128,8 +128,8 @@ async function confirmRecursiveUnpublish(
 }
 
 /**
- * GitHub commands for fallback sharing and public broadcasting
- * Philosophy: "GitHub for sharing, Radicle for collaboration"
+ * GitHub commands for public broadcasting via GitHub Pages
+ * Philosophy: "Radicle for collaboration, GitHub Pages for publishing"
  */
 export function registerGitHubCommands(
   plugin: Plugin,
@@ -147,10 +147,10 @@ export function registerGitHubCommands(
     console.warn('[GitHubCommands] Could not determine vault path for plugin directory');
   }
 
-  // Share DreamNode via GitHub - Creates public repo + GitHub Pages
+  // Publish DreamNode to GitHub - Creates public repo + GitHub Pages
   plugin.addCommand({
-    id: 'share-dreamnode-github',
-    name: 'Share DreamNode via GitHub',
+    id: 'publish-dreamnode-github',
+    name: 'Publish DreamNode to GitHub',
     callback: async () => {
       try {
         const store = useInterBrainStore.getState();
@@ -296,7 +296,7 @@ export function registerGitHubCommands(
   // Unpublish DreamNode from GitHub - Deletes repo and cleans metadata
   plugin.addCommand({
     id: 'unpublish-dreamnode-github',
-    name: 'Unpublish DreamNode from GitHub',
+    name: 'Unpublish DreamNode from GitHub Pages',
     callback: async () => {
       try {
         const store = useInterBrainStore.getState();
@@ -408,6 +408,73 @@ export function registerGitHubCommands(
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error('[GitHubCommands] Unpublish workflow failed:', error);
           uiService.showError(`Failed to unpublish DreamNode: ${errorMessage}`);
+        }
+
+      } catch (error) {
+        console.error('[GitHubCommands] Unexpected error:', error);
+        uiService.showError('An unexpected error occurred');
+      }
+    }
+  });
+
+  // Update GitHub Pages - Rebuilds static site without touching repo
+  plugin.addCommand({
+    id: 'update-github-pages',
+    name: 'Update GitHub Pages',
+    callback: async () => {
+      try {
+        const store = useInterBrainStore.getState();
+        const selectedNode = store.selectedNode;
+
+        if (!selectedNode) {
+          uiService.showError('Please select a DreamNode first');
+          return;
+        }
+
+        // Resolve full repo path using VaultService
+        const fullRepoPath = vaultService?.getFullPath(selectedNode.repoPath) || selectedNode.repoPath;
+
+        // Check if DreamNode is published
+        const fs = require('fs').promises;
+        const uddPath = path.join(fullRepoPath, '.udd');
+
+        let udd;
+        try {
+          const uddContent = await fs.readFile(uddPath, 'utf-8');
+          udd = JSON.parse(uddContent);
+        } catch {
+          uiService.showError('Could not read DreamNode metadata');
+          return;
+        }
+
+        if (!udd.githubRepoUrl) {
+          uiService.showError('This DreamNode is not published to GitHub. Use "Publish to GitHub" first.');
+          return;
+        }
+
+        // Check if GitHub CLI is available
+        const availabilityCheck = await githubService.isAvailable();
+
+        if (!availabilityCheck.available) {
+          uiService.showError(availabilityCheck.error || 'GitHub CLI not available');
+          return;
+        }
+
+        // Show progress indicator
+        const notice = new Notice('Updating GitHub Pages...', 0);
+
+        try {
+          // Rebuild the static site and deploy to gh-pages
+          await githubService.rebuildGitHubPages(fullRepoPath);
+
+          notice.hide();
+          new Notice(`GitHub Pages updated successfully!\n\n${udd.githubPagesUrl || 'Site rebuilding...'}`, 5000);
+
+        } catch (error) {
+          notice.hide();
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error('[GitHubCommands] Update Pages failed:', error);
+          uiService.showError(`Failed to update GitHub Pages: ${errorMessage}`);
         }
 
       } catch (error) {
