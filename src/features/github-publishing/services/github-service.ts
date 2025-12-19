@@ -438,58 +438,114 @@ export class GitHubService {
     }
   }
 
-  /**
-   * Rebuild GitHub Pages for an already-published DreamNode
-   * This is the fast path - only rebuilds the static site, doesn't touch repo
-   */
-  async rebuildGitHubPages(dreamNodePath: string): Promise<void> {
-    const fs = require('fs');
-    const path = require('path');
+  // ============================================================
+  // GITHUB PAGES PUBLISHING - UNIFIED PIPELINE
+  // ============================================================
+  //
+  // The publishing pipeline has three stages:
+  // 1. prepareContentBlocks() - Parse canvas/content, resolve media paths
+  // 2. buildStaticSite() - Generate HTML/assets in temp directory
+  // 3. deployToGhPages() - Commit to local gh-pages branch, push to remote
+  //
+  // Both "Publish" and "Update" commands use the same pipeline.
+  // ============================================================
 
-    // Read .udd to get metadata
-    const uddPath = path.join(dreamNodePath, '.udd');
-    if (!fs.existsSync(uddPath)) {
-      throw new Error('DreamNode metadata (.udd) not found');
+  /**
+   * Prepare content blocks from DreamNode for static site generation
+   * Parses canvas files and resolves media to absolute paths
+   *
+   * Fallback hierarchy: DreamSong (canvas) → DreamTalk → README.md
+   */
+  private async prepareContentBlocks(
+    dreamNodePath: string,
+    dreamNodeUuid: string
+  ): Promise<any[]> {
+    const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
+
+    const files = fs.readdirSync(dreamNodePath);
+    const canvasFiles = files.filter((f: string) => f.endsWith('.canvas'));
+    const vaultPath = path.dirname(dreamNodePath);
+
+    // PRIMARY: DreamSong (canvas file)
+    if (canvasFiles.length > 0) {
+      const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
+      const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
+      const canvasData = JSON.parse(canvasContent);
+      const blocks = parseCanvasToBlocks(canvasData, dreamNodeUuid) as any[];
+
+      // Resolve media paths and UUIDs
+      for (const block of blocks) {
+        if (block.media && block.media.src &&
+            !block.media.src.startsWith('data:') &&
+            !block.media.src.startsWith('http')) {
+
+          // Resolve source DreamNode UUID for cross-navigation
+          const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
+          if (resolvedUuid) {
+            block.media.sourceDreamNodeId = resolvedUuid;
+          }
+
+          // Store absolute path for file copy (NOT base64 embedding)
+          const mediaPath = path.join(vaultPath, block.media.src);
+          if (fs.existsSync(mediaPath)) {
+            block.media._absolutePath = mediaPath;
+          } else {
+            console.warn(`GitHubService: Media file not found: ${mediaPath}`);
+          }
+        }
+      }
+
+      return blocks;
     }
 
-    const uddContent = fs.readFileSync(uddPath, 'utf-8');
-    const udd = JSON.parse(uddContent);
+    // FALLBACK 1: DreamTalk - handled by buildStaticSite via .udd
+    const udd = await this.readUDD(dreamNodePath);
+    if (udd.dreamTalk) {
+      return []; // Empty blocks - buildStaticSite reads dreamTalk from .udd
+    }
+
+    // FALLBACK 2: README.md
+    const readmePath = path.join(dreamNodePath, 'README.md');
+    if (fs.existsSync(readmePath)) {
+      const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+
+      // Simple markdown to HTML conversion
+      const htmlContent = readmeContent
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        .split('\n\n')
+        .map(para => para.trim() ? `<p>${para.replace(/\n/g, '<br>')}</p>` : '')
+        .join('');
+
+      return [{
+        id: 'readme-fallback',
+        type: 'text',
+        text: htmlContent,
+        edges: []
+      }];
+    }
+
+    console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
+    return [];
+  }
+
+  /**
+   * Rebuild GitHub Pages for an already-published DreamNode
+   * Fast path - only rebuilds the static site, doesn't touch repo config
+   */
+  async rebuildGitHubPages(dreamNodePath: string): Promise<void> {
+    const udd = await this.readUDD(dreamNodePath);
 
     if (!udd.githubRepoUrl) {
       throw new Error('DreamNode is not published to GitHub');
     }
 
-    // Parse canvas to get blocks with absolute paths
-    const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
-
-    const files = fs.readdirSync(dreamNodePath);
-    const canvasFiles = files.filter((f: string) => f.endsWith('.canvas'));
-    let blocks: any[] = [];
-
-    if (canvasFiles.length > 0) {
-      const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
-      const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
-      const canvasData = JSON.parse(canvasContent);
-      blocks = parseCanvasToBlocks(canvasData, udd.uuid);
-
-      const vaultPath = path.dirname(dreamNodePath);
-      for (const block of blocks) {
-        if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
-          const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
-          if (resolvedUuid) {
-            block.media.sourceDreamNodeId = resolvedUuid;
-          }
-          // Store absolute path for file copy
-          const mediaPath = path.join(vaultPath, block.media.src);
-          if (fs.existsSync(mediaPath)) {
-            block.media._absolutePath = mediaPath;
-          }
-        }
-      }
-    }
-    // Empty blocks array for DreamTalk-only nodes - buildStaticSite handles via udd.dreamTalk
-
-    // Rebuild and deploy
+    // Prepare content and deploy
+    const blocks = await this.prepareContentBlocks(dreamNodePath, udd.uuid);
     await this.buildStaticSite(dreamNodePath, udd.uuid, udd.title, blocks);
   }
 
@@ -1234,82 +1290,14 @@ export class GitHubService {
       const existingGitHubUrl = stdout.trim();
 
       if (existingGitHubUrl) {
-
         // Update .udd with missing GitHub URL
         udd.githubRepoUrl = existingGitHubUrl;
         await this.writeUDD(dreamNodePath, udd);
 
-        // Build and deploy static site (idempotent - safe to run multiple times)
+        // Build and deploy static site using unified pipeline
         let pagesUrl: string | undefined;
         try {
-          const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
-
-          const files = fs.readdirSync(dreamNodePath);
-          const canvasFiles = files.filter(f => f.endsWith('.canvas'));
-
-          let blocks: any[] = [];
-
-          if (canvasFiles.length > 0) {
-            const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
-            const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
-            const canvasData = JSON.parse(canvasContent);
-
-            blocks = parseCanvasToBlocks(canvasData, dreamNodeUuid);
-
-            const vaultPath = path.dirname(dreamNodePath);
-
-            // Store absolute paths for media files (buildStaticSite will copy them)
-            for (const block of blocks) {
-              if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
-                try {
-                  const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
-                  if (resolvedUuid) {
-                    block.media.sourceDreamNodeId = resolvedUuid;
-                  }
-
-                  // Store absolute path for later file copy (NOT base64 embedding)
-                  const mediaPath = path.join(vaultPath, block.media.src);
-
-                  if (fs.existsSync(mediaPath)) {
-                    block.media._absolutePath = mediaPath;
-                  } else {
-                    console.warn(`GitHubService: Media file not found: ${mediaPath}`);
-                  }
-                } catch (error) {
-                  console.warn(`GitHubService: Could not process media ${block.media.src}:`, error);
-                }
-              }
-            }
-          } else if (udd.dreamTalk) {
-            // DreamTalk media file - handled by buildStaticSite
-            blocks = [];
-          } else {
-            const readmePath = path.join(dreamNodePath, 'README.md');
-            if (fs.existsSync(readmePath)) {
-              const readmeContent = fs.readFileSync(readmePath, 'utf-8');
-
-              let htmlContent = readmeContent
-                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-                .split('\n\n')
-                .map(para => para.trim() ? `<p>${para.replace(/\n/g, '<br>')}</p>` : '')
-                .join('');
-
-              blocks = [{
-                id: 'readme-fallback',
-                type: 'text',
-                text: htmlContent,
-                edges: []
-              }];
-            } else {
-              console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
-            }
-          }
-
+          const blocks = await this.prepareContentBlocks(dreamNodePath, dreamNodeUuid);
           await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title, blocks);
 
           // Setup GitHub Pages (idempotent - will succeed even if already configured)
@@ -1391,97 +1379,10 @@ export class GitHubService {
     // Step 4: Create GitHub repository
     const repoUrl = await this.createRepo(dreamNodePath, repoName);
 
-    // Step 5: Build and deploy static DreamSong site
+    // Step 5: Build and deploy static DreamSong site using unified pipeline
     let pagesUrl: string | undefined;
     try {
-      // Use the same parsing pipeline as local rendering
-      // This ensures GitHub Pages displays exactly what you see locally
-      const { parseCanvasToBlocks } = await import('../../dreamweaving/dreamsong/index');
-
-      // Find and parse canvas file
-      const files = fs.readdirSync(dreamNodePath);
-      const canvasFiles = files.filter(f => f.endsWith('.canvas'));
-
-      let blocks: any[] = [];
-
-      // Fallback hierarchy: DreamSong → DreamTalk → README
-      if (canvasFiles.length > 0) {
-        // PRIMARY: DreamSong (canvas file) - Full rich content
-        const canvasPath = path.join(dreamNodePath, canvasFiles[0]);
-        const canvasContent = fs.readFileSync(canvasPath, 'utf-8');
-        const canvasData = JSON.parse(canvasContent);
-
-        // Parse canvas to blocks (same as local rendering)
-        blocks = parseCanvasToBlocks(canvasData, dreamNodeUuid);
-
-        // Derive vault path from DreamNode path
-        // Canvas media paths are vault-relative, not DreamNode-relative
-        const vaultPath = path.dirname(dreamNodePath);
-
-        // Store absolute paths for media files (buildStaticSite will copy them)
-        for (const block of blocks) {
-          if (block.media && block.media.src && !block.media.src.startsWith('data:') && !block.media.src.startsWith('http')) {
-            try {
-              // Step 1: Resolve UUID from submodule .udd file (if this is submodule media)
-              const resolvedUuid = await this.resolveSourceDreamNodeUuid(block.media.src, vaultPath);
-              if (resolvedUuid) {
-                block.media.sourceDreamNodeId = resolvedUuid;
-              }
-
-              // Step 2: Store absolute path for later file copy (NOT base64 embedding)
-              // Canvas paths are vault-relative (e.g., "ArkCrystal/ARK Crystal.jpeg")
-              const mediaPath = path.join(vaultPath, block.media.src);
-
-              if (fs.existsSync(mediaPath)) {
-                // Store absolute path - buildStaticSite will copy the file
-                block.media._absolutePath = mediaPath;
-              } else {
-                console.warn(`GitHubService: Media file not found: ${mediaPath}`);
-              }
-            } catch (error) {
-              console.warn(`GitHubService: Could not process media ${block.media.src}:`, error);
-            }
-          }
-        }
-      } else if (udd.dreamTalk) {
-        // FALLBACK 1: DreamTalk media file - handled by buildStaticSite
-        // Empty blocks - buildStaticSite reads dreamTalk from .udd and copies it
-        blocks = [];
-      } else {
-        // FALLBACK 2: README.md - Text content
-        const readmePath = path.join(dreamNodePath, 'README.md');
-        if (fs.existsSync(readmePath)) {
-          const readmeContent = fs.readFileSync(readmePath, 'utf-8');
-
-          // Simple markdown to HTML conversion (basic support)
-          let htmlContent = readmeContent
-            // Headers
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            // Bold
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            // Italic
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            // Links
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-            // Line breaks to paragraphs
-            .split('\n\n')
-            .map(para => para.trim() ? `<p>${para.replace(/\n/g, '<br>')}</p>` : '')
-            .join('');
-
-          // Create a single text block with proper type field
-          blocks = [{
-            id: 'readme-fallback',
-            type: 'text', // IMPORTANT: Must set type for DreamSong component
-            text: htmlContent,
-            edges: []
-          }];
-        } else {
-          console.warn(`GitHubService: No content found - no DreamSong, DreamTalk, or README.md`);
-        }
-      }
-
+      const blocks = await this.prepareContentBlocks(dreamNodePath, dreamNodeUuid);
       await this.buildStaticSite(dreamNodePath, dreamNodeUuid, udd.title, blocks);
 
       // Step 6: Setup GitHub Pages (configure to serve from gh-pages branch)
