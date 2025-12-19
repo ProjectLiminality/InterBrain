@@ -366,6 +366,38 @@
   margin-bottom: 4px;
 }
 
+/* Skeleton loader for images */
+.dreamSongMediaWrapper {
+  position: relative;
+  background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: 8px;
+  min-height: 200px;
+}
+
+.dreamSongMediaWrapper.loaded {
+  background: none;
+  animation: none;
+  min-height: auto;
+}
+
+.dreamSongMediaWrapper img,
+.dreamSongMediaWrapper video {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.dreamSongMediaWrapper.loaded img,
+.dreamSongMediaWrapper.loaded video {
+  opacity: 1;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Error states */
 .dreamSongMediaError {
   padding: 16px;

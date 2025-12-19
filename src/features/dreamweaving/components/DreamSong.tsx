@@ -287,14 +287,30 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
       ? { cursor: 'pointer' } 
       : {};
 
+    // Helper for skeleton loading state
+    const ImageWithSkeleton = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
+      const [loaded, setLoaded] = React.useState(false);
+      return (
+        <div className={`${styles.dreamSongMediaWrapper} ${loaded ? styles.loaded : ''}`}>
+          <img
+            className={className}
+            src={src}
+            alt={alt}
+            loading="lazy"
+            onLoad={() => setLoaded(true)}
+          />
+        </div>
+      );
+    };
+
     switch (media.type) {
       case 'image':
         return (
           <div style={containerStyle} onClick={clickHandler}>
-            <img
-              {...commonProps}
+            <ImageWithSkeleton
               src={media.src}
               alt={media.alt}
+              className={commonProps.className}
             />
           </div>
         );
