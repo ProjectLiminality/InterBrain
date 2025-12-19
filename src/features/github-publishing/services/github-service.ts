@@ -717,8 +717,9 @@ export class GitHubService {
       const submodulePath = path.join(vaultPath, submoduleDirName);
 
       // Check if .udd exists using UDDService
+      // If no .udd, this is just a regular subfolder (like "images/"), not a DreamNode submodule
       if (!UDDService.uddExists(submodulePath)) {
-        console.error(`❌ [GitHubService] CORRUPTED DREAMNODE: ${submoduleDirName} is missing .udd metadata file`);
+        // Not a DreamNode - just a regular folder, return silently
         return null;
       }
 
