@@ -268,14 +268,15 @@ export function registerGitHubCommands(
             store.updateDreamNode(selectedNode.id, updatedNodeData);
           }
 
-          // Copy Obsidian URI to clipboard
-          await navigator.clipboard.writeText(result.obsidianUri);
+          // Copy GitHub Pages URL to clipboard (preferred for sharing)
+          const urlToCopy = result.pagesUrl || result.repoUrl;
+          await navigator.clipboard.writeText(urlToCopy);
 
           // Success notification
           notice.hide();
           const successMessage = result.pagesUrl
-            ? `DreamNode shared!\n\nRepository: ${result.repoUrl}\nWebsite: ${result.pagesUrl}\n\nObsidian URI copied to clipboard.`
-            : `DreamNode shared!\n\nRepository: ${result.repoUrl}\n\nObsidian URI copied to clipboard.`;
+            ? `DreamNode published!\n\nWebsite: ${result.pagesUrl}\n\nURL copied to clipboard.`
+            : `DreamNode published!\n\nRepository: ${result.repoUrl}\n\nURL copied to clipboard.`;
 
           new Notice(successMessage, 10000);
 
@@ -468,7 +469,15 @@ export function registerGitHubCommands(
           await githubService.rebuildGitHubPages(fullRepoPath);
 
           notice.hide();
-          new Notice(`GitHub Pages updated successfully!\n\n${udd.githubPagesUrl || 'Site rebuilding...'}`, 5000);
+
+          // Copy GitHub Pages URL to clipboard
+          const pagesUrl = udd.githubPagesUrl;
+          if (pagesUrl) {
+            await navigator.clipboard.writeText(pagesUrl);
+            new Notice(`GitHub Pages updated!\n\nURL copied to clipboard:\n${pagesUrl}`, 5000);
+          } else {
+            new Notice('GitHub Pages updated successfully!', 5000);
+          }
 
         } catch (error) {
           notice.hide();
