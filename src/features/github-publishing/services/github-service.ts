@@ -20,6 +20,10 @@ import { UDDService } from '../../dreamnode/services/udd-service';
 
 const execAsync = promisify(exec);
 
+// Image optimization settings
+const IMAGE_MAX_WIDTH = 1920;
+const IMAGE_QUALITY = 80;
+
 export interface GitHubShareResult {
   /** GitHub repository URL */
   repoUrl: string;
@@ -41,12 +45,70 @@ interface SubmoduleInfo {
 export class GitHubService {
   private ghPath: string | null = null;
   private pluginDir: string | null = null;
+  private sharp: any = null;
 
   /**
    * Set the plugin directory path (must be called during plugin initialization)
    */
   setPluginDir(dir: string): void {
     this.pluginDir = dir;
+  }
+
+  /**
+   * Lazily load sharp for image optimization
+   * Returns null if sharp is not available (graceful fallback to copy)
+   */
+  private getSharp(): any {
+    if (this.sharp === undefined) {
+      try {
+        this.sharp = require('sharp');
+      } catch {
+        console.warn('GitHubService: sharp not available, images will not be optimized');
+        this.sharp = null;
+      }
+    }
+    return this.sharp;
+  }
+
+  /**
+   * Optimize an image file using sharp
+   * Returns the output path (may have different extension if converted to webp)
+   */
+  private async optimizeImage(srcPath: string, destPath: string): Promise<string> {
+    const sharp = this.getSharp();
+    if (!sharp) {
+      // Fallback: just copy the file
+      fs.copyFileSync(srcPath, destPath);
+      return destPath;
+    }
+
+    const ext = path.extname(srcPath).toLowerCase();
+
+    // Skip non-optimizable formats
+    if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+      fs.copyFileSync(srcPath, destPath);
+      return destPath;
+    }
+
+    try {
+      // Convert to WebP for better compression (except if already webp)
+      const outputExt = ext === '.webp' ? '.webp' : '.webp';
+      const outputPath = destPath.replace(/\.[^.]+$/, outputExt);
+
+      await sharp(srcPath)
+        .resize(IMAGE_MAX_WIDTH, null, {
+          withoutEnlargement: true,
+          fit: 'inside'
+        })
+        .webp({ quality: IMAGE_QUALITY })
+        .toFile(outputPath);
+
+      return outputPath;
+    } catch (error) {
+      console.warn(`GitHubService: Failed to optimize ${srcPath}, copying original:`, error);
+      fs.copyFileSync(srcPath, destPath);
+      return destPath;
+    }
   }
 
   /**
@@ -484,16 +546,29 @@ export class GitHubService {
         return filename;
       };
 
-      // Copy media files and update block references
+      // Helper to check if file is an image that can be optimized
+      const isOptimizableImage = (filePath: string): boolean => {
+        const ext = path.extname(filePath).toLowerCase();
+        return ['.jpg', '.jpeg', '.png', '.webp'].includes(ext);
+      };
+
+      // Copy/optimize media files and update block references
       for (const block of blocks) {
         if (block.media && block.media._absolutePath) {
           const absolutePath = block.media._absolutePath;
 
           if (fs.existsSync(absolutePath)) {
-            const uniqueFilename = getUniqueFilename(absolutePath);
+            let uniqueFilename = getUniqueFilename(absolutePath);
             const destPath = path.join(mediaDir, uniqueFilename);
 
-            fs.copyFileSync(absolutePath, destPath);
+            // Optimize images, copy other files directly
+            if (isOptimizableImage(absolutePath)) {
+              const outputPath = await this.optimizeImage(absolutePath, destPath);
+              // Update filename if extension changed (e.g., jpg -> webp)
+              uniqueFilename = path.basename(outputPath);
+            } else {
+              fs.copyFileSync(absolutePath, destPath);
+            }
 
             // Update src to relative path (works in browser)
             block.media.src = `./media/${uniqueFilename}`;
@@ -508,18 +583,24 @@ export class GitHubService {
       }
 
 
-      // Handle DreamTalk media (copy file, not embed)
+      // Handle DreamTalk media (copy/optimize file, not embed)
       let dreamTalkMedia: any[] | undefined;
       if (udd.dreamTalk) {
         const dreamTalkPath = path.join(dreamNodePath, udd.dreamTalk);
         if (fs.existsSync(dreamTalkPath)) {
-          const uniqueFilename = getUniqueFilename(dreamTalkPath);
+          let uniqueFilename = getUniqueFilename(dreamTalkPath);
           const destPath = path.join(mediaDir, uniqueFilename);
 
-          fs.copyFileSync(dreamTalkPath, destPath);
+          // Optimize images, copy other files directly
+          if (isOptimizableImage(dreamTalkPath)) {
+            const outputPath = await this.optimizeImage(dreamTalkPath, destPath);
+            uniqueFilename = path.basename(outputPath);
+          } else {
+            fs.copyFileSync(dreamTalkPath, destPath);
+          }
 
-          // Determine MIME type from extension
-          const ext = path.extname(dreamTalkPath).toLowerCase();
+          // Determine MIME type from output extension (may be webp now)
+          const ext = path.extname(uniqueFilename).toLowerCase();
           const mimeTypes: Record<string, string> = {
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
@@ -539,7 +620,7 @@ export class GitHubService {
             path: path.basename(dreamTalkPath),
             type: mimeType,
             data: `./media/${uniqueFilename}`, // Relative path instead of data URL
-            size: fs.statSync(dreamTalkPath).size
+            size: fs.statSync(path.join(mediaDir, uniqueFilename)).size
           }];
 
         }
@@ -733,41 +814,122 @@ export class GitHubService {
   }
 
   /**
-   * Deploy built site to GitHub Pages using gh-pages branch strategy
-   * Creates an orphan branch with only the built HTML (no source files)
+   * Deploy built site to GitHub Pages using local gh-pages branch
+   * Uses git worktree for incremental updates (only changed files are committed)
    */
   private async deployToPages(dreamNodePath: string, buildDir: string): Promise<void> {
     try {
-      // Step 1: Initialize a fresh git repo in temp directory
-      await execAsync(`git init`, { cwd: buildDir });
+      // Check if gh-pages branch exists locally
+      let ghPagesExists = false;
+      try {
+        await execAsync(`git rev-parse --verify gh-pages`, { cwd: dreamNodePath });
+        ghPagesExists = true;
+      } catch {
+        // Branch doesn't exist locally
+      }
 
-      // Step 2: Add all built files
-      await execAsync(`git add .`, { cwd: buildDir });
+      // Check if gh-pages exists on remote (use 'github' remote name)
+      let remoteGhPagesExists = false;
+      try {
+        await execAsync(`git ls-remote --exit-code --heads github gh-pages`, { cwd: dreamNodePath });
+        remoteGhPagesExists = true;
+      } catch {
+        // Remote branch doesn't exist
+      }
 
-      // Step 3: Commit built site
-      await execAsync(
-        `git commit -m "Deploy DreamSong to GitHub Pages"`,
-        { cwd: buildDir }
-      );
+      // Create worktree directory for gh-pages
+      const tmpOs = require('os');
+      const worktreeDir = path.join(tmpOs.tmpdir(), `gh-pages-worktree-${Date.now()}`);
 
-      // Step 4: Get the remote URL from main repo
-      const { stdout: remoteUrl } = await execAsync(
-        `git remote get-url github`,
-        { cwd: dreamNodePath }
-      );
+      try {
+        if (!ghPagesExists && !remoteGhPagesExists) {
+          // First time: create orphan gh-pages branch
+          await execAsync(`git checkout --orphan gh-pages`, { cwd: dreamNodePath });
+          await execAsync(`git reset --hard`, { cwd: dreamNodePath });
+          await execAsync(`git commit --allow-empty -m "Initialize gh-pages branch"`, { cwd: dreamNodePath });
+          await execAsync(`git checkout -`, { cwd: dreamNodePath }); // Go back to previous branch
+        } else if (!ghPagesExists && remoteGhPagesExists) {
+          // Remote exists but not local: fetch it
+          await execAsync(`git fetch github gh-pages:gh-pages`, { cwd: dreamNodePath });
+        }
 
-      // Step 5: Add remote to build repo
-      await execAsync(
-        `git remote add origin ${remoteUrl.trim()}`,
-        { cwd: buildDir }
-      );
+        // Create worktree for gh-pages
+        await execAsync(`git worktree add "${worktreeDir}" gh-pages`, { cwd: dreamNodePath });
 
-      // Step 6: Force push to gh-pages branch (orphan branch)
-      await execAsync(
-        `git push -f origin HEAD:gh-pages`,
-        { cwd: buildDir }
-      );
+        // Clear existing files in worktree (except .git)
+        const existingFiles = fs.readdirSync(worktreeDir);
+        for (const file of existingFiles) {
+          if (file !== '.git') {
+            const filePath = path.join(worktreeDir, file);
+            fs.rmSync(filePath, { recursive: true, force: true });
+          }
+        }
 
+        // Copy all files from buildDir to worktree
+        const copyRecursive = (src: string, dest: string) => {
+          const entries = fs.readdirSync(src, { withFileTypes: true });
+          fs.mkdirSync(dest, { recursive: true });
+          for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            if (entry.isDirectory()) {
+              copyRecursive(srcPath, destPath);
+            } else {
+              fs.copyFileSync(srcPath, destPath);
+            }
+          }
+        };
+
+        const buildFiles = fs.readdirSync(buildDir, { withFileTypes: true });
+        for (const entry of buildFiles) {
+          const srcPath = path.join(buildDir, entry.name);
+          const destPath = path.join(worktreeDir, entry.name);
+          if (entry.isDirectory()) {
+            copyRecursive(srcPath, destPath);
+          } else {
+            fs.copyFileSync(srcPath, destPath);
+          }
+        }
+
+        // Stage all changes
+        await execAsync(`git add -A`, { cwd: worktreeDir });
+
+        // Check if there are any changes to commit
+        const { stdout: statusOutput } = await execAsync(
+          `git status --porcelain`,
+          { cwd: worktreeDir }
+        );
+
+        if (statusOutput.trim()) {
+          // Commit changes
+          await execAsync(
+            `git commit -m "Update DreamSong on GitHub Pages"`,
+            { cwd: worktreeDir }
+          );
+
+          // Push to remote (use 'github' remote name)
+          await execAsync(
+            `git push github gh-pages`,
+            { cwd: worktreeDir }
+          );
+        } else {
+          console.log('GitHubService: No changes to deploy to gh-pages');
+        }
+
+      } finally {
+        // Cleanup: remove worktree
+        try {
+          await execAsync(`git worktree remove "${worktreeDir}" --force`, { cwd: dreamNodePath });
+        } catch {
+          // Manual cleanup if worktree remove fails
+          try {
+            fs.rmSync(worktreeDir, { recursive: true, force: true });
+            await execAsync(`git worktree prune`, { cwd: dreamNodePath });
+          } catch {
+            console.warn(`GitHubService: Failed to cleanup worktree at ${worktreeDir}`);
+          }
+        }
+      }
 
     } catch (error) {
       if (error instanceof Error) {
