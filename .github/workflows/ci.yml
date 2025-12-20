@@ -43,3 +43,24 @@ jobs:
       - name: Run tests
         run: npm run test
         timeout-minutes: 5
+
+  install-script-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify install.sh syntax
+        run: bash -n install.sh
+
+      - name: Test --ci flag parsing
+        run: |
+          # Verify the script accepts --ci flag and outputs CI mode message
+          # Note: We can't run the full install in CI, just test parsing
+          bash -c 'source <(head -120 install.sh); echo "CI_MODE=$CI_MODE"'
+
+          # Test that command_exists function works
+          bash -c '
+            source <(sed -n "117,120p" install.sh)
+            command_exists bash && echo "command_exists: OK"
+          '

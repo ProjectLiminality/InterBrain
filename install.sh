@@ -21,6 +21,9 @@
 #   --test-fail before-gh         Simulate failure before GitHub CLI installed (no automatic issue creation available)
 #   --test-fail after-gh          Simulate failure after GitHub CLI installed (should offer automatic issue creation)
 #   --test-radicle-fallback       Force GitHub source fallback for Radicle installation (simulates server outage)
+#
+# CI mode (non-interactive):
+#   bash install.sh --ci          Run in CI mode with defaults, no prompts, temp directory vault
 
 # Create log file FIRST (before anything else)
 LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
@@ -47,7 +50,14 @@ echo "=================================="
 echo ""
 
 # Check if running in non-interactive mode (piped without bash)
-if [ ! -t 0 ]; then
+# CI mode bypasses this check and uses defaults/env vars
+if [ "$CI_MODE" = "true" ]; then
+    echo "Running in CI mode - non-interactive with defaults"
+    DEFAULT_VAULT_PARENT="/tmp"
+    DEFAULT_VAULT_NAME="interbrain-ci-test-$$"
+    SKIP_AUTH=true
+    SKIP_OBSIDIAN=true
+elif [ ! -t 0 ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "⚠️  NON-INTERACTIVE MODE NOT SUPPORTED"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -81,6 +91,7 @@ DREAMER_UUID=""
 BRANCH="main"  # Default to main branch
 TEST_FAIL=""
 TEST_RADICLE_FALLBACK=false
+CI_MODE=false
 while [[ $# -gt 0 ]]; do
   case $1 in
     --uri)
@@ -101,6 +112,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-radicle-fallback)
       TEST_RADICLE_FALLBACK=true
+      shift
+      ;;
+    --ci)
+      CI_MODE=true
       shift
       ;;
     *)
@@ -1112,7 +1127,11 @@ else
     info "  • Community features"
     echo ""
 
-    if [ -t 0 ]; then
+    if [ "$SKIP_AUTH" = "true" ]; then
+        # CI mode - skip auth entirely
+        info "CI mode: Skipping GitHub authentication"
+        GH_USER="[CI mode - skipped]"
+    elif [ -t 0 ]; then
         # Interactive mode - offer authentication
         echo "Do you have a GitHub account?"
         echo ""
@@ -1230,7 +1249,28 @@ else
     echo "  2. Create a passphrase (keep this safe!)"
     echo ""
 
-    if [ -t 0 ]; then
+    if [ "$CI_MODE" = "true" ] && [ -n "$RAD_PASSPHRASE" ]; then
+        # CI mode with passphrase - create identity non-interactively
+        info "CI mode: Creating Radicle identity with RAD_PASSPHRASE"
+        rad auth --alias "CI-Test-$$"
+
+        if rad self --did >/dev/null 2>&1; then
+            success "Radicle identity created (CI mode)"
+            RAD_DID=$(rad self --did)
+            RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "CI-Test")
+            echo "   DID: $RAD_DID"
+            echo "   Alias: $RAD_ALIAS"
+        else
+            warning "CI mode: Radicle identity creation failed"
+            RAD_DID="[CI mode - failed]"
+            RAD_ALIAS="[Not created]"
+        fi
+    elif [ "$CI_MODE" = "true" ]; then
+        # CI mode without passphrase - skip
+        info "CI mode: Skipping Radicle identity (no RAD_PASSPHRASE)"
+        RAD_DID="[CI mode - skipped]"
+        RAD_ALIAS="[Not created]"
+    elif [ -t 0 ]; then
         # Interactive mode - offer choice
         read -p "Create Radicle identity now? [Y/n] (you can skip and rerun installer later): " -n 1 -r
         echo ""
@@ -1472,7 +1512,9 @@ echo ""
 echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
-if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
+if [ "$SKIP_OBSIDIAN" = "true" ]; then
+    info "CI mode: Skipping Obsidian registration and launch"
+elif [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
     # Kill Obsidian if running so it can read the updated config
     if pgrep -x "Obsidian" > /dev/null; then
         info "Closing Obsidian to update vault registry..."
