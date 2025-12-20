@@ -5,11 +5,18 @@
  * - Obsidian UI test commands (manual testing)
  * - Vitest automated tests
  *
- * Contains one comprehensive scenario that covers all test cases:
- * - Multiple peers (Bob, Charlie)
- * - Unique commits from each peer
- * - Shared/relayed commits (same commit from multiple peers)
- * - Rich commit messages with subject + body
+ * IMPORTANT: The test setup creates SEPARATE working directories for each peer.
+ * Each peer's commits are applied sequentially to their OWN repo, then pushed.
+ * This means commits from the same peer MUST form a linear chain.
+ *
+ * The scenario below is designed so:
+ * - Bob has 2 commits that build on each other (add section, then add file)
+ * - Charlie has 1 commit (add his section)
+ * - Alice's commit is relayed by BOTH Bob and Charlie (tests deduplication)
+ *
+ * When David (test perspective) tries to accept commits from multiple peers
+ * that touch the same file (Bob's section + Charlie's section), a conflict
+ * will occur - this is intentional and tests our conflict resolution!
  */
 
 /**
@@ -90,132 +97,69 @@ export const PEER_ALICE: TestPeer = {
 // ============================================
 
 /**
- * Comprehensive test scenario covering all collaboration cases:
+ * The initial README that all peers start from.
+ * Has clear sections with marker lines for conflict testing.
+ */
+const INITIAL_README = `# Shared Project
+
+Welcome to our collaborative DreamNode!
+
+## Vision
+
+This section describes our shared vision.
+
+## Contributors
+
+This section will be updated as people contribute.
+
+## Resources
+
+Links and resources will be added here.
+
+## Status
+
+Just getting started...
+`;
+
+/**
+ * Comprehensive test scenario covering all collaboration cases.
  *
- * 1. Bob's unique commit - Only Bob offers this
- * 2. Charlie's unique commit - Only Charlie offers this
- * 3. Alice's shared commit - Both Bob AND Charlie relay this (tests deduplication)
+ * Timeline:
+ * 1. Alice creates the project (initial commit - done in setup)
+ * 2. Bob adds his intro to Contributors section
+ * 3. Bob adds a RESOURCES.md file (separate file, no conflict)
+ * 4. Charlie adds his intro to Contributors section (WILL CONFLICT with Bob's)
+ * 5. Alice's vision update is relayed by BOTH Bob and Charlie (tests deduplication)
  *
- * This allows testing:
- * - Accept/reject individual commits
- * - Preview mode with file changes
- * - Deduplication UI ("Also from: ...")
- * - Hover coupling between duplicate commits
- * - Rejection history and restore
+ * Test Cases Covered:
+ * - Accept single commit (no conflict) ✓
+ * - Accept commits from same peer (sequential, no conflict) ✓
+ * - Accept commits from different peers touching different files (no conflict) ✓
+ * - Accept commits from different peers touching SAME file (CONFLICT!) ✓
+ * - Deduplication of relayed commits (same originalHash from multiple peers) ✓
+ * - Preview mode and banner workflow ✓
+ * - Rejection history and restore ✓
  */
 export const SCENARIO_COMPREHENSIVE: TestScenario = {
   name: 'comprehensive',
-  description: 'All-in-one scenario: unique commits + shared/relayed commits for full testing',
-  initialReadme: `# Shared Project
-
-Welcome to our collaborative DreamNode!
-
-## Contributors
-
-This section will be updated as people contribute.
-
-## Project Status
-
-Just getting started...
-`,
+  description: 'Tests: sequential commits, separate files, same-file conflicts, and deduplication',
+  initialReadme: INITIAL_README,
   peers: [PEER_BOB, PEER_CHARLIE],
   commits: [
     // =========================================
-    // COMMIT 1: Bob's unique contribution
+    // COMMIT 1: Bob adds his intro (README edit)
     // =========================================
+    // This is Bob's first commit, starts from INITIAL_README
     {
       author: 'bob',
-      subject: "Add Bob's introduction section",
-      body: `This commit adds a personal introduction section for Bob.
+      subject: "Add Bob's contributor introduction",
+      body: `Adding my introduction to the Contributors section.
 
-The section includes:
-- A brief bio
-- Bob's interests and expertise
-- How to reach Bob for collaboration
+This is Bob's first contribution to the project.
+It modifies the README by adding a subsection under Contributors.
 
-This is a unique contribution that only Bob is offering.
-You should see this commit ONLY under Bob's peer group.`,
-      files: {
-        'README.md': `# Shared Project
-
-Welcome to our collaborative DreamNode!
-
-## Contributors
-
-This section will be updated as people contribute.
-
-### Bob
-
-Hi, I'm Bob! I'm passionate about decentralized systems and
-knowledge gardening. Feel free to reach out if you want to
-collaborate on any distributed tech projects.
-
-**Interests:** P2P networks, Git internals, Obsidian plugins
-
-## Project Status
-
-Just getting started...
-`
-      },
-      relayedBy: ['bob']
-    },
-
-    // =========================================
-    // COMMIT 2: Charlie's unique contribution
-    // =========================================
-    {
-      author: 'charlie',
-      subject: "Add Charlie's introduction section",
-      body: `This commit adds a personal introduction section for Charlie.
-
-Charlie's section includes:
-- Background information
-- Areas of expertise
-- Collaboration preferences
-
-This is a unique contribution that only Charlie is offering.
-You should see this commit ONLY under Charlie's peer group.`,
-      files: {
-        'README.md': `# Shared Project
-
-Welcome to our collaborative DreamNode!
-
-## Contributors
-
-This section will be updated as people contribute.
-
-### Charlie
-
-Hey there! I'm Charlie. I focus on UI/UX design and making
-complex systems feel intuitive. Always happy to help with
-design reviews or brainstorming sessions.
-
-**Expertise:** Design systems, User research, Prototyping
-
-## Project Status
-
-Just getting started...
-`
-      },
-      relayedBy: ['charlie']
-    },
-
-    // =========================================
-    // COMMIT 3: Alice's commit relayed by BOTH peers
-    // =========================================
-    {
-      author: 'alice',
-      subject: "Add project vision statement",
-      body: `This commit adds a vision statement for the project.
-
-Alice wrote this vision statement and shared it with the community.
-Both Bob and Charlie are relaying this commit to you.
-
-IMPORTANT: This tests DEDUPLICATION!
-- You should see this commit appear ONCE in the modal
-- It should show "Also from: charlie" (or bob) to indicate both peers have it
-- Hovering should highlight the duplicate indicator
-- Accepting from one peer should work for both`,
+TESTING: This commit alone should apply cleanly.
+TESTING: If Charlie's intro is applied first, this will conflict.`,
       files: {
         'README.md': `# Shared Project
 
@@ -223,44 +167,7 @@ Welcome to our collaborative DreamNode!
 
 ## Vision
 
-> "We believe that knowledge grows best when shared freely
-> and organized through genuine human connections rather
-> than rigid hierarchies." — Alice
-
-This project explores new ways of collaborative thinking
-and distributed knowledge management.
-
-## Contributors
-
-This section will be updated as people contribute.
-
-## Project Status
-
-Just getting started...
-`
-      },
-      relayedBy: ['bob', 'charlie'],
-      originalAuthor: 'alice'
-    },
-
-    // =========================================
-    // COMMIT 4: Bob adds a resources section
-    // =========================================
-    {
-      author: 'bob',
-      subject: "Add resources and links section",
-      body: `Adding a resources section with helpful links.
-
-This commit creates a new section in the README with:
-- Links to related projects
-- Documentation references
-- Community resources
-
-Another unique Bob contribution to test multiple commits per peer.`,
-      files: {
-        'README.md': `# Shared Project
-
-Welcome to our collaborative DreamNode!
+This section describes our shared vision.
 
 ## Contributors
 
@@ -276,20 +183,180 @@ collaborate on any distributed tech projects.
 
 ## Resources
 
-### Related Projects
-- [InterBrain](https://github.com/ProjectLiminality/InterBrain) - Knowledge gardening system
-- [Radicle](https://radicle.xyz) - P2P code collaboration
+Links and resources will be added here.
 
-### Documentation
-- [Git Internals](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain)
-- [Obsidian Plugin Development](https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin)
-
-## Project Status
+## Status
 
 Just getting started...
 `
       },
       relayedBy: ['bob']
+    },
+
+    // =========================================
+    // COMMIT 2: Bob adds a resources file
+    // =========================================
+    // This builds on Bob's commit 1 (in Bob's repo)
+    // Creates a NEW file, so no conflict possible
+    {
+      author: 'bob',
+      subject: "Add resources document",
+      body: `Creating a separate RESOURCES.md file with helpful links.
+
+This is a NEW FILE, not an edit to README.
+Should never conflict with any other commit.
+
+TESTING: This should always apply cleanly.`,
+      files: {
+        // Keep README as it was after Bob's commit 1
+        'README.md': `# Shared Project
+
+Welcome to our collaborative DreamNode!
+
+## Vision
+
+This section describes our shared vision.
+
+## Contributors
+
+This section will be updated as people contribute.
+
+### Bob
+
+Hi, I'm Bob! I'm passionate about decentralized systems and
+knowledge gardening. Feel free to reach out if you want to
+collaborate on any distributed tech projects.
+
+**Interests:** P2P networks, Git internals, Obsidian plugins
+
+## Resources
+
+Links and resources will be added here.
+
+## Status
+
+Just getting started...
+`,
+        // New file
+        'RESOURCES.md': `# Resources & Links
+
+Curated by Bob
+
+## Related Projects
+
+- [InterBrain](https://github.com/ProjectLiminality/InterBrain) - Knowledge gardening
+- [Radicle](https://radicle.xyz) - P2P code collaboration
+- [IPFS](https://ipfs.tech) - Distributed file system
+
+## Documentation
+
+- [Git Internals](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain)
+- [Obsidian Plugin Dev](https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin)
+
+## Community
+
+- Discord: #interbrain-dev
+- Matrix: #p2p-knowledge:matrix.org
+`
+      },
+      relayedBy: ['bob']
+    },
+
+    // =========================================
+    // COMMIT 3: Charlie adds his intro (README edit)
+    // =========================================
+    // This is Charlie's first commit, starts from INITIAL_README
+    // (Charlie's repo doesn't have Bob's changes!)
+    // WILL CONFLICT if David already accepted Bob's README changes
+    {
+      author: 'charlie',
+      subject: "Add Charlie's contributor introduction",
+      body: `Adding my introduction to the Contributors section.
+
+This is Charlie's contribution to the project.
+
+TESTING: This modifies the same section as Bob's intro.
+TESTING: If Bob's intro was already accepted, this WILL CONFLICT.
+TESTING: The conflict resolution modal should appear.
+TESTING: AI Magic or search-replace should merge both intros.`,
+      files: {
+        'README.md': `# Shared Project
+
+Welcome to our collaborative DreamNode!
+
+## Vision
+
+This section describes our shared vision.
+
+## Contributors
+
+This section will be updated as people contribute.
+
+### Charlie
+
+Hey there! I'm Charlie. I focus on UI/UX design and making
+complex systems feel intuitive. Always happy to help with
+design reviews or brainstorming sessions.
+
+**Expertise:** Design systems, User research, Prototyping
+
+## Resources
+
+Links and resources will be added here.
+
+## Status
+
+Just getting started...
+`
+      },
+      relayedBy: ['charlie']
+    },
+
+    // =========================================
+    // COMMIT 4: Alice's vision (relayed by BOTH)
+    // =========================================
+    // Alice wrote this, Bob and Charlie both relay it
+    // Tests deduplication - should appear ONCE in the modal
+    // with "Also from: charlie" indicator
+    {
+      author: 'alice',
+      subject: "Add project vision statement",
+      body: `Adding a vision statement to guide the project.
+
+This commit was authored by Alice and relayed through the network.
+Both Bob and Charlie have this commit and are offering it to David.
+
+TESTING: Should appear ONCE in the modal (deduplicated by originalHash)
+TESTING: Should show "Also from: charlie" (or bob) indicator
+TESTING: Accepting from either peer should work`,
+      files: {
+        // For Bob's relay: builds on Bob's README (with Bob's intro)
+        // For Charlie's relay: builds on Charlie's README (with Charlie's intro)
+        // We'll use a version that just adds the Vision content
+        // The conflict (if any) will be in the Contributors section
+        'VISION.md': `# Project Vision
+
+> "We believe that knowledge grows best when shared freely
+> and organized through genuine human connections rather
+> than rigid hierarchies."
+>
+> — Alice
+
+## Core Principles
+
+1. **Social Resonance** - Ideas spread through trust networks
+2. **Decentralization** - No central authority controls knowledge
+3. **Organic Growth** - Structure emerges from use, not planning
+
+## Goals
+
+- Enable frictionless collaboration across the Liminal Web
+- Preserve provenance while allowing remix and evolution
+- Make knowledge gardening as natural as conversation
+`
+      },
+      relayedBy: ['bob', 'charlie'],
+      originalAuthor: 'alice'
     }
   ]
 };

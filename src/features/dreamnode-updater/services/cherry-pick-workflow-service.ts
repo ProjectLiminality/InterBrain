@@ -22,6 +22,12 @@ import {
   CollaborationMemoryService,
   getCollaborationMemoryService
 } from './collaboration-memory-service';
+import {
+  ConflictInfo,
+  MergeResolution,
+  getConflictInfo,
+  getSmartMergeService
+} from './smart-merge-service';
 
 /**
  * Extended commit info with deduplication metadata
@@ -75,6 +81,10 @@ export interface WorkflowResult {
   acceptedCount?: number;
   rejectedCount?: number;
   error?: string;
+  /** If there's a conflict that needs resolution */
+  conflict?: ConflictInfo;
+  /** The commit that caused the conflict */
+  conflictingCommit?: PendingCommit;
 }
 
 export class CherryPickWorkflowService {
@@ -306,7 +316,57 @@ export class CherryPickWorkflowService {
           // Cherry-pick failed (likely conflict)
           console.error(`[CherryPickWorkflow] Cherry-pick failed for ${commit.hash}:`, cherryPickError);
 
-          // Abort the cherry-pick
+          // Check if this is a merge conflict we can help resolve
+          const isConflict = cherryPickError.message?.includes('CONFLICT') ||
+                            cherryPickError.message?.includes('could not apply') ||
+                            cherryPickError.stderr?.includes('CONFLICT');
+
+          if (isConflict) {
+            // Get conflict details before aborting
+            const { stdout: conflictFiles } = await execAsync(
+              'git diff --name-only --diff-filter=U',
+              { cwd: fullPath }
+            ).catch(() => ({ stdout: '' }));
+
+            const conflictedFile = conflictFiles.trim().split('\n')[0];
+
+            if (conflictedFile) {
+              const conflictInfo = await getConflictInfo(fullPath, conflictedFile);
+
+              if (conflictInfo) {
+                // Don't abort yet - let the UI handle resolution
+                // But do reset any already-applied commits first
+                if (appliedCount > 0) {
+                  // We need to abort first, then reset
+                  try {
+                    await execAsync('git cherry-pick --abort', { cwd: fullPath });
+                  } catch {
+                    // Ignore
+                  }
+                  await execAsync(`git reset --hard HEAD~${appliedCount}`, { cwd: fullPath });
+                }
+
+                // Restore stash if we stashed
+                if (didStash) {
+                  try {
+                    await execAsync('git stash pop', { cwd: fullPath });
+                  } catch {
+                    // Ignore
+                  }
+                }
+
+                return {
+                  success: false,
+                  message: `Conflict detected in "${conflictedFile}" while applying "${commit.subject}".`,
+                  conflict: conflictInfo,
+                  conflictingCommit: commit,
+                  error: 'merge_conflict'
+                };
+              }
+            }
+          }
+
+          // Abort the cherry-pick (non-conflict error or couldn't get conflict info)
           try {
             await execAsync('git cherry-pick --abort', { cwd: fullPath });
           } catch {
@@ -662,6 +722,100 @@ export class CherryPickWorkflowService {
   forceCleanupPreview(): void {
     console.warn('[CherryPickWorkflow] Force cleanup of preview state');
     this.previewState = null;
+  }
+
+  /**
+   * Apply a resolved conflict and continue/complete the cherry-pick
+   *
+   * Called after ConflictResolutionModal resolves a conflict
+   */
+  async applyConflictResolution(
+    dreamNodePath: string,
+    resolution: MergeResolution,
+    commit: PendingCommit
+  ): Promise<WorkflowResult> {
+    if (!resolution.success || !resolution.mergedContent) {
+      return {
+        success: false,
+        message: 'No valid resolution provided'
+      };
+    }
+
+    const fullPath = this.getFullPath(dreamNodePath);
+
+    try {
+      // The conflict file should already be written by the smart merge service
+      // But let's make sure
+      const { writeFile } = await import('fs/promises');
+      const conflictFilePath = path.join(fullPath, 'README.md'); // TODO: Get from conflict info
+
+      // Stage the resolved file
+      await execAsync('git add -A', { cwd: fullPath });
+
+      // Complete the cherry-pick
+      try {
+        await execAsync('git cherry-pick --continue --no-edit', { cwd: fullPath });
+      } catch (continueError: any) {
+        // If continue fails, try committing directly
+        if (continueError.message?.includes('nothing to commit') ||
+            continueError.message?.includes('cherry-pick is now empty')) {
+          // Changes already committed or nothing to commit
+          try {
+            await execAsync('git cherry-pick --skip', { cwd: fullPath });
+          } catch {
+            // Ignore
+          }
+        } else {
+          // Try to commit the resolution manually
+          try {
+            await execAsync(
+              `git commit -m "${commit.subject} (conflict resolved)"`,
+              { cwd: fullPath }
+            );
+          } catch {
+            // If that fails too, abort
+            await execAsync('git cherry-pick --abort', { cwd: fullPath }).catch(() => {});
+            return {
+              success: false,
+              message: 'Failed to complete cherry-pick after resolution',
+              error: continueError.message
+            };
+          }
+        }
+      }
+
+      return {
+        success: true,
+        message: `Applied "${commit.subject}" with resolved conflict (${resolution.method})`,
+        acceptedCount: 1
+      };
+
+    } catch (error: any) {
+      console.error('[CherryPickWorkflow] Apply conflict resolution failed:', error);
+      return {
+        success: false,
+        message: 'Failed to apply conflict resolution',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Abort a pending conflict resolution and clean up
+   */
+  async abortConflictResolution(dreamNodePath: string): Promise<void> {
+    const fullPath = this.getFullPath(dreamNodePath);
+
+    try {
+      await execAsync('git cherry-pick --abort', { cwd: fullPath });
+    } catch {
+      // Try reset if abort doesn't work
+      try {
+        await execAsync('git reset --hard HEAD', { cwd: fullPath });
+      } catch {
+        // Ignore
+      }
+    }
   }
 }
 

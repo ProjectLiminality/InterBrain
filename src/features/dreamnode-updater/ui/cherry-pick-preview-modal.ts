@@ -23,6 +23,7 @@ import {
   getCollaborationMemoryService
 } from '../services/collaboration-memory-service';
 import { showPreviewBanner } from './preview-banner';
+import { showConflictResolutionModal } from './conflict-resolution-modal';
 
 export interface CherryPickPreviewConfig {
   /** Path to the DreamNode being updated */
@@ -400,11 +401,14 @@ export class CherryPickPreviewModal extends Modal {
       cls: 'cherry-pick-commit-meta'
     });
 
-    // Expandable body
+    // Expandable body - only render if expandable, start hidden
     if (showExpandable) {
       const bodyEl = infoEl.createDiv({
-        cls: 'cherry-pick-commit-body cherry-pick-commit-body-collapsed'
+        cls: 'cherry-pick-commit-body'
       });
+      // Start collapsed - hide by default
+      bodyEl.style.display = 'none';
+
       bodyEl.createEl('pre', {
         text: displayBody,
         cls: 'cherry-pick-commit-body-text'
@@ -421,8 +425,9 @@ export class CherryPickPreviewModal extends Modal {
           toggle.textContent = isExpanded ? '▶' : '▼';
           toggle.setAttribute('data-expanded', isExpanded ? 'false' : 'true');
         }
-        bodyEl.classList.toggle('cherry-pick-commit-body-collapsed', isExpanded);
-        bodyEl.classList.toggle('cherry-pick-commit-body-expanded', !isExpanded);
+
+        // Toggle visibility
+        bodyEl.style.display = isExpanded ? 'none' : 'block';
       });
     }
 
@@ -572,6 +577,11 @@ export class CherryPickPreviewModal extends Modal {
 
       if (result.success) {
         this.showPreviewBannerAndClose([commit]);
+      } else if (result.conflict && result.conflictingCommit) {
+        // Show conflict resolution modal
+        this.isProcessing = false;
+        this.close();
+        this.showConflictModal(result.conflict, result.conflictingCommit);
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -596,6 +606,11 @@ export class CherryPickPreviewModal extends Modal {
 
       if (result.success) {
         this.showPreviewBannerAndClose(group.commits);
+      } else if (result.conflict && result.conflictingCommit) {
+        // Show conflict resolution modal
+        this.isProcessing = false;
+        this.close();
+        this.showConflictModal(result.conflict, result.conflictingCommit);
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -629,6 +644,11 @@ export class CherryPickPreviewModal extends Modal {
 
       if (result.success) {
         this.showPreviewBannerAndClose(allSelected);
+      } else if (result.conflict && result.conflictingCommit) {
+        // Show conflict resolution modal
+        this.isProcessing = false;
+        this.close();
+        this.showConflictModal(result.conflict, result.conflictingCommit);
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -647,6 +667,9 @@ export class CherryPickPreviewModal extends Modal {
     const selectedGroups = this.getSelectedCommits();
     const peerRepoPath = selectedGroups[0]?.peerRepoPath || '';
 
+    // Store config for reopening modal
+    const configForReopen = { ...this.config };
+
     // Show the thin bottom banner with callbacks
     showPreviewBanner({
       onAccept: async () => {
@@ -664,6 +687,9 @@ export class CherryPickPreviewModal extends Modal {
         } else {
           console.error('[CherryPickModal] Accept failed:', acceptResult.message);
         }
+
+        // Reopen modal with refreshed state
+        await this.reopenModalWithRefreshedState(configForReopen);
       },
       onReject: async () => {
         const workflowService = getCherryPickWorkflowService();
@@ -680,15 +706,47 @@ export class CherryPickPreviewModal extends Modal {
         } else {
           console.error('[CherryPickModal] Reject failed:', rejectResult.message);
         }
+
+        // Reopen modal with refreshed state
+        await this.reopenModalWithRefreshedState(configForReopen);
       },
       onCancel: async () => {
         const workflowService = getCherryPickWorkflowService();
         await workflowService.cancelPreview();
+
+        // Reopen modal with refreshed state
+        await this.reopenModalWithRefreshedState(configForReopen);
       }
     });
 
     // Close the modal - user can interact with dream space
     this.close();
+  }
+
+  private async reopenModalWithRefreshedState(originalConfig: CherryPickPreviewConfig) {
+    // Re-fetch pending commits
+    const workflowService = getCherryPickWorkflowService();
+
+    const peers = originalConfig.allPeers || originalConfig.peerGroups.map(g => ({
+      uuid: g.peerUuid,
+      name: g.peerName,
+      repoPath: g.peerRepoPath
+    }));
+
+    const newPeerGroups = await workflowService.getPendingCommits(
+      originalConfig.dreamNodePath,
+      originalConfig.dreamNodeUuid,
+      peers
+    );
+
+    // Create new modal with updated peer groups
+    const newConfig: CherryPickPreviewConfig = {
+      ...originalConfig,
+      peerGroups: newPeerGroups
+    };
+
+    const newModal = new CherryPickPreviewModal(this.app, newConfig);
+    newModal.open();
   }
 
   private async acceptSelected() {
@@ -982,6 +1040,43 @@ export class CherryPickPreviewModal extends Modal {
     await this.refreshPendingCommits();
 
     this.renderContent();
+  }
+
+  private showConflictModal(
+    conflict: import('../services/smart-merge-service').ConflictInfo,
+    commit: PendingCommit
+  ) {
+    const configForReopen = { ...this.config };
+
+    showConflictResolutionModal(this.app, {
+      repoPath: this.config.dreamNodePath,
+      conflict,
+      commitSubject: commit.subject,
+      onResolved: async (resolution) => {
+        // Apply the resolution
+        const workflowService = getCherryPickWorkflowService();
+        const result = await workflowService.applyConflictResolution(
+          this.config.dreamNodePath,
+          resolution,
+          commit
+        );
+
+        if (result.success) {
+          // Reopen the cherry-pick modal with refreshed state
+          await this.reopenModalWithRefreshedState(configForReopen);
+        } else {
+          // Show error and reopen
+          console.error('[CherryPickModal] Conflict resolution apply failed:', result.message);
+          await this.reopenModalWithRefreshedState(configForReopen);
+        }
+      },
+      onCancel: async () => {
+        // Abort the conflict and reopen modal
+        const workflowService = getCherryPickWorkflowService();
+        await workflowService.abortConflictResolution(this.config.dreamNodePath);
+        await this.reopenModalWithRefreshedState(configForReopen);
+      }
+    });
   }
 
   private async refreshPendingCommits() {

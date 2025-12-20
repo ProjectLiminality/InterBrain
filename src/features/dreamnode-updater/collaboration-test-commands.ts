@@ -144,23 +144,23 @@ async function setupTestEnvironment(
 
         await execAsync('git add .', { cwd: workPath });
 
-        // If this is a relayed commit (originalAuthor differs from relay peer),
-        // simulate cherry-pick by adding the provenance marker
+        // Build commit message
+        let commitMsg: string;
         if (commit.originalAuthor && commit.originalAuthor !== relayPeerName) {
-          // First, create the "original" commit message with provenance
-          // In real scenario, this would come from cherry-pick -x
+          // Relayed commit - add cherry-pick provenance marker
           const fakeOriginalHash = `abc${commit.author}${Date.now().toString(16)}`.slice(0, 12);
           const bodyText = commit.body ? `\n\n${commit.body}` : '';
-          const commitMsg = `${commit.subject}${bodyText}\n\n(cherry picked from commit ${fakeOriginalHash})`;
-          // Use heredoc for multiline commit message
-          const heredocCmd = `git commit -m "$(cat <<'COMMITMSG'\n${commitMsg}\nCOMMITMSG\n)"`;
-          await execAsync(heredocCmd, { cwd: workPath });
+          commitMsg = `${commit.subject}${bodyText}\n\n(cherry picked from commit ${fakeOriginalHash})`;
         } else {
           const bodyText = commit.body ? `\n\n${commit.body}` : '';
-          const commitMsg = `${commit.subject}${bodyText}`;
-          const heredocCmd = `git commit -m "$(cat <<'COMMITMSG'\n${commitMsg}\nCOMMITMSG\n)"`;
-          await execAsync(heredocCmd, { cwd: workPath });
+          commitMsg = `${commit.subject}${bodyText}`;
         }
+
+        // Write commit message to temp file to avoid shell escaping issues
+        const msgFilePath = path.join(workPath, '.git', 'COMMIT_MSG_TEMP');
+        await fs.writeFile(msgFilePath, commitMsg);
+        await execAsync(`git commit -F "${msgFilePath}"`, { cwd: workPath });
+        await fs.unlink(msgFilePath).catch(() => {}); // Clean up
 
         await execAsync('git push origin main', { cwd: workPath });
       }
