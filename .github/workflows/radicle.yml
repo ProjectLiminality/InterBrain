@@ -1,0 +1,125 @@
+name: Radicle Integration
+
+on:
+  push:
+    branches: [main, 'epic/*', 'feature/*']
+    paths:
+      - 'src/features/social-resonance-filter/**'
+      - 'src/features/dreamnode-updater/**'
+      - 'install.sh'
+      - '.github/workflows/radicle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/features/social-resonance-filter/**'
+      - 'src/features/dreamnode-updater/**'
+      - 'install.sh'
+      - '.github/workflows/radicle.yml'
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  radicle-unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Radicle
+        run: |
+          echo "Installing Radicle on ${{ matrix.os }}..."
+
+          # Try official installer first
+          if curl -sSf https://radicle.xyz/install | sh; then
+            echo "Official installer succeeded"
+          else
+            echo "Official installer failed, building from source..."
+
+            # Install Rust if needed
+            if ! command -v cargo &> /dev/null; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+              source "$HOME/.cargo/env"
+            fi
+
+            # Build from source
+            cargo install radicle-cli --git https://github.com/radicle-dev/heartwood --locked
+          fi
+
+          # Add to PATH
+          echo "$HOME/.radicle/bin" >> $GITHUB_PATH
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        timeout-minutes: 15
+
+      - name: Verify Radicle installation
+        run: |
+          rad --version
+          echo "Radicle CLI installed successfully"
+
+      - name: Create test identity
+        env:
+          RAD_PASSPHRASE: ci-test-passphrase-123
+        run: |
+          rad auth --alias "CI-Test-${{ matrix.os }}"
+
+          echo "Identity created:"
+          rad self --did
+          rad self --alias
+        timeout-minutes: 2
+
+      - name: Test basic rad operations
+        env:
+          RAD_PASSPHRASE: ci-test-passphrase-123
+        run: |
+          # Create a test repo
+          mkdir -p /tmp/test-dreamnode
+          cd /tmp/test-dreamnode
+
+          git init
+          git config user.email "ci@test.local"
+          git config user.name "CI Test"
+          git commit --allow-empty -m "Initial commit"
+
+          # Initialize as Radicle repo
+          rad init --private --default-branch main --name "CI-Test-Node" --description "Test node for CI"
+
+          # Verify it worked
+          rad .
+
+          echo "Radicle repo initialized successfully"
+        timeout-minutes: 3
+
+  radicle-windows-cli:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+
+      - name: Build Radicle CLI from source
+        run: |
+          cargo install radicle-cli --git https://github.com/radicle-dev/heartwood --locked
+        timeout-minutes: 20
+
+      - name: Test rad CLI basics
+        run: |
+          rad --version
+          rad --help
+
+          echo "### Windows Radicle CLI Test Results" >> $env:GITHUB_STEP_SUMMARY
+          echo "- rad --version: PASS" >> $env:GITHUB_STEP_SUMMARY
+          echo "- rad --help: PASS" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "Note: Full Radicle node requires WSL on Windows" >> $env:GITHUB_STEP_SUMMARY
