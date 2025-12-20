@@ -25,6 +25,16 @@
 # CI mode (non-interactive):
 #   bash install.sh --ci          Run in CI mode with defaults, no prompts, temp directory vault
 
+# Parse --ci flag FIRST (before any checks that might exit)
+# This allows CI mode to bypass the non-interactive check
+CI_MODE=false
+for arg in "$@"; do
+    if [ "$arg" = "--ci" ]; then
+        CI_MODE=true
+        break
+    fi
+done
+
 # Create log file FIRST (before anything else)
 LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
 
@@ -91,7 +101,7 @@ DREAMER_UUID=""
 BRANCH="main"  # Default to main branch
 TEST_FAIL=""
 TEST_RADICLE_FALLBACK=false
-CI_MODE=false
+# CI_MODE already parsed above before non-interactive check
 while [[ $# -gt 0 ]]; do
   case $1 in
     --uri)

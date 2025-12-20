@@ -53,14 +53,22 @@ jobs:
       - name: Verify install.sh syntax
         run: bash -n install.sh
 
-      - name: Test --ci flag parsing
+      - name: Test --ci flag is recognized
         run: |
-          # Verify the script accepts --ci flag and outputs CI mode message
-          # Note: We can't run the full install in CI, just test parsing
-          bash -c 'source <(head -120 install.sh); echo "CI_MODE=$CI_MODE"'
+          # Test that --ci flag prevents the non-interactive exit
+          # The script will fail on missing deps (brew/apt), but should NOT fail with "NON-INTERACTIVE MODE NOT SUPPORTED"
+          output=$(timeout 5 bash install.sh --ci 2>&1 || true)
 
-          # Test that command_exists function works
-          bash -c '
-            source <(sed -n "117,120p" install.sh)
-            command_exists bash && echo "command_exists: OK"
-          '
+          if echo "$output" | grep -q "NON-INTERACTIVE MODE NOT SUPPORTED"; then
+            echo "ERROR: --ci flag not working - script still requires interactive mode"
+            exit 1
+          fi
+
+          if echo "$output" | grep -q "Running in CI mode"; then
+            echo "SUCCESS: --ci flag recognized"
+          else
+            echo "WARNING: CI mode message not found, but non-interactive error also not present"
+          fi
+
+          echo "Output preview:"
+          echo "$output" | head -20
