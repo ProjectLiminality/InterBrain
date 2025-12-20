@@ -96,12 +96,11 @@ jobs:
           git add README.md
           git commit -m "Initial commit by Alice"
 
-          # Bob's contribution
-          echo "" >> README.md
-          echo "## Bob's Section" >> README.md
-          echo "Bob was here." >> README.md
-          git add README.md
-          git commit -m "Add Bob's section"
+          # Bob's contribution - in a separate file to avoid conflicts
+          echo "# Bob's Contribution" > bob.md
+          echo "Bob was here." >> bob.md
+          git add bob.md
+          git commit -m "Add Bob's contribution"
 
           echo "Bob's contribution committed"
         timeout-minutes: 2
@@ -122,12 +121,11 @@ jobs:
           git add README.md
           git commit -m "Initial commit by Alice"
 
-          # Charlie's contribution
-          echo "" >> README.md
-          echo "## Charlie's Section" >> README.md
-          echo "Charlie was here too." >> README.md
-          git add README.md
-          git commit -m "Add Charlie's section"
+          # Charlie's contribution - in a separate file to avoid conflicts
+          echo "# Charlie's Contribution" > charlie.md
+          echo "Charlie was here too." >> charlie.md
+          git add charlie.md
+          git commit -m "Add Charlie's contribution"
 
           echo "Charlie's contribution committed"
         timeout-minutes: 2
