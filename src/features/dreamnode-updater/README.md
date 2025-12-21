@@ -16,6 +16,7 @@ dreamnode-updater/
 │   └── smart-merge-service.ts                # Conflict resolution with search-replace merging
 ├── ui/
 │   ├── cherry-pick-preview-modal.ts          # Enhanced modal with per-commit selection
+│   ├── interbrain-update-modal.ts            # Simple all-or-nothing modal for self-updates
 │   ├── conflict-resolution-modal.ts          # Modal for resolving merge conflicts
 │   ├── preview-banner.ts                     # Floating banner during preview mode
 │   └── rejection-history-modal.ts            # View and unreject previously rejected commits
@@ -23,8 +24,7 @@ dreamnode-updater/
 │   ├── setup-cherry-pick-test.sh             # Bash script to create test environment
 │   └── test-cherry-pick-services.ts          # Integration test for services
 ├── docs/
-│   ├── collaboration-scenarios.md            # Design scenarios and test scripts
-│   └── p2p-collaboration-status.md           # Feature status and roadmap
+│   └── collaboration-scenarios.md            # Design scenarios and test scripts
 ├── commands.ts                               # DreamNode update commands
 ├── dreamer-update-commands.ts                # Peer-centric batch update commands
 ├── collaboration-test-commands.ts            # UI testing commands (setup/cleanup)
@@ -53,6 +53,8 @@ dreamnode-updater/
 export { registerUpdateCommands } from './commands';
 export { registerDreamerUpdateCommands } from './dreamer-update-commands';
 export { UpdateSummaryService } from './services/update-summary-service';
+export { CherryPickPreviewModal } from './ui/cherry-pick-preview-modal';
+export { InterBrainUpdateModal } from './ui/interbrain-update-modal';
 export { createUpdatesSlice, type UpdatesSlice } from './store/slice';
 ```
 
@@ -113,10 +115,10 @@ User clicks "Preview Updates"
               |
               v
 +---------------------------------------------+
-| UpdatePreviewModal shows:                   |
-| - Summary of changes                        |
+| CherryPickPreviewModal shows:               |
+| - Summary of changes (on-demand AI)         |
 | - Commits grouped by peer                   |
-| - Accept / Reject buttons                   |
+| - Preview / Accept / Reject buttons         |
 +---------------------------------------------+
               |
               v
@@ -191,11 +193,21 @@ When Alice and Bob both relay Charlie's commit:
 ## UI Components
 
 ### CherryPickPreviewModal
-Enhanced modal for the cherry-pick collaboration workflow:
+Enhanced modal for the cherry-pick collaboration workflow (used for DreamNodes):
 - Groups commits by peer (Dreamer)
 - Checkboxes for individual commit selection
 - Per-commit and per-peer accept/reject actions
 - Preview mode: stash work → apply → explore → decide → restore
+- On-demand AI summarization of selected commits
+- Fixed footer with action buttons, scrollable content area
+- Collapsible rejection history section
+
+### InterBrainUpdateModal
+Simple all-or-nothing modal for InterBrain self-updates:
+- Shows commit count and expandable commit list
+- On-demand AI summarization
+- "Update & Reload" pulls, builds, and reloads the plugin
+- No granular commit selection (must accept all)
 
 ### PreviewBanner
 Floating banner that appears during preview mode:
