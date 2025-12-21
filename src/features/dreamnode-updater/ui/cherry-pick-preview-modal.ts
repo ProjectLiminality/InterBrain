@@ -12,7 +12,7 @@
 
 /* eslint-disable no-undef */
 
-import { App, Modal, Setting } from 'obsidian';
+import { App, Modal, Setting, Notice } from 'obsidian';
 import {
   PeerCommitGroup,
   PendingCommit,
@@ -22,6 +22,12 @@ import {
   RejectedCommit,
   getCollaborationMemoryService
 } from '../services/collaboration-memory-service';
+import {
+  getUpdateSummaryService,
+  initializeUpdateSummaryService,
+  UpdateSummary
+} from '../services/update-summary-service';
+import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
 import { showPreviewBanner } from './preview-banner';
 import { showConflictResolutionModal } from './conflict-resolution-modal';
 
@@ -55,7 +61,8 @@ export class CherryPickPreviewModal extends Modal {
   private selectionState: Map<string, CommitSelectionState> = new Map();
   private isProcessing = false;
   private rejectionHistory: Map<string, RejectedCommit[]> = new Map();
-  private isHistoryExpanded = true; // Start expanded so users see it
+  private adaptedCommits: Set<string> = new Set(); // Track commits with stored adaptations
+  private isHistoryExpanded = false; // Start collapsed by default
 
   constructor(app: App, config: CherryPickPreviewConfig) {
     super(app);
@@ -74,12 +81,18 @@ export class CherryPickPreviewModal extends Modal {
   }
 
   async onOpen() {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
     contentEl.empty();
     contentEl.addClass('cherry-pick-preview-modal');
+    // Set width on the modal container itself
+    modalEl.addClass('cherry-pick-preview-modal-container');
+    // Also set inline style as fallback for CSS specificity issues
+    modalEl.style.width = '650px';
+    modalEl.style.maxWidth = '90vw';
 
-    // Load rejection history from all peers
+    // Load rejection history and adaptations from all peers
     await this.loadRejectionHistory();
+    await this.loadAdaptations();
 
     this.renderContent();
     this.addStyles();
@@ -106,6 +119,29 @@ export class CherryPickPreviewModal extends Modal {
     }
   }
 
+  private async loadAdaptations() {
+    const memoryService = getCollaborationMemoryService();
+    this.adaptedCommits.clear();
+
+    // Check all commits in all peer groups for stored adaptations
+    for (const group of this.config.peerGroups) {
+      for (const commit of group.commits) {
+        const adaptation = await memoryService.getAdaptation(
+          group.peerRepoPath,
+          this.config.dreamNodeUuid,
+          commit.originalHash
+        );
+        if (adaptation) {
+          this.adaptedCommits.add(commit.originalHash);
+        }
+      }
+    }
+
+    if (this.adaptedCommits.size > 0) {
+      console.log(`[CherryPickModal] Found ${this.adaptedCommits.size} adapted commit(s)`);
+    }
+  }
+
   onClose() {
     const { contentEl } = this;
     contentEl.empty();
@@ -118,7 +154,7 @@ export class CherryPickPreviewModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Header
+    // Header (fixed at top)
     contentEl.createEl('h2', {
       text: `Updates for ${this.config.dreamNodeName}`,
       cls: 'cherry-pick-modal-title'
@@ -137,8 +173,11 @@ export class CherryPickPreviewModal extends Modal {
       });
     }
 
+    // === SCROLLABLE CONTENT AREA ===
+    const scrollableContent = contentEl.createDiv({ cls: 'cherry-pick-scrollable-content' });
+
     // === PENDING COMMITS SECTION ===
-    const pendingSection = contentEl.createDiv({ cls: 'cherry-pick-section' });
+    const pendingSection = scrollableContent.createDiv({ cls: 'cherry-pick-section' });
 
     const pendingHeader = pendingSection.createDiv({ cls: 'cherry-pick-section-header' });
     pendingHeader.createEl('h3', {
@@ -167,13 +206,10 @@ export class CherryPickPreviewModal extends Modal {
           this.renderPeerGroup(groupsContainer, group, 'pending');
         }
       }
-
-      // Action buttons for pending commits
-      this.renderActionButtons(pendingSection);
     }
 
     // === REJECTION HISTORY SECTION ===
-    const historySection = contentEl.createDiv({ cls: 'cherry-pick-section cherry-pick-history-section' });
+    const historySection = scrollableContent.createDiv({ cls: 'cherry-pick-section cherry-pick-history-section' });
 
     const historyHeader = historySection.createDiv({
       cls: 'cherry-pick-section-header cherry-pick-section-header-collapsible'
@@ -210,6 +246,11 @@ export class CherryPickPreviewModal extends Modal {
         const historyContainer = historySection.createDiv({ cls: 'cherry-pick-peer-groups' });
         this.renderRejectionGroups(historyContainer);
       }
+    }
+
+    // === FIXED FOOTER WITH ACTION BUTTONS ===
+    if (totalCommits > 0) {
+      this.renderActionButtons(contentEl);
     }
   }
 
@@ -388,6 +429,16 @@ export class CherryPickPreviewModal extends Modal {
       expandToggle.setAttribute('data-expanded', 'false');
     }
 
+    // Show sparkle if commit has stored adaptation
+    const hasAdaptation = this.adaptedCommits.has(commit.originalHash);
+    if (hasAdaptation) {
+      subjectRow.createSpan({
+        text: '✨',
+        cls: 'cherry-pick-commit-adapted-indicator',
+        attr: { title: 'AI-adapted to work with your changes' }
+      });
+    }
+
     subjectRow.createSpan({
       text: commit.subject,
       cls: 'cherry-pick-commit-subject'
@@ -519,7 +570,23 @@ export class CherryPickPreviewModal extends Modal {
   private renderActionButtons(container: HTMLElement) {
     const buttonContainer = container.createDiv({ cls: 'cherry-pick-modal-buttons' });
 
+    // Count selected commits to determine if summarize should be enabled
+    const selectedCount = Array.from(this.selectionState.values()).filter(s => s.selected).length;
+    const canSummarize = selectedCount >= 2;
+
     new Setting(buttonContainer)
+      .addButton((btn) => {
+        btn
+          .setButtonText('📝 Summarize Selected')
+          .onClick(async () => {
+            await this.showSummaryForSelection();
+          });
+        // Disable if less than 2 commits selected
+        if (!canSummarize) {
+          btn.setDisabled(true);
+          btn.buttonEl.setAttribute('title', 'Select at least 2 commits to summarize');
+        }
+      })
       .addButton((btn) =>
         btn
           .setButtonText('👁 Preview Selected')
@@ -567,21 +634,28 @@ export class CherryPickPreviewModal extends Modal {
     this.isProcessing = true;
     this.showProcessing('Starting preview...');
 
+    // Find the peer repo path for this commit
+    const peerGroup = this.config.peerGroups.find(g =>
+      g.commits.some(c => c.originalHash === commit.originalHash)
+    );
+    const peerRepoPath = peerGroup?.peerRepoPath;
+
     try {
       const workflowService = getCherryPickWorkflowService();
       const result = await workflowService.startPreview(
         this.config.dreamNodePath,
         this.config.dreamNodeUuid,
-        [commit]
+        [commit],
+        peerRepoPath
       );
 
       if (result.success) {
         this.showPreviewBannerAndClose([commit]);
       } else if (result.conflict && result.conflictingCommit) {
-        // Show conflict resolution modal
+        // Show conflict resolution modal in preview mode
         this.isProcessing = false;
         this.close();
-        this.showConflictModal(result.conflict, result.conflictingCommit);
+        this.showConflictModal(result.conflict, result.conflictingCommit, 'preview');
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -601,16 +675,17 @@ export class CherryPickPreviewModal extends Modal {
       const result = await workflowService.startPreview(
         this.config.dreamNodePath,
         this.config.dreamNodeUuid,
-        group.commits
+        group.commits,
+        group.peerRepoPath
       );
 
       if (result.success) {
         this.showPreviewBannerAndClose(group.commits);
       } else if (result.conflict && result.conflictingCommit) {
-        // Show conflict resolution modal
+        // Show conflict resolution modal in preview mode
         this.isProcessing = false;
         this.close();
-        this.showConflictModal(result.conflict, result.conflictingCommit);
+        this.showConflictModal(result.conflict, result.conflictingCommit, 'preview');
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -630,6 +705,8 @@ export class CherryPickPreviewModal extends Modal {
 
     // Flatten all selected commits for preview
     const allSelected = selectedGroups.flatMap(g => g.commits);
+    // Use the first peer's repo path for adaptation lookups
+    const peerRepoPath = selectedGroups[0]?.peerRepoPath;
 
     this.isProcessing = true;
     this.showProcessing('Starting preview...');
@@ -639,16 +716,17 @@ export class CherryPickPreviewModal extends Modal {
       const result = await workflowService.startPreview(
         this.config.dreamNodePath,
         this.config.dreamNodeUuid,
-        allSelected
+        allSelected,
+        peerRepoPath
       );
 
       if (result.success) {
         this.showPreviewBannerAndClose(allSelected);
       } else if (result.conflict && result.conflictingCommit) {
-        // Show conflict resolution modal
+        // Show conflict resolution modal in preview mode
         this.isProcessing = false;
         this.close();
-        this.showConflictModal(result.conflict, result.conflictingCommit);
+        this.showConflictModal(result.conflict, result.conflictingCommit, 'preview');
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -659,7 +737,7 @@ export class CherryPickPreviewModal extends Modal {
     }
   }
 
-  private showPreviewBannerAndClose(commits: PendingCommit[]) {
+  private showPreviewBannerAndClose(_commits: PendingCommit[]) {
     // Close modal and show non-blocking banner
     this.isProcessing = false;
 
@@ -771,6 +849,13 @@ export class CherryPickPreviewModal extends Modal {
         );
 
         if (!result.success) {
+          if (result.conflict && result.conflictingCommit) {
+            // Show conflict resolution modal
+            this.isProcessing = false;
+            this.close();
+            this.showConflictModal(result.conflict, result.conflictingCommit);
+            return;
+          }
           this.showMessage(result.message, true);
           this.isProcessing = false;
           return;
@@ -857,6 +942,11 @@ export class CherryPickPreviewModal extends Modal {
         } else {
           this.renderContent();
         }
+      } else if (result.conflict && result.conflictingCommit) {
+        // Show conflict resolution modal
+        this.isProcessing = false;
+        this.close();
+        this.showConflictModal(result.conflict, result.conflictingCommit);
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -947,6 +1037,11 @@ export class CherryPickPreviewModal extends Modal {
         } else {
           this.renderContent();
         }
+      } else if (result.conflict && result.conflictingCommit) {
+        // Show conflict resolution modal
+        this.isProcessing = false;
+        this.close();
+        this.showConflictModal(result.conflict, result.conflictingCommit);
       } else {
         this.showMessage(result.message, true);
         this.isProcessing = false;
@@ -1044,7 +1139,8 @@ export class CherryPickPreviewModal extends Modal {
 
   private showConflictModal(
     conflict: import('../services/smart-merge-service').ConflictInfo,
-    commit: PendingCommit
+    commit: PendingCommit,
+    mode: 'accept' | 'preview' = 'accept'
   ) {
     const configForReopen = { ...this.config };
 
@@ -1058,16 +1154,80 @@ export class CherryPickPreviewModal extends Modal {
         const result = await workflowService.applyConflictResolution(
           this.config.dreamNodePath,
           resolution,
-          commit
+          commit,
+          conflict.filePath // Pass the conflict file path so it can write the resolved content
         );
 
         if (result.success) {
-          // Reopen the cherry-pick modal with refreshed state
-          await this.reopenModalWithRefreshedState(configForReopen);
+          const memoryService = getCollaborationMemoryService();
+
+          // Find peer repo path for this commit
+          const peerGroup = this.config.peerGroups.find(g =>
+            g.commits.some(c => c.originalHash === commit.originalHash)
+          );
+          const peerRepoPath = peerGroup?.peerRepoPath || '';
+
+          // Store the adaptation for future use
+          if (resolution.mergedContent && peerGroup) {
+            await memoryService.storeAdaptation(
+              peerRepoPath,
+              this.config.dreamNodeUuid,
+              commit.originalHash,
+              {
+                files: { [conflict.filePath]: resolution.mergedContent },
+                createdAt: Date.now(),
+                method: resolution.method === 'ai-magic' ? 'ai-magic' : 'manual'
+              }
+            );
+          }
+
+          if (mode === 'preview') {
+            // Preview mode: Set up preview state and show banner
+            // This is needed because the normal startPreview flow was interrupted by conflict
+            workflowService.setPreviewState(
+              this.config.dreamNodePath,
+              this.config.dreamNodeUuid,
+              [commit]
+            );
+            this.showPreviewBannerAndClose([commit]);
+          } else {
+            // Accept mode: Record the acceptance immediately
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+            const adapter = this.app.vault.adapter as any;
+            const fullPath = require('path').join(adapter.basePath || '', this.config.dreamNodePath);
+            let appliedHash = commit.originalHash;
+            try {
+              const { stdout } = await execAsync('git rev-parse HEAD', { cwd: fullPath });
+              appliedHash = stdout.trim();
+            } catch {
+              // Use original hash if we can't get new one
+            }
+
+            await memoryService.recordAcceptance(
+              peerRepoPath,
+              this.config.dreamNodeUuid,
+              [{
+                originalHash: commit.originalHash,
+                appliedHash: appliedHash,
+                subject: commit.subject,
+                relayedBy: commit.offeredBy
+              }]
+            );
+
+            // Notify via callback
+            await this.config.onAccept([commit], peerRepoPath);
+
+            // Reopen the cherry-pick modal with refreshed state
+            await this.reopenModalWithRefreshedState(configForReopen);
+          }
+
+          return { success: true };
         } else {
-          // Show error and reopen
-          console.error('[CherryPickModal] Conflict resolution apply failed:', result.message);
-          await this.reopenModalWithRefreshedState(configForReopen);
+          // Return failure so conflict modal can show retry/report options
+          console.log('[CherryPickModal] Conflict resolution apply failed:', result.message);
+          return { success: false, error: result.message || result.error };
         }
       },
       onCancel: async () => {
@@ -1111,6 +1271,103 @@ export class CherryPickPreviewModal extends Modal {
     }
   }
 
+  /**
+   * Show AI-generated summary for selected commits
+   * Requires at least 2 commits - single commits are self-descriptive
+   */
+  private async showSummaryForSelection(): Promise<void> {
+    const selectedGroups = this.getSelectedCommits();
+    const allSelected = selectedGroups.flatMap(g => g.commits);
+
+    if (allSelected.length < 2) {
+      new Notice('Select at least 2 commits to summarize');
+      return;
+    }
+
+    // Show loading overlay
+    const overlayEl = this.contentEl.createDiv({ cls: 'cherry-pick-summary-overlay' });
+    overlayEl.createDiv({ cls: 'cherry-pick-summary-loading', text: 'Generating summary...' });
+
+    try {
+      // Get stats for selected commits
+      const workflowService = getCherryPickWorkflowService();
+      const hashes = allSelected.map(c => c.cherryPickRef);
+      const stats = await workflowService.getStatsForCommits(
+        this.config.dreamNodePath,
+        hashes
+      );
+
+      // Build a FetchResult-like object for the summary service
+      const partialResult: FetchResult = {
+        hasUpdates: true,
+        commits: allSelected.map(c => ({
+          hash: c.hash,
+          author: c.author,
+          email: c.email,
+          timestamp: c.timestamp,
+          subject: c.subject,
+          body: c.body,
+          source: c.source
+        })),
+        filesChanged: stats.filesChanged,
+        insertions: stats.insertions,
+        deletions: stats.deletions
+      };
+
+      // Generate AI summary
+      initializeUpdateSummaryService();
+      const summaryService = getUpdateSummaryService();
+      const summary = await summaryService.generateUpdateSummary(partialResult);
+
+      // Remove loading and show summary
+      overlayEl.empty();
+      this.displaySummary(overlayEl, summary, stats);
+    } catch (error: any) {
+      overlayEl.empty();
+      overlayEl.createDiv({
+        cls: 'cherry-pick-summary-error',
+        text: 'Failed to generate summary'
+      });
+      console.error('[CherryPickModal] Summary failed:', error);
+
+      // Add close button
+      const closeBtn = overlayEl.createEl('button', {
+        text: 'Close',
+        cls: 'cherry-pick-summary-close'
+      });
+      closeBtn.onclick = () => overlayEl.remove();
+    }
+  }
+
+  /**
+   * Display the briefing in an overlay
+   */
+  private displaySummary(
+    overlayEl: HTMLElement,
+    summary: UpdateSummary,
+    stats: { filesChanged: number; insertions: number; deletions: number }
+  ): void {
+    // Header
+    overlayEl.createEl('h3', { text: "What's been happening", cls: 'cherry-pick-summary-header' });
+
+    // The briefing - just natural prose
+    const contentEl = overlayEl.createDiv({ cls: 'cherry-pick-summary-content' });
+    // Use briefing if available, otherwise fall back to userFacingChanges
+    const briefingText = summary.briefing || summary.userFacingChanges;
+    contentEl.createEl('p', { text: briefingText });
+
+    // Stats at bottom
+    const statsEl = overlayEl.createDiv({ cls: 'cherry-pick-summary-stats' });
+    statsEl.setText(`${stats.filesChanged} files · +${stats.insertions} -${stats.deletions}`);
+
+    // Close button
+    const closeBtn = overlayEl.createEl('button', {
+      text: 'Close',
+      cls: 'cherry-pick-summary-close'
+    });
+    closeBtn.onclick = () => overlayEl.remove();
+  }
+
   private showProcessing(message: string) {
     const { contentEl } = this;
     contentEl.empty();
@@ -1147,23 +1404,54 @@ export class CherryPickPreviewModal extends Modal {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      .cherry-pick-preview-modal-container.modal {
+        width: 650px !important;
+        max-width: 90vw !important;
+      }
+
+      /* Layout: header, scrollable content, fixed footer */
       .cherry-pick-preview-modal {
-        max-width: 600px;
+        display: flex;
+        flex-direction: column;
+        max-height: 70vh;
       }
 
       .cherry-pick-modal-title {
         margin-bottom: 0.5em;
+        flex-shrink: 0;
       }
 
       .cherry-pick-modal-subtitle {
         color: var(--text-muted);
         margin-bottom: 1em;
         font-size: 0.9em;
+        flex-shrink: 0;
+      }
+
+      /* Scrollable content area */
+      .cherry-pick-scrollable-content {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 0.5em;
+        margin-bottom: 1em;
+      }
+
+      /* Fixed footer for action buttons */
+      .cherry-pick-modal-buttons {
+        flex-shrink: 0;
+        border-top: 1px solid var(--background-modifier-border);
+        padding-top: 1em;
+        margin-top: 0;
+        background: var(--background-primary);
       }
 
       /* Section styling */
       .cherry-pick-section {
         margin-bottom: 1.5em;
+      }
+
+      .cherry-pick-section:last-child {
+        margin-bottom: 0;
       }
 
       .cherry-pick-section-header {
@@ -1341,6 +1629,17 @@ export class CherryPickPreviewModal extends Modal {
 
       .cherry-pick-commit-subject-expandable:hover .cherry-pick-commit-expand-toggle {
         color: var(--text-accent);
+      }
+
+      .cherry-pick-commit-adapted-indicator {
+        font-size: 0.85em;
+        cursor: help;
+        animation: cherry-pick-sparkle 2s ease-in-out infinite;
+      }
+
+      @keyframes cherry-pick-sparkle {
+        0%, 100% { opacity: 0.7; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
       }
 
       .cherry-pick-commit-subject {
@@ -1546,6 +1845,89 @@ export class CherryPickPreviewModal extends Modal {
       .cherry-pick-message-error {
         background: var(--background-modifier-error);
         color: var(--text-on-accent);
+      }
+
+      /* Summary overlay */
+      .cherry-pick-summary-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--background-primary);
+        padding: 1.5em;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        border-radius: 8px;
+      }
+
+      .cherry-pick-summary-header {
+        margin: 0 0 1em 0;
+        font-size: 1.1em;
+      }
+
+      .cherry-pick-summary-loading {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+      }
+
+      .cherry-pick-summary-error {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-error);
+      }
+
+      .cherry-pick-summary-impact {
+        background: var(--background-secondary);
+        padding: 0.75em 1em;
+        border-radius: 6px;
+        margin-bottom: 1em;
+        font-weight: 500;
+      }
+
+      .cherry-pick-summary-content {
+        flex: 1;
+        line-height: 1.6;
+        overflow-y: auto;
+      }
+
+      .cherry-pick-summary-content p {
+        margin: 0 0 0.75em 0;
+      }
+
+      .cherry-pick-summary-technical {
+        color: var(--text-muted);
+        font-size: 0.95em;
+      }
+
+      .cherry-pick-summary-stats {
+        color: var(--text-muted);
+        font-size: 0.85em;
+        margin-top: 1em;
+        padding-top: 0.75em;
+        border-top: 1px solid var(--background-modifier-border);
+      }
+
+      .cherry-pick-summary-close {
+        align-self: flex-end;
+        margin-top: 1em;
+        padding: 0.5em 1em;
+        border: none;
+        border-radius: 4px;
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .cherry-pick-summary-close:hover {
+        background: var(--interactive-accent-hover);
       }
     `;
     document.head.appendChild(style);

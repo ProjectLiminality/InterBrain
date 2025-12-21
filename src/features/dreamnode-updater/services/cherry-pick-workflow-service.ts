@@ -25,8 +25,7 @@ import {
 import {
   ConflictInfo,
   MergeResolution,
-  getConflictInfo,
-  getSmartMergeService
+  getConflictInfo
 } from './smart-merge-service';
 
 /**
@@ -106,6 +105,152 @@ export class CherryPickWorkflowService {
   }
 
   /**
+   * Try to apply a stored adaptation for a commit
+   * Returns true if successful, false if no adaptation or it failed (stale)
+   */
+  private async tryApplyStoredAdaptation(
+    fullPath: string,
+    dreamNodeUuid: string,
+    commit: PendingCommit,
+    dreamerRepoPath: string
+  ): Promise<boolean> {
+    const memoryService = getCollaborationMemoryService();
+    const adaptation = await memoryService.getAdaptation(
+      dreamerRepoPath,
+      dreamNodeUuid,
+      commit.originalHash
+    );
+
+    if (!adaptation) {
+      return false;
+    }
+
+    console.log(`[CherryPickWorkflow] Found stored adaptation for ${commit.originalHash.substring(0, 8)}, attempting to apply...`);
+
+    try {
+      const fsPromises = require('fs/promises');
+
+      // Write all adapted files
+      for (const [filePath, content] of Object.entries(adaptation.files)) {
+        const fullFilePath = path.join(fullPath, filePath);
+        await fsPromises.writeFile(fullFilePath, content, 'utf-8');
+        console.log(`[CherryPickWorkflow] Applied adapted content to ${filePath}`);
+      }
+
+      // Stage the changes
+      await execAsync('git add -A', { cwd: fullPath });
+
+      // Try to continue the cherry-pick
+      try {
+        await execAsync('git cherry-pick --continue --no-edit', { cwd: fullPath });
+        console.log(`[CherryPickWorkflow] Successfully applied stored adaptation for "${commit.subject}"`);
+        return true;
+      } catch (continueError: any) {
+        // If cherry-pick --continue fails, try committing directly
+        if (continueError.message?.includes('nothing to commit') ||
+            continueError.message?.includes('cherry-pick is now empty')) {
+          try {
+            await execAsync('git cherry-pick --skip', { cwd: fullPath });
+          } catch {
+            // Ignore
+          }
+          return true;
+        }
+
+        // Try to commit the resolution manually
+        try {
+          await execAsync(
+            `git commit -m "${commit.subject.replace(/"/g, '\\"')} (adapted)"`,
+            { cwd: fullPath }
+          );
+          return true;
+        } catch {
+          // Adaptation is stale, it didn't work
+          throw new Error('Stored adaptation failed to apply cleanly');
+        }
+      }
+    } catch (error: any) {
+      console.warn(`[CherryPickWorkflow] Stored adaptation is stale for ${commit.originalHash.substring(0, 8)}: ${error.message}`);
+
+      // Remove the stale adaptation
+      await memoryService.removeAdaptation(dreamerRepoPath, dreamNodeUuid, commit.originalHash);
+
+      // Reset the failed state
+      try {
+        await execAsync('git cherry-pick --abort', { cwd: fullPath });
+      } catch {
+        try {
+          await execAsync('git reset --hard HEAD', { cwd: fullPath });
+        } catch {
+          // Ignore
+        }
+      }
+
+      return false;
+    }
+  }
+
+  /**
+   * Get files changed by the most recent commit(s)
+   * Returns vault-relative paths for the changed files
+   */
+  private async getChangedFiles(
+    fullPath: string,
+    dreamNodePath: string,
+    commitCount: number = 1
+  ): Promise<string[]> {
+    try {
+      // Get files changed in the last N commits
+      const { stdout } = await execAsync(
+        `git diff --name-only HEAD~${commitCount} HEAD`,
+        { cwd: fullPath }
+      );
+
+      const files = stdout.trim().split('\n').filter((f: string) => f.trim());
+
+      // Convert to vault-relative paths
+      return files.map((file: string) => path.join(dreamNodePath, file));
+    } catch (error) {
+      console.warn('[CherryPickWorkflow] Could not get changed files:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Open changed files in the right pane using LeafManagerService
+   * Opens ALL changed files as tabs in the right pane
+   */
+  async openChangedFilesInRightPane(
+    dreamNodePath: string,
+    commitCount: number = 1
+  ): Promise<void> {
+    const fullPath = this.getFullPath(dreamNodePath);
+    const changedFiles = await this.getChangedFiles(fullPath, dreamNodePath, commitCount);
+
+    if (changedFiles.length === 0) {
+      console.log('[CherryPickWorkflow] No changed files to open');
+      return;
+    }
+
+    // Import service manager dynamically to avoid circular deps
+    const { serviceManager } = await import('../../../core/services/service-manager');
+    const leafManager = serviceManager.getLeafManagerService();
+
+    if (!leafManager) {
+      console.warn('[CherryPickWorkflow] LeafManagerService not available');
+      return;
+    }
+
+    // Open ALL changed files as tabs in the right pane
+    console.log(`[CherryPickWorkflow] Opening ${changedFiles.length} changed file(s)`);
+
+    for (const filePath of changedFiles) {
+      console.log(`[CherryPickWorkflow] Opening: ${filePath}`);
+      await leafManager.openFileInRightPane(filePath);
+    }
+  }
+
+  /**
    * Fetch pending commits from all peers for a DreamNode
    * Filters out rejected commits and deduplicates by original hash
    */
@@ -164,8 +309,18 @@ export class CherryPickWorkflowService {
               body || ''
             );
 
+            // Debug: Log deduplication info
+            console.log(`[CherryPickWorkflow] Commit from ${peer.name}: ${subject.substring(0, 40)}...`);
+            console.log(`[CherryPickWorkflow]   hash: ${hash.trim().substring(0, 8)}, originalHash: ${originalHash.substring(0, 8)}`);
+            console.log(`[CherryPickWorkflow]   body length: ${body?.length || 0}, body preview: ${JSON.stringify(body?.substring(0, 100))}`);
+            const cherryPickMatch = body?.match(/\(cherry picked from commit ([a-f0-9]+)\)/i);
+            if (cherryPickMatch) {
+              console.log(`[CherryPickWorkflow]   Cherry-pick trailer found! Original: ${cherryPickMatch[1]}`);
+            }
+
             // Skip if already accepted or rejected
             if (allFilteredHashes.has(originalHash)) {
+              console.log(`[CherryPickWorkflow]   Skipping: already filtered (accepted/rejected)`);
               continue;
             }
 
@@ -173,6 +328,7 @@ export class CherryPickWorkflowService {
             const existing = commitsByOriginalHash.get(originalHash);
             if (existing) {
               // Add this peer as another source
+              console.log(`[CherryPickWorkflow]   DEDUP: Already have this from ${existing.offeredByNames.join(', ')}, adding ${peer.name}`);
               if (!existing.offeredBy.includes(peer.uuid)) {
                 existing.offeredBy.push(peer.uuid);
                 existing.offeredByNames.push(peer.name);
@@ -251,12 +407,36 @@ export class CherryPickWorkflowService {
   }
 
   /**
+   * Set preview state manually (used after conflict resolution in preview mode)
+   * This allows the preview banner to work after a conflict was resolved.
+   */
+  setPreviewState(
+    dreamNodePath: string,
+    dreamNodeUuid: string,
+    commits: PendingCommit[]
+  ): void {
+    this.previewState = {
+      isActive: true,
+      dreamNodePath,
+      dreamNodeUuid,
+      previewedCommits: commits,
+      commitCount: 1, // Conflict resolution applies one commit
+      didStash: false, // No stash needed - changes were already applied
+      stashRef: undefined
+    };
+
+    console.log('[CherryPickWorkflow] Set preview state after conflict resolution');
+  }
+
+  /**
    * Start preview mode - stash work and apply commits
+   * @param dreamerRepoPath Optional - needed for using stored adaptations
    */
   async startPreview(
     dreamNodePath: string,
     dreamNodeUuid: string,
-    commits: PendingCommit[]
+    commits: PendingCommit[],
+    dreamerRepoPath?: string
   ): Promise<WorkflowResult> {
     if (this.previewState?.isActive) {
       return {
@@ -313,16 +493,30 @@ export class CherryPickWorkflowService {
             continue;
           }
 
-          // Cherry-pick failed (likely conflict)
-          console.error(`[CherryPickWorkflow] Cherry-pick failed for ${commit.hash}:`, cherryPickError);
-
+          // Cherry-pick failed - check if it's a conflict (which is a normal part of the flow)
           // Check if this is a merge conflict we can help resolve
           const isConflict = cherryPickError.message?.includes('CONFLICT') ||
                             cherryPickError.message?.includes('could not apply') ||
                             cherryPickError.stderr?.includes('CONFLICT');
 
           if (isConflict) {
-            // Get conflict details before aborting
+            // Try to apply stored adaptation first (if we have dreamerRepoPath)
+            if (dreamerRepoPath) {
+              const adaptationApplied = await this.tryApplyStoredAdaptation(
+                fullPath,
+                dreamNodeUuid,
+                commit,
+                dreamerRepoPath
+              );
+
+              if (adaptationApplied) {
+                appliedCount++;
+                console.log(`[CherryPickWorkflow] Applied commit via stored adaptation: ${commit.subject}`);
+                continue;
+              }
+            }
+
+            // No stored adaptation or it failed - get conflict details for UI resolution
             const { stdout: conflictFiles } = await execAsync(
               'git diff --name-only --diff-filter=U',
               { cwd: fullPath }
@@ -401,6 +595,9 @@ export class CherryPickWorkflowService {
         didStash,
         stashRef
       };
+
+      // Step 4: Open changed files in right pane for user to explore
+      await this.openChangedFilesInRightPane(dreamNodePath, appliedCount);
 
       return {
         success: true,
@@ -642,6 +839,53 @@ export class CherryPickWorkflowService {
             continue;
           }
 
+          // Check if this is a merge conflict we can help resolve
+          const isConflict = cherryPickError.message?.includes('CONFLICT') ||
+                            cherryPickError.message?.includes('could not apply') ||
+                            cherryPickError.stderr?.includes('CONFLICT');
+
+          if (isConflict) {
+            // Try to apply stored adaptation first
+            const adaptationApplied = await this.tryApplyStoredAdaptation(
+              fullPath,
+              dreamNodeUuid,
+              commit,
+              dreamerRepoPath
+            );
+
+            if (adaptationApplied) {
+              // Get the new hash
+              const { stdout } = await execAsync('git rev-parse HEAD', { cwd: fullPath });
+              appliedHashes.push(stdout.trim());
+              console.log(`[CherryPickWorkflow] Accepted via stored adaptation: ${commit.subject}`);
+              continue;
+            }
+
+            // No stored adaptation or it failed - get conflict details for UI resolution
+            const { stdout: conflictFiles } = await execAsync(
+              'git diff --name-only --diff-filter=U',
+              { cwd: fullPath }
+            ).catch(() => ({ stdout: '' }));
+
+            const conflictedFile = conflictFiles.trim().split('\n')[0];
+
+            if (conflictedFile) {
+              const conflictInfo = await getConflictInfo(fullPath, conflictedFile);
+
+              if (conflictInfo) {
+                // Return conflict info so UI can show resolution modal
+                // Don't abort - leave in conflict state for resolution
+                return {
+                  success: false,
+                  message: `Conflict detected in "${conflictedFile}" while applying "${commit.subject}".`,
+                  conflict: conflictInfo,
+                  conflictingCommit: commit,
+                  error: 'merge_conflict'
+                };
+              }
+            }
+          }
+
           // Abort and report for other errors
           try {
             await execAsync('git cherry-pick --abort', { cwd: fullPath });
@@ -665,6 +909,9 @@ export class CherryPickWorkflowService {
       }));
 
       await memoryService.recordAcceptance(dreamerRepoPath, dreamNodeUuid, acceptanceRecords);
+
+      // Open changed files in right pane for user to see what was accepted
+      await this.openChangedFilesInRightPane(dreamNodePath, sortedCommits.length);
 
       return {
         success: true,
@@ -732,7 +979,8 @@ export class CherryPickWorkflowService {
   async applyConflictResolution(
     dreamNodePath: string,
     resolution: MergeResolution,
-    commit: PendingCommit
+    commit: PendingCommit,
+    conflictFilePath?: string
   ): Promise<WorkflowResult> {
     if (!resolution.success || !resolution.mergedContent) {
       return {
@@ -744,10 +992,15 @@ export class CherryPickWorkflowService {
     const fullPath = this.getFullPath(dreamNodePath);
 
     try {
-      // The conflict file should already be written by the smart merge service
-      // But let's make sure
-      const { writeFile } = await import('fs/promises');
-      const conflictFilePath = path.join(fullPath, 'README.md'); // TODO: Get from conflict info
+      // Write the resolved content to the conflict file
+      if (conflictFilePath && resolution.mergedContent) {
+        const fsPromises = require('fs/promises');
+        const filePath = require('path').join(fullPath, conflictFilePath);
+        await fsPromises.writeFile(filePath, resolution.mergedContent, 'utf-8');
+        console.log(`[CherryPickWorkflow] Wrote resolved content to ${conflictFilePath}`);
+      } else {
+        console.warn('[CherryPickWorkflow] No conflictFilePath provided, cannot write resolved content');
+      }
 
       // Stage the resolved file
       await execAsync('git add -A', { cwd: fullPath });
@@ -815,6 +1068,57 @@ export class CherryPickWorkflowService {
       } catch {
         // Ignore
       }
+    }
+  }
+
+  /**
+   * Get git diff stats for a range of commits
+   * Used by the UI to show file change statistics for selected commits
+   */
+  async getStatsForCommits(
+    repoPath: string,
+    hashes: string[]
+  ): Promise<{ filesChanged: number; insertions: number; deletions: number }> {
+    if (hashes.length === 0) {
+      return { filesChanged: 0, insertions: 0, deletions: 0 };
+    }
+
+    const fullPath = this.getFullPath(repoPath);
+
+    try {
+      // For a single commit, use HEAD~1..HEAD style
+      // For multiple commits, get stats for the range from oldest to newest
+      const firstHash = hashes[hashes.length - 1]; // oldest
+      const lastHash = hashes[0]; // newest
+
+      let output: string;
+      if (hashes.length === 1) {
+        // Single commit - get its stats directly
+        const { stdout } = await execAsync(
+          `git show --stat --format="" ${firstHash}`,
+          { cwd: fullPath }
+        );
+        output = stdout;
+      } else {
+        // Multiple commits - get diff stats for the range
+        const { stdout } = await execAsync(
+          `git diff --stat ${firstHash}^..${lastHash}`,
+          { cwd: fullPath }
+        );
+        output = stdout;
+      }
+
+      // Parse last line: " X files changed, Y insertions(+), Z deletions(-)"
+      const match = output.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
+
+      return {
+        filesChanged: parseInt(match?.[1] || '0', 10),
+        insertions: parseInt(match?.[2] || '0', 10),
+        deletions: parseInt(match?.[3] || '0', 10)
+      };
+    } catch (error) {
+      console.warn('[CherryPickWorkflow] Failed to get stats for commits:', error);
+      return { filesChanged: 0, insertions: 0, deletions: 0 };
     }
   }
 }

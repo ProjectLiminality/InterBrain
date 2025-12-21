@@ -24,10 +24,17 @@ export function useEscapeKeyHandler(
   useEffect(() => {
     let debounceTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
 
-    const handleEscape = (e: globalThis.KeyboardEvent) => {
+    const handleEscape = async (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return;
 
       e.preventDefault();
+
+      // Block escape during collaboration preview mode
+      const { getCherryPickWorkflowService } = await import('../../features/dreamnode-updater/services/cherry-pick-workflow-service');
+      if (getCherryPickWorkflowService()?.isPreviewActive()) {
+        console.log('[Escape] Blocked - collaboration preview active. Use the preview banner to accept/reject.');
+        return;
+      }
 
       // Debounce rapid escape key presses (300ms)
       if (debounceTimeout) {

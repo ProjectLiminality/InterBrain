@@ -267,6 +267,77 @@ export class LeafManagerService {
   }
 
   /**
+   * Open any file in the right pane (split view)
+   * Creates 50/50 split on first call, then stacks as tabs.
+   * This is the generic method for opening files while keeping DreamSpace visible.
+   *
+   * @param filePath - Vault-relative path to the file
+   * @param trackingId - Optional ID for tracking this leaf (for cleanup)
+   * @returns true if file was opened successfully
+   */
+  async openFileInRightPane(filePath: string, trackingId?: string): Promise<boolean> {
+    try {
+      console.log(`[LeafManager] Opening file in right pane: ${filePath}`);
+
+      // Check if we already have a leaf for this file (if tracking ID provided)
+      if (trackingId) {
+        const existingLeaf = this.dreamTalkLeaves.get(trackingId);
+        if (existingLeaf) {
+          this.app.workspace.revealLeaf(existingLeaf);
+          console.log(`[LeafManager] Revealed existing leaf for ${trackingId}`);
+          return true;
+        }
+      }
+
+      // Get the file from the vault
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+
+      if (!file) {
+        console.error(`[LeafManager] File not found in vault: ${filePath}`);
+        return false;
+      }
+
+      // Check if it's actually a file (not a folder)
+      if (!(file instanceof TFile)) {
+        console.error(`[LeafManager] Path is not a file: ${filePath}`);
+        return false;
+      }
+
+      // Check if this file is already open in any leaf - if so, just reveal it
+      let existingLeafForFile: WorkspaceLeaf | null = null;
+      this.app.workspace.iterateAllLeaves((leaf) => {
+        const viewState = leaf.getViewState();
+        if (viewState.state?.file === filePath) {
+          existingLeafForFile = leaf;
+        }
+      });
+
+      if (existingLeafForFile) {
+        this.app.workspace.revealLeaf(existingLeafForFile);
+        console.log(`[LeafManager] File already open, revealed existing leaf: ${filePath}`);
+        return true;
+      }
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+      await leaf.openFile(file);
+
+      // Track this leaf if tracking ID provided
+      if (trackingId) {
+        this.dreamTalkLeaves.set(trackingId, leaf);
+        this.setupDreamTalkLeafCleanup(trackingId, leaf);
+      }
+
+      console.log(`[LeafManager] Successfully opened ${filePath} in right pane`);
+      return true;
+
+    } catch (error) {
+      console.error('[LeafManager] Failed to open file in right pane:', error);
+      return false;
+    }
+  }
+
+  /**
    * Open README file in right pane
    * Creates 50/50 split on first call, then stacks as tabs. Same behavior as DreamTalk media.
    */

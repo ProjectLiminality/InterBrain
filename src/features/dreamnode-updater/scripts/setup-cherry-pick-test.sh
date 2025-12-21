@@ -24,6 +24,7 @@ SHARED_PROJECT="$TEST_DIR/shared-project"
 ALICE_BARE="$TEST_DIR/alice-bare"
 CHARLIE_BARE="$TEST_DIR/charlie-bare"
 BOB_DREAMER_ALICE="$TEST_DIR/bob-dreamer-alice"
+BOB_DREAMER_CHARLIE="$TEST_DIR/bob-dreamer-charlie"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -128,7 +129,7 @@ EOF
   # Add Charlie as remote
   git remote add charlie "$CHARLIE_BARE"
 
-  # Simulate Charlie making commits
+  # Simulate Charlie making commits AND relaying Alice's commits
   CHARLIE_WORK="/tmp/charlie-work-$$"
   git clone "$CHARLIE_BARE" "$CHARLIE_WORK"
   cd "$CHARLIE_WORK"
@@ -138,13 +139,32 @@ EOF
   git add charlie-doc.md
   git commit -m "Add Charlie's documentation"
 
-  # Charlie's commit 2: Cherry-pick from Alice (simulating relay)
-  # First fetch Alice's commits
+  # Charlie relays Alice's commits via cherry-pick -x
+  # This creates the "(cherry picked from commit ...)" trailer for deduplication
   git remote add alice "$ALICE_BARE"
   git fetch alice
-  # Cherry-pick Alice's first commit with -x flag
-  ALICE_FIRST_COMMIT=$(git log alice/main --oneline | tail -1 | cut -d' ' -f1)
-  # Note: We skip this for simplicity - Charlie's commits are his own
+
+  # Get Alice's commit hashes (excluding the initial shared commit)
+  ALICE_COMMITS=$(git log alice/main --oneline --reverse | tail -n +2 | cut -d' ' -f1)
+
+  log "Charlie cherry-picking Alice's commits..."
+  for COMMIT in $ALICE_COMMITS; do
+    git cherry-pick -x "$COMMIT" || {
+      # Handle conflicts by accepting theirs
+      git checkout --theirs .
+      git add -A
+      git cherry-pick --continue --no-edit
+    }
+    info "  Cherry-picked: $(git log -1 --oneline)"
+  done
+
+  # Charlie's unique commit: Add contributor intro
+  cat > collaboration-memory.json << 'CONTRIB_EOF'
+# Collaboration Notes
+Charlie here! I've cherry-picked some great contributions from Alice.
+CONTRIB_EOF
+  git add collaboration-memory.json
+  git commit -m "Add Charlie's contributor introduction"
 
   # Push to bare repo
   git push origin main
@@ -172,6 +192,27 @@ EOF
   git add .
   git commit -m "Create Dreamer node for Alice"
 
+  # Create Bob's Dreamer node for Charlie
+  log "Creating Bob's Dreamer node for Charlie..."
+  mkdir -p "$BOB_DREAMER_CHARLIE"
+  cd "$BOB_DREAMER_CHARLIE"
+  git init
+
+  cat > .udd << 'EOF'
+{
+  "uuid": "charlie-dreamer-uuid",
+  "title": "Charlie",
+  "type": "dreamer",
+  "dreamTalk": "",
+  "submodules": [],
+  "supermodules": [],
+  "did": "did:key:z6MkCharlieFakeDID"
+}
+EOF
+
+  git add .
+  git commit -m "Create Dreamer node for Charlie"
+
   # Fetch updates in shared project
   log "Fetching updates in shared project..."
   cd "$SHARED_PROJECT"
@@ -182,15 +223,21 @@ EOF
   echo ""
   info "Directory structure:"
   echo "  $SHARED_PROJECT       - Your working repo (Bob)"
-  echo "  $ALICE_BARE           - Alice's remote (3 commits ahead)"
-  echo "  $CHARLIE_BARE         - Charlie's remote (1 commit ahead)"
-  echo "  $BOB_DREAMER_ALICE    - Dreamer node for collaboration memory"
+  echo "  $ALICE_BARE           - Alice's remote (3 original commits)"
+  echo "  $CHARLIE_BARE         - Charlie's remote (1 own + 3 relayed from Alice + 1 own)"
+  echo "  $BOB_DREAMER_ALICE    - Dreamer node for Alice collaboration memory"
+  echo "  $BOB_DREAMER_CHARLIE  - Dreamer node for Charlie collaboration memory"
   echo ""
   info "To see pending commits from Alice:"
   echo "  cd $SHARED_PROJECT && git log HEAD..alice/main --oneline"
   echo ""
   info "To see pending commits from Charlie:"
   echo "  cd $SHARED_PROJECT && git log HEAD..charlie/main --oneline"
+  echo ""
+  info "Deduplication test:"
+  echo "  Alice's 3 commits appear in both alice/main AND charlie/main"
+  echo "  Charlie's relayed commits have '(cherry picked from commit ...)' trailers"
+  echo "  UI should show 'Also from: charlie' for Alice's commits (or vice versa)"
 }
 
 # Function to reset to initial state
@@ -211,10 +258,23 @@ reset_test() {
   # Clear any stashes
   git stash clear 2>/dev/null || true
 
-  # Clear collaboration memory
+  # Abort any in-progress cherry-pick
+  git cherry-pick --abort 2>/dev/null || true
+
+  # Clear collaboration memory for Alice's Dreamer
   if [ -f "$BOB_DREAMER_ALICE/collaboration-memory.json" ]; then
+    log "Clearing Alice's collaboration memory..."
     rm "$BOB_DREAMER_ALICE/collaboration-memory.json"
     cd "$BOB_DREAMER_ALICE"
+    git add -A
+    git commit -m "Reset: Clear collaboration memory" 2>/dev/null || true
+  fi
+
+  # Clear collaboration memory for Charlie's Dreamer
+  if [ -f "$BOB_DREAMER_CHARLIE/collaboration-memory.json" ]; then
+    log "Clearing Charlie's collaboration memory..."
+    rm "$BOB_DREAMER_CHARLIE/collaboration-memory.json"
+    cd "$BOB_DREAMER_CHARLIE"
     git add -A
     git commit -m "Reset: Clear collaboration memory" 2>/dev/null || true
   fi
@@ -226,7 +286,11 @@ reset_test() {
 
   log "Reset complete!"
   info "Shared project reset to initial commit"
-  info "Collaboration memory cleared"
+  info "Collaboration memory cleared for both Alice and Charlie Dreamers"
+  echo ""
+  info "Pending commits:"
+  echo "  Alice:   $(git log HEAD..alice/main --oneline | wc -l | tr -d ' ') commits"
+  echo "  Charlie: $(git log HEAD..charlie/main --oneline | wc -l | tr -d ' ') commits"
 }
 
 # Main

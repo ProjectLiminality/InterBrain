@@ -20,7 +20,7 @@ export {
   type PreviewState,
   type WorkflowResult
 } from './services/cherry-pick-workflow-service';
-export { UpdatePreviewModal } from './ui/update-preview-modal';
+export { InterBrainUpdateModal } from './ui/interbrain-update-modal';
 export {
   CherryPickPreviewModal,
   type CherryPickPreviewConfig

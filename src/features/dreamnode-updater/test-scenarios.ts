@@ -152,14 +152,10 @@ export const SCENARIO_COMPREHENSIVE: TestScenario = {
     // This is Bob's first commit, starts from INITIAL_README
     {
       author: 'bob',
-      subject: "Add Bob's contributor introduction",
-      body: `Adding my introduction to the Contributors section.
-
-This is Bob's first contribution to the project.
-It modifies the README by adding a subsection under Contributors.
-
-TESTING: This commit alone should apply cleanly.
-TESTING: If Charlie's intro is applied first, this will conflict.`,
+      subject: "Introduced myself in the Contributors section",
+      body: `Hi everyone! Finally adding my intro - took me a while to figure out
+what to write. Shared a bit about my background in decentralized systems
+and what I hope to contribute to this project.`,
       files: {
         'README.md': `# Shared Project
 
@@ -200,13 +196,10 @@ Just getting started...
     // Creates a NEW file, so no conflict possible
     {
       author: 'bob',
-      subject: "Add resources document",
-      body: `Creating a separate RESOURCES.md file with helpful links.
-
-This is a NEW FILE, not an edit to README.
-Should never conflict with any other commit.
-
-TESTING: This should always apply cleanly.`,
+      subject: "Created a curated list of resources and helpful links",
+      body: `Been collecting these links for a while now. Figured it's time to
+share them properly. Includes stuff on P2P systems, Git internals,
+and community channels. Let me know if you have suggestions to add!`,
       files: {
         // Keep README as it was after Bob's commit 1
         'README.md': `# Shared Project
@@ -270,15 +263,10 @@ Curated by Bob
     // WILL CONFLICT if David already accepted Bob's README changes
     {
       author: 'charlie',
-      subject: "Add Charlie's contributor introduction",
-      body: `Adding my introduction to the Contributors section.
-
-This is Charlie's contribution to the project.
-
-TESTING: This modifies the same section as Bob's intro.
-TESTING: If Bob's intro was already accepted, this WILL CONFLICT.
-TESTING: The conflict resolution modal should appear.
-TESTING: AI Magic or search-replace should merge both intros.`,
+      subject: "Added my intro - excited to join the project!",
+      body: `Hey all! Super excited to be part of this. I come from a design
+background and I'm really interested in how we can make these complex
+P2P systems feel approachable and intuitive for everyday users.`,
       files: {
         'README.md': `# Shared Project
 
@@ -320,15 +308,10 @@ Just getting started...
     // with "Also from: charlie" indicator
     {
       author: 'alice',
-      subject: "Add project vision statement",
-      body: `Adding a vision statement to guide the project.
-
-This commit was authored by Alice and relayed through the network.
-Both Bob and Charlie have this commit and are offering it to David.
-
-TESTING: Should appear ONCE in the modal (deduplicated by originalHash)
-TESTING: Should show "Also from: charlie" (or bob) indicator
-TESTING: Accepting from either peer should work`,
+      subject: "Wrote up our project vision and core principles",
+      body: `Took some time to articulate what we're really trying to do here.
+The vision doc captures the "why" behind InterBrain - it's about
+genuine human connections over rigid hierarchies. Would love feedback!`,
       files: {
         // For Bob's relay: builds on Bob's README (with Bob's intro)
         // For Charlie's relay: builds on Charlie's README (with Charlie's intro)
@@ -357,6 +340,171 @@ TESTING: Accepting from either peer should work`,
       },
       relayedBy: ['bob', 'charlie'],
       originalAuthor: 'alice'
+    },
+
+    // =========================================
+    // COMMIT 5: Bob adds meeting notes
+    // =========================================
+    {
+      author: 'bob',
+      subject: "Added notes from our first planning call",
+      body: `Finally got around to writing up what we discussed last week.
+Captured the main action items and who's doing what.`,
+      files: {
+        'MEETINGS/2024-01-planning.md': `# Planning Call - January 2024
+
+## Attendees
+Bob, Charlie, Alice
+
+## Discussion
+- Agreed on using git submodules for shared DreamNodes
+- Charlie will work on the onboarding flow
+- Bob taking point on P2P sync
+
+## Action Items
+- [ ] Bob: Document git workflow
+- [ ] Charlie: Mockups for first-time experience
+- [ ] Alice: Draft contributor guidelines
+`
+      },
+      relayedBy: ['bob']
+    },
+
+    // =========================================
+    // COMMIT 6: Charlie adds design sketches
+    // =========================================
+    {
+      author: 'charlie',
+      subject: "Uploaded initial wireframes for the welcome screen",
+      body: `These are rough but should give us something to react to.
+Focused on making the first experience feel magical, not overwhelming.`,
+      files: {
+        'DESIGN/welcome-wireframes.md': `# Welcome Screen Wireframes
+
+## Concept
+Keep it simple - just three things:
+1. Your name
+2. One DreamNode to start with
+3. An invitation to explore
+
+## Notes
+- No walls of text
+- Progressive disclosure
+- Let people discover features naturally
+`
+      },
+      relayedBy: ['charlie']
+    },
+
+    // =========================================
+    // COMMIT 7: Bob documents the sync protocol
+    // =========================================
+    {
+      author: 'bob',
+      subject: "Drafted the P2P sync protocol spec",
+      body: `This explains how DreamNodes sync between peers. Still a work
+in progress but wanted to get it out there for feedback.`,
+      files: {
+        'SPECS/sync-protocol.md': `# P2P Sync Protocol
+
+## Overview
+Each peer maintains their own copy. Changes propagate through
+cherry-pick offers that recipients can accept or reject.
+
+## Flow
+1. Peer A makes changes locally
+2. Peer A's changes become "offers" to connected peers
+3. Peer B sees offers, can preview before accepting
+4. Accepted changes get cherry-picked into Peer B's copy
+
+## Key Principle
+You control what enters your garden.
+`
+      },
+      relayedBy: ['bob']
+    },
+
+    // =========================================
+    // COMMIT 8: Charlie refines the color palette
+    // =========================================
+    {
+      author: 'charlie',
+      subject: "Defined our color palette and visual identity",
+      body: `Went with warm, earthy tones that feel organic and inviting.
+These colors should work well in both light and dark modes.`,
+      files: {
+        'DESIGN/colors.md': `# Color Palette
+
+## Primary
+- Deep Forest: #2D4A3E
+- Warm Sand: #E8DCC4
+
+## Accents
+- Sunset Orange: #E07A5F
+- Ocean Blue: #457B9D
+
+## Philosophy
+Nature-inspired, calming, trustworthy.
+`
+      },
+      relayedBy: ['charlie']
+    },
+
+    // =========================================
+    // COMMIT 9: Bob adds troubleshooting guide
+    // =========================================
+    {
+      author: 'bob',
+      subject: "Started a troubleshooting guide for common issues",
+      body: `Been collecting the questions people ask most often.
+This should help folks get unstuck without waiting for help.`,
+      files: {
+        'HELP/troubleshooting.md': `# Troubleshooting
+
+## Sync not working?
+1. Check if Radicle is running
+2. Make sure you're on the same network
+3. Try refreshing the peer list
+
+## DreamNode won't open?
+- Check if the .udd file exists
+- Verify git repo is healthy
+
+## Still stuck?
+Reach out in Discord - we're friendly!
+`
+      },
+      relayedBy: ['bob']
+    },
+
+    // =========================================
+    // COMMIT 10: Charlie adds onboarding checklist
+    // =========================================
+    {
+      author: 'charlie',
+      subject: "Created a simple onboarding checklist for new users",
+      body: `Breaking down the first-time experience into clear steps.
+Each item should feel achievable and build confidence.`,
+      files: {
+        'DESIGN/onboarding-checklist.md': `# New User Onboarding
+
+## First 5 Minutes
+- [ ] Create your Dreamer profile
+- [ ] Make your first DreamNode
+- [ ] Add a simple thought or note
+
+## First Day
+- [ ] Connect with one friend
+- [ ] Share a DreamNode with them
+- [ ] Accept something they shared
+
+## First Week
+- [ ] Discover the Liminal Web
+- [ ] Find a public DreamNode that resonates
+- [ ] Contribute to something collaboratively
+`
+      },
+      relayedBy: ['charlie']
     }
   ]
 };

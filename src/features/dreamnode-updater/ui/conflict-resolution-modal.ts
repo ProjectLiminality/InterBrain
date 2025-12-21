@@ -9,11 +9,11 @@
  * Shows the conflict details and resolution explanation.
  */
 
-/* eslint-disable no-undef */
 
 import { App, Modal } from 'obsidian';
 import {
   ConflictInfo,
+  ConflictRegion,
   MergeResolution,
   getSmartMergeService
 } from '../services/smart-merge-service';
@@ -25,16 +25,22 @@ export interface ConflictResolutionConfig {
   conflict: ConflictInfo;
   /** Commit being cherry-picked */
   commitSubject: string;
-  /** Callback when conflict is resolved */
-  onResolved: (resolution: MergeResolution) => Promise<void>;
+  /** Callback when conflict is resolved - returns success/failure */
+  onResolved: (resolution: MergeResolution) => Promise<{ success: boolean; error?: string }>;
   /** Callback when user cancels */
   onCancel: () => void;
+  /** Callback to report a failed resolution for feedback/analytics */
+  onReportFailure?: (conflict: ConflictInfo, resolution: MergeResolution, error: string) => Promise<void>;
 }
 
 export class ConflictResolutionModal extends Modal {
   private config: ConflictResolutionConfig;
   private isProcessing = false;
   private resolution: MergeResolution | null = null;
+  private lastRefinement: string | null = null; // Only keep the last refinement
+  private wasAccepted = false; // Track if user accepted the resolution
+  private retryCount = 0; // Track how many times AI has retried
+  private lastApplyError: string | null = null; // Track the last error when applying resolution
 
   constructor(app: App, config: ConflictResolutionConfig) {
     super(app);
@@ -53,7 +59,9 @@ export class ConflictResolutionModal extends Modal {
   onClose() {
     const { contentEl } = this;
     contentEl.empty();
-    if (!this.resolution && !this.isProcessing) {
+    // Always abort conflict state if user didn't explicitly accept
+    // This handles: X button, Escape key, clicking outside modal
+    if (!this.wasAccepted) {
       this.config.onCancel();
     }
   }
@@ -153,39 +161,39 @@ export class ConflictResolutionModal extends Modal {
       cls: 'conflict-option-desc'
     });
 
-    // Option 2: Keep theirs
+    // Option 2: Override (take incoming, discard local)
     const theirsOption = optionsEl.createDiv({ cls: 'conflict-option' });
     const theirsBtn = theirsOption.createEl('button', {
-      text: 'Accept Incoming',
+      text: 'Override',
       cls: 'conflict-btn conflict-btn-theirs'
     });
     theirsBtn.addEventListener('click', () => this.resolveKeepTheirs());
     theirsOption.createEl('p', {
-      text: 'Replace your version with the incoming change.',
+      text: 'Discard your local changes and use the incoming version as-is.',
       cls: 'conflict-option-desc'
     });
 
-    // Option 3: Keep ours
+    // Option 3: Reject (full rejection of this commit)
     const oursOption = optionsEl.createDiv({ cls: 'conflict-option' });
     const oursBtn = oursOption.createEl('button', {
-      text: 'Keep Current',
+      text: 'Reject',
       cls: 'conflict-btn conflict-btn-ours'
     });
-    oursBtn.addEventListener('click', () => this.resolveKeepOurs());
+    oursBtn.addEventListener('click', () => this.handleReject());
     oursOption.createEl('p', {
-      text: 'Keep your version and discard the incoming change.',
+      text: 'Reject this commit entirely and keep your current version.',
       cls: 'conflict-option-desc'
     });
 
-    // Option 4: Skip/Cancel
+    // Option 4: Decide Later
     const cancelOption = optionsEl.createDiv({ cls: 'conflict-option' });
     const cancelBtn = cancelOption.createEl('button', {
-      text: 'Skip This Commit',
+      text: 'Decide Later',
       cls: 'conflict-btn conflict-btn-cancel'
     });
     cancelBtn.addEventListener('click', () => this.close());
     cancelOption.createEl('p', {
-      text: 'Abort this cherry-pick and leave your files unchanged.',
+      text: 'Skip for now and come back to this commit later.',
       cls: 'conflict-option-desc'
     });
   }
@@ -249,28 +257,140 @@ export class ConflictResolutionModal extends Modal {
         text: preview,
         cls: 'conflict-preview-content'
       });
+
+      // Inline refinement input (always visible, below preview)
+      const refineContainer = previewEl.createDiv({ cls: 'conflict-refine-inline' });
+      const refineInput = refineContainer.createEl('input', {
+        type: 'text',
+        placeholder: 'e.g., "put entries in alphabetical order"',
+        cls: 'conflict-refine-input'
+      });
+      const refineSubmit = refineContainer.createEl('button', {
+        text: 'Refine',
+        cls: 'conflict-btn conflict-btn-ai'
+      });
+      refineSubmit.addEventListener('click', async () => {
+        const instruction = refineInput.value.trim();
+        if (instruction) {
+          await this.refineWithAI(instruction);
+        }
+      });
+      refineInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+          const instruction = refineInput.value.trim();
+          if (instruction) {
+            await this.refineWithAI(instruction);
+          }
+        }
+      });
     }
 
-    // Action buttons
+    // Action buttons (just Accept and Back)
     const actionsEl = contentEl.createDiv({ cls: 'conflict-actions' });
 
     const acceptBtn = actionsEl.createEl('button', {
-      text: 'Accept Resolution',
+      text: 'Accept',
       cls: 'conflict-btn conflict-btn-accept'
     });
     acceptBtn.addEventListener('click', async () => {
-      await this.config.onResolved(resolution);
-      this.close();
+      // Try to apply the resolution
+      const result = await this.config.onResolved(resolution);
+
+      if (result.success) {
+        this.wasAccepted = true;
+        this.close();
+      } else {
+        // Resolution failed to apply - show failure state with retry/report options
+        this.lastApplyError = result.error || 'Unknown error';
+        this.retryCount++;
+        this.renderResolutionFailed();
+      }
     });
 
-    const rejectBtn = actionsEl.createEl('button', {
+    const backBtn = actionsEl.createEl('button', {
+      text: 'Back',
+      cls: 'conflict-btn conflict-btn-retry'
+    });
+    backBtn.addEventListener('click', () => {
+      this.resolution = null;
+      this.lastRefinement = null;
+      this.lastApplyError = null;
+      this.renderContent();
+    });
+  }
+
+  private renderResolutionFailed() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    contentEl.createEl('h2', {
+      text: 'Resolution Failed',
+      cls: 'conflict-modal-title conflict-error-title'
+    });
+
+    contentEl.createEl('p', {
+      text: `The AI-generated resolution couldn't be applied. This can happen when the merge is particularly complex.`,
+      cls: 'conflict-error-explanation'
+    });
+
+    if (this.lastApplyError) {
+      const errorBox = contentEl.createDiv({ cls: 'conflict-error-box' });
+      errorBox.createEl('strong', { text: 'Error: ' });
+      errorBox.createSpan({ text: this.lastApplyError });
+    }
+
+    contentEl.createEl('p', {
+      text: `Attempts: ${this.retryCount}`,
+      cls: 'conflict-attempts-count'
+    });
+
+    // Action buttons
+    const actionsEl = contentEl.createDiv({ cls: 'conflict-actions conflict-actions-column' });
+
+    const retryBtn = actionsEl.createEl('button', {
+      text: 'Retry with AI',
+      cls: 'conflict-btn conflict-btn-ai'
+    });
+    retryBtn.addEventListener('click', async () => {
+      this.resolution = null;
+      this.lastApplyError = null;
+      await this.resolveWithAI();
+    });
+
+    const backBtn = actionsEl.createEl('button', {
       text: 'Try Different Option',
       cls: 'conflict-btn conflict-btn-retry'
     });
-    rejectBtn.addEventListener('click', () => {
+    backBtn.addEventListener('click', () => {
       this.resolution = null;
+      this.lastApplyError = null;
       this.renderContent();
     });
+
+    // After multiple failures, show report option
+    if (this.retryCount >= 2) {
+      const reportSection = contentEl.createDiv({ cls: 'conflict-report-section' });
+      reportSection.createEl('p', {
+        text: 'This conflict seems difficult to resolve automatically. Help us improve by reporting it.',
+        cls: 'conflict-report-text'
+      });
+
+      const reportBtn = reportSection.createEl('button', {
+        text: 'Abort & Report Issue',
+        cls: 'conflict-btn conflict-btn-report'
+      });
+      reportBtn.addEventListener('click', async () => {
+        if (this.config.onReportFailure && this.resolution) {
+          await this.config.onReportFailure(
+            this.config.conflict,
+            this.resolution,
+            this.lastApplyError || 'Unknown error'
+          );
+        }
+        this.config.onCancel();
+        this.close();
+      });
+    }
   }
 
   private async resolveWithAI() {
@@ -280,13 +400,8 @@ export class ConflictResolutionModal extends Modal {
     try {
       const smartMerge = getSmartMergeService();
 
-      // First try search-replace
-      let resolution = smartMerge.trySearchReplaceResolution(this.config.conflict);
-
-      if (!resolution.success) {
-        // Fall back to AI
-        resolution = await smartMerge.resolveWithAI(this.config.conflict);
-      }
+      // Go straight to AI - let it handle the semantic merge
+      const resolution = await smartMerge.resolveWithAI(this.config.conflict);
 
       this.resolution = resolution;
       this.isProcessing = false;
@@ -295,6 +410,40 @@ export class ConflictResolutionModal extends Modal {
       this.isProcessing = false;
       this.showError(`Resolution failed: ${error.message}`);
     }
+  }
+
+  private async refineWithAI(instruction: string) {
+    this.isProcessing = true;
+    this.lastRefinement = instruction; // Replace, don't accumulate
+    this.renderContent();
+
+    try {
+      const smartMerge = getSmartMergeService();
+
+      // Refine with just the current instruction
+      const resolution = await smartMerge.resolveWithAI(
+        this.config.conflict,
+        [instruction]
+      );
+
+      this.resolution = resolution;
+      this.isProcessing = false;
+      this.renderContent();
+    } catch (error: any) {
+      this.isProcessing = false;
+      this.showError(`Refinement failed: ${error.message}`);
+    }
+  }
+
+  private handleReject() {
+    // Full rejection - close modal and signal rejection to parent
+    this.resolution = {
+      success: false,
+      method: 'manual',
+      error: 'User rejected this commit'
+    };
+    this.config.onCancel(); // This will trigger the rejection flow
+    this.close();
   }
 
   private async resolveKeepTheirs() {
@@ -370,7 +519,9 @@ export class ConflictResolutionModal extends Modal {
 
   private addStyles() {
     const styleId = 'conflict-resolution-modal-styles';
-    if (document.getElementById(styleId)) return;
+    // Remove existing style to ensure updates take effect
+    const existing = document.getElementById(styleId);
+    if (existing) existing.remove();
 
     const style = document.createElement('style');
     style.id = styleId;
@@ -613,14 +764,64 @@ export class ConflictResolutionModal extends Modal {
         margin-bottom: 0.5em;
       }
 
-      .conflict-preview-content {
+      .conflict-preview {
         background: var(--background-secondary);
+        border-radius: 8px;
+        padding: 1em;
+        margin: 1em 0;
+      }
+
+      .conflict-preview h3 {
+        margin: 0 0 0.75em 0;
+        font-size: 0.9em;
+      }
+
+      .conflict-preview-content {
+        background: var(--background-primary);
         padding: 1em;
         border-radius: 6px;
         font-size: 0.85em;
         max-height: 300px;
-        overflow-y: auto;
+        overflow-y: scroll;
         white-space: pre-wrap;
+        border: 1px solid var(--background-modifier-border);
+      }
+
+      /* Ensure scrollbar is always visible */
+      .conflict-preview-content::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .conflict-preview-content::-webkit-scrollbar-track {
+        background: var(--background-secondary);
+        border-radius: 4px;
+      }
+
+      .conflict-preview-content::-webkit-scrollbar-thumb {
+        background: var(--background-modifier-border);
+        border-radius: 4px;
+      }
+
+      .conflict-preview-content::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+      }
+
+      .conflict-refine-inline {
+        display: flex;
+        gap: 1em;
+        margin-top: 1em;
+        padding-top: 1em;
+        border-top: 1px solid var(--background-modifier-border);
+        align-items: center;
+      }
+
+      .conflict-refine-inline .conflict-refine-input {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .conflict-refine-inline .conflict-btn {
+        flex-shrink: 0;
       }
 
       .conflict-actions {
@@ -628,6 +829,8 @@ export class ConflictResolutionModal extends Modal {
         gap: 1em;
         justify-content: flex-end;
         margin-top: 1.5em;
+        padding-top: 1em;
+        border-top: 1px solid var(--background-modifier-border);
       }
 
       .conflict-error {
@@ -636,6 +839,73 @@ export class ConflictResolutionModal extends Modal {
         padding: 0.75em 1em;
         border-radius: 4px;
         margin-top: 1em;
+      }
+
+      .conflict-refine-input {
+        padding: 0.5em 0.75em;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-normal);
+        font-size: 0.9em;
+      }
+
+      .conflict-refine-input:focus {
+        outline: none;
+        border-color: var(--interactive-accent);
+      }
+
+      /* Failed resolution state */
+      .conflict-error-title {
+        color: var(--text-error);
+      }
+
+      .conflict-error-explanation {
+        color: var(--text-muted);
+        margin-bottom: 1em;
+      }
+
+      .conflict-error-box {
+        background: var(--background-secondary);
+        border-left: 3px solid var(--text-error);
+        padding: 0.75em 1em;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.85em;
+        margin-bottom: 1em;
+        word-break: break-word;
+      }
+
+      .conflict-attempts-count {
+        font-size: 0.85em;
+        color: var(--text-muted);
+      }
+
+      .conflict-actions-column {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .conflict-actions-column .conflict-btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .conflict-report-section {
+        margin-top: 1.5em;
+        padding-top: 1em;
+        border-top: 1px solid var(--background-modifier-border);
+      }
+
+      .conflict-report-text {
+        font-size: 0.9em;
+        color: var(--text-muted);
+        margin-bottom: 0.75em;
+      }
+
+      .conflict-btn-report {
+        background: var(--text-error);
+        color: white;
       }
     `;
     document.head.appendChild(style);

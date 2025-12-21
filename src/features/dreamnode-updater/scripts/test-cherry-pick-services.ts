@@ -1,14 +1,16 @@
 /**
  * Integration test for cherry-pick collaboration services
  *
- * Run with: npx tsx scripts/test/test-cherry-pick-services.ts
+ * Run with: npx tsx src/features/dreamnode-updater/scripts/test-cherry-pick-services.ts
  *
  * Prerequisites: Run setup-cherry-pick-test.sh first
  */
 
+/* eslint-disable no-undef */
+
 import {
   CollaborationMemoryService,
-} from '../../src/features/dreamnode-updater/services/collaboration-memory-service';
+} from '../services/collaboration-memory-service';
 
 const TEST_DIR = '/tmp/interbrain-cherry-pick-test';
 const SHARED_PROJECT = `${TEST_DIR}/shared-project`;

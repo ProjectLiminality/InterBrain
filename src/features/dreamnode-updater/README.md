@@ -12,15 +12,23 @@ dreamnode-updater/
 │   ├── update-summary-service.ts             # LLM-powered commit summaries
 │   ├── collaboration-memory-service.ts       # Accept/reject tracking per peer
 │   ├── collaboration-memory-service.test.ts  # Unit tests for memory service
-│   └── cherry-pick-workflow-service.ts       # Preview/accept/reject orchestration
+│   ├── cherry-pick-workflow-service.ts       # Preview/accept/reject orchestration
+│   └── smart-merge-service.ts                # Conflict resolution with search-replace merging
 ├── ui/
-│   ├── update-preview-modal.ts               # Legacy modal for update preview
 │   ├── cherry-pick-preview-modal.ts          # Enhanced modal with per-commit selection
+│   ├── conflict-resolution-modal.ts          # Modal for resolving merge conflicts
 │   ├── preview-banner.ts                     # Floating banner during preview mode
 │   └── rejection-history-modal.ts            # View and unreject previously rejected commits
+├── scripts/
+│   ├── setup-cherry-pick-test.sh             # Bash script to create test environment
+│   └── test-cherry-pick-services.ts          # Integration test for services
+├── docs/
+│   ├── collaboration-scenarios.md            # Design scenarios and test scripts
+│   └── p2p-collaboration-status.md           # Feature status and roadmap
 ├── commands.ts                               # DreamNode update commands
 ├── dreamer-update-commands.ts                # Peer-centric batch update commands
 ├── collaboration-test-commands.ts            # UI testing commands (setup/cleanup)
+├── test-scenarios.ts                         # Test data generation for UI testing
 ├── index.ts                                  # Barrel export
 └── README.md
 ```

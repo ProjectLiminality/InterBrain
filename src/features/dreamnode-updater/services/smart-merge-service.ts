@@ -15,6 +15,8 @@
 
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const fsPromises = require('fs/promises');
+const path = require('path');
 
 const execAsync = promisify(exec);
 
@@ -142,10 +144,8 @@ export async function getConflictInfo(
 ): Promise<ConflictInfo | null> {
   try {
     // Read the conflicted file
-    const { readFile } = await import('fs/promises');
-    const path = await import('path');
     const fullPath = path.join(repoPath, filePath);
-    const conflictContent = await readFile(fullPath, 'utf-8');
+    const conflictContent = await fsPromises.readFile(fullPath, 'utf-8');
 
     if (!conflictContent.includes('<<<<<<<')) {
       return null; // No conflicts in this file
@@ -197,7 +197,7 @@ export async function getConflictInfo(
       conflictRegions
     };
   } catch (error) {
-    console.error('[SmartMerge] Failed to get conflict info:', error);
+    console.log('[SmartMerge] Could not parse conflict info:', error);
     return null;
   }
 }
@@ -228,6 +228,15 @@ export function trySearchReplaceResolution(conflict: ConflictInfo): MergeResolut
   // Parse both sides to find common anchor lines
   const oursLines = region.ours.split('\n');
   const theirsLines = region.theirs.split('\n');
+
+  // Debug: log what we're comparing
+  console.log('[SearchReplace] Attempting resolution...');
+  console.log('[SearchReplace] Ours (' + oursLines.length + ' lines):');
+  oursLines.forEach((line, i) => console.log(`  [${i}] ${JSON.stringify(line)}`));
+  console.log('[SearchReplace] Theirs (' + theirsLines.length + ' lines):');
+  theirsLines.forEach((line, i) => console.log(`  [${i}] ${JSON.stringify(line)}`));
+  console.log('[SearchReplace] First line match:', oursLines[0] === theirsLines[0]);
+  console.log('[SearchReplace] Last line match:', oursLines[oursLines.length - 1] === theirsLines[theirsLines.length - 1]);
 
   // Check if both sides start with the same line (common anchor)
   if (oursLines[0] === theirsLines[0] && oursLines[0].trim().length > 0) {
@@ -363,9 +372,12 @@ function reconstructFileWithResolution(
 
 /**
  * Resolve a conflict using AI (Claude)
+ * @param conflict - The conflict information
+ * @param refinements - Optional array of user refinement instructions for iterative improvement
  */
 export async function resolveWithAI(
-  conflict: ConflictInfo
+  conflict: ConflictInfo,
+  refinements?: string[]
 ): Promise<MergeResolution> {
   try {
     // Dynamic import to avoid circular dependencies
@@ -380,27 +392,30 @@ export async function resolveWithAI(
       };
     }
 
-    const prompt = buildMergePrompt(conflict);
+    const userPrompt = buildMergePrompt(conflict, refinements);
 
-    const systemPrompt = `You are a git merge conflict resolver. Your job is to intelligently merge conflicting changes while preserving the intent of both sides.
+    const systemPrompt = `You are a git merge conflict resolver. Your task is to intelligently combine two versions of content that have diverged.
 
-Rules:
-1. Always preserve ALL content from both sides unless they're truly duplicates
-2. Maintain consistent formatting and style
-3. If both sides add similar sections, include both
-4. Never lose information - when in doubt, include it
-5. Return ONLY the merged content, no explanations or markdown code blocks`;
+RULES:
+1. PRESERVE ALL CONTENT from both versions - never discard changes from either side
+2. When both versions add different content (sections, paragraphs, items), include ALL additions
+3. When both versions modify the same content differently, combine the intent of both changes
+4. Maintain the original formatting style and structure
+5. Prefer minimal integration - add incoming content at the natural location rather than restructuring existing content
+6. Output ONLY the merged content - no explanations, no markdown code fences, no meta-commentary`;
 
-    const response = await inferenceService.generate({
-      prompt: `${systemPrompt}\n\n${prompt}`,
-      maxTokens: 2000
-    });
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: userPrompt }
+    ];
 
-    if (!response.success || !response.content) {
+    const response = await inferenceService.generate(messages, 'standard');
+
+    if (!response.content) {
       return {
         success: false,
         method: 'ai-magic',
-        error: response.error || 'AI returned empty response'
+        error: 'AI returned empty response'
       };
     }
 
@@ -417,11 +432,14 @@ Rules:
       mergedContent
     );
 
+    const hasRefinements = refinements && refinements.length > 0;
     return {
       success: true,
       mergedContent: fullMerged,
       method: 'ai-magic',
-      explanation: 'AI analyzed both changes and merged them semantically.'
+      explanation: hasRefinements
+        ? `AI refined the merge based on: "${refinements[refinements.length - 1]}"`
+        : 'AI analyzed both changes and merged them semantically.'
     };
   } catch (error: any) {
     return {
@@ -432,24 +450,37 @@ Rules:
   }
 }
 
-function buildMergePrompt(conflict: ConflictInfo): string {
+function buildMergePrompt(conflict: ConflictInfo, refinements?: string[]): string {
   const region = conflict.conflictRegions[0];
 
-  return `Merge these two conflicting changes to ${conflict.filePath}:
+  let prompt = `Merge conflict in: ${conflict.filePath}
 
-CONTEXT BEFORE:
-${region.contextBefore || '(start of relevant section)'}
+CONTEXT (content before the conflict):
+${region.contextBefore || '(beginning of section)'}
 
-VERSION A (current):
+--- VERSION A (current state) ---
 ${region.ours}
 
-VERSION B (incoming):
+--- VERSION B (incoming changes) ---
 ${region.theirs}
 
-CONTEXT AFTER:
-${region.contextAfter || '(end of relevant section)'}
+CONTEXT (content after the conflict):
+${region.contextAfter || '(end of section)'}
 
-Merge both changes intelligently. Both changes should be preserved - they are additions from different contributors.`;
+Combine VERSION A and VERSION B into unified content. Both versions represent valid changes that should be preserved.`;
+
+  // Add refinement instructions if provided
+  if (refinements && refinements.length > 0) {
+    prompt += `\n\nUSER REFINEMENT INSTRUCTIONS:\n`;
+    refinements.forEach((instruction, i) => {
+      prompt += `${i + 1}. ${instruction}\n`;
+    });
+    prompt += `\nApply these refinements to the merged result.`;
+  }
+
+  prompt += `\n\nOutput only the merged content that replaces the conflict region.`;
+
+  return prompt;
 }
 
 // ============================================
@@ -481,7 +512,7 @@ export async function resolveConflicts(
       { cwd: repoPath }
     );
 
-    const conflictedFiles = stdout.trim().split('\n').filter(f => f);
+    const conflictedFiles = stdout.trim().split('\n').filter((f: string) => f);
 
     if (conflictedFiles.length === 0) {
       return {
@@ -513,9 +544,7 @@ export async function resolveConflicts(
 
       if (resolution.success && resolution.mergedContent) {
         // Write the resolved content
-        const { writeFile } = await import('fs/promises');
-        const path = await import('path');
-        await writeFile(
+        await fsPromises.writeFile(
           path.join(repoPath, filePath),
           resolution.mergedContent
         );
@@ -572,8 +601,8 @@ export class SmartMergeService {
     return trySearchReplaceResolution(conflict);
   }
 
-  async resolveWithAI(conflict: ConflictInfo) {
-    return resolveWithAI(conflict);
+  async resolveWithAI(conflict: ConflictInfo, refinements?: string[]) {
+    return resolveWithAI(conflict, refinements);
   }
 }
 

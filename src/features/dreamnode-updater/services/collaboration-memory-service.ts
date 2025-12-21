@@ -46,11 +46,35 @@ export interface RejectedCommit {
 }
 
 /**
+ * Adaptation wrapper for a commit
+ *
+ * When a commit causes a conflict and is resolved via AI or manual merge,
+ * the adapted content is stored here. This allows the commit to be previewed
+ * or accepted without re-triggering the conflict resolution flow.
+ *
+ * The adaptation is keyed by originalHash, so it works across peers
+ * (if Bob and Charlie both offer the same commit, one adaptation works for both).
+ *
+ * If the adaptation causes a new conflict (because the codebase changed),
+ * it will be discarded and a fresh resolution will be requested.
+ */
+export interface CommitAdaptation {
+  /** The adapted file contents - key is file path, value is content */
+  files: Record<string, string>;
+  /** When this adaptation was created */
+  createdAt: number;
+  /** How it was created */
+  method: 'ai-magic' | 'manual';
+}
+
+/**
  * Collaboration state for a single DreamNode
  */
 export interface DreamNodeCollaborationState {
   accepted: AcceptedCommit[];
   rejected: RejectedCommit[];
+  /** Map of originalHash -> adaptation wrapper (optional, for resolved conflicts) */
+  adaptations?: Record<string, CommitAdaptation>;
 }
 
 /**
@@ -359,6 +383,73 @@ export class CollaborationMemoryService {
   ): Promise<DreamNodeCollaborationState> {
     const memory = await this.loadMemory(dreamerRepoPath);
     return memory.dreamNodes[dreamNodeUuid] || { accepted: [], rejected: [] };
+  }
+
+  /**
+   * Store an adaptation for a commit
+   * Called after AI or manual conflict resolution
+   */
+  async storeAdaptation(
+    dreamerRepoPath: string,
+    dreamNodeUuid: string,
+    originalHash: string,
+    adaptation: CommitAdaptation
+  ): Promise<void> {
+    const memory = await this.loadMemory(dreamerRepoPath);
+
+    // Ensure node state exists
+    if (!memory.dreamNodes[dreamNodeUuid]) {
+      memory.dreamNodes[dreamNodeUuid] = { accepted: [], rejected: [] };
+    }
+
+    const nodeState = memory.dreamNodes[dreamNodeUuid];
+
+    // Ensure adaptations map exists
+    if (!nodeState.adaptations) {
+      nodeState.adaptations = {};
+    }
+
+    // Store/replace the adaptation
+    nodeState.adaptations[originalHash] = adaptation;
+
+    await this.saveMemory(dreamerRepoPath, memory);
+    console.log(`[CollaborationMemory] Stored adaptation for ${originalHash.substring(0, 8)}`);
+  }
+
+  /**
+   * Get adaptation for a commit if it exists
+   */
+  async getAdaptation(
+    dreamerRepoPath: string,
+    dreamNodeUuid: string,
+    originalHash: string
+  ): Promise<CommitAdaptation | null> {
+    const memory = await this.loadMemory(dreamerRepoPath);
+    const nodeState = memory.dreamNodes[dreamNodeUuid];
+
+    if (!nodeState?.adaptations) {
+      return null;
+    }
+
+    return nodeState.adaptations[originalHash] || null;
+  }
+
+  /**
+   * Remove adaptation for a commit (e.g., when it becomes stale)
+   */
+  async removeAdaptation(
+    dreamerRepoPath: string,
+    dreamNodeUuid: string,
+    originalHash: string
+  ): Promise<void> {
+    const memory = await this.loadMemory(dreamerRepoPath);
+    const nodeState = memory.dreamNodes[dreamNodeUuid];
+
+    if (nodeState?.adaptations && nodeState.adaptations[originalHash]) {
+      delete nodeState.adaptations[originalHash];
+      await this.saveMemory(dreamerRepoPath, memory);
+      console.log(`[CollaborationMemory] Removed adaptation for ${originalHash.substring(0, 8)}`);
+    }
   }
 
   /**

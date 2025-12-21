@@ -32,7 +32,8 @@ import {
   ALL_SCENARIOS,
   type TestScenario,
   PEER_BOB,
-  PEER_CHARLIE
+  PEER_CHARLIE,
+  PEER_ALICE
 } from './test-scenarios';
 
 const { exec } = require('child_process');
@@ -42,6 +43,26 @@ const path = require('path');
 
 const execAsync = promisify(exec);
 
+/**
+ * Generate a stable hash from a string input.
+ * Used for creating deterministic "original commit" hashes in test scenarios.
+ * The same input always produces the same output, which is essential for
+ * deduplication testing (same commit relayed by multiple peers).
+ */
+function generateStableHash(input: string): string {
+  // Simple but deterministic hash function
+  // We don't need cryptographic security, just consistency
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  // Convert to hex and pad to look like a git hash
+  const hexHash = Math.abs(hash).toString(16).padStart(8, '0');
+  return `${hexHash}${hexHash}${hexHash}${hexHash}${hexHash}`.slice(0, 40);
+}
+
 // Test constants - following real InterBrain ontology
 const TEST_NODE_PATH = '_collab-test-node';
 const TEST_NODE_UUID = 'collab-test-dream-uuid';
@@ -50,6 +71,7 @@ const TEST_NODE_NAME = 'Collaboration Test Node';
 // Dreamer paths derived from scenario peers
 const BOB_DREAMER_PATH = '_collab-test-bob';
 const CHARLIE_DREAMER_PATH = '_collab-test-charlie';
+const ALICE_DREAMER_PATH = '_collab-test-alice';
 
 // Hidden folder for peer bare repos (simulating Radicle storage)
 const PEER_REPOS_PATH = '.collab-test-peer-repos';
@@ -132,14 +154,28 @@ async function setupTestEnvironment(
 
     // Create commits from scenario
     // For relayed commits, we simulate the relay chain
+    //
+    // IMPORTANT: For deduplication to work, relayed commits must share the same
+    // "original hash" in their cherry-pick trailer. We generate a deterministic
+    // fake hash based on the commit content, not timestamp.
     for (const commit of scenario.commits) {
+      // Generate a stable fake original hash for this commit (used when it's relayed)
+      // This hash must be the same regardless of which peer relays it
+      const stableOriginalHash = generateStableHash(commit.subject + commit.author);
+
       for (const relayPeerName of commit.relayedBy) {
         const workPath = peerWorkPaths[relayPeerName];
         if (!workPath) continue;
 
         // Write all files for this commit
         for (const [filename, content] of Object.entries(commit.files)) {
-          await fs.writeFile(path.join(workPath, filename), content);
+          const filePath = path.join(workPath, filename);
+          // Create parent directories if needed (e.g., for MEETINGS/foo.md)
+          const parentDir = path.dirname(filePath);
+          if (parentDir !== workPath) {
+            await fs.mkdir(parentDir, { recursive: true });
+          }
+          await fs.writeFile(filePath, content);
         }
 
         await execAsync('git add .', { cwd: workPath });
@@ -147,10 +183,9 @@ async function setupTestEnvironment(
         // Build commit message
         let commitMsg: string;
         if (commit.originalAuthor && commit.originalAuthor !== relayPeerName) {
-          // Relayed commit - add cherry-pick provenance marker
-          const fakeOriginalHash = `abc${commit.author}${Date.now().toString(16)}`.slice(0, 12);
+          // Relayed commit - add cherry-pick provenance marker with STABLE hash
           const bodyText = commit.body ? `\n\n${commit.body}` : '';
-          commitMsg = `${commit.subject}${bodyText}\n\n(cherry picked from commit ${fakeOriginalHash})`;
+          commitMsg = `${commit.subject}${bodyText}\n\n(cherry picked from commit ${stableOriginalHash})`;
         } else {
           const bodyText = commit.body ? `\n\n${commit.body}` : '';
           commitMsg = `${commit.subject}${bodyText}`;
@@ -319,11 +354,13 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
         // Map remote names to Dreamer node paths
         const peerPathMap: Record<string, string> = {
           'bob': BOB_DREAMER_PATH,
-          'charlie': CHARLIE_DREAMER_PATH
+          'charlie': CHARLIE_DREAMER_PATH,
+          'alice': ALICE_DREAMER_PATH
         };
         const peerUuidMap: Record<string, string> = {
           'bob': PEER_BOB.uuid,
-          'charlie': PEER_CHARLIE.uuid
+          'charlie': PEER_CHARLIE.uuid,
+          'alice': PEER_ALICE.uuid
         };
 
         const peers = remotes.map((remote: string) => ({
