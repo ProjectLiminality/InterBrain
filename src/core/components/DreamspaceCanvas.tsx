@@ -29,6 +29,7 @@ import {
 import { openNodeContent } from '../../features/conversational-copilot/utils/open-node-content';
 import { OrchestratorContext } from '../context/orchestrator-context';
 import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
+import { getCherryPickWorkflowService } from '../../features/dreamnode-updater/services/cherry-pick-workflow-service';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -289,6 +290,12 @@ export default function DreamspaceCanvas() {
   const handleNodeClick = async (node: DreamNode) => {
     const store = useInterBrainStore.getState();
 
+    // Block node selection during collaboration preview mode
+    if (getCherryPickWorkflowService()?.isPreviewActive()) {
+      console.log('[DreamSpace] Node selection blocked - collaboration preview active');
+      return;
+    }
+
     // Handle copilot mode invoke interaction
     if (store.spatialLayout === 'copilot' && store.copilotMode.isActive) {
       // IMPORTANT: Prevent clicking the conversation partner itself
@@ -476,7 +483,13 @@ export default function DreamspaceCanvas() {
         onPointerMissed={() => {
           // Clicked on empty space - handle based on current spatial layout
           const store = useInterBrainStore.getState();
-          
+
+          // Suppress empty space clicks during collaboration preview mode
+          if (getCherryPickWorkflowService()?.isPreviewActive()) {
+            console.log('Empty space clicked during collaboration preview - ignoring');
+            return;
+          }
+
           // Suppress empty space clicks during edit mode
           if (store.editMode.isActive) {
             console.log('Empty space clicked during edit mode - ignoring');

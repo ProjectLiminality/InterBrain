@@ -97,6 +97,11 @@ src/
    - **Never** use `import('fs')` - dynamic imports don't resolve in Electron
    - VaultService is the canonical wrapper for vault-relative fs operations
 5. **Anti-pattern**: Never use CSS transforms for 3D positioning in R3F
+6. **AI Integration**: ALL AI functionality MUST use the `ai-magic` feature slice:
+   - Import from `src/features/ai-magic/services/inference-service.ts`
+   - Use `getInferenceService().generate({ prompt, maxTokens })` for completions
+   - Never call AI APIs directly - always go through InferenceService
+   - This ensures consistent provider handling (Claude, Ollama, OpenAI, Groq, xAI)
 
 ## Essential Commands
 

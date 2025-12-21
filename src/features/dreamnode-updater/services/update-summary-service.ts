@@ -1,215 +1,133 @@
 /**
  * Update Summary Service
  *
- * Uses LLM to generate user-friendly summaries of git updates
- * Translates technical commit messages into plain English focused on UX impact
+ * Generates natural-language briefings of recent collaboration activity.
+ * Like a colleague catching you up on "what's been going on" with a shared project.
  */
 
 import { generateAI, AIMessage, getInferenceService } from '../../ai-magic';
 import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
 
+/**
+ * Simple summary result - just the briefing text
+ */
 export interface UpdateSummary {
+  /** The briefing text - what's been happening */
+  briefing: string;
+  /** @deprecated Legacy field for backwards compatibility */
   userFacingChanges: string;
+  /** @deprecated Legacy field for backwards compatibility */
   technicalImprovements: string;
+  /** @deprecated Legacy field for backwards compatibility */
   overallImpact: string;
 }
 
+// Target ~200-300 chars for small updates, more for larger ones
+const TARGET_CHARS = 250;
+
 export class UpdateSummaryService {
   /**
-   * Generate a user-friendly summary of updates
-   * Uses ai-magic service for intelligent provider routing
+   * Generate a natural briefing of recent activity
    */
   async generateUpdateSummary(fetchResult: FetchResult): Promise<UpdateSummary> {
-    // Check if any AI provider is available
     const inferenceService = getInferenceService();
     const aiAvailable = await inferenceService.isAnyProviderAvailable();
 
     if (!aiAvailable) {
-      // Fallback to simple formatting if no AI available
       return this.generateFallbackSummary(fetchResult);
     }
 
     try {
-      const prompt = this.buildPrompt(fetchResult);
+      const input = this.formatActivityLog(fetchResult);
       const messages: AIMessage[] = [
         {
           role: 'system',
-          content: 'You are a helpful assistant that translates technical git commit messages into user-friendly summaries. Focus on what users will experience, not technical implementation details.'
+          content: `You brief someone on recent project activity. Read the activity log and write a friendly, natural summary - like a colleague saying "here's what's been happening..."
+
+Keep it to about ${TARGET_CHARS} characters. If the input is already short, just make it flow nicely. If it's long, focus on the highlights.
+
+Write plain prose, no headers or bullet points. Just conversational text.`
         },
         {
           role: 'user',
-          content: prompt
+          content: input
         }
       ];
 
-      // Use 'trivial' complexity - summaries are quick tasks
       const response = await generateAI(messages, 'trivial', {
-        maxTokens: 1024,
-        temperature: 0.7
+        maxTokens: 300,
+        temperature: 0.4
       });
 
       console.log(`[UpdateSummary] Generated via ${response.provider}`);
-      return this.parseResponse(response.content);
+      const briefing = response.content.trim();
+      return { briefing, userFacingChanges: briefing, technicalImprovements: '', overallImpact: '' };
     } catch (error) {
-      console.error('[UpdateSummary] AI generation failed, using fallback:', error);
+      console.error('[UpdateSummary] AI generation failed:', error);
       return this.generateFallbackSummary(fetchResult);
     }
   }
 
   /**
-   * Build the prompt for LLM
+   * Format the activity log that gets sent to the LLM
    */
-  private buildPrompt(fetchResult: FetchResult): string {
-    const commitList = fetchResult.commits.map((commit: any, i: number) =>
-      `${i + 1}. ${commit.subject}${commit.body ? '\n   ' + commit.body : ''}`
-    ).join('\n\n');
+  private formatActivityLog(fetchResult: FetchResult): string {
+    // Group commits by author
+    const byAuthor = new Map<string, string[]>();
+    for (const commit of fetchResult.commits) {
+      const author = (commit as any).author || 'Someone';
+      if (!byAuthor.has(author)) {
+        byAuthor.set(author, []);
+      }
+      byAuthor.get(author)!.push(commit.subject);
+    }
 
-    return `I have ${fetchResult.commits.length} new commits available for a software update:
+    // Build readable log
+    const lines: string[] = [];
+    lines.push(`Recent activity (${fetchResult.commits.length} changes, ${fetchResult.filesChanged} files):\n`);
 
-${commitList}
+    for (const [author, subjects] of byAuthor) {
+      lines.push(`${author}:`);
+      for (const subject of subjects) {
+        lines.push(`  - ${subject}`);
+      }
+    }
 
-Stats: ${fetchResult.filesChanged} files changed, ${fetchResult.insertions} insertions(+), ${fetchResult.deletions} deletions(-)
-
-Please provide a user-friendly summary in 3 sections:
-
-1. **User-Facing Changes** (2-3 sentences): What new features, improvements, or fixes will users directly experience?
-2. **Technical Improvements** (1-2 sentences): Summarize any performance, stability, or internal improvements as "more stable", "more performant", or "improved reliability".
-3. **Overall Impact** (1 sentence): Brief recommendation - is this a critical update, nice-to-have improvement, or minor update?
-
-Keep it concise, friendly, and focused on user experience. Use simple language.`;
+    return lines.join('\n');
   }
 
   /**
-   * Parse LLM response into structured summary
-   */
-  private parseResponse(content: string): UpdateSummary {
-    // Try to extract sections from LLM response
-    const userFacingMatch = content.match(/User-Facing Changes[:\s]+(.*?)(?=Technical Improvements|Overall Impact|$)/is);
-    const technicalMatch = content.match(/Technical Improvements[:\s]+(.*?)(?=Overall Impact|$)/is);
-    const overallMatch = content.match(/Overall Impact[:\s]+(.*?)$/is);
-
-    // Helper to clean markdown formatting
-    const cleanMarkdown = (text: string): string => {
-      return text
-        .replace(/#{1,6}\s+/g, '') // Remove markdown headers
-        .replace(/\*\*/g, '')      // Remove bold
-        .replace(/\*/g, '')        // Remove italic
-        .replace(/`/g, '')         // Remove code markers
-        .trim();
-    };
-
-    return {
-      userFacingChanges: cleanMarkdown(userFacingMatch?.[1] || 'Various updates and improvements'),
-      technicalImprovements: cleanMarkdown(technicalMatch?.[1] || 'Improved stability and performance'),
-      overallImpact: cleanMarkdown(overallMatch?.[1] || 'Recommended update for better experience')
-    };
-  }
-
-  /**
-   * Generate a simple fallback summary without LLM
-   * Extracts key information from commit messages and presents them clearly
+   * Fallback when no AI is available
    */
   private generateFallbackSummary(fetchResult: FetchResult): UpdateSummary {
     const { commits, filesChanged, insertions, deletions } = fetchResult;
 
-    // Categorize commits by keywords
-    const features = commits.filter((c: any) =>
-      /\b(add|feature|new|implement|create)\b/i.test(c.subject)
-    );
-    const fixes = commits.filter((c: any) =>
-      /\b(fix|bug|issue|resolve|correct)\b/i.test(c.subject)
-    );
-    const improvements = commits.filter((c: any) =>
-      /\b(improve|enhance|update|refactor|optimize|clean)\b/i.test(c.subject)
-    );
-    const docs = commits.filter((c: any) =>
-      /\b(doc|readme|comment)\b/i.test(c.subject)
-    );
+    // Group by author
+    const byAuthor = new Map<string, string[]>();
+    for (const commit of commits) {
+      const author = (commit as any).author || 'Someone';
+      if (!byAuthor.has(author)) {
+        byAuthor.set(author, []);
+      }
+      byAuthor.get(author)!.push(commit.subject);
+    }
 
-    // Build user-facing summary from actual commit subjects
-    const userFacingParts: string[] = [];
-
-    if (features.length > 0) {
-      const featureList = features.slice(0, 3).map((c: any) =>
-        c.subject.replace(/^(add|feature|new|implement|create)[:\s]*/i, '').trim()
-      );
-      if (features.length <= 2) {
-        userFacingParts.push(`New: ${featureList.join(', ')}`);
+    // Build natural text
+    const parts: string[] = [];
+    for (const [author, subjects] of byAuthor) {
+      if (subjects.length === 1) {
+        parts.push(`${author}: "${subjects[0]}"`);
       } else {
-        userFacingParts.push(`${features.length} new features including ${featureList[0]}`);
+        parts.push(`${author} made ${subjects.length} changes`);
       }
     }
 
-    if (fixes.length > 0) {
-      const fixList = fixes.slice(0, 2).map((c: any) =>
-        c.subject.replace(/^(fix|bug|issue|resolve|correct)[:\s]*/i, '').trim()
-      );
-      if (fixes.length <= 2) {
-        userFacingParts.push(`Fixed: ${fixList.join(', ')}`);
-      } else {
-        userFacingParts.push(`${fixes.length} bug fixes`);
-      }
-    }
-
-    if (improvements.length > 0 && userFacingParts.length < 2) {
-      const improvementList = improvements.slice(0, 2).map((c: any) =>
-        c.subject.replace(/^(improve|enhance|update|refactor|optimize|clean)[:\s]*/i, '').trim()
-      );
-      userFacingParts.push(`Improved: ${improvementList[0]}`);
-    }
-
-    const userFacing = userFacingParts.length > 0
-      ? userFacingParts.join('. ') + '.'
-      : `${commits.length} update${commits.length > 1 ? 's' : ''} with various improvements.`;
-
-    // Build technical summary
-    const technicalParts: string[] = [];
-
-    if (filesChanged > 0) {
-      technicalParts.push(`${filesChanged} file${filesChanged > 1 ? 's' : ''} changed`);
-    }
-    if (insertions > 0) {
-      technicalParts.push(`${insertions} additions`);
-    }
-    if (deletions > 0) {
-      technicalParts.push(`${deletions} deletions`);
-    }
-    if (docs.length > 0) {
-      technicalParts.push(`documentation updates`);
-    }
-
-    const technical = technicalParts.length > 0
-      ? technicalParts.join(', ') + '.'
-      : 'Code improvements and refinements.';
-
-    // Determine overall impact
-    const isMajor = commits.length > 10 || filesChanged > 20;
-    const hasCriticalFixes = fixes.some((c: any) =>
-      /\b(critical|urgent|security|crash|data loss)\b/i.test(c.subject + c.body)
-    );
-
-    let overall = '';
-    if (hasCriticalFixes) {
-      overall = '⚠️ Important update with critical fixes';
-    } else if (isMajor) {
-      overall = '📦 Major update with significant changes';
-    } else if (features.length > fixes.length) {
-      overall = '✨ Nice update with new features';
-    } else if (fixes.length > 0) {
-      overall = '🔧 Helpful update with bug fixes';
-    } else {
-      overall = '📝 Minor update with refinements';
-    }
-
-    return {
-      userFacingChanges: userFacing,
-      technicalImprovements: technical,
-      overallImpact: overall
-    };
+    const briefing = parts.join('. ') + ` (${filesChanged} files, +${insertions}/-${deletions})`;
+    return { briefing, userFacingChanges: briefing, technicalImprovements: '', overallImpact: '' };
   }
 }
 
-// Singleton instance
+// Singleton
 let updateSummaryService: UpdateSummaryService | null = null;
 
 export function initializeUpdateSummaryService(): UpdateSummaryService {

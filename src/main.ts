@@ -29,6 +29,9 @@ import { registerCoherenceBeaconCommands } from './features/coherence-beacon/com
 import { registerDreamerUpdateCommands } from './features/dreamnode-updater/dreamer-update-commands';
 import { registerRelationshipCommands } from './features/liminal-web-layout';
 import { registerUpdateCommands } from './features/dreamnode-updater/commands';
+import { registerCollaborationTestCommands } from './features/dreamnode-updater/collaboration-test-commands';
+import { initializeCollaborationMemoryService } from './features/dreamnode-updater/services/collaboration-memory-service';
+import { initializeCherryPickWorkflowService } from './features/dreamnode-updater/services/cherry-pick-workflow-service';
 import {
 	registerTranscriptionCommands,
 	cleanupTranscriptionService,
@@ -354,6 +357,12 @@ export default class InterBrainPlugin extends Plugin {
       initializeAudioTrimmingService();
       initializeConversationsService(this);
       initializeAudioStreamingService(this);
+
+      // Initialize collaboration services
+      const vaultPath = (this.app.vault.adapter as any).basePath;
+      initializeCollaborationMemoryService(vaultPath);
+      initializeCherryPickWorkflowService(this.app);
+
       console.log('[Plugin] Background services initialized');
     }, 100); // Tiny delay to let vault scan finish first
 
@@ -453,6 +462,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register update commands (auto-fetch and update management)
     registerUpdateCommands(this, this.uiService);
+
+    // Register collaboration test commands (UI testing for cherry-pick workflow)
+    registerCollaborationTestCommands(this, this.uiService);
 
     // Register link file commands (.link file support)
     registerLinkFileCommands(this, this.uiService);

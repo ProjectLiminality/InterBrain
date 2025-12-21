@@ -7,7 +7,6 @@
 
 import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
-import { getUpdateSummaryService, initializeUpdateSummaryService } from './services/update-summary-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { GitSyncService, type CommitInfo } from '../social-resonance-filter/services/git-sync-service';
 import {
@@ -16,9 +15,14 @@ import {
   updateSubmodulesFromStandalone
 } from '../social-resonance-filter/utils/submodule-sync';
 import { GitOperationsService } from '../dreamnode/utils/git-operations';
-import { UpdatePreviewModal } from './ui/update-preview-modal';
+import { InterBrainUpdateModal } from './ui/interbrain-update-modal';
+import { CherryPickPreviewModal, CherryPickPreviewConfig } from './ui/cherry-pick-preview-modal';
+import { initializeCherryPickWorkflowService } from './services/cherry-pick-workflow-service';
 
 const path = require('path');
+
+// InterBrain's fixed UUID for routing decisions
+const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
 
 export function registerUpdateCommands(plugin: Plugin, uiService: UIService): void {
   const gitSyncService = new GitSyncService(plugin.app);
@@ -143,164 +147,83 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         return;
       }
 
-      const loadingNotice = uiService.showLoading('Generating update summary...');
-      try {
-        // Initialize and use summary service (uses ai-magic for provider routing)
-        initializeUpdateSummaryService();
-        const summaryService = getUpdateSummaryService();
-        const summary = await summaryService.generateUpdateSummary(updateStatus!);
-
-        // Hide loading notice before showing modal
-        loadingNotice.hide();
-
-        // Show modal with update preview
-        const modal = new UpdatePreviewModal(
+      // ROUTING: InterBrain vs DreamNode
+      if (selectedNode.id === INTERBRAIN_UUID) {
+        // InterBrain: Simple all-or-nothing update modal
+        const modal = new InterBrainUpdateModal(
           plugin.app,
-          selectedNode.name,
           updateStatus!,
-          summary,
-          // On Accept
+          // onAccept: Pull, build, reload
           async () => {
-            // Check if this is a read-only repo with divergent branches
-            const divergentCheck = await gitSyncService.checkDivergentBranches(selectedNode.repoPath);
-            const isReadOnly = await gitSyncService.isReadOnlyRepo(selectedNode.repoPath);
-
-            if (isReadOnly && divergentCheck.hasDivergence) {
-              // Show warning dialog for read-only repos with local changes
-              const confirmed = await uiService.showConfirmDialog(
-                'Read-Only DreamNode - Local Changes Will Be Lost',
-                `This is a read-only DreamNode and your local branch has diverged from the remote.\n\n` +
-                `Your local commits: ${divergentCheck.localCommits}\n` +
-                `Remote commits: ${divergentCheck.remoteCommits}\n\n` +
-                `By pulling updates, your local changes will be DISCARDED and replaced with the remote version.\n\n` +
-                `Continue?`,
-                'Continue and Discard Local Changes',
-                'Abort'
-              );
-
-              if (!confirmed) {
-                return;
-              }
-
-              // User confirmed - reset to remote
-              const resetNotice = uiService.showLoading(`Resetting ${selectedNode.name} to remote...`);
-              try {
-                await gitSyncService.resetToRemote(selectedNode.repoPath);
-                resetNotice.hide();
-              } catch (error) {
-                resetNotice.hide();
-                console.error('[UpdatePreview] Failed to reset:', error);
-                uiService.showError(`Failed to reset: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                return;
-              }
-            }
-
-            const applyNotice = uiService.showLoading(`Updating ${selectedNode.name}...`);
+            const applyNotice = uiService.showLoading('Updating InterBrain...');
             try {
-              // Pull updates - cherry-pick peer commits or fast-forward from upstream
               const commitHashes = updateStatus!.commits.map((c: CommitInfo) => c.hash);
               await gitSyncService.pullUpdates(selectedNode.repoPath, commitHashes);
-
-              // Check for coherence beacons in the commits we just pulled
               applyNotice.hide();
-              const checkingNotice = uiService.showLoading('Checking for new relationships...');
-              try {
-                const beacons = await (plugin as any).coherenceBeaconService.checkCommitsForBeacons(
-                  selectedNode.repoPath,
-                  updateStatus!.commits
-                );
-                checkingNotice.hide();
 
-                if (beacons.length > 0) {
-                  // Import modal dynamically to avoid circular dependencies
-                  const { CoherenceBeaconModal } = await import('../coherence-beacon/ui/coherence-beacon-modal');
+              const buildNotice = uiService.showLoading('Building InterBrain...');
+              await gitOpsService.buildDreamNode(selectedNode.repoPath);
+              buildNotice.hide();
 
-                  // Process each beacon sequentially
-                  for (const beacon of beacons) {
-                    await new Promise<void>((resolve) => {
-                      const beaconModal = new CoherenceBeaconModal(
-                        plugin.app,
-                        beacon,
-                        // On Accept - clone the supermodule
-                        async () => {
-                          const { Notice } = await import('obsidian');
-                          try {
-                            new Notice(`Cloning ${beacon.title}...`);
-                            await (plugin as any).coherenceBeaconService.acceptBeacon(selectedNode.repoPath, beacon);
-                            new Notice(`Successfully cloned ${beacon.title}!`);
-                          } catch (error) {
-                            console.error('Failed to accept beacon:', error);
-                            new Notice(`Failed to clone ${beacon.title}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                          } finally {
-                            resolve();
-                          }
-                        },
-                        // On Reject - skip this supermodule
-                        async () => {
-                          const { Notice } = await import('obsidian');
-                          await (plugin as any).coherenceBeaconService.rejectBeacon(selectedNode.repoPath, beacon);
-                          new Notice(`Skipped ${beacon.title}`);
-                          resolve();
-                        }
-                      );
-                      beaconModal.open();
-                    });
-                  }
-                }
-              } catch (beaconError) {
-                checkingNotice.hide();
-                console.error('[UpdatePreview] Error checking beacons:', beaconError);
-                // Don't fail the update if beacon check fails
-              }
+              const reloadNotice = uiService.showLoading('Reloading plugin...');
+              const plugins = (plugin.app as any).plugins;
+              await plugins.disablePlugin('interbrain');
+              await plugins.enablePlugin('interbrain');
+              reloadNotice.hide();
 
-              // If it's the InterBrain node, run build and reload
-              if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
-                const buildNotice = uiService.showLoading('Building InterBrain...');
-                try {
-                  await gitOpsService.buildDreamNode(selectedNode.repoPath);
-                  buildNotice.hide();
-
-                  // Auto-reload plugin after build
-                  const reloadNotice = uiService.showLoading('Reloading plugin...');
-                  try {
-                    const plugins = (plugin.app as any).plugins;
-                    await plugins.disablePlugin('interbrain');
-                    await plugins.enablePlugin('interbrain');
-                    reloadNotice.hide();
-                    uiService.showSuccess(`InterBrain updated and reloaded!`);
-                  } catch (reloadError) {
-                    reloadNotice.hide();
-                    throw reloadError;
-                  }
-                } catch (buildError) {
-                  buildNotice.hide();
-                  throw buildError;
-                }
-              } else {
-                uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
-              }
-
-              // Clear update status
-              const store = useInterBrainStore.getState();
+              uiService.showSuccess('InterBrain updated and reloaded!');
               store.clearNodeUpdateStatus(selectedNode.id);
             } catch (error) {
-              console.error('[UpdatePreview] Failed to apply update:', error);
-              uiService.showError(`Failed to update: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            } finally {
-              applyNotice.hide();
+              console.error('[InterBrainUpdate] Failed:', error);
+              uiService.showError(`Update failed: ${error instanceof Error ? error.message : 'Unknown'}`);
             }
           },
-          // On Reject
+          // onReject
           () => {
             uiService.showInfo('Update cancelled');
           }
         );
-
         modal.open();
-      } catch (error) {
-        console.error('[UpdatePreview] Error:', error);
-        loadingNotice.hide();
-        uiService.showError('Failed to generate update preview');
+      } else {
+        // DreamNode: Cherry-pick workflow with commit selection
+        initializeCherryPickWorkflowService(plugin.app);
+
+        // For now, treat all commits as coming from a single "upstream" peer
+        // In a full P2P scenario, we'd have multiple peer groups
+        const peerGroups = [{
+          peerUuid: 'upstream',
+          peerName: 'Upstream',
+          peerRepoPath: selectedNode.repoPath,
+          commits: updateStatus!.commits.map((c: CommitInfo) => ({
+            ...c,
+            originalHash: c.hash,
+            offeredBy: ['upstream'],
+            offeredByNames: ['Upstream'],
+            cherryPickRef: c.hash
+          }))
+        }];
+
+        const config: CherryPickPreviewConfig = {
+          dreamNodePath: selectedNode.repoPath,
+          dreamNodeUuid: selectedNode.id,
+          dreamNodeName: selectedNode.name,
+          peerGroups,
+          onAccept: async (acceptedCommits, _peerRepoPath) => {
+            uiService.showSuccess(`Accepted ${acceptedCommits.length} commit(s)`);
+            // Trigger vault rescan
+            const { serviceManager } = await import('../../core/services/service-manager');
+            await serviceManager.scanVault();
+          },
+          onReject: async (rejectedCommits, _peerRepoPath) => {
+            uiService.showInfo(`Rejected ${rejectedCommits.length} commit(s)`);
+          },
+          onCancel: () => {
+            uiService.showInfo('Update cancelled');
+          }
+        };
+
+        const modal = new CherryPickPreviewModal(plugin.app, config);
+        modal.open();
       }
     }
   });
@@ -340,27 +263,31 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         // Pull updates
         await gitSyncService.pullUpdates(selectedNode.repoPath);
 
-        // If it's the InterBrain node, run build
-        if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
+        // If it's the InterBrain node, run build and reload
+        if (selectedNode.id === INTERBRAIN_UUID) {
           const buildNotice = uiService.showLoading('Building InterBrain...');
           try {
             await gitOpsService.buildDreamNode(selectedNode.repoPath);
             buildNotice.hide();
+
+            // Auto-reload plugin
+            const reloadNotice = uiService.showLoading('Reloading plugin...');
+            const plugins = (plugin.app as any).plugins;
+            await plugins.disablePlugin('interbrain');
+            await plugins.enablePlugin('interbrain');
+            reloadNotice.hide();
+
+            uiService.showSuccess('InterBrain updated and reloaded!');
           } catch (buildError) {
             buildNotice.hide();
             throw buildError;
           }
+        } else {
+          uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
         }
 
         // Clear update status
         store.clearNodeUpdateStatus(selectedNode.id);
-
-        uiService.showSuccess(`Successfully updated ${selectedNode.name}!`);
-
-        // If InterBrain was updated, suggest reload
-        if (selectedNode.id === '550e8400-e29b-41d4-a716-446655440000') {
-          uiService.showInfo('InterBrain updated - reload Obsidian to use new version');
-        }
       } catch (error) {
         console.error('Failed to apply updates:', error);
         uiService.showError(`Failed to update: ${error instanceof Error ? error.message : 'Unknown error'}`);
