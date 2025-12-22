@@ -30,6 +30,7 @@ import {
 import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
 import { showPreviewBanner } from './preview-banner';
 import { showConflictResolutionModal } from './conflict-resolution-modal';
+import { getURIHandlerService } from '../../uri-handler';
 
 export interface CherryPickPreviewConfig {
   /** Path to the DreamNode being updated */
@@ -391,8 +392,9 @@ export class CherryPickPreviewModal extends Modal {
     if (!state && mode === 'pending') return;
 
     const isShared = commit.offeredByNames.length > 1;
+    const isBeacon = !!commit.beaconData;
     const commitEl = container.createDiv({
-      cls: `cherry-pick-commit ${mode === 'pending' && state?.selected ? 'selected' : ''} ${isShared ? 'cherry-pick-commit-shared' : ''}`
+      cls: `cherry-pick-commit ${mode === 'pending' && state?.selected ? 'selected' : ''} ${isShared ? 'cherry-pick-commit-shared' : ''} ${isBeacon ? 'cherry-pick-commit-beacon' : ''}`
     });
 
     // Checkbox (only for pending)
@@ -429,6 +431,15 @@ export class CherryPickPreviewModal extends Modal {
       expandToggle.setAttribute('data-expanded', 'false');
     }
 
+    // Show beacon indicator if this is a coherence beacon
+    if (commit.beaconData) {
+      subjectRow.createSpan({
+        text: '🔗',
+        cls: 'cherry-pick-commit-beacon-indicator',
+        attr: { title: `Coherence Beacon: ${commit.beaconData.title} wants to include you` }
+      });
+    }
+
     // Show sparkle if commit has stored adaptation
     const hasAdaptation = this.adaptedCommits.has(commit.originalHash);
     if (hasAdaptation) {
@@ -439,9 +450,14 @@ export class CherryPickPreviewModal extends Modal {
       });
     }
 
+    // For beacons, show a more descriptive subject
+    const displaySubject = commit.beaconData
+      ? `${commit.beaconData.title} wants to include you as a submodule`
+      : commit.subject;
+
     subjectRow.createSpan({
-      text: commit.subject,
-      cls: 'cherry-pick-commit-subject'
+      text: displaySubject,
+      cls: `cherry-pick-commit-subject ${commit.beaconData ? 'cherry-pick-commit-subject-beacon' : ''}`
     });
 
     const date = new Date(commit.timestamp * 1000).toLocaleDateString();
@@ -631,6 +647,12 @@ export class CherryPickPreviewModal extends Modal {
   }
 
   private async previewSingleCommit(commit: PendingCommit) {
+    // If this is a beacon commit, use special beacon preview
+    if (commit.beaconData) {
+      await this.previewBeaconCommit(commit);
+      return;
+    }
+
     this.isProcessing = true;
     this.showProcessing('Starting preview...');
 
@@ -661,6 +683,58 @@ export class CherryPickPreviewModal extends Modal {
         this.isProcessing = false;
       }
     } catch (error: any) {
+      this.showMessage(`Preview failed: ${error.message}`, true);
+      this.isProcessing = false;
+    }
+  }
+
+  /**
+   * Preview a coherence beacon commit by cloning the supermodule and opening its DreamSong
+   */
+  private async previewBeaconCommit(commit: PendingCommit) {
+    if (!commit.beaconData) return;
+
+    this.isProcessing = true;
+    this.showProcessing(`Cloning ${commit.beaconData.title} for preview...`);
+
+    try {
+      // Clone the supermodule repository
+      const uriHandler = getURIHandlerService();
+      const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
+
+      if (cloneResult === 'error') {
+        this.showMessage(`Failed to clone ${commit.beaconData.title}. The repository may still be propagating.`, true);
+        this.isProcessing = false;
+        return;
+      }
+
+      // Find and open the DreamSong canvas
+      const clonedNodeName = commit.beaconData.title;
+      const dreamSongPath = `${clonedNodeName}/${clonedNodeName}.canvas`;
+
+      // Check if the canvas exists
+      const canvasFile = this.app.vault.getAbstractFileByPath(dreamSongPath);
+
+      if (canvasFile) {
+        // Open the canvas in fullscreen
+        const leaf = this.app.workspace.getLeaf(false);
+        await leaf.openFile(canvasFile as any);
+
+        new Notice(`Previewing ${commit.beaconData.title}'s DreamSong. Check it out and decide whether to accept or reject.`);
+      } else {
+        new Notice(`Cloned ${commit.beaconData.title} but no DreamSong canvas found.`);
+      }
+
+      this.isProcessing = false;
+      this.close();
+
+      // Note: For beacon preview, we don't show the banner because the decision
+      // is made through the cherry-pick modal when they reopen it.
+      // The cloned repo stays in place - accepting just cherry-picks the commit,
+      // rejecting will need to clean up the cloned repo.
+
+    } catch (error: any) {
+      console.error('[CherryPickModal] Beacon preview failed:', error);
       this.showMessage(`Preview failed: ${error.message}`, true);
       this.isProcessing = false;
     }
@@ -1000,6 +1074,27 @@ export class CherryPickPreviewModal extends Modal {
 
   private async acceptSingleCommit(commit: PendingCommit, peerRepoPath: string) {
     this.isProcessing = true;
+
+    // For beacon commits, clone the supermodule first if needed
+    if (commit.beaconData) {
+      this.showProcessing(`Cloning ${commit.beaconData.title}...`);
+
+      try {
+        const uriHandler = getURIHandlerService();
+        const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
+
+        if (cloneResult === 'error') {
+          this.showMessage(`Failed to clone ${commit.beaconData.title}. The repository may still be propagating.`, true);
+          this.isProcessing = false;
+          return;
+        }
+      } catch (cloneError: any) {
+        this.showMessage(`Clone failed: ${cloneError.message}`, true);
+        this.isProcessing = false;
+        return;
+      }
+    }
+
     this.showProcessing('Accepting commit...');
 
     try {
@@ -1719,6 +1814,39 @@ export class CherryPickPreviewModal extends Modal {
         width: 3px;
         background: var(--interactive-accent);
         border-radius: 2px;
+      }
+
+      /* Coherence beacon commit styling */
+      .cherry-pick-commit-beacon {
+        position: relative;
+        border: 1px solid var(--background-modifier-error);
+        border-radius: 6px;
+      }
+
+      .cherry-pick-commit-beacon::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--background-modifier-error);
+        border-radius: 2px 0 0 2px;
+      }
+
+      .cherry-pick-commit-beacon:hover {
+        background: rgba(var(--color-red-rgb), 0.1) !important;
+        border-color: var(--text-error);
+      }
+
+      .cherry-pick-commit-beacon-indicator {
+        font-size: 0.9em;
+        margin-right: 0.25em;
+      }
+
+      .cherry-pick-commit-subject-beacon {
+        color: var(--text-error);
+        font-weight: 600;
       }
 
       .cherry-pick-commit-actions {

@@ -29,6 +29,16 @@ import {
 } from './smart-merge-service';
 
 /**
+ * Coherence beacon metadata embedded in a commit
+ */
+export interface BeaconData {
+  type: 'supermodule';
+  radicleId: string;
+  title: string;
+  atCommit?: string;
+}
+
+/**
  * Extended commit info with deduplication metadata
  */
 export interface PendingCommit extends CommitInfo {
@@ -40,6 +50,8 @@ export interface PendingCommit extends CommitInfo {
   offeredByNames: string[];
   /** The remote/ref to cherry-pick from */
   cherryPickRef: string;
+  /** If this commit is a coherence beacon, contains the beacon data */
+  beaconData?: BeaconData;
 }
 
 /**
@@ -102,6 +114,32 @@ export class CherryPickWorkflowService {
    */
   private getFullPath(repoPath: string): string {
     return path.join(this.vaultPath, repoPath);
+  }
+
+  /**
+   * Parse coherence beacon data from commit body if present
+   */
+  private parseBeaconData(body: string): BeaconData | undefined {
+    const BEACON_REGEX = /COHERENCE_BEACON:\s*({.*?})/;
+    const match = BEACON_REGEX.exec(body);
+
+    if (!match) return undefined;
+
+    try {
+      const data = JSON.parse(match[1]);
+      if (data.type === 'supermodule') {
+        return {
+          type: 'supermodule',
+          radicleId: data.radicleId,
+          title: data.title,
+          atCommit: data.atCommit
+        };
+      }
+    } catch {
+      // Invalid JSON, not a beacon
+    }
+
+    return undefined;
   }
 
   /**
@@ -336,6 +374,9 @@ export class CherryPickWorkflowService {
               continue;
             }
 
+            // Check if this is a coherence beacon commit
+            const beaconData = this.parseBeaconData(body || '');
+
             // New commit
             const commit: PendingCommit = {
               hash: hash.trim(),
@@ -348,8 +389,13 @@ export class CherryPickWorkflowService {
               originalHash,
               offeredBy: [peer.uuid],
               offeredByNames: [peer.name],
-              cherryPickRef: hash.trim()
+              cherryPickRef: hash.trim(),
+              beaconData
             };
+
+            if (beaconData) {
+              console.log(`[CherryPickWorkflow]   BEACON detected: ${beaconData.title} (${beaconData.radicleId})`);
+            }
 
             commitsByOriginalHash.set(originalHash, commit);
           }

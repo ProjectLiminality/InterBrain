@@ -94,9 +94,13 @@ export class CoherenceBeaconService {
     const fullPath = path.join(this.vaultPath, dreamNodePath);
 
     try {
-      // Fetch from Radicle network
+      // Fetch from Radicle network (non-fatal if no seeds available)
       const radCmd = await this.getRadCommand();
-      await execAsync(`"${radCmd}" sync --fetch`, { cwd: fullPath });
+      try {
+        await execAsync(`"${radCmd}" sync --fetch`, { cwd: fullPath });
+      } catch (fetchError) {
+        console.warn('[CoherenceBeacon] Fetch failed (continuing with local refs):', fetchError);
+      }
 
       // Get current HEAD commit
       const { stdout: currentHead } = await execAsync('git rev-parse HEAD', { cwd: fullPath });
