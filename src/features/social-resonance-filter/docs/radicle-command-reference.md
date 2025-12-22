@@ -2,19 +2,21 @@
 
 **Version**: Radicle CLI 1.5.0
 **Last Updated**: 2025-12-22
-**Purpose**: Document the exact Radicle commands used by InterBrain and verify they align with the privacy-first direct P2P model.
+**Purpose**: Document the exact Radicle commands used by InterBrain for the privacy-first direct P2P model.
 
-## Privacy Model Summary
+## Privacy Model: Direct P2P Only
 
-InterBrain uses **direct P2P** mode where:
-- Repos are cloned from **known peers** (via `--seed` flag or routing table)
-- Changes propagate only to **connected peers**, not public seeds
-- Scope is set to `followed` for privacy, `all` for public sharing
+InterBrain uses **direct peer-to-peer** mode exclusively:
+- Repos are cloned **directly from known peers** (via `--seed <nid>` flag)
+- Changes propagate only to **direct peers who are online**
+- Scope is always `followed` (never `all`) for privacy
+- **No public seeds. No gossip. Just peer-to-peer.**
 
-| Mode | Command Pattern | Privacy | Availability |
-|------|-----------------|---------|--------------|
-| **Private/Direct** | `rad clone RID --seed <nid>` | High | Peer must be online |
-| **Public/Seeds** | `rad clone RID --scope all` | Low | Always via seeds |
+| Aspect | Our Model | What We Avoid |
+|--------|-----------|---------------|
+| **Clone** | `rad clone RID --scope followed --seed <peer-nid>` | `--scope all` (public seeds) |
+| **Seed** | `--scope followed` (trusted peers only) | `--scope all` (everyone) |
+| **Discovery** | Direct link sharing (RID + peer NID) | Network announcement |
 
 ---
 
@@ -25,15 +27,17 @@ InterBrain uses **direct P2P** mode where:
 **File**: `radicle-service.ts:init()`
 
 ```bash
-rad init <path> --private --default-branch main --no-confirm --no-seed --name <name>
+rad init <path> --private --default-branch main --no-confirm --name <name>
 ```
 
 **Flags**:
-- `--private`: Repository not announced to network (stays local until shared)
-- `--no-seed`: Don't replicate to public seeds
-- `--name`: Required for non-TTY mode
+- `--private`: Repository not announced to network (hidden from discovery)
+- No `--no-seed`: Repo IS seeded locally so direct peers can fetch
 
-**Privacy**: ✅ Correct - private by default
+**What this means**:
+- The repo is **not advertised** on the network (private)
+- But if a peer knows the RID + your NID, they **can** fetch it (auto-seeded)
+- Privacy through obscurity, not through refusing to serve
 
 ---
 
@@ -42,52 +46,63 @@ rad init <path> --private --default-branch main --no-confirm --no-seed --name <n
 **File**: `radicle-service.ts:clone()`
 
 ```bash
-rad clone <rid> --scope all
+rad clone <rid> --scope followed --seed <peer-nid>
 ```
 
-**Current Behavior**: Uses `--scope all` which subscribes to ALL peers' content.
+**Flags**:
+- `--scope followed`: Only trust delegates + explicitly followed peers
+- `--seed <nid>`: Clone directly from this specific peer (bypasses routing table)
 
-**Analysis**:
-- `--scope all` is appropriate for public DreamNodes
-- For private collaboration, should use `--scope followed` + `--seed <nid>`
+**How it works**:
+1. Your node connects directly to the peer's node
+2. Fetches the repo from their local Radicle storage
+3. No intermediary seeds involved
 
-**CLI Options** (from `rad clone --help`):
-```
---scope <scope>     Follow scope: `followed` or `all` (default: all)
--s, --seed <nid>    Clone from this seed (may be specified multiple times)
-```
-
-**Recommendation**: The current implementation is correct for InterBrain's public sharing model. Private repos would need additional UI to specify seed nodes.
+**Note**: The `peerNid` comes from the share link (`senderDid` parameter).
 
 ---
 
-### 3. Sharing/Publishing
+### 3. Sharing (Local Storage)
 
 **File**: `radicle-service.ts:share()`
 
-**Step 1: Push commits to Radicle storage**
+**Step 1: Push to local Radicle storage**
 ```bash
 git push rad main
 ```
 
-**Step 2: Convert to public (if needed)**
+This pushes commits to **your local** `~/.radicle/storage/` - NOT to the network.
+
+**Step 2: Make discoverable (publish)**
 ```bash
 rad publish
 ```
 
-**Step 3: Announce to network**
-```bash
-rad sync --inventory
-```
-
-**Privacy Analysis**:
-- `rad publish` makes repo visible on network
-- `rad sync --inventory` announces availability to peers
-- This is the **intentional transition** from private to public
+Converts private → public (announces existence to network).
+**Note**: For direct P2P only, this may not be needed if peers have your NID.
 
 ---
 
-### 4. Fetching Updates
+### 4. Seeding Policy
+
+**File**: `radicle-service.ts:setSeedingScope()`, `seedInBackground()`
+
+```bash
+rad seed <rid> --scope followed
+```
+
+**Scopes**:
+- `followed`: Serve to delegates + explicitly followed peers only (PRIVACY)
+- `all`: Serve to anyone (PUBLIC - we don't use this)
+
+**When is a repo "seeded"?**
+- `rad init` auto-seeds (unless `--no-seed`)
+- `rad clone --scope followed` auto-seeds with that scope
+- `rad seed` changes the policy later
+
+---
+
+### 5. Fetching Updates
 
 **File**: `coherence-beacon/service.ts:checkForBeacons()`
 
@@ -95,108 +110,44 @@ rad sync --inventory
 rad sync --fetch
 ```
 
-**CLI Options** (from `rad sync --help`):
-```
--f, --fetch                   Turn on fetching (default: true)
-    --seed          <nid>     Sync with the given node (may be specified multiple times)
--r, --replicas      <count>   Sync with a specific number of seeds
-```
+Fetches from peers in your routing table. For direct P2P, you need to have the peer followed.
 
-**Note**: There is NO `--peer` flag. To fetch from specific peers, use `--seed <nid>`.
+**To fetch from a specific peer**:
+```bash
+rad sync --fetch --seed <nid>
+```
 
 ---
 
-### 5. Peer Following
+### 6. Peer Following
 
 **File**: `radicle-service.ts:followPeer()`
 
 ```bash
-rad follow <did>
+rad follow <nid>
 ```
 
-**Purpose**: Subscribe to updates from a specific peer's Node ID (NID).
+Adds peer to your trusted list. Their content will be fetched when available.
 
 **Note**: Accepts both raw NID (`z6Mk...`) and DID format (`did:key:z6Mk...`).
 
 ---
 
-### 6. Adding Delegates
+### 7. Adding Delegates
 
 **File**: `radicle-service.ts:addDelegate()`
 
 ```bash
-rad id update --delegate "<did>" --threshold 1 --title "..." --description "..."
+rad id update --delegate "<did>" --threshold 1
 ```
 
-**Purpose**: Add peer as equal collaborator with threshold=1 (single signature required).
+Makes peer an equal collaborator (can push to your repo).
 
 ---
 
-### 7. Seeding Configuration
+### 8. Git Remote Format
 
-**File**: `radicle-service.ts:setSeedingScope()` and `seedInBackground()`
-
-```bash
-# Set scope (with no-fetch to avoid blocking)
-rad seed "<rid>" --scope followed --no-fetch
-
-# Full seed operation (background)
-rad seed <rid> --scope all
-```
-
-**CLI Options** (from `rad seed --help`):
-```
---[no-]fetch           Fetch repository after updating seeding policy
---from <nid>           Fetch from the given node (may be specified multiple times)
---scope <scope>        Peer follow scope for this repository
-```
-
-**Scopes**:
-- `all`: Replicate content from ALL remote nodes
-- `followed`: Only replicate from delegates + explicitly followed nodes
-
----
-
-### 8. Peer Discovery (Routing Table)
-
-**File**: `radicle-service.ts:getSeeders()`
-
-```bash
-rad node routing --rid <rid> --json
-```
-
-**Output Format** (JSON lines):
-```json
-{"rid":"rad:z...","nid":"z6Mk..."}
-```
-
-**Purpose**: Discover which peers are seeding a repository.
-
----
-
-### 9. Node Management
-
-**Files**: Various
-
-```bash
-# Check if node is running
-rad node
-# Output: "✓ Node is running with Node ID z6Mk..."
-
-# Start node
-rad node start
-
-# Get status with only NID
-rad node status --only nid
-```
-
----
-
-### 10. Git Remote Management
-
-**File**: `radicle-service.ts:addPeerRemote()`
-
-Git remotes for Radicle use the format:
+Radicle git remotes use this format:
 ```
 rad://<rid>/<nid>
 ```
@@ -206,30 +157,50 @@ Example:
 git remote add alice rad://z1234.../z6Mk...
 ```
 
-**Note**: Both RID and NID should be stripped of prefixes (`rad:` and `did:key:`).
+When Alice fetches from this remote, git talks to Radicle which connects to that peer.
 
 ---
 
-## Key Findings from Audit
+## The Complete Flow
 
-### 1. No `--peer` Flag Exists
+### David creates a DreamNode:
+```
+rad init --private           # Creates in local storage, auto-seeded
+git add . && git commit       # Normal git workflow
+git push rad main             # Pushes to LOCAL Radicle storage
+```
 
-The `rad sync` command does NOT have a `--peer` flag. To fetch from specific peers:
-- Use `--seed <nid>` on `rad sync` or `rad clone`
-- Or use `--from <nid>` on `rad seed`
+### David shares with Alice:
+```
+# David gives Alice a link containing:
+# - radicleId: rad:z1234...
+# - senderDid: did:key:z6Mk... (David's NID)
+```
 
-### 2. Scope Terminology
+### Alice clones from David:
+```
+rad clone rad:z1234... --scope followed --seed z6Mk...
+#                       ↑ only trust followed    ↑ fetch from David directly
+```
 
-| Scope | Meaning |
-|-------|---------|
-| `all` | Subscribe to content from ALL nodes (public) |
-| `followed` | Only delegates + explicitly followed nodes (private) |
+### Later, Alice checks for updates:
+```
+git fetch david              # Fetches from David's node (if online)
+# or
+rad sync --fetch             # Fetches from all followed peers
+```
 
-### 3. Push Destination
+---
 
-`git push rad main` pushes to local Radicle storage. Network propagation happens via:
-- `rad sync --announce` (announce refs to peers)
-- `rad sync --inventory` (announce repository existence)
+## Key Differences from "Public" Radicle
+
+| Aspect | InterBrain (Private) | Public Radicle |
+|--------|---------------------|----------------|
+| Init | `--private` (not announced) | Default (announced) |
+| Clone | `--scope followed --seed <nid>` | `--scope all` (any seed) |
+| Seed | `--scope followed` | `--scope all` |
+| Discovery | Direct link sharing | Network gossip |
+| Availability | Peer must be online | Always via seeds |
 
 ---
 
@@ -239,28 +210,24 @@ The `rad sync` command does NOT have a `--peer` flag. To fetch from specific pee
 |-----------|------|--------|
 | Initialize | `radicle-service.ts` | `init()` |
 | Clone | `radicle-service.ts` | `clone()` |
-| Share/Publish | `radicle-service.ts` | `share()` |
+| Clone (URI) | `uri-handler-service.ts` | `cloneFromRadicle()` |
+| Share | `radicle-service.ts` | `share()` |
 | Follow Peer | `radicle-service.ts` | `followPeer()` |
 | Add Delegate | `radicle-service.ts` | `addDelegate()` |
 | Set Scope | `radicle-service.ts` | `setSeedingScope()` |
-| Get Seeders | `radicle-service.ts` | `getSeeders()` |
 | Background Seed | `radicle-service.ts` | `seedInBackground()` |
-| Fetch (beacon) | `coherence-beacon/service.ts` | `checkForBeacons()` |
-| Clone (URI) | `uri-handler-service.ts` | `cloneFromRadicle()` |
-| Sync Peers | `peer-sync-service.ts` | `syncPeerFollowing()` |
 
 ---
 
 ## Verification Checklist
 
-- [x] `rad init --private` used for initial creation
-- [x] `rad clone --scope all` used for public cloning
+- [x] `rad init --private` used (no `--no-seed`)
+- [x] `rad clone --scope followed --seed <nid>` used
 - [x] `git push rad main` for local storage
-- [x] `rad sync --inventory` for network announcement
+- [x] `rad seed --scope followed` for seeding policy
 - [x] `rad follow` for peer subscription
 - [x] `rad id update --delegate` for collaboration
-- [x] `rad seed --scope` for replication policy
-- [x] `rad node routing --json` for peer discovery
+- [x] No `--scope all` anywhere in the codebase
 
 ---
 

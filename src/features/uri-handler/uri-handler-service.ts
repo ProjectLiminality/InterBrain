@@ -91,7 +91,8 @@ export class URIHandlerService {
 					if (type === 'github') {
 						result = await this.cloneFromGitHub(raw, true); // silent=true
 					} else if (type === 'radicle') {
-						const cloneResult = await this.cloneFromRadicle(raw, true); // silent=true
+						// Pass senderDid as peerNid for direct P2P clone
+						const cloneResult = await this.cloneFromRadicle(raw, true, senderDid);
 						result = cloneResult.status;
 					} else {
 						console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${raw}`);
@@ -469,9 +470,12 @@ export class URIHandlerService {
 	 * Public method to allow reuse by CoherenceBeaconService and other features
 	 */
 	/**
-	 * Result of a Radicle clone operation
+	 * Clone a DreamNode from Radicle network
+	 * @param radicleId The Radicle ID (RID) of the repo to clone
+	 * @param silent If true, don't show notices
+	 * @param peerNid Optional peer Node ID for direct P2P clone (bypasses routing table)
 	 */
-	public async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<{ status: 'success' | 'skipped' | 'error'; repoName?: string }> {
+	public async cloneFromRadicle(radicleId: string, silent: boolean = false, peerNid?: string): Promise<{ status: 'success' | 'skipped' | 'error'; repoName?: string }> {
 		try {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
@@ -491,7 +495,8 @@ export class URIHandlerService {
 			}
 
 			// RadicleService.clone() handles: clone, directory rename, submodule init, .udd update
-			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase);
+			// Pass peerNid for direct P2P clone (--seed flag)
+			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase, peerNid);
 
 			if (cloneResult.alreadyExisted) {
 				console.log(`[URIHandler] Radicle ID ${radicleId} already exists as "${cloneResult.repoName}"`);
