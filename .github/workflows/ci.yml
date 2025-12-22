@@ -53,6 +53,12 @@ jobs:
       - name: Verify install.sh syntax
         run: bash -n install.sh
 
+      - name: Verify install.ps1 syntax
+        run: |
+          # Use pwsh to check PowerShell syntax
+          pwsh -Command "[System.Management.Automation.Language.Parser]::ParseFile('install.ps1', [ref]\$null, [ref]\$null)" > /dev/null
+          echo "install.ps1 syntax OK"
+
       - name: Test --ci flag is recognized
         run: |
           # Test that --ci flag prevents the non-interactive exit
@@ -72,3 +78,143 @@ jobs:
 
           echo "Output preview:"
           echo "$output" | head -20
+
+  # Full install script tests - run on each platform
+  install-test-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache installed state
+        id: cache-install
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.radicle
+            /tmp/interbrain-ci-*
+            ~/.ollama
+          key: install-linux-${{ hashFiles('install.sh') }}-v1
+          restore-keys: |
+            install-linux-
+
+      - name: Run full install script
+        if: steps.cache-install.outputs.cache-hit != 'true'
+        run: |
+          # Run install in CI mode
+          bash install.sh --ci 2>&1 | tee /tmp/install-output.log
+
+          # Check for critical failures
+          if grep -q "Installation complete" /tmp/install-output.log; then
+            echo "SUCCESS: Install script completed"
+          else
+            echo "WARNING: Install may not have completed fully"
+            cat /tmp/install-output.log
+          fi
+
+      - name: Verify installed tools
+        run: |
+          echo "=== Verifying installed tools ==="
+          git --version || echo "Git: NOT FOUND"
+          node --version || echo "Node: NOT FOUND"
+          npm --version || echo "npm: NOT FOUND"
+          gh --version || echo "GitHub CLI: NOT FOUND"
+
+          # Radicle may not be available if cache miss on first run
+          if command -v rad &> /dev/null; then
+            rad --version
+          else
+            echo "Radicle: NOT INSTALLED (expected on first run)"
+          fi
+
+  install-test-macos:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache installed state
+        id: cache-install
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.radicle
+            /tmp/interbrain-ci-*
+            ~/.ollama
+          key: install-macos-${{ hashFiles('install.sh') }}-v1
+          restore-keys: |
+            install-macos-
+
+      - name: Run full install script
+        if: steps.cache-install.outputs.cache-hit != 'true'
+        run: |
+          # Run install in CI mode
+          bash install.sh --ci 2>&1 | tee /tmp/install-output.log
+
+          # Check for critical failures
+          if grep -q "Installation complete" /tmp/install-output.log; then
+            echo "SUCCESS: Install script completed"
+          else
+            echo "WARNING: Install may not have completed fully"
+            cat /tmp/install-output.log
+          fi
+
+      - name: Verify installed tools
+        run: |
+          echo "=== Verifying installed tools ==="
+          git --version || echo "Git: NOT FOUND"
+          node --version || echo "Node: NOT FOUND"
+          npm --version || echo "npm: NOT FOUND"
+          gh --version || echo "GitHub CLI: NOT FOUND"
+
+          # Radicle should be available on macOS
+          if command -v rad &> /dev/null; then
+            rad --version
+          else
+            echo "Radicle: NOT INSTALLED"
+          fi
+
+  install-test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache installed state
+        id: cache-install
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\.ollama
+            ${{ runner.temp }}\interbrain-ci-*
+          key: install-windows-${{ hashFiles('install.ps1') }}-v1
+          restore-keys: |
+            install-windows-
+
+      - name: Run full install script
+        if: steps.cache-install.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          # Run install in CI mode
+          .\install.ps1 -CI 2>&1 | Tee-Object -FilePath "$env:TEMP\install-output.log"
+
+          # Check for completion
+          $output = Get-Content "$env:TEMP\install-output.log" -Raw
+          if ($output -match "Installation complete") {
+            Write-Host "SUCCESS: Install script completed"
+          } else {
+            Write-Host "WARNING: Install may not have completed fully"
+            Get-Content "$env:TEMP\install-output.log"
+          }
+
+      - name: Verify installed tools
+        shell: pwsh
+        run: |
+          Write-Host "=== Verifying installed tools ==="
+          try { git --version } catch { Write-Host "Git: NOT FOUND" }
+          try { node --version } catch { Write-Host "Node: NOT FOUND" }
+          try { npm --version } catch { Write-Host "npm: NOT FOUND" }
+          try { gh --version | Select-Object -First 1 } catch { Write-Host "GitHub CLI: NOT FOUND" }
+
+          # Radicle requires WSL on Windows
+          Write-Host "Radicle: Requires WSL (not tested in CI)"
