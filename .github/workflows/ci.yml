@@ -210,31 +210,38 @@ jobs:
       - name: Verify installed tools
         shell: pwsh
         run: |
+          # Don't fail on non-zero exit codes from external commands
+          $ErrorActionPreference = "Continue"
+
           Write-Host "=== Verifying installed tools ==="
           try { git --version } catch { Write-Host "Git: NOT FOUND" }
           try { node --version } catch { Write-Host "Node: NOT FOUND" }
           try { npm --version } catch { Write-Host "npm: NOT FOUND" }
           try { gh --version | Select-Object -First 1 } catch { Write-Host "GitHub CLI: NOT FOUND" }
 
-          # Check WSL status
+          # Check WSL status (not available on GitHub runners)
           Write-Host ""
           Write-Host "=== WSL Status ==="
-          $wslList = wsl -l -v 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "WSL distributions:"
-            Write-Host $wslList
-
-            # Check if Radicle is installed in WSL
-            Write-Host ""
-            Write-Host "=== Radicle in WSL ==="
-            $radVersion = wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad --version 2>/dev/null' 2>&1
+          try {
+            $wslList = wsl -l -v 2>&1
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "Radicle version: $radVersion"
+              Write-Host "WSL distributions:"
+              Write-Host $wslList
+
+              # Check if Radicle is installed in WSL
+              Write-Host ""
+              Write-Host "=== Radicle in WSL ==="
+              $radVersion = wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad --version 2>/dev/null' 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Radicle version: $radVersion"
+              } else {
+                Write-Host "Radicle: Not installed in WSL (expected in CI mode)"
+              }
             } else {
-              Write-Host "Radicle: Not installed in WSL (expected in CI mode)"
+              Write-Host "WSL: Not available on this runner (expected)"
             }
-          } else {
-            Write-Host "WSL: Not available on this runner"
+          } catch {
+            Write-Host "WSL: Not available on this runner (expected)"
           }
 
           # Check for rad wrapper
@@ -246,3 +253,6 @@ jobs:
           } else {
             Write-Host "Rad wrapper: Not created (expected if WSL/Radicle not installed)"
           }
+
+          # Ensure success exit code
+          exit 0
