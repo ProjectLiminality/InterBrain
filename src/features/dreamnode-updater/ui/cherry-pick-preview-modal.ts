@@ -28,7 +28,7 @@ import {
   UpdateSummary
 } from '../services/update-summary-service';
 import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
-import { showPreviewBanner, hidePreviewBanner } from './preview-banner';
+import { showPreviewBanner } from './preview-banner';
 import { showConflictResolutionModal } from './conflict-resolution-modal';
 import { getURIHandlerService } from '../../uri-handler';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
@@ -63,6 +63,7 @@ interface BeaconPreviewState {
   commit: PendingCommit;
   clonedRepos: string[]; // Repo names that were newly cloned (not pre-existing)
   peerRepoPath: string;
+  originalNodeId: string; // Original node to return to after preview
 }
 
 export class CherryPickPreviewModal extends Modal {
@@ -698,7 +699,8 @@ export class CherryPickPreviewModal extends Modal {
   }
 
   /**
-   * Preview a coherence beacon commit by cloning the supermodule and opening its DreamSong
+   * Preview a coherence beacon commit by opening the supermodule's DreamSong
+   * (clones first if needed)
    */
   private async previewBeaconCommit(commit: PendingCommit) {
     if (!commit.beaconData) return;
@@ -709,18 +711,22 @@ export class CherryPickPreviewModal extends Modal {
     );
     const peerRepoPath = peerGroup?.peerRepoPath || '';
 
+    // Store the original node to return to after preview
+    const store = useInterBrainStore.getState();
+    const originalNodeId = store.selectedNode?.id || this.config.dreamNodeUuid;
+
     this.isProcessing = true;
-    this.showProcessing(`Cloning ${commit.beaconData.title} for preview...`);
+    this.showProcessing(`Loading ${commit.beaconData.title} for preview...`);
 
     const clonedRepos: string[] = []; // Track newly cloned repos for cleanup
 
     try {
-      // Clone the supermodule repository
+      // Clone the supermodule repository (will skip if already exists)
       const uriHandler = getURIHandlerService();
       const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
 
       if (cloneResult === 'error') {
-        this.showMessage(`Failed to clone ${commit.beaconData.title}. The repository may still be propagating.`, true);
+        this.showMessage(`Failed to access ${commit.beaconData.title}. The repository may still be propagating.`, true);
         this.isProcessing = false;
         return;
       }
@@ -730,61 +736,183 @@ export class CherryPickPreviewModal extends Modal {
         clonedRepos.push(commit.beaconData.title);
       }
 
-      // Save beacon preview state for cleanup
+      // Save beacon preview state for cleanup and return
       this.beaconPreviewState = {
         commit,
         clonedRepos,
-        peerRepoPath
+        peerRepoPath,
+        originalNodeId
       };
 
-      // Wait for vault to update
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // If it was skipped (already exists), we still need to proceed with preview
+      // Wait briefly for any vault updates
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Trigger vault rescan to pick up the cloned node
+      // Trigger vault rescan to ensure node is loaded
       const { serviceManager } = await import('../../../core/services/service-manager');
       await serviceManager.scanVault();
 
-      // Find and select the cloned node
-      const store = useInterBrainStore.getState();
-      const clonedNodeName = commit.beaconData.title;
-      const clonedNode = Array.from(store.dreamNodes.values())
+      // Find and select the target node
+      const updatedStore = useInterBrainStore.getState();
+      const targetNodeName = commit.beaconData.title;
+      const targetNode = Array.from(updatedStore.dreamNodes.values())
         .map(data => data.node)
-        .find(n => n.name === clonedNodeName);
+        .find(n => n.name === targetNodeName);
 
-      if (clonedNode) {
-        // Select the node
-        store.setSelectedNode(clonedNode);
-
-        // Wait a moment for selection to take effect
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Open DreamSong fullscreen using the existing command
-        (this.app as any).commands.executeCommandById('interbrain:open-dreamsong-fullscreen');
-      } else {
-        new Notice(`Cloned ${clonedNodeName} but couldn't find it in vault`);
+      if (!targetNode) {
+        this.showMessage(`Could not find ${targetNodeName} in vault`, true);
+        this.isProcessing = false;
+        this.beaconPreviewState = null;
+        return;
       }
 
-      this.isProcessing = false;
-      this.close();
+      // Select the target node
+      updatedStore.setSelectedNode(targetNode);
 
-      // Show preview banner for accept/reject/later
-      showPreviewBanner({
-        onAccept: async () => {
-          await this.acceptBeaconFromPreview();
-        },
-        onReject: async () => {
-          await this.rejectBeaconFromPreview();
-        },
-        onCancel: async () => {
-          await this.cancelBeaconPreview();
-        }
-      });
+      // Wait for selection to take effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Open DreamSong fullscreen
+      (this.app as any).commands.executeCommandById('interbrain:open-dreamsong-fullscreen');
+
+      this.isProcessing = false;
+
+      // Hide the modal (don't close - we'll reopen it)
+      this.modalEl.style.display = 'none';
+
+      // Show beacon preview banner
+      this.showBeaconPreviewBanner(commit);
 
     } catch (error: any) {
       console.error('[CherryPickModal] Beacon preview failed:', error);
       this.showMessage(`Preview failed: ${error.message}`, true);
       this.isProcessing = false;
+      this.beaconPreviewState = null;
     }
+  }
+
+  /**
+   * Show a custom beacon preview banner (doesn't depend on workflow service state)
+   */
+  private showBeaconPreviewBanner(commit: PendingCommit) {
+    // Remove any existing beacon banner
+    const existingBanner = document.querySelector('.beacon-preview-banner');
+    if (existingBanner) existingBanner.remove();
+
+    const banner = document.createElement('div');
+    banner.className = 'beacon-preview-banner preview-banner';
+
+    // Add styles if not already present
+    this.addBeaconBannerStyles();
+
+    // Content
+    const label = banner.createSpan({ cls: 'preview-banner-label' });
+    label.innerHTML = `🔗 <strong>Beacon Preview</strong> · ${commit.beaconData?.title || 'Supermodule'}`;
+
+    // Spacer
+    banner.createDiv({ cls: 'preview-banner-spacer' });
+
+    // Buttons
+    const acceptBtn = banner.createEl('button', {
+      text: '✓ Accept',
+      cls: 'preview-banner-btn preview-banner-btn-accept'
+    });
+    acceptBtn.addEventListener('click', () => this.handleBeaconAccept());
+
+    const rejectBtn = banner.createEl('button', {
+      text: '✗ Reject',
+      cls: 'preview-banner-btn preview-banner-btn-reject'
+    });
+    rejectBtn.addEventListener('click', () => this.handleBeaconReject());
+
+    const laterBtn = banner.createEl('button', {
+      text: 'Later',
+      cls: 'preview-banner-btn preview-banner-btn-cancel'
+    });
+    laterBtn.addEventListener('click', () => this.handleBeaconLater());
+
+    document.body.appendChild(banner);
+
+    // Animate in
+    requestAnimationFrame(() => {
+      banner.classList.add('preview-banner-visible');
+    });
+  }
+
+  private addBeaconBannerStyles() {
+    const styleId = 'beacon-preview-banner-styles';
+    if (document.getElementById(styleId)) return;
+
+    // The base preview-banner styles should already exist
+    // Just add the beacon-specific class styles
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .beacon-preview-banner {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        gap: 0.75em;
+        background: var(--background-primary);
+        border-top: 2px solid #e07a5f; /* Warm beacon color */
+        padding: 0.5em 1em;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
+        opacity: 0;
+        transform: translateY(100%);
+        transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  private hideBeaconPreviewBanner() {
+    const banner = document.querySelector('.beacon-preview-banner');
+    if (banner) {
+      banner.classList.remove('preview-banner-visible');
+      setTimeout(() => banner.remove(), 200);
+    }
+  }
+
+  private async handleBeaconAccept() {
+    await this.acceptBeaconFromPreview();
+    await this.returnToOriginalNodeAndReopenModal();
+  }
+
+  private async handleBeaconReject() {
+    await this.rejectBeaconFromPreview();
+    await this.returnToOriginalNodeAndReopenModal();
+  }
+
+  private async handleBeaconLater() {
+    await this.cancelBeaconPreview();
+    await this.returnToOriginalNodeAndReopenModal();
+  }
+
+  /**
+   * Return to the original node and re-open the modal
+   */
+  private async returnToOriginalNodeAndReopenModal() {
+    const originalNodeId = this.beaconPreviewState?.originalNodeId;
+    this.beaconPreviewState = null;
+
+    if (originalNodeId) {
+      const store = useInterBrainStore.getState();
+      const nodeData = store.dreamNodes.get(originalNodeId);
+      if (nodeData) {
+        store.setSelectedNode(nodeData.node);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
+    // Re-show the modal
+    this.modalEl.style.display = '';
+
+    // Refresh the content to reflect any changes
+    await this.onOpen();
   }
 
   /**
@@ -795,7 +923,7 @@ export class CherryPickPreviewModal extends Modal {
 
     const { commit, peerRepoPath } = this.beaconPreviewState;
 
-    hidePreviewBanner();
+    this.hideBeaconPreviewBanner();
 
     try {
       const workflowService = getCherryPickWorkflowService();
@@ -826,8 +954,7 @@ export class CherryPickPreviewModal extends Modal {
     } catch (error: any) {
       new Notice(`Accept failed: ${error.message}`);
     }
-
-    this.beaconPreviewState = null;
+    // Note: beaconPreviewState is cleared in returnToOriginalNodeAndReopenModal
   }
 
   /**
@@ -838,7 +965,7 @@ export class CherryPickPreviewModal extends Modal {
 
     const { commit, clonedRepos, peerRepoPath } = this.beaconPreviewState;
 
-    hidePreviewBanner();
+    this.hideBeaconPreviewBanner();
 
     try {
       // Record rejection
@@ -879,8 +1006,7 @@ export class CherryPickPreviewModal extends Modal {
     } catch (error: any) {
       new Notice(`Reject failed: ${error.message}`);
     }
-
-    this.beaconPreviewState = null;
+    // Note: beaconPreviewState is cleared in returnToOriginalNodeAndReopenModal
   }
 
   /**
@@ -891,7 +1017,7 @@ export class CherryPickPreviewModal extends Modal {
 
     const { clonedRepos } = this.beaconPreviewState;
 
-    hidePreviewBanner();
+    this.hideBeaconPreviewBanner();
 
     // Clean up newly cloned repos (not pre-existing ones)
     if (clonedRepos.length > 0) {
@@ -915,8 +1041,7 @@ export class CherryPickPreviewModal extends Modal {
       await serviceManager.scanVault();
     }
 
-    new Notice('Beacon preview cancelled - you can review it later');
-    this.beaconPreviewState = null;
+    // Note: beaconPreviewState is cleared in returnToOriginalNodeAndReopenModal
   }
 
   private async previewPeerCommits(group: PeerCommitGroup) {
