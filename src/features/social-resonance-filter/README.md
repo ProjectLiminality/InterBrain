@@ -25,19 +25,26 @@ social-resonance-filter/
 │   ├── submodule-sync.ts        # Submodule update detection and sync
 │   └── vault-scanner.ts         # DreamNode discovery and UDD loading
 ├── docs/
-│   └── radicle-architecture.md  # Pure P2P philosophy and vision
+│   ├── radicle-architecture.md      # Pure P2P philosophy and vision
+│   └── radicle-command-reference.md # CLI commands with exact syntax (v1.5.0)
 ├── commands.ts                  # User-facing commands (thin handlers)
 ├── index.ts                     # Barrel export
 └── README.md
 ```
 
-## Philosophy Documentation
+## Documentation
 
 **[📖 Radicle Architecture](./docs/radicle-architecture.md)** - Deep dive into the P2P philosophy:
 - "Radicle IS the Liminal Web" - identity collapse to single source of truth
 - Transitive trust examples (Alice/Bob/Charlie scenarios)
 - Intentional divergence - curation as a feature
 - Merge conflict strategies
+
+**[🔧 Radicle Command Reference](./docs/radicle-command-reference.md)** - Exact CLI commands (v1.5.0):
+- All `rad` commands used by InterBrain with flags
+- Privacy model (scopes: `all` vs `followed`)
+- Code locations for each operation
+- Verification checklist for P2P compliance
 
 ## Architecture: Commands → Services
 
