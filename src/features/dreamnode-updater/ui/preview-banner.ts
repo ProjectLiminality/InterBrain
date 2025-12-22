@@ -30,20 +30,16 @@ export class PreviewBanner {
   private bannerEl: HTMLElement | null = null;
   private callbacks: PreviewBannerCallbacks | null = null;
   private isProcessing = false;
+  private customState: PreviewState | null = null; // For beacon previews
 
   constructor(app: App) {
     this.app = app;
   }
 
   /**
-   * Show the preview banner
+   * Show the preview banner (uses workflow service state)
    */
   show(callbacks: PreviewBannerCallbacks) {
-    // Remove existing banner if present
-    this.hide();
-
-    this.callbacks = callbacks;
-
     const workflowService = getCherryPickWorkflowService();
     const previewState = workflowService.getPreviewState();
 
@@ -52,7 +48,20 @@ export class PreviewBanner {
       return;
     }
 
-    this.bannerEl = this.createBanner(previewState);
+    this.showWithState(callbacks, previewState);
+  }
+
+  /**
+   * Show the preview banner with custom state (for beacon previews, etc.)
+   */
+  showWithState(callbacks: PreviewBannerCallbacks, state: PreviewState) {
+    // Remove existing banner if present
+    this.hide();
+
+    this.callbacks = callbacks;
+    this.customState = state;
+
+    this.bannerEl = this.createBanner(state);
     document.body.appendChild(this.bannerEl);
 
     // Add entry animation
@@ -75,6 +84,7 @@ export class PreviewBanner {
     }
     this.callbacks = null;
     this.isProcessing = false;
+    this.customState = null;
   }
 
   /**
@@ -90,8 +100,12 @@ export class PreviewBanner {
   update() {
     if (!this.bannerEl || !this.callbacks) return;
 
-    const workflowService = getCherryPickWorkflowService();
-    const previewState = workflowService.getPreviewState();
+    // Use custom state if available (beacon preview), otherwise get from workflow service
+    let previewState = this.customState;
+    if (!previewState) {
+      const workflowService = getCherryPickWorkflowService();
+      previewState = workflowService.getPreviewState();
+    }
 
     if (!previewState || !previewState.isActive) {
       this.hide();
@@ -362,4 +376,12 @@ export function hidePreviewBanner(): void {
   if (previewBannerInstance) {
     previewBannerInstance.hide();
   }
+}
+
+export function showPreviewBannerWithState(callbacks: PreviewBannerCallbacks, state: PreviewState): void {
+  if (!previewBannerInstance) {
+    console.warn('[PreviewBanner] Not initialized, cannot show banner');
+    return;
+  }
+  previewBannerInstance.showWithState(callbacks, state);
 }

@@ -28,7 +28,7 @@ import {
   UpdateSummary
 } from '../services/update-summary-service';
 import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
-import { showPreviewBanner } from './preview-banner';
+import { showPreviewBanner, showPreviewBannerWithState, hidePreviewBanner } from './preview-banner';
 import { showConflictResolutionModal } from './conflict-resolution-modal';
 import { getURIHandlerService } from '../../uri-handler';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
@@ -772,159 +772,44 @@ export class CherryPickPreviewModal extends Modal {
 
       // Select the target node
       updatedStore.setSelectedNode(targetNode);
+      console.log(`[BeaconPreview] Selected node: ${targetNode.name}`);
 
       // Wait for selection to take effect
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Open DreamSong fullscreen
+      console.log('[BeaconPreview] Opening DreamSong fullscreen...');
       (this.app as any).commands.executeCommandById('interbrain:open-dreamsong-fullscreen');
 
       this.isProcessing = false;
 
       // Hide the modal (don't close - we'll reopen it)
       this.modalEl.style.display = 'none';
+      console.log('[BeaconPreview] Modal hidden, showing banner...');
 
-      // Show beacon preview banner
-      this.showBeaconPreviewBanner(commit);
+      // Show preview banner using the existing UI component
+      showPreviewBannerWithState(
+        {
+          onAccept: () => this.handleBeaconAccept(),
+          onReject: () => this.handleBeaconReject(),
+          onCancel: () => this.handleBeaconLater()
+        },
+        {
+          isActive: true,
+          dreamNodePath: this.config.dreamNodePath,
+          dreamNodeUuid: this.config.dreamNodeUuid,
+          previewedCommits: [commit],
+          commitCount: 1,
+          didStash: false
+        }
+      );
+      console.log('[BeaconPreview] Banner should now be visible');
 
     } catch (error: any) {
       console.error('[CherryPickModal] Beacon preview failed:', error);
       this.showMessage(`Preview failed: ${error.message}`, true);
       this.isProcessing = false;
       this.beaconPreviewState = null;
-    }
-  }
-
-  /**
-   * Show a custom beacon preview banner (doesn't depend on workflow service state)
-   */
-  private showBeaconPreviewBanner(commit: PendingCommit) {
-    // Remove any existing beacon banner
-    const existingBanner = document.querySelector('.beacon-preview-banner');
-    if (existingBanner) existingBanner.remove();
-
-    const banner = document.createElement('div');
-    banner.className = 'beacon-preview-banner preview-banner';
-
-    // Add styles if not already present
-    this.addBeaconBannerStyles();
-
-    // Content
-    const label = banner.createSpan({ cls: 'preview-banner-label' });
-    label.innerHTML = `🔗 <strong>Beacon Preview</strong> · ${commit.beaconData?.title || 'Supermodule'}`;
-
-    // Spacer
-    banner.createDiv({ cls: 'preview-banner-spacer' });
-
-    // Buttons
-    const acceptBtn = banner.createEl('button', {
-      text: '✓ Accept',
-      cls: 'preview-banner-btn preview-banner-btn-accept'
-    });
-    acceptBtn.addEventListener('click', () => this.handleBeaconAccept());
-
-    const rejectBtn = banner.createEl('button', {
-      text: '✗ Reject',
-      cls: 'preview-banner-btn preview-banner-btn-reject'
-    });
-    rejectBtn.addEventListener('click', () => this.handleBeaconReject());
-
-    const laterBtn = banner.createEl('button', {
-      text: 'Later',
-      cls: 'preview-banner-btn preview-banner-btn-cancel'
-    });
-    laterBtn.addEventListener('click', () => this.handleBeaconLater());
-
-    document.body.appendChild(banner);
-
-    // Animate in
-    requestAnimationFrame(() => {
-      banner.classList.add('preview-banner-visible');
-    });
-  }
-
-  private addBeaconBannerStyles() {
-    const styleId = 'beacon-preview-banner-styles';
-    if (document.getElementById(styleId)) return;
-
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      .beacon-preview-banner {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 10000;
-        display: flex;
-        align-items: center;
-        gap: 0.75em;
-        background: var(--background-primary);
-        border-top: 2px solid #e07a5f;
-        padding: 0.5em 1em;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
-        opacity: 0;
-        transform: translateY(100%);
-        transition: transform 0.2s ease-out, opacity 0.2s ease-out;
-      }
-
-      .beacon-preview-banner.preview-banner-visible {
-        transform: translateY(0);
-        opacity: 1;
-      }
-
-      .beacon-preview-banner .preview-banner-label {
-        color: var(--text-normal);
-        font-size: 0.9em;
-        white-space: nowrap;
-      }
-
-      .beacon-preview-banner .preview-banner-label strong {
-        color: #e07a5f;
-      }
-
-      .beacon-preview-banner .preview-banner-spacer {
-        flex: 1;
-      }
-
-      .beacon-preview-banner .preview-banner-btn {
-        border: none;
-        border-radius: 4px;
-        padding: 0.4em 0.8em;
-        cursor: pointer;
-        font-size: 0.85em;
-        font-weight: 500;
-        transition: background 0.15s, transform 0.1s;
-        white-space: nowrap;
-      }
-
-      .beacon-preview-banner .preview-banner-btn:hover {
-        transform: translateY(-1px);
-      }
-
-      .beacon-preview-banner .preview-banner-btn-accept {
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-      }
-
-      .beacon-preview-banner .preview-banner-btn-reject {
-        background: var(--background-modifier-error);
-        color: var(--text-on-accent);
-      }
-
-      .beacon-preview-banner .preview-banner-btn-cancel {
-        background: var(--background-modifier-border);
-        color: var(--text-normal);
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  private hideBeaconPreviewBanner() {
-    const banner = document.querySelector('.beacon-preview-banner');
-    if (banner) {
-      banner.classList.remove('preview-banner-visible');
-      setTimeout(() => banner.remove(), 200);
     }
   }
 
@@ -974,7 +859,7 @@ export class CherryPickPreviewModal extends Modal {
 
     const { commit, peerRepoPath } = this.beaconPreviewState;
 
-    this.hideBeaconPreviewBanner();
+    hidePreviewBanner();
 
     try {
       const workflowService = getCherryPickWorkflowService();
@@ -1016,7 +901,7 @@ export class CherryPickPreviewModal extends Modal {
 
     const { commit, clonedRepos, peerRepoPath } = this.beaconPreviewState;
 
-    this.hideBeaconPreviewBanner();
+    hidePreviewBanner();
 
     try {
       // Record rejection
@@ -1068,7 +953,7 @@ export class CherryPickPreviewModal extends Modal {
 
     const { clonedRepos } = this.beaconPreviewState;
 
-    this.hideBeaconPreviewBanner();
+    hidePreviewBanner();
 
     // Clean up newly cloned repos (not pre-existing ones)
     if (clonedRepos.length > 0) {
