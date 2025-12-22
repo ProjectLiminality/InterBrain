@@ -690,27 +690,16 @@ export class SubmoduleManagerService {
 
           console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
 
-          let sovereignModified = false;
+          // NOTE: We no longer modify the sovereign's .udd file here at all.
+          // Both the .udd supermodules update AND the beacon commit are now created
+          // when the user explicitly "Shares Changes" via igniteBeacons().
+          // This prevents:
+          // 1. Modifying sovereign repos during editing (weave freely!)
+          // 2. Noisy beacon commits during editing
+          // 3. Force-pushing unpublished work in sovereign repos
+          // See: src/features/coherence-beacon/service.ts - igniteBeacons()
 
-          // Add parent's Radicle ID to sovereign's supermodules array (source of truth)
-          // All DreamNodes are guaranteed to have Radicle IDs, so this should always succeed
-          if (await UDDService.addSupermodule(sovereignPath, parentRadicleId)) {
-            console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentRadicleId}) to sovereign ${childTitle}'s supermodules`);
-            sovereignModified = true;
-          }
-
-          // NOTE: We no longer create COHERENCE_BEACON commits here.
-          // The .udd supermodules array is updated above (via UDDService.addSupermodule),
-          // but the beacon commit will be created when the user explicitly "Shares Changes"
-          // via the ignite-coherence-beacon command. This prevents:
-          // 1. Noisy beacon commits during editing (add/remove submodules freely)
-          // 2. Force-pushing unpublished work in sovereign repos
-          // See: src/features/coherence-beacon/service.ts - igniteBeacon()
-          if (sovereignModified) {
-            console.log(`SubmoduleManagerService: Updated ${childTitle}'s .udd supermodules array (beacon commit will be created on Share)`);
-          }
-
-          // STEP 2: NOW update submodule to point to latest sovereign commit with all metadata
+          // STEP 2: Update submodule to point to latest sovereign commit with all metadata
           console.log(`SubmoduleManagerService: Updating submodule to latest sovereign state...`);
 
           try {

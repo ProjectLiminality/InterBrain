@@ -28,6 +28,7 @@ import {
   fileExists
 } from '../dreamnode/utils/vault-scanner';
 import { UDDService } from '../dreamnode/services/udd-service';
+import { pushToRadicle } from '../dreamnode/utils/git-utils';
 
 export interface CoherenceBeacon {
   type: 'supermodule';
@@ -35,6 +36,8 @@ export interface CoherenceBeacon {
   title: string;
   commitHash: string;
   commitMessage: string;
+  /** The parent commit that included this as a submodule (when beacon was ignited) */
+  atCommit?: string;
 }
 
 /**
@@ -149,7 +152,8 @@ export class CoherenceBeaconService {
               radicleId: beaconData.radicleId,
               title: beaconData.title,
               commitHash: commit.hash,
-              commitMessage: commit.subject
+              commitMessage: commit.subject,
+              atCommit: beaconData.atCommit // Preserve parent commit reference
             });
           }
         } catch {
@@ -375,9 +379,18 @@ export class CoherenceBeaconService {
         console.log('[CoherenceBeacon] Stashed uncommitted changes');
       }
 
-      // 2. Fetch latest and find last pushed commit
+      // 2. Determine which remote to use (rad for Radicle, origin for GitHub)
+      let remoteName = 'origin';
       try {
-        await execAsync('git fetch origin', { cwd: sovereignPath });
+        await execAsync('git remote get-url rad', { cwd: sovereignPath });
+        remoteName = 'rad';
+      } catch {
+        // No rad remote, try origin
+      }
+
+      // Fetch latest
+      try {
+        await execAsync(`git fetch ${remoteName}`, { cwd: sovereignPath });
       } catch {
         // No remote configured - that's OK, we'll just commit locally
         console.log('[CoherenceBeacon] No remote configured - creating local beacon only');
@@ -387,11 +400,11 @@ export class CoherenceBeaconService {
       let hasRemote = false;
       let lastPushed = '';
       try {
-        const { stdout: remoteRef } = await execAsync('git rev-parse origin/main', { cwd: sovereignPath });
+        const { stdout: remoteRef } = await execAsync(`git rev-parse ${remoteName}/main`, { cwd: sovereignPath });
         lastPushed = remoteRef.trim();
         hasRemote = true;
       } catch {
-        // No remote or no origin/main - use current HEAD
+        // No remote or no remote/main - use current HEAD
         const { stdout: headRef } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
         lastPushed = headRef.trim();
       }
@@ -428,14 +441,17 @@ export class CoherenceBeaconService {
       await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
       console.log('[CoherenceBeacon] Created beacon commit');
 
-      // 6. Push if we have a remote
+      // Get the beacon commit hash (we're in detached HEAD, so HEAD is the beacon)
+      const { stdout: beaconCommitOutput } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+      const beaconCommit = beaconCommitOutput.trim();
+
+      // 6. Push if we have a remote (using shared Radicle-aware push utility)
       if (hasRemote) {
-        try {
-          await execAsync('git push origin HEAD:main', { cwd: sovereignPath });
-          console.log('[CoherenceBeacon] Pushed beacon commit');
-        } catch (pushError) {
-          console.warn('[CoherenceBeacon] Push failed - beacon commit created locally:', pushError);
-          // Non-fatal: the commit exists, user can push later
+        const pushSuccess = await pushToRadicle(sovereignPath, 'HEAD:main', remoteName);
+        if (pushSuccess) {
+          console.log(`[CoherenceBeacon] Pushed beacon commit to ${remoteName}`);
+        } else {
+          console.warn('[CoherenceBeacon] Push failed - beacon commit created locally (can be pushed later)');
         }
       }
 
@@ -443,7 +459,8 @@ export class CoherenceBeaconService {
       if (needsDetach) {
         await execAsync(`git checkout ${originalBranch}`, { cwd: sovereignPath });
         try {
-          await execAsync('git rebase origin/main', { cwd: sovereignPath });
+          // Rebase onto the beacon commit (not remote/main, which may not have updated if push failed)
+          await execAsync(`git rebase ${beaconCommit}`, { cwd: sovereignPath });
           console.log('[CoherenceBeacon] Rebased local work on top of beacon');
         } catch {
           // Rebase conflict - abort and warn user
@@ -504,7 +521,8 @@ export class CoherenceBeaconService {
               radicleId: beaconData.radicleId,
               title: beaconData.title,
               commitHash: hash,
-              commitMessage: fullMessage
+              commitMessage: fullMessage,
+              atCommit: beaconData.atCommit // Preserve parent commit reference
             });
           }
         } catch {
