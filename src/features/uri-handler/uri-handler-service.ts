@@ -445,6 +445,12 @@ export class URIHandlerService {
 			return ''; // Node already running
 		}
 
+		// Ensure Radicle CLI is available before starting node
+		const isAvailable = await this.radicleService.isAvailable();
+		if (!isAvailable) {
+			throw new Error('Radicle CLI not available');
+		}
+
 		// Start node
 		try {
 			await (this.radicleService as any).startNode(passphrase);

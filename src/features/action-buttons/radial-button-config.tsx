@@ -306,14 +306,14 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'check-updates',
     iconName: 'lucide-refresh-cw',
-    commandId: 'interbrain:preview-updates', // Default for Dream nodes
+    commandId: 'interbrain:cherry-pick-preview', // Cherry-pick collaboration modal
     label: 'Check for Updates',
     // Dynamic command based on node type
     getDynamicCommand: (node) => {
       if (node?.type === 'dreamer') {
         return 'interbrain:check-all-updates-from-dreamer';
       }
-      return 'interbrain:preview-updates';
+      return 'interbrain:cherry-pick-preview';
     },
     // Dynamic label based on node type
     getDynamicLabel: (node) => {

@@ -28,9 +28,10 @@ import {
   UpdateSummary
 } from '../services/update-summary-service';
 import { FetchResult } from '../../social-resonance-filter/services/git-sync-service';
-import { showPreviewBanner } from './preview-banner';
+import { showPreviewBanner, hidePreviewBanner } from './preview-banner';
 import { showConflictResolutionModal } from './conflict-resolution-modal';
 import { getURIHandlerService } from '../../uri-handler';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 
 export interface CherryPickPreviewConfig {
   /** Path to the DreamNode being updated */
@@ -57,6 +58,13 @@ interface CommitSelectionState {
   peerRepoPath: string;
 }
 
+/** State for beacon preview cleanup */
+interface BeaconPreviewState {
+  commit: PendingCommit;
+  clonedRepos: string[]; // Repo names that were newly cloned (not pre-existing)
+  peerRepoPath: string;
+}
+
 export class CherryPickPreviewModal extends Modal {
   private config: CherryPickPreviewConfig;
   private selectionState: Map<string, CommitSelectionState> = new Map();
@@ -64,6 +72,7 @@ export class CherryPickPreviewModal extends Modal {
   private rejectionHistory: Map<string, RejectedCommit[]> = new Map();
   private adaptedCommits: Set<string> = new Set(); // Track commits with stored adaptations
   private isHistoryExpanded = false; // Start collapsed by default
+  private beaconPreviewState: BeaconPreviewState | null = null; // Track beacon preview for cleanup
 
   constructor(app: App, config: CherryPickPreviewConfig) {
     super(app);
@@ -694,8 +703,16 @@ export class CherryPickPreviewModal extends Modal {
   private async previewBeaconCommit(commit: PendingCommit) {
     if (!commit.beaconData) return;
 
+    // Find the peer repo path for this commit
+    const peerGroup = this.config.peerGroups.find(g =>
+      g.commits.some(c => c.originalHash === commit.originalHash)
+    );
+    const peerRepoPath = peerGroup?.peerRepoPath || '';
+
     this.isProcessing = true;
     this.showProcessing(`Cloning ${commit.beaconData.title} for preview...`);
+
+    const clonedRepos: string[] = []; // Track newly cloned repos for cleanup
 
     try {
       // Clone the supermodule repository
@@ -708,36 +725,198 @@ export class CherryPickPreviewModal extends Modal {
         return;
       }
 
-      // Find and open the DreamSong canvas
+      // Track if this was a new clone (not skipped = already existed)
+      if (cloneResult === 'success') {
+        clonedRepos.push(commit.beaconData.title);
+      }
+
+      // Save beacon preview state for cleanup
+      this.beaconPreviewState = {
+        commit,
+        clonedRepos,
+        peerRepoPath
+      };
+
+      // Wait for vault to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Trigger vault rescan to pick up the cloned node
+      const { serviceManager } = await import('../../../core/services/service-manager');
+      await serviceManager.scanVault();
+
+      // Find and select the cloned node
+      const store = useInterBrainStore.getState();
       const clonedNodeName = commit.beaconData.title;
-      const dreamSongPath = `${clonedNodeName}/${clonedNodeName}.canvas`;
+      const clonedNode = Array.from(store.dreamNodes.values())
+        .map(data => data.node)
+        .find(n => n.name === clonedNodeName);
 
-      // Check if the canvas exists
-      const canvasFile = this.app.vault.getAbstractFileByPath(dreamSongPath);
+      if (clonedNode) {
+        // Select the node
+        store.setSelectedNode(clonedNode);
 
-      if (canvasFile) {
-        // Open the canvas in fullscreen
-        const leaf = this.app.workspace.getLeaf(false);
-        await leaf.openFile(canvasFile as any);
+        // Wait a moment for selection to take effect
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-        new Notice(`Previewing ${commit.beaconData.title}'s DreamSong. Check it out and decide whether to accept or reject.`);
+        // Open DreamSong fullscreen using the existing command
+        (this.app as any).commands.executeCommandById('interbrain:open-dreamsong-fullscreen');
       } else {
-        new Notice(`Cloned ${commit.beaconData.title} but no DreamSong canvas found.`);
+        new Notice(`Cloned ${clonedNodeName} but couldn't find it in vault`);
       }
 
       this.isProcessing = false;
       this.close();
 
-      // Note: For beacon preview, we don't show the banner because the decision
-      // is made through the cherry-pick modal when they reopen it.
-      // The cloned repo stays in place - accepting just cherry-picks the commit,
-      // rejecting will need to clean up the cloned repo.
+      // Show preview banner for accept/reject/later
+      showPreviewBanner({
+        onAccept: async () => {
+          await this.acceptBeaconFromPreview();
+        },
+        onReject: async () => {
+          await this.rejectBeaconFromPreview();
+        },
+        onCancel: async () => {
+          await this.cancelBeaconPreview();
+        }
+      });
 
     } catch (error: any) {
       console.error('[CherryPickModal] Beacon preview failed:', error);
       this.showMessage(`Preview failed: ${error.message}`, true);
       this.isProcessing = false;
     }
+  }
+
+  /**
+   * Accept beacon from preview banner - cherry-pick the commit
+   */
+  private async acceptBeaconFromPreview() {
+    if (!this.beaconPreviewState) return;
+
+    const { commit, peerRepoPath } = this.beaconPreviewState;
+
+    hidePreviewBanner();
+
+    try {
+      const workflowService = getCherryPickWorkflowService();
+      const result = await workflowService.acceptCommits(
+        this.config.dreamNodePath,
+        this.config.dreamNodeUuid,
+        peerRepoPath,
+        [commit]
+      );
+
+      if (result.success) {
+        new Notice(`Accepted coherence beacon from ${commit.beaconData?.title}`);
+
+        // Remove from selection state
+        this.selectionState.delete(commit.originalHash);
+
+        // Remove from peer group
+        for (const group of this.config.peerGroups) {
+          const idx = group.commits.findIndex(c => c.originalHash === commit.originalHash);
+          if (idx >= 0) {
+            group.commits.splice(idx, 1);
+            break;
+          }
+        }
+      } else {
+        new Notice(`Accept failed: ${result.message}`);
+      }
+    } catch (error: any) {
+      new Notice(`Accept failed: ${error.message}`);
+    }
+
+    this.beaconPreviewState = null;
+  }
+
+  /**
+   * Reject beacon from preview banner - record rejection and clean up cloned repos
+   */
+  private async rejectBeaconFromPreview() {
+    if (!this.beaconPreviewState) return;
+
+    const { commit, clonedRepos, peerRepoPath } = this.beaconPreviewState;
+
+    hidePreviewBanner();
+
+    try {
+      // Record rejection
+      const workflowService = getCherryPickWorkflowService();
+      await workflowService.rejectCommits(
+        this.config.dreamNodeUuid,
+        peerRepoPath,
+        [commit]
+      );
+
+      // Clean up newly cloned repos (not pre-existing ones)
+      if (clonedRepos.length > 0) {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const adapter = this.app.vault.adapter as any;
+        const vaultPath = adapter.basePath || '';
+
+        for (const repoName of clonedRepos) {
+          const repoPath = path.join(vaultPath, repoName);
+          try {
+            await fs.rm(repoPath, { recursive: true, force: true });
+            console.log(`[CherryPickModal] Cleaned up preview clone: ${repoName}`);
+          } catch (cleanupError) {
+            console.warn(`[CherryPickModal] Failed to clean up ${repoName}:`, cleanupError);
+          }
+        }
+
+        // Rescan vault
+        const { serviceManager } = await import('../../../core/services/service-manager');
+        await serviceManager.scanVault();
+      }
+
+      new Notice(`Rejected coherence beacon from ${commit.beaconData?.title}`);
+
+      // Remove from selection state
+      this.selectionState.delete(commit.originalHash);
+
+    } catch (error: any) {
+      new Notice(`Reject failed: ${error.message}`);
+    }
+
+    this.beaconPreviewState = null;
+  }
+
+  /**
+   * Cancel beacon preview (Later) - clean up cloned repos without recording rejection
+   */
+  private async cancelBeaconPreview() {
+    if (!this.beaconPreviewState) return;
+
+    const { clonedRepos } = this.beaconPreviewState;
+
+    hidePreviewBanner();
+
+    // Clean up newly cloned repos (not pre-existing ones)
+    if (clonedRepos.length > 0) {
+      const fs = require('fs').promises;
+      const path = require('path');
+      const adapter = this.app.vault.adapter as any;
+      const vaultPath = adapter.basePath || '';
+
+      for (const repoName of clonedRepos) {
+        const repoPath = path.join(vaultPath, repoName);
+        try {
+          await fs.rm(repoPath, { recursive: true, force: true });
+          console.log(`[CherryPickModal] Cleaned up preview clone: ${repoName}`);
+        } catch (cleanupError) {
+          console.warn(`[CherryPickModal] Failed to clean up ${repoName}:`, cleanupError);
+        }
+      }
+
+      // Rescan vault
+      const { serviceManager } = await import('../../../core/services/service-manager');
+      await serviceManager.scanVault();
+    }
+
+    new Notice('Beacon preview cancelled - you can review it later');
+    this.beaconPreviewState = null;
   }
 
   private async previewPeerCommits(group: PeerCommitGroup) {
