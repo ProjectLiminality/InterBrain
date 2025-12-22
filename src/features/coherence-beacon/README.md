@@ -26,38 +26,44 @@ The beacon commit updates the sovereign's `.udd` file with a `supermodules` entr
 
 ### Incoming Beacons (Update Flow)
 
-When a peer adds your DreamNode as a submodule and you receive their commits:
+Beacon detection is now integrated into the unified cherry-pick workflow:
 
-1. **Detects** the beacon metadata in the commit
-2. **Presents** a modal explaining the relationship and consequences
-3. **Clones** the parent DreamNode (and nested submodules) if accepted
-4. **Establishes** peer relationships in the liminal web
-5. **Merges** the beacon commit to complete the relationship
+1. **Check for Updates** triggers `cherry-pick-preview` command
+2. `getPendingCommits()` scans all peer commits for beacon metadata
+3. Beacon commits appear in the **unified cherry-pick modal** with red styling
+4. User can **preview** (clones supermodule + submodules, opens DreamSong)
+5. User can **accept** (cherry-picks commit), **reject** (records rejection), or **later** (cleanup)
+
+This unified flow means beacon commits are handled identically to regular commits, with the addition of automatic cloning of the supermodule and its dependencies.
 
 ## Directory Structure
 
 ```
 coherence-beacon/
-├── ui/
-│   └── coherence-beacon-modal.ts  # Accept/reject decision modal
-├── service.ts                      # Beacon detection, parsing, acceptance
-├── commands.ts                     # Check for beacons command
-├── index.ts                        # Barrel export
+├── service.ts      # Beacon detection, parsing, ignition
+├── service.test.ts # Unit tests
+├── commands.ts     # ignite-coherence-beacons command
+├── index.ts        # Barrel export
 └── README.md
 ```
 
 ## Integration Flow
 
 ```
-social-resonance-filter (git fetch from peers)
+Check for Updates button
         ↓
-dreamnode-updater (preview/summarize commits)
-        ↓ hands off beacon commits
-coherence-beacon (this feature)
-        ↓ if accepted, uses
-uri-handler (clone from Radicle)
+dreamnode-updater/commands.ts (cherry-pick-preview)
+        ↓
+cherry-pick-workflow-service.getPendingCommits()
+        ↓ scans for beacon metadata
+cherry-pick-preview-modal.ts
+        ↓ for beacon commits:
+        ↓ • previewBeaconCommit() - clones + opens DreamSong
+        ↓ • acceptSingleCommit() - clones + cherry-picks
         ↓ uses
-dreamnode (establish relationships)
+uri-handler (cloneFromRadicle)
+        ↓
+cloneMissingSubmodules() - recursive submodule cloning
 ```
 
 ## Main Exports
@@ -68,14 +74,11 @@ export {
   CoherenceBeaconService,
   type CoherenceBeacon,
   type BeaconRejectionInfo,
-  type IgniteBeaconResult  // New: result of outgoing beacon ignition
+  type IgniteBeaconResult
 } from './service';
 
 // Commands
 export { registerCoherenceBeaconCommands } from './commands';
-
-// UI
-export { CoherenceBeaconModal } from './ui/coherence-beacon-modal';
 ```
 
 ## Entry Points
@@ -83,39 +86,24 @@ export { CoherenceBeaconModal } from './ui/coherence-beacon-modal';
 | Entry Point | Caller | Description |
 |-------------|--------|-------------|
 | `igniteBeacons()` | share/push commands | **Outgoing**: Creates beacons in sovereign repos after share |
-| `checkCommitsForBeacons()` | dreamnode-updater | **Incoming**: Parses pulled commits for beacons |
-| `checkForBeacons()` | check-coherence-beacons command | Manual: fetches + parses for beacons |
+| `checkCommitsForBeacons()` | cherry-pick-workflow-service | **Incoming**: Parses commits for beacon metadata |
+| `parseOriginalHash()` | cherry-pick-workflow-service | Extract original hash from cherry-pick -x commits |
 
 ## Responsibility Boundaries
 
 ### What This Feature Owns
 - **Outgoing**: Beacon ignition after share (create commits in sovereign repos)
 - **Outgoing**: Non-invasive push algorithm (stash → detach → commit → push → rebase → restore)
-- **Incoming**: Beacon detection and parsing (commit metadata)
-- **Incoming**: Modal UI for accept/reject decisions
-- **Incoming**: Beacon acceptance orchestration (clone → relationships → merge)
-- Rejection info returned to caller (future: unified tracking in dreamnode-updater)
+- **Incoming**: Beacon metadata parsing (`COHERENCE_BEACON:` regex)
+- **Incoming**: Original hash parsing for deduplication
 
 ### What This Feature Does NOT Own
-- Network operations (fetch/push) → `social-resonance-filter`
-- Update preview/summary UI → `dreamnode-updater`
+- Update preview/summary UI → `dreamnode-updater` (cherry-pick-preview-modal)
 - Clone operations → `uri-handler` → `social-resonance-filter`
+- Submodule auto-cloning → `cherry-pick-preview-modal.cloneMissingSubmodules()`
+- Network operations (fetch/push) → `social-resonance-filter`
 - Relationship persistence → `dreamnode`
-- Gitmodules parsing → `dreamnode/utils/vault-scanner`
-- Dreamer lookup → `dreamnode/utils/vault-scanner`
-- Rejection persistence → caller's responsibility (dreamnode-updater)
-- UDD supermodule entry format → `dreamnode/types/dreamnode.ts`
-
-## Atomic Acceptance
-
-Beacon acceptance is atomic - the commit is only merged if all clones succeed:
-
-1. Clone supermodule DreamNode
-2. Initialize nested submodules (recursive)
-3. Establish peer relationships
-4. Cherry-pick beacon commit (only after success)
-
-If any step fails, the beacon remains unmerged and can be retried later.
+- Rejection persistence → `collaboration-memory-service`
 
 ## Non-Invasive Push Algorithm
 
@@ -165,5 +153,5 @@ The `.udd` file tracks supermodule relationships with historical context:
 
 Features that call into this one:
 - `social-resonance-filter/commands.ts` - calls `igniteBeacons()` after share/push
-- `dreamnode-updater` - calls `checkCommitsForBeacons()` after pulling
+- `dreamnode-updater/services/cherry-pick-workflow-service.ts` - calls `checkCommitsForBeacons()`
 - `main.ts` - registers commands and creates service instance

@@ -699,6 +699,83 @@ export class CherryPickPreviewModal extends Modal {
   }
 
   /**
+   * Clone any missing submodules for a given repo
+   * Reads the .udd file to find submodule Radicle IDs and clones any that don't exist
+   * @returns Array of newly cloned repo names (for cleanup tracking)
+   */
+  private async cloneMissingSubmodules(repoName: string): Promise<string[]> {
+    const clonedRepos: string[] = [];
+
+    try {
+      const adapter = this.app.vault.adapter as any;
+      const vaultPath = adapter.basePath || '';
+      const path = require('path');
+      const fs = require('fs').promises;
+
+      // Read the .udd file to get submodule Radicle IDs
+      const uddPath = path.join(vaultPath, repoName, '.udd');
+      let uddContent: string;
+      try {
+        uddContent = await fs.readFile(uddPath, 'utf-8');
+      } catch {
+        console.log(`[BeaconPreview] No .udd file found for ${repoName}, skipping submodule scan`);
+        return clonedRepos;
+      }
+
+      const udd = JSON.parse(uddContent);
+      const submoduleIds: string[] = udd.submodules || [];
+
+      if (submoduleIds.length === 0) {
+        console.log(`[BeaconPreview] No submodules in ${repoName}`);
+        return clonedRepos;
+      }
+
+      console.log(`[BeaconPreview] Found ${submoduleIds.length} submodule(s) in ${repoName}: ${submoduleIds.join(', ')}`);
+
+      // Get existing repos in vault to check what's already there
+      const store = useInterBrainStore.getState();
+      const existingRadicleIds = new Set(
+        Array.from(store.dreamNodes.values())
+          .map(data => data.node.radicleId)
+          .filter(id => id)
+      );
+
+      const uriHandler = getURIHandlerService();
+
+      for (const radicleId of submoduleIds) {
+        // Check if already exists by Radicle ID
+        if (existingRadicleIds.has(radicleId)) {
+          console.log(`[BeaconPreview] Submodule ${radicleId} already exists, skipping`);
+          continue;
+        }
+
+        // Clone the submodule
+        console.log(`[BeaconPreview] Cloning missing submodule: ${radicleId}`);
+        this.showProcessing(`Cloning submodule...`);
+
+        const result = await uriHandler.cloneFromRadicle(radicleId, true); // silent mode
+
+        if (result.status === 'success' && result.repoName) {
+          console.log(`[BeaconPreview] Cloned submodule: ${radicleId} → "${result.repoName}"`);
+          clonedRepos.push(result.repoName);
+
+          // Recursively clone nested submodules
+          const nestedClones = await this.cloneMissingSubmodules(result.repoName);
+          clonedRepos.push(...nestedClones);
+        } else if (result.status === 'skipped') {
+          console.log(`[BeaconPreview] Submodule ${radicleId} already existed as "${result.repoName}"`);
+        } else {
+          console.warn(`[BeaconPreview] Failed to clone submodule ${radicleId}`);
+        }
+      }
+    } catch (error) {
+      console.error(`[BeaconPreview] Error scanning submodules for ${repoName}:`, error);
+    }
+
+    return clonedRepos;
+  }
+
+  /**
    * Preview a coherence beacon commit by opening the supermodule's DreamSong
    * (clones first if needed)
    */
@@ -740,6 +817,10 @@ export class CherryPickPreviewModal extends Modal {
       if (cloneResult.status === 'success') {
         clonedRepos.push(actualRepoName);
       }
+
+      // Clone any missing submodules from the newly cloned repo
+      const submoduleClones = await this.cloneMissingSubmodules(actualRepoName);
+      clonedRepos.push(...submoduleClones);
 
       // Save beacon preview state for cleanup and return
       this.beaconPreviewState = {
@@ -783,16 +864,28 @@ export class CherryPickPreviewModal extends Modal {
 
       this.isProcessing = false;
 
-      // Hide the modal (don't close - we'll reopen it)
-      this.modalEl.style.display = 'none';
-      console.log('[BeaconPreview] Modal hidden, showing banner...');
+      // Store config for reopening modal after preview
+      const configForReopen = { ...this.config };
+      const beaconState = { ...this.beaconPreviewState };
+
+      console.log('[BeaconPreview] Closing modal, showing banner...');
 
       // Show preview banner using the existing UI component
+      // (Must set up callbacks BEFORE closing modal since 'this' context will be lost)
       showPreviewBannerWithState(
         {
-          onAccept: () => this.handleBeaconAccept(),
-          onReject: () => this.handleBeaconReject(),
-          onCancel: () => this.handleBeaconLater()
+          onAccept: async () => {
+            console.log('[BeaconPreview] Accept clicked');
+            await this.handleBeaconAcceptStatic(beaconState, configForReopen);
+          },
+          onReject: async () => {
+            console.log('[BeaconPreview] Reject clicked');
+            await this.handleBeaconRejectStatic(beaconState, configForReopen);
+          },
+          onCancel: async () => {
+            console.log('[BeaconPreview] Later clicked');
+            await this.handleBeaconLaterStatic(beaconState, configForReopen);
+          }
         },
         {
           isActive: true,
@@ -803,6 +896,9 @@ export class CherryPickPreviewModal extends Modal {
           didStash: false
         }
       );
+
+      // Close modal properly (removes backdrop) - user can now interact with DreamSpace
+      this.close();
       console.log('[BeaconPreview] Banner should now be visible');
 
     } catch (error: any) {
@@ -813,93 +909,47 @@ export class CherryPickPreviewModal extends Modal {
     }
   }
 
-  private async handleBeaconAccept() {
-    await this.acceptBeaconFromPreview();
-    await this.returnToOriginalNodeAndReopenModal();
-  }
-
-  private async handleBeaconReject() {
-    await this.rejectBeaconFromPreview();
-    await this.returnToOriginalNodeAndReopenModal();
-  }
-
-  private async handleBeaconLater() {
-    await this.cancelBeaconPreview();
-    await this.returnToOriginalNodeAndReopenModal();
-  }
-
   /**
-   * Return to the original node and re-open the modal
+   * Handle beacon accept with captured state (modal is already closed)
    */
-  private async returnToOriginalNodeAndReopenModal() {
-    const originalNodeId = this.beaconPreviewState?.originalNodeId;
-    this.beaconPreviewState = null;
-
-    if (originalNodeId) {
-      const store = useInterBrainStore.getState();
-      const nodeData = store.dreamNodes.get(originalNodeId);
-      if (nodeData) {
-        store.setSelectedNode(nodeData.node);
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-
-    // Re-show the modal
-    this.modalEl.style.display = '';
-
-    // Refresh the content to reflect any changes
-    await this.onOpen();
-  }
-
-  /**
-   * Accept beacon from preview banner - cherry-pick the commit
-   */
-  private async acceptBeaconFromPreview() {
-    if (!this.beaconPreviewState) return;
-
-    const { commit, peerRepoPath } = this.beaconPreviewState;
+  private async handleBeaconAcceptStatic(
+    beaconState: BeaconPreviewState,
+    configForReopen: CherryPickPreviewConfig
+  ) {
+    const { commit, peerRepoPath } = beaconState;
 
     hidePreviewBanner();
 
     try {
       const workflowService = getCherryPickWorkflowService();
       const result = await workflowService.acceptCommits(
-        this.config.dreamNodePath,
-        this.config.dreamNodeUuid,
+        configForReopen.dreamNodePath,
+        configForReopen.dreamNodeUuid,
         peerRepoPath,
         [commit]
       );
 
       if (result.success) {
         new Notice(`Accepted coherence beacon from ${commit.beaconData?.title}`);
-
-        // Remove from selection state
-        this.selectionState.delete(commit.originalHash);
-
-        // Remove from peer group
-        for (const group of this.config.peerGroups) {
-          const idx = group.commits.findIndex(c => c.originalHash === commit.originalHash);
-          if (idx >= 0) {
-            group.commits.splice(idx, 1);
-            break;
-          }
-        }
       } else {
         new Notice(`Accept failed: ${result.message}`);
       }
     } catch (error: any) {
       new Notice(`Accept failed: ${error.message}`);
     }
-    // Note: beaconPreviewState is cleared in returnToOriginalNodeAndReopenModal
+
+    // Return to original node and reopen modal
+    await this.returnToOriginalAndReopen(beaconState.originalNodeId, configForReopen);
   }
 
   /**
-   * Reject beacon from preview banner - record rejection and clean up cloned repos
+   * Handle beacon reject with captured state (modal is already closed)
    */
-  private async rejectBeaconFromPreview() {
-    if (!this.beaconPreviewState) return;
-
-    const { commit, clonedRepos, peerRepoPath } = this.beaconPreviewState;
+  private async handleBeaconRejectStatic(
+    beaconState: BeaconPreviewState,
+    configForReopen: CherryPickPreviewConfig
+  ) {
+    const { commit, clonedRepos, peerRepoPath } = beaconState;
 
     hidePreviewBanner();
 
@@ -907,7 +957,7 @@ export class CherryPickPreviewModal extends Modal {
       // Record rejection
       const workflowService = getCherryPickWorkflowService();
       await workflowService.rejectCommits(
-        this.config.dreamNodeUuid,
+        configForReopen.dreamNodeUuid,
         peerRepoPath,
         [commit]
       );
@@ -923,9 +973,9 @@ export class CherryPickPreviewModal extends Modal {
           const repoPath = path.join(vaultPath, repoName);
           try {
             await fs.rm(repoPath, { recursive: true, force: true });
-            console.log(`[CherryPickModal] Cleaned up preview clone: ${repoName}`);
+            console.log(`[BeaconPreview] Cleaned up preview clone: ${repoName}`);
           } catch (cleanupError) {
-            console.warn(`[CherryPickModal] Failed to clean up ${repoName}:`, cleanupError);
+            console.warn(`[BeaconPreview] Failed to clean up ${repoName}:`, cleanupError);
           }
         }
 
@@ -935,23 +985,22 @@ export class CherryPickPreviewModal extends Modal {
       }
 
       new Notice(`Rejected coherence beacon from ${commit.beaconData?.title}`);
-
-      // Remove from selection state
-      this.selectionState.delete(commit.originalHash);
-
     } catch (error: any) {
       new Notice(`Reject failed: ${error.message}`);
     }
-    // Note: beaconPreviewState is cleared in returnToOriginalNodeAndReopenModal
+
+    // Return to original node and reopen modal
+    await this.returnToOriginalAndReopen(beaconState.originalNodeId, configForReopen);
   }
 
   /**
-   * Cancel beacon preview (Later) - clean up cloned repos without recording rejection
+   * Handle beacon later (cancel) with captured state (modal is already closed)
    */
-  private async cancelBeaconPreview() {
-    if (!this.beaconPreviewState) return;
-
-    const { clonedRepos } = this.beaconPreviewState;
+  private async handleBeaconLaterStatic(
+    beaconState: BeaconPreviewState,
+    configForReopen: CherryPickPreviewConfig
+  ) {
+    const { clonedRepos } = beaconState;
 
     hidePreviewBanner();
 
@@ -966,9 +1015,9 @@ export class CherryPickPreviewModal extends Modal {
         const repoPath = path.join(vaultPath, repoName);
         try {
           await fs.rm(repoPath, { recursive: true, force: true });
-          console.log(`[CherryPickModal] Cleaned up preview clone: ${repoName}`);
+          console.log(`[BeaconPreview] Cleaned up preview clone: ${repoName}`);
         } catch (cleanupError) {
-          console.warn(`[CherryPickModal] Failed to clean up ${repoName}:`, cleanupError);
+          console.warn(`[BeaconPreview] Failed to clean up ${repoName}:`, cleanupError);
         }
       }
 
@@ -977,7 +1026,29 @@ export class CherryPickPreviewModal extends Modal {
       await serviceManager.scanVault();
     }
 
-    // Note: beaconPreviewState is cleared in returnToOriginalNodeAndReopenModal
+    // Return to original node and reopen modal
+    await this.returnToOriginalAndReopen(beaconState.originalNodeId, configForReopen);
+  }
+
+  /**
+   * Return to the original node and reopen the modal with refreshed state
+   */
+  private async returnToOriginalAndReopen(
+    originalNodeId: string,
+    configForReopen: CherryPickPreviewConfig
+  ) {
+    // Return to original node
+    if (originalNodeId) {
+      const store = useInterBrainStore.getState();
+      const nodeData = store.dreamNodes.get(originalNodeId);
+      if (nodeData) {
+        store.setSelectedNode(nodeData.node);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
+    // Reopen modal with refreshed state (same pattern as regular preview)
+    await this.reopenModalWithRefreshedState(configForReopen);
   }
 
   private async previewPeerCommits(group: PeerCommitGroup) {
@@ -1315,20 +1386,40 @@ export class CherryPickPreviewModal extends Modal {
   private async acceptSingleCommit(commit: PendingCommit, peerRepoPath: string) {
     this.isProcessing = true;
 
-    // For beacon commits, clone the supermodule first if needed
+    // For beacon commits, clone the supermodule and its submodules first
     if (commit.beaconData) {
       this.showProcessing(`Loading ${commit.beaconData.title}...`);
 
+      // Save current selection to restore after clone (don't change selection during accept)
+      const store = useInterBrainStore.getState();
+      const originalSelection = store.selectedNode;
+
       try {
         const uriHandler = getURIHandlerService();
-        const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
+        // Use silent=true to prevent auto-focus changing selection
+        const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, true);
 
         if (cloneResult.status === 'error') {
           this.showMessage(`Failed to access repository. It may still be propagating.`, true);
           this.isProcessing = false;
           return;
         }
-        console.log(`[AcceptBeacon] Repository resolved: ${commit.beaconData.radicleId} → "${cloneResult.repoName}"`);
+
+        const repoName = cloneResult.repoName || commit.beaconData.title;
+        console.log(`[AcceptBeacon] Repository resolved: ${commit.beaconData.radicleId} → "${repoName}"`);
+
+        // Clone any missing submodules (same as preview flow)
+        await this.cloneMissingSubmodules(repoName);
+
+        // Trigger vault rescan to ensure all nodes are loaded
+        const { serviceManager } = await import('../../../core/services/service-manager');
+        await serviceManager.scanVault();
+
+        // Restore original selection (cloning should not change what node user is viewing)
+        if (originalSelection) {
+          useInterBrainStore.getState().setSelectedNode(originalSelection);
+        }
+
       } catch (cloneError: any) {
         this.showMessage(`Clone failed: ${cloneError.message}`, true);
         this.isProcessing = false;
