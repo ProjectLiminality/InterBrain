@@ -725,15 +725,20 @@ export class CherryPickPreviewModal extends Modal {
       const uriHandler = getURIHandlerService();
       const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
 
-      if (cloneResult === 'error') {
-        this.showMessage(`Failed to access ${commit.beaconData.title}. The repository may still be propagating.`, true);
+      if (cloneResult.status === 'error') {
+        console.error(`[BeaconPreview] Failed to clone/find ${commit.beaconData.radicleId}`);
+        this.showMessage(`Failed to access repository. It may still be propagating on the network.`, true);
         this.isProcessing = false;
         return;
       }
 
+      // Use the actual repo name from clone result (Radicle ID is source of truth)
+      const actualRepoName = cloneResult.repoName || commit.beaconData.title;
+      console.log(`[BeaconPreview] Repository resolved: ${commit.beaconData.radicleId} → "${actualRepoName}"`);
+
       // Track if this was a new clone (not skipped = already existed)
-      if (cloneResult === 'success') {
-        clonedRepos.push(commit.beaconData.title);
+      if (cloneResult.status === 'success') {
+        clonedRepos.push(actualRepoName);
       }
 
       // Save beacon preview state for cleanup and return
@@ -744,7 +749,6 @@ export class CherryPickPreviewModal extends Modal {
         originalNodeId
       };
 
-      // If it was skipped (already exists), we still need to proceed with preview
       // Wait briefly for any vault updates
       await new Promise(resolve => setTimeout(resolve, 200));
 
@@ -752,15 +756,15 @@ export class CherryPickPreviewModal extends Modal {
       const { serviceManager } = await import('../../../core/services/service-manager');
       await serviceManager.scanVault();
 
-      // Find and select the target node
+      // Find and select the target node using actual repo name
       const updatedStore = useInterBrainStore.getState();
-      const targetNodeName = commit.beaconData.title;
       const targetNode = Array.from(updatedStore.dreamNodes.values())
         .map(data => data.node)
-        .find(n => n.name === targetNodeName);
+        .find(n => n.name === actualRepoName);
 
       if (!targetNode) {
-        this.showMessage(`Could not find ${targetNodeName} in vault`, true);
+        console.error(`[BeaconPreview] Node "${actualRepoName}" not found in vault after clone/skip`);
+        this.showMessage(`Could not find "${actualRepoName}" in vault`, true);
         this.isProcessing = false;
         this.beaconPreviewState = null;
         return;
@@ -1381,17 +1385,18 @@ export class CherryPickPreviewModal extends Modal {
 
     // For beacon commits, clone the supermodule first if needed
     if (commit.beaconData) {
-      this.showProcessing(`Cloning ${commit.beaconData.title}...`);
+      this.showProcessing(`Loading ${commit.beaconData.title}...`);
 
       try {
         const uriHandler = getURIHandlerService();
         const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
 
-        if (cloneResult === 'error') {
-          this.showMessage(`Failed to clone ${commit.beaconData.title}. The repository may still be propagating.`, true);
+        if (cloneResult.status === 'error') {
+          this.showMessage(`Failed to access repository. It may still be propagating.`, true);
           this.isProcessing = false;
           return;
         }
+        console.log(`[AcceptBeacon] Repository resolved: ${commit.beaconData.radicleId} → "${cloneResult.repoName}"`);
       } catch (cloneError: any) {
         this.showMessage(`Clone failed: ${cloneError.message}`, true);
         this.isProcessing = false;

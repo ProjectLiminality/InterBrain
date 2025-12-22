@@ -91,7 +91,8 @@ export class URIHandlerService {
 					if (type === 'github') {
 						result = await this.cloneFromGitHub(raw, true); // silent=true
 					} else if (type === 'radicle') {
-						result = await this.cloneFromRadicle(raw, true); // silent=true
+						const cloneResult = await this.cloneFromRadicle(raw, true); // silent=true
+						result = cloneResult.status;
 					} else {
 						console.warn(`⚠️ [URIHandler] UUID-based clone not implemented: ${raw}`);
 						return { result: 'error', identifier: raw, type };
@@ -467,7 +468,10 @@ export class URIHandlerService {
 	 * Clone a DreamNode from Radicle network
 	 * Public method to allow reuse by CoherenceBeaconService and other features
 	 */
-	public async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
+	/**
+	 * Result of a Radicle clone operation
+	 */
+	public async cloneFromRadicle(radicleId: string, silent: boolean = false): Promise<{ status: 'success' | 'skipped' | 'error'; repoName?: string }> {
 		try {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';
@@ -490,11 +494,12 @@ export class URIHandlerService {
 			const cloneResult = await this.radicleService.clone(radicleId, vaultPath, passphrase);
 
 			if (cloneResult.alreadyExisted) {
+				console.log(`[URIHandler] Radicle ID ${radicleId} already exists as "${cloneResult.repoName}"`);
 				if (!silent) {
 					new Notice(`DreamNode "${cloneResult.repoName}" already cloned!`);
 					await this.autoFocusNode(cloneResult.repoName, silent);
 				}
-				return 'skipped';
+				return { status: 'skipped', repoName: cloneResult.repoName };
 			}
 
 			if (!silent) {
@@ -520,7 +525,7 @@ export class URIHandlerService {
 				}
 			}
 
-			return 'success';
+			return { status: 'success', repoName: cloneResult.repoName };
 
 		} catch (error) {
 			// Handle network propagation delays gracefully
@@ -531,7 +536,7 @@ export class URIHandlerService {
 						8000
 					);
 				}
-				return 'error';
+				return { status: 'error' };
 			}
 
 			console.error(`[URIHandler] Clone failed for ${radicleId}:`, error);
@@ -541,7 +546,7 @@ export class URIHandlerService {
 				new Notice(`Failed to clone: ${errorMsg}`);
 			}
 
-			return 'error';
+			return { status: 'error' };
 		}
 	}
 

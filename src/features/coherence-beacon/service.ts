@@ -193,7 +193,7 @@ export class CoherenceBeaconService {
       const uriHandler = getURIHandlerService();
       const cloneResult = await uriHandler.cloneFromRadicle(beacon.radicleId, false);
 
-      if (cloneResult === 'error') {
+      if (cloneResult.status === 'error') {
         throw new Error(
           `Failed to clone "${beacon.title}" from Radicle network.\n\n` +
           `NETWORK DELAY: Repositories may take 2-5 minutes to propagate.\n\n` +
@@ -204,7 +204,9 @@ export class CoherenceBeaconService {
         );
       }
 
-      const clonedNodePath = path.join(this.vaultPath, beacon.title);
+      // Use actual repo name from clone result (may differ from beacon.title)
+      const actualRepoName = cloneResult.repoName || beacon.title;
+      const clonedNodePath = path.join(this.vaultPath, actualRepoName);
 
       // PHASE 2: Initialize submodules (using dreamnode utilities)
       await this.initializeSubmodules(clonedNodePath);
