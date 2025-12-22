@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh issue view:*)"
+      "Bash(gh issue view:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(git:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(cd:*)",
+      "Bash(echo:*)"
     ],
     "deny": []
   }
