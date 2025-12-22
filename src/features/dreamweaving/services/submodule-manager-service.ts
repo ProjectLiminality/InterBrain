@@ -699,50 +699,15 @@ export class SubmoduleManagerService {
             sovereignModified = true;
           }
 
-          // Commit all sovereign changes at once (only if there are actual changes)
-          // IMPORTANT: Always create COHERENCE_BEACON commits, even in skipRadicle mode
-          // The skipRadicle flag only affects network operations, not local commits
+          // NOTE: We no longer create COHERENCE_BEACON commits here.
+          // The .udd supermodules array is updated above (via UDDService.addSupermodule),
+          // but the beacon commit will be created when the user explicitly "Shares Changes"
+          // via the ignite-coherence-beacon command. This prevents:
+          // 1. Noisy beacon commits during editing (add/remove submodules freely)
+          // 2. Force-pushing unpublished work in sovereign repos
+          // See: src/features/coherence-beacon/service.ts - igniteBeacon()
           if (sovereignModified) {
-            try {
-              await execAsync('git add .udd', { cwd: sovereignPath });
-
-              // Check if there are actually staged changes before committing
-              const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: sovereignPath });
-
-              if (statusOutput.trim()) {
-                // Only create COHERENCE_BEACON if we have a parent Radicle ID
-                if (!parentRadicleId) {
-                  console.warn(`SubmoduleManagerService: Cannot create COHERENCE_BEACON - parent Radicle ID not available`);
-                  console.warn(`SubmoduleManagerService: Committing .udd changes without beacon metadata`);
-                  await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
-                } else {
-                  // Commit with COHERENCE_BEACON metadata for network discovery
-                  const beaconData = JSON.stringify({
-                    type: 'supermodule',
-                    radicleId: parentRadicleId,
-                    title: parentTitle
-                  });
-
-                  const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
-
-                  console.log(`SubmoduleManagerService: 🎯 Creating COHERENCE_BEACON commit in sovereign ${childTitle}`);
-                  console.log(`SubmoduleManagerService: Beacon metadata:`, beaconData);
-                  console.log(`SubmoduleManagerService: Full commit message:\n${commitMessage}`);
-
-                  const { stdout: commitOutput } = await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
-                  console.log(`SubmoduleManagerService: Commit output:`, commitOutput);
-
-                  // Get the commit hash
-                  const { stdout: commitHash } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
-                  console.log(`SubmoduleManagerService: ✓ COHERENCE_BEACON commit created: ${commitHash.trim()}`);
-                  console.log(`SubmoduleManagerService: This commit will be detected when other vaults run "Check for Updates"`)
-                }
-              } else {
-                console.log(`SubmoduleManagerService: No changes to commit in sovereign ${childTitle} (metadata already up to date)`);
-              }
-            } catch (error) {
-              console.warn(`SubmoduleManagerService: Failed to commit sovereign .udd changes:`, error);
-            }
+            console.log(`SubmoduleManagerService: Updated ${childTitle}'s .udd supermodules array (beacon commit will be created on Share)`);
           }
 
           // STEP 2: NOW update submodule to point to latest sovereign commit with all metadata

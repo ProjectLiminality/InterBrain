@@ -1,3 +1,8 @@
 export { registerCoherenceBeaconCommands } from './commands';
-export { CoherenceBeaconService, type CoherenceBeacon, type BeaconRejectionInfo } from './service';
+export {
+  CoherenceBeaconService,
+  type CoherenceBeacon,
+  type BeaconRejectionInfo,
+  type IgniteBeaconResult
+} from './service';
 export { CoherenceBeaconModal } from './ui/coherence-beacon-modal';

@@ -5,7 +5,8 @@
  * Commands are thin handlers - business logic lives in services.
  */
 
-import { Plugin, Notice } from 'obsidian';
+import { Notice } from 'obsidian';
+import type InterBrainPlugin from '../../main';
 import { UIService } from '../../core/services/ui-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
@@ -20,7 +21,7 @@ const fs = require('fs').promises;
 /**
  * Get vault path from plugin
  */
-function getVaultPath(plugin: Plugin): string {
+function getVaultPath(plugin: InterBrainPlugin): string {
   const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
   if (typeof adapter.path === 'string') return adapter.path;
   if (typeof adapter.basePath === 'string') return adapter.basePath;
@@ -31,7 +32,7 @@ function getVaultPath(plugin: Plugin): string {
  * Register all Radicle commands
  */
 export function registerRadicleCommands(
-  plugin: Plugin,
+  plugin: InterBrainPlugin,
   uiService: UIService,
   passphraseManager: PassphraseManager
 ): void {
@@ -176,6 +177,19 @@ export function registerRadicleCommands(
 
         notice.hide();
         uiService.showSuccess(`${selectedNode.name} shared successfully!`);
+
+        // After successful share, ignite coherence beacons for submodules
+        try {
+          const beaconResults = await plugin.coherenceBeaconService.igniteBeacons(selectedNode.repoPath);
+
+          const created = beaconResults.filter(r => r.status === 'created').length;
+          if (created > 0) {
+            uiService.showInfo(`Shared relationship to ${created} DreamNode${created > 1 ? 's' : ''}`);
+          }
+        } catch (beaconError) {
+          // Beacon ignition is secondary - don't fail the entire share
+          console.error('[RadicleCommands] Beacon ignition failed:', beaconError);
+        }
       } catch (error: any) {
         notice.hide();
         console.error('[RadicleCommands] Share failed:', error);
@@ -383,6 +397,20 @@ export function registerRadicleCommands(
           result.type === 'github' ? 'GitHub' :
           'remote';
         new Notice(`Pushed ${selectedNode.name} to ${remoteTypeLabel}!`);
+
+        // After successful push, ignite coherence beacons for submodules
+        // This creates beacon commits in sovereign repos signaling the relationship
+        try {
+          const beaconResults = await plugin.coherenceBeaconService.igniteBeacons(selectedNode.repoPath);
+
+          const created = beaconResults.filter(r => r.status === 'created').length;
+          if (created > 0) {
+            new Notice(`Shared relationship to ${created} DreamNode${created > 1 ? 's' : ''}`);
+          }
+        } catch (beaconError) {
+          // Beacon ignition is secondary - don't fail the entire push
+          console.error('[RadicleCommands] Beacon ignition failed:', beaconError);
+        }
       } catch (error) {
         console.error('[RadicleCommands] Push failed:', error);
         new Notice(`Failed to push: ${error instanceof Error ? error.message : 'Unknown error'}`);

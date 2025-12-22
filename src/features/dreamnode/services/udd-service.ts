@@ -8,7 +8,7 @@
  * and operations need to be atomic (especially in git hooks).
  */
 
-import { UDDFile } from '../types/dreamnode';
+import { UDDFile, SupermoduleEntry } from '../types/dreamnode';
 
 const fs = require('fs');
 const path = require('path');
@@ -53,32 +53,75 @@ export class UDDService {
   }
 
   /**
-   * Add a supermodule relationship to a DreamNode's .udd file
+   * Add a supermodule relationship to a DreamNode's .udd file (legacy format)
    * Returns true if the relationship was added, false if it already existed
+   * @deprecated Use addSupermoduleEntry for new code - includes historical tracking
    */
   static async addSupermodule(dreamNodePath: string, parentUUID: string): Promise<boolean> {
     const udd = await this.readUDD(dreamNodePath);
 
-    // Check if relationship already exists
-    if (udd.supermodules.includes(parentUUID)) {
+    // Check if relationship already exists (handle both formats)
+    const exists = udd.supermodules.some(entry =>
+      typeof entry === 'string' ? entry === parentUUID : entry.radicleId === parentUUID
+    );
+    if (exists) {
       return false;
     }
 
-    // Add the relationship
+    // Add the relationship (legacy string format for backward compat)
     udd.supermodules.push(parentUUID);
     await this.writeUDD(dreamNodePath, udd);
     return true;
   }
 
   /**
-   * Remove a supermodule relationship from a DreamNode's .udd file
-   * Returns true if the relationship was removed, false if it didn't exist
+   * Add an enhanced supermodule entry with historical tracking
+   * Returns true if added, false if already exists (by radicleId)
    */
-  static async removeSupermodule(dreamNodePath: string, parentUUID: string): Promise<boolean> {
+  static async addSupermoduleEntry(
+    dreamNodePath: string,
+    entry: SupermoduleEntry
+  ): Promise<boolean> {
     const udd = await this.readUDD(dreamNodePath);
 
-    // Check if relationship exists
-    const index = udd.supermodules.indexOf(parentUUID);
+    // Check if relationship already exists by radicleId
+    const exists = udd.supermodules.some(existing =>
+      typeof existing === 'string'
+        ? existing === entry.radicleId
+        : existing.radicleId === entry.radicleId
+    );
+    if (exists) {
+      return false;
+    }
+
+    // Add the enhanced entry
+    udd.supermodules.push(entry);
+    await this.writeUDD(dreamNodePath, udd);
+    return true;
+  }
+
+  /**
+   * Check if a supermodule relationship exists (by radicleId)
+   */
+  static async hasSupermodule(dreamNodePath: string, radicleId: string): Promise<boolean> {
+    const udd = await this.readUDD(dreamNodePath);
+    return udd.supermodules.some(entry =>
+      typeof entry === 'string' ? entry === radicleId : entry.radicleId === radicleId
+    );
+  }
+
+  /**
+   * Remove a supermodule relationship from a DreamNode's .udd file
+   * Returns true if the relationship was removed, false if it didn't exist
+   * Handles both legacy (string) and enhanced (SupermoduleEntry) formats
+   */
+  static async removeSupermodule(dreamNodePath: string, radicleId: string): Promise<boolean> {
+    const udd = await this.readUDD(dreamNodePath);
+
+    // Find index handling both formats
+    const index = udd.supermodules.findIndex(entry =>
+      typeof entry === 'string' ? entry === radicleId : entry.radicleId === radicleId
+    );
     if (index === -1) {
       return false;
     }
