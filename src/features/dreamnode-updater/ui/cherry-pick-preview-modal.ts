@@ -847,8 +847,6 @@ export class CherryPickPreviewModal extends Modal {
     const styleId = 'beacon-preview-banner-styles';
     if (document.getElementById(styleId)) return;
 
-    // The base preview-banner styles should already exist
-    // Just add the beacon-specific class styles
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
@@ -862,12 +860,61 @@ export class CherryPickPreviewModal extends Modal {
         align-items: center;
         gap: 0.75em;
         background: var(--background-primary);
-        border-top: 2px solid #e07a5f; /* Warm beacon color */
+        border-top: 2px solid #e07a5f;
         padding: 0.5em 1em;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
         opacity: 0;
         transform: translateY(100%);
         transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+      }
+
+      .beacon-preview-banner.preview-banner-visible {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .beacon-preview-banner .preview-banner-label {
+        color: var(--text-normal);
+        font-size: 0.9em;
+        white-space: nowrap;
+      }
+
+      .beacon-preview-banner .preview-banner-label strong {
+        color: #e07a5f;
+      }
+
+      .beacon-preview-banner .preview-banner-spacer {
+        flex: 1;
+      }
+
+      .beacon-preview-banner .preview-banner-btn {
+        border: none;
+        border-radius: 4px;
+        padding: 0.4em 0.8em;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-weight: 500;
+        transition: background 0.15s, transform 0.1s;
+        white-space: nowrap;
+      }
+
+      .beacon-preview-banner .preview-banner-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .beacon-preview-banner .preview-banner-btn-accept {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+      }
+
+      .beacon-preview-banner .preview-banner-btn-reject {
+        background: var(--background-modifier-error);
+        color: var(--text-on-accent);
+      }
+
+      .beacon-preview-banner .preview-banner-btn-cancel {
+        background: var(--background-modifier-border);
+        color: var(--text-normal);
       }
     `;
     document.head.appendChild(style);
