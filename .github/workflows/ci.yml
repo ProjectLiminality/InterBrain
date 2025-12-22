@@ -216,5 +216,33 @@ jobs:
           try { npm --version } catch { Write-Host "npm: NOT FOUND" }
           try { gh --version | Select-Object -First 1 } catch { Write-Host "GitHub CLI: NOT FOUND" }
 
-          # Radicle requires WSL on Windows
-          Write-Host "Radicle: Requires WSL (not tested in CI)"
+          # Check WSL status
+          Write-Host ""
+          Write-Host "=== WSL Status ==="
+          $wslList = wsl -l -v 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "WSL distributions:"
+            Write-Host $wslList
+
+            # Check if Radicle is installed in WSL
+            Write-Host ""
+            Write-Host "=== Radicle in WSL ==="
+            $radVersion = wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad --version 2>/dev/null' 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Radicle version: $radVersion"
+            } else {
+              Write-Host "Radicle: Not installed in WSL (expected in CI mode)"
+            }
+          } else {
+            Write-Host "WSL: Not available on this runner"
+          }
+
+          # Check for rad wrapper
+          Write-Host ""
+          Write-Host "=== Rad Wrapper ==="
+          $radWrapperPath = Join-Path $env:USERPROFILE ".interbrain\bin\rad.cmd"
+          if (Test-Path $radWrapperPath) {
+            Write-Host "Rad wrapper exists at: $radWrapperPath"
+          } else {
+            Write-Host "Rad wrapper: Not created (expected if WSL/Radicle not installed)"
+          }

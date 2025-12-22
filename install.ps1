@@ -433,34 +433,258 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # ============================================================
-# Step 10: Radicle setup (WSL required on Windows)
+# Step 10: Radicle setup (WSL + Radicle installation)
 # ============================================================
-Write-Step -Step 10 -Message "Radicle setup (requires WSL)"
+Write-Step -Step 10 -Message "Radicle P2P setup (WSL + Radicle)"
 
-Write-Warning "Radicle requires Linux/WSL on Windows."
-Write-Info ""
-Write-Info "For full P2P collaboration, you have two options:"
-Write-Info ""
-Write-Info "Option 1: Use WSL (recommended)"
-Write-Info "  1. Install WSL: wsl --install"
-Write-Info "  2. Open WSL terminal and run the Linux install script:"
-Write-Info "     curl -sSf https://radicle.xyz/install | sh"
-Write-Info ""
-Write-Info "Option 2: Use GitHub-only mode"
-Write-Info "  InterBrain will fall back to GitHub for collaboration."
-Write-Info "  P2P features will be limited until Radicle is set up."
-Write-Info ""
+# Track if we need a reboot for WSL
+$NeedsReboot = $false
+$RadicleReady = $false
 
-# Check if WSL is available
-$WslStatus = wsl --status 2>$null
-if ($LASTEXITCODE -eq 0) {
-    Write-Success "WSL is available"
-    Write-Info "To complete Radicle setup, open WSL and run:"
-    Write-Info "  curl -sSf https://radicle.xyz/install | sh"
+# Check if WSL is installed and has a distribution
+function Test-WslReady {
+    try {
+        $distros = wsl -l -q 2>$null
+        if ($LASTEXITCODE -eq 0 -and $distros) {
+            return $true
+        }
+    } catch {}
+    return $false
+}
+
+# Check if Radicle is installed in WSL
+function Test-RadicleInWsl {
+    try {
+        $result = wsl bash -c "command -v rad" 2>$null
+        return ($LASTEXITCODE -eq 0 -and $result)
+    } catch {}
+    return $false
+}
+
+# Check if Radicle identity exists in WSL
+function Test-RadicleIdentity {
+    try {
+        $result = wsl bash -c "rad self 2>/dev/null" 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {}
+    return $false
+}
+
+if (Test-WslReady) {
+    Write-Success "WSL is installed with a Linux distribution"
+
+    # Check if Radicle is already installed
+    if (Test-RadicleInWsl) {
+        Write-Success "Radicle is installed in WSL"
+
+        if (Test-RadicleIdentity) {
+            Write-Success "Radicle identity exists"
+            $RadicleReady = $true
+        } else {
+            Write-Warning "Radicle installed but no identity created"
+            if (-not $CI) {
+                Write-Info "Creating Radicle identity..."
+                Write-Info "You'll be prompted to set a passphrase for your Radicle key."
+                wsl bash -c "rad auth"
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Radicle identity created"
+                    $RadicleReady = $true
+                } else {
+                    Write-Warning "Failed to create identity. Run 'wsl rad auth' later."
+                }
+            } else {
+                Write-Info "CI mode: Skipping Radicle identity creation"
+            }
+        }
+    } else {
+        Write-Info "Installing Radicle in WSL..."
+
+        # Install Radicle using the official installer
+        $RadicleInstallScript = @'
+#!/bin/bash
+set -e
+
+# Install Radicle via official installer
+curl -sSf https://radicle.xyz/install | sh
+
+# Add to PATH for current session
+export PATH="$HOME/.radicle/bin:$PATH"
+
+# Add to .bashrc for future sessions
+if ! grep -q 'radicle/bin' ~/.bashrc 2>/dev/null; then
+    echo 'export PATH="$HOME/.radicle/bin:$PATH"' >> ~/.bashrc
+fi
+
+# Verify installation
+rad --version
+'@
+
+        $RadicleInstallScript | wsl bash
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Radicle installed in WSL"
+
+            # Create identity if not in CI mode
+            if (-not $CI) {
+                Write-Info "Creating Radicle identity..."
+                wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad auth'
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Radicle identity created"
+                    $RadicleReady = $true
+                }
+            }
+        } else {
+            Write-Warning "Radicle installation failed. You can install manually later:"
+            Write-Info "  wsl bash -c 'curl -sSf https://radicle.xyz/install | sh'"
+        }
+    }
 } else {
-    Write-Warning "WSL not installed"
-    Write-Info "Install WSL with: wsl --install"
-    Write-Info "Then restart and run the Radicle installer in WSL."
+    # WSL not installed - need to install it
+    Write-Warning "WSL not installed. Installing WSL with Ubuntu..."
+
+    if ($CI) {
+        Write-Info "CI mode: Skipping WSL installation (requires reboot)"
+        Write-Info "In production, WSL would be installed here."
+    } else {
+        # Check if we're running as admin (required for WSL install)
+        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+        if (-not $isAdmin) {
+            Write-Warning "WSL installation requires administrator privileges."
+            Write-Info "Please run this script as Administrator, or install WSL manually:"
+            Write-Info "  1. Open PowerShell as Administrator"
+            Write-Info "  2. Run: wsl --install"
+            Write-Info "  3. Restart your computer"
+            Write-Info "  4. Run this installer again"
+        } else {
+            Write-Info "Installing WSL (this may take a few minutes)..."
+            wsl --install --no-launch -d Ubuntu
+
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "WSL installed successfully"
+                $NeedsReboot = $true
+                Write-Warning "A system restart is required to complete WSL setup."
+                Write-Info "After restarting, run this installer again to complete Radicle setup."
+            } else {
+                Write-Error "WSL installation failed"
+                Write-Info "Try installing manually: wsl --install"
+            }
+        }
+    }
+}
+
+# Configure WSL networking for Radicle communication
+if (Test-WslReady -and -not $NeedsReboot) {
+    Write-Info "Configuring WSL networking for Radicle..."
+
+    # Check Windows version for mirrored networking support
+    $WinVersion = [System.Environment]::OSVersion.Version
+    $WslConfigPath = Join-Path $env:USERPROFILE ".wslconfig"
+
+    # Windows 11 22H2+ supports mirrored networking (build 22621+)
+    if ($WinVersion.Build -ge 22621) {
+        Write-Info "Windows 11 22H2+ detected - enabling mirrored networking"
+
+        # Create or update .wslconfig for mirrored networking
+        $WslConfig = @"
+[wsl2]
+networkingMode=mirrored
+"@
+
+        if (Test-Path $WslConfigPath) {
+            $existingConfig = Get-Content $WslConfigPath -Raw
+            if ($existingConfig -notmatch "networkingMode=mirrored") {
+                # Append mirrored networking if not present
+                if ($existingConfig -match "\[wsl2\]") {
+                    $existingConfig = $existingConfig -replace "(\[wsl2\])", "`$1`nnetworkingMode=mirrored"
+                } else {
+                    $existingConfig += "`n$WslConfig"
+                }
+                Set-Content -Path $WslConfigPath -Value $existingConfig
+                Write-Success "Updated .wslconfig with mirrored networking"
+                Write-Info "Run 'wsl --shutdown' and restart WSL for changes to take effect"
+            } else {
+                Write-Success "Mirrored networking already configured"
+            }
+        } else {
+            Set-Content -Path $WslConfigPath -Value $WslConfig
+            Write-Success "Created .wslconfig with mirrored networking"
+        }
+    } else {
+        Write-Info "Windows 10 or older Windows 11 detected - using port forwarding"
+        Write-Info "Radicle ports will be forwarded from WSL to Windows"
+
+        # Create a startup script for port forwarding
+        $PortForwardScript = @'
+# Radicle WSL Port Forwarding Script
+# This script forwards Radicle ports from WSL to Windows
+# Run this after each Windows restart if using Windows 10
+
+$wslIp = (wsl hostname -I).Trim().Split()[0]
+if ($wslIp) {
+    # Remove existing rules
+    netsh interface portproxy reset | Out-Null
+
+    # Forward Radicle P2P port (8776) and HTTP API port (8777)
+    netsh interface portproxy add v4tov4 listenport=8776 listenaddress=0.0.0.0 connectport=8776 connectaddress=$wslIp
+    netsh interface portproxy add v4tov4 listenport=8777 listenaddress=0.0.0.0 connectport=8777 connectaddress=$wslIp
+
+    Write-Host "Radicle ports forwarded to WSL ($wslIp)"
+} else {
+    Write-Host "Could not get WSL IP address. Is WSL running?"
+}
+'@
+
+        $ScriptsDir = Join-Path $env:USERPROFILE ".interbrain"
+        New-Item -ItemType Directory -Path $ScriptsDir -Force | Out-Null
+        $PortForwardScriptPath = Join-Path $ScriptsDir "forward-radicle-ports.ps1"
+        Set-Content -Path $PortForwardScriptPath -Value $PortForwardScript
+
+        Write-Success "Created port forwarding script: $PortForwardScriptPath"
+        Write-Info "Run this script after each Windows restart for Radicle connectivity"
+    }
+}
+
+# Create Windows wrapper for rad command
+if (Test-WslReady -and (Test-RadicleInWsl)) {
+    Write-Info "Creating Windows 'rad' command wrapper..."
+
+    $RadWrapper = @'
+@echo off
+REM Wrapper to run Radicle commands in WSL from Windows
+wsl bash -c "export PATH=\"\$HOME/.radicle/bin:\$PATH\" && rad %*"
+'@
+
+    # Create wrapper in a directory that's in PATH
+    $WrapperDir = Join-Path $env:USERPROFILE ".interbrain\bin"
+    New-Item -ItemType Directory -Path $WrapperDir -Force | Out-Null
+    $WrapperPath = Join-Path $WrapperDir "rad.cmd"
+    Set-Content -Path $WrapperPath -Value $RadWrapper
+
+    # Add to user PATH if not already there
+    $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$WrapperDir*") {
+        [System.Environment]::SetEnvironmentVariable("Path", "$UserPath;$WrapperDir", "User")
+        $env:Path = "$env:Path;$WrapperDir"
+        Write-Success "Added rad wrapper to PATH"
+    }
+
+    Write-Success "Created Windows 'rad' command wrapper"
+    Write-Info "You can now run 'rad' commands directly from PowerShell/CMD"
+}
+
+# Summary
+if ($RadicleReady) {
+    Write-Success "Radicle P2P is fully configured!"
+    $radSelf = wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad self 2>/dev/null | head -3'
+    Write-Info "Your Radicle identity:"
+    Write-Host $radSelf
+} elseif ($NeedsReboot) {
+    Write-Warning "Restart required to complete Radicle setup"
+    Write-Info "After restart, run this installer again"
+} else {
+    Write-Warning "Radicle setup incomplete"
+    Write-Info "Run 'wsl rad auth' to create your Radicle identity"
 }
 
 # ============================================================
@@ -543,6 +767,27 @@ if (Test-Command "ollama") {
     Write-Warning "Ollama not available"
 }
 
+# Check WSL
+if (Test-WslReady) {
+    Write-Success "WSL installed"
+} else {
+    Write-Warning "WSL not installed (required for P2P)"
+}
+
+# Check Radicle in WSL
+if (Test-WslReady) {
+    if (Test-RadicleInWsl) {
+        Write-Success "Radicle installed in WSL"
+        if (Test-RadicleIdentity) {
+            Write-Success "Radicle identity configured"
+        } else {
+            Write-Warning "Radicle identity not configured (run: wsl rad auth)"
+        }
+    } else {
+        Write-Warning "Radicle not installed in WSL"
+    }
+}
+
 Write-Host ""
 Write-Host ("=" * 60) -ForegroundColor Green
 if ($AllGood) {
@@ -560,14 +805,23 @@ Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "1. Open Obsidian and select vault: $VaultPath"
 Write-Host "2. Click 'Trust author and enable plugins' when prompted"
 Write-Host "3. Look for the InterBrain icon in the left ribbon"
-Write-Host "4. Configure settings (Anthropic API key, etc.)"
+Write-Host "4. Configure settings (Anthropic API key, Radicle passphrase)"
 Write-Host ""
 
-if (-not (Test-Command "wsl")) {
+if ($NeedsReboot) {
+    Write-Host "IMPORTANT: Restart required!" -ForegroundColor Yellow
+    Write-Host "  1. Restart your computer to complete WSL setup"
+    Write-Host "  2. Run this installer again to install Radicle"
+    Write-Host ""
+} elseif (-not (Test-WslReady)) {
     Write-Host "For full P2P features:" -ForegroundColor Yellow
-    Write-Host "  1. Install WSL: wsl --install"
-    Write-Host "  2. Restart computer"
-    Write-Host "  3. Open WSL and install Radicle"
+    Write-Host "  1. Run this script as Administrator to install WSL"
+    Write-Host "  2. Or manually: wsl --install"
+    Write-Host "  3. Restart and run this installer again"
+    Write-Host ""
+} elseif (-not $RadicleReady) {
+    Write-Host "To complete P2P setup:" -ForegroundColor Yellow
+    Write-Host "  Run: wsl rad auth"
     Write-Host ""
 }
 
