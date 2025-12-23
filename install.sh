@@ -24,6 +24,8 @@
 #
 # CI mode (non-interactive):
 #   bash install.sh --ci          Run in CI mode with defaults, no prompts, temp directory vault
+#   bash install.sh --ci --alias "TestBot" --passphrase "test123"
+#                                 CI mode with custom Radicle identity (creates identity automatically)
 
 # Parse --ci flag FIRST (before any checks that might exit)
 # This allows CI mode to bypass the non-interactive check
@@ -101,6 +103,8 @@ DREAMER_UUID=""
 BRANCH="main"  # Default to main branch
 TEST_FAIL=""
 TEST_RADICLE_FALLBACK=false
+CI_RAD_ALIAS=""       # Radicle alias for CI mode
+CI_RAD_PASSPHRASE=""  # Radicle passphrase for CI mode
 # CI_MODE already parsed above before non-interactive check
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -128,11 +132,24 @@ while [[ $# -gt 0 ]]; do
       CI_MODE=true
       shift
       ;;
+    --alias)
+      CI_RAD_ALIAS="$2"
+      shift 2
+      ;;
+    --passphrase)
+      CI_RAD_PASSPHRASE="$2"
+      shift 2
+      ;;
     *)
       shift
       ;;
   esac
 done
+
+# Export passphrase for rad auth if provided via CLI
+if [ -n "$CI_RAD_PASSPHRASE" ]; then
+    export RAD_PASSPHRASE="$CI_RAD_PASSPHRASE"
+fi
 
 # Function to check if command exists
 command_exists() {
@@ -1261,13 +1278,15 @@ else
 
     if [ "$CI_MODE" = "true" ] && [ -n "$RAD_PASSPHRASE" ]; then
         # CI mode with passphrase - create identity non-interactively
-        info "CI mode: Creating Radicle identity with RAD_PASSPHRASE"
-        rad auth --alias "CI-Test-$$"
+        # Use CLI-provided alias or generate a default one
+        local ci_alias="${CI_RAD_ALIAS:-CI-Test-$$}"
+        info "CI mode: Creating Radicle identity with alias '$ci_alias'"
+        rad auth --alias "$ci_alias"
 
         if rad self --did >/dev/null 2>&1; then
             success "Radicle identity created (CI mode)"
             RAD_DID=$(rad self --did)
-            RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "CI-Test")
+            RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "$ci_alias")
             echo "   DID: $RAD_DID"
             echo "   Alias: $RAD_ALIAS"
         else
@@ -1277,7 +1296,8 @@ else
         fi
     elif [ "$CI_MODE" = "true" ]; then
         # CI mode without passphrase - skip
-        info "CI mode: Skipping Radicle identity (no RAD_PASSPHRASE)"
+        info "CI mode: Skipping Radicle identity (no RAD_PASSPHRASE or --passphrase)"
+        info "To create identity in CI: bash install.sh --ci --alias 'Name' --passphrase 'pass'"
         RAD_DID="[CI mode - skipped]"
         RAD_ALIAS="[Not created]"
     elif [ -t 0 ]; then

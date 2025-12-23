@@ -32,23 +32,47 @@ Current development progress is tracked through [**GitHub Issues**](https://gith
 
 ## Installation & Setup
 
+### 🧪 Private Beta Status
+
+InterBrain is currently in **private beta**. We're gathering feedback from early users before public release.
+
+**What this means:**
+- Core functionality works reliably across platforms
+- You may encounter rough edges - please report issues!
+- Your feedback directly shapes the product
+
 ### Platform Support
 
-> ⚠️ **macOS First**: The InterBrain is currently focused on full macOS support. While many features work cross-platform, the complete feature stack and automated install script are optimized for macOS. If you're on Windows or Linux, some core features may not work yet.
+InterBrain runs on **macOS, Linux, and Windows**. See [Platform Support Documentation](docs/platform-support.md) for full details.
+
+| Feature | macOS | Linux | Windows |
+|---------|-------|-------|---------|
+| Create & edit DreamNodes | ✅ | ✅ | ✅ |
+| DreamSong canvas playback | ✅ | ✅ | ✅ |
+| Submodule import (dreamweaving) | ✅ | ✅ | ✅ |
+| Semantic search (Ollama) | ✅ | ✅ | ✅ |
+| GitHub publishing | ✅ | ✅ | ✅ |
+| **P2P collaboration (Radicle)** | ✅ | ✅ | 🔜 |
+
+**Windows P2P Note**: Radicle's `git-remote-rad` and `radicle-node` are not yet available on Windows. Once Radicle ships these components, InterBrain will automatically enable full P2P collaboration. See [Platform Support](docs/platform-support.md) for details on expressing interest to the Radicle team.
 
 ### Quick Install
 
-Run the automated install script (macOS only):
-
+**macOS / Linux:**
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)
+```
+
+**Windows:**
+```powershell
+irm https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.ps1 | iex
 ```
 
 The install script will automatically install and configure all dependencies:
 - Obsidian (if not already installed)
 - Git (required for DreamNode versioning)
 - Ollama (for semantic search with local AI)
-- Radicle (for peer-to-peer sharing)
+- Radicle (for peer-to-peer sharing - macOS/Linux)
 - InterBrain plugin and vault setup
 
 > 💡 **Tip**: If the install script encounters issues, you can safely re-run it. It's designed to be idempotent and may resolve transient problems on subsequent runs.

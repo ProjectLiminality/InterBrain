@@ -2,8 +2,18 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
+const os = require('os');
 
 const execAsync = promisify(exec);
+
+/**
+ * Check if running on Windows
+ * Windows doesn't have git-remote-rad helper yet, so we use local filesystem paths
+ * for submodules instead of rad:// URLs
+ */
+function isWindows(): boolean {
+  return os.platform() === 'win32';
+}
 
 import { App } from 'obsidian';
 import { GitOperationsService } from '../../dreamnode/utils/git-operations';
@@ -129,34 +139,47 @@ export class SubmoduleManagerService {
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
 
-      // Get Radicle ID for the submodule (network-based URL)
+      // Get Radicle ID for the submodule (stored in .udd for future migration)
       const radicleId = await this.radicleService.getRadicleId(sourceFullPath);
       if (!radicleId) {
         throw new Error(`Cannot add submodule: ${actualSubmoduleName} does not have a Radicle ID. Initialize with Radicle first.`);
       }
 
-      console.log(`SubmoduleManagerService: Using Radicle URL for submodule: ${radicleId}`);
-
-      // Convert rad:zABC... to rad://zABC... format for git submodule
-      const radicleUrl = radicleId.replace(/^rad:/, 'rad://');
-      console.log(`SubmoduleManagerService: Converted to git-compatible URL: ${radicleUrl}`);
-
-      // Import the submodule using Radicle URL (use --force to handle previously-removed submodules)
-      // CRITICAL: Add Radicle bin to PATH so git can find git-remote-rad helper
-      const os = require('os');
-      const homeDir = os.homedir();
-      const radicleGitHelperPaths = [
-        `${homeDir}/.radicle/bin`,
-        '/usr/local/bin',
-        '/opt/homebrew/bin'
-      ];
+      // Determine submodule URL based on platform
+      // Windows: Use relative filesystem path (git-remote-rad not available yet)
+      // macOS/Linux: Use Radicle URL for network portability
+      let submoduleUrl: string;
       const nodeProcess = (globalThis as any).process;
-      const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
+      let execEnv = { ...nodeProcess?.env };
 
-      const submoduleCommand = `git submodule add --force "${radicleUrl}" "${actualSubmoduleName}"`;
-      await execAsync(submoduleCommand, { cwd: parentFullPath, env: { ...nodeProcess?.env, PATH: enhancedPath } });
+      if (isWindows()) {
+        // Windows: Use relative path from parent to source
+        // Both repos are assumed to be in the vault root, so ../SubmoduleName works
+        submoduleUrl = `../${actualSubmoduleName}`;
+        console.log(`SubmoduleManagerService: [Windows] Using local path for submodule: ${submoduleUrl}`);
+        console.log(`SubmoduleManagerService: [Windows] Radicle ID stored in .udd for future migration: ${radicleId}`);
+      } else {
+        // macOS/Linux: Use Radicle URL for network portability
+        // Convert rad:zABC... to rad://zABC... format for git submodule
+        submoduleUrl = radicleId.replace(/^rad:/, 'rad://');
+        console.log(`SubmoduleManagerService: Using Radicle URL for submodule: ${submoduleUrl}`);
 
-      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName} with Radicle URL`);
+        // CRITICAL: Add Radicle bin to PATH so git can find git-remote-rad helper
+        const homeDir = os.homedir();
+        const radicleGitHelperPaths = [
+          `${homeDir}/.radicle/bin`,
+          '/usr/local/bin',
+          '/opt/homebrew/bin'
+        ];
+        const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
+        execEnv = { ...nodeProcess?.env, PATH: enhancedPath };
+      }
+
+      // Import the submodule (use --force to handle previously-removed submodules)
+      const submoduleCommand = `git submodule add --force "${submoduleUrl}" "${actualSubmoduleName}"`;
+      await execAsync(submoduleCommand, { cwd: parentFullPath, env: execEnv });
+
+      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName}${isWindows() ? ' (local path)' : ' (Radicle URL)'}`);
       
       return {
         success: true,
@@ -704,31 +727,36 @@ export class SubmoduleManagerService {
 
           try {
             // Initialize submodule first (if not already)
-            // CRITICAL: Add Radicle bin to PATH for git-remote-rad helper
-            const os = require('os');
-            const homeDir = os.homedir();
-            const radicleGitHelperPaths = [
-              `${homeDir}/.radicle/bin`,
-              '/usr/local/bin',
-              '/opt/homebrew/bin'
-            ];
             const nodeProcess = (globalThis as any).process;
-            const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
+            let execEnv = { ...nodeProcess?.env };
+
+            // On macOS/Linux, add Radicle bin to PATH for git-remote-rad helper
+            // On Windows, submodules use local paths so this isn't needed
+            if (!isWindows()) {
+              const homeDir = os.homedir();
+              const radicleGitHelperPaths = [
+                `${homeDir}/.radicle/bin`,
+                '/usr/local/bin',
+                '/opt/homebrew/bin'
+              ];
+              const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
+              execEnv = { ...nodeProcess?.env, PATH: enhancedPath };
+            }
 
             await execAsync(`git submodule update --init "${result.submoduleName}"`, {
               cwd: fullParentPath,
-              env: { ...nodeProcess?.env, PATH: enhancedPath }
+              env: execEnv
             });
 
             // Update submodule to point to latest commit from sovereign (remote origin/main)
             const submodulePath = path.join(fullParentPath, result.submoduleName);
             await execAsync(`git fetch origin`, {
               cwd: submodulePath,
-              env: { ...nodeProcess?.env, PATH: enhancedPath }
+              env: execEnv
             });
             await execAsync(`git checkout origin/main`, {
               cwd: submodulePath,
-              env: { ...nodeProcess?.env, PATH: enhancedPath }
+              env: execEnv
             });
 
             console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest with complete metadata`);

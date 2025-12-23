@@ -129,20 +129,26 @@ export class RadicleServiceImpl implements RadicleService {
   private _radCommand: string | null = null;
 
   /**
-   * Check if current platform supports Radicle (macOS/Linux only)
-   * Windows users will use GitHub-based implementation (future)
+   * Check if current platform supports Radicle P2P features (macOS/Linux only)
    *
-   * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test GitHub fallback on macOS
+   * Windows Support Status:
+   * - Radicle CLI (rad) works on Windows as of v1.3.0
+   * - git-remote-rad and radicle-node are not yet available
+   * - P2P collaboration features require the full Radicle stack
+   * - Local operations (create DreamNodes, dreamweaving) work on Windows
+   * - See docs/platform-support.md for details
+   *
+   * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test Windows behavior on macOS
    */
   private isPlatformSupported(): boolean {
     if (this._isPlatformSupported !== null) {
       return this._isPlatformSupported;
     }
 
-    // 🧪 TESTING MODE: Simulate Windows to test GitHub fallback
+    // 🧪 TESTING MODE: Simulate Windows to test behavior
     const simulateWindows = process.env.SIMULATE_WINDOWS === 'true';
     if (simulateWindows) {
-      console.log('🧪 [TEST MODE] Simulating Windows - Radicle disabled, GitHub fallback active');
+      console.log('🧪 [TEST MODE] Simulating Windows - Radicle P2P features disabled');
       this._isPlatformSupported = false;
       return false;
     }
@@ -151,7 +157,9 @@ export class RadicleServiceImpl implements RadicleService {
     const isSupported = platform === 'darwin' || platform === 'linux';
 
     if (!isSupported && platform === 'win32') {
-      console.log('RadicleService: Windows detected - Radicle features disabled (GitHub implementation coming soon)');
+      console.log('RadicleService: Windows detected - P2P collaboration features not yet available');
+      console.log('RadicleService: Local features (DreamNode creation, dreamweaving) work normally');
+      console.log('RadicleService: See docs/platform-support.md for details and how to express interest');
     }
 
     this._isPlatformSupported = isSupported;
