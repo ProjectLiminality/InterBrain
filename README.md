@@ -43,7 +43,7 @@ InterBrain is currently in **private beta**. We're gathering feedback from early
 
 ### Platform Support
 
-InterBrain runs on **macOS, Linux, and Windows**. See [Platform Support Documentation](docs/platform-support.md) for full details.
+InterBrain runs on **macOS, Linux, and Windows**. See [Platform Support Documentation](src/features/social-resonance-filter/docs/platform-support.md) for full details.
 
 | Feature | macOS | Linux | Windows |
 |---------|-------|-------|---------|
@@ -54,7 +54,7 @@ InterBrain runs on **macOS, Linux, and Windows**. See [Platform Support Document
 | GitHub publishing | ✅ | ✅ | ✅ |
 | **P2P collaboration (Radicle)** | ✅ | ✅ | 🔜 |
 
-**Windows P2P Note**: Radicle's `git-remote-rad` and `radicle-node` are not yet available on Windows. Once Radicle ships these components, InterBrain will automatically enable full P2P collaboration. See [Platform Support](docs/platform-support.md) for details on expressing interest to the Radicle team.
+**Windows P2P Note**: Radicle's `git-remote-rad` and `radicle-node` are not yet available on Windows. Once Radicle ships these components, InterBrain will automatically enable full P2P collaboration. See [Platform Support](src/features/social-resonance-filter/docs/platform-support.md) for details on expressing interest to the Radicle team.
 
 ### Quick Install
 

@@ -136,7 +136,7 @@ export class RadicleServiceImpl implements RadicleService {
    * - git-remote-rad and radicle-node are not yet available
    * - P2P collaboration features require the full Radicle stack
    * - Local operations (create DreamNodes, dreamweaving) work on Windows
-   * - See docs/platform-support.md for details
+   * - See src/features/social-resonance-filter/docs/platform-support.md for details
    *
    * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test Windows behavior on macOS
    */
@@ -159,7 +159,7 @@ export class RadicleServiceImpl implements RadicleService {
     if (!isSupported && platform === 'win32') {
       console.log('RadicleService: Windows detected - P2P collaboration features not yet available');
       console.log('RadicleService: Local features (DreamNode creation, dreamweaving) work normally');
-      console.log('RadicleService: See docs/platform-support.md for details and how to express interest');
+      console.log('RadicleService: See platform-support.md in social-resonance-filter/docs for details');
     }
 
     this._isPlatformSupported = isSupported;
