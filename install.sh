@@ -68,7 +68,7 @@ if [ "$CI_MODE" = "true" ]; then
     DEFAULT_VAULT_PARENT="/tmp"
     DEFAULT_VAULT_NAME="interbrain-ci-test-$$"
     SKIP_AUTH=true
-    SKIP_OBSIDIAN=true
+    SKIP_OBSIDIAN_LAUNCH=true  # Install Obsidian but don't launch it
 elif [ ! -t 0 ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "⚠️  NON-INTERACTIVE MODE NOT SUPPORTED"
@@ -1587,8 +1587,8 @@ echo ""
 echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
-if [ "$SKIP_OBSIDIAN" = "true" ]; then
-    info "CI mode: Skipping Obsidian registration and launch"
+if [ "$SKIP_OBSIDIAN_LAUNCH" = "true" ]; then
+    info "CI mode: Skipping Obsidian registration and launch (Obsidian installed: $OBSIDIAN_INSTALLED)"
 elif [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
     # Kill Obsidian if running so it can read the updated config
     if pgrep -x "Obsidian" > /dev/null; then

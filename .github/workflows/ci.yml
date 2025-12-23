@@ -184,6 +184,19 @@ jobs:
             echo "WARNING: Ollama not installed (optional)"
           fi
 
+          # A.6: Obsidian (Linux - check Flatpak/Snap)
+          echo "A.6 Obsidian:"
+          if flatpak list 2>/dev/null | grep -q "md.obsidian.Obsidian"; then
+            echo "Obsidian installed via Flatpak"
+          elif snap list 2>/dev/null | grep -q "obsidian"; then
+            echo "Obsidian installed via Snap"
+          elif command -v obsidian &> /dev/null; then
+            echo "Obsidian found in PATH"
+          else
+            echo "FAIL: Obsidian not found"
+            exit 1
+          fi
+
           echo ""
           echo "=== All required tools verified ==="
 
@@ -258,6 +271,15 @@ jobs:
             echo "Ollama installed"
           else
             echo "WARNING: Ollama not installed (optional)"
+          fi
+
+          # A.6: Obsidian (macOS - check /Applications)
+          echo "A.6 Obsidian:"
+          if [ -d "/Applications/Obsidian.app" ]; then
+            echo "Obsidian installed at /Applications/Obsidian.app"
+          else
+            echo "FAIL: Obsidian not found"
+            exit 1
           fi
 
           echo ""
@@ -353,6 +375,26 @@ jobs:
             Write-Host "Ollama installed"
           } catch {
             Write-Host "INFO: Ollama not installed (optional)"
+          }
+
+          # A.6: Obsidian (Windows - check common locations)
+          Write-Host "A.6 Obsidian:"
+          $obsidianPaths = @(
+            "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
+            "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
+            "$env:PROGRAMFILES\Obsidian\Obsidian.exe"
+          )
+          $obsidianFound = $false
+          foreach ($path in $obsidianPaths) {
+            if (Test-Path $path) {
+              Write-Host "Obsidian installed at $path"
+              $obsidianFound = $true
+              break
+            }
+          }
+          if (-not $obsidianFound) {
+            Write-Host "FAIL: Obsidian not found"
+            exit 1
           }
 
           Write-Host ""
