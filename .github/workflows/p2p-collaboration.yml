@@ -379,7 +379,8 @@ jobs:
           export RAD_PASSPHRASE="alice-tailscale-pass"
 
           # Start node listening on all interfaces (including Tailscale)
-          rad node start --foreground --listen 0.0.0.0:8776 &
+          # --listen is a radicle-node option, passed after --
+          rad node start --foreground -- --listen 0.0.0.0:8776 &
           sleep 5
           rad node status || echo "Node starting..."
 
