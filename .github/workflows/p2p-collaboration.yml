@@ -92,15 +92,15 @@ jobs:
           mkdir -p "$ALICE_REPO"
           cd "$ALICE_REPO"
 
-          # Initialize git
-          git init
+          # Initialize git with main branch (not master)
+          git init --initial-branch=main
           git config user.email "alice@test.ci"
           git config user.name "Alice"
 
           # Create .udd file
-          cat > .udd << EOF
+          cat > .udd << 'EOF'
           {
-            "uuid": "alice-node-$(date +%s)",
+            "uuid": "alice-node-test",
             "title": "Alice's Test DreamNode",
             "type": "dream"
           }
@@ -113,11 +113,32 @@ jobs:
           git add -A
           git commit -m "Initial DreamNode"
 
-          # Initialize with Radicle
-          rad init --private --name "AliceNode" --default-branch main --no-confirm
+          # Initialize with Radicle using service pattern (spawn with stdin pipe)
+          node -e "
+          const { spawn } = require('child_process');
+          const child = spawn('rad', [
+            'init', '$ALICE_REPO',
+            '--private', '--name', 'AliceNode',
+            '--default-branch', 'main',
+            '--description', 'Alice P2P Test Node',
+            '--no-confirm'
+          ], {
+            env: { ...process.env },
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          let stdout = '';
+          child.stdout.on('data', d => { stdout += d; process.stdout.write(d); });
+          child.stderr.on('data', d => process.stderr.write(d));
+          child.on('close', code => {
+            const match = stdout.match(/rad:z[a-zA-Z0-9]+/);
+            if (match) console.log('RID=' + match[0]);
+            process.exit(code);
+          });
+          child.stdin.end();
+          " | tee /tmp/alice-rad-init.txt
 
-          # Get the RID
-          ALICE_RID=$(rad self --rid 2>/dev/null || rad . 2>/dev/null | grep -oE 'rad:[a-zA-Z0-9]+' | head -1)
+          # Get the RID from output
+          ALICE_RID=$(grep -oE 'rad:z[a-zA-Z0-9]+' /tmp/alice-rad-init.txt | head -1)
           echo "alice-rid=$ALICE_RID" >> $GITHUB_OUTPUT
           echo "alice-repo=$ALICE_REPO" >> $GITHUB_OUTPUT
           echo "Alice RID: $ALICE_RID"
@@ -317,7 +338,7 @@ jobs:
           # Now create the actual test node for P2P
           mkdir -p /tmp/AliceTailscaleNode
           cd /tmp/AliceTailscaleNode
-          git init
+          git init --initial-branch=main
           git config user.email "alice@tailscale.test"
           git config user.name "Alice Tailscale"
 
