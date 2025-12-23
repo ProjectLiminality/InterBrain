@@ -1324,7 +1324,7 @@ else
     if [ "$CI_MODE" = "true" ] && [ -n "$RAD_PASSPHRASE" ]; then
         # CI mode with passphrase - create identity non-interactively
         # Use CLI-provided alias or generate a default one
-        local ci_alias="${CI_RAD_ALIAS:-CI-Test-$$}"
+        ci_alias="${CI_RAD_ALIAS:-CI-Test-$$}"
         info "CI mode: Creating Radicle identity with alias '$ci_alias'"
         rad auth --alias "$ci_alias"
 
