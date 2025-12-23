@@ -980,9 +980,9 @@ jobs:
           echo ""
 
           # Check .udd file exists (InterBrain signature)
-          if [ -f "${CLONED_PATH}.udd" ]; then
+          if [ -f "${CLONED_PATH}/.udd" ]; then
             echo "✅ .udd file found:"
-            cat "${CLONED_PATH}.udd"
+            cat "${CLONED_PATH}/.udd"
           else
             echo "❌ .udd file NOT found"
             ls -la "$CLONED_PATH"
@@ -1243,11 +1243,11 @@ jobs:
           echo "=============================================="
           echo ""
 
-          if [ -f "${CLONED_PATH}.udd" ]; then
+          if [ -f "${CLONED_PATH}/.udd" ]; then
             echo "Square's .udd now points to Cylinder:"
-            cat "${CLONED_PATH}.udd"
+            cat "${CLONED_PATH}/.udd"
 
-            if grep -q "supermodules" "${CLONED_PATH}.udd"; then
+            if grep -q "supermodules" "${CLONED_PATH}/.udd"; then
               echo ""
               echo "✅ Square's .udd now has supermodules array pointing to Cylinder!"
             fi
@@ -1292,7 +1292,7 @@ jobs:
 
           echo ""
           echo "Cylinder's .udd:"
-          cat "${CYLINDER_PATH}.udd"
+          cat "${CYLINDER_PATH}/.udd"
 
       - name: Parse Cylinder's submodules and auto-clone Circle
         id: submodule-clone
@@ -1314,7 +1314,7 @@ jobs:
 
           # Read Cylinder's .udd to find submodule Radicle IDs
           # Pattern from line 726: const submoduleIds = udd.submodules || []
-          SUBMODULE_IDS=$(cat "${CYLINDER_PATH}.udd" | grep -oE 'rad:z[a-zA-Z0-9]+' || true)
+          SUBMODULE_IDS=$(cat "${CYLINDER_PATH}/.udd" | grep -oE 'rad:z[a-zA-Z0-9]+' || true)
 
           echo "Submodule RIDs from Cylinder's .udd:"
           echo "$SUBMODULE_IDS"
@@ -1352,7 +1352,7 @@ jobs:
             echo "✅ Circle auto-cloned to: $CIRCLE_PATH"
             echo ""
             echo "Circle's .udd:"
-            cat "${CIRCLE_PATH}.udd"
+            cat "${CIRCLE_PATH}/.udd"
           else
             echo "Circle already exists at: $CIRCLE_EXISTS"
             echo "circle-path=$CIRCLE_EXISTS" >> $GITHUB_OUTPUT
