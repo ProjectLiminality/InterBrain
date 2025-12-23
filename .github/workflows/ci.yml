@@ -410,45 +410,11 @@ jobs:
   # - Verify platform-specific submodule URL handling
 
   # ============================================================================
-  # Group C: GitHub Publishing (requires GH_TEST_TOKEN secret)
+  # DROPPED GROUPS (December 2025)
   # ============================================================================
-  # Test script: scripts/ci/test-github-publishing.ts
-  # Tests: gh CLI auth, repo creation, Pages setup, unpublish workflow
-
-  feature-github-publishing:
-    if: ${{ vars.ENABLE_GITHUB_PUBLISHING_TEST == 'true' }}
-    needs: [install-verify-linux, install-verify-macos, install-verify-windows]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Authenticate with test GitHub account
-        run: |
-          echo "${{ secrets.GH_TEST_TOKEN }}" | gh auth login --with-token
-          gh auth status
-
-      - name: Run GitHub Publishing E2E test
-        run: npx ts-node scripts/ci/test-github-publishing.ts
-
-  # ============================================================================
-  # Group D: Semantic Search (requires Ollama)
-  # ============================================================================
-  # TODO: Create scripts/ci/test-semantic-search.ts
-  # - Start Ollama service
-  # - Pull embedding model
-  # - Test EmbeddingService
-  # - Test IndexingService
-  # - Test SemanticSearchService
+  # Group C (GitHub Publishing) - Dropped: gh CLI is straightforward, manual testing sufficient
+  # Group D (Semantic Search) - Dropped: Vitest covers logic, Ollama is install-script concern
+  # See p2p-collaboration.yml for Group E (P2P tests with Tailscale)
 
   # ============================================================================
   # Summary Job
