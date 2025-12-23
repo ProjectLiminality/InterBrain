@@ -430,7 +430,7 @@ jobs:
           path: /tmp/alice-info/
           retention-days: 1
 
-      - name: Keep node running for Bob
+      - name: Keep node running until Bob completes
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
 
@@ -443,18 +443,32 @@ jobs:
           echo "RID: ${{ steps.create.outputs.rid }}"
           echo "Share URI: ${{ steps.share.outputs.share-uri }}"
           echo ""
-          echo "Artifact uploaded. Waiting for Bob to clone..."
+          echo "Artifact uploaded. Waiting for Bob to signal completion..."
           echo ""
 
-          # Wait for Bob to clone (max 5 minutes)
-          for i in {1..10}; do
-            sleep 30
-            echo "[$i/10] Still waiting for Bob..."
-            rad node status 2>/dev/null | head -2 || true
+          # Wait for Bob to upload his completion artifact (max 10 minutes)
+          for i in {1..60}; do
+            # Check if Bob has uploaded his completion artifact
+            BOB_DONE=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "bob-complete") | .name' || true)
+
+            if [ "$BOB_DONE" = "bob-complete" ]; then
+              echo ""
+              echo "=============================================="
+              echo "  BOB COMPLETED - Alice can exit"
+              echo "=============================================="
+              exit 0
+            fi
+
+            echo "[$i/60] Waiting for Bob's completion signal..."
+            rad node status 2>/dev/null | head -1 || true
+            sleep 10
           done
 
           echo ""
-          echo "Alice's wait period complete."
+          echo "WARNING: Bob did not signal completion within 10 minutes"
+          echo "Alice exiting anyway."
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   p2p-tailscale-bob:
     if: ${{ github.event.inputs.test_mode == 'multi-runner' }}
@@ -731,6 +745,21 @@ jobs:
           echo "  Cloned RID: ${{ steps.alice.outputs.alice-rid }}"
           echo ""
           echo "=============================================="
+
+      - name: Signal completion to Alice
+        if: always()
+        run: |
+          mkdir -p /tmp/bob-complete
+          echo "completed" > /tmp/bob-complete/status
+          echo "${{ job.status }}" >> /tmp/bob-complete/status
+
+      - name: Upload completion signal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bob-complete
+          path: /tmp/bob-complete/
+          retention-days: 1
 
   # ============================================================================
   # Summary
