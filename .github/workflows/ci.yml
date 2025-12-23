@@ -340,12 +340,8 @@ jobs:
   # ============================================================================
   # Group C: GitHub Publishing (requires GH_TEST_TOKEN secret)
   # ============================================================================
-  # TODO: Create scripts/ci/test-github-publishing.ts
-  # - Authenticate with test account
-  # - Create test DreamNode
-  # - Publish to GitHub
-  # - Verify Pages URL
-  # - Unpublish and cleanup
+  # Test script: scripts/ci/test-github-publishing.ts
+  # Tests: gh CLI auth, repo creation, Pages setup, unpublish workflow
 
   feature-github-publishing:
     if: ${{ vars.ENABLE_GITHUB_PUBLISHING_TEST == 'true' }}
@@ -370,14 +366,7 @@ jobs:
           gh auth status
 
       - name: Run GitHub Publishing E2E test
-        run: |
-          echo "TODO: Implement scripts/ci/test-github-publishing.ts"
-          echo "This test will:"
-          echo "  1. Create a test DreamNode"
-          echo "  2. Publish to GitHub using GitHubService"
-          echo "  3. Verify Pages URL is accessible"
-          echo "  4. Unpublish and delete test repo"
-          # npm run test:github-publishing
+        run: npx ts-node scripts/ci/test-github-publishing.ts
 
   # ============================================================================
   # Group D: Semantic Search (requires Ollama)
