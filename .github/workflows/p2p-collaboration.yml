@@ -482,14 +482,7 @@ jobs:
 
           # Create .gitmodules file manually (git submodule add won't work without git-remote-rad)
           # This is what InterBrain would normally create when adding submodules
-          cat > .gitmodules << GITMODULES_EOF
-[submodule "Square"]
-	path = Square
-	url = rad://${SQUARE_RID#rad:}
-[submodule "Circle"]
-	path = Circle
-	url = rad://${CIRCLE_RID#rad:}
-GITMODULES_EOF
+          printf '[submodule "Square"]\n\tpath = Square\n\turl = rad://%s\n[submodule "Circle"]\n\tpath = Circle\n\turl = rad://%s\n' "${SQUARE_RID#rad:}" "${CIRCLE_RID#rad:}" > .gitmodules
 
           # Create empty submodule placeholder directories
           # In real usage, git submodule update --init would populate these
