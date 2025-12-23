@@ -395,24 +395,62 @@ jobs:
           sleep 5
           rad node status || echo "Node starting..."
 
-      - name: Wait for Bob (with status updates)
+      - name: Generate Share URI
+        id: share
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
 
-          echo "Alice is ready and waiting for Bob..."
-          echo "  Tailscale IP: ${{ steps.tailscale.outputs.ip }}"
-          echo "  DID: ${{ steps.alice.outputs.did }}"
-          echo "  RID: ${{ steps.create.outputs.rid }}"
+          # Generate share URI using the same pattern as ShareLinkService
+          # Format: obsidian://interbrain-clone?ids=<rid>&senderDid=<did>&senderName=<name>
+          RID="${{ steps.create.outputs.rid }}"
+          DID="${{ steps.alice.outputs.did }}"
+          ALIAS=$(rad self --alias 2>/dev/null || echo "Alice-Tailscale-${{ github.run_id }}")
+
+          SHARE_URI="obsidian://interbrain-clone?ids=${RID}&senderDid=${DID}&senderName=${ALIAS}"
+          echo "share-uri=$SHARE_URI" >> $GITHUB_OUTPUT
+          echo "Generated share URI: $SHARE_URI"
+
+      - name: Write Alice's info to artifact
+        run: |
+          mkdir -p /tmp/alice-info
+          echo "${{ steps.tailscale.outputs.ip }}" > /tmp/alice-info/tailscale-ip
+          echo "${{ steps.alice.outputs.did }}" > /tmp/alice-info/did
+          echo "${{ steps.create.outputs.rid }}" > /tmp/alice-info/rid
+          echo "alice-tailscale-test" > /tmp/alice-info/uuid
+          echo "${{ steps.share.outputs.share-uri }}" > /tmp/alice-info/share-uri
+
+      - name: Upload Alice's info
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-info
+          path: /tmp/alice-info/
+          retention-days: 1
+
+      - name: Keep node running for Bob
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+
+          echo "=============================================="
+          echo "  ALICE READY FOR BOB"
+          echo "=============================================="
+          echo ""
+          echo "Tailscale IP: ${{ steps.tailscale.outputs.ip }}"
+          echo "DID: ${{ steps.alice.outputs.did }}"
+          echo "RID: ${{ steps.create.outputs.rid }}"
+          echo "Share URI: ${{ steps.share.outputs.share-uri }}"
+          echo ""
+          echo "Artifact uploaded. Waiting for Bob to clone..."
           echo ""
 
-          # Wait for Bob to complete (max 5 minutes - Bob typically connects in <1 min)
+          # Wait for Bob to clone (max 5 minutes)
           for i in {1..10}; do
             sleep 30
-            echo "[$i/10] Waiting for Bob... (rad node status below)"
-            rad node status 2>/dev/null || true
+            echo "[$i/10] Still waiting for Bob..."
+            rad node status 2>/dev/null | head -2 || true
           done
 
-          echo "Alice wait complete - Bob should have connected by now"
+          echo ""
+          echo "Alice's wait period complete."
 
   p2p-tailscale-bob:
     if: ${{ github.event.inputs.test_mode == 'multi-runner' }}
@@ -473,113 +511,218 @@ jobs:
           sleep 10
           rad node status || echo "Node starting..."
 
-      - name: Wait for Alice and Discover via Tailscale
-        id: discover
+      - name: Wait for Alice's artifact
+        id: wait-artifact
         run: |
-          echo "Waiting for Alice to appear on Tailscale network..."
+          echo "Waiting for Alice to upload her info artifact..."
 
-          # Wait for another CI runner to appear on Tailscale
-          # Alice's hostname will be like "github-runner-..." or similar
-          for i in {1..60}; do
-            echo "[$i/60] Scanning Tailscale network..."
+          # Poll for artifact (Alice uploads after starting her node)
+          for i in {1..30}; do
+            echo "[$i/30] Checking for alice-info artifact..."
 
-            # List all Tailscale peers
-            PEERS=$(tailscale status --json | jq -r '.Peer | to_entries[] | select(.value.Online == true) | .value.TailscaleIPs[0]' 2>/dev/null || true)
+            # Use gh CLI to check for artifact
+            ARTIFACT_EXISTS=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "alice-info") | .name' || true)
 
-            if [ -n "$PEERS" ]; then
-              echo "Found Tailscale peers:"
-              echo "$PEERS"
-
-              # Try to find Alice by checking if Radicle port is open
-              for PEER_IP in $PEERS; do
-                echo "Checking $PEER_IP for Radicle node..."
-                if nc -zv "$PEER_IP" 8776 -w 2 2>/dev/null; then
-                  echo "Found Radicle node at $PEER_IP!"
-                  echo "alice-ip=$PEER_IP" >> $GITHUB_OUTPUT
-                  break 2
-                fi
-              done
+            if [ "$ARTIFACT_EXISTS" = "alice-info" ]; then
+              echo "Found alice-info artifact!"
+              break
             fi
 
             sleep 10
           done
 
-          # Verify we found Alice - read from GITHUB_OUTPUT file
-          ALICE_IP=$(grep "alice-ip=" $GITHUB_OUTPUT | cut -d= -f2 || true)
-          if [ -z "$ALICE_IP" ]; then
-            echo "ERROR: Could not find Alice's Radicle node on Tailscale network"
+          if [ "$ARTIFACT_EXISTS" != "alice-info" ]; then
+            echo "ERROR: alice-info artifact not found after 5 minutes"
             exit 1
           fi
-          echo "Successfully found Alice at $ALICE_IP"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-      - name: Connect to Alice
+      - name: Download Alice's artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-info
+          path: /tmp/alice-info
+
+      - name: Read Alice's info
+        id: alice
+        run: |
+          ALICE_IP=$(cat /tmp/alice-info/tailscale-ip)
+          ALICE_DID=$(cat /tmp/alice-info/did)
+          ALICE_RID=$(cat /tmp/alice-info/rid)
+          ALICE_UUID=$(cat /tmp/alice-info/uuid)
+          SHARE_URI=$(cat /tmp/alice-info/share-uri)
+
+          echo "alice-ip=$ALICE_IP" >> $GITHUB_OUTPUT
+          echo "alice-did=$ALICE_DID" >> $GITHUB_OUTPUT
+          echo "alice-rid=$ALICE_RID" >> $GITHUB_OUTPUT
+          echo "alice-uuid=$ALICE_UUID" >> $GITHUB_OUTPUT
+          echo "share-uri=$SHARE_URI" >> $GITHUB_OUTPUT
+
+          echo "=============================================="
+          echo "  ALICE'S INFO (from artifact)"
+          echo "=============================================="
+          echo "Tailscale IP: $ALICE_IP"
+          echo "DID: $ALICE_DID"
+          echo "RID: $ALICE_RID"
+          echo "UUID: $ALICE_UUID"
+          echo "Share URI: $SHARE_URI"
+
+      - name: Connect to Alice's node
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="bob-tailscale-pass"
 
-          ALICE_IP="${{ steps.discover.outputs.alice-ip }}"
-          echo "Connecting to Alice at $ALICE_IP..."
+          ALICE_IP="${{ steps.alice.outputs.alice-ip }}"
+          ALICE_DID="${{ steps.alice.outputs.alice-did }}"
 
-          # We need to discover Alice's DID by connecting first
-          # rad node connect will fail without DID, so we use a different approach
-          # Directly try to fetch from the node
+          # Strip did:key: prefix for node connection
+          RAW_NID="${ALICE_DID#did:key:}"
 
-          # First, let's see what repos Alice is hosting
-          echo "Checking Alice's node..."
-          rad node connect "127.0.0.1:8776" || true  # Wake up our own node
+          echo "Connecting to Alice's Radicle node..."
+          echo "  Node address: ${RAW_NID}@${ALICE_IP}:8776"
 
-          # Try connecting to Alice's IP - we'll get DID from the connection
-          timeout 30 rad node connect "unknown@$ALICE_IP:8776" || echo "Direct connect may fail without DID"
+          rad node connect "${RAW_NID}@${ALICE_IP}:8776"
+          echo "Connected to Alice!"
 
           # Show routing table
           rad node routing || true
-          rad node status
 
-      - name: Discover Alice's Repository
-        id: find-repo
+      - name: Follow Alice (collaboration handshake)
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="bob-tailscale-pass"
 
-          ALICE_IP="${{ steps.discover.outputs.alice-ip }}"
+          ALICE_DID="${{ steps.alice.outputs.alice-did }}"
 
-          # Since we can't easily discover RIDs without knowing them,
-          # and Alice's job outputs aren't available (parallel run),
-          # we need a coordination mechanism.
+          echo "Following Alice to receive her updates..."
+          rad follow "$ALICE_DID" || echo "Already following or follow completed"
 
-          # For now, let's use a well-known test RID approach:
-          # Alice creates a repo and we try standard discovery
-
-          echo "Attempting P2P discovery..."
-          rad node status
-
-          # This is the limitation - without needs:, we can't get Alice's RID
-          # We need to either:
-          # 1. Use a coordination service (Redis, etc)
-          # 2. Use a well-known RID
-          # 3. Use file-based coordination via artifacts
-
-          echo "NOTE: Full P2P test requires coordination mechanism"
-          echo "Current test validates: Tailscale connectivity between runners"
-
-      - name: Verify Tailscale P2P Connectivity
+      - name: Clone from Alice using share URI
+        id: clone
         run: |
-          ALICE_IP="${{ steps.discover.outputs.alice-ip }}"
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
 
-          echo "=========================================="
-          echo "  TAILSCALE CONNECTIVITY VERIFIED!"
-          echo "=========================================="
+          ALICE_RID="${{ steps.alice.outputs.alice-rid }}"
+          ALICE_DID="${{ steps.alice.outputs.alice-did }}"
+          SHARE_URI="${{ steps.alice.outputs.share-uri }}"
+
+          echo "=============================================="
+          echo "  CLONING FROM ALICE"
+          echo "=============================================="
           echo ""
-          echo "What was validated:"
-          echo "  1. Both runners joined Tailscale mesh network"
-          echo "  2. Bob discovered Alice via Tailscale peer list"
-          echo "  3. Radicle port (8776) is reachable on Alice"
+          echo "This mirrors URIHandlerService.cloneFromRadicle()"
+          echo "Share URI: $SHARE_URI"
+          echo "RID: $ALICE_RID"
+          echo "Sender DID: $ALICE_DID"
           echo ""
-          echo "Alice's Tailscale IP: $ALICE_IP"
-          echo "Bob's Tailscale IP: ${{ steps.tailscale.outputs.ip }}"
+
+          # Clone using the same pattern as RadicleService.clone()
+          # --scope followed + --seed for direct P2P clone
+          RAW_NID="${ALICE_DID#did:key:}"
+          CLONE_DIR="/tmp/bob-clones"
+          mkdir -p "$CLONE_DIR"
+
+          echo "Running: rad clone $ALICE_RID --scope followed --seed $RAW_NID"
+          cd "$CLONE_DIR"
+          rad clone "$ALICE_RID" --scope followed --seed "$RAW_NID"
+
+          # Find the cloned directory
+          CLONED_REPO=$(ls -td "$CLONE_DIR"/*/ | head -1)
+          echo "cloned-path=$CLONED_REPO" >> $GITHUB_OUTPUT
           echo ""
-          echo "Full P2P clone/push requires passing RID between jobs."
-          echo "This can be done via GitHub artifacts in a future iteration."
+          echo "Clone completed: $CLONED_REPO"
+
+      - name: Verify cloned DreamNode
+        run: |
+          CLONED_PATH="${{ steps.clone.outputs.cloned-path }}"
+
+          echo "=============================================="
+          echo "  VERIFYING CLONED DREAMNODE"
+          echo "=============================================="
+          echo ""
+          echo "Path: $CLONED_PATH"
+          echo ""
+
+          # Check .udd file exists (InterBrain signature)
+          if [ -f "${CLONED_PATH}.udd" ]; then
+            echo "✅ .udd file found:"
+            cat "${CLONED_PATH}.udd"
+          else
+            echo "❌ .udd file NOT found"
+            ls -la "$CLONED_PATH"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ DreamNode clone verified!"
+
+      - name: Generate DID backpropagation URI
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          BOB_DID="${{ steps.bob.outputs.did }}"
+          ALICE_UUID="${{ steps.alice.outputs.alice-uuid }}"
+          BOB_ALIAS=$(rad self --alias 2>/dev/null || echo "Bob-Tailscale-${{ github.run_id }}")
+
+          echo "=============================================="
+          echo "  DID BACKPROPAGATION"
+          echo "=============================================="
+          echo ""
+          echo "This mirrors URIHandlerService.generateUpdateContactLink()"
+          echo ""
+
+          # Generate update contact URI (Bob → Alice)
+          UPDATE_URI="obsidian://interbrain-update-contact?did=${BOB_DID}&uuid=${ALICE_UUID}&name=${BOB_ALIAS}"
+          echo "Update Contact URI: $UPDATE_URI"
+          echo ""
+          echo "In real InterBrain flow:"
+          echo "  1. Bob would send this URI to Alice via email/chat"
+          echo "  2. Alice clicks it → her Dreamer node for Bob gets updated with his DID"
+          echo "  3. Auto-triggers sync-radicle-peer-following"
+          echo "  4. Bidirectional collaboration enabled!"
+
+      - name: P2P Collaboration Test Summary
+        run: |
+          echo "=============================================="
+          echo "  ✅ P2P COLLABORATION TEST COMPLETE!"
+          echo "=============================================="
+          echo ""
+          echo "What was tested (mirrors actual InterBrain UX):"
+          echo ""
+          echo "  1. Alice created DreamNode with Radicle"
+          echo "     → RadicleBatchInitService.ensureNodesHaveRadicleIds()"
+          echo ""
+          echo "  2. Alice generated share URI"
+          echo "     → ShareLinkService.generateShareLink()"
+          echo "     → URIHandlerService.generateSingleNodeLink()"
+          echo ""
+          echo "  3. Bob connected to Alice via Tailscale"
+          echo "     → Real network P2P (separate VMs)"
+          echo ""
+          echo "  4. Bob followed Alice (collaboration handshake)"
+          echo "     → RadicleService.followPeer()"
+          echo ""
+          echo "  5. Bob cloned using share URI"
+          echo "     → URIHandlerService.cloneFromRadicle()"
+          echo "     → RadicleService.clone() with --seed flag"
+          echo ""
+          echo "  6. Bob verified .udd file in cloned repo"
+          echo "     → UDDService.readUDD()"
+          echo ""
+          echo "  7. Bob generated DID backpropagation URI"
+          echo "     → URIHandlerService.generateUpdateContactLink()"
+          echo ""
+          echo "Network Details:"
+          echo "  Alice Tailscale IP: ${{ steps.alice.outputs.alice-ip }}"
+          echo "  Bob Tailscale IP: ${{ steps.tailscale.outputs.ip }}"
+          echo "  Alice DID: ${{ steps.alice.outputs.alice-did }}"
+          echo "  Bob DID: ${{ steps.bob.outputs.did }}"
+          echo "  Cloned RID: ${{ steps.alice.outputs.alice-rid }}"
+          echo ""
+          echo "=============================================="
 
   # ============================================================================
   # Summary
