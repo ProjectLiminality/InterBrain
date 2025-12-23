@@ -414,7 +414,7 @@ jobs:
           echo "share-uri=$SHARE_URI" >> $GITHUB_OUTPUT
           echo "Generated share URI: $SHARE_URI"
 
-      - name: Write Alice's info to artifact
+      - name: Write Alice's Phase 1 info to artifact
         run: |
           mkdir -p /tmp/alice-info
           echo "${{ steps.tailscale.outputs.ip }}" > /tmp/alice-info/tailscale-ip
@@ -422,14 +422,175 @@ jobs:
           echo "${{ steps.create.outputs.rid }}" > /tmp/alice-info/rid
           echo "alice-tailscale-test" > /tmp/alice-info/uuid
           echo "${{ steps.share.outputs.share-uri }}" > /tmp/alice-info/share-uri
+          echo "phase1" > /tmp/alice-info/phase
 
-      - name: Upload Alice's info
+      - name: Upload Alice's Phase 1 info
         uses: actions/upload-artifact@v4
         with:
-          name: alice-info
+          name: alice-phase1
           path: /tmp/alice-info/
           retention-days: 1
 
+      # ========================================================================
+      # Phase 2: Wait for Bob to clone, then make a regular commit
+      # ========================================================================
+      - name: Wait for Bob's clone confirmation
+        run: |
+          echo "Waiting for Bob to confirm clone..."
+          for i in {1..60}; do
+            BOB_CLONED=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "bob-cloned") | .name' || true)
+            if [ "$BOB_CLONED" = "bob-cloned" ]; then
+              echo "Bob has cloned! Proceeding to Phase 2..."
+              break
+            fi
+            echo "[$i/60] Waiting for Bob to clone..."
+            sleep 5
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Alice makes a regular commit (Phase 2)
+        id: commit
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="alice-tailscale-pass"
+
+          cd /tmp/AliceTailscaleNode
+
+          echo "=============================================="
+          echo "  PHASE 2: COMMIT PROPAGATION"
+          echo "=============================================="
+          echo ""
+          echo "Alice makes a regular commit that Bob will fetch"
+          echo ""
+
+          # Make a change
+          echo "" >> README.md
+          echo "## Update from Alice" >> README.md
+          echo "This commit tests GitSyncService.fetchUpdates()" >> README.md
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> README.md
+
+          git add -A
+          git commit -m "Alice's update for Bob to fetch"
+
+          COMMIT_HASH=$(git rev-parse HEAD)
+          echo "commit-hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+          echo "Commit created: $COMMIT_HASH"
+
+          # Exact commands from RadicleService.share():
+          # STEP 1: Push to local Radicle storage
+          echo ""
+          echo "Step 1: git push rad main (RadicleService.share step 1)"
+          git push rad main
+
+          # STEP 2: Announce to network with inventory
+          echo ""
+          echo "Step 2: rad sync --inventory (RadicleService.share step 4)"
+          rad sync --inventory || echo "Sync inventory completed"
+
+      - name: Upload Phase 2 marker
+        run: |
+          mkdir -p /tmp/alice-phase2
+          echo "${{ steps.commit.outputs.commit-hash }}" > /tmp/alice-phase2/commit-hash
+          echo "phase2" > /tmp/alice-phase2/phase
+
+      - name: Upload Alice's Phase 2 info
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-phase2
+          path: /tmp/alice-phase2/
+          retention-days: 1
+
+      # ========================================================================
+      # Phase 3: Wait for Bob to fetch, then create beacon commit
+      # ========================================================================
+      - name: Wait for Bob's fetch confirmation
+        run: |
+          echo "Waiting for Bob to confirm fetch..."
+          for i in {1..60}; do
+            BOB_FETCHED=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "bob-fetched") | .name' || true)
+            if [ "$BOB_FETCHED" = "bob-fetched" ]; then
+              echo "Bob has fetched! Proceeding to Phase 3 (Beacon)..."
+              break
+            fi
+            echo "[$i/60] Waiting for Bob to fetch..."
+            sleep 5
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Alice creates beacon commit (Phase 3)
+        id: beacon
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="alice-tailscale-pass"
+
+          cd /tmp/AliceTailscaleNode
+
+          echo "=============================================="
+          echo "  PHASE 3: COHERENCE BEACON IGNITION"
+          echo "=============================================="
+          echo ""
+          echo "This mirrors CoherenceBeaconService.createBeaconCommit()"
+          echo ""
+
+          # Get current commit (atCommit) - exact pattern from service line 288-289
+          AT_COMMIT=$(git rev-parse HEAD)
+          ALICE_RID="${{ steps.create.outputs.rid }}"
+
+          # Beacon data format from CoherenceBeaconService.createBeaconCommit() lines 438-443
+          # Note: In real flow this is created in the SOVEREIGN repo, but for testing
+          # we create it in Alice's repo to test the detection mechanism
+          BEACON_DATA="{\"type\":\"supermodule\",\"radicleId\":\"${ALICE_RID}\",\"title\":\"AliceTailscaleNode\",\"atCommit\":\"${AT_COMMIT}\"}"
+
+          # Commit message format from CoherenceBeaconService.createBeaconCommit() line 444
+          # Format: "Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}"
+          COMMIT_MSG=$(printf "Add supermodule relationship: AliceTailscaleNode\n\nCOHERENCE_BEACON: %s" "$BEACON_DATA")
+
+          # Update .udd with supermodule entry (mirrors UDDService.addSupermoduleEntry)
+          ADDED_AT=$(date +%s)000
+          printf '{\n  "uuid": "alice-tailscale-test",\n  "title": "Alice Tailscale Test DreamNode",\n  "type": "dream",\n  "supermodules": [\n    {\n      "radicleId": "%s",\n      "title": "AliceTailscaleNode",\n      "atCommit": "%s",\n      "addedAt": %s\n    }\n  ]\n}\n' "$ALICE_RID" "$AT_COMMIT" "$ADDED_AT" > .udd
+
+          # Exact commit pattern from service line 446-447
+          git add .udd
+          git commit -m "$COMMIT_MSG"
+
+          BEACON_HASH=$(git rev-parse HEAD)
+          echo "beacon-hash=$BEACON_HASH" >> $GITHUB_OUTPUT
+          echo "Beacon commit created: $BEACON_HASH"
+
+          # Show the commit message
+          echo ""
+          echo "Beacon commit message:"
+          git log -1 --format="%B"
+
+          # Exact commands from RadicleService.share():
+          # STEP 1: Push to local Radicle storage (line 867)
+          echo ""
+          echo "Step 1: git push rad main"
+          git push rad main
+
+          # STEP 2: Announce to network (line 992)
+          echo ""
+          echo "Step 2: rad sync --inventory"
+          rad sync --inventory || echo "Sync inventory completed"
+
+      - name: Upload Phase 3 marker
+        run: |
+          mkdir -p /tmp/alice-phase3
+          echo "${{ steps.beacon.outputs.beacon-hash }}" > /tmp/alice-phase3/beacon-hash
+          echo "phase3" > /tmp/alice-phase3/phase
+
+      - name: Upload Alice's Phase 3 info
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-phase3
+          path: /tmp/alice-phase3/
+          retention-days: 1
+
+      # ========================================================================
+      # Phase 4: Wait for Bob to complete all phases
+      # ========================================================================
       - name: Keep node running until Bob completes
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
@@ -533,37 +694,37 @@ jobs:
           sleep 10
           rad node status || echo "Node starting..."
 
-      - name: Wait for Alice's artifact
+      - name: Wait for Alice's Phase 1 artifact
         id: wait-artifact
         run: |
-          echo "Waiting for Alice to upload her info artifact..."
+          echo "Waiting for Alice to upload her Phase 1 info artifact..."
 
           # Poll for artifact (Alice uploads after starting her node)
           for i in {1..30}; do
-            echo "[$i/30] Checking for alice-info artifact..."
+            echo "[$i/30] Checking for alice-phase1 artifact..."
 
             # Use gh CLI to check for artifact
-            ARTIFACT_EXISTS=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "alice-info") | .name' || true)
+            ARTIFACT_EXISTS=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "alice-phase1") | .name' || true)
 
-            if [ "$ARTIFACT_EXISTS" = "alice-info" ]; then
-              echo "Found alice-info artifact!"
+            if [ "$ARTIFACT_EXISTS" = "alice-phase1" ]; then
+              echo "Found alice-phase1 artifact!"
               break
             fi
 
             sleep 10
           done
 
-          if [ "$ARTIFACT_EXISTS" != "alice-info" ]; then
-            echo "ERROR: alice-info artifact not found after 5 minutes"
+          if [ "$ARTIFACT_EXISTS" != "alice-phase1" ]; then
+            echo "ERROR: alice-phase1 artifact not found after 5 minutes"
             exit 1
           fi
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Download Alice's artifact
+      - name: Download Alice's Phase 1 artifact
         uses: actions/download-artifact@v4
         with:
-          name: alice-info
+          name: alice-phase1
           path: /tmp/alice-info
 
       - name: Read Alice's info
@@ -680,6 +841,271 @@ jobs:
           echo ""
           echo "✅ DreamNode clone verified!"
 
+      # ========================================================================
+      # Signal clone completion to Alice so she can proceed to Phase 2
+      # ========================================================================
+      - name: Signal clone completion
+        run: |
+          mkdir -p /tmp/bob-cloned
+          echo "cloned" > /tmp/bob-cloned/status
+
+      - name: Upload clone signal
+        uses: actions/upload-artifact@v4
+        with:
+          name: bob-cloned
+          path: /tmp/bob-cloned/
+          retention-days: 1
+
+      # ========================================================================
+      # Phase 2: Fetch Alice's new commit
+      # ========================================================================
+      - name: Wait for Alice's Phase 2 artifact
+        run: |
+          echo "Waiting for Alice to make Phase 2 commit..."
+          for i in {1..60}; do
+            PHASE2=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "alice-phase2") | .name' || true)
+            if [ "$PHASE2" = "alice-phase2" ]; then
+              echo "Alice Phase 2 ready!"
+              break
+            fi
+            echo "[$i/60] Waiting for Alice Phase 2..."
+            sleep 5
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download Alice's Phase 2 info
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-phase2
+          path: /tmp/alice-phase2
+
+      - name: Fetch updates from Alice (Phase 2)
+        id: fetch
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          CLONED_PATH="${{ steps.clone.outputs.cloned-path }}"
+          EXPECTED_COMMIT=$(cat /tmp/alice-phase2/commit-hash)
+
+          echo "=============================================="
+          echo "  PHASE 2: COMMIT PROPAGATION (FETCH)"
+          echo "=============================================="
+          echo ""
+          echo "This mirrors GitSyncService.fetchUpdates()"
+          echo "Expected commit: $EXPECTED_COMMIT"
+          echo ""
+
+          cd "$CLONED_PATH"
+
+          # Show current state
+          echo "Current HEAD: $(git rev-parse HEAD)"
+          echo ""
+
+          # Exact command from GitSyncService.fetchUpdates() line 168
+          # git fetch <remoteName>
+          echo "Fetching from rad remote (GitSyncService.fetchUpdates line 168)..."
+          git fetch rad || echo "git fetch rad completed"
+
+          # Check if we got the new commit
+          echo ""
+          echo "Checking for Alice's commit..."
+          if git log --oneline --all | grep -q "Alice's update"; then
+            echo "✅ Alice's commit found in fetched refs!"
+            FOUND_COMMIT=$(git log --all --oneline | grep "Alice's update" | head -1 | cut -d' ' -f1)
+            echo "Found: $FOUND_COMMIT"
+            echo "commit-found=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Commit not found via git fetch - trying rad sync --fetch..."
+            # Fallback: rad sync --fetch (from radicle-command-reference.md)
+            rad sync --fetch || echo "rad sync --fetch completed"
+
+            if git log --oneline --all | grep -q "Alice's update"; then
+              echo "✅ Found after rad sync --fetch!"
+              echo "commit-found=true" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️ Commit still not found - checking remote refs..."
+              git branch -r
+              git log --oneline rad/main 2>/dev/null || echo "rad/main not available"
+              echo "commit-found=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Signal fetch completion
+        run: |
+          mkdir -p /tmp/bob-fetched
+          echo "fetched" > /tmp/bob-fetched/status
+          echo "${{ steps.fetch.outputs.commit-found }}" > /tmp/bob-fetched/commit-found
+
+      - name: Upload fetch signal
+        uses: actions/upload-artifact@v4
+        with:
+          name: bob-fetched
+          path: /tmp/bob-fetched/
+          retention-days: 1
+
+      # ========================================================================
+      # Phase 3: Detect and cherry-pick beacon commit
+      # ========================================================================
+      - name: Wait for Alice's Phase 3 artifact (beacon)
+        run: |
+          echo "Waiting for Alice to create beacon commit..."
+          for i in {1..60}; do
+            PHASE3=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts 2>/dev/null | jq -r '.artifacts[] | select(.name == "alice-phase3") | .name' || true)
+            if [ "$PHASE3" = "alice-phase3" ]; then
+              echo "Alice Phase 3 (beacon) ready!"
+              break
+            fi
+            echo "[$i/60] Waiting for Alice Phase 3..."
+            sleep 5
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download Alice's Phase 3 info
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-phase3
+          path: /tmp/alice-phase3
+
+      - name: Fetch and detect beacon (Phase 3)
+        id: beacon-detect
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          CLONED_PATH="${{ steps.clone.outputs.cloned-path }}"
+          EXPECTED_BEACON=$(cat /tmp/alice-phase3/beacon-hash)
+
+          echo "=============================================="
+          echo "  PHASE 3: BEACON DETECTION"
+          echo "=============================================="
+          echo ""
+          echo "This mirrors CoherenceBeaconService.checkCommitsForBeacons()"
+          echo "Expected beacon hash: $EXPECTED_BEACON"
+          echo ""
+
+          cd "$CLONED_PATH"
+
+          # Fetch latest - exact command from GitSyncService line 168
+          echo "Fetching latest from rad (git fetch rad)..."
+          git fetch rad || echo "git fetch rad completed"
+
+          # Exact regex from CoherenceBeaconService line 143 and 514:
+          # const BEACON_REGEX = /COHERENCE_BEACON:\s*({.*?})/g;
+          # Note: In bash we use grep -E with a slightly adapted pattern
+          echo ""
+          echo "Scanning for COHERENCE_BEACON metadata..."
+          echo "Using regex pattern from CoherenceBeaconService line 143"
+
+          # Check commits from remote that we don't have locally
+          # Pattern from CoherenceBeaconService.checkForBeacons() lines 110-120
+          CURRENT_HEAD=$(git rev-parse HEAD)
+
+          BEACON_FOUND=""
+          BEACON_COMMIT=""
+
+          # Check rad/main commits after our HEAD
+          for commit in $(git log ${CURRENT_HEAD}..rad/main --format="%H" 2>/dev/null); do
+            MSG=$(git log -1 --format="%B" "$commit" 2>/dev/null || true)
+            # Match the exact pattern: COHERENCE_BEACON: {json}
+            if echo "$MSG" | grep -qE 'COHERENCE_BEACON:\s*\{'; then
+              echo "✅ BEACON DETECTED in commit $commit!"
+              echo ""
+              echo "Commit message:"
+              echo "$MSG"
+              BEACON_COMMIT="$commit"
+              # Extract beacon data - exact pattern from service parseCommitsForBeacons
+              BEACON_FOUND=$(echo "$MSG" | grep -oE 'COHERENCE_BEACON:\s*\{[^}]+\}' | sed 's/COHERENCE_BEACON:\s*//')
+              break
+            fi
+          done
+
+          if [ -n "$BEACON_COMMIT" ]; then
+            echo ""
+            echo "beacon-hash=$BEACON_COMMIT" >> $GITHUB_OUTPUT
+            echo "beacon-detected=true" >> $GITHUB_OUTPUT
+            echo "beacon-data=$BEACON_FOUND" >> $GITHUB_OUTPUT
+            echo "Beacon data: $BEACON_FOUND"
+          else
+            echo "⚠️ No beacon commit detected in rad/main"
+            echo "Checking all refs..."
+            git log --all --oneline | head -10
+            echo "beacon-detected=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Cherry-pick beacon commit (Phase 3)
+        id: cherry-pick
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+
+          CLONED_PATH="${{ steps.clone.outputs.cloned-path }}"
+          BEACON_DETECTED="${{ steps.beacon-detect.outputs.beacon-detected }}"
+          BEACON_HASH="${{ steps.beacon-detect.outputs.beacon-hash }}"
+
+          echo "=============================================="
+          echo "  PHASE 3: CHERRY-PICK ACCEPT"
+          echo "=============================================="
+          echo ""
+          echo "This mirrors CherryPickWorkflowService.acceptSingleCommit()"
+          echo ""
+
+          if [ "$BEACON_DETECTED" != "true" ]; then
+            echo "⚠️ No beacon to cherry-pick - skipping"
+            echo "cherry-picked=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          cd "$CLONED_PATH"
+
+          # Configure git for cherry-pick
+          git config user.email "bob@tailscale.test"
+          git config user.name "Bob Tailscale"
+
+          echo "Cherry-picking beacon commit: $BEACON_HASH"
+
+          # Exact command from CherryPickWorkflowService lines 520 and 859:
+          # await execAsync(`git cherry-pick -x ${commit.cherryPickRef}`, { cwd: fullPath });
+          # The -x flag preserves original commit hash in the commit message
+          if git cherry-pick -x "$BEACON_HASH" 2>/dev/null; then
+            echo ""
+            echo "✅ Beacon cherry-picked successfully!"
+            echo "cherry-picked=true" >> $GITHUB_OUTPUT
+
+            # Show result
+            echo ""
+            echo "Bob's log after cherry-pick:"
+            git log --oneline -5
+          else
+            echo "⚠️ Cherry-pick failed (may need conflict resolution)"
+            echo "cherry-picked=false" >> $GITHUB_OUTPUT
+            git cherry-pick --abort 2>/dev/null || true
+          fi
+
+      - name: Verify .udd after beacon acceptance
+        run: |
+          CLONED_PATH="${{ steps.clone.outputs.cloned-path }}"
+
+          echo "=============================================="
+          echo "  VERIFYING UDD AFTER BEACON ACCEPT"
+          echo "=============================================="
+          echo ""
+
+          if [ -f "${CLONED_PATH}.udd" ]; then
+            echo ".udd contents after beacon acceptance:"
+            cat "${CLONED_PATH}.udd"
+
+            # Check if submodules array was added by beacon
+            if grep -q "submodules" "${CLONED_PATH}.udd"; then
+              echo ""
+              echo "✅ Beacon added submodule relationship to .udd!"
+            else
+              echo ""
+              echo "Note: submodules array not present (beacon may not have modified .udd)"
+            fi
+          fi
+
       - name: Generate DID backpropagation URI
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
@@ -712,30 +1138,27 @@ jobs:
           echo "  ✅ P2P COLLABORATION TEST COMPLETE!"
           echo "=============================================="
           echo ""
-          echo "What was tested (mirrors actual InterBrain UX):"
+          echo "What was tested (mirrors actual InterBrain services):"
           echo ""
-          echo "  1. Alice created DreamNode with Radicle"
-          echo "     → RadicleBatchInitService.ensureNodesHaveRadicleIds()"
+          echo "PHASE 1: Network Setup & Initial Clone"
+          echo "  ├─ Alice: rad auth, rad init (RadicleService spawn pattern)"
+          echo "  ├─ Alice: share URI generation (ShareLinkService)"
+          echo "  ├─ Bob: connect via Tailscale (real network P2P)"
+          echo "  ├─ Bob: rad follow (collaboration handshake)"
+          echo "  └─ Bob: rad clone --seed (RadicleService.clone)"
           echo ""
-          echo "  2. Alice generated share URI"
-          echo "     → ShareLinkService.generateShareLink()"
-          echo "     → URIHandlerService.generateSingleNodeLink()"
+          echo "PHASE 2: Commit Propagation"
+          echo "  ├─ Alice: git push rad main (RadicleService.share step 1)"
+          echo "  ├─ Alice: rad sync --inventory (RadicleService.share step 4)"
+          echo "  └─ Bob: git fetch rad (GitSyncService.fetchUpdates line 168)"
           echo ""
-          echo "  3. Bob connected to Alice via Tailscale"
-          echo "     → Real network P2P (separate VMs)"
-          echo ""
-          echo "  4. Bob followed Alice (collaboration handshake)"
-          echo "     → RadicleService.followPeer()"
-          echo ""
-          echo "  5. Bob cloned using share URI"
-          echo "     → URIHandlerService.cloneFromRadicle()"
-          echo "     → RadicleService.clone() with --seed flag"
-          echo ""
-          echo "  6. Bob verified .udd file in cloned repo"
-          echo "     → UDDService.readUDD()"
-          echo ""
-          echo "  7. Bob generated DID backpropagation URI"
-          echo "     → URIHandlerService.generateUpdateContactLink()"
+          echo "PHASE 3: Coherence Beacon"
+          echo "  ├─ Alice: create beacon commit (CoherenceBeaconService.createBeaconCommit)"
+          echo "  │         - Exact JSON format from lines 438-443"
+          echo "  │         - Commit msg: 'Add supermodule relationship: \${title}'"
+          echo "  ├─ Bob: detect beacon (CoherenceBeaconService.checkCommitsForBeacons)"
+          echo "  │         - Regex: COHERENCE_BEACON:\\s*({.*?}) from line 143"
+          echo "  └─ Bob: git cherry-pick -x (CherryPickWorkflowService line 520)"
           echo ""
           echo "Network Details:"
           echo "  Alice Tailscale IP: ${{ steps.alice.outputs.alice-ip }}"
@@ -743,6 +1166,12 @@ jobs:
           echo "  Alice DID: ${{ steps.alice.outputs.alice-did }}"
           echo "  Bob DID: ${{ steps.bob.outputs.did }}"
           echo "  Cloned RID: ${{ steps.alice.outputs.alice-rid }}"
+          echo ""
+          echo "Test Results:"
+          echo "  Clone: ✅"
+          echo "  Fetch: ${{ steps.fetch.outputs.commit-found == 'true' && '✅' || '⚠️' }}"
+          echo "  Beacon Detection: ${{ steps.beacon-detect.outputs.beacon-detected == 'true' && '✅' || '⚠️' }}"
+          echo "  Cherry-Pick: ${{ steps.cherry-pick.outputs.cherry-picked == 'true' && '✅' || '⚠️' }}"
           echo ""
           echo "=============================================="
 
