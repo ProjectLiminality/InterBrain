@@ -321,9 +321,9 @@ jobs:
           git add -A
           git commit -m "Initial commit"
 
-          # Init with Radicle (not private - Bob needs to fetch)
-          # Need --description to avoid TTY prompt
-          rad init --name "AliceTailscaleNode" --default-branch main --description "Tailscale P2P Test" --no-confirm
+          # Init with Radicle (public so Bob can fetch)
+          # Need --public and --description to avoid TTY prompts for visibility and description
+          rad init --public --name "AliceTailscaleNode" --default-branch main --description "Tailscale P2P Test" --no-confirm
           RID=$(rad . 2>/dev/null | grep -oE 'rad:[a-zA-Z0-9]+' | head -1)
           echo "rid=$RID" >> $GITHUB_OUTPUT
           echo "Alice RID: $RID"
