@@ -480,10 +480,21 @@ jobs:
           echo "# Cylinder" > README.md
           echo "A DreamSong that weaves Square and Circle together" >> README.md
 
-          # Add Square and Circle as git submodules (rad:// URLs for P2P)
-          # This creates .gitmodules file
-          git submodule add "rad://${SQUARE_RID#rad:}" Square
-          git submodule add "rad://${CIRCLE_RID#rad:}" Circle
+          # Create .gitmodules file manually (git submodule add won't work without git-remote-rad)
+          # This is what InterBrain would normally create when adding submodules
+          cat > .gitmodules << GITMODULES_EOF
+[submodule "Square"]
+	path = Square
+	url = rad://${SQUARE_RID#rad:}
+[submodule "Circle"]
+	path = Circle
+	url = rad://${CIRCLE_RID#rad:}
+GITMODULES_EOF
+
+          # Create empty submodule placeholder directories
+          # In real usage, git submodule update --init would populate these
+          mkdir -p Square Circle
+          touch Square/.gitkeep Circle/.gitkeep
 
           git add -A
           git commit -m "Initial Cylinder with Square and Circle submodules"
