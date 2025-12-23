@@ -28,6 +28,7 @@ import {
   fileExists
 } from '../dreamnode/utils/vault-scanner';
 import { UDDService } from '../dreamnode/services/udd-service';
+import { pushToRadicle } from '../dreamnode/utils/git-utils';
 
 export interface CoherenceBeacon {
   type: 'supermodule';
@@ -35,6 +36,8 @@ export interface CoherenceBeacon {
   title: string;
   commitHash: string;
   commitMessage: string;
+  /** The parent commit that included this as a submodule (when beacon was ignited) */
+  atCommit?: string;
 }
 
 /**
@@ -45,6 +48,15 @@ export interface BeaconRejectionInfo {
   radicleId: string;
   title: string;
   rejectedAt: string;
+}
+
+/**
+ * Result of igniting a beacon for a single submodule
+ */
+export interface IgniteBeaconResult {
+  submoduleName: string;
+  status: 'created' | 'skipped' | 'error';
+  message?: string;
 }
 
 export class CoherenceBeaconService {
@@ -82,9 +94,13 @@ export class CoherenceBeaconService {
     const fullPath = path.join(this.vaultPath, dreamNodePath);
 
     try {
-      // Fetch from Radicle network
+      // Fetch from Radicle network (non-fatal if no seeds available)
       const radCmd = await this.getRadCommand();
-      await execAsync(`"${radCmd}" sync --fetch`, { cwd: fullPath });
+      try {
+        await execAsync(`"${radCmd}" sync --fetch`, { cwd: fullPath });
+      } catch (fetchError) {
+        console.warn('[CoherenceBeacon] Fetch failed (continuing with local refs):', fetchError);
+      }
 
       // Get current HEAD commit
       const { stdout: currentHead } = await execAsync('git rev-parse HEAD', { cwd: fullPath });
@@ -140,7 +156,8 @@ export class CoherenceBeaconService {
               radicleId: beaconData.radicleId,
               title: beaconData.title,
               commitHash: commit.hash,
-              commitMessage: commit.subject
+              commitMessage: commit.subject,
+              atCommit: beaconData.atCommit // Preserve parent commit reference
             });
           }
         } catch {
@@ -176,7 +193,7 @@ export class CoherenceBeaconService {
       const uriHandler = getURIHandlerService();
       const cloneResult = await uriHandler.cloneFromRadicle(beacon.radicleId, false);
 
-      if (cloneResult === 'error') {
+      if (cloneResult.status === 'error') {
         throw new Error(
           `Failed to clone "${beacon.title}" from Radicle network.\n\n` +
           `NETWORK DELAY: Repositories may take 2-5 minutes to propagate.\n\n` +
@@ -187,7 +204,9 @@ export class CoherenceBeaconService {
         );
       }
 
-      const clonedNodePath = path.join(this.vaultPath, beacon.title);
+      // Use actual repo name from clone result (may differ from beacon.title)
+      const actualRepoName = cloneResult.repoName || beacon.title;
+      const clonedNodePath = path.join(this.vaultPath, actualRepoName);
 
       // PHASE 2: Initialize submodules (using dreamnode utilities)
       await this.initializeSubmodules(clonedNodePath);
@@ -235,6 +254,240 @@ export class CoherenceBeaconService {
     };
   }
 
+  // ===== Beacon Ignition (Outgoing Beacons) =====
+
+  /**
+   * Ignite coherence beacons for all submodules of a parent DreamNode.
+   *
+   * For each submodule, creates a COHERENCE_BEACON commit in the sovereign repo
+   * that signals "you are included in this parent project". Uses non-invasive
+   * push to avoid forcing user's unpublished work.
+   *
+   * Called when user clicks "Share Changes" on a DreamNode that has submodules.
+   *
+   * @param parentPath - Vault-relative path to the parent DreamNode
+   * @returns Array of results per submodule
+   */
+  async igniteBeacons(parentPath: string): Promise<IgniteBeaconResult[]> {
+    const path = require('path');
+    const results: IgniteBeaconResult[] = [];
+    const parentFullPath = path.join(this.vaultPath, parentPath);
+
+    try {
+      // Get parent's info
+      const parentUDD = await UDDService.readUDD(parentFullPath);
+      const parentRadicleId = parentUDD.radicleId;
+      const parentTitle = parentUDD.title;
+
+      if (!parentRadicleId) {
+        console.warn('[CoherenceBeacon] Cannot ignite beacons - parent has no Radicle ID');
+        return results;
+      }
+
+      // Get current parent commit (the one that includes these submodules)
+      const { stdout: parentCommit } = await execAsync('git rev-parse HEAD', { cwd: parentFullPath });
+      const atCommit = parentCommit.trim();
+
+      // Get all submodules from .gitmodules
+      const submodules = await readGitmodules(parentFullPath);
+
+      if (submodules.length === 0) {
+        console.log('[CoherenceBeacon] No submodules found - nothing to ignite');
+        return results;
+      }
+
+      // Process each submodule
+      for (const submodule of submodules) {
+        const sovereignPath = path.join(this.vaultPath, submodule.name);
+
+        try {
+          // Check if sovereign exists
+          if (!(await fileExists(path.join(sovereignPath, '.git')))) {
+            results.push({
+              submoduleName: submodule.name,
+              status: 'skipped',
+              message: 'Sovereign repo not found at vault root'
+            });
+            continue;
+          }
+
+          // Check if beacon already exists for this parent
+          const alreadyExists = await UDDService.hasSupermodule(sovereignPath, parentRadicleId);
+          if (alreadyExists) {
+            results.push({
+              submoduleName: submodule.name,
+              status: 'skipped',
+              message: 'Beacon already exists'
+            });
+            continue;
+          }
+
+          // Create the beacon commit using non-invasive push
+          await this.createBeaconCommit(
+            sovereignPath,
+            parentRadicleId,
+            parentTitle,
+            atCommit
+          );
+
+          results.push({
+            submoduleName: submodule.name,
+            status: 'created'
+          });
+
+        } catch (error) {
+          console.error(`[CoherenceBeacon] Failed to ignite beacon for ${submodule.name}:`, error);
+          results.push({
+            submoduleName: submodule.name,
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('[CoherenceBeacon] Failed to ignite beacons:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a beacon commit in a sovereign repo using non-invasive push.
+   *
+   * This avoids forcing the user to push their unpublished work by:
+   * 1. Stashing uncommitted changes
+   * 2. Detaching to the last pushed commit
+   * 3. Creating the beacon commit there
+   * 4. Pushing only that commit
+   * 5. Rebasing local work on top
+   * 6. Restoring stash
+   */
+  private async createBeaconCommit(
+    sovereignPath: string,
+    parentRadicleId: string,
+    parentTitle: string,
+    atCommit: string
+  ): Promise<void> {
+    let stashCreated = false;
+    let originalBranch = '';
+
+    try {
+      // 0. Get current branch name
+      const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: sovereignPath });
+      originalBranch = branchOutput.trim() || 'main';
+
+      // 1. Stash uncommitted changes
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: sovereignPath });
+      if (statusOutput.trim()) {
+        await execAsync('git stash push -m "InterBrain beacon stash"', { cwd: sovereignPath });
+        stashCreated = true;
+        console.log('[CoherenceBeacon] Stashed uncommitted changes');
+      }
+
+      // 2. Determine which remote to use (rad for Radicle, origin for GitHub)
+      let remoteName = 'origin';
+      try {
+        await execAsync('git remote get-url rad', { cwd: sovereignPath });
+        remoteName = 'rad';
+      } catch {
+        // No rad remote, try origin
+      }
+
+      // Fetch latest
+      try {
+        await execAsync(`git fetch ${remoteName}`, { cwd: sovereignPath });
+      } catch {
+        // No remote configured - that's OK, we'll just commit locally
+        console.log('[CoherenceBeacon] No remote configured - creating local beacon only');
+      }
+
+      // Check if we have a remote to compare against
+      let hasRemote = false;
+      let lastPushed = '';
+      try {
+        const { stdout: remoteRef } = await execAsync(`git rev-parse ${remoteName}/main`, { cwd: sovereignPath });
+        lastPushed = remoteRef.trim();
+        hasRemote = true;
+      } catch {
+        // No remote or no remote/main - use current HEAD
+        const { stdout: headRef } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+        lastPushed = headRef.trim();
+      }
+
+      // 3. Check if we need to detach (are there unpushed commits?)
+      const { stdout: currentHead } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+      const needsDetach = hasRemote && currentHead.trim() !== lastPushed;
+
+      if (needsDetach) {
+        // Detach to last pushed commit
+        await execAsync(`git checkout --detach ${lastPushed}`, { cwd: sovereignPath });
+        console.log('[CoherenceBeacon] Detached to last pushed commit');
+      }
+
+      // 4. Update .udd with supermodule entry
+      const entry = {
+        radicleId: parentRadicleId,
+        title: parentTitle,
+        atCommit: atCommit,
+        addedAt: Date.now()
+      };
+      await UDDService.addSupermoduleEntry(sovereignPath, entry);
+
+      // 5. Create beacon commit
+      const beaconData = JSON.stringify({
+        type: 'supermodule',
+        radicleId: parentRadicleId,
+        title: parentTitle,
+        atCommit: atCommit
+      });
+      const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
+
+      await execAsync('git add .udd', { cwd: sovereignPath });
+      await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
+      console.log('[CoherenceBeacon] Created beacon commit');
+
+      // Get the beacon commit hash (we're in detached HEAD, so HEAD is the beacon)
+      const { stdout: beaconCommitOutput } = await execAsync('git rev-parse HEAD', { cwd: sovereignPath });
+      const beaconCommit = beaconCommitOutput.trim();
+
+      // 6. Push if we have a remote (using shared Radicle-aware push utility)
+      if (hasRemote) {
+        const pushSuccess = await pushToRadicle(sovereignPath, 'HEAD:main', remoteName);
+        if (pushSuccess) {
+          console.log(`[CoherenceBeacon] Pushed beacon commit to ${remoteName}`);
+        } else {
+          console.warn('[CoherenceBeacon] Push failed - beacon commit created locally (can be pushed later)');
+        }
+      }
+
+      // 7. Return to original branch and rebase if we detached
+      if (needsDetach) {
+        await execAsync(`git checkout ${originalBranch}`, { cwd: sovereignPath });
+        try {
+          // Rebase onto the beacon commit (not remote/main, which may not have updated if push failed)
+          await execAsync(`git rebase ${beaconCommit}`, { cwd: sovereignPath });
+          console.log('[CoherenceBeacon] Rebased local work on top of beacon');
+        } catch {
+          // Rebase conflict - abort and warn user
+          await execAsync('git rebase --abort', { cwd: sovereignPath });
+          console.warn('[CoherenceBeacon] Rebase conflict - user will need to manually rebase');
+        }
+      }
+
+    } finally {
+      // 8. Restore stash if we created one
+      if (stashCreated) {
+        try {
+          await execAsync('git stash pop', { cwd: sovereignPath });
+          console.log('[CoherenceBeacon] Restored stashed changes');
+        } catch (stashError) {
+          console.warn('[CoherenceBeacon] Failed to restore stash:', stashError);
+        }
+      }
+    }
+  }
+
   // ===== Private Helper Methods =====
 
   private async getRadCommand(): Promise<string> {
@@ -274,7 +527,8 @@ export class CoherenceBeaconService {
               radicleId: beaconData.radicleId,
               title: beaconData.title,
               commitHash: hash,
-              commitMessage: fullMessage
+              commitMessage: fullMessage,
+              atCommit: beaconData.atCommit // Preserve parent commit reference
             });
           }
         } catch {

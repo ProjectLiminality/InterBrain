@@ -270,6 +270,8 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
       const description = `${nodeTypeLabel} ${timestamp}`;
 
       const radInitPromise = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        // NOTE: No --no-seed flag. Repo is auto-seeded so direct peers can fetch.
+        // Privacy comes from --private (not announced), not from refusing to serve.
         const child = spawn('rad', [
           'init',
           folderPath,
@@ -277,8 +279,7 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
           '--name', folderName,
           '--default-branch', 'main',
           '--description', description,
-          '--no-confirm',
-          '--no-seed'
+          '--no-confirm'
         ], {
           env,
           cwd: folderPath,

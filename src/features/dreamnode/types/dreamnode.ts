@@ -1,9 +1,24 @@
 /**
  * DreamNode Types - Core data structures for InterBrain spatial visualization
- * 
+ *
  * Based on Git-native architecture where each DreamNode is a Git repository
  * with explicit file path arrays stored in UDD (Universal Dream Description) files.
  */
+
+/**
+ * Enhanced supermodule entry with historical tracking
+ * Tracks which commit of the parent first included this as a dependency
+ */
+export interface SupermoduleEntry {
+  /** Radicle ID of the parent DreamNode */
+  radicleId: string;
+  /** Display title of the parent DreamNode */
+  title: string;
+  /** Commit hash in the parent repo when this was added as submodule */
+  atCommit: string;
+  /** Timestamp when this relationship was recorded */
+  addedAt: number;
+}
 
 /**
  * Universal Dream Description (UDD) file structure
@@ -26,8 +41,12 @@ export interface UDDFile {
   /** Array of UUIDs for vertical holonic relationships - children */
   submodules: string[];
 
-  /** Array of UUIDs for vertical holonic relationships - parents */
-  supermodules: string[];
+  /**
+   * Supermodule relationships - parents that include this DreamNode as a submodule
+   * Can be either legacy format (string UUIDs) or enhanced format (SupermoduleEntry[])
+   * New entries should use SupermoduleEntry format for historical tracking
+   */
+  supermodules: (string | SupermoduleEntry)[];
 
   /** Optional contact email (for dreamer-type nodes) */
   email?: string;

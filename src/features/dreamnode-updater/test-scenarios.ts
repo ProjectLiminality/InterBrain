@@ -505,6 +505,36 @@ Each item should feel achievable and build confidence.`,
 `
       },
       relayedBy: ['charlie']
+    },
+
+    // =========================================
+    // COMMIT 11: Coherence Beacon from Bob's "Mega Project"
+    // =========================================
+    // This simulates a beacon commit - Bob's "Mega Project" DreamSong
+    // wants to include this shared project as a submodule
+    {
+      author: 'bob',
+      subject: "Add supermodule relationship: Mega Project",
+      body: `COHERENCE_BEACON: {"type":"supermodule","radicleId":"rad:z2N2LRCMhxK9Wba3oF2br8s9qZM5w","title":"Mega Project","atCommit":"abc123def456"}`,
+      files: {
+        // Beacon commits update the .udd file to add supermodule reference
+        '.udd': `{
+  "uuid": "collab-test-dream-uuid",
+  "title": "Collaboration Test Node",
+  "type": "dream",
+  "dreamTalk": "",
+  "submodules": [],
+  "supermodules": [
+    {
+      "radicleId": "rad:z2N2LRCMhxK9Wba3oF2br8s9qZM5w",
+      "title": "Mega Project",
+      "atCommit": "abc123def456",
+      "addedAt": 1703123456000
+    }
+  ]
+}`
+      },
+      relayedBy: ['bob']
     }
   ]
 };

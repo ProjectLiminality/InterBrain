@@ -42,10 +42,10 @@ export interface RadicleService {
   /**
    * Clone a DreamNode from the Radicle network
    * @param passphrase Optional passphrase (uses ssh-agent if not provided)
-   * @param targetDirName Optional exact directory name (for nested submodules to avoid UUID prefix conflicts)
+   * @param peerNid Optional peer Node ID to clone directly from (for private P2P)
    * @returns Object with repo name and whether it was already cloned
    */
-  clone(radicleId: string, destinationPath: string, passphrase?: string, targetDirName?: string): Promise<{ repoName: string; alreadyExisted: boolean }>;
+  clone(radicleId: string, destinationPath: string, passphrase?: string, peerNid?: string): Promise<{ repoName: string; alreadyExisted: boolean }>;
 
   /**
    * Share DreamNode to Radicle network (sync changes)
@@ -129,20 +129,26 @@ export class RadicleServiceImpl implements RadicleService {
   private _radCommand: string | null = null;
 
   /**
-   * Check if current platform supports Radicle (macOS/Linux only)
-   * Windows users will use GitHub-based implementation (future)
+   * Check if current platform supports Radicle P2P features (macOS/Linux only)
    *
-   * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test GitHub fallback on macOS
+   * Windows Support Status:
+   * - Radicle CLI (rad) works on Windows as of v1.3.0
+   * - git-remote-rad and radicle-node are not yet available
+   * - P2P collaboration features require the full Radicle stack
+   * - Local operations (create DreamNodes, dreamweaving) work on Windows
+   * - See src/features/social-resonance-filter/docs/platform-support.md for details
+   *
+   * 🧪 TESTING: Set SIMULATE_WINDOWS=true to test Windows behavior on macOS
    */
   private isPlatformSupported(): boolean {
     if (this._isPlatformSupported !== null) {
       return this._isPlatformSupported;
     }
 
-    // 🧪 TESTING MODE: Simulate Windows to test GitHub fallback
+    // 🧪 TESTING MODE: Simulate Windows to test behavior
     const simulateWindows = process.env.SIMULATE_WINDOWS === 'true';
     if (simulateWindows) {
-      console.log('🧪 [TEST MODE] Simulating Windows - Radicle disabled, GitHub fallback active');
+      console.log('🧪 [TEST MODE] Simulating Windows - Radicle P2P features disabled');
       this._isPlatformSupported = false;
       return false;
     }
@@ -151,7 +157,9 @@ export class RadicleServiceImpl implements RadicleService {
     const isSupported = platform === 'darwin' || platform === 'linux';
 
     if (!isSupported && platform === 'win32') {
-      console.log('RadicleService: Windows detected - Radicle features disabled (GitHub implementation coming soon)');
+      console.log('RadicleService: Windows detected - P2P collaboration features not yet available');
+      console.log('RadicleService: Local features (DreamNode creation, dreamweaving) work normally');
+      console.log('RadicleService: See platform-support.md in social-resonance-filter/docs for details');
     }
 
     this._isPlatformSupported = isSupported;
@@ -250,7 +258,6 @@ export class RadicleServiceImpl implements RadicleService {
       // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
       // IMPORTANT: --name is REQUIRED for non-TTY mode
       // IMPORTANT: --private keeps repo local until explicitly shared
-      // IMPORTANT: --no-seed prevents automatic network seeding
       const { spawn } = require('child_process');
       const repoName = name || require('path').basename(dreamNodePath);
 
@@ -260,7 +267,8 @@ export class RadicleServiceImpl implements RadicleService {
         '--private',           // Private = not announced, stays local until share
         '--default-branch', 'main',
         '--no-confirm',
-        '--no-seed',           // Don't seed until user explicitly shares
+        // NOTE: No --no-seed flag. Repo is auto-seeded so direct peers can fetch.
+        // Privacy comes from --private (not announced), not from refusing to serve.
         '--name', repoName,    // REQUIRED for non-TTY mode
       ];
       if (description) {
@@ -608,7 +616,7 @@ export class RadicleServiceImpl implements RadicleService {
     }
   }
 
-  async clone(radicleId: string, destinationPath: string, passphrase?: string): Promise<{ repoName: string; alreadyExisted: boolean }> {
+  async clone(radicleId: string, destinationPath: string, passphrase?: string, peerNid?: string): Promise<{ repoName: string; alreadyExisted: boolean }> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
@@ -650,10 +658,18 @@ export class RadicleServiceImpl implements RadicleService {
     let cloneResult: any;
 
     try {
-      // Use --scope all for public seed infrastructure (Phase 1 approach)
-      // This allows cloning from any public seed without requiring peer following
-      console.log(`RadicleService: Running 'rad clone ${radicleId} --scope all' in ${destinationPath}`);
-      cloneResult = await execAsync(`"${radCmd}" clone ${radicleId} --scope all`, {
+      // Direct P2P model: --scope followed means only trust delegates + explicitly followed peers
+      // If peerNid provided, use --seed to clone directly from that peer (private P2P)
+      let cloneCmd = `"${radCmd}" clone ${radicleId} --scope followed`;
+      if (peerNid) {
+        // Strip did:key: prefix if present - rad clone expects raw NID
+        const rawNid = peerNid.replace(/^did:key:/, '');
+        cloneCmd += ` --seed ${rawNid}`;
+        console.log(`RadicleService: Running '${cloneCmd}' (direct P2P from peer)`);
+      } else {
+        console.log(`RadicleService: Running '${cloneCmd}' (from routing table)`);
+      }
+      cloneResult = await execAsync(cloneCmd, {
         cwd: destinationPath,
         env: env,
       });
@@ -1271,27 +1287,28 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
-   * Trigger public seeding and network sync in the background (fire-and-forget)
+   * Trigger seeding in the background (fire-and-forget)
    * Does NOT wait for completion - returns immediately
-   * Used by "Copy Share Link" to make nodes discoverable without blocking UI
+   * Used by "Copy Share Link" to ensure node is servable to direct peers
    *
-   * This runs the FULL `rad seed <RID> --scope all` command which:
-   * 1. Updates inventory (announces to network)
-   * 2. Sets seeding policy to 'all'
-   * 3. Fetches from network (completes bidirectional handshake with seeds)
+   * This runs `rad seed <RID> --scope followed` which:
+   * 1. Sets seeding policy to 'followed' (only serve to trusted peers)
+   * 2. Fetches from followed peers (if any)
+   *
+   * NOTE: --scope followed is used for privacy. Direct peers with your NID can still clone.
    */
   seedInBackground(dreamNodePath: string, radicleId: string): void {
     // Fire-and-forget async operation
     (async () => {
       try {
-        console.log(`🌐 [Background Seed] Starting full seed operation for ${radicleId}...`);
+        console.log(`🌐 [Background Seed] Starting seed operation for ${radicleId} (scope: followed)...`);
         const radCmd = this.getRadCommand();
         const { spawn } = require('child_process');
 
-        // Run FULL rad seed command (WITHOUT --no-fetch)
-        // This completes the bidirectional handshake with seed nodes
+        // Run rad seed with --scope followed for direct P2P model
+        // Privacy: only serve to delegates + explicitly followed peers
         await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all'], {
+          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'followed'], {
             cwd: dreamNodePath,
             stdio: ['pipe', 'pipe', 'pipe']
           });
@@ -1312,7 +1329,7 @@ export class RadicleServiceImpl implements RadicleService {
             if (stderr) console.log(`[Background Seed] rad seed stderr:`, stderr);
 
             if (code === 0 || stdout.includes('Inventory updated') || stdout.includes('already seeding')) {
-              console.log(`✅ [Background Seed] Successfully seeded ${radicleId} to public network with full sync`);
+              console.log(`✅ [Background Seed] Successfully seeded ${radicleId} (scope: followed)`);
             } else {
               console.warn(`⚠️ [Background Seed] rad seed exited with code ${code} (non-critical)`);
             }

@@ -21,6 +21,21 @@
 #   --test-fail before-gh         Simulate failure before GitHub CLI installed (no automatic issue creation available)
 #   --test-fail after-gh          Simulate failure after GitHub CLI installed (should offer automatic issue creation)
 #   --test-radicle-fallback       Force GitHub source fallback for Radicle installation (simulates server outage)
+#
+# CI mode (non-interactive):
+#   bash install.sh --ci          Run in CI mode with defaults, no prompts, temp directory vault
+#   bash install.sh --ci --alias "TestBot" --passphrase "test123"
+#                                 CI mode with custom Radicle identity (creates identity automatically)
+
+# Parse --ci flag FIRST (before any checks that might exit)
+# This allows CI mode to bypass the non-interactive check
+CI_MODE=false
+for arg in "$@"; do
+    if [ "$arg" = "--ci" ]; then
+        CI_MODE=true
+        break
+    fi
+done
 
 # Create log file FIRST (before anything else)
 LOG_FILE="/tmp/interbrain-install-$(date +%Y%m%d-%H%M%S).log"
@@ -47,7 +62,14 @@ echo "=================================="
 echo ""
 
 # Check if running in non-interactive mode (piped without bash)
-if [ ! -t 0 ]; then
+# CI mode bypasses this check and uses defaults/env vars
+if [ "$CI_MODE" = "true" ]; then
+    echo "Running in CI mode - non-interactive with defaults"
+    DEFAULT_VAULT_PARENT="/tmp"
+    DEFAULT_VAULT_NAME="interbrain-ci-test-$$"
+    SKIP_AUTH=true
+    SKIP_OBSIDIAN_LAUNCH=true  # Install Obsidian but don't launch it
+elif [ ! -t 0 ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "⚠️  NON-INTERACTIVE MODE NOT SUPPORTED"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -81,6 +103,9 @@ DREAMER_UUID=""
 BRANCH="main"  # Default to main branch
 TEST_FAIL=""
 TEST_RADICLE_FALLBACK=false
+CI_RAD_ALIAS=""       # Radicle alias for CI mode
+CI_RAD_PASSPHRASE=""  # Radicle passphrase for CI mode
+# CI_MODE already parsed above before non-interactive check
 while [[ $# -gt 0 ]]; do
   case $1 in
     --uri)
@@ -103,11 +128,28 @@ while [[ $# -gt 0 ]]; do
       TEST_RADICLE_FALLBACK=true
       shift
       ;;
+    --ci)
+      CI_MODE=true
+      shift
+      ;;
+    --alias)
+      CI_RAD_ALIAS="$2"
+      shift 2
+      ;;
+    --passphrase)
+      CI_RAD_PASSPHRASE="$2"
+      shift 2
+      ;;
     *)
       shift
       ;;
   esac
 done
+
+# Export passphrase for rad auth if provided via CLI
+if [ -n "$CI_RAD_PASSPHRASE" ]; then
+    export RAD_PASSPHRASE="$CI_RAD_PASSPHRASE"
+fi
 
 # Function to check if command exists
 command_exists() {
@@ -771,23 +813,68 @@ else
 fi
 
 # Check for Obsidian
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo ""
-    echo "Step 2/$TOTAL_STEPS: Checking for Obsidian..."
-    echo "----------------------------------"
+echo ""
+echo "Step 2/$TOTAL_STEPS: Checking for Obsidian..."
+echo "----------------------------------"
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: Check /Applications or use Homebrew
     if [ -d "/Applications/Obsidian.app" ]; then
         success "Obsidian found"
         OBSIDIAN_INSTALLED=true
     else
-        warning "Obsidian not found. Installing..."
+        warning "Obsidian not found. Installing via Homebrew..."
         brew install --cask obsidian
         success "Obsidian installed"
         OBSIDIAN_INSTALLED=true
     fi
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux: Check common locations, try Flatpak or Snap
+    if command -v obsidian &> /dev/null || \
+       flatpak list 2>/dev/null | grep -q "md.obsidian.Obsidian" || \
+       snap list 2>/dev/null | grep -q "obsidian"; then
+        success "Obsidian found"
+        OBSIDIAN_INSTALLED=true
+    else
+        warning "Obsidian not found. Attempting to install..."
+
+        # Try Flatpak first (most universal)
+        if command -v flatpak &> /dev/null; then
+            info "Installing via Flatpak..."
+            if flatpak install -y flathub md.obsidian.Obsidian 2>/dev/null; then
+                success "Obsidian installed via Flatpak"
+                OBSIDIAN_INSTALLED=true
+            fi
+        fi
+
+        # Try Snap if Flatpak failed or unavailable
+        if [ "$OBSIDIAN_INSTALLED" != "true" ] && command -v snap &> /dev/null; then
+            info "Installing via Snap..."
+            if sudo snap install obsidian --classic 2>/dev/null; then
+                success "Obsidian installed via Snap"
+                OBSIDIAN_INSTALLED=true
+            fi
+        fi
+
+        # If both failed, guide user
+        if [ "$OBSIDIAN_INSTALLED" != "true" ]; then
+            OBSIDIAN_INSTALLED=false
+            warning "Could not auto-install Obsidian."
+            echo ""
+            echo "Please install Obsidian manually:"
+            echo "  - Flatpak: flatpak install flathub md.obsidian.Obsidian"
+            echo "  - Snap:    sudo snap install obsidian --classic"
+            echo "  - Or download from: https://obsidian.md"
+            echo ""
+            echo "Then re-run this installer."
+            if [ "$CI_MODE" != "true" ]; then
+                exit 1
+            fi
+        fi
+    fi
 else
     OBSIDIAN_INSTALLED=false
-    warning "Non-macOS system detected. Please install Obsidian manually from https://obsidian.md"
+    warning "Unknown OS. Please install Obsidian manually from https://obsidian.md"
 fi
 
 echo ""
@@ -1112,7 +1199,11 @@ else
     info "  • Community features"
     echo ""
 
-    if [ -t 0 ]; then
+    if [ "$SKIP_AUTH" = "true" ]; then
+        # CI mode - skip auth entirely
+        info "CI mode: Skipping GitHub authentication"
+        GH_USER="[CI mode - skipped]"
+    elif [ -t 0 ]; then
         # Interactive mode - offer authentication
         echo "Do you have a GitHub account?"
         echo ""
@@ -1230,7 +1321,31 @@ else
     echo "  2. Create a passphrase (keep this safe!)"
     echo ""
 
-    if [ -t 0 ]; then
+    if [ "$CI_MODE" = "true" ] && [ -n "$RAD_PASSPHRASE" ]; then
+        # CI mode with passphrase - create identity non-interactively
+        # Use CLI-provided alias or generate a default one
+        ci_alias="${CI_RAD_ALIAS:-CI-Test-$$}"
+        info "CI mode: Creating Radicle identity with alias '$ci_alias'"
+        rad auth --alias "$ci_alias"
+
+        if rad self --did >/dev/null 2>&1; then
+            success "Radicle identity created (CI mode)"
+            RAD_DID=$(rad self --did)
+            RAD_ALIAS=$(rad self --alias 2>/dev/null || echo "$ci_alias")
+            echo "   DID: $RAD_DID"
+            echo "   Alias: $RAD_ALIAS"
+        else
+            warning "CI mode: Radicle identity creation failed"
+            RAD_DID="[CI mode - failed]"
+            RAD_ALIAS="[Not created]"
+        fi
+    elif [ "$CI_MODE" = "true" ]; then
+        # CI mode without passphrase - skip
+        info "CI mode: Skipping Radicle identity (no RAD_PASSPHRASE or --passphrase)"
+        info "To create identity in CI: bash install.sh --ci --alias 'Name' --passphrase 'pass'"
+        RAD_DID="[CI mode - skipped]"
+        RAD_ALIAS="[Not created]"
+    elif [ -t 0 ]; then
         # Interactive mode - offer choice
         read -p "Create Radicle identity now? [Y/n] (you can skip and rerun installer later): " -n 1 -r
         echo ""
@@ -1472,7 +1587,9 @@ echo ""
 echo "Step 14/$TOTAL_STEPS: Registering vault with Obsidian..."
 echo "-----------------------------"
 
-if [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
+if [ "$SKIP_OBSIDIAN_LAUNCH" = "true" ]; then
+    info "CI mode: Skipping Obsidian registration and launch (Obsidian installed: $OBSIDIAN_INSTALLED)"
+elif [[ "$OSTYPE" == "darwin"* ]] && [ "$OBSIDIAN_INSTALLED" = true ]; then
     # Kill Obsidian if running so it can read the updated config
     if pgrep -x "Obsidian" > /dev/null; then
         info "Closing Obsidian to update vault registry..."

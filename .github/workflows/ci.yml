@@ -1,0 +1,466 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'epic/*', 'feature/*']
+  pull_request:
+    branches: [main]
+
+# Path filters for conditional job execution
+# Note: GitHub Actions doesn't support per-job path filters natively,
+# so we use dorny/paths-filter action within jobs that need it
+
+jobs:
+  # ============================================================================
+  # Core Checks - Run on every commit (fast: ~2 min)
+  # ============================================================================
+  check-all:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        timeout-minutes: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+        timeout-minutes: 3
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 5
+
+      - name: Run lint
+        run: npm run lint
+        timeout-minutes: 2
+
+      - name: Run typecheck
+        run: npm run typecheck
+        timeout-minutes: 3
+
+      - name: Run tests
+        run: npm run test
+        timeout-minutes: 5
+
+  # ============================================================================
+  # Path Filter - Determine which jobs need to run
+  # ============================================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      install-scripts: ${{ steps.filter.outputs.install-scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            install-scripts:
+              - 'install.sh'
+              - 'install.ps1'
+              - '.github/workflows/ci.yml'
+
+  # ============================================================================
+  # Install Script Syntax Validation (only when install scripts change)
+  # ============================================================================
+  install-script-syntax:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify install.sh syntax
+        run: bash -n install.sh
+
+      - name: Verify install.ps1 syntax
+        run: |
+          # Use pwsh to check PowerShell syntax
+          pwsh -Command "[System.Management.Automation.Language.Parser]::ParseFile('install.ps1', [ref]\$null, [ref]\$null)" > /dev/null
+          echo "install.ps1 syntax OK"
+
+      - name: Test --ci flag is recognized
+        run: |
+          # Test that --ci flag prevents the non-interactive exit
+          output=$(timeout 5 bash install.sh --ci 2>&1 || true)
+
+          if echo "$output" | grep -q "NON-INTERACTIVE MODE NOT SUPPORTED"; then
+            echo "ERROR: --ci flag not working - script still requires interactive mode"
+            exit 1
+          fi
+
+          if echo "$output" | grep -q "Running in CI mode"; then
+            echo "SUCCESS: --ci flag recognized"
+          else
+            echo "WARNING: CI mode message not found, but non-interactive error also not present"
+          fi
+
+          echo "Output preview:"
+          echo "$output" | head -20
+
+  # ============================================================================
+  # Group A: Installation & Tool Verification (only when install scripts change)
+  # ============================================================================
+  install-verify-linux:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      rad-version: ${{ steps.verify.outputs.rad-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Radicle
+        id: cache-radicle
+        uses: actions/cache@v4
+        with:
+          path: ~/.radicle
+          key: radicle-linux-${{ hashFiles('install.sh') }}-v2
+          restore-keys: radicle-linux-
+
+      - name: Cache Ollama models
+        id: cache-ollama
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-nomic-embed-text-v1
+
+      - name: Run install script
+        run: |
+          bash install.sh --ci --alias "CI-Linux-${{ github.run_id }}" --passphrase "ci-test-pass"
+        env:
+          RAD_PASSPHRASE: ci-test-pass
+
+      - name: Verify installed tools
+        id: verify
+        run: |
+          echo "=== Group A: Tool Verification ==="
+
+          # A.1: Git
+          echo "A.1 Git:"
+          git --version || { echo "FAIL: Git not found"; exit 1; }
+
+          # A.2: GitHub CLI (check presence, auth tested separately)
+          echo "A.2 GitHub CLI:"
+          gh --version || { echo "FAIL: GitHub CLI not found"; exit 1; }
+
+          # A.3: Radicle CLI
+          echo "A.3 Radicle CLI:"
+          export PATH="$HOME/.radicle/bin:$PATH"
+          RAD_VERSION=$(rad --version 2>/dev/null || echo "NOT FOUND")
+          echo "rad-version=$RAD_VERSION" >> $GITHUB_OUTPUT
+          if [ "$RAD_VERSION" = "NOT FOUND" ]; then
+            echo "FAIL: Radicle CLI not found"
+            exit 1
+          fi
+          echo "Radicle: $RAD_VERSION"
+
+          # A.4: Radicle Identity
+          echo "A.4 Radicle Identity:"
+          RAD_DID=$(rad self --did 2>/dev/null || echo "NOT FOUND")
+          if [ "$RAD_DID" = "NOT FOUND" ]; then
+            echo "FAIL: Radicle identity not found"
+            exit 1
+          fi
+          echo "Identity: $RAD_DID"
+
+          # A.5: Ollama
+          echo "A.5 Ollama:"
+          if command -v ollama &> /dev/null; then
+            ollama --version || true
+            echo "Ollama installed"
+          else
+            echo "WARNING: Ollama not installed (optional)"
+          fi
+
+          # A.6: Obsidian (Linux - check Flatpak/Snap)
+          echo "A.6 Obsidian:"
+          if flatpak list 2>/dev/null | grep -q "md.obsidian.Obsidian"; then
+            echo "Obsidian installed via Flatpak"
+          elif snap list 2>/dev/null | grep -q "obsidian"; then
+            echo "Obsidian installed via Snap"
+          elif command -v obsidian &> /dev/null; then
+            echo "Obsidian found in PATH"
+          else
+            echo "FAIL: Obsidian not found"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== All required tools verified ==="
+
+  install-verify-macos:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    outputs:
+      rad-version: ${{ steps.verify.outputs.rad-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Radicle
+        id: cache-radicle
+        uses: actions/cache@v4
+        with:
+          path: ~/.radicle
+          key: radicle-macos-${{ hashFiles('install.sh') }}-v2
+          restore-keys: radicle-macos-
+
+      - name: Cache Ollama models
+        id: cache-ollama
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-nomic-embed-text-v1
+
+      - name: Run install script
+        run: |
+          bash install.sh --ci --alias "CI-macOS-${{ github.run_id }}" --passphrase "ci-test-pass"
+        env:
+          RAD_PASSPHRASE: ci-test-pass
+
+      - name: Verify installed tools
+        id: verify
+        run: |
+          echo "=== Group A: Tool Verification ==="
+
+          # A.1: Git
+          echo "A.1 Git:"
+          git --version || { echo "FAIL: Git not found"; exit 1; }
+
+          # A.2: GitHub CLI
+          echo "A.2 GitHub CLI:"
+          gh --version || { echo "FAIL: GitHub CLI not found"; exit 1; }
+
+          # A.3: Radicle CLI
+          echo "A.3 Radicle CLI:"
+          export PATH="$HOME/.radicle/bin:$PATH"
+          RAD_VERSION=$(rad --version 2>/dev/null || echo "NOT FOUND")
+          echo "rad-version=$RAD_VERSION" >> $GITHUB_OUTPUT
+          if [ "$RAD_VERSION" = "NOT FOUND" ]; then
+            echo "FAIL: Radicle CLI not found"
+            exit 1
+          fi
+          echo "Radicle: $RAD_VERSION"
+
+          # A.4: Radicle Identity
+          echo "A.4 Radicle Identity:"
+          RAD_DID=$(rad self --did 2>/dev/null || echo "NOT FOUND")
+          if [ "$RAD_DID" = "NOT FOUND" ]; then
+            echo "FAIL: Radicle identity not found"
+            exit 1
+          fi
+          echo "Identity: $RAD_DID"
+
+          # A.5: Ollama
+          echo "A.5 Ollama:"
+          if command -v ollama &> /dev/null; then
+            ollama --version || true
+            echo "Ollama installed"
+          else
+            echo "WARNING: Ollama not installed (optional)"
+          fi
+
+          # A.6: Obsidian (macOS - check /Applications)
+          echo "A.6 Obsidian:"
+          if [ -d "/Applications/Obsidian.app" ]; then
+            echo "Obsidian installed at /Applications/Obsidian.app"
+          else
+            echo "FAIL: Obsidian not found"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== All required tools verified ==="
+
+  install-verify-windows:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Ollama models
+        id: cache-ollama
+        uses: actions/cache@v4
+        with:
+          path: ~\.ollama\models
+          key: ollama-nomic-embed-text-windows-v1
+
+      - name: Run install script
+        shell: pwsh
+        run: |
+          .\install.ps1 -CI
+
+      - name: Verify installed tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          Write-Host "=== Group A: Tool Verification (Windows) ==="
+
+          # A.1: Git
+          Write-Host "A.1 Git:"
+          try {
+            git --version
+          } catch {
+            Write-Host "FAIL: Git not found"
+            exit 1
+          }
+
+          # A.2: GitHub CLI
+          Write-Host "A.2 GitHub CLI:"
+          try {
+            gh --version | Select-Object -First 1
+          } catch {
+            Write-Host "FAIL: GitHub CLI not found"
+            exit 1
+          }
+
+          # A.3: Radicle CLI (Windows has CLI but not node)
+          Write-Host "A.3 Radicle CLI:"
+          # Check if rad is in PATH or common locations
+          $radPaths = @(
+            "$env:USERPROFILE\.radicle\bin\rad.exe",
+            "$env:LOCALAPPDATA\Programs\Radicle\rad.exe"
+          )
+          $radFound = $false
+          foreach ($radPath in $radPaths) {
+            if (Test-Path $radPath) {
+              $radVersion = & $radPath --version 2>&1
+              Write-Host "Radicle: $radVersion"
+              $radFound = $true
+              break
+            }
+          }
+          if (-not $radFound) {
+            # Try PATH
+            try {
+              $radVersion = rad --version 2>&1
+              Write-Host "Radicle: $radVersion"
+              $radFound = $true
+            } catch {
+              Write-Host "INFO: Radicle CLI not found (expected - Windows native build optional)"
+            }
+          }
+
+          # A.4: Radicle Identity (only if rad found)
+          if ($radFound) {
+            Write-Host "A.4 Radicle Identity:"
+            try {
+              $radDid = rad self --did 2>&1
+              Write-Host "Identity: $radDid"
+            } catch {
+              Write-Host "INFO: No Radicle identity (expected if rad not fully set up)"
+            }
+          }
+
+          # A.5: Ollama
+          Write-Host "A.5 Ollama:"
+          try {
+            ollama --version
+            Write-Host "Ollama installed"
+          } catch {
+            Write-Host "INFO: Ollama not installed (optional)"
+          }
+
+          # A.6: Obsidian (Windows - check common locations)
+          Write-Host "A.6 Obsidian:"
+          $obsidianPaths = @(
+            "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
+            "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
+            "$env:PROGRAMFILES\Obsidian\Obsidian.exe"
+          )
+          $obsidianFound = $false
+          foreach ($path in $obsidianPaths) {
+            if (Test-Path $path) {
+              Write-Host "Obsidian installed at $path"
+              $obsidianFound = $true
+              break
+            }
+          }
+          if (-not $obsidianFound) {
+            Write-Host "FAIL: Obsidian not found"
+            exit 1
+          }
+
+          Write-Host ""
+          Write-Host "=== Windows tool verification complete ==="
+          Write-Host "NOTE: P2P features not available on Windows (pending Radicle support)"
+
+  # ============================================================================
+  # Group B: DreamNode Operations (placeholder - needs Node.js test harness)
+  # ============================================================================
+  # TODO: Create scripts/ci/test-dreamnode-ops.ts
+  # - Test DreamNodeConversionService.convertToDreamNode()
+  # - Test SubmoduleManagerService.importSubmodule()
+  # - Verify platform-specific submodule URL handling
+
+  # ============================================================================
+  # DROPPED GROUPS (December 2025)
+  # ============================================================================
+  # Group C (GitHub Publishing) - Dropped: gh CLI is straightforward, manual testing sufficient
+  # Group D (Semantic Search) - Dropped: Vitest covers logic, Ollama is install-script concern
+  # See p2p-collaboration.yml for Group E (P2P tests with Tailscale)
+
+  # ============================================================================
+  # Summary Job
+  # ============================================================================
+  ci-summary:
+    if: always()
+    needs: [check-all, changes, install-script-syntax, install-verify-linux, install-verify-macos, install-verify-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI Summary
+        run: |
+          echo "=== CI Summary ==="
+          echo ""
+          echo "Core Checks: ${{ needs.check-all.result }}"
+          echo ""
+          echo "Install Script Tests (run when install.sh/install.ps1 change):"
+          echo "  Path filter: ${{ needs.changes.outputs.install-scripts == 'true' && 'triggered' || 'skipped (no changes)' }}"
+          echo "  Syntax Check: ${{ needs.install-script-syntax.result }}"
+          echo "  Linux Install: ${{ needs.install-verify-linux.result }}"
+          echo "  macOS Install: ${{ needs.install-verify-macos.result }}"
+          echo "  Windows Install: ${{ needs.install-verify-windows.result }}"
+          echo ""
+
+          # Only show Radicle versions if install jobs ran
+          if [ "${{ needs.changes.outputs.install-scripts }}" == "true" ]; then
+            echo "Radicle Versions:"
+            echo "  Linux: ${{ needs.install-verify-linux.outputs.rad-version || 'N/A' }}"
+            echo "  macOS: ${{ needs.install-verify-macos.outputs.rad-version || 'N/A' }}"
+            echo ""
+          fi
+
+          # Fail if check-all failed (always required)
+          if [ "${{ needs.check-all.result }}" != "success" ]; then
+            echo "FAIL: Core checks failed"
+            exit 1
+          fi
+
+          # Fail if install jobs ran and failed (skipped is OK)
+          if [ "${{ needs.changes.outputs.install-scripts }}" == "true" ]; then
+            if [ "${{ needs.install-script-syntax.result }}" == "failure" ] || \
+               [ "${{ needs.install-verify-linux.result }}" == "failure" ] || \
+               [ "${{ needs.install-verify-macos.result }}" == "failure" ] || \
+               [ "${{ needs.install-verify-windows.result }}" == "failure" ]; then
+              echo "FAIL: Install verification failed"
+              exit 1
+            fi
+          fi
+
+          echo "SUCCESS: All CI checks passed"
