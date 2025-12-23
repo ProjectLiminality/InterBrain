@@ -248,12 +248,14 @@ jobs:
           rm -rf ${{ steps.bob-clone.outputs.bob-repo }} 2>/dev/null || true
 
   # ============================================================================
-  # Multi-Runner Test: Real network P2P between macOS and Linux via Tailscale
+  # Multi-Runner Test: Real network P2P between two Linux runners via Tailscale
   # Uses Tailscale VPN to create mesh network between CI runners
+  # Note: Tailscale GitHub Action only supports Linux, so both runners are Linux
+  # This still validates real network P2P since they're separate VMs
   # ============================================================================
   p2p-tailscale-alice:
     if: ${{ github.event.inputs.test_mode == 'multi-runner' }}
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
       alice-did: ${{ steps.alice.outputs.did }}
@@ -485,8 +487,8 @@ jobs:
           echo "=========================================="
           echo ""
           echo "What happened:"
-          echo "  1. Alice (macOS) and Bob (Linux) joined Tailscale mesh"
-          echo "  2. Bob connected to Alice via Tailscale IP"
+          echo "  1. Alice and Bob (separate Linux VMs) joined Tailscale mesh"
+          echo "  2. Bob connected to Alice via Tailscale IP (bypassing NAT)"
           echo "  3. Bob cloned Alice's DreamNode via rad clone --seed"
           echo "  4. Bob made changes and pushed back to Alice"
           echo ""
