@@ -296,35 +296,68 @@ jobs:
           echo "did=$ALICE_DID" >> $GITHUB_OUTPUT
           echo "Alice DID: $ALICE_DID"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Create and Initialize DreamNode
         id: create
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="alice-tailscale-pass"
 
-          # Create test repo
+          # Use actual service pattern via test script
+          npx ts-node scripts/ci/test-radicle-init.ts
+
+          # Now create the actual test node for P2P
           mkdir -p /tmp/AliceTailscaleNode
           cd /tmp/AliceTailscaleNode
           git init
           git config user.email "alice@tailscale.test"
           git config user.name "Alice Tailscale"
 
-          cat > .udd << EOF
+          cat > .udd << 'UDDEOF'
           {
-            "uuid": "alice-tailscale-$(date +%s)",
+            "uuid": "alice-tailscale-test",
             "title": "Alice Tailscale Test DreamNode",
             "type": "dream"
           }
-          EOF
+          UDDEOF
           echo "# Tailscale P2P Test Node" > README.md
-          echo "Created by Alice on macOS runner" >> README.md
+          echo "Created by Alice for P2P testing" >> README.md
           git add -A
           git commit -m "Initial commit"
 
-          # Init with Radicle (public so Bob can fetch)
-          # Need --public and --description to avoid TTY prompts for visibility and description
-          rad init --public --name "AliceTailscaleNode" --default-branch main --description "Tailscale P2P Test" --no-confirm
-          RID=$(rad . 2>/dev/null | grep -oE 'rad:[a-zA-Z0-9]+' | head -1)
+          # Use spawn pattern with stdin pipe (matches RadicleService)
+          node -e "
+          const { spawn } = require('child_process');
+          const child = spawn('rad', [
+            'init', '/tmp/AliceTailscaleNode',
+            '--public', '--name', 'AliceTailscaleNode',
+            '--default-branch', 'main',
+            '--description', 'Tailscale P2P Test',
+            '--no-confirm'
+          ], {
+            env: { ...process.env, RAD_PASSPHRASE: 'alice-tailscale-pass', PATH: process.env.HOME + '/.radicle/bin:' + process.env.PATH },
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          let stdout = '';
+          child.stdout.on('data', d => { stdout += d; process.stdout.write(d); });
+          child.stderr.on('data', d => process.stderr.write(d));
+          child.on('close', code => {
+            const match = stdout.match(/rad:z[a-zA-Z0-9]+/);
+            if (match) console.log('RID=' + match[0]);
+            process.exit(code);
+          });
+          child.stdin.end();
+          " | tee /tmp/rad-init-output.txt
+
+          RID=$(grep -oE 'rad:z[a-zA-Z0-9]+' /tmp/rad-init-output.txt | head -1)
           echo "rid=$RID" >> $GITHUB_OUTPUT
           echo "Alice RID: $RID"
 
