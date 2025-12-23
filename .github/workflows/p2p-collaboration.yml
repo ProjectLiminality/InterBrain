@@ -248,21 +248,35 @@ jobs:
           rm -rf ${{ steps.bob-clone.outputs.bob-repo }} 2>/dev/null || true
 
   # ============================================================================
-  # Multi-Runner Test: Actual network P2P between macOS and Linux
-  # This is the stretch goal - requires Radicle nodes to be publicly reachable
+  # Multi-Runner Test: Real network P2P between macOS and Linux via Tailscale
+  # Uses Tailscale VPN to create mesh network between CI runners
   # ============================================================================
-  p2p-multi-runner-alice:
+  p2p-tailscale-alice:
     if: ${{ github.event.inputs.test_mode == 'multi-runner' }}
     runs-on: macos-latest
     timeout-minutes: 30
     outputs:
       alice-did: ${{ steps.alice.outputs.did }}
       alice-rid: ${{ steps.create.outputs.rid }}
-      alice-ip: ${{ steps.network.outputs.ip }}
+      alice-tailscale-ip: ${{ steps.tailscale.outputs.ip }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:CI
+
+      - name: Get Tailscale IP
+        id: tailscale
+        run: |
+          TAILSCALE_IP=$(tailscale ip -4)
+          echo "ip=$TAILSCALE_IP" >> $GITHUB_OUTPUT
+          echo "Alice Tailscale IP: $TAILSCALE_IP"
 
       - name: Install Radicle
         run: |
@@ -274,67 +288,105 @@ jobs:
         id: alice
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
-          export RAD_PASSPHRASE="alice-multi-pass"
-          rad auth --alias "Alice-Multi-${{ github.run_id }}"
-          echo "did=$(rad self --did)" >> $GITHUB_OUTPUT
+          export RAD_PASSPHRASE="alice-tailscale-pass"
+          rad auth --alias "Alice-Tailscale-${{ github.run_id }}"
+          ALICE_DID=$(rad self --did)
+          echo "did=$ALICE_DID" >> $GITHUB_OUTPUT
+          echo "Alice DID: $ALICE_DID"
 
-      - name: Get Network Info
-        id: network
-        run: |
-          # Get public IP (may not be routable from other runners)
-          IP=$(curl -s https://api.ipify.org || echo "unknown")
-          echo "ip=$IP" >> $GITHUB_OUTPUT
-          echo "Alice IP: $IP"
-
-      - name: Create and Seed DreamNode
+      - name: Create and Initialize DreamNode
         id: create
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
-          export RAD_PASSPHRASE="alice-multi-pass"
+          export RAD_PASSPHRASE="alice-tailscale-pass"
 
           # Create test repo
-          mkdir -p /tmp/AliceMultiNode
-          cd /tmp/AliceMultiNode
+          mkdir -p /tmp/AliceTailscaleNode
+          cd /tmp/AliceTailscaleNode
           git init
-          git config user.email "alice@multi.test"
-          git config user.name "Alice Multi"
+          git config user.email "alice@tailscale.test"
+          git config user.name "Alice Tailscale"
 
-          echo '{"uuid":"alice-multi","title":"Alice Multi Test","type":"dream"}' > .udd
-          echo "# Multi-Runner Test Node" > README.md
+          cat > .udd << EOF
+          {
+            "uuid": "alice-tailscale-$(date +%s)",
+            "title": "Alice Tailscale Test DreamNode",
+            "type": "dream"
+          }
+          EOF
+          echo "# Tailscale P2P Test Node" > README.md
+          echo "Created by Alice on macOS runner" >> README.md
           git add -A
           git commit -m "Initial commit"
 
-          # Init with Radicle and seed publicly
-          rad init --name "AliceMultiNode" --default-branch main --no-confirm
-          RID=$(rad . | grep -oE 'rad:[a-zA-Z0-9]+' | head -1)
+          # Init with Radicle (not private - Bob needs to fetch)
+          rad init --name "AliceTailscaleNode" --default-branch main --no-confirm
+          RID=$(rad . 2>/dev/null | grep -oE 'rad:[a-zA-Z0-9]+' | head -1)
           echo "rid=$RID" >> $GITHUB_OUTPUT
+          echo "Alice RID: $RID"
 
-          # Seed with scope all so Bob can fetch
+          # Seed so Bob can fetch
           rad seed "$RID" --scope all
 
-      - name: Start Node and Wait
+      - name: Start Radicle Node
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
-          export RAD_PASSPHRASE="alice-multi-pass"
+          export RAD_PASSPHRASE="alice-tailscale-pass"
 
-          # Start node
-          rad node start --foreground &
+          # Start node listening on all interfaces (including Tailscale)
+          rad node start --foreground --listen 0.0.0.0:8776 &
+          sleep 5
+          rad node status || echo "Node starting..."
 
-          # Wait for Bob to finish (poll for file or timeout)
-          for i in {1..60}; do
+      - name: Wait for Bob (with status updates)
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+
+          echo "Alice is ready and waiting for Bob..."
+          echo "  Tailscale IP: ${{ steps.tailscale.outputs.ip }}"
+          echo "  DID: ${{ steps.alice.outputs.did }}"
+          echo "  RID: ${{ steps.create.outputs.rid }}"
+          echo ""
+
+          # Wait for Bob to complete (max 20 minutes)
+          for i in {1..40}; do
             sleep 30
-            echo "Waiting for Bob... ($i/60)"
+            echo "[$i/40] Waiting for Bob... (rad node status below)"
+            rad node status 2>/dev/null || true
           done
 
-  p2p-multi-runner-bob:
+  p2p-tailscale-bob:
     if: ${{ github.event.inputs.test_mode == 'multi-runner' }}
-    needs: p2p-multi-runner-alice
+    needs: p2p-tailscale-alice
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:CI
+
+      - name: Get Tailscale IP and Test Connectivity
+        id: tailscale
+        run: |
+          BOB_IP=$(tailscale ip -4)
+          echo "Bob Tailscale IP: $BOB_IP"
+
+          ALICE_IP="${{ needs.p2p-tailscale-alice.outputs.alice-tailscale-ip }}"
+          echo "Alice Tailscale IP: $ALICE_IP"
+
+          # Test connectivity to Alice via Tailscale
+          echo "Testing connectivity to Alice..."
+          ping -c 3 "$ALICE_IP" || echo "Ping failed (may be blocked, trying anyway)"
+
+          # Test if Radicle port is reachable
+          nc -zv "$ALICE_IP" 8776 -w 5 || echo "Port check inconclusive"
 
       - name: Install Radicle
         run: |
@@ -345,40 +397,100 @@ jobs:
       - name: Create Bob's Identity
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
-          export RAD_PASSPHRASE="bob-multi-pass"
-          rad auth --alias "Bob-Multi-${{ github.run_id }}"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+          rad auth --alias "Bob-Tailscale-${{ github.run_id }}"
+          echo "Bob DID: $(rad self --did)"
 
-      - name: Start Node
+      - name: Start Bob's Node
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
-          export RAD_PASSPHRASE="bob-multi-pass"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
           rad node start --foreground &
           sleep 10
+          rad node status || echo "Node starting..."
 
-      - name: Try to Clone from Alice
+      - name: Connect to Alice via Tailscale
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
-          export RAD_PASSPHRASE="bob-multi-pass"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
 
-          ALICE_DID="${{ needs.p2p-multi-runner-alice.outputs.alice-did }}"
-          ALICE_RID="${{ needs.p2p-multi-runner-alice.outputs.alice-rid }}"
-          ALICE_IP="${{ needs.p2p-multi-runner-alice.outputs.alice-ip }}"
+          ALICE_DID="${{ needs.p2p-tailscale-alice.outputs.alice-did }}"
+          ALICE_IP="${{ needs.p2p-tailscale-alice.outputs.alice-tailscale-ip }}"
 
-          echo "Attempting to connect to Alice..."
+          echo "Connecting to Alice..."
           echo "  DID: $ALICE_DID"
+          echo "  Tailscale IP: $ALICE_IP"
+
+          # Connect using Tailscale IP (bypasses NAT!)
+          rad node connect "$ALICE_DID@$ALICE_IP:8776"
+
+          # Verify connection
+          sleep 5
+          rad node status
+          rad node routing || true
+
+      - name: Clone from Alice
+        id: clone
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          ALICE_DID="${{ needs.p2p-tailscale-alice.outputs.alice-did }}"
+          ALICE_RID="${{ needs.p2p-tailscale-alice.outputs.alice-rid }}"
+
+          echo "Cloning from Alice..."
           echo "  RID: $ALICE_RID"
-          echo "  IP: $ALICE_IP"
+          echo "  Seed: $ALICE_DID"
 
-          # Try to connect (will likely fail due to NAT/firewall)
-          rad node connect "$ALICE_DID@$ALICE_IP:8776" || echo "Connection failed (expected in CI)"
-
-          # Try to clone
+          # Clone using direct P2P (--seed points to Alice)
           mkdir -p /tmp/BobClone
-          rad clone "$ALICE_RID" --scope followed --seed "$ALICE_DID" /tmp/BobClone || {
-            echo "Clone failed - network P2P not possible between CI runners"
-            echo "This is expected. Use single-runner mode for CI testing."
-            exit 0
-          }
+          rad clone "$ALICE_RID" --scope followed --seed "$ALICE_DID" /tmp/BobClone
+
+          # Verify clone
+          echo ""
+          echo "=== Clone successful! ==="
+          ls -la /tmp/BobClone
+          cat /tmp/BobClone/README.md
+          cat /tmp/BobClone/.udd
+
+      - name: Bob Makes Changes and Pushes
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          cd /tmp/BobClone
+          git config user.email "bob@tailscale.test"
+          git config user.name "Bob Tailscale"
+
+          # Make a change
+          echo "" >> README.md
+          echo "## Bob's Contribution" >> README.md
+          echo "This was added by Bob on Linux runner via Tailscale P2P!" >> README.md
+          echo "Timestamp: $(date)" >> README.md
+
+          git add -A
+          git commit -m "Bob's contribution via Tailscale P2P"
+
+          # Push to Alice via Radicle
+          git push rad main
+
+          echo ""
+          echo "=== Push successful! ==="
+          git log --oneline -3
+
+      - name: Verify P2P Success
+        run: |
+          echo "=========================================="
+          echo "  TAILSCALE P2P TEST SUCCESSFUL!"
+          echo "=========================================="
+          echo ""
+          echo "What happened:"
+          echo "  1. Alice (macOS) and Bob (Linux) joined Tailscale mesh"
+          echo "  2. Bob connected to Alice via Tailscale IP"
+          echo "  3. Bob cloned Alice's DreamNode via rad clone --seed"
+          echo "  4. Bob made changes and pushed back to Alice"
+          echo ""
+          echo "This proves real cross-platform P2P works in CI!"
 
   # ============================================================================
   # Summary
@@ -401,5 +513,28 @@ jobs:
           echo "  - Clone with --seed flag (direct P2P model)"
           echo "  - Push/sync operations"
           echo ""
-          echo "For full network P2P testing, run with test_mode=multi-runner"
-          echo "(Note: Multi-runner may fail due to NAT/firewall between CI runners)"
+          echo "For full network P2P testing via Tailscale, run with test_mode=multi-runner"
+
+  p2p-tailscale-summary:
+    if: ${{ always() && github.event.inputs.test_mode == 'multi-runner' }}
+    needs: [p2p-tailscale-alice, p2p-tailscale-bob]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tailscale P2P Test Summary
+        run: |
+          echo "=== Tailscale P2P Test Summary ==="
+          echo ""
+          echo "Alice (macOS): ${{ needs.p2p-tailscale-alice.result }}"
+          echo "Bob (Linux): ${{ needs.p2p-tailscale-bob.result }}"
+          echo ""
+          echo "Alice Tailscale IP: ${{ needs.p2p-tailscale-alice.outputs.alice-tailscale-ip }}"
+          echo "Alice DID: ${{ needs.p2p-tailscale-alice.outputs.alice-did }}"
+          echo "Alice RID: ${{ needs.p2p-tailscale-alice.outputs.alice-rid }}"
+          echo ""
+
+          if [ "${{ needs.p2p-tailscale-bob.result }}" == "success" ]; then
+            echo "SUCCESS: Real cross-platform P2P collaboration verified!"
+          else
+            echo "FAILURE: P2P test did not complete successfully"
+            exit 1
+          fi
