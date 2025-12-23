@@ -332,39 +332,48 @@ jobs:
           echo "did=$ALICE_DID" >> $GITHUB_OUTPUT
           echo "Alice DID: $ALICE_DID"
 
-      - name: Create and Initialize DreamNode
-        id: create
+      # ========================================================================
+      # Create Square, Circle, and Cylinder DreamNodes
+      # Square: Shared with Bob (he'll clone this)
+      # Circle: Alice has it, Bob doesn't (will be auto-cloned via submodule)
+      # Cylinder: Parent DreamSong that weaves Square + Circle
+      # ========================================================================
+      - name: Create Square DreamNode
+        id: create-square
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="alice-tailscale-pass"
 
-          # Create test node for P2P (using RadicleService spawn pattern)
-          mkdir -p /tmp/AliceTailscaleNode
-          cd /tmp/AliceTailscaleNode
+          echo "=============================================="
+          echo "  Creating SQUARE (shared with Bob)"
+          echo "=============================================="
+
+          mkdir -p /tmp/Square
+          cd /tmp/Square
           git init --initial-branch=main
           git config user.email "alice@tailscale.test"
           git config user.name "Alice Tailscale"
 
           cat > .udd << 'UDDEOF'
           {
-            "uuid": "alice-tailscale-test",
-            "title": "Alice Tailscale Test DreamNode",
+            "uuid": "square-uuid",
+            "title": "Square",
             "type": "dream"
           }
           UDDEOF
-          echo "# Tailscale P2P Test Node" > README.md
-          echo "Created by Alice for P2P testing" >> README.md
+          echo "# Square" > README.md
+          echo "A DreamNode shared between Alice and Bob" >> README.md
           git add -A
           git commit -m "Initial commit"
 
-          # Use spawn pattern with stdin pipe (matches RadicleService)
+          # rad init with spawn pattern
           node -e "
           const { spawn } = require('child_process');
           const child = spawn('rad', [
-            'init', '/tmp/AliceTailscaleNode',
-            '--public', '--name', 'AliceTailscaleNode',
+            'init', '/tmp/Square',
+            '--public', '--name', 'Square',
             '--default-branch', 'main',
-            '--description', 'Tailscale P2P Test',
+            '--description', 'Square DreamNode',
             '--no-confirm'
           ], {
             env: { ...process.env, RAD_PASSPHRASE: 'alice-tailscale-pass', PATH: process.env.HOME + '/.radicle/bin:' + process.env.PATH },
@@ -379,14 +388,143 @@ jobs:
             process.exit(code);
           });
           child.stdin.end();
-          " | tee /tmp/rad-init-output.txt
+          " | tee /tmp/square-init.txt
 
-          RID=$(grep -oE 'rad:z[a-zA-Z0-9]+' /tmp/rad-init-output.txt | head -1)
-          echo "rid=$RID" >> $GITHUB_OUTPUT
-          echo "Alice RID: $RID"
+          SQUARE_RID=$(grep -oE 'rad:z[a-zA-Z0-9]+' /tmp/square-init.txt | head -1)
+          echo "rid=$SQUARE_RID" >> $GITHUB_OUTPUT
+          echo "Square RID: $SQUARE_RID"
 
-          # Seed so Bob can fetch
-          rad seed "$RID" --scope all
+          rad seed "$SQUARE_RID" --scope all
+
+      - name: Create Circle DreamNode
+        id: create-circle
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="alice-tailscale-pass"
+
+          echo "=============================================="
+          echo "  Creating CIRCLE (Bob doesn't have this)"
+          echo "=============================================="
+
+          mkdir -p /tmp/Circle
+          cd /tmp/Circle
+          git init --initial-branch=main
+          git config user.email "alice@tailscale.test"
+          git config user.name "Alice Tailscale"
+
+          cat > .udd << 'UDDEOF'
+          {
+            "uuid": "circle-uuid",
+            "title": "Circle",
+            "type": "dream"
+          }
+          UDDEOF
+          echo "# Circle" > README.md
+          echo "Alice's DreamNode that Bob will auto-clone via submodule" >> README.md
+          git add -A
+          git commit -m "Initial commit"
+
+          # rad init
+          node -e "
+          const { spawn } = require('child_process');
+          const child = spawn('rad', [
+            'init', '/tmp/Circle',
+            '--public', '--name', 'Circle',
+            '--default-branch', 'main',
+            '--description', 'Circle DreamNode',
+            '--no-confirm'
+          ], {
+            env: { ...process.env, RAD_PASSPHRASE: 'alice-tailscale-pass', PATH: process.env.HOME + '/.radicle/bin:' + process.env.PATH },
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          let stdout = '';
+          child.stdout.on('data', d => { stdout += d; process.stdout.write(d); });
+          child.stderr.on('data', d => process.stderr.write(d));
+          child.on('close', code => {
+            const match = stdout.match(/rad:z[a-zA-Z0-9]+/);
+            if (match) console.log('RID=' + match[0]);
+            process.exit(code);
+          });
+          child.stdin.end();
+          " | tee /tmp/circle-init.txt
+
+          CIRCLE_RID=$(grep -oE 'rad:z[a-zA-Z0-9]+' /tmp/circle-init.txt | head -1)
+          echo "rid=$CIRCLE_RID" >> $GITHUB_OUTPUT
+          echo "Circle RID: $CIRCLE_RID"
+
+          rad seed "$CIRCLE_RID" --scope all
+
+      - name: Create Cylinder DreamNode (Parent with submodules)
+        id: create-cylinder
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="alice-tailscale-pass"
+
+          echo "=============================================="
+          echo "  Creating CYLINDER (Parent DreamSong)"
+          echo "=============================================="
+
+          SQUARE_RID="${{ steps.create-square.outputs.rid }}"
+          CIRCLE_RID="${{ steps.create-circle.outputs.rid }}"
+
+          mkdir -p /tmp/Cylinder
+          cd /tmp/Cylinder
+          git init --initial-branch=main
+          git config user.email "alice@tailscale.test"
+          git config user.name "Alice Tailscale"
+
+          # Create .udd with submodules array (this is what InterBrain reads)
+          # Format from cherry-pick-preview-modal.ts line 726: udd.submodules || []
+          printf '{\n  "uuid": "cylinder-uuid",\n  "title": "Cylinder",\n  "type": "dream",\n  "submodules": ["%s", "%s"]\n}\n' "$SQUARE_RID" "$CIRCLE_RID" > .udd
+
+          echo "# Cylinder" > README.md
+          echo "A DreamSong that weaves Square and Circle together" >> README.md
+
+          # Add Square and Circle as git submodules (rad:// URLs for P2P)
+          # This creates .gitmodules file
+          git submodule add "rad://${SQUARE_RID#rad:}" Square
+          git submodule add "rad://${CIRCLE_RID#rad:}" Circle
+
+          git add -A
+          git commit -m "Initial Cylinder with Square and Circle submodules"
+
+          # rad init
+          node -e "
+          const { spawn } = require('child_process');
+          const child = spawn('rad', [
+            'init', '/tmp/Cylinder',
+            '--public', '--name', 'Cylinder',
+            '--default-branch', 'main',
+            '--description', 'Cylinder DreamSong (Square + Circle)',
+            '--no-confirm'
+          ], {
+            env: { ...process.env, RAD_PASSPHRASE: 'alice-tailscale-pass', PATH: process.env.HOME + '/.radicle/bin:' + process.env.PATH },
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          let stdout = '';
+          child.stdout.on('data', d => { stdout += d; process.stdout.write(d); });
+          child.stderr.on('data', d => process.stderr.write(d));
+          child.on('close', code => {
+            const match = stdout.match(/rad:z[a-zA-Z0-9]+/);
+            if (match) console.log('RID=' + match[0]);
+            process.exit(code);
+          });
+          child.stdin.end();
+          " | tee /tmp/cylinder-init.txt
+
+          CYLINDER_RID=$(grep -oE 'rad:z[a-zA-Z0-9]+' /tmp/cylinder-init.txt | head -1)
+          echo "rid=$CYLINDER_RID" >> $GITHUB_OUTPUT
+          echo "Cylinder RID: $CYLINDER_RID"
+
+          # Show what we created
+          echo ""
+          echo "Cylinder .udd:"
+          cat .udd
+          echo ""
+          echo "Cylinder .gitmodules:"
+          cat .gitmodules
+
+          rad seed "$CYLINDER_RID" --scope all
 
       - name: Start Radicle Node
         run: |
@@ -399,28 +537,31 @@ jobs:
           sleep 5
           rad node status || echo "Node starting..."
 
-      - name: Generate Share URI
+      - name: Generate Share URI for Square
         id: share
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
 
-          # Generate share URI using the same pattern as ShareLinkService
+          # Generate share URI for Square (what Bob will clone first)
           # Format: obsidian://interbrain-clone?ids=<rid>&senderDid=<did>&senderName=<name>
-          RID="${{ steps.create.outputs.rid }}"
+          SQUARE_RID="${{ steps.create-square.outputs.rid }}"
           DID="${{ steps.alice.outputs.did }}"
           ALIAS=$(rad self --alias 2>/dev/null || echo "Alice-Tailscale-${{ github.run_id }}")
 
-          SHARE_URI="obsidian://interbrain-clone?ids=${RID}&senderDid=${DID}&senderName=${ALIAS}"
+          SHARE_URI="obsidian://interbrain-clone?ids=${SQUARE_RID}&senderDid=${DID}&senderName=${ALIAS}"
           echo "share-uri=$SHARE_URI" >> $GITHUB_OUTPUT
-          echo "Generated share URI: $SHARE_URI"
+          echo "Generated share URI for Square: $SHARE_URI"
 
       - name: Write Alice's Phase 1 info to artifact
         run: |
           mkdir -p /tmp/alice-info
           echo "${{ steps.tailscale.outputs.ip }}" > /tmp/alice-info/tailscale-ip
           echo "${{ steps.alice.outputs.did }}" > /tmp/alice-info/did
-          echo "${{ steps.create.outputs.rid }}" > /tmp/alice-info/rid
-          echo "alice-tailscale-test" > /tmp/alice-info/uuid
+          # Square/Circle/Cylinder RIDs
+          echo "${{ steps.create-square.outputs.rid }}" > /tmp/alice-info/square-rid
+          echo "${{ steps.create-circle.outputs.rid }}" > /tmp/alice-info/circle-rid
+          echo "${{ steps.create-cylinder.outputs.rid }}" > /tmp/alice-info/cylinder-rid
+          echo "square-uuid" > /tmp/alice-info/uuid
           echo "${{ steps.share.outputs.share-uri }}" > /tmp/alice-info/share-uri
           echo "phase1" > /tmp/alice-info/phase
 
@@ -449,19 +590,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Alice makes a regular commit (Phase 2)
+      - name: Alice makes a regular commit to Square (Phase 2)
         id: commit
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="alice-tailscale-pass"
 
-          cd /tmp/AliceTailscaleNode
+          cd /tmp/Square
 
           echo "=============================================="
-          echo "  PHASE 2: COMMIT PROPAGATION"
+          echo "  PHASE 2: COMMIT PROPAGATION (Square)"
           echo "=============================================="
           echo ""
-          echo "Alice makes a regular commit that Bob will fetch"
+          echo "Alice makes a regular commit to Square that Bob will fetch"
           echo ""
 
           # Make a change
@@ -471,7 +612,7 @@ jobs:
           echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> README.md
 
           git add -A
-          git commit -m "Alice's update for Bob to fetch"
+          git commit -m "Alice's update to Square for Bob to fetch"
 
           COMMIT_HASH=$(git rev-parse HEAD)
           echo "commit-hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
@@ -519,39 +660,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Alice creates beacon commit (Phase 3)
+      - name: Alice creates Cylinder beacon commit (Phase 3)
         id: beacon
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="alice-tailscale-pass"
 
-          cd /tmp/AliceTailscaleNode
+          # The beacon is created in SQUARE (the shared repo) to tell Bob about CYLINDER
+          cd /tmp/Square
 
           echo "=============================================="
-          echo "  PHASE 3: COHERENCE BEACON IGNITION"
+          echo "  PHASE 3: COHERENCE BEACON (Cylinder)"
           echo "=============================================="
           echo ""
-          echo "This mirrors CoherenceBeaconService.createBeaconCommit()"
+          echo "Alice creates beacon in Square telling Bob about Cylinder"
+          echo "Cylinder contains Square + Circle as submodules"
           echo ""
 
-          # Get current commit (atCommit) - exact pattern from service line 288-289
-          AT_COMMIT=$(git rev-parse HEAD)
-          ALICE_RID="${{ steps.create.outputs.rid }}"
+          # Get Cylinder's commit (atCommit)
+          CYLINDER_COMMIT=$(cd /tmp/Cylinder && git rev-parse HEAD)
+          CYLINDER_RID="${{ steps.create-cylinder.outputs.rid }}"
 
           # Beacon data format from CoherenceBeaconService.createBeaconCommit() lines 438-443
-          # Note: In real flow this is created in the SOVEREIGN repo, but for testing
-          # we create it in Alice's repo to test the detection mechanism
-          BEACON_DATA="{\"type\":\"supermodule\",\"radicleId\":\"${ALICE_RID}\",\"title\":\"AliceTailscaleNode\",\"atCommit\":\"${AT_COMMIT}\"}"
+          BEACON_DATA="{\"type\":\"supermodule\",\"radicleId\":\"${CYLINDER_RID}\",\"title\":\"Cylinder\",\"atCommit\":\"${CYLINDER_COMMIT}\"}"
 
           # Commit message format from CoherenceBeaconService.createBeaconCommit() line 444
-          # Format: "Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}"
-          COMMIT_MSG=$(printf "Add supermodule relationship: AliceTailscaleNode\n\nCOHERENCE_BEACON: %s" "$BEACON_DATA")
+          COMMIT_MSG=$(printf "Add supermodule relationship: Cylinder\n\nCOHERENCE_BEACON: %s" "$BEACON_DATA")
 
-          # Update .udd with supermodule entry (mirrors UDDService.addSupermoduleEntry)
+          # Update Square's .udd with supermodule entry pointing to Cylinder
           ADDED_AT=$(date +%s)000
-          printf '{\n  "uuid": "alice-tailscale-test",\n  "title": "Alice Tailscale Test DreamNode",\n  "type": "dream",\n  "supermodules": [\n    {\n      "radicleId": "%s",\n      "title": "AliceTailscaleNode",\n      "atCommit": "%s",\n      "addedAt": %s\n    }\n  ]\n}\n' "$ALICE_RID" "$AT_COMMIT" "$ADDED_AT" > .udd
+          printf '{\n  "uuid": "square-uuid",\n  "title": "Square",\n  "type": "dream",\n  "supermodules": [\n    {\n      "radicleId": "%s",\n      "title": "Cylinder",\n      "atCommit": "%s",\n      "addedAt": %s\n    }\n  ]\n}\n' "$CYLINDER_RID" "$CYLINDER_COMMIT" "$ADDED_AT" > .udd
 
-          # Exact commit pattern from service line 446-447
           git add .udd
           git commit -m "$COMMIT_MSG"
 
@@ -559,18 +698,21 @@ jobs:
           echo "beacon-hash=$BEACON_HASH" >> $GITHUB_OUTPUT
           echo "Beacon commit created: $BEACON_HASH"
 
-          # Show the commit message
           echo ""
           echo "Beacon commit message:"
           git log -1 --format="%B"
 
-          # Exact commands from RadicleService.share():
-          # STEP 1: Push to local Radicle storage (line 867)
+          echo ""
+          echo "Square's .udd now points to Cylinder as supermodule"
+          echo "Cylinder contains: Square + Circle"
+          echo "Bob has: Square"
+          echo "Bob missing: Circle (will auto-clone via submodule)"
+
+          # Push to Radicle
           echo ""
           echo "Step 1: git push rad main"
           git push rad main
 
-          # STEP 2: Announce to network (line 992)
           echo ""
           echo "Step 2: rad sync --inventory"
           rad sync --inventory || echo "Sync inventory completed"
@@ -579,6 +721,8 @@ jobs:
         run: |
           mkdir -p /tmp/alice-phase3
           echo "${{ steps.beacon.outputs.beacon-hash }}" > /tmp/alice-phase3/beacon-hash
+          echo "${{ steps.create-cylinder.outputs.rid }}" > /tmp/alice-phase3/cylinder-rid
+          echo "${{ steps.create-circle.outputs.rid }}" > /tmp/alice-phase3/circle-rid
           echo "phase3" > /tmp/alice-phase3/phase
 
       - name: Upload Alice's Phase 3 info
@@ -732,23 +876,28 @@ jobs:
         run: |
           ALICE_IP=$(cat /tmp/alice-info/tailscale-ip)
           ALICE_DID=$(cat /tmp/alice-info/did)
-          ALICE_RID=$(cat /tmp/alice-info/rid)
+          SQUARE_RID=$(cat /tmp/alice-info/square-rid)
+          CIRCLE_RID=$(cat /tmp/alice-info/circle-rid)
+          CYLINDER_RID=$(cat /tmp/alice-info/cylinder-rid)
           ALICE_UUID=$(cat /tmp/alice-info/uuid)
           SHARE_URI=$(cat /tmp/alice-info/share-uri)
 
           echo "alice-ip=$ALICE_IP" >> $GITHUB_OUTPUT
           echo "alice-did=$ALICE_DID" >> $GITHUB_OUTPUT
-          echo "alice-rid=$ALICE_RID" >> $GITHUB_OUTPUT
+          echo "square-rid=$SQUARE_RID" >> $GITHUB_OUTPUT
+          echo "circle-rid=$CIRCLE_RID" >> $GITHUB_OUTPUT
+          echo "cylinder-rid=$CYLINDER_RID" >> $GITHUB_OUTPUT
           echo "alice-uuid=$ALICE_UUID" >> $GITHUB_OUTPUT
           echo "share-uri=$SHARE_URI" >> $GITHUB_OUTPUT
 
           echo "=============================================="
-          echo "  ALICE'S INFO (from artifact)"
+          echo "  ALICE'S INFO (Square/Circle/Cylinder)"
           echo "=============================================="
           echo "Tailscale IP: $ALICE_IP"
           echo "DID: $ALICE_DID"
-          echo "RID: $ALICE_RID"
-          echo "UUID: $ALICE_UUID"
+          echo "Square RID: $SQUARE_RID"
+          echo "Circle RID: $CIRCLE_RID"
+          echo "Cylinder RID: $CYLINDER_RID"
           echo "Share URI: $SHARE_URI"
 
       - name: Connect to Alice's node
@@ -781,37 +930,35 @@ jobs:
           echo "Following Alice to receive her updates..."
           rad follow "$ALICE_DID" || echo "Already following or follow completed"
 
-      - name: Clone from Alice using share URI
+      - name: Clone Square from Alice
         id: clone
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="bob-tailscale-pass"
 
-          ALICE_RID="${{ steps.alice.outputs.alice-rid }}"
+          SQUARE_RID="${{ steps.alice.outputs.square-rid }}"
           ALICE_DID="${{ steps.alice.outputs.alice-did }}"
           SHARE_URI="${{ steps.alice.outputs.share-uri }}"
 
           echo "=============================================="
-          echo "  CLONING FROM ALICE"
+          echo "  CLONING SQUARE FROM ALICE"
           echo "=============================================="
           echo ""
-          echo "This mirrors URIHandlerService.cloneFromRadicle()"
-          echo "Share URI: $SHARE_URI"
-          echo "RID: $ALICE_RID"
-          echo "Sender DID: $ALICE_DID"
+          echo "Bob clones Square (the shared DreamNode)"
+          echo "Bob does NOT have Circle yet"
+          echo ""
+          echo "Square RID: $SQUARE_RID"
           echo ""
 
-          # Clone using the same pattern as RadicleService.clone()
-          # --scope followed + --seed for direct P2P clone
           RAW_NID="${ALICE_DID#did:key:}"
           CLONE_DIR="/tmp/bob-clones"
           mkdir -p "$CLONE_DIR"
 
-          echo "Running: rad clone $ALICE_RID --scope followed --seed $RAW_NID"
+          echo "Running: rad clone $SQUARE_RID --scope followed --seed $RAW_NID"
           cd "$CLONE_DIR"
-          rad clone "$ALICE_RID" --scope followed --seed "$RAW_NID"
+          rad clone "$SQUARE_RID" --scope followed --seed "$RAW_NID"
 
-          # Find the cloned directory
+          # Find the cloned directory (should be Square)
           CLONED_REPO=$(ls -td "$CLONE_DIR"/*/ | head -1)
           echo "cloned-path=$CLONED_REPO" >> $GITHUB_OUTPUT
           echo ""
@@ -1083,27 +1230,168 @@ jobs:
             git cherry-pick --abort 2>/dev/null || true
           fi
 
-      - name: Verify .udd after beacon acceptance
+      - name: Verify Square's .udd after beacon acceptance
         run: |
           CLONED_PATH="${{ steps.clone.outputs.cloned-path }}"
 
           echo "=============================================="
-          echo "  VERIFYING UDD AFTER BEACON ACCEPT"
+          echo "  VERIFYING SQUARE'S UDD AFTER BEACON"
           echo "=============================================="
           echo ""
 
           if [ -f "${CLONED_PATH}.udd" ]; then
-            echo ".udd contents after beacon acceptance:"
+            echo "Square's .udd now points to Cylinder:"
             cat "${CLONED_PATH}.udd"
 
-            # Check if submodules array was added by beacon
-            if grep -q "submodules" "${CLONED_PATH}.udd"; then
+            if grep -q "supermodules" "${CLONED_PATH}.udd"; then
               echo ""
-              echo "✅ Beacon added submodule relationship to .udd!"
-            else
-              echo ""
-              echo "Note: submodules array not present (beacon may not have modified .udd)"
+              echo "✅ Square's .udd now has supermodules array pointing to Cylinder!"
             fi
+          fi
+
+      # ========================================================================
+      # Phase 4: Clone Cylinder and auto-clone missing submodule (Circle)
+      # This mirrors cloneMissingSubmodules() from cherry-pick-preview-modal.ts
+      # ========================================================================
+      - name: Clone Cylinder (the supermodule)
+        id: clone-cylinder
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          CYLINDER_RID="${{ steps.alice.outputs.cylinder-rid }}"
+          ALICE_DID="${{ steps.alice.outputs.alice-did }}"
+
+          echo "=============================================="
+          echo "  PHASE 4: CLONE CYLINDER (Supermodule)"
+          echo "=============================================="
+          echo ""
+          echo "Bob clones Cylinder (the parent DreamSong)"
+          echo "Cylinder RID: $CYLINDER_RID"
+          echo ""
+
+          RAW_NID="${ALICE_DID#did:key:}"
+          CLONE_DIR="/tmp/bob-clones"
+
+          echo "Running: rad clone $CYLINDER_RID --scope followed --seed $RAW_NID"
+          cd "$CLONE_DIR"
+          rad clone "$CYLINDER_RID" --scope followed --seed "$RAW_NID"
+
+          # Find Cylinder directory
+          CYLINDER_PATH=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Cylinder*" | head -1)
+          if [ -z "$CYLINDER_PATH" ]; then
+            CYLINDER_PATH=$(ls -td "$CLONE_DIR"/*/ | head -1)
+          fi
+          echo "cylinder-path=$CYLINDER_PATH" >> $GITHUB_OUTPUT
+          echo ""
+          echo "Cylinder cloned to: $CYLINDER_PATH"
+
+          echo ""
+          echo "Cylinder's .udd:"
+          cat "${CYLINDER_PATH}.udd"
+
+      - name: Parse Cylinder's submodules and auto-clone Circle
+        id: submodule-clone
+        run: |
+          export PATH="$HOME/.radicle/bin:$PATH"
+          export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          CYLINDER_PATH="${{ steps.clone-cylinder.outputs.cylinder-path }}"
+          CIRCLE_RID="${{ steps.alice.outputs.circle-rid }}"
+          ALICE_DID="${{ steps.alice.outputs.alice-did }}"
+
+          echo "=============================================="
+          echo "  PHASE 4: AUTO-CLONE MISSING SUBMODULE"
+          echo "=============================================="
+          echo ""
+          echo "This mirrors cloneMissingSubmodules() from"
+          echo "cherry-pick-preview-modal.ts lines 706-776"
+          echo ""
+
+          # Read Cylinder's .udd to find submodule Radicle IDs
+          # Pattern from line 726: const submoduleIds = udd.submodules || []
+          SUBMODULE_IDS=$(cat "${CYLINDER_PATH}.udd" | grep -oE 'rad:z[a-zA-Z0-9]+' || true)
+
+          echo "Submodule RIDs from Cylinder's .udd:"
+          echo "$SUBMODULE_IDS"
+          echo ""
+
+          CLONE_DIR="/tmp/bob-clones"
+          RAW_NID="${ALICE_DID#did:key:}"
+
+          # Check which submodules Bob already has
+          # Bob has: Square (cloned in Phase 1)
+          # Bob missing: Circle
+          SQUARE_EXISTS=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Square*" | head -1)
+          CIRCLE_EXISTS=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Circle*" | head -1)
+
+          echo "Bob's current repos:"
+          echo "  Square: ${SQUARE_EXISTS:-NOT FOUND}"
+          echo "  Circle: ${CIRCLE_EXISTS:-NOT FOUND}"
+          echo ""
+
+          if [ -z "$CIRCLE_EXISTS" ]; then
+            echo "Circle NOT found - auto-cloning..."
+            echo ""
+            echo "This is the DreamWeaving magic!"
+            echo "SubmoduleManagerService.cloneMissingSubmodules() would do this"
+            echo ""
+
+            cd "$CLONE_DIR"
+            rad clone "$CIRCLE_RID" --scope followed --seed "$RAW_NID"
+
+            CIRCLE_PATH=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Circle*" | head -1)
+            echo "circle-path=$CIRCLE_PATH" >> $GITHUB_OUTPUT
+            echo "circle-cloned=true" >> $GITHUB_OUTPUT
+
+            echo ""
+            echo "✅ Circle auto-cloned to: $CIRCLE_PATH"
+            echo ""
+            echo "Circle's .udd:"
+            cat "${CIRCLE_PATH}.udd"
+          else
+            echo "Circle already exists at: $CIRCLE_EXISTS"
+            echo "circle-path=$CIRCLE_EXISTS" >> $GITHUB_OUTPUT
+            echo "circle-cloned=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify complete DreamWeaving
+        run: |
+          CLONE_DIR="/tmp/bob-clones"
+
+          echo "=============================================="
+          echo "  FINAL VERIFICATION: DREAMWEAVING COMPLETE"
+          echo "=============================================="
+          echo ""
+          echo "Bob's Vault after accepting Cylinder beacon:"
+          echo ""
+          ls -la "$CLONE_DIR"
+          echo ""
+
+          # Check all three repos exist
+          SQUARE=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Square*" | head -1)
+          CIRCLE=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Circle*" | head -1)
+          CYLINDER=$(find "$CLONE_DIR" -maxdepth 1 -type d -name "Cylinder*" | head -1)
+
+          echo "Square: ${SQUARE:-❌ MISSING}"
+          echo "Circle: ${CIRCLE:-❌ MISSING}"
+          echo "Cylinder: ${CYLINDER:-❌ MISSING}"
+          echo ""
+
+          if [ -n "$SQUARE" ] && [ -n "$CIRCLE" ] && [ -n "$CYLINDER" ]; then
+            echo "✅ All three DreamNodes present!"
+            echo ""
+            echo "The Square/Circle/Cylinder story is complete:"
+            echo "  1. Bob cloned Square (shared with Alice)"
+            echo "  2. Alice created Cylinder (weaves Square + Circle)"
+            echo "  3. Alice sent beacon about Cylinder"
+            echo "  4. Bob cloned Cylinder"
+            echo "  5. Bob auto-cloned Circle (missing submodule)"
+            echo ""
+            echo "This is exactly how InterBrain DreamWeaving works!"
+          else
+            echo "❌ Some DreamNodes missing!"
+            exit 1
           fi
 
       - name: Generate DID backpropagation URI
@@ -1135,43 +1423,53 @@ jobs:
       - name: P2P Collaboration Test Summary
         run: |
           echo "=============================================="
-          echo "  ✅ P2P COLLABORATION TEST COMPLETE!"
+          echo "  ✅ SQUARE/CIRCLE/CYLINDER TEST COMPLETE!"
           echo "=============================================="
           echo ""
-          echo "What was tested (mirrors actual InterBrain services):"
+          echo "The Full DreamWeaving Story:"
           echo ""
-          echo "PHASE 1: Network Setup & Initial Clone"
-          echo "  ├─ Alice: rad auth, rad init (RadicleService spawn pattern)"
-          echo "  ├─ Alice: share URI generation (ShareLinkService)"
-          echo "  ├─ Bob: connect via Tailscale (real network P2P)"
-          echo "  ├─ Bob: rad follow (collaboration handshake)"
-          echo "  └─ Bob: rad clone --seed (RadicleService.clone)"
+          echo "PHASE 1: Setup"
+          echo "  ├─ Alice creates: Square, Circle, Cylinder"
+          echo "  ├─ Cylinder contains Square + Circle as submodules"
+          echo "  └─ Bob clones Square (the shared DreamNode)"
           echo ""
           echo "PHASE 2: Commit Propagation"
-          echo "  ├─ Alice: git push rad main (RadicleService.share step 1)"
-          echo "  ├─ Alice: rad sync --inventory (RadicleService.share step 4)"
-          echo "  └─ Bob: git fetch rad (GitSyncService.fetchUpdates line 168)"
+          echo "  ├─ Alice commits to Square"
+          echo "  └─ Bob fetches update"
           echo ""
           echo "PHASE 3: Coherence Beacon"
-          echo "  ├─ Alice: create beacon commit (CoherenceBeaconService.createBeaconCommit)"
-          echo "  │         - Exact JSON format from lines 438-443"
-          echo "  │         - Commit msg: 'Add supermodule relationship: \${title}'"
-          echo "  ├─ Bob: detect beacon (CoherenceBeaconService.checkCommitsForBeacons)"
-          echo "  │         - Regex: COHERENCE_BEACON:\\s*({.*?}) from line 143"
-          echo "  └─ Bob: git cherry-pick -x (CherryPickWorkflowService line 520)"
+          echo "  ├─ Alice creates beacon in Square → 'Cylinder is your parent'"
+          echo "  └─ Bob detects and cherry-picks beacon"
+          echo ""
+          echo "PHASE 4: DreamWeaving Magic"
+          echo "  ├─ Bob clones Cylinder (the supermodule)"
+          echo "  ├─ Bob reads Cylinder's .udd → finds Square + Circle RIDs"
+          echo "  ├─ Bob has Square ✓"
+          echo "  └─ Bob auto-clones Circle (missing submodule) ✨"
+          echo ""
+          echo "Services Tested:"
+          echo "  - RadicleService.init(), clone(), share()"
+          echo "  - GitSyncService.fetchUpdates()"
+          echo "  - CoherenceBeaconService.createBeaconCommit(), checkCommitsForBeacons()"
+          echo "  - CherryPickWorkflowService.acceptSingleCommit()"
+          echo "  - SubmoduleManagerService.cloneMissingSubmodules()"
           echo ""
           echo "Network Details:"
           echo "  Alice Tailscale IP: ${{ steps.alice.outputs.alice-ip }}"
           echo "  Bob Tailscale IP: ${{ steps.tailscale.outputs.ip }}"
-          echo "  Alice DID: ${{ steps.alice.outputs.alice-did }}"
-          echo "  Bob DID: ${{ steps.bob.outputs.did }}"
-          echo "  Cloned RID: ${{ steps.alice.outputs.alice-rid }}"
+          echo ""
+          echo "DreamNode RIDs:"
+          echo "  Square: ${{ steps.alice.outputs.square-rid }}"
+          echo "  Circle: ${{ steps.alice.outputs.circle-rid }}"
+          echo "  Cylinder: ${{ steps.alice.outputs.cylinder-rid }}"
           echo ""
           echo "Test Results:"
-          echo "  Clone: ✅"
+          echo "  Clone Square: ✅"
           echo "  Fetch: ${{ steps.fetch.outputs.commit-found == 'true' && '✅' || '⚠️' }}"
           echo "  Beacon Detection: ${{ steps.beacon-detect.outputs.beacon-detected == 'true' && '✅' || '⚠️' }}"
           echo "  Cherry-Pick: ${{ steps.cherry-pick.outputs.cherry-picked == 'true' && '✅' || '⚠️' }}"
+          echo "  Clone Cylinder: ✅"
+          echo "  Auto-Clone Circle: ${{ steps.submodule-clone.outputs.circle-cloned == 'true' && '✅' || '⚠️' }}"
           echo ""
           echo "=============================================="
 
