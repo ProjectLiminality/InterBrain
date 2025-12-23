@@ -813,23 +813,68 @@ else
 fi
 
 # Check for Obsidian
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo ""
-    echo "Step 2/$TOTAL_STEPS: Checking for Obsidian..."
-    echo "----------------------------------"
+echo ""
+echo "Step 2/$TOTAL_STEPS: Checking for Obsidian..."
+echo "----------------------------------"
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: Check /Applications or use Homebrew
     if [ -d "/Applications/Obsidian.app" ]; then
         success "Obsidian found"
         OBSIDIAN_INSTALLED=true
     else
-        warning "Obsidian not found. Installing..."
+        warning "Obsidian not found. Installing via Homebrew..."
         brew install --cask obsidian
         success "Obsidian installed"
         OBSIDIAN_INSTALLED=true
     fi
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux: Check common locations, try Flatpak or Snap
+    if command -v obsidian &> /dev/null || \
+       flatpak list 2>/dev/null | grep -q "md.obsidian.Obsidian" || \
+       snap list 2>/dev/null | grep -q "obsidian"; then
+        success "Obsidian found"
+        OBSIDIAN_INSTALLED=true
+    else
+        warning "Obsidian not found. Attempting to install..."
+
+        # Try Flatpak first (most universal)
+        if command -v flatpak &> /dev/null; then
+            info "Installing via Flatpak..."
+            if flatpak install -y flathub md.obsidian.Obsidian 2>/dev/null; then
+                success "Obsidian installed via Flatpak"
+                OBSIDIAN_INSTALLED=true
+            fi
+        fi
+
+        # Try Snap if Flatpak failed or unavailable
+        if [ "$OBSIDIAN_INSTALLED" != "true" ] && command -v snap &> /dev/null; then
+            info "Installing via Snap..."
+            if sudo snap install obsidian --classic 2>/dev/null; then
+                success "Obsidian installed via Snap"
+                OBSIDIAN_INSTALLED=true
+            fi
+        fi
+
+        # If both failed, guide user
+        if [ "$OBSIDIAN_INSTALLED" != "true" ]; then
+            OBSIDIAN_INSTALLED=false
+            warning "Could not auto-install Obsidian."
+            echo ""
+            echo "Please install Obsidian manually:"
+            echo "  - Flatpak: flatpak install flathub md.obsidian.Obsidian"
+            echo "  - Snap:    sudo snap install obsidian --classic"
+            echo "  - Or download from: https://obsidian.md"
+            echo ""
+            echo "Then re-run this installer."
+            if [ "$CI_MODE" != "true" ]; then
+                exit 1
+            fi
+        fi
+    fi
 else
     OBSIDIAN_INSTALLED=false
-    warning "Non-macOS system detected. Please install Obsidian manually from https://obsidian.md"
+    warning "Unknown OS. Please install Obsidian manually from https://obsidian.md"
 fi
 
 echo ""
