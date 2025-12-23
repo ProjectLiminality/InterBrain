@@ -120,11 +120,12 @@ jobs:
           npm --version || echo "npm: NOT FOUND"
           gh --version || echo "GitHub CLI: NOT FOUND"
 
-          # Radicle may not be available if cache miss on first run
+          # Check Radicle (add to PATH since install.sh puts it in ~/.radicle/bin)
+          export PATH="$HOME/.radicle/bin:$PATH"
           if command -v rad &> /dev/null; then
             rad --version
           else
-            echo "Radicle: NOT INSTALLED (expected on first run)"
+            echo "Radicle: NOT INSTALLED"
           fi
 
   install-test-macos:
@@ -167,7 +168,8 @@ jobs:
           npm --version || echo "npm: NOT FOUND"
           gh --version || echo "GitHub CLI: NOT FOUND"
 
-          # Radicle should be available on macOS
+          # Check Radicle (add to PATH since install.sh puts it in ~/.radicle/bin)
+          export PATH="$HOME/.radicle/bin:$PATH"
           if command -v rad &> /dev/null; then
             rad --version
           else
