@@ -317,25 +317,13 @@ jobs:
           echo "did=$ALICE_DID" >> $GITHUB_OUTPUT
           echo "Alice DID: $ALICE_DID"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Create and Initialize DreamNode
         id: create
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="alice-tailscale-pass"
 
-          # Use actual service pattern via test script
-          npx ts-node scripts/ci/test-radicle-init.ts
-
-          # Now create the actual test node for P2P
+          # Create test node for P2P (using RadicleService spawn pattern)
           mkdir -p /tmp/AliceTailscaleNode
           cd /tmp/AliceTailscaleNode
           git init --initial-branch=main
