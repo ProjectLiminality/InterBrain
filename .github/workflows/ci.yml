@@ -6,9 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Path filters for conditional job execution
+# Note: GitHub Actions doesn't support per-job path filters natively,
+# so we use dorny/paths-filter action within jobs that need it
+
 jobs:
   # ============================================================================
-  # Core Checks - Run on every commit
+  # Core Checks - Run on every commit (fast: ~2 min)
   # ============================================================================
   check-all:
     strategy:
@@ -48,9 +52,29 @@ jobs:
         timeout-minutes: 5
 
   # ============================================================================
-  # Install Script Syntax Validation
+  # Path Filter - Determine which jobs need to run
+  # ============================================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      install-scripts: ${{ steps.filter.outputs.install-scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            install-scripts:
+              - 'install.sh'
+              - 'install.ps1'
+              - '.github/workflows/ci.yml'
+
+  # ============================================================================
+  # Install Script Syntax Validation (only when install scripts change)
   # ============================================================================
   install-script-syntax:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -85,9 +109,11 @@ jobs:
           echo "$output" | head -20
 
   # ============================================================================
-  # Group A: Installation & Tool Verification
+  # Group A: Installation & Tool Verification (only when install scripts change)
   # ============================================================================
   install-verify-linux:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
@@ -162,6 +188,8 @@ jobs:
           echo "=== All required tools verified ==="
 
   install-verify-macos:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
     runs-on: macos-latest
     timeout-minutes: 30
     outputs:
@@ -236,6 +264,8 @@ jobs:
           echo "=== All required tools verified ==="
 
   install-verify-windows:
+    needs: changes
+    if: ${{ needs.changes.outputs.install-scripts == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -383,7 +413,7 @@ jobs:
   # ============================================================================
   ci-summary:
     if: always()
-    needs: [check-all, install-script-syntax, install-verify-linux, install-verify-macos, install-verify-windows]
+    needs: [check-all, changes, install-script-syntax, install-verify-linux, install-verify-macos, install-verify-windows]
     runs-on: ubuntu-latest
     steps:
       - name: CI Summary
@@ -391,24 +421,38 @@ jobs:
           echo "=== CI Summary ==="
           echo ""
           echo "Core Checks: ${{ needs.check-all.result }}"
-          echo "Install Script Syntax: ${{ needs.install-script-syntax.result }}"
-          echo "Linux Install: ${{ needs.install-verify-linux.result }}"
-          echo "macOS Install: ${{ needs.install-verify-macos.result }}"
-          echo "Windows Install: ${{ needs.install-verify-windows.result }}"
           echo ""
-          echo "Radicle Versions:"
-          echo "  Linux: ${{ needs.install-verify-linux.outputs.rad-version || 'N/A' }}"
-          echo "  macOS: ${{ needs.install-verify-macos.outputs.rad-version || 'N/A' }}"
+          echo "Install Script Tests (run when install.sh/install.ps1 change):"
+          echo "  Path filter: ${{ needs.changes.outputs.install-scripts == 'true' && 'triggered' || 'skipped (no changes)' }}"
+          echo "  Syntax Check: ${{ needs.install-script-syntax.result }}"
+          echo "  Linux Install: ${{ needs.install-verify-linux.result }}"
+          echo "  macOS Install: ${{ needs.install-verify-macos.result }}"
+          echo "  Windows Install: ${{ needs.install-verify-windows.result }}"
           echo ""
 
-          # Fail if any required job failed
-          if [ "${{ needs.check-all.result }}" != "success" ] || \
-             [ "${{ needs.install-script-syntax.result }}" != "success" ] || \
-             [ "${{ needs.install-verify-linux.result }}" != "success" ] || \
-             [ "${{ needs.install-verify-macos.result }}" != "success" ] || \
-             [ "${{ needs.install-verify-windows.result }}" != "success" ]; then
-            echo "FAIL: One or more jobs failed"
+          # Only show Radicle versions if install jobs ran
+          if [ "${{ needs.changes.outputs.install-scripts }}" == "true" ]; then
+            echo "Radicle Versions:"
+            echo "  Linux: ${{ needs.install-verify-linux.outputs.rad-version || 'N/A' }}"
+            echo "  macOS: ${{ needs.install-verify-macos.outputs.rad-version || 'N/A' }}"
+            echo ""
+          fi
+
+          # Fail if check-all failed (always required)
+          if [ "${{ needs.check-all.result }}" != "success" ]; then
+            echo "FAIL: Core checks failed"
             exit 1
+          fi
+
+          # Fail if install jobs ran and failed (skipped is OK)
+          if [ "${{ needs.changes.outputs.install-scripts }}" == "true" ]; then
+            if [ "${{ needs.install-script-syntax.result }}" == "failure" ] || \
+               [ "${{ needs.install-verify-linux.result }}" == "failure" ] || \
+               [ "${{ needs.install-verify-macos.result }}" == "failure" ] || \
+               [ "${{ needs.install-verify-windows.result }}" == "failure" ]; then
+              echo "FAIL: Install verification failed"
+              exit 1
+            fi
           fi
 
           echo "SUCCESS: All CI checks passed"
