@@ -301,11 +301,11 @@ jobs:
           echo "ip=$TAILSCALE_IP" >> $GITHUB_OUTPUT
           echo "Alice Tailscale IP: $TAILSCALE_IP"
 
-      - name: Cache Radicle
+      - name: Cache Radicle binaries only
         uses: actions/cache@v4
         with:
-          path: ~/.radicle
-          key: radicle-tailscale-${{ runner.os }}-v1
+          path: ~/.radicle/bin
+          key: radicle-bin-${{ runner.os }}-v1
 
       - name: Install Radicle
         run: |
@@ -313,7 +313,7 @@ jobs:
             echo "Installing Radicle..."
             curl -sSf https://radicle.xyz/install | sh
           else
-            echo "Radicle already cached"
+            echo "Radicle binaries already cached"
           fi
           export PATH="$HOME/.radicle/bin:$PATH"
           rad --version
@@ -323,6 +323,10 @@ jobs:
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="alice-tailscale-pass"
+
+          # Clear any existing identity to avoid passphrase mismatch
+          rm -rf ~/.radicle/keys ~/.radicle/node ~/.radicle/storage 2>/dev/null || true
+
           rad auth --alias "Alice-Tailscale-${{ github.run_id }}"
           ALICE_DID=$(rad self --did)
           echo "did=$ALICE_DID" >> $GITHUB_OUTPUT
@@ -476,11 +480,11 @@ jobs:
           echo "ip=$BOB_IP" >> $GITHUB_OUTPUT
           echo "Bob Tailscale IP: $BOB_IP"
 
-      - name: Cache Radicle
+      - name: Cache Radicle binaries only
         uses: actions/cache@v4
         with:
-          path: ~/.radicle
-          key: radicle-tailscale-${{ runner.os }}-v1
+          path: ~/.radicle/bin
+          key: radicle-bin-${{ runner.os }}-v1
 
       - name: Install Radicle
         run: |
@@ -488,7 +492,7 @@ jobs:
             echo "Installing Radicle..."
             curl -sSf https://radicle.xyz/install | sh
           else
-            echo "Radicle already cached"
+            echo "Radicle binaries already cached"
           fi
           export PATH="$HOME/.radicle/bin:$PATH"
           rad --version
@@ -498,6 +502,10 @@ jobs:
         run: |
           export PATH="$HOME/.radicle/bin:$PATH"
           export RAD_PASSPHRASE="bob-tailscale-pass"
+
+          # Clear any existing identity to avoid passphrase mismatch
+          rm -rf ~/.radicle/keys ~/.radicle/node ~/.radicle/storage 2>/dev/null || true
+
           rad auth --alias "Bob-Tailscale-${{ github.run_id }}"
           BOB_DID=$(rad self --did)
           echo "did=$BOB_DID" >> $GITHUB_OUTPUT
