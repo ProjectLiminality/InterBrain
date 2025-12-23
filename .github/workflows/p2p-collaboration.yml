@@ -480,11 +480,13 @@ jobs:
             sleep 10
           done
 
-          # Verify we found Alice
-          if [ -z "${{ steps.discover.outputs.alice-ip }}" ]; then
+          # Verify we found Alice - read from GITHUB_OUTPUT file
+          ALICE_IP=$(grep "alice-ip=" $GITHUB_OUTPUT | cut -d= -f2 || true)
+          if [ -z "$ALICE_IP" ]; then
             echo "ERROR: Could not find Alice's Radicle node on Tailscale network"
             exit 1
           fi
+          echo "Successfully found Alice at $ALICE_IP"
 
       - name: Connect to Alice
         run: |
