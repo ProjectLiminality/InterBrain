@@ -301,9 +301,20 @@ jobs:
           echo "ip=$TAILSCALE_IP" >> $GITHUB_OUTPUT
           echo "Alice Tailscale IP: $TAILSCALE_IP"
 
+      - name: Cache Radicle
+        uses: actions/cache@v4
+        with:
+          path: ~/.radicle
+          key: radicle-tailscale-${{ runner.os }}-v1
+
       - name: Install Radicle
         run: |
-          curl -sSf https://radicle.xyz/install | sh
+          if [ ! -f "$HOME/.radicle/bin/rad" ]; then
+            echo "Installing Radicle..."
+            curl -sSf https://radicle.xyz/install | sh
+          else
+            echo "Radicle already cached"
+          fi
           export PATH="$HOME/.radicle/bin:$PATH"
           rad --version
 
@@ -394,12 +405,14 @@ jobs:
           echo "  RID: ${{ steps.create.outputs.rid }}"
           echo ""
 
-          # Wait for Bob to complete (max 20 minutes)
-          for i in {1..40}; do
+          # Wait for Bob to complete (max 5 minutes - Bob typically connects in <1 min)
+          for i in {1..10}; do
             sleep 30
-            echo "[$i/40] Waiting for Bob... (rad node status below)"
+            echo "[$i/10] Waiting for Bob... (rad node status below)"
             rad node status 2>/dev/null || true
           done
+
+          echo "Alice wait complete - Bob should have connected by now"
 
   p2p-tailscale-bob:
     if: ${{ github.event.inputs.test_mode == 'multi-runner' }}
@@ -425,9 +438,20 @@ jobs:
           echo "ip=$BOB_IP" >> $GITHUB_OUTPUT
           echo "Bob Tailscale IP: $BOB_IP"
 
+      - name: Cache Radicle
+        uses: actions/cache@v4
+        with:
+          path: ~/.radicle
+          key: radicle-tailscale-${{ runner.os }}-v1
+
       - name: Install Radicle
         run: |
-          curl -sSf https://radicle.xyz/install | sh
+          if [ ! -f "$HOME/.radicle/bin/rad" ]; then
+            echo "Installing Radicle..."
+            curl -sSf https://radicle.xyz/install | sh
+          else
+            echo "Radicle already cached"
+          fi
           export PATH="$HOME/.radicle/bin:$PATH"
           rad --version
 
