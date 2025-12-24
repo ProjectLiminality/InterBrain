@@ -194,10 +194,21 @@ export default class InterBrainPlugin extends Plugin {
           store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
 
           // Show portal overlay on fresh Obsidian launch (not plugin reload)
-          if (isFreshLaunch) {
-            console.log('[InterBrain] Fresh launch detected - showing portal overlay');
-            store.showTutorialPortal();
+          // Check if this is a reload by looking for the reload flag
+          const isPluginReload = (globalThis as any).__interbrainPluginReloaded === true;
+          console.log(`[InterBrain] isFreshLaunch=${isFreshLaunch}, isPluginReload=${isPluginReload}`);
+
+          if (!isPluginReload) {
+            console.log('[InterBrain] Fresh app launch detected - showing portal overlay');
+            // Delay slightly to ensure DreamspaceCanvas is mounted
+            setTimeout(() => {
+              console.log('[InterBrain] Calling showTutorialPortal()');
+              store.showTutorialPortal();
+            }, 500);
           }
+
+          // Set reload flag for next time (persists across plugin reloads but not app restarts)
+          (globalThis as any).__interbrainPluginReloaded = true;
         } else {
           console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect}`);
 
