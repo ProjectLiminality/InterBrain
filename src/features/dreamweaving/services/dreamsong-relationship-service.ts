@@ -50,14 +50,10 @@ export class DreamSongRelationshipService {
     config: DreamSongRelationshipConfig = DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
   ): Promise<DreamSongScanResult> {
     const startTime = Date.now();
-    console.log('🔍 [DreamSong Relationships] Starting vault scan...');
 
     try {
-      // Phase 0: Removed - dangling ref cleanup no longer needed with liminal-web.json approach
-
       // Phase 1: Discover all DreamNodes and build UUID mapping
       const { dreamNodes, uuidToPathMap } = await this.discoverAllDreamNodes();
-      console.log(`📊 [DreamSong Relationships] Found ${dreamNodes.length} DreamNodes`);
 
       // Phase 2: Scan for DreamSongs and extract relationships
       const { edges, dreamSongsFound, dreamSongsParsed } = await this.extractAllRelationships(
@@ -70,8 +66,6 @@ export class DreamSongRelationshipService {
       const graph = this.buildRelationshipGraph(dreamNodes, edges);
 
       const scanTimeMs = Date.now() - startTime;
-      console.log(`✅ [DreamSong Relationships] Scan complete in ${scanTimeMs}ms`);
-      console.log(`📈 [DreamSong Relationships] Created ${edges.length} edges from ${dreamSongsParsed} DreamSongs`);
 
       return {
         success: true,
@@ -86,7 +80,7 @@ export class DreamSongRelationshipService {
       };
 
     } catch (error) {
-      console.error('❌ [DreamSong Relationships] Vault scan failed:', error);
+      console.error('[DreamSong] Scan failed:', error instanceof Error ? error.message : error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
       return {
@@ -124,10 +118,9 @@ export class DreamSongRelationshipService {
 
       // Write to file
       fs.writeFileSync(fullPath, jsonString, 'utf-8');
-      console.log(`📤 [DreamSong Relationships] Exported graph to: ${fullPath}`);
 
     } catch (error) {
-      console.error('❌ [DreamSong Relationships] Export failed:', error);
+      console.error('[DreamSong] Export failed:', error instanceof Error ? error.message : error);
       throw error;
     }
   }
@@ -169,9 +162,7 @@ export class DreamSongRelationshipService {
     dreamSongsFound: number;
     dreamSongsParsed: number;
   }> {
-    console.log(`⚡ [DreamSong Relationships] Using parallel I/O for ${dreamNodes.length} nodes...`);
-
-    // OPTIMIZATION: Check all DreamSongs in parallel instead of sequentially
+    // Check all DreamSongs in parallel
     const dreamSongChecks = await Promise.all(
       dreamNodes.map(async (node) => ({
         node,
@@ -185,23 +176,19 @@ export class DreamSongRelationshipService {
       .map(check => check.node);
 
     const dreamSongsFound = nodesWithDreamSongs.length;
-    console.log(`🎵 [DreamSong Relationships] Found ${dreamSongsFound} DreamSongs to process`);
 
-    // OPTIMIZATION: Parse all DreamSongs in parallel instead of sequentially
+    // Parse all DreamSongs in parallel
     const parseResults = await Promise.all(
       nodesWithDreamSongs.map(async (dreamNode) => {
         const dreamSongPath = `${dreamNode.repoPath}/DreamSong.canvas`;
 
         try {
-          console.log(`🎵 [DreamSong Relationships] Processing: ${dreamNode.name} -> ${dreamSongPath}`);
-
           const dreamSongResult = await this.dreamSongParser.parseDreamSong(
             dreamSongPath,
             dreamNode.repoPath
           );
 
           if (!dreamSongResult.success || !dreamSongResult.data) {
-            console.warn(`⚠️ [DreamSong Relationships] Failed to parse: ${dreamSongPath}`);
             return { success: false, edges: [] };
           }
 
@@ -216,8 +203,7 @@ export class DreamSongRelationshipService {
 
           return { success: true, edges };
 
-        } catch (error) {
-          console.error(`❌ [DreamSong Relationships] Error processing ${dreamSongPath}:`, error);
+        } catch {
           return { success: false, edges: [] };
         }
       })
@@ -233,8 +219,6 @@ export class DreamSongRelationshipService {
         allEdges.push(...result.edges);
       }
     }
-
-    console.log(`⚡ [DreamSong Relationships] Parallel processing complete: ${dreamSongsParsed}/${dreamSongsFound} parsed successfully`);
 
     return { edges: allEdges, dreamSongsFound, dreamSongsParsed };
   }
@@ -285,20 +269,12 @@ export class DreamSongRelationshipService {
       });
 
     if (mediaBlocks.length < config.minSequenceLength) {
-      console.log(`📏 [DreamSong Relationships] Skipping ${dreamSongPath}: sequence too short (${mediaBlocks.length})`);
       return edges;
     }
-
-    console.log(`🔗 [DreamSong Relationships] Processing sequence of ${mediaBlocks.length} media blocks`);
-    console.log(`🔍 [DreamSong Relationships] Media blocks:`, mediaBlocks.map((b: { sourceDreamNodeId: string | undefined; mediaPath: string }) => ({
-      sourceDreamNodeId: b.sourceDreamNodeId,
-      mediaPath: b.mediaPath.startsWith('data:') ? `[data URL: ${b.mediaPath.substring(0, 30)}...]` : b.mediaPath
-    })));
 
     // Create edges from sequential pairs
     for (let i = 0; i < mediaBlocks.length - 1; i++) {
       if (edges.length >= config.maxEdgesPerDreamSong) {
-        console.warn(`⚠️ [DreamSong Relationships] Hit max edges limit (${config.maxEdgesPerDreamSong}) for ${dreamSongPath}`);
         break;
       }
 
@@ -320,19 +296,8 @@ export class DreamSongRelationshipService {
         uuidToPathMap
       );
 
-      const truncatedCurrentPath = currentMedia.mediaPath.startsWith('data:')
-        ? `[data URL: ${currentMedia.mediaPath.substring(0, 30)}...]`
-        : currentMedia.mediaPath;
-      const truncatedNextPath = nextMedia.mediaPath.startsWith('data:')
-        ? `[data URL: ${nextMedia.mediaPath.substring(0, 30)}...]`
-        : nextMedia.mediaPath;
-
-      console.log(`🔗 [Edge ${i}] source: ${sourceUUID} (from ${currentMedia.sourceDreamNodeId}/${truncatedCurrentPath})`);
-      console.log(`🔗 [Edge ${i}] target: ${targetUUID} (from ${nextMedia.sourceDreamNodeId}/${truncatedNextPath})`);
-
       // Skip self-loops
       if (sourceUUID === targetUUID) {
-        console.log(`⚠️ [Edge ${i}] SKIPPED (self-loop): ${sourceUUID} === ${targetUUID}`);
         continue;
       }
 
@@ -359,7 +324,6 @@ export class DreamSongRelationshipService {
       }
     }
 
-    console.log(`✨ [DreamSong Relationships] Created ${edges.length} edges from ${dreamSongPath}`);
     return edges;
   }
 
@@ -390,9 +354,7 @@ export class DreamSongRelationshipService {
           return uuid;
         }
       }
-
-      // Only warn for real file paths, not data URLs
-      console.warn(`⚠️ [DreamSong Relationships] Could not resolve extracted source ID: ${extractedSourceId} for path: ${mediaPath}`);
+      // Could not resolve - will fallback to current DreamNode ID
     }
 
     // Fallback to current DreamNode ID for local files

@@ -12,10 +12,6 @@
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { serviceManager } from '../../core/services/service-manager';
-import { musicService } from './services/music-service';
-// TODO: Re-enable when tutorial flow is connected
-// import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { STAR_GRADIENT } from '../constellation-layout';
 import { ProjectLiminalityLogo } from './components/ProjectLiminalityLogo';
 

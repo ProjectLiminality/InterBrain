@@ -119,18 +119,16 @@ export class DreamSongParserService {
       
       // L1 Cache check (in-memory, fastest)
       if (this.parseCache.has(cacheKey)) {
-        console.log(`⚡ DreamSong L1 cache HIT: ${cacheKey}`);
         return {
           success: true,
           data: this.parseCache.get(cacheKey)!
         };
       }
-      
+
       // L2 Cache check (Zustand persistent store)
       if (zustandStore) {
         const cachedEntry = zustandStore.getCachedDreamSong(nodeId, structureHash);
         if (cachedEntry) {
-          console.log(`🚀 DreamSong L2 cache HIT: ${cacheKey}`);
           // Populate L1 cache for next time
           this.parseCache.set(cacheKey, cachedEntry.data);
           return {
@@ -139,21 +137,18 @@ export class DreamSongParserService {
           };
         }
       }
-      
+
       // Cache miss - parse from scratch
-      console.log(`📝 DreamSong cache MISS: ${cacheKey} - parsing...`);
       const result = await this.parseDreamSong(canvasPath, dreamNodePath);
-      
+
       if (result.success && result.data) {
         // Store in L1 cache
         this.parseCache.set(cacheKey, result.data);
-        
+
         // Store in L2 cache (Zustand)
         if (zustandStore) {
           zustandStore.setCachedDreamSong(nodeId, structureHash, result.data);
         }
-        
-        console.log(`✅ DreamSong parsed and cached: ${cacheKey}`);
       }
       
       return result;
@@ -193,7 +188,6 @@ export class DreamSongParserService {
       };
 
     } catch (error) {
-      console.error(`❌ [DreamSong Parser] Error parsing ${canvasPath}:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown parsing error';
       return this.createErrorResult('parsing_error', errorMessage, canvasPath);
     }
@@ -293,7 +287,6 @@ export class DreamSongParserService {
       }
     }
 
-    console.log(`📊 [DreamSong Parser] Found ${directed.length} directed edges, ${undirected.length} undirected edges`);
     return { directed, undirected };
   }
 
@@ -331,7 +324,6 @@ export class DreamSongParserService {
       }
     }
 
-    console.log(`🔗 [DreamSong Parser] Found ${pairs.length} media-text pairs`);
     return pairs;
   }
 
@@ -339,7 +331,6 @@ export class DreamSongParserService {
    * Kahn's algorithm for topological sorting
    */
   private topologicalSort(nodes: CanvasNode[], directedEdges: ProcessedCanvasEdge[]): TopologicalSortResult {
-    console.log(`🔢 [DreamSong Parser] Starting topological sort with ${nodes.length} nodes`);
 
     // Build adjacency list and in-degree map
     const adjList = new Map<string, string[]>();
@@ -390,8 +381,6 @@ export class DreamSongParserService {
     const nodesInCycle = hasCycle ? 
       Array.from(nodeIds).filter(id => !sortedList.includes(id)) : 
       undefined;
-
-    console.log(`🎯 [DreamSong Parser] Topological sort result: ${sortedList.length} nodes sorted, cycle: ${hasCycle}`);
 
     return {
       sortedNodeIds: sortedList,
@@ -484,10 +473,7 @@ export class DreamSongParserService {
     }
 
     // Respect max blocks limit
-    const finalBlocks = blocks.slice(0, this.config.maxBlocksToRender);
-    console.log(`📝 [DreamSong Parser] Created ${finalBlocks.length} content blocks`);
-    
-    return finalBlocks;
+    return blocks.slice(0, this.config.maxBlocksToRender);
   }
 
   /**
@@ -518,7 +504,6 @@ export class DreamSongParserService {
     // Resolve file path to data URL (following DreamTalk pattern)
     const resolvedSrc = await this.resolveMediaPath(filename, dreamNodePath);
     if (!resolvedSrc) {
-      console.warn(`🚫 [DreamSong Parser] Could not resolve media path: ${filename}`);
       return null;
     }
 
@@ -551,15 +536,13 @@ export class DreamSongParserService {
       // Check if file exists in vault
       const exists = await this.vaultService.fileExists(filePath);
       if (!exists) {
-        console.warn(`🚫 [DreamSong Parser] Media file not found: ${filePath}`);
         return null;
       }
 
       // Convert to data URL using same approach as DreamTalk media
       return await this.filePathToDataUrl(filePath);
       
-    } catch (error) {
-      console.error(`❌ [DreamSong Parser] Error resolving media path ${filename}:`, error);
+    } catch {
       return null;
     }
   }
@@ -591,7 +574,6 @@ export class DreamSongParserService {
     // Use VaultService to get vault path and construct full path
     const vaultPath = this.getVaultPath();
     if (!vaultPath) {
-      console.warn('DreamSongParserService: Vault path not initialized, using relative path');
       return filePath;
     }
     return path.join(vaultPath, filePath);

@@ -809,61 +809,34 @@ export function registerDreamweavingCommands(
       const store = useInterBrainStore.getState();
       store.setDreamSongRelationshipScanning(true);
 
-      const scanNotice = uiService.showInfo('Scanning DreamSong relationships...', 0);
-
       try {
         const result = await relationshipService.scanVaultForDreamSongRelationships(
           DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
         );
 
-        scanNotice.hide();
-
         if (result.success && result.graph) {
-          const { metadata, nodes } = result.graph;
+          const { metadata } = result.graph;
           const existingGraph = store.dreamSongRelationships.graph;
           const relationshipsChanged = hasDreamSongRelationshipsChanged(existingGraph, result.graph);
 
           store.setDreamSongRelationshipGraph(result.graph);
 
-          const changeIndicator = relationshipsChanged ? 'UPDATED' : 'NO CHANGES';
-          const statsMessage = [
-            `DreamSong relationship scan complete! ${changeIndicator}`,
-            ``,
-            `Results:`,
-            `- ${metadata.totalNodes} DreamNodes discovered`,
-            `- ${metadata.totalDreamSongs} DreamSongs found`,
-            `- ${metadata.totalEdges} relationship edges created`,
-            `- ${metadata.standaloneNodes} standalone nodes`,
-            `- ${nodes.size - metadata.standaloneNodes} connected nodes`,
-            ``,
-            `Scan completed in ${result.stats.scanTimeMs}ms`,
-            relationshipsChanged
-              ? `Relationships changed - constellation will update`
-              : `No changes detected`
-          ].join('\n');
-
-          uiService.showSuccess(statsMessage, 8000);
+          // Concise single-line log
+          const status = relationshipsChanged ? 'UPDATED' : 'unchanged';
+          console.log(`[DreamSong] Scan: ${metadata.totalEdges} edges, ${metadata.totalDreamSongs} songs (${status}, ${result.stats.scanTimeMs}ms)`);
 
           if (relationshipsChanged) {
-            // Request constellation layout update
             store.requestNavigation({ type: 'applyLayout' });
           }
 
         } else {
           store.setDreamSongRelationshipScanning(false);
-          const errorMessage = result.error
-            ? `Scan failed: ${result.error.message}\n\nType: ${result.error.type}`
-            : 'Scan failed with unknown error';
-          uiService.showError(errorMessage, 8000);
-          console.error('[DreamSong Relationships] Scan failed:', result.error);
+          console.error('[DreamSong] Scan failed:', result.error?.message || 'Unknown error');
         }
 
       } catch (error) {
-        scanNotice.hide();
         store.setDreamSongRelationshipScanning(false);
-        const errorMessage = `Unexpected error during scan: ${error instanceof Error ? error.message : error}`;
-        uiService.showError(errorMessage, 8000);
-        console.error('[DreamSong Relationships] Unexpected scan error:', error);
+        console.error('[DreamSong] Scan error:', error instanceof Error ? error.message : error);
       }
     }
   });
