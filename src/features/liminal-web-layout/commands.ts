@@ -3,9 +3,13 @@ import type InterBrainPlugin from '../../main';
 import { serviceManager } from '../../core/services/service-manager';
 import { VaultService } from '../../core/services/vault-service';
 
+// InterBrain system node UUID - all Dreamers should be related to this
+const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
 /**
  * Clean up dangling relationship references in liminal-web.json files
  * Removes references to non-existent DreamNodes (only affects DreamerNodes)
+ * Also ensures all Dreamer nodes are related to InterBrain
  */
 async function cleanDanglingRelationships(vaultService: VaultService): Promise<void> {
   try {
@@ -95,6 +99,10 @@ async function cleanDanglingRelationships(vaultService: VaultService): Promise<v
     console.log(`[RelationshipCleanup] Found ${nodesToClean.size} Dreamer nodes with dangling references`);
 
     if (nodesToClean.size === 0) {
+      console.log('[RelationshipCleanup] No dangling references found');
+      // Still ensure Dreamers are related to InterBrain even if no dangling refs
+      await ensureDreamersRelatedToInterBrain(vaultService, dreamNodeDirs, validUuids);
+      await serviceManager.scanVault();
       new Notice('✓ No dangling references found - all relationships are valid!');
       return;
     }
@@ -145,6 +153,9 @@ async function cleanDanglingRelationships(vaultService: VaultService): Promise<v
 
     console.log(`[RelationshipCleanup] Complete - Cleaned: ${cleanedCount}, Errors: ${errorCount}`);
 
+    // Ensure all Dreamer nodes are related to InterBrain
+    await ensureDreamersRelatedToInterBrain(vaultService, dreamNodeDirs, validUuids);
+
     // Rescan vault to update UI
     await serviceManager.scanVault();
 
@@ -153,6 +164,73 @@ async function cleanDanglingRelationships(vaultService: VaultService): Promise<v
   } catch (error) {
     console.error('[RelationshipCleanup] Fatal error:', error);
     new Notice(`Failed to clean relationships: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Ensure all Dreamer nodes have a relationship to InterBrain
+ * This maintains the social graph integrity where all users are connected to the system node
+ */
+async function ensureDreamersRelatedToInterBrain(
+  vaultService: VaultService,
+  dreamNodeDirs: { name: string; path: string }[],
+  validUuids: Set<string>
+): Promise<void> {
+  // Only proceed if InterBrain exists in the vault
+  if (!validUuids.has(INTERBRAIN_UUID)) {
+    console.log('[RelationshipCleanup] InterBrain node not found in vault, skipping Dreamer relationship check');
+    return;
+  }
+
+  console.log('[RelationshipCleanup] Ensuring all Dreamers are related to InterBrain...');
+
+  let addedCount = 0;
+
+  await Promise.all(
+    dreamNodeDirs.map(async ({ name, path: dirPath }) => {
+      try {
+        // Read .udd to check if this is a Dreamer node
+        const uddPath = vaultService.joinPath(dirPath, '.udd');
+        const uddContent = await vaultService.readFile(uddPath);
+        const udd = JSON.parse(uddContent);
+
+        // Skip if not a Dreamer node or if it IS the InterBrain node itself
+        if (udd.type !== 'dreamer' || udd.uuid === INTERBRAIN_UUID) {
+          return;
+        }
+
+        // Read or create liminal-web.json
+        const liminalWebPath = vaultService.joinPath(dirPath, 'liminal-web.json');
+        let liminalWeb: { relationships: string[] } = { relationships: [] };
+
+        try {
+          const liminalWebContent = await vaultService.readFile(liminalWebPath);
+          liminalWeb = JSON.parse(liminalWebContent);
+          if (!Array.isArray(liminalWeb.relationships)) {
+            liminalWeb.relationships = [];
+          }
+        } catch {
+          // File doesn't exist, use default
+        }
+
+        // Check if InterBrain relationship already exists
+        if (!liminalWeb.relationships.includes(INTERBRAIN_UUID)) {
+          liminalWeb.relationships.push(INTERBRAIN_UUID);
+          await vaultService.writeFile(liminalWebPath, JSON.stringify(liminalWeb, null, 2));
+          console.log(`[RelationshipCleanup] Added InterBrain relationship to Dreamer "${name}"`);
+          addedCount++;
+        }
+      } catch (error) {
+        console.error(`[RelationshipCleanup] Error checking Dreamer "${name}":`, error);
+      }
+    })
+  );
+
+  if (addedCount > 0) {
+    console.log(`[RelationshipCleanup] Added InterBrain relationship to ${addedCount} Dreamer nodes`);
+    new Notice(`Added InterBrain relationship to ${addedCount} Dreamer nodes`);
+  } else {
+    console.log('[RelationshipCleanup] All Dreamers already related to InterBrain');
   }
 }
 

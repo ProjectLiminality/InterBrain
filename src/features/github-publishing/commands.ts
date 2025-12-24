@@ -493,6 +493,16 @@ export function registerGitHubCommands(
     }
   });
 
+  // Open InterBrain GitHub repository in browser
+  plugin.addCommand({
+    id: 'open-github-repo',
+    name: 'Open InterBrain on GitHub',
+    callback: async () => {
+      // Open the InterBrain GitHub repository
+      window.open('https://github.com/ProjectLiminality/InterBrain', '_blank');
+    }
+  });
+
   // Clone DreamNode from GitHub - Supports Obsidian URI protocol
   plugin.addCommand({
     id: 'clone-dreamnode-github',

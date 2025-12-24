@@ -234,8 +234,9 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'edit-relationships',
     iconName: 'lucide-git-compare-arrows',  // Relationship/connection icon
     commandId: 'interbrain:enter-relationship-edit-mode',
-    label: 'Edit Relationships'
-    // Shows for both dream and dreamer types (bidirectional relationships)
+    label: 'Edit Relationships',
+    // Hide for InterBrain - all Dreamers are automatically related to it
+    shouldShow: (node) => node?.id !== INTERBRAIN_UUID
   },
   {
     id: 'video-call',
@@ -268,13 +269,19 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     iconName: 'lucide-github',
     commandId: 'interbrain:publish-dreamnode-github',
     label: 'Publish to GitHub',
-    // Only show for dream-type nodes
-    shouldShow: (node) => node?.type === 'dream',
-    // Dynamic label and command based on publish state
+    // Show for dream-type nodes OR InterBrain (which links to repo)
+    shouldShow: (node) => node?.type === 'dream' || node?.id === INTERBRAIN_UUID,
+    // Dynamic label and command based on node and publish state
     getDynamicLabel: (node) => {
+      if (node?.id === INTERBRAIN_UUID) {
+        return 'View on GitHub';
+      }
       return node?.githubRepoUrl ? 'Unpublish from GitHub' : 'Publish to GitHub';
     },
     getDynamicCommand: (node) => {
+      if (node?.id === INTERBRAIN_UUID) {
+        return 'interbrain:open-github-repo';
+      }
       return node?.githubRepoUrl
         ? 'interbrain:unpublish-dreamnode-github'
         : 'interbrain:publish-dreamnode-github';

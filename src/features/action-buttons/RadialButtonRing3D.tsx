@@ -315,8 +315,9 @@ const RadialButton: React.FC<RadialButtonProps> = ({
                   left: '50%',
                   transform: 'translateX(-50%)',
                   color: disabledState.disabled ? '#ff6b6b' : '#ffffff',
-                  fontSize: '18px',  // Increased from 14px
-                  fontWeight: '500',
+                  fontSize: '54px',  // 3x size for readability
+                  fontFamily: '"TeX Gyre Termes", "Times New Roman", serif',
+                  fontWeight: '400',
                   textAlign: 'center',
                   whiteSpace: 'nowrap',
                   background: 'rgba(0, 0, 0, 0.8)',
