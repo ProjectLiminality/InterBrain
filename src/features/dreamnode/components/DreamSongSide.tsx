@@ -79,10 +79,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   );
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Treat pending relationship or tutorial highlight as forced hover state
-  // This shows name overlay for related nodes in edit mode or tutorial
-  const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
-
   // Glow conditions (no general hover glow - only specific contexts):
   // 1. isPendingRelationship - already marked as pending relationship
   // 2. isTutorialHighlighted - explicitly highlighted by tutorial system

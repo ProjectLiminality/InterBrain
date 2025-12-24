@@ -5,6 +5,56 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2025-12-24 - Private Beta Release
+
+### Added
+
+**Tutorial System (Feature Slice)**
+- Manim-style onboarding with animated text and GoldenDot guidance
+- Portal overlay with logo animation for immersive introduction
+- Music service for tutorial atmosphere
+- Step-based tutorial system with store integration
+- Manual commands for tutorial progression (safe for production)
+
+**CI Infrastructure**
+- Complete GitHub Actions CI pipeline for quality assurance
+- Multi-platform testing (macOS, Ubuntu, Windows)
+- Feature-centric path filters (core changes, P2P, install scripts)
+- Obsidian installation verification in CI
+- P2P collaboration testing with Tailscale integration
+- Linux Obsidian auto-install via Flatpak/Snap
+
+**Install Scripts**
+- Cross-platform install.sh (macOS/Linux) and install.ps1 (Windows)
+- Automatic dependency installation (Homebrew, Radicle, Ollama)
+- Obsidian auto-install on Linux
+
+### Changed
+
+**Edit Mode Refactor**
+- Separated metadata editing from relationship editing
+- `edit` layout for metadata editing (DreamNodeEditor3D)
+- `relationship-edit` layout for relationship management (RelationshipEditor3D)
+- Cleaner state management with explicit mode distinction
+
+**Glow System Refinement**
+- Distance-invariant hover effects with proper scaling
+- Glow now conditional on context:
+  - Pending relationships (selected for addition)
+  - Tutorial-highlighted nodes
+  - Hover preview in relationship-edit mode only
+- No general hover glow - keeps UI clean and intentional
+
+**Pure CSS Star Assets**
+- Removed external dependencies for star rendering
+- CSS-only implementation for better performance
+
+### Technical
+
+- 23 feature slices now in codebase
+- Zero lint warnings, zero TypeScript errors
+- All tests passing
+
 ## [0.11.0] - 2025-12-16 - Feedback System & Multi-Provider AI
 
 ### Added

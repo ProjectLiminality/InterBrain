@@ -17,7 +17,7 @@ import { musicService } from './services/music-service';
 // TODO: Re-enable when tutorial flow is connected
 // import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { STAR_GRADIENT } from '../constellation-layout';
-import { ProjectLiminalityLogo, LOGO_DIMENSIONS } from './components/ProjectLiminalityLogo';
+import { ProjectLiminalityLogo } from './components/ProjectLiminalityLogo';
 
 /**
  * Generate a deterministic but organic-looking star field
