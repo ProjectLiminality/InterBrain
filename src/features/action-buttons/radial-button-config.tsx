@@ -358,5 +358,13 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     label: 'Delete DreamNode',
     // Hide delete button for the InterBrain system node - it cannot be deleted
     shouldShow: (node) => node?.id !== INTERBRAIN_UUID
+  },
+  {
+    id: 'report-bug',
+    iconName: 'lucide-bug',
+    commandId: 'interbrain:report-bug',
+    label: 'Report Bug',
+    // Only show for InterBrain system node
+    shouldShow: (node) => node?.id === INTERBRAIN_UUID
   }
 ];
