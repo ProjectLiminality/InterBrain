@@ -8,8 +8,6 @@
  * the changes in their vault.
  */
 
-/* eslint-disable no-undef */
-
 import { App } from 'obsidian';
 import {
   getCherryPickWorkflowService,
