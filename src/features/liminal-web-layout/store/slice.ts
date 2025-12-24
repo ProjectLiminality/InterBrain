@@ -102,12 +102,21 @@ export const createLiminalWebSlice: StateCreator<
     }
 
     // Detect meaningful node selection changes for history tracking
-    const isMeaningfulChange = (
+    // Track both: navigating between nodes in liminal-web AND initial selection from constellation
+    const isNavigatingBetweenNodes = (
       currentLayout === 'liminal-web' &&
       previousNode &&
       node &&
       previousNode.id !== node.id
     );
+
+    const isInitialSelection = (
+      !previousNode &&
+      node &&
+      (currentLayout === 'constellation' || currentLayout === 'liminal-web')
+    );
+
+    const isMeaningfulChange = isNavigatingBetweenNodes || isInitialSelection;
 
     if (isMeaningfulChange && !state.isRestoringFromHistory) {
       const newEntry: NavigationHistoryEntry = {

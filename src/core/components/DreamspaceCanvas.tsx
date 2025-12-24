@@ -560,6 +560,8 @@ export default function DreamspaceCanvas() {
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
             console.log('Empty space clicked in liminal web - deselecting node');
+            // Add history entry BEFORE changing state so undo can return here
+            store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
             store.setSpatialLayout('constellation');
           } else {
