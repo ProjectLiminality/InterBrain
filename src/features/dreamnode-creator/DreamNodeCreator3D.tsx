@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../dreamnode/styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../dreamnode/styles/dreamNodeStyles';
 import { isValidDreamTalkMedia, DropZone, ValidationError, validateDreamNodeTitle, isTitleValid } from '../dreamnode';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
@@ -216,7 +216,7 @@ export default function DreamNodeCreator3D() {
               overflow: 'hidden',
               position: 'relative',
               transition: dreamNodeStyles.transitions.creation,
-              boxShadow: getNodeGlow(draft.type, 15),
+              boxShadow: getGoldenGlow(15),
               fontFamily: dreamNodeStyles.typography.fontFamily
             }}
             onDragOver={handleDragOver}

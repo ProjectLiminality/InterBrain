@@ -5,6 +5,7 @@ import { Group } from 'three';
 import { RADIAL_BUTTON_CONFIGS, RadialButtonConfig, createIconElement } from './radial-button-config';
 import { serviceManager } from '../../core/services/service-manager';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { getGoldenGlow } from '../dreamnode/styles/dreamNodeStyles';
 
 interface RadialButtonRing3DProps {
   /** Position of the center node around which buttons appear */
@@ -295,7 +296,7 @@ const RadialButton: React.FC<RadialButtonProps> = ({
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
                 transform: (isHovered && !disabledState.disabled) ? 'scale(1.1)' : 'scale(1)',
-                boxShadow: (isHovered && !disabledState.disabled) ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',  // Hover glow
+                boxShadow: (isHovered && !disabledState.disabled) ? getGoldenGlow(20) : 'none',
                 cursor: disabledState.disabled ? 'not-allowed' : 'pointer',
                 color: disabledState.disabled ? '#666666' : '#ffffff',  // Grayed out icon when disabled
                 opacity: disabledState.disabled ? 0.5 : 1

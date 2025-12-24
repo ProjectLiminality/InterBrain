@@ -1,6 +1,6 @@
 /**
  * Shared styling constants for DreamNode components
- * 
+ *
  * This module provides consistent visual design across all DreamNode-related UI,
  * including the regular 3D nodes, proto-nodes during creation, and related components.
  */
@@ -19,9 +19,11 @@ export const dreamNodeStyles = {
     text: {
       primary: '#FFFFFF',   // White text
       secondary: '#CCCCCC'  // Light gray for secondary text
-    }
+    },
+    // Universal golden glow for attention/interaction
+    glow: '#FFD700'
   },
-  
+
   // Standard dimensions for consistent sizing
   dimensions: {
     nodeSize: 240,        // Base size in pixels for UI elements
@@ -30,7 +32,7 @@ export const dreamNodeStyles = {
     toggleBorderWidth: 2, // Toggle button border thickness
     borderRadius: '50%'   // Perfect circle
   },
-  
+
   // Typography settings
   typography: {
     fontFamily: 'TeX Gyre Termes, Georgia, serif',
@@ -45,54 +47,28 @@ export const dreamNodeStyles = {
     },
     lineHeight: 1.4
   },
-  
+
   // Interaction states
   states: {
     hover: {
-      scale: 1.1,
-      glowIntensity: 20  // for box-shadow glow effect
+      scale: 1.05,
+      glowIntensity: 35  // Golden glow intensity on hover
     },
     creation: {
       opacity: 0.7       // Translucent for proto-nodes
     },
     normal: {
       opacity: 1.0       // Fully opaque for real nodes
-    },
-    // Git state visual indicators
-    git: {
-      clean: {
-        glowIntensity: 0,        // No glow for clean state
-        glowColor: '#000000'     // Black (invisible since intensity is 0)
-      },
-      uncommitted: {
-        glowIntensity: 30,       // Strong glow
-        glowColor: '#FF6B6B',    // Red (same as Dreamer color)
-        pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite'
-      },
-      stashed: {
-        glowIntensity: 25,       // Strong glow  
-        glowColor: '#4FC3F7'     // Blue (same as Dream color)
-      },
-      dirtyAndStashed: {
-        glowIntensity: 35,       // Maximum glow
-        glowColor: '#FF6B6B',    // Red for uncommitted (primary state)
-        pulseAnimation: 'dreamnode-pulse 2s ease-in-out infinite'
-      },
-      unpushed: {
-        glowIntensity: 20,       // Moderate glow
-        glowColor: '#4FC3F7'     // Blue (same as Dream color)
-      }
     }
   },
-  
+
   // Animation timing
   transitions: {
     default: 'all 0.2s ease',
     creation: 'opacity 0.3s ease',
-    hover: 'transform 0.2s ease, box-shadow 0.2s ease',
-    gitState: 'border-style 0.3s ease, box-shadow 0.3s ease'
+    hover: 'transform 0.2s ease, box-shadow 0.2s ease'
   },
-  
+
   // Media file effects
   media: {
     // Radial fade-to-black gradient for circular media display
@@ -110,33 +86,76 @@ export function getNodeColors(type: 'dream' | 'dreamer') {
 }
 
 /**
- * Helper function to generate box-shadow glow effect
+ * Universal golden glow effect for attention/interaction
+ * Used for: hover states, edit mode, tutorial focus, relationships
+ *
+ * Creates a white-hot center fading to golden edges (matching GoldenDot aesthetic)
+ *
+ * @param intensity - Glow spread in pixels (default: 25)
+ * @returns CSS box-shadow value with white core and golden outer glow
  */
-export function getNodeGlow(type: 'dream' | 'dreamer', intensity: number = 10) {
-  const colors = getNodeColors(type);
-  return `0 0 ${intensity}px ${colors.border}`;
+export function getGoldenGlow(intensity: number = 25) {
+  // White-hot inner core, golden mid-layer, warm gold outer
+  return `0 0 ${intensity * 0.5}px rgba(255, 255, 255, 0.9), 0 0 ${intensity}px rgba(255, 220, 150, 0.8), 0 0 ${intensity * 2}px rgba(255, 200, 80, 0.6)`;
 }
 
 /**
- * Helper function to generate gold glow for edit mode relationships
- * Uses strong double-layered effect matching git glows for visibility
+ * Reference distance for distance-invariant hover effects
+ * This is the center node position in liminal web layout (z = -50)
  */
-export function getEditModeGlow(intensity: number = 25) {
-  const goldColor = '#FFD700'; // Bright gold color for relationships
-  // Use double-layered glow effect like git glows for better visibility
-  return `0 0 ${intensity}px ${goldColor}, 0 0 ${intensity * 2}px ${goldColor}`;
+const REFERENCE_DISTANCE = 50;
+
+/**
+ * Calculate distance compensation factor for distance-invariant hover effects
+ *
+ * This ensures that hover effects (glow radius, scale ring thickness) appear
+ * the same absolute size in screen space regardless of how far the node is.
+ *
+ * Geometric derivation:
+ * - Apparent size scales as 1/distance
+ * - To maintain constant absolute effect, we scale the effect by distance/reference
+ *
+ * Liminal Web Layout z-distances:
+ * - Center node: z = -50  → 1.0x
+ * - Ring 1: z = -100      → 2.0x
+ * - Ring 2: z = -200      → 4.0x
+ * - Ring 3: z = -450      → 9.0x
+ *
+ * @param zPosition - The z-coordinate of the node (negative = further from camera)
+ * @returns Distance compensation factor (1.0 at reference distance)
+ */
+export function getDistanceCompensationFactor(zPosition: number): number {
+  const distance = Math.abs(zPosition);
+  return distance / REFERENCE_DISTANCE;
 }
 
 /**
- * Helper function to generate git state glow effect
+ * Calculate distance-scaled glow intensity for DreamNodes
+ *
+ * @param zPosition - The z-coordinate of the node (negative = further from camera)
+ * @param baseIntensity - Base glow intensity at reference distance (default: 35)
+ * @returns Scaled intensity value for distance-invariant glow appearance
  */
-export function getGitGlow(gitState: GitStateType, intensity: number = 0) {
-  if (intensity === 0) return 'none';
-  
-  const gitStyles = dreamNodeStyles.states.git[gitState];
-  const color = ('glowColor' in gitStyles) ? gitStyles.glowColor : '#FFFFFF';
-  
-  return `0 0 ${intensity}px ${color}, 0 0 ${intensity * 2}px ${color}`;
+export function getDistanceScaledGlowIntensity(zPosition: number, baseIntensity: number = 35): number {
+  const factor = getDistanceCompensationFactor(zPosition);
+  return baseIntensity * factor;
+}
+
+/**
+ * Calculate distance-scaled hover scale for DreamNodes
+ *
+ * Ensures the "ring thickness" (visual difference between hovered and unhovered)
+ * appears constant in screen space regardless of distance.
+ *
+ * Math: scale = 1 + baseScaleDelta * (distance / referenceDistance)
+ *
+ * @param zPosition - The z-coordinate of the node (negative = further from camera)
+ * @param baseScaleDelta - Scale increase at reference distance (default: 0.05 = 5%)
+ * @returns Scale factor for distance-invariant hover ring appearance
+ */
+export function getDistanceScaledHoverScale(zPosition: number, baseScaleDelta: number = 0.05): number {
+  const factor = getDistanceCompensationFactor(zPosition);
+  return 1 + (baseScaleDelta * factor);
 }
 
 /**
@@ -172,48 +191,6 @@ export function getMediaOverlayStyle() {
 }
 
 /**
- * Git state type for visual indicators
- */
-export type GitStateType = 'clean' | 'uncommitted' | 'stashed' | 'dirtyAndStashed' | 'unpushed';
-
-/**
- * Helper function to determine git visual state from git status
- * Hierarchy: red (uncommitted/stashed) wins over blue (unpushed)
- */
-export function getGitVisualState(gitStatus?: { hasUncommittedChanges: boolean; hasStashedChanges: boolean; hasUnpushedChanges: boolean }): GitStateType {
-  if (!gitStatus) return 'clean';
-  
-  const { hasUncommittedChanges, hasStashedChanges, hasUnpushedChanges } = gitStatus;
-  
-  // Red glow wins: uncommitted OR stashed changes (work in progress)
-  if (hasUncommittedChanges || hasStashedChanges) {
-    return 'uncommitted'; // Use 'uncommitted' state for both cases
-  }
-  // Blue glow: unpushed commits (ready to share)
-  else if (hasUnpushedChanges) {
-    return 'unpushed';
-  }
-  // Clean state
-  else {
-    return 'clean';
-  }
-}
-
-/**
- * Helper function to get git state styling properties
- */
-export function getGitStateStyle(gitState: GitStateType) {
-  const gitStyles = dreamNodeStyles.states.git[gitState];
-  
-  return {
-    borderStyle: ('borderStyle' in gitStyles) ? gitStyles.borderStyle : 'solid',
-    animation: ('pulseAnimation' in gitStyles) ? gitStyles.pulseAnimation : 'none',
-    glowIntensity: gitStyles.glowIntensity,
-    glowColor: ('glowColor' in gitStyles) ? gitStyles.glowColor : '#000000'
-  };
-}
-
-/**
  * Helper function to get complete node styling for a given type and state
  */
 export function getNodeStyle(
@@ -222,7 +199,7 @@ export function getNodeStyle(
 ) {
   const colors = getNodeColors(type);
   const { dimensions, transitions, states } = dreamNodeStyles;
-  
+
   const baseStyle = {
     width: `${dimensions.nodeSize}px`,
     height: `${dimensions.nodeSize}px`,
@@ -238,13 +215,13 @@ export function getNodeStyle(
     position: 'relative' as const,
     overflow: 'hidden' as const
   };
-  
+
   switch (state) {
     case 'hover':
       return {
         ...baseStyle,
         transform: `scale(${states.hover.scale})`,
-        boxShadow: getNodeGlow(type, states.hover.glowIntensity)
+        boxShadow: getGoldenGlow(states.hover.glowIntensity)
       };
     case 'creation':
       return {
@@ -256,7 +233,7 @@ export function getNodeStyle(
       return {
         ...baseStyle,
         opacity: states.normal.opacity,
-        boxShadow: getNodeGlow(type, 10)
+        boxShadow: 'none'
       };
   }
 }

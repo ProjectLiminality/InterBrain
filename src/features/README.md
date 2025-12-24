@@ -169,6 +169,7 @@ export { registerDreamNodeCommands } from './commands';
 | [dreamnode-updater](./dreamnode-updater/README.md) | DreamNode update workflow (preview, apply) | Low |
 | [uri-handler](./uri-handler/README.md) | interbrain:// protocol handling | Low |
 | [feedback](./feedback/README.md) | Bug reporting and feedback system | Low |
+| [tutorial](./tutorial/README.md) | Onboarding with Manim-style text animations | Low |
 
 ## Creating a New Feature
 

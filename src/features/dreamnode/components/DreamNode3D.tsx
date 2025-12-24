@@ -5,7 +5,7 @@ import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
-import { dreamNodeStyles } from '../styles/dreamNodeStyles';
+import { dreamNodeStyles, getDistanceScaledGlowIntensity, getDistanceScaledHoverScale } from '../styles/dreamNodeStyles';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { VaultService } from '../../../core/services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
@@ -127,7 +127,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Check global drag state
   const isDragging = useInterBrainStore(state => state.isDragging);
-  
+
+  // Tutorial highlight state - allows programmatic hover effect
+  const isTutorialHighlighted = useInterBrainStore(state =>
+    state.tutorial.highlightedNodeId === dreamNode.id
+  );
+
   // Flip state management
   const flipState = useInterBrainStore(state => state.flipState);
   const setFlippedNode = useInterBrainStore(state => state.setFlippedNode);
@@ -140,8 +145,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const isPendingRelationship: boolean = useInterBrainStore(state => {
     const nodeId = dreamNode.id;
 
-    // Edit mode relationships
-    if (state.editMode?.pendingRelationships?.includes(nodeId)) {
+    // Relationship-edit mode only: show glow for pending relationships
+    // Regular 'edit' mode is for metadata only - no relationship interaction
+    if (state.spatialLayout === 'relationship-edit' &&
+        state.editMode?.pendingRelationships?.includes(nodeId)) {
       return true;
     }
 
@@ -243,6 +250,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Handle mouse events
   const handleMouseEnter = () => {
     if (isDragging) return;
+    // Suppress hover for center node in relationship-edit mode (search bar covers it)
+    if (spatialLayout === 'relationship-edit' && selectedNode?.id === dreamNode.id) {
+      return;
+    }
     setIsHovered(true);
     onHover?.(dreamNode, true);
   };
@@ -557,18 +568,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     isMoving: () => isTransitioning
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing]);
   
-  // Update target hover scale when hover state changes
-  useEffect(() => {
-    targetHoverScale.current = isHovered ? dreamNodeStyles.states.hover.scale : 1;
-  }, [isHovered]);
-
   // Position calculation and animation frame logic
   useFrame((_state, delta) => {
+    // Calculate current z-position for distance-scaled hover
+    const currentZ = positionMode === 'constellation'
+      ? anchorPosition[2] - normalizedDirection[2] * radialOffset
+      : currentPosition[2];
+
+    // Update target hover scale based on distance (distance-invariant ring thickness)
+    // Treat pending relationship or tutorial highlight as forced hover state
+    const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
+    targetHoverScale.current = effectiveHover ? getDistanceScaledHoverScale(currentZ) : 1;
+
     // Smooth hover scale animation (lerp towards target)
     if (hoverGroupRef.current) {
       const currentScale = hoverGroupRef.current.scale.x;
       const targetScale = targetHoverScale.current;
-      const lerpFactor = 1 - Math.pow(0.001, delta); // Smooth interpolation (similar to 0.2s CSS transition)
+      const lerpFactor = 1 - Math.pow(0.00001, delta); // Snappier interpolation (~0.1s feel)
       const newScale = currentScale + (targetScale - currentScale) * lerpFactor;
       hoverGroupRef.current.scale.set(newScale, newScale, newScale);
     }
@@ -700,6 +716,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = dreamNodeStyles.dimensions.borderWidth;
 
+  // Calculate distance-scaled glow intensity based on z-position
+  const glowIntensity = getDistanceScaledGlowIntensity(finalPosition[2]);
+
 
   // Clean Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
   return (
@@ -743,10 +762,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 isHovered={isHovered}
                 isEditModeActive={isEditModeActive}
                 isPendingRelationship={isPendingRelationship}
+                isRelationshipEditMode={spatialLayout === 'relationship-edit'}
+                isTutorialHighlighted={isTutorialHighlighted}
                 shouldShowFlipButton={shouldShowFlipButton}
                 shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
                 nodeSize={nodeSize}
                 borderWidth={borderWidth}
+                glowIntensity={glowIntensity}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
@@ -786,10 +808,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   isHovered={isHovered}
                   isEditModeActive={isEditModeActive}
                   isPendingRelationship={isPendingRelationship}
+                  isRelationshipEditMode={spatialLayout === 'relationship-edit'}
+                  isTutorialHighlighted={isTutorialHighlighted}
                   shouldShowFlipButton={shouldShowFlipButton}
                   shouldShowFullscreenButton={shouldShowDreamSongFullscreen}
                   nodeSize={nodeSize}
                   borderWidth={borderWidth}
+                  glowIntensity={glowIntensity}
                   onMouseEnter={handleMouseEnter}
                   onMouseLeave={handleMouseLeave}
                   onClick={handleClick}

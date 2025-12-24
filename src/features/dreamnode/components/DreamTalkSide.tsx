@@ -1,6 +1,6 @@
 import React from 'react';
 import { DreamNode, MediaFile } from '../types/dreamnode';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaContainerStyle, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from '../styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 import { PDFPreview } from './PDFPreview';
@@ -11,10 +11,13 @@ interface DreamTalkSideProps {
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
+  isRelationshipEditMode?: boolean; // In relationship-edit layout (hover shows glow preview)
+  isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
+  glowIntensity?: number; // Distance-scaled glow intensity
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: (e: React.MouseEvent) => void;
@@ -28,10 +31,13 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   isHovered,
   isEditModeActive: _isEditModeActive,
   isPendingRelationship,
+  isRelationshipEditMode = false,
+  isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
   nodeSize,
   borderWidth,
+  glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -40,8 +46,16 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   onFullScreenClick
 }) => {
   const nodeColors = getNodeColors(dreamNode.type);
-  const gitState = getGitVisualState(dreamNode.gitStatus);
-  const gitStyle = getGitStateStyle(gitState);
+
+  // Treat pending relationship or tutorial highlight as forced hover state
+  // This shows name overlay for related nodes in edit mode or tutorial
+  const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
+
+  // Glow conditions (no general hover glow - only specific contexts):
+  // 1. isPendingRelationship - already marked as pending relationship
+  // 2. isTutorialHighlighted - explicitly highlighted by tutorial system
+  // 3. Hover in relationship-edit mode - preview that clicking would add relationship
+  const shouldShowGlow = isPendingRelationship || isTutorialHighlighted || (isHovered && isRelationshipEditMode);
 
   return (
     <div
@@ -50,26 +64,12 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         width: '100%',
         height: '100%',
         borderRadius: dreamNodeStyles.dimensions.borderRadius,
-        border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+        border: `${borderWidth}px solid ${nodeColors.border}`,
         background: nodeColors.fill,
         overflow: 'hidden',
         cursor: 'pointer !important',
-        transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        animation: gitStyle.animation,
-        boxShadow: (() => {
-          // Priority 1: Git status glow (always highest priority)
-          if (gitStyle.glowIntensity > 0) {
-            return getGitGlow(gitState, gitStyle.glowIntensity);
-          }
-
-          // Priority 2: Relationship glow (edit mode OR copilot mode)
-          if (isPendingRelationship) {
-            return getEditModeGlow(25); // Strong gold glow for relationships
-          }
-
-          // Priority 3: Hover glow (fallback)
-          return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-        })(),
+        transition: dreamNodeStyles.transitions.default,
+        boxShadow: shouldShowGlow ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
@@ -86,8 +86,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
           {/* Fade-to-black overlay */}
           <div style={getMediaOverlayStyle()} />
 
-          {/* Hover overlay with name */}
-          {isHovered && (
+          {/* Hover overlay with name - shows for hover OR pending relationship */}
+          {effectiveHover && (
             <div
               style={{
                 position: 'absolute',
@@ -100,7 +100,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: isHovered ? 1 : 0,
+                opacity: 1,
                 transition: 'opacity 0.2s ease-in-out',
                 pointerEvents: 'none',
                 zIndex: 10

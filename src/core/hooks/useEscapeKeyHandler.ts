@@ -5,14 +5,17 @@ import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
 /**
  * useEscapeKeyHandler - Unified escape key handling for spatial layout navigation
  *
- * Provides hierarchical navigation through escape key:
+ * Provides flat navigation through escape key (simplified hierarchy):
  * - creation → constellation
- * - edit-search → edit
- * - edit → liminal-web
+ * - edit → liminal-web (metadata editing)
+ * - relationship-edit → liminal-web (relationship editing - peer to edit)
  * - search → constellation
  * - copilot → liminal-web
  * - liminal-web → constellation
  * - constellation → (already at root)
+ *
+ * Note: 'edit' and 'relationship-edit' are peer-level modes, not nested.
+ * Both exit to liminal-web.
  *
  * Includes 300ms debouncing to prevent rapid state changes.
  *
@@ -57,12 +60,14 @@ export function useEscapeKeyHandler(
             store.cancelCreation(); // This sets layout to 'constellation'
             break;
 
-          case 'edit-search':
-            // Exit search mode, stay in edit mode
-            store.setEditModeSearchActive(false); // This will set layout to 'edit'
-            break;
-
           case 'edit':
+          case 'relationship-edit':
+            // Both edit modes are peer-level - both exit to liminal-web
+            // Clear stale edit mode data from orchestrator before exiting
+            if (orchestratorRef.current) {
+              orchestratorRef.current.clearEditModeData();
+            }
+
             // Exit edit mode, go to liminal-web
             store.exitEditMode();
             store.setSpatialLayout('liminal-web');

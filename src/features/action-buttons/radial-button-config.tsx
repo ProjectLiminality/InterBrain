@@ -215,7 +215,7 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'edit-mode',
     iconName: 'lucide-settings',  // Gear icon
     commandId: 'interbrain:enter-edit-mode',
-    label: 'Edit Mode',
+    label: 'Edit Metadata',
     // Special handling for InterBrain node - open settings instead of edit mode
     getDynamicCommand: (node) => {
       if (node?.id === INTERBRAIN_UUID) {
@@ -227,8 +227,15 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
       if (node?.id === INTERBRAIN_UUID) {
         return 'InterBrain Settings';
       }
-      return 'Edit Mode';
+      return 'Edit Metadata';
     }
+  },
+  {
+    id: 'edit-relationships',
+    iconName: 'lucide-git-compare-arrows',  // Relationship/connection icon
+    commandId: 'interbrain:enter-relationship-edit-mode',
+    label: 'Edit Relationships'
+    // Shows for both dream and dreamer types (bidirectional relationships)
   },
   {
     id: 'video-call',

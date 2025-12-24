@@ -8,6 +8,9 @@ import { Plugin } from 'obsidian';
 import { IndexingService, indexingService } from '../../features/semantic-search/services/indexing-service';
 import { UrlMetadata } from '../../features/drag-and-drop';
 import { RadicleService, RadicleServiceImpl } from '../../features/social-resonance-filter/services/radicle-service';
+import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
+import type { Mesh } from 'three';
+import type { MutableRefObject, RefObject } from 'react';
 
 /**
  * Service interface that both mock and real implementations will follow
@@ -70,6 +73,8 @@ export class ServiceManager {
   private canvasParserService: CanvasParserService | null = null;
   private leafManagerService: LeafManagerService | null = null;
   private submoduleManagerService: SubmoduleManagerService | null = null;
+  private spatialOrchestratorRef: SpatialOrchestratorRef | null = null;
+  private hitSphereRefs: MutableRefObject<Map<string, RefObject<Mesh | null>>> | null = null;
 
   constructor() {
     this.indexingService = indexingService;
@@ -268,7 +273,37 @@ export class ServiceManager {
   getRadicleService(): RadicleService {
     return this.radicleService;
   }
-  
+
+  /**
+   * Set the SpatialOrchestrator ref (called from DreamspaceCanvas)
+   */
+  setSpatialOrchestratorRef(ref: SpatialOrchestratorRef | null): void {
+    this.spatialOrchestratorRef = ref;
+  }
+
+  /**
+   * Get the SpatialOrchestrator ref for position queries
+   */
+  getSpatialOrchestrator(): SpatialOrchestratorRef | null {
+    return this.spatialOrchestratorRef;
+  }
+
+  /**
+   * Set the hit sphere refs map (called from DreamspaceCanvas)
+   */
+  setHitSphereRefs(refs: MutableRefObject<Map<string, RefObject<Mesh | null>>>): void {
+    this.hitSphereRefs = refs;
+  }
+
+  /**
+   * Get hit sphere mesh for a specific node ID
+   */
+  getHitSphere(nodeId: string): Mesh | null {
+    if (!this.hitSphereRefs?.current) return null;
+    const ref = this.hitSphereRefs.current.get(nodeId);
+    return ref?.current ?? null;
+  }
+
   /**
    * Perform vault scan
    */

@@ -76,6 +76,9 @@ export interface SpatialOrchestratorRef {
 
   /** Calculate forward position on sphere accounting for current rotation */
   calculateForwardPositionOnSphere: () => [number, number, number];
+
+  /** Get a node's current rendered position (from DreamNode3D ref) */
+  getNodeCurrentPosition: (nodeId: string) => [number, number, number] | null;
 }
 
 interface SpatialOrchestratorProps {
@@ -289,7 +292,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Only update to liminal-web if not in a mode that manages its own layout
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
+        if (currentLayout !== 'edit' && currentLayout !== 'relationship-edit' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
 
@@ -339,7 +342,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         focusedNodeId.current = nodeId;
 
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'edit-search' && currentLayout !== 'copilot') {
+        if (currentLayout !== 'edit' && currentLayout !== 'relationship-edit' && currentLayout !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
 
@@ -918,6 +921,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
 
       return [forwardPosition.x, forwardPosition.y, forwardPosition.z];
+    },
+
+    getNodeCurrentPosition: (nodeId: string): [number, number, number] | null => {
+      const nodeRef = nodeRefs.current.get(nodeId);
+      if (!nodeRef?.current) {
+        console.warn(`[SpatialOrchestrator] No ref found for node: ${nodeId}`);
+        return null;
+      }
+      return nodeRef.current.getCurrentPosition();
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 

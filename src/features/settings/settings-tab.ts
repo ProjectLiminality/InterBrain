@@ -17,6 +17,7 @@ import { createRadicleSettingsSection } from '../social-resonance-filter/setting
 import { createGitHubSettingsSection } from '../github-publishing/settings-section';
 import { createFeedbackSettingsSection } from '../feedback/settings-section';
 import { createAIMagicSettingsSection } from '../ai-magic/settings-section';
+import { createTutorialSettingsSection } from '../tutorial/settings-section';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
@@ -166,6 +167,11 @@ export class InterBrainSettingTab extends PluginSettingTab {
 		// Advanced Section (global)
 		// ============================================================
 		this.createAdvancedSection(containerEl);
+
+		// ============================================================
+		// Tutorial & Credits Section (feature-owned)
+		// ============================================================
+		createTutorialSettingsSection(containerEl);
 	}
 
 	/**

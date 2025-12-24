@@ -4,6 +4,7 @@ import { Group } from 'three';
 import { createIconElement } from './radial-button-config';
 import { serviceManager } from '../../core/services/service-manager';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { getGoldenGlow } from '../dreamnode/styles/dreamNodeStyles';
 
 /**
  * ActiveVideoCallButton - Persistent button during active video calls
@@ -111,7 +112,7 @@ export const ActiveVideoCallButton: React.FC = () => {
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
                 transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-                boxShadow: isHovered ? '0 0 20px rgba(79, 195, 247, 0.6)' : 'none',
+                boxShadow: isHovered ? getGoldenGlow(20) : 'none',
                 cursor: 'pointer',
                 color: '#ffffff'
               }}

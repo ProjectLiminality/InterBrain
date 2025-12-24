@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { DreamNode } from '../types/dreamnode';
-import { dreamNodeStyles, getNodeColors, getNodeGlow, getEditModeGlow, getMediaOverlayStyle, getGitVisualState, getGitStateStyle, getGitGlow } from '../styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { DreamSong } from '../../dreamweaving/components/DreamSong'; // Use pure DreamSong for 3D back side (embedded context)
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { useDreamSongData } from '../../dreamweaving/hooks/useDreamSongData';
@@ -13,10 +13,13 @@ interface DreamSongSideProps {
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
+  isRelationshipEditMode?: boolean; // In relationship-edit layout (hover shows glow preview)
+  isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
+  glowIntensity?: number; // Distance-scaled glow intensity
   // dreamSongData and isLoadingDreamSong removed - handled by hook
   // isVisible removed - relying on CSS backface-visibility for optimization
   onMouseEnter: () => void;
@@ -32,10 +35,13 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   isHovered,
   isEditModeActive: _isEditModeActive,
   isPendingRelationship,
+  isRelationshipEditMode = false,
+  isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
   nodeSize: _nodeSize,
   borderWidth,
+  glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
   // dreamSongData and isLoadingDreamSong removed - using hook
   // isVisible parameter removed for simplicity
   onMouseEnter,
@@ -72,8 +78,16 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     dreamNode.id
   );
   const nodeColors = getNodeColors(dreamNode.type);
-  const gitState = getGitVisualState(dreamNode.gitStatus);
-  const gitStyle = getGitStateStyle(gitState);
+
+  // Treat pending relationship or tutorial highlight as forced hover state
+  // This shows name overlay for related nodes in edit mode or tutorial
+  const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
+
+  // Glow conditions (no general hover glow - only specific contexts):
+  // 1. isPendingRelationship - already marked as pending relationship
+  // 2. isTutorialHighlighted - explicitly highlighted by tutorial system
+  // 3. Hover in relationship-edit mode - preview that clicking would add relationship
+  const shouldShowGlow = isPendingRelationship || isTutorialHighlighted || (isHovered && isRelationshipEditMode);
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
@@ -103,26 +117,12 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         width: '100%',
         height: '100%',
         borderRadius: dreamNodeStyles.dimensions.borderRadius,
-        border: `${borderWidth}px ${gitStyle.borderStyle} ${nodeColors.border}`,
+        border: `${borderWidth}px solid ${nodeColors.border}`,
         background: nodeColors.fill,
         overflow: 'hidden',
         cursor: 'pointer !important',
-        transition: `${dreamNodeStyles.transitions.default}, ${dreamNodeStyles.transitions.gitState}`,
-        animation: gitStyle.animation,
-        boxShadow: (() => {
-          // Priority 1: Git status glow (always highest priority)
-          if (gitStyle.glowIntensity > 0) {
-            return getGitGlow(gitState, gitStyle.glowIntensity);
-          }
-
-          // Priority 2: Relationship glow (edit mode OR copilot mode)
-          if (isPendingRelationship) {
-            return getEditModeGlow(25); // Strong gold glow for relationships
-          }
-
-          // Priority 3: Hover glow (fallback)
-          return isHovered ? getNodeGlow(dreamNode.type, dreamNodeStyles.states.hover.glowIntensity) : 'none';
-        })(),
+        transition: dreamNodeStyles.transitions.default,
+        boxShadow: shouldShowGlow ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
