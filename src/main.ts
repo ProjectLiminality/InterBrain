@@ -179,6 +179,11 @@ export default class InterBrainPlugin extends Plugin {
   private autoSelectNode(targetUUID?: string): void {
     this.app.workspace.onLayoutReady(() => {
       setTimeout(() => {
+        // Detect fresh Obsidian launch vs plugin reload
+        // On fresh launch, DreamSpace view won't exist yet
+        const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
+        const isFreshLaunch = existingDreamspaceLeaf.length === 0;
+
         const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
         const store = useInterBrainStore.getState();
         const nodeData = store.dreamNodes.get(uuidToSelect);
@@ -187,6 +192,12 @@ export default class InterBrainPlugin extends Plugin {
           console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
           store.setSelectedNode(nodeData.node);
           store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
+
+          // Show portal overlay on fresh Obsidian launch (not plugin reload)
+          if (isFreshLaunch) {
+            console.log('[InterBrain] Fresh launch detected - showing portal overlay');
+            store.showTutorialPortal();
+          }
         } else {
           console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect}`);
 
@@ -241,7 +252,10 @@ export default class InterBrainPlugin extends Plugin {
           console.log('[InterBrain] Selecting InterBrain node');
           store.setSelectedNode(nodeData.node);
           store.setSpatialLayout('liminal-web');
-          this.uiService.showInfo('Welcome to InterBrain! Drag images here to create Dreamer nodes.');
+
+          // Show the tutorial portal overlay for first-time users
+          // (also shown on every fresh Obsidian launch via autoSelectNode)
+          store.showTutorialPortal();
         } else {
           console.warn('[InterBrain] InterBrain node not found for auto-selection');
         }

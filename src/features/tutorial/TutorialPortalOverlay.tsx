@@ -193,12 +193,12 @@ export const TutorialPortalOverlay: React.FC<TutorialPortalOverlayProps> = ({
     setIsEntering(true);
     setIsHovered(false); // Reset hover state
 
-    // Start music
-    const app = serviceManager.getApp();
-    if (app) {
-      musicService.initialize(app);
-      musicService.play(2000);
-    }
+    // Music disabled for now - needs permissions for copyrighted tracks
+    // const app = serviceManager.getApp();
+    // if (app) {
+    //   musicService.initialize(app);
+    //   musicService.play(2000);
+    // }
 
     // TODO: Re-enable tutorial start after portal animation is finalized
     // startTutorial();
