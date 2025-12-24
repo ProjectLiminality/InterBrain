@@ -30,7 +30,9 @@ import { openNodeContent } from '../../features/conversational-copilot/utils/ope
 import { OrchestratorContext } from '../context/orchestrator-context';
 import { useEscapeKeyHandler, useCopilotOptionKeyHandler, useLiminalWebOptionKeyHandler } from '../hooks';
 import { getCherryPickWorkflowService } from '../../features/dreamnode-updater/services/cherry-pick-workflow-service';
-import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
+// Tutorial system disabled for current version
+// import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
+import { TutorialPortalOverlay } from '../../features/tutorial';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -93,12 +95,12 @@ export default function DreamspaceCanvas() {
   const searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
 
-  // Tutorial state
-  const tutorialIsActive = useInterBrainStore(state => state.tutorial.isActive);
+  // Tutorial state (tutorial system disabled for current version)
+  // const tutorialIsActive = useInterBrainStore(state => state.tutorial.isActive);
   const showPortal = useInterBrainStore(state => state.tutorial.showPortal);
-  const endTutorial = useInterBrainStore(state => state.endTutorial);
-  const skipTutorial = useInterBrainStore(state => state.skipTutorial);
-  const markTutorialComplete = useInterBrainStore(state => state.markTutorialComplete);
+  // const endTutorial = useInterBrainStore(state => state.endTutorial);
+  // const skipTutorial = useInterBrainStore(state => state.skipTutorial);
+  // const markTutorialComplete = useInterBrainStore(state => state.markTutorialComplete);
   const hideTutorialPortal = useInterBrainStore(state => state.hideTutorialPortal);
 
   // Copilot mode state for transcription buffer
@@ -689,10 +691,8 @@ export default function DreamspaceCanvas() {
           {/* Relationship editor - render when in 'relationship-edit' layout */}
           <RelationshipEditor3D />
 
-          {/* Tutorial overlay - onboarding system with Manim-style animations (legacy) */}
+          {/* Tutorial system disabled for current version
           <TutorialOverlay />
-
-          {/* MVP Tutorial Runner - new step-based tutorial system */}
           <TutorialRunner
             isActive={tutorialIsActive}
             onComplete={() => {
@@ -703,6 +703,7 @@ export default function DreamspaceCanvas() {
               skipTutorial();
             }}
           />
+          */}
         </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}
