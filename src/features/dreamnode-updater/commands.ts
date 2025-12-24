@@ -147,84 +147,45 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         return;
       }
 
-      // ROUTING: InterBrain vs DreamNode
-      if (selectedNode.id === INTERBRAIN_UUID) {
-        // InterBrain: Simple all-or-nothing update modal
-        const modal = new InterBrainUpdateModal(
-          plugin.app,
-          updateStatus!,
-          // onAccept: Pull, build, reload
-          async () => {
-            const applyNotice = uiService.showLoading('Updating InterBrain...');
-            try {
-              const commitHashes = updateStatus!.commits.map((c: CommitInfo) => c.hash);
-              await gitSyncService.pullUpdates(selectedNode.repoPath, commitHashes);
-              applyNotice.hide();
+      // DreamNode: Cherry-pick workflow with commit selection
+      initializeCherryPickWorkflowService(plugin.app);
 
-              const buildNotice = uiService.showLoading('Building InterBrain...');
-              await gitOpsService.buildDreamNode(selectedNode.repoPath);
-              buildNotice.hide();
+      // For now, treat all commits as coming from a single "upstream" peer
+      // In a full P2P scenario, we'd have multiple peer groups
+      const peerGroups = [{
+        peerUuid: 'upstream',
+        peerName: 'Upstream',
+        peerRepoPath: selectedNode.repoPath,
+        commits: updateStatus!.commits.map((c: CommitInfo) => ({
+          ...c,
+          originalHash: c.hash,
+          offeredBy: ['upstream'],
+          offeredByNames: ['Upstream'],
+          cherryPickRef: c.hash
+        }))
+      }];
 
-              const reloadNotice = uiService.showLoading('Reloading plugin...');
-              const plugins = (plugin.app as any).plugins;
-              await plugins.disablePlugin('interbrain');
-              await plugins.enablePlugin('interbrain');
-              reloadNotice.hide();
+      const config: CherryPickPreviewConfig = {
+        dreamNodePath: selectedNode.repoPath,
+        dreamNodeUuid: selectedNode.id,
+        dreamNodeName: selectedNode.name,
+        peerGroups,
+        onAccept: async (acceptedCommits, _peerRepoPath) => {
+          uiService.showSuccess(`Accepted ${acceptedCommits.length} commit(s)`);
+          // Trigger vault rescan
+          const { serviceManager } = await import('../../core/services/service-manager');
+          await serviceManager.scanVault();
+        },
+        onReject: async (rejectedCommits, _peerRepoPath) => {
+          uiService.showInfo(`Rejected ${rejectedCommits.length} commit(s)`);
+        },
+        onCancel: () => {
+          uiService.showInfo('Update cancelled');
+        }
+      };
 
-              uiService.showSuccess('InterBrain updated and reloaded!');
-              store.clearNodeUpdateStatus(selectedNode.id);
-            } catch (error) {
-              console.error('[InterBrainUpdate] Failed:', error);
-              uiService.showError(`Update failed: ${error instanceof Error ? error.message : 'Unknown'}`);
-            }
-          },
-          // onReject
-          () => {
-            uiService.showInfo('Update cancelled');
-          }
-        );
-        modal.open();
-      } else {
-        // DreamNode: Cherry-pick workflow with commit selection
-        initializeCherryPickWorkflowService(plugin.app);
-
-        // For now, treat all commits as coming from a single "upstream" peer
-        // In a full P2P scenario, we'd have multiple peer groups
-        const peerGroups = [{
-          peerUuid: 'upstream',
-          peerName: 'Upstream',
-          peerRepoPath: selectedNode.repoPath,
-          commits: updateStatus!.commits.map((c: CommitInfo) => ({
-            ...c,
-            originalHash: c.hash,
-            offeredBy: ['upstream'],
-            offeredByNames: ['Upstream'],
-            cherryPickRef: c.hash
-          }))
-        }];
-
-        const config: CherryPickPreviewConfig = {
-          dreamNodePath: selectedNode.repoPath,
-          dreamNodeUuid: selectedNode.id,
-          dreamNodeName: selectedNode.name,
-          peerGroups,
-          onAccept: async (acceptedCommits, _peerRepoPath) => {
-            uiService.showSuccess(`Accepted ${acceptedCommits.length} commit(s)`);
-            // Trigger vault rescan
-            const { serviceManager } = await import('../../core/services/service-manager');
-            await serviceManager.scanVault();
-          },
-          onReject: async (rejectedCommits, _peerRepoPath) => {
-            uiService.showInfo(`Rejected ${rejectedCommits.length} commit(s)`);
-          },
-          onCancel: () => {
-            uiService.showInfo('Update cancelled');
-          }
-        };
-
-        const modal = new CherryPickPreviewModal(plugin.app, config);
-        modal.open();
-      }
+      const modal = new CherryPickPreviewModal(plugin.app, config);
+      modal.open();
     }
   });
 
