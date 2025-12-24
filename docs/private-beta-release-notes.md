@@ -97,6 +97,18 @@ No prerequisites needed - just run the script!
 - Some UI polish needed
 - Error messages could be clearer
 
+### Troubleshooting
+
+**If anything breaks or you accidentally delete the InterBrain folder:**
+
+The install script is safe to run multiple times! Just re-run it and point to the same vault:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)
+```
+
+It will restore everything to a working state without destroying your existing DreamNodes.
+
 ### How to Give Feedback
 
 - GitHub Issues: [ProjectLiminality/InterBrain](https://github.com/ProjectLiminality/InterBrain/issues)

@@ -284,15 +284,17 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'save-changes',
     iconName: 'lucide-save',
     commandId: 'interbrain:save-dreamnode',
-    label: 'Save Changes'
-    // TODO: Refine what "save" means in different contexts
+    label: 'Save Changes',
+    // Hide for InterBrain system node - it's read-only
+    shouldShow: (node) => node?.id !== INTERBRAIN_UUID
   },
   {
     id: 'share-changes',
     iconName: 'lucide-upload-cloud',
     commandId: 'interbrain:push-to-network',
     label: 'Share Changes',
-    // TODO: Combine push-to-network + initialize/share radicle
+    // Hide for InterBrain system node - it's read-only
+    shouldShow: (node) => node?.id !== INTERBRAIN_UUID,
     // Disable for GitHub-only repos where user lacks push access
     shouldDisable: (node) => {
       // This is intentionally synchronous - we use cached result
@@ -346,6 +348,8 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     id: 'delete-node',
     iconName: 'lucide-trash-2',
     commandId: 'interbrain:delete-dreamnode',
-    label: 'Delete DreamNode'
+    label: 'Delete DreamNode',
+    // Hide delete button for the InterBrain system node - it cannot be deleted
+    shouldShow: (node) => node?.id !== INTERBRAIN_UUID
   }
 ];

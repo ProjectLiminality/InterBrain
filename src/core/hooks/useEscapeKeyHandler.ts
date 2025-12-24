@@ -97,7 +97,7 @@ export function useEscapeKeyHandler(
 
           case 'liminal-web':
             // Exit liminal-web, go to constellation
-            // Add history entry BEFORE changing state so undo can return here
+            // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
             store.setSpatialLayout('constellation');

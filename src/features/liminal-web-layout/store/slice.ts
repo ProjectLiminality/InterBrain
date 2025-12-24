@@ -23,15 +23,12 @@ export interface NavigationHistoryState {
 
 /**
  * Initial navigation history state
+ * Starts empty - first meaningful navigation will populate it
+ * This ensures Cmd+Z spam always ends at the first selected node, not constellation
  */
 export const INITIAL_NAVIGATION_HISTORY: NavigationHistoryState = {
-  history: [{
-    nodeId: null,
-    layout: 'constellation',
-    timestamp: Date.now(),
-    flipState: null
-  }],
-  currentIndex: 0,
+  history: [],
+  currentIndex: -1,
   maxHistorySize: 150
 };
 

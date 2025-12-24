@@ -1154,8 +1154,9 @@ export default class InterBrainPlugin extends Plugin {
           try {
             // Restore the layout state via store-based navigation
             if (previousEntry.layout === 'constellation') {
-              // Going to constellation - request navigation with interruption
+              // Going to constellation - set layout and request navigation
               store.setSelectedNode(null);
+              store.setSpatialLayout('constellation');
               store.requestNavigation({ type: 'constellation', interrupt: true });
             } else if (previousEntry.layout === 'liminal-web' && previousEntry.nodeId) {
               // Going to liminal-web - need to find and focus on the node
@@ -1163,8 +1164,9 @@ export default class InterBrainPlugin extends Plugin {
               const targetNode = allNodes.find(node => node.id === previousEntry.nodeId);
 
               if (targetNode) {
-                // Update store and request navigation
+                // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
+                store.setSpatialLayout('liminal-web');
                 store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case - skip to next valid entry
@@ -1223,8 +1225,9 @@ export default class InterBrainPlugin extends Plugin {
           try {
             // Restore the layout state via store-based navigation
             if (nextEntry.layout === 'constellation') {
-              // Going to constellation - request navigation with interruption
+              // Going to constellation - set layout and request navigation
               store.setSelectedNode(null);
+              store.setSpatialLayout('constellation');
               store.requestNavigation({ type: 'constellation', interrupt: true });
             } else if (nextEntry.layout === 'liminal-web' && nextEntry.nodeId) {
               // Going to liminal-web - need to find and focus on the node
@@ -1232,8 +1235,9 @@ export default class InterBrainPlugin extends Plugin {
               const targetNode = allNodes.find(node => node.id === nextEntry.nodeId);
 
               if (targetNode) {
-                // Update store and request navigation
+                // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
+                store.setSpatialLayout('liminal-web');
                 store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case
