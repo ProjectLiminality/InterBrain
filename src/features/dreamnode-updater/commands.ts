@@ -296,4 +296,77 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       }
     }
   });
+
+  // Check for InterBrain updates (dedicated command for InterBrain node)
+  plugin.addCommand({
+    id: 'check-interbrain-updates',
+    name: 'Check for InterBrain Updates',
+    callback: async () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+
+      // Verify it's the InterBrain node
+      if (!selectedNode || selectedNode.id !== INTERBRAIN_UUID) {
+        uiService.showError('This command is only for the InterBrain node');
+        return;
+      }
+
+      const fetchNotice = uiService.showLoading('Checking for InterBrain updates...');
+
+      try {
+        // Check for updates from GitHub
+        const fetchResult = await gitSyncService.fetchUpdates(selectedNode.repoPath);
+
+        fetchNotice.hide();
+
+        if (!fetchResult.hasUpdates) {
+          uiService.showInfo('InterBrain is up to date');
+          return;
+        }
+
+        store.setNodeUpdateStatus(selectedNode.id, fetchResult);
+
+        // Open the InterBrain update modal
+        const modal = new InterBrainUpdateModal(
+          plugin.app,
+          fetchResult,
+          // onAccept: Pull, build, reload
+          async () => {
+            const applyNotice = uiService.showLoading('Updating InterBrain...');
+            try {
+              const commitHashes = fetchResult.commits.map((c: CommitInfo) => c.hash);
+              await gitSyncService.pullUpdates(selectedNode.repoPath, commitHashes);
+              applyNotice.hide();
+
+              const buildNotice = uiService.showLoading('Building InterBrain...');
+              await gitOpsService.buildDreamNode(selectedNode.repoPath);
+              buildNotice.hide();
+
+              const reloadNotice = uiService.showLoading('Reloading plugin...');
+              const plugins = (plugin.app as any).plugins;
+              await plugins.disablePlugin('interbrain');
+              await plugins.enablePlugin('interbrain');
+              reloadNotice.hide();
+
+              uiService.showSuccess('InterBrain updated and reloaded!');
+              store.clearNodeUpdateStatus(selectedNode.id);
+            } catch (error) {
+              console.error('[InterBrainUpdate] Failed:', error);
+              uiService.showError(`Update failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+            }
+          },
+          // onReject
+          () => {
+            uiService.showInfo('Update cancelled');
+          }
+        );
+        modal.open();
+
+      } catch (error) {
+        fetchNotice.hide();
+        console.error('[InterBrainUpdate] Fetch failed:', error);
+        uiService.showError('Failed to check for updates');
+      }
+    }
+  });
 }

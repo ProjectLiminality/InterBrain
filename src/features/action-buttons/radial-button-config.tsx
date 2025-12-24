@@ -324,15 +324,21 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     iconName: 'lucide-refresh-cw',
     commandId: 'interbrain:cherry-pick-preview', // Cherry-pick collaboration modal
     label: 'Check for Updates',
-    // Dynamic command based on node type
+    // Dynamic command based on node type/id
     getDynamicCommand: (node) => {
+      if (node?.id === INTERBRAIN_UUID) {
+        return 'interbrain:check-interbrain-updates';
+      }
       if (node?.type === 'dreamer') {
         return 'interbrain:check-all-updates-from-dreamer';
       }
       return 'interbrain:cherry-pick-preview';
     },
-    // Dynamic label based on node type
+    // Dynamic label based on node type/id
     getDynamicLabel: (node) => {
+      if (node?.id === INTERBRAIN_UUID) {
+        return 'Check for Updates';
+      }
       if (node?.type === 'dreamer') {
         return 'Check All Projects from This Peer';
       }
