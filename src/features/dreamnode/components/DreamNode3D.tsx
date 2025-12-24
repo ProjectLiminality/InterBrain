@@ -762,6 +762,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 isHovered={isHovered}
                 isEditModeActive={isEditModeActive}
                 isPendingRelationship={isPendingRelationship}
+                isRelationshipEditMode={spatialLayout === 'relationship-edit'}
                 isTutorialHighlighted={isTutorialHighlighted}
                 shouldShowFlipButton={shouldShowFlipButton}
                 shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
@@ -807,6 +808,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                   isHovered={isHovered}
                   isEditModeActive={isEditModeActive}
                   isPendingRelationship={isPendingRelationship}
+                  isRelationshipEditMode={spatialLayout === 'relationship-edit'}
                   isTutorialHighlighted={isTutorialHighlighted}
                   shouldShowFlipButton={shouldShowFlipButton}
                   shouldShowFullscreenButton={shouldShowDreamSongFullscreen}

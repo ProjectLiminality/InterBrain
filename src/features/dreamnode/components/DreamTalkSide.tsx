@@ -11,6 +11,7 @@ interface DreamTalkSideProps {
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
+  isRelationshipEditMode?: boolean; // In relationship-edit layout (hover shows glow preview)
   isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
@@ -30,6 +31,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   isHovered,
   isEditModeActive: _isEditModeActive,
   isPendingRelationship,
+  isRelationshipEditMode = false,
   isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
@@ -46,8 +48,14 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
   const nodeColors = getNodeColors(dreamNode.type);
 
   // Treat pending relationship or tutorial highlight as forced hover state
-  // This shows name overlay and glow for related nodes in edit mode or tutorial
+  // This shows name overlay for related nodes in edit mode or tutorial
   const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
+
+  // Glow conditions (no general hover glow - only specific contexts):
+  // 1. isPendingRelationship - already marked as pending relationship
+  // 2. isTutorialHighlighted - explicitly highlighted by tutorial system
+  // 3. Hover in relationship-edit mode - preview that clicking would add relationship
+  const shouldShowGlow = isPendingRelationship || isTutorialHighlighted || (isHovered && isRelationshipEditMode);
 
   return (
     <div
@@ -61,7 +69,7 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         overflow: 'hidden',
         cursor: 'pointer !important',
         transition: dreamNodeStyles.transitions.default,
-        boxShadow: effectiveHover ? getGoldenGlow(glowIntensity) : 'none',
+        boxShadow: shouldShowGlow ? getGoldenGlow(glowIntensity) : 'none',
         // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
