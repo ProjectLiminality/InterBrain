@@ -224,12 +224,16 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   }, [dreamNode.id, onHitSphereRef]);
 
   // Trigger back-side loading when animation completes
+  // Also reset when node is no longer selected (prevents heavy DreamSong rendering for ring nodes)
   useEffect(() => {
     if (shouldLoadBackSide && !hasLoadedBackSide) {
       // Small delay to ensure animation is fully complete and avoid any frame drops
       globalThis.setTimeout(() => {
         setHasLoadedBackSide(true);
       }, 100);
+    } else if (!shouldLoadBackSide && hasLoadedBackSide) {
+      // Reset when no longer selected - unmounts DreamSongSide for performance
+      setHasLoadedBackSide(false);
     }
   }, [shouldLoadBackSide, hasLoadedBackSide, dreamNode.name, spatialLayout, selectedNode?.id, isTransitioning]);
   
