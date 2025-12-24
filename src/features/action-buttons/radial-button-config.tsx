@@ -361,10 +361,8 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   },
   {
     id: 'report-bug',
-    iconName: 'lucide-bug',
+    iconName: 'lucide-settings',
     commandId: 'interbrain:report-bug',
-    label: 'Report Bug',
-    // Only show for InterBrain system node
-    shouldShow: (node) => node?.id === INTERBRAIN_UUID
+    label: 'Report Bug'
   }
 ];
