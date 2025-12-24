@@ -18,11 +18,8 @@ export const TutorialOverlay: React.FC = () => {
   const [textAnimation, setTextAnimation] = useState<TextAnimation | null>(null);
 
   useEffect(() => {
-    console.log('🎓 [TutorialOverlay] Mounting and subscribing to tutorial service');
-
     // Subscribe to tutorial step changes
     const unsubscribe = tutorialService.onStepChange((step) => {
-      console.log('🎓 [TutorialOverlay] Step changed:', step);
       if (step) {
         setShowAnimation(false); // Reset animation
         setCurrentStep(step);
@@ -44,13 +41,11 @@ export const TutorialOverlay: React.FC = () => {
 
     // Subscribe to golden dot changes
     const unsubscribeGoldenDot = tutorialService.onGoldenDotChange((animation) => {
-      console.log('✨ [TutorialOverlay] Golden dot changed:', animation);
       setGoldenDot(animation);
     });
 
     // Load current step on mount
     const step = tutorialService.getCurrentStep();
-    console.log('🎓 [TutorialOverlay] Initial step on mount:', step);
     if (step) {
       setCurrentStep(step);
       setShowAnimation(true);
@@ -64,7 +59,6 @@ export const TutorialOverlay: React.FC = () => {
 
     // Subscribe to text animation changes
     const unsubscribeText = tutorialService.onTextAnimationChange((animation) => {
-      console.log('📝 [TutorialOverlay] Text animation changed:', animation);
       setTextAnimation(animation);
     });
 
@@ -83,7 +77,6 @@ export const TutorialOverlay: React.FC = () => {
 
   // Handle golden dot completion
   const handleGoldenDotComplete = () => {
-    console.log('✨ [TutorialOverlay] Golden dot reached destination');
     tutorialService.clearGoldenDot();
   };
 
@@ -91,8 +84,6 @@ export const TutorialOverlay: React.FC = () => {
   if (!currentStep && !goldenDot && !textAnimation) {
     return null;
   }
-
-  console.log('🎓 [TutorialOverlay] Rendering - step:', currentStep?.title, 'goldenDot:', !!goldenDot, 'text:', !!textAnimation);
 
   return (
     <>
