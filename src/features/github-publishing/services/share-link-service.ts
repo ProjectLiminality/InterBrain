@@ -82,6 +82,8 @@ export class ShareLinkService {
 			senderEmail = this.plugin.settings?.userEmail || undefined;
 
 			// Ensure node has Radicle ID (initialize if needed)
+			// Note: rad init --private auto-seeds the repo, making it available for direct P2P cloning
+			// No need to call share() - recipients clone directly using RID + sender NID
 			let radicleId: string | null = null;
 
 			try {
@@ -89,12 +91,13 @@ export class ShareLinkService {
 				const uuidToRadicleIdMap = await batchInitService.ensureNodesHaveRadicleIds([nodeUuid]);
 				radicleId = uuidToRadicleIdMap.get(nodeUuid) || null;
 
-				if (radicleId) {
-					// Publish to network and add delegate if recipient DID provided
+				if (radicleId && recipientDid) {
+					// Fire-and-forget: Add recipient as delegate so they can push back
+					// This doesn't block link generation - clone works via --seed flag anyway
 					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
-
-					// Call share synchronously (wait for completion)
-					await radicleService.share(absoluteRepoPath, undefined, recipientDid);
+					radicleService.addDelegate(absoluteRepoPath, recipientDid).catch((err: Error) => {
+						console.warn('[ShareLink] Failed to add delegate (non-blocking):', err.message);
+					});
 				}
 			} catch (error) {
 				console.error('[ShareLink] Failed to ensure Radicle ID:', error);
