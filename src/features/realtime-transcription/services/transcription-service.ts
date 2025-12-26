@@ -125,6 +125,29 @@ export class TranscriptionService implements ITranscriptionService {
 	}
 
 	/**
+	 * Check if required Python dependencies are installed in venv
+	 * Returns true only if RealtimeSTT is importable
+	 */
+	async checkDependenciesInstalled(): Promise<boolean> {
+		const venvPython = this.getVenvPython();
+		if (!venvPython) {
+			return false;
+		}
+
+		return new Promise((resolve) => {
+			try {
+				const { exec } = require('child_process');
+				// Try to import RealtimeSTT - this is the core dependency
+				exec(`"${venvPython}" -c "import RealtimeSTT"`, (error: Error | null) => {
+					resolve(!error);
+				});
+			} catch {
+				resolve(false);
+			}
+		});
+	}
+
+	/**
 	 * Check if Python 3 is available on the system
 	 */
 	async checkPythonAvailable(): Promise<boolean> {

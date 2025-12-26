@@ -81,11 +81,13 @@ echo "This may take 1-2 minutes but saves time on first transcription..."
 echo ""
 
 # Pre-download the model by running a quick test
-# This triggers the model download without requiring user interaction
-python3 << 'PYTHON_SCRIPT'
+# Note: We write to a temp file instead of using heredoc because RealtimeSTT
+# uses multiprocessing which fails when the script comes from stdin
+TEMP_SCRIPT=$(mktemp /tmp/whisper_preload_XXXXXX.py)
+cat > "$TEMP_SCRIPT" << 'PYTHON_SCRIPT'
+import sys
 try:
     from RealtimeSTT import AudioToTextRecorder
-    import sys
 
     print("⏳ Initializing Whisper model (small.en)...")
 
@@ -107,6 +109,9 @@ except Exception as e:
     print("Model will download automatically on first transcription run")
     sys.exit(0)  # Don't fail the setup
 PYTHON_SCRIPT
+
+python3 "$TEMP_SCRIPT"
+rm -f "$TEMP_SCRIPT"
 
 echo ""
 echo "✅ Setup complete!"

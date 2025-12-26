@@ -41,6 +41,18 @@ export async function checkTranscriptionStatus(): Promise<FeatureStatus> {
 			};
 		}
 
+		// Check if dependencies are actually installed in the venv
+		const depsInstalled = await transcriptionService.checkDependenciesInstalled();
+
+		if (!depsInstalled) {
+			return {
+				available: false,
+				status: 'warning',
+				message: 'Dependencies missing in environment',
+				details: 'Click "Setup Environment" to install required packages'
+			};
+		}
+
 		return {
 			available: true,
 			status: 'ready',
@@ -48,9 +60,10 @@ export async function checkTranscriptionStatus(): Promise<FeatureStatus> {
 			details: 'Real-time transcription available'
 		};
 	} catch {
-		// Service not initialized or other error - fall back to direct venv check
+		// Service not initialized or other error - fall back to direct checks
 		const venvExists = checkVenvExistsFallback();
 		const pythonAvailable = await checkPythonAvailableFallback();
+		const depsInstalled = await checkDependenciesInstalledFallback();
 
 		if (!pythonAvailable) {
 			return {
@@ -67,6 +80,15 @@ export async function checkTranscriptionStatus(): Promise<FeatureStatus> {
 				status: 'warning',
 				message: 'Python installed, environment needs setup',
 				details: 'Click "Setup Environment" button below to initialize'
+			};
+		}
+
+		if (!depsInstalled) {
+			return {
+				available: false,
+				status: 'warning',
+				message: 'Dependencies missing in environment',
+				details: 'Click "Setup Environment" to install required packages'
 			};
 		}
 
@@ -133,6 +155,48 @@ async function checkPythonAvailableFallback(): Promise<boolean> {
 			resolve(!error);
 		});
 	});
+}
+
+/**
+ * Fallback dependency check when service not initialized
+ * Tries to import RealtimeSTT using the venv Python
+ */
+async function checkDependenciesInstalledFallback(): Promise<boolean> {
+	const path = require('path');
+	const fs = require('fs');
+	const { exec } = require('child_process');
+
+	try {
+		const vaultPath = (globalThis as any).app?.vault?.adapter?.basePath;
+		if (!vaultPath) return false;
+
+		const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
+		const isWindows = (globalThis as any).process?.platform === 'win32';
+
+		// Try to get venv Python path
+		let venvPython: string;
+		try {
+			const realPluginDir = fs.realpathSync(pluginDir);
+			const scriptsDir = path.join(realPluginDir, 'src', 'features', 'realtime-transcription', 'scripts');
+			venvPython = isWindows
+				? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
+				: path.join(scriptsDir, 'venv', 'bin', 'python3');
+
+			if (!fs.existsSync(venvPython)) {
+				return false;
+			}
+		} catch {
+			return false;
+		}
+
+		return new Promise((resolve) => {
+			exec(`"${venvPython}" -c "import RealtimeSTT"`, (error: Error | null) => {
+				resolve(!error);
+			});
+		});
+	} catch {
+		return false;
+	}
 }
 
 /**
