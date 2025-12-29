@@ -397,6 +397,29 @@ export function createTranscriptionSettingsSection(
 					}));
 		}
 
+		// Search Buffer Size setting
+		const bufferSize = plugin.settings.transcriptionSearchBufferSize || 500;
+		new Setting(containerEl)
+			.setName('Search Buffer Size')
+			.setDesc('Rolling buffer of recent speech for semantic search (50-2000 characters). Larger = more conversational context influences results. Smaller = only recent topics affect search.')
+			.addText(text => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = '50';
+				text.inputEl.max = '2000';
+				text.inputEl.style.width = '80px';
+				text.setValue(bufferSize.toString());
+				text.setPlaceholder('500');
+				text.onChange(async (value) => {
+					const numValue = parseInt(value, 10);
+					if (!isNaN(numValue)) {
+						// Clamp to valid range
+						const clampedValue = Math.max(50, Math.min(2000, numValue));
+						plugin.settings.transcriptionSearchBufferSize = clampedValue;
+						await plugin.saveSettings();
+					}
+				});
+			});
+
 		// Test buttons - one for each stream
 		const testSetting = new Setting(containerEl)
 			.setName('Test Streams')
@@ -409,7 +432,8 @@ export function createTranscriptionSettingsSection(
 			.onClick(() => {
 				const model = (plugin.settings.transcriptionModel || 'small') as WhisperModel;
 				const language = (plugin.settings.transcriptionLanguage || 'auto') as TranscriptionLanguage;
-				new SearchStreamTestModal(plugin.app, model, language).open();
+				const bufferSz = plugin.settings.transcriptionSearchBufferSize || 500;
+				new SearchStreamTestModal(plugin.app, model, language, bufferSz).open();
 			}));
 
 		// Test Transcript Stream (final, for transcript file)

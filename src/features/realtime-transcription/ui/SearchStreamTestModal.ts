@@ -23,12 +23,13 @@ export class SearchStreamTestModal extends Modal {
 	// Rolling buffer simulation (mirrors conversational-copilot logic)
 	private searchBuffer: string = '';
 	private lastStreamText: string = '';
-	private bufferSize: number = 500;
+	private bufferSize: number;
 
-	constructor(app: App, model: WhisperModel, language: TranscriptionLanguage) {
+	constructor(app: App, model: WhisperModel, language: TranscriptionLanguage, bufferSize: number = 500) {
 		super(app);
 		this.model = model;
 		this.language = language;
+		this.bufferSize = bufferSize;
 	}
 
 	async onOpen(): Promise<void> {

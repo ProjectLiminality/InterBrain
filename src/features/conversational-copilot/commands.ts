@@ -78,6 +78,11 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
 
         // Create transcript file in DreamNode folder (OLD service - creates file + semantic search monitoring)
         const oldTranscriptionService = getTranscriptionService();
+
+        // Set buffer size from settings before starting
+        const bufferSize = plugin.settings.transcriptionSearchBufferSize || 500;
+        oldTranscriptionService.setBufferSize(bufferSize);
+
         await oldTranscriptionService.startTranscription(freshNode);
 
         // Get the transcript file path for Python transcription

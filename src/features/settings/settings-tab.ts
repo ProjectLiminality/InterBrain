@@ -33,6 +33,7 @@ export interface InterBrainSettings {
 	transcriptionSetupComplete: boolean;
 	transcriptionModel: string;    // Whisper model: 'tiny' | 'base' | 'small.en' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
 	transcriptionLanguage: string; // Language code: 'auto' | 'en' | 'es' | 'fr' | etc.
+	transcriptionSearchBufferSize: number; // Rolling buffer size for semantic search (50-2000 chars)
 	webLinkAnalyzerEnabled: boolean;
 	webLinkAnalyzerSetupComplete: boolean;
 }
@@ -51,6 +52,7 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	transcriptionSetupComplete: false,
 	transcriptionModel: 'small',  // Multilingual model, good balance of speed/accuracy
 	transcriptionLanguage: 'auto',   // Auto-detect language
+	transcriptionSearchBufferSize: 500,  // 500 chars is ~75-100 words, good for semantic context
 	webLinkAnalyzerEnabled: false,  // Requires manual setup (needs API key)
 	webLinkAnalyzerSetupComplete: false
 };
