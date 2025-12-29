@@ -377,6 +377,7 @@ export class TranscriptionService implements ITranscriptionService {
 				// Filter out harmless errors from early termination / rapid open-close
 				// These occur when process is terminated before fully initialized
 				// or when Python multiprocessing subprocesses are killed mid-spawn
+				// Also filter Python traceback formatting artifacts (^ characters, partial lines)
 				if (error.includes('EOFError') ||
 				    error.includes('Error receiving data from connection') ||
 				    error.includes('poll_connection') ||
@@ -384,7 +385,12 @@ export class TranscriptionService implements ITranscriptionService {
 				    error.includes('spawn_main') ||
 				    error.includes('SemLock') ||
 				    error.includes('pickle.load') ||
-				    error.includes('_rebuild')) {
+				    error.includes('_rebuild') ||
+				    error.includes('exitcode') ||
+				    error.includes('_main(fd') ||
+				    error.includes('FileNotFoundError') ||
+				    error.includes('No such file or directory') ||
+				    /^[\s\^]+$/.test(error)) {  // Lines with only spaces and ^ characters
 					// Silently ignore - expected behavior when user ends call quickly
 					return;
 				}
