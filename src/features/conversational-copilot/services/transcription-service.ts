@@ -27,6 +27,10 @@ export class TranscriptionService {
   private bufferSize: number = 500; // FIFO buffer size in characters
   private isSearchCooldownActive: boolean = false; // Throttling cooldown state
 
+  // Rolling buffer for search stream - maintains context across VAD boundaries
+  private searchStreamBuffer: string = '';
+  private lastStreamText: string = ''; // Track last received text to detect resets
+
   constructor(app: App) {
     this.app = app;
     this.vaultService = new VaultService(app.vault, app);
@@ -42,8 +46,10 @@ export class TranscriptionService {
       await this.stopTranscription();
     }
 
-    // Reset throttling for new session
+    // Reset throttling and search buffer for new session
     this.isSearchCooldownActive = false;
+    this.searchStreamBuffer = '';
+    this.lastStreamText = '';
     if (this.searchTimeout) {
       globalThis.clearTimeout(this.searchTimeout);
       this.searchTimeout = null;
@@ -229,6 +235,64 @@ export class TranscriptionService {
     } catch (error) {
       console.error('Failed to process file change:', error);
     }
+  }
+
+  /**
+   * Trigger semantic search from real-time transcription stream
+   * Called by the Python transcription service via callback
+   * Uses the same throttling logic as file-based monitoring
+   *
+   * Maintains a rolling buffer across VAD boundaries:
+   * - When text grows (continuation), update buffer with new text
+   * - When text shrinks/resets (new VAD chunk), append previous chunk to buffer
+   */
+  triggerSemanticSearchFromStream(text: string): void {
+    // Detect if this is a new VAD chunk (text reset/shrunk significantly)
+    // The stabilized stream resets after each final transcription
+    const isNewChunk = text.length < this.lastStreamText.length * 0.5;
+
+    if (isNewChunk && this.lastStreamText) {
+      // Previous chunk is complete - append it to the rolling buffer
+      this.searchStreamBuffer += ' ' + this.lastStreamText;
+
+      // Trim buffer to max size (keep most recent text)
+      if (this.searchStreamBuffer.length > this.bufferSize) {
+        this.searchStreamBuffer = this.searchStreamBuffer.slice(-this.bufferSize);
+      }
+    }
+
+    // Update last stream text
+    this.lastStreamText = text;
+
+    // Combine buffer with current text for search
+    const combinedText = (this.searchStreamBuffer + ' ' + text).trim();
+
+    // Apply FIFO buffer logic - take last N characters
+    const bufferContent = combinedText.length > this.bufferSize
+      ? combinedText.slice(-this.bufferSize)
+      : combinedText;
+
+    // Only trigger search if we have meaningful content
+    if (bufferContent.trim().length < 3) {
+      return;
+    }
+
+    // THROTTLE LOGIC: Search immediately if not in cooldown, ignore if in cooldown
+    if (this.isSearchCooldownActive) {
+      return;
+    }
+
+    // Search immediately (throttle behavior)
+    this.triggerSemanticSearch(bufferContent);
+
+    // Start 5-second cooldown period
+    this.isSearchCooldownActive = true;
+    if (this.searchTimeout) {
+      globalThis.clearTimeout(this.searchTimeout);
+    }
+    this.searchTimeout = window.setTimeout(() => {
+      this.isSearchCooldownActive = false;
+    }, 5000);
   }
 
   /**

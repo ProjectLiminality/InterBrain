@@ -11,6 +11,7 @@ import type { FeatureStatus } from '../settings/settings-status-service';
 import { SettingsStatusService } from '../settings/settings-status-service';
 import { getRealtimeTranscriptionService } from './services/transcription-service';
 import { TranscriptionTestModal } from './ui/TranscriptionTestModal';
+import { SearchStreamTestModal } from './ui/SearchStreamTestModal';
 import type { WhisperModel, TranscriptionLanguage } from './types/transcription-types';
 
 /**
@@ -360,47 +361,61 @@ export function createTranscriptionSettingsSection(
 			});
 		}
 
-		// Action buttons
-		const buttonSetting = new Setting(containerEl)
-			.setName('Test')
-			.setDesc('Verify your microphone and transcription settings');
-
 		// Setup Environment button (if not ready)
 		if (status?.status !== 'ready') {
-			buttonSetting.addButton(button => button
-				.setButtonText('Setup Environment')
-				.onClick(async () => {
-					const vaultPath = (plugin.app.vault.adapter as any).basePath;
-					const pluginPath = `${vaultPath}/.obsidian/plugins/${plugin.manifest.id}`;
+			new Setting(containerEl)
+				.setName('Setup')
+				.setDesc('Initialize Python environment and download Whisper model')
+				.addButton(button => button
+					.setButtonText('Setup Environment')
+					.onClick(async () => {
+						const vaultPath = (plugin.app.vault.adapter as any).basePath;
+						const pluginPath = `${vaultPath}/.obsidian/plugins/${plugin.manifest.id}`;
 
-					// Run setup script
-					const { exec } = require('child_process');
-					button.setButtonText('Setting up...');
-					button.setDisabled(true);
+						// Run setup script
+						const { exec } = require('child_process');
+						button.setButtonText('Setting up...');
+						button.setDisabled(true);
 
-					exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
-						(error: Error | null, stdout: string, stderr: string) => {
-							if (error) {
-								console.error('Setup error:', error);
-								console.error('stderr:', stderr);
-								window.alert(`Setup failed: ${error.message}\n\nCheck console for details.`);
-								button.setButtonText('Setup Environment');
-								button.setDisabled(false);
-							} else {
-								console.log('Setup output:', stdout);
-								window.alert('Setup complete! Python environment and Whisper model are ready.');
-								button.setButtonText('Setup Complete ✓');
-								// Refresh status
-								setTimeout(() => refreshDisplay(), 1000);
+						exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
+							(error: Error | null, stdout: string, stderr: string) => {
+								if (error) {
+									console.error('Setup error:', error);
+									console.error('stderr:', stderr);
+									window.alert(`Setup failed: ${error.message}\n\nCheck console for details.`);
+									button.setButtonText('Setup Environment');
+									button.setDisabled(false);
+								} else {
+									console.log('Setup output:', stdout);
+									window.alert('Setup complete! Python environment and Whisper model are ready.');
+									button.setButtonText('Setup Complete ✓');
+									// Refresh status
+									setTimeout(() => refreshDisplay(), 1000);
+								}
 							}
-						}
-					);
-				}));
+						);
+					}));
 		}
 
-		// Test Transcription button (always available)
-		buttonSetting.addButton(button => button
-			.setButtonText('Test Transcription')
+		// Test buttons - one for each stream
+		const testSetting = new Setting(containerEl)
+			.setName('Test Streams')
+			.setDesc('Test the dual transcription streams');
+
+		// Test Search Stream (real-time, for semantic search)
+		testSetting.addButton(button => button
+			.setButtonText('Search Stream')
+			.setTooltip('Real-time text for semantic search (updates continuously)')
+			.onClick(() => {
+				const model = (plugin.settings.transcriptionModel || 'small') as WhisperModel;
+				const language = (plugin.settings.transcriptionLanguage || 'auto') as TranscriptionLanguage;
+				new SearchStreamTestModal(plugin.app, model, language).open();
+			}));
+
+		// Test Transcript Stream (final, for transcript file)
+		testSetting.addButton(button => button
+			.setButtonText('Transcript Stream')
+			.setTooltip('Final timestamped text saved to transcript file (waits for sentences)')
 			.onClick(() => {
 				const model = (plugin.settings.transcriptionModel || 'small') as WhisperModel;
 				const language = (plugin.settings.transcriptionLanguage || 'auto') as TranscriptionLanguage;

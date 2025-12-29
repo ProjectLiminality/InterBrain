@@ -30,7 +30,15 @@ export class TranscriptionTestModal extends Modal {
 		contentEl.addClass('interbrain-transcription-test-modal');
 
 		// Title
-		contentEl.createEl('h2', { text: 'Test Transcription' });
+		contentEl.createEl('h2', { text: 'Test Transcript Stream' });
+
+		// Description
+		const descEl = contentEl.createEl('p', {
+			cls: 'transcription-test-desc'
+		});
+		descEl.style.color = 'var(--text-muted)';
+		descEl.style.marginBottom = '12px';
+		descEl.setText('Final transcript output with timestamps. Waits for complete sentences (1.5s silence). This is what gets saved to the transcript file.');
 
 		// Info
 		const infoEl = contentEl.createEl('p', {
@@ -72,7 +80,7 @@ export class TranscriptionTestModal extends Modal {
 		statusDot.style.backgroundColor = '#22c55e';
 		statusDot.style.animation = 'pulse 1.5s infinite';
 
-		statusEl.createSpan({ text: 'Listening... Close this modal to stop.' });
+		statusEl.createSpan({ text: 'Listening (Transcript Stream)... Close this modal to stop.' });
 
 		// Add pulse animation
 		const styleEl = document.createElement('style');

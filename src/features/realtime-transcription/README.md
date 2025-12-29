@@ -60,6 +60,55 @@ Settings are managed in InterBrain's settings panel under "Real-Time Transcripti
 
 ## Architecture Notes
 
+### Dual-Stream Architecture
+
+The transcription system uses a **dual-stream architecture** to serve two different consumers with different requirements:
+
+1. **SEARCH Stream** (Stabilized)
+   - **Purpose**: Real-time semantic search during conversations
+   - **Characteristics**: Low latency, continuous output, may have minor inaccuracies
+   - **Output prefix**: `SEARCH:` in stdout
+   - **Consumer**: `conversational-copilot` → `semantic-search` feature
+
+2. **TRANSCRIPT Stream** (Final)
+   - **Purpose**: Accurate transcript file for permanent record
+   - **Characteristics**: High quality, complete sentences, no word loss
+   - **Output prefix**: `TRANSCRIPT:` in stdout
+   - **Consumer**: Transcript markdown file, conversation summary
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Python Transcription                        │
+│                   (interbrain-transcribe.py)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────┐    ┌─────────────────────────────────┐ │
+│  │  Stabilized Stream  │    │       Final Text Stream         │ │
+│  │  (on_realtime_      │    │    (on_final_text via VAD)      │ │
+│  │  transcription_     │    │                                 │ │
+│  │  stabilized)        │    │                                 │ │
+│  └──────────┬──────────┘    └────────────────┬────────────────┘ │
+│             │                                │                  │
+│        SEARCH:text                    TRANSCRIPT:[ts] text      │
+└─────────────┼────────────────────────────────┼──────────────────┘
+              │                                │
+              ▼                                ▼
+    ┌─────────────────────┐        ┌─────────────────────┐
+    │  Semantic Search    │        │   Transcript File   │
+    │  (5s throttle)      │        │   (write to disk)   │
+    └─────────────────────┘        └─────────────────────┘
+```
+
+### Key Configuration
+
+- **VAD Settings**: Optimized for transcript quality
+  - `post_speech_silence_duration: 1.5s` - Wait for complete sentences
+  - `pre_recording_buffer_duration: 0.5s` - Capture lead-in words
+- **Stabilized Settings**: Optimized for search latency
+  - `realtime_processing_pause: 0.1s` - Process every 100ms
+  - Only outputs when meaningfully different (>5 chars change)
+
+### Other Notes
+
 - **Self-contained virtual environment**: Python dependencies isolated in `scripts/venv/`
 - **Singleton service**: Prevents multiple instances from losing track of running processes
 - **Plugin path resolution**: Uses symlink-resolved paths to locate Python scripts

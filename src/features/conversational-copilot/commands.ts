@@ -102,6 +102,15 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
         const model = plugin.settings.transcriptionModel || 'small.en';
         const language = plugin.settings.transcriptionLanguage || 'en';
 
+        // Set up dual-stream callbacks BEFORE starting transcription
+        // The stabilized stream feeds semantic search (real-time, can tolerate minor inaccuracies)
+        // The transcript stream writes to file (high quality, complete sentences)
+        pythonTranscriptionService.setSearchTextCallback((text: string) => {
+          // Route stabilized text directly to semantic search via the old transcription service
+          // This bypasses file monitoring for lower latency
+          (oldTranscriptionService as any).triggerSemanticSearchFromStream(text);
+        });
+
         await pythonTranscriptionService.startTranscription(absoluteTranscriptPath, {
           model: model as any,
           language: language as any,

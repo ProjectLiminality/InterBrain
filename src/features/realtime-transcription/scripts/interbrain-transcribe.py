@@ -2,13 +2,16 @@
 """
 InterBrain Real-Time Transcription CLI
 
-A minimalist CLI tool for real-time speech transcription using RealtimeSTT
-with faster-whisper backend. Appends timestamped transcripts to markdown files.
-Optionally records audio to file for Songline feature.
+Dual-stream architecture:
+1. Stabilized stream for real-time semantic search (low latency, may have minor inaccuracies)
+2. Batch transcription for final transcript (high quality, no word loss)
+
+The stabilized stream outputs continuously for responsive semantic search.
+The batch transcription runs periodically and at session end for accurate transcripts.
 
 Usage:
     python3 interbrain-transcribe.py --output transcript.md
-    python3 interbrain-transcribe.py --output transcript.md --model small.en
+    python3 interbrain-transcribe.py --output transcript.md --model small
     python3 interbrain-transcribe.py --output transcript.md --record-audio --audio-output recording.wav
 """
 
@@ -20,7 +23,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 # Check for required dependencies
 try:
@@ -116,12 +119,21 @@ class AudioRecorder:
 
 
 class TranscriptionSession:
-    """Manages a real-time transcription session."""
+    """
+    Manages a real-time transcription session with dual-stream output.
+
+    Architecture:
+    - Stabilized stream: Real-time text for semantic search (SEARCH: prefix)
+    - Final chunks: Accurate text for transcript (TRANSCRIPT: prefix)
+
+    The stabilized stream provides continuous output without waiting for pauses,
+    while the transcript receives complete, accurate chunks.
+    """
 
     def __init__(
         self,
         output_path: Path,
-        model: str = "small.en",
+        model: str = "small",
         language: Optional[str] = None,
         start_time: Optional[float] = None,
         audio_output: Optional[Path] = None,
@@ -133,8 +145,16 @@ class TranscriptionSession:
         self.recorder = None
         self.audio_recorder = None
 
+        # Stabilized text buffer for semantic search
+        self.stabilized_buffer = ""
+        self.last_stabilized_output = ""
+        self.stabilized_lock = threading.Lock()
+
+        # Transcript accumulator
+        self.transcript_chunks: List[str] = []
+        self.transcript_lock = threading.Lock()
+
         # Start time will be set when audio recording actually starts (for perfect sync)
-        # This ensures transcript timestamps match audio position exactly
         self.start_time = start_time if start_time is not None else None
 
         # Initialize audio recorder if output path provided
@@ -151,17 +171,65 @@ class TranscriptionSession:
         self.stop()
         sys.exit(0)
 
-
     def _format_relative_time(self, elapsed_seconds: float) -> str:
         """Format elapsed time as MM:SS"""
         minutes = int(elapsed_seconds // 60)
         seconds = int(elapsed_seconds % 60)
         return f"{minutes}:{seconds:02d}"
 
+    def _on_realtime_stabilized(self, text: str):
+        """
+        Callback for stabilized real-time transcription.
+        This fires continuously with confident text that won't change.
+        Used for driving semantic search.
+        """
+        if not text or not text.strip():
+            return
+
+        with self.stabilized_lock:
+            self.stabilized_buffer = text.strip()
+
+            # Only output if meaningfully different from last output
+            # This prevents flooding with tiny incremental updates
+            if len(self.stabilized_buffer) > len(self.last_stabilized_output) + 5:
+                # Output for semantic search consumption
+                print(f"SEARCH:{self.stabilized_buffer}")
+                sys.stdout.flush()
+                self.last_stabilized_output = self.stabilized_buffer
+
+    def _on_final_text(self, text: str):
+        """
+        Callback for final transcription after VAD detects end of utterance.
+        This is the high-quality, complete text for the transcript.
+        """
+        if not text or not text.strip():
+            return
+
+        text = text.strip()
+
+        # Calculate timestamp
+        elapsed = time.time() - self.start_time
+        timestamp = self._format_relative_time(elapsed)
+
+        # Store for transcript
+        with self.transcript_lock:
+            self.transcript_chunks.append(f"[{timestamp}] {text}")
+
+        # Output for transcript file
+        print(f"TRANSCRIPT:[{timestamp}] {text}")
+        sys.stdout.flush()
+
+        # Also write directly to file for immediate persistence
+        self._write_transcript(text)
+
+        # Reset stabilized buffer after final text is received
+        with self.stabilized_lock:
+            self.stabilized_buffer = ""
+            self.last_stabilized_output = ""
+
     def _write_transcript(self, text: str):
         """Write transcribed text to output file with relative timestamp."""
         if not text or not text.strip():
-            print("⚠️  Empty text, skipping write")
             return
 
         # Calculate elapsed time since session start
@@ -172,13 +240,12 @@ class TranscriptionSession:
         try:
             with open(self.output_path, 'a', encoding='utf-8') as f:
                 f.write(line)
-                f.flush()  # Ensure immediate write
-            print(f"✅ Transcribed: {text.strip()}")
+                f.flush()
         except Exception as e:
             print(f"❌ Error writing to file: {e}", file=sys.stderr)
 
     def start(self):
-        """Start the transcription session."""
+        """Start the transcription session with dual-stream output."""
         print(f"🎙️  Starting transcription...")
         print(f"📝 Output: {self.output_path}")
         print(f"🤖 Model: {self.model}")
@@ -190,35 +257,42 @@ class TranscriptionSession:
             # Start audio recording first and capture the exact start time
             if self.audio_recorder:
                 self.audio_recorder.start()
-                # Set start_time NOW for perfect timestamp synchronization
                 if self.start_time is None:
                     self.start_time = time.time()
-                    print(f"⏱️  Session start time: {self.start_time}")
             else:
-                # No audio recording - use current time as fallback
                 if self.start_time is None:
                     self.start_time = time.time()
 
             # Initialize recorder with faster-whisper model
             print("⏳ Initializing recorder (may take time on first run to download model)...")
 
-            # Handle 'auto' language detection - set to None for RealtimeSTT auto-detect
-            # Only multilingual models support auto-detection; English-only models (.en) always use 'en'
+            # Handle 'auto' language detection
             effective_language = None if self.language == 'auto' else (self.language or 'en')
 
             recorder_config = {
                 'model': self.model,
-                'compute_type': 'float32',  # Explicitly set compute type to avoid float16 warning
-                'no_log_file': True,  # Disable log file (prevents read-only filesystem errors on macOS)
-                'silero_sensitivity': 0.4,  # Voice activity detection sensitivity
-                'webrtc_sensitivity': 2,    # Additional VAD for better detection
-                'post_speech_silence_duration': 0.2,  # Wait 200ms after speech ends (reduced for more frequent commits)
-                'min_length_of_recording': 0.5,  # Minimum 500ms recording
-                'min_gap_between_recordings': 0,  # No gap between recordings
-                'level': 'WARNING',  # Reduce log verbosity
+                'compute_type': 'float32',
+                'no_log_file': True,
+
+                # VAD settings - optimized for transcript quality
+                # Longer silence duration for more complete sentences
+                'silero_sensitivity': 0.4,
+                'webrtc_sensitivity': 2,
+                'post_speech_silence_duration': 1.5,  # Wait 1.5s for sentence completion
+                'min_length_of_recording': 0.5,
+                'min_gap_between_recordings': 0,
+                'pre_recording_buffer_duration': 0.5,  # Capture lead-in words
+
+                # Enable real-time transcription for semantic search
+                # The stabilized callback provides confident text that won't change
+                'enable_realtime_transcription': True,
+                'realtime_processing_pause': 0.1,  # Process every 100ms
+                'on_realtime_transcription_stabilized': self._on_realtime_stabilized,
+
+                'level': 'WARNING',
             }
 
-            # Only set language if not auto-detecting (None means auto-detect in RealtimeSTT)
+            # Set language if not auto-detecting
             if effective_language is not None:
                 recorder_config['language'] = effective_language
                 print(f"🌍 Language: {effective_language}")
@@ -229,16 +303,18 @@ class TranscriptionSession:
 
             print("✅ Model loaded successfully")
             print("🎤 Listening for speech...")
+            print("READY")  # Signal to TypeScript that we're ready
+            sys.stdout.flush()
 
             self.running = True
 
-            # Blocking mode: recorder.text() waits for complete utterances
+            # Main loop - process final transcriptions
             while self.running:
-                text = self.recorder.text()  # Blocks until speech is detected and transcribed
+                # text() blocks until VAD detects end of utterance
+                text = self.recorder.text()
 
-                # Write the final transcription to file
                 if text and text.strip():
-                    self._write_transcript(text)
+                    self._on_final_text(text)
 
         except KeyboardInterrupt:
             print("\n🛑 Stopped by user")
@@ -251,6 +327,7 @@ class TranscriptionSession:
     def stop(self):
         """Stop the transcription session."""
         self.running = False
+
         if self.recorder:
             try:
                 self.recorder.shutdown()
@@ -261,10 +338,17 @@ class TranscriptionSession:
         if self.audio_recorder:
             success = self.audio_recorder.stop()
             if success:
-                # Convert WAV to MP3 if ffmpeg is available
                 self._convert_to_mp3()
 
+        # Output final stabilized buffer if any remains
+        with self.stabilized_lock:
+            if self.stabilized_buffer and self.stabilized_buffer != self.last_stabilized_output:
+                print(f"SEARCH:{self.stabilized_buffer}")
+                sys.stdout.flush()
+
         print("✅ Transcription session ended")
+        print("END")  # Signal to TypeScript that session has ended
+        sys.stdout.flush()
 
     def _convert_to_mp3(self):
         """Convert recorded WAV to MP3 using ffmpeg."""
@@ -280,8 +364,8 @@ class TranscriptionSession:
                 [
                     'ffmpeg', '-i', str(wav_path),
                     '-codec:a', 'libmp3lame',
-                    '-b:a', '128k',  # 128kbps as specified
-                    '-y',  # Overwrite output file
+                    '-b:a', '128k',
+                    '-y',
                     str(mp3_path)
                 ],
                 capture_output=True,
@@ -290,7 +374,6 @@ class TranscriptionSession:
             )
 
             if result.returncode == 0:
-                # Success - delete WAV and update audio recorder path
                 wav_path.unlink()
                 self.audio_recorder.output_path = mp3_path
                 print(f"✅ Audio converted to MP3: {mp3_path}")
@@ -307,7 +390,7 @@ class TranscriptionSession:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Real-time speech transcription with RealtimeSTT"
+        description="Real-time speech transcription with dual-stream output"
     )
     parser.add_argument(
         '--output',
@@ -318,14 +401,14 @@ def main():
     parser.add_argument(
         '--model',
         type=str,
-        default='small.en',
-        help='Whisper model size (default: small.en)'
+        default='small',
+        help='Whisper model size (default: small)'
     )
     parser.add_argument(
         '--language',
         type=str,
-        default='en',
-        help='Language code (default: en)'
+        default='auto',
+        help='Language code or "auto" for auto-detect (default: auto)'
     )
     parser.add_argument(
         '--device',

@@ -4,7 +4,23 @@ import { UIService } from '../../../core/services/ui-service';
 import type { ITranscriptionService, TranscriptionConfig } from '../types/transcription-types';
 
 /**
+ * Callback type for real-time search text updates
+ * Called with stabilized text suitable for semantic search
+ */
+export type SearchTextCallback = (text: string) => void;
+
+/**
+ * Callback type for final transcript updates
+ * Called with timestamped text for the final transcript
+ */
+export type TranscriptCallback = (timestampedText: string) => void;
+
+/**
  * Service for managing real-time transcription processes
+ *
+ * Dual-stream architecture:
+ * - SEARCH stream: Real-time stabilized text for semantic search (low latency)
+ * - TRANSCRIPT stream: Final accurate text for transcript file (high quality)
  */
 export class TranscriptionService implements ITranscriptionService {
 	private plugin: InterBrainPlugin;
@@ -12,6 +28,10 @@ export class TranscriptionService implements ITranscriptionService {
 	private currentProcess: ChildProcess | null = null;
 	private currentOutputPath: string | null = null;
 	private sessionStartTime: number | null = null; // Unix timestamp in seconds
+
+	// Callbacks for dual-stream output
+	private searchTextCallback: SearchTextCallback | null = null;
+	private transcriptCallback: TranscriptCallback | null = null;
 
 	constructor(plugin: InterBrainPlugin) {
 		this.plugin = plugin;
@@ -173,6 +193,22 @@ export class TranscriptionService implements ITranscriptionService {
 	}
 
 	/**
+	 * Set callback for real-time search text updates
+	 * The callback receives stabilized text suitable for semantic search
+	 */
+	setSearchTextCallback(callback: SearchTextCallback | null): void {
+		this.searchTextCallback = callback;
+	}
+
+	/**
+	 * Set callback for final transcript updates
+	 * The callback receives timestamped text for the transcript
+	 */
+	setTranscriptCallback(callback: TranscriptCallback | null): void {
+		this.transcriptCallback = callback;
+	}
+
+	/**
 	 * Start transcription to the specified markdown file
 	 */
 	async startTranscription(
@@ -260,33 +296,75 @@ export class TranscriptionService implements ITranscriptionService {
 
 			console.log('[Transcription] Process spawned, waiting for output...');
 
-			// Monitor stdout for status updates
+			// Monitor stdout for status updates and dual-stream output
 			// eslint-disable-next-line no-undef
 			this.currentProcess?.stdout?.on('data', (data: Buffer) => {
-				const output = data.toString().trim();
-				if (!output) return;
+				const rawOutput = data.toString();
+				// Process each line separately (data may contain multiple lines)
+				const lines = rawOutput.split('\n');
 
-				// Filter out spinner/progress indicators (they flood the console)
-				if (output.match(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/) || output.includes('speak now')) {
-					return;
-				}
+				for (const line of lines) {
+					const output = line.trim();
+					if (!output) continue;
 
-				// Show user-friendly notifications for key events
-				if (output.includes('Starting transcription')) {
-					console.log('[Transcription] Starting...');
-					this.uiService.showSuccess('🎙️ Transcription started');
-				} else if (output.includes('Model loaded successfully')) {
-					console.log('[Transcription] Whisper model ready');
-					this.uiService.showSuccess('✅ Whisper model loaded');
-				} else if (output.includes('Listening')) {
-					console.log('[Transcription] Listening for speech');
-					this.uiService.showSuccess('🎤 Listening for speech...');
-				} else if (output.startsWith('✅')) {
-					// This is a transcribed line - show it
-					this.uiService.showInfo(`Transcribed: ${output.substring(2).trim()}`);
-				} else {
-					// Log other meaningful output
-					console.log(`[Transcription] ${output}`);
+					// Filter out spinner/progress indicators (they flood the console)
+					if (output.match(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/) || output.includes('speak now')) {
+						continue;
+					}
+
+					// Handle dual-stream output
+					if (output.startsWith('SEARCH:')) {
+						// Real-time stabilized text for semantic search
+						const searchText = output.substring(7); // Remove 'SEARCH:' prefix
+						if (this.searchTextCallback && searchText) {
+							this.searchTextCallback(searchText);
+						}
+						continue;
+					}
+
+					if (output.startsWith('TRANSCRIPT:')) {
+						// Final timestamped text for transcript
+						const transcriptText = output.substring(11); // Remove 'TRANSCRIPT:' prefix
+						if (this.transcriptCallback && transcriptText) {
+							this.transcriptCallback(transcriptText);
+						}
+						// Also show user notification for transcribed text
+						// Extract just the text part (after timestamp)
+						const textMatch = transcriptText.match(/^\[[\d:]+\]\s*(.+)$/);
+						if (textMatch) {
+							this.uiService.showInfo(`Transcribed: ${textMatch[1]}`);
+						}
+						continue;
+					}
+
+					// Handle status messages
+					if (output === 'READY') {
+						console.log('[Transcription] Python process ready');
+						continue;
+					}
+
+					if (output === 'END') {
+						console.log('[Transcription] Python process ended');
+						continue;
+					}
+
+					// Show user-friendly notifications for key events
+					if (output.includes('Starting transcription')) {
+						console.log('[Transcription] Starting...');
+						this.uiService.showSuccess('🎙️ Transcription started');
+					} else if (output.includes('Model loaded successfully')) {
+						console.log('[Transcription] Whisper model ready');
+						this.uiService.showSuccess('✅ Whisper model loaded');
+					} else if (output.includes('Listening')) {
+						console.log('[Transcription] Listening for speech');
+						this.uiService.showSuccess('🎤 Listening for speech...');
+					} else if (output.startsWith('✅')) {
+						// Legacy format - still handle it
+						this.uiService.showInfo(`Transcribed: ${output.substring(2).trim()}`);
+					} else {
+						// Log other meaningful output
+						console.log(`[Transcription] ${output}`);
+					}
 				}
 			});
 
@@ -296,11 +374,17 @@ export class TranscriptionService implements ITranscriptionService {
 				const error = data.toString().trim();
 				if (!error) return;
 
-				// Filter out harmless connection errors from early termination
+				// Filter out harmless errors from early termination / rapid open-close
 				// These occur when process is terminated before fully initialized
+				// or when Python multiprocessing subprocesses are killed mid-spawn
 				if (error.includes('EOFError') ||
 				    error.includes('Error receiving data from connection') ||
-				    error.includes('poll_connection')) {
+				    error.includes('poll_connection') ||
+				    error.includes('multiprocessing') ||
+				    error.includes('spawn_main') ||
+				    error.includes('SemLock') ||
+				    error.includes('pickle.load') ||
+				    error.includes('_rebuild')) {
 					// Silently ignore - expected behavior when user ends call quickly
 					return;
 				}
@@ -358,6 +442,10 @@ export class TranscriptionService implements ITranscriptionService {
 		}
 
 		console.log('[Transcription] Stopping process...');
+
+		// Clear callbacks
+		this.searchTextCallback = null;
+		this.transcriptCallback = null;
 
 		// Check if process is still initializing (no exitCode but also might not be fully started)
 		const isInitializing = this.currentProcess.exitCode === null && !this.currentProcess.pid;
