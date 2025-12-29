@@ -17,12 +17,15 @@ InterBrain supports two network modes. The architecture is designed so that **sw
 
 **Why**: Radicle's NAT hole-punching is under development. Until then, nodes behind NAT cannot directly connect.
 
-**Privacy**: Still protected via `--scope followed` - only authorized peers can fetch your repos. Seeds relay encrypted data but cannot access unauthorized content.
+**Privacy (Private Beta)**: Using `--scope all` for simplified onboarding. Trust model is link-based - only share links with people you trust.
+
+**Privacy (Future)**: Will use `--scope followed` for stricter access control when backpropagation UX is refined.
 
 **Commands that differ**:
 ```bash
 # Clone: no --seed flag (fetch from routing table via seeds)
-rad clone <RID> --scope followed
+rad clone <RID> --scope all   # Private beta: simplified
+# rad clone <RID> --scope followed  # Future: stricter
 
 # Sync: announce to seeds so peers can discover
 rad sync --announce
@@ -94,11 +97,14 @@ Every InterBrain DreamNode is configured with these mandatory Radicle settings:
    - No hierarchy, pure peer-to-peer
    - Command: `rad id update --delegate <DID> --threshold 1`
 
-2. **Followed Scope** (`--scope followed`):
-   - Only fetch from peers you explicitly trust
-   - Changes flow through social relationships
-   - No stranger contributions
-   - Command: `rad seed <RID> --scope followed`
+2. **Scope** (`--scope all` or `--scope followed`):
+   - **Private Beta (current)**: `--scope all` for simplified onboarding
+     - Trust model is link-based: only share links with trusted people
+     - Recipients can clone without backpropagation setup
+   - **Future**: `--scope followed` for stricter access control
+     - Only peers in your trust graph can fetch
+     - Requires recipients to add sender's DID to dreamer metadata
+   - Command: `rad seed <RID> --scope all` (beta) or `--scope followed` (future)
 
 3. **Bidirectional Trust**:
    - When Alice shares with Bob, both follow each other

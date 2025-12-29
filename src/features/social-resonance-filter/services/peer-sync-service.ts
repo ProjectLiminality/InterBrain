@@ -354,10 +354,11 @@ export class PeerSyncService {
               errors++;
             }
 
-            // Set seeding scope to 'followed' for privacy
-            // Only serve to delegates + explicitly followed peers
+            // Set seeding scope to 'all' for private beta simplification
+            // Trust model: link-based (only share links with trusted people)
+            // FUTURE: Use 'followed' when backpropagation UX is refined
             try {
-              const wasSet = await this.radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
+              const wasSet = await this.radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'all');
               if (wasSet) {
                 scopeUpdates++;
               } else {

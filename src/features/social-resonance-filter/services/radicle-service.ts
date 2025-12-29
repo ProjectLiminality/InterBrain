@@ -659,12 +659,16 @@ export class RadicleServiceImpl implements RadicleService {
 
     try {
       // SEED-RELAYED MODE (Current): Clone from seeds in routing table
-      // --scope followed means only trust delegates + explicitly followed peers
+      // --scope all: Simplified for private beta - trust model is link-based
+      // (Only people you share links with can clone)
+      //
+      // FUTURE: Use --scope followed for stricter access control when
+      // backpropagation UX is refined (recipients add DID to dreamer metadata)
       //
       // NOTE: peerNid parameter is preserved for future DIRECT P2P MODE when
       // Radicle ships NAT hole-punching. Will re-enable --seed flag then.
       // See docs/radicle-architecture.md for dual-mode documentation.
-      const cloneCmd = `"${radCmd}" clone ${radicleId} --scope followed`;
+      const cloneCmd = `"${radCmd}" clone ${radicleId} --scope all`;
 
       // Log the mode we're using
       if (peerNid) {
@@ -1301,17 +1305,19 @@ export class RadicleServiceImpl implements RadicleService {
    * Used by "Copy Share Link" to ensure node is discoverable via seeds
    *
    * SEED-RELAYED MODE (current):
-   * 1. Sets seeding policy to 'followed' (only serve to trusted peers)
+   * 1. Sets seeding policy to 'all' (simplified for private beta)
    * 2. Announces to network seeds (CRITICAL for discoverability)
    *
-   * NOTE: --scope followed is used for privacy. Seeds relay to authorized peers.
+   * PRIVATE BETA: Using --scope all for simplified onboarding.
+   * Trust model is link-based (only share links with trusted people).
+   * FUTURE: Use --scope followed when backpropagation UX is refined.
    * See docs/radicle-architecture.md for dual-mode documentation.
    */
   seedInBackground(dreamNodePath: string, radicleId: string): void {
     // Fire-and-forget async operation
     (async () => {
       try {
-        console.log(`🌐 [Background Seed] Starting seed operation for ${radicleId} (scope: followed)...`);
+        console.log(`🌐 [Background Seed] Starting seed operation for ${radicleId} (scope: all - private beta)...`);
         const radCmd = this.getRadCommand();
         const { spawn } = require('child_process');
 
@@ -1354,10 +1360,10 @@ export class RadicleServiceImpl implements RadicleService {
           child.stdin?.end();
         });
 
-        // STEP 1: Run rad seed with --scope followed
-        // Privacy: only serve to delegates + explicitly followed peers
+        // STEP 1: Run rad seed with --scope all (private beta simplification)
+        // Trust model: link-based (only share links with trusted people)
         await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'followed'], {
+          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all'], {
             cwd: dreamNodePath,
             stdio: ['pipe', 'pipe', 'pipe']
           });
@@ -1378,7 +1384,7 @@ export class RadicleServiceImpl implements RadicleService {
             if (stderr) console.log(`[Background Seed] rad seed stderr:`, stderr);
 
             if (code === 0 || stdout.includes('Inventory updated') || stdout.includes('already seeding')) {
-              console.log(`✅ [Background Seed] Successfully seeded ${radicleId} (scope: followed)`);
+              console.log(`✅ [Background Seed] Successfully seeded ${radicleId} (scope: all - private beta)`);
             } else {
               console.warn(`⚠️ [Background Seed] rad seed exited with code ${code} (non-critical)`);
             }

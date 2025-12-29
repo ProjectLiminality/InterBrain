@@ -12,7 +12,7 @@ InterBrain supports two network modes. Currently using **Seed-Relayed Mode** unt
 
 | Aspect | Seed-Relayed (Current) | Direct P2P (Future) |
 |--------|------------------------|---------------------|
-| **Clone** | `rad clone RID --scope followed` | `rad clone RID --scope followed --seed <nid>` |
+| **Clone** | `rad clone RID --scope all` (beta) | `rad clone RID --scope followed --seed <nid>` |
 | **Announce** | `rad sync --announce` (required) | Not needed |
 | **Availability** | Depends on seed propagation | Depends on peer being online |
 | **Privacy** | Good (`--scope followed` protects) | Maximum (no intermediaries) |
@@ -56,7 +56,8 @@ rad init <path> --private --default-branch main --no-confirm --name <name>
 #### Seed-Relayed Mode (Current)
 
 ```bash
-rad clone <rid> --scope followed
+rad clone <rid> --scope all   # Private beta: simplified
+# rad clone <rid> --scope followed  # Future: stricter
 ```
 
 **How it works**:
@@ -77,7 +78,8 @@ rad clone <rid> --scope followed --seed <peer-nid>
 3. No seed intermediary needed
 
 **Flags (both modes)**:
-- `--scope followed`: Only trust delegates + explicitly followed peers
+- `--scope all`: Trust anyone with the link (private beta - simplified)
+- `--scope followed`: Only trust delegates + explicitly followed peers (future - stricter)
 
 ---
 
@@ -130,12 +132,13 @@ Converts private → public (if you want network-wide discovery). For InterBrain
 **File**: `radicle-service.ts:setSeedingScope()`, `seedInBackground()`
 
 ```bash
-rad seed <rid> --scope followed
+rad seed <rid> --scope all       # Private beta: simplified onboarding
+# rad seed <rid> --scope followed  # Future: stricter access control
 ```
 
 **Scopes**:
-- `followed`: Serve to delegates + explicitly followed peers only (PRIVACY)
-- `all`: Serve to anyone (PUBLIC - we don't use this)
+- `all`: Serve to anyone with the link (PRIVATE BETA - trust is link-based)
+- `followed`: Serve to delegates + explicitly followed peers only (FUTURE - stricter)
 
 **When is a repo "seeded"?**
 - `rad init` auto-seeds (unless `--no-seed`)
