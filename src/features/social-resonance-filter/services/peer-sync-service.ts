@@ -354,9 +354,10 @@ export class PeerSyncService {
               errors++;
             }
 
-            // Set seeding scope
+            // Set seeding scope to 'followed' for privacy
+            // Only serve to delegates + explicitly followed peers
             try {
-              const wasSet = await this.radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'all');
+              const wasSet = await this.radicleService.setSeedingScope(relatedData.dirPath, radicleId, 'followed');
               if (wasSet) {
                 scopeUpdates++;
               } else {

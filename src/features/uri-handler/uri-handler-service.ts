@@ -122,14 +122,28 @@ export class URIHandlerService {
 
 			notice.hide();
 
-			// Show comprehensive summary
+			// Show comprehensive summary with appropriate icon
 			const parts: string[] = [];
 			if (successCount > 0) parts.push(`${successCount} cloned`);
 			if (skipCount > 0) parts.push(`${skipCount} already existed`);
 			if (errorCount > 0) parts.push(`${errorCount} failed`);
 
 			const summary = parts.join(', ');
-			new Notice(`✅ Clone complete: ${summary}`);
+
+			if (errorCount > 0 && successCount === 0 && skipCount === 0) {
+				// All failed - show error with explanation
+				new Notice(
+					`❌ Clone failed. The DreamNode may not be available on the network yet. ` +
+					`The sender should ensure they've shared the link after the node is synced.`,
+					10000
+				);
+			} else if (errorCount > 0) {
+				// Partial failure
+				new Notice(`⚠️ Clone partial: ${summary}. Some nodes may need the sender to sync first.`, 8000);
+			} else {
+				// All success or skipped
+				new Notice(`✅ Clone complete: ${summary}`);
+			}
 
 			// Determine if anything actually changed (new clones vs all already existed)
 			const allNodesAlreadyExisted = successCount === 0 && skipCount > 0;

@@ -1315,6 +1315,45 @@ export class RadicleServiceImpl implements RadicleService {
         const radCmd = this.getRadCommand();
         const { spawn } = require('child_process');
 
+        // STEP 0: Publish repo if still private (required for seeds to announce)
+        console.log(`🌐 [Background Seed] Ensuring ${radicleId} is public (rad publish)...`);
+        await new Promise<void>((resolve) => {
+          const child = spawn(radCmd, ['publish'], {
+            cwd: dreamNodePath,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          let stdout = '';
+          let stderr = '';
+
+          child.stdout?.on('data', (data: any) => {
+            stdout += data.toString();
+          });
+
+          child.stderr?.on('data', (data: any) => {
+            stderr += data.toString();
+          });
+
+          child.on('close', (code: number | null) => {
+            const output = stdout + stderr;
+            if (code === 0) {
+              console.log(`✅ [Background Seed] Repository published successfully`);
+            } else if (output.includes('already public')) {
+              console.log(`ℹ️ [Background Seed] Repository already public`);
+            } else {
+              console.warn(`⚠️ [Background Seed] rad publish exited with code ${code}: ${output}`);
+            }
+            resolve(); // Always resolve, never fail
+          });
+
+          child.on('error', (error: Error) => {
+            console.warn(`⚠️ [Background Seed] rad publish error (non-critical):`, error);
+            resolve();
+          });
+
+          child.stdin?.end();
+        });
+
         // STEP 1: Run rad seed with --scope followed
         // Privacy: only serve to delegates + explicitly followed peers
         await new Promise<void>((resolve) => {
