@@ -91,6 +91,14 @@ export class EmailExportService {
 						identifier: identifier
 					});
 
+					// CRITICAL: Trigger background seeding so node is discoverable via seeds
+					// This is the same step that copyShareLink() does but generateShareLink() skips
+					if (identifier.startsWith('rad:') && nodeData.node.repoPath) {
+						const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, nodeData.node.repoPath);
+						radicleService.seedInBackground(absoluteRepoPath, identifier);
+						console.log(`🌐 [EmailExport] Triggered background seeding for "${inv.nodeName}"`);
+					}
+
 					console.log(`✅ [EmailExport] Shared "${inv.nodeName}": ${identifier}`);
 				} catch (error) {
 					console.error(`❌ [EmailExport] Failed to share "${inv.nodeName}":`, error);
