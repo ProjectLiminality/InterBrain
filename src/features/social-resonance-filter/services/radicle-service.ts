@@ -658,17 +658,26 @@ export class RadicleServiceImpl implements RadicleService {
     let cloneResult: any;
 
     try {
-      // Direct P2P model: --scope followed means only trust delegates + explicitly followed peers
-      // If peerNid provided, use --seed to clone directly from that peer (private P2P)
-      let cloneCmd = `"${radCmd}" clone ${radicleId} --scope followed`;
+      // SEED-RELAYED MODE (Current): Clone from seeds in routing table
+      // --scope followed means only trust delegates + explicitly followed peers
+      //
+      // NOTE: peerNid parameter is preserved for future DIRECT P2P MODE when
+      // Radicle ships NAT hole-punching. Will re-enable --seed flag then.
+      // See docs/radicle-architecture.md for dual-mode documentation.
+      const cloneCmd = `"${radCmd}" clone ${radicleId} --scope followed`;
+
+      // Log the mode we're using
       if (peerNid) {
-        // Strip did:key: prefix if present - rad clone expects raw NID
-        const rawNid = peerNid.replace(/^did:key:/, '');
-        cloneCmd += ` --seed ${rawNid}`;
-        console.log(`RadicleService: Running '${cloneCmd}' (direct P2P from peer)`);
+        console.log(`RadicleService: Running '${cloneCmd}' (seed-relayed mode, peerNid preserved for future direct P2P: ${peerNid})`);
       } else {
-        console.log(`RadicleService: Running '${cloneCmd}' (from routing table)`);
+        console.log(`RadicleService: Running '${cloneCmd}' (seed-relayed mode, from routing table)`);
       }
+
+      // FUTURE DIRECT P2P MODE (when hole-punching ships):
+      // if (peerNid) {
+      //   const rawNid = peerNid.replace(/^did:key:/, '');
+      //   cloneCmd += ` --seed ${rawNid}`;
+      // }
       cloneResult = await execAsync(cloneCmd, {
         cwd: destinationPath,
         env: env,
@@ -1289,13 +1298,14 @@ export class RadicleServiceImpl implements RadicleService {
   /**
    * Trigger seeding in the background (fire-and-forget)
    * Does NOT wait for completion - returns immediately
-   * Used by "Copy Share Link" to ensure node is servable to direct peers
+   * Used by "Copy Share Link" to ensure node is discoverable via seeds
    *
-   * This runs `rad seed <RID> --scope followed` which:
+   * SEED-RELAYED MODE (current):
    * 1. Sets seeding policy to 'followed' (only serve to trusted peers)
-   * 2. Fetches from followed peers (if any)
+   * 2. Announces to network seeds (CRITICAL for discoverability)
    *
-   * NOTE: --scope followed is used for privacy. Direct peers with your NID can still clone.
+   * NOTE: --scope followed is used for privacy. Seeds relay to authorized peers.
+   * See docs/radicle-architecture.md for dual-mode documentation.
    */
   seedInBackground(dreamNodePath: string, radicleId: string): void {
     // Fire-and-forget async operation
@@ -1305,7 +1315,7 @@ export class RadicleServiceImpl implements RadicleService {
         const radCmd = this.getRadCommand();
         const { spawn } = require('child_process');
 
-        // Run rad seed with --scope followed for direct P2P model
+        // STEP 1: Run rad seed with --scope followed
         // Privacy: only serve to delegates + explicitly followed peers
         await new Promise<void>((resolve) => {
           const child = spawn(radCmd, ['seed', radicleId, '--scope', 'followed'], {
@@ -1338,6 +1348,48 @@ export class RadicleServiceImpl implements RadicleService {
 
           child.on('error', (error: Error) => {
             console.warn(`⚠️ [Background Seed] rad seed error (non-critical):`, error);
+            resolve(); // Always resolve, never fail
+          });
+
+          child.stdin?.end();
+        });
+
+        // STEP 2: SEED-RELAYED MODE - Announce to network seeds
+        // This is CRITICAL for peers to discover and clone the repo via seeds
+        console.log(`🌐 [Background Seed] Announcing ${radicleId} to network seeds (rad sync --announce)...`);
+        await new Promise<void>((resolve) => {
+          const child = spawn(radCmd, ['sync', '--announce'], {
+            cwd: dreamNodePath,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          let stdout = '';
+          let stderr = '';
+
+          child.stdout?.on('data', (data: any) => {
+            stdout += data.toString();
+          });
+
+          child.stderr?.on('data', (data: any) => {
+            stderr += data.toString();
+          });
+
+          child.on('close', (code: number | null) => {
+            console.log(`[Background Seed] rad sync --announce output:`, stdout);
+            if (stderr) console.log(`[Background Seed] rad sync --announce stderr:`, stderr);
+
+            if (code === 0) {
+              console.log(`✅ [Background Seed] Successfully announced ${radicleId} to network seeds`);
+            } else if (stdout.includes('No seeds found') || stderr.includes('No seeds found')) {
+              console.warn(`⚠️ [Background Seed] No seeds found for ${radicleId} - repo may not be discoverable yet`);
+            } else {
+              console.warn(`⚠️ [Background Seed] rad sync --announce exited with code ${code} (non-critical)`);
+            }
+            resolve(); // Always resolve, never fail
+          });
+
+          child.on('error', (error: Error) => {
+            console.warn(`⚠️ [Background Seed] rad sync --announce error (non-critical):`, error);
             resolve(); // Always resolve, never fail
           });
 

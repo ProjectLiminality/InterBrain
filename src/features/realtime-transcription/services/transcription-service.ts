@@ -390,7 +390,7 @@ export class TranscriptionService implements ITranscriptionService {
 				    error.includes('_main(fd') ||
 				    error.includes('FileNotFoundError') ||
 				    error.includes('No such file or directory') ||
-				    /^[\s\^]+$/.test(error)) {  // Lines with only spaces and ^ characters
+				    /^[\s^]+$/.test(error)) {  // Lines with only spaces and ^ characters
 					// Silently ignore - expected behavior when user ends call quickly
 					return;
 				}

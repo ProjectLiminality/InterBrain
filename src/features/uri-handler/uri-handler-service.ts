@@ -533,12 +533,14 @@ export class URIHandlerService {
 			return { status: 'success', repoName: cloneResult.repoName };
 
 		} catch (error) {
-			// Handle network propagation delays gracefully
+			// Handle network propagation delays gracefully (SEED-RELAYED MODE)
+			// This happens when the sender hasn't announced to seeds yet,
+			// or seeds haven't propagated the repo information
 			if (error instanceof Error && error.message === 'NETWORK_PROPAGATION_DELAY') {
 				if (!silent) {
 					new Notice(
-						'Repository is being published to the network. This usually takes 1-2 minutes. Please try again shortly.',
-						8000
+						'DreamNode not yet available on network. The sender may need to sync their node, or network propagation is in progress. Please try again in a moment.',
+						10000
 					);
 				}
 				return { status: 'error' };

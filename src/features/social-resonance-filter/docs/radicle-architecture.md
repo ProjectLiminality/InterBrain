@@ -1,6 +1,67 @@
 # Radicle Architecture: Pure Peer-to-Peer Dreamweaving
 
-InterBrain is fundamentally a **specialized GUI client for Radicle**, implementing a constrained, extremely peer-to-peer subset of Radicle's capabilities optimized for trust-based knowledge sharing.
+InterBrain is fundamentally a **specialized GUI client for Radicle**, implementing a constrained, trust-based subset of Radicle's capabilities optimized for knowledge sharing.
+
+## Network Mode: Seed-Relayed (Current) vs Direct P2P (Future)
+
+InterBrain supports two network modes. The architecture is designed so that **switching requires only changing clone/sync commands** - all other concepts (delegates, following, scope) remain identical.
+
+### Current: Seed-Relayed Mode
+
+```
+┌─────────────────┐                          ┌─────────────────┐
+│   Your Node     │──outbound──►┌────────┐◄──outbound──│   Peer Node     │
+│   (behind NAT)  │             │ Public │             │   (behind NAT)  │
+└─────────────────┘             │ Seeds  │             └─────────────────┘
+```
+
+**Why**: Radicle's NAT hole-punching is under development. Until then, nodes behind NAT cannot directly connect.
+
+**Privacy**: Still protected via `--scope followed` - only authorized peers can fetch your repos. Seeds relay encrypted data but cannot access unauthorized content.
+
+**Commands that differ**:
+```bash
+# Clone: no --seed flag (fetch from routing table via seeds)
+rad clone <RID> --scope followed
+
+# Sync: announce to seeds so peers can discover
+rad sync --announce
+```
+
+### Future: Direct P2P Mode (When Hole-Punching Ships)
+
+```
+┌─────────────────┐       NAT Hole-Punch      ┌─────────────────┐
+│   Your Node     │◄══════════════════════════►│   Peer Node     │
+│   (behind NAT)  │      (direct connection)   │   (behind NAT)  │
+└─────────────────┘                            └─────────────────┘
+```
+
+**Why**: Maximum privacy, lowest latency, no intermediaries.
+
+**Commands that will differ**:
+```bash
+# Clone: --seed flag to fetch directly from peer's NID
+rad clone <RID> --scope followed --seed <peer-nid>
+
+# Sync: no announcement needed (direct connection)
+rad sync --fetch
+```
+
+### What Stays The Same (Both Modes)
+
+| Concept | Command | Purpose |
+|---------|---------|---------|
+| Initialize | `rad init --private` | Create repo (not announced) |
+| Seed policy | `rad seed <RID> --scope followed` | Only serve to trusted peers |
+| Follow peer | `rad follow <DID>` | Add to global trust list |
+| Add delegate | `rad id update --delegate <DID>` | Grant push access |
+| Push changes | `git push rad main` | Store in local Radicle |
+| Fetch updates | `git fetch <peer>` | Get peer's commits |
+
+**Key insight**: The trust model, delegation, and social graph are identical. Only the transport layer changes.
+
+---
 
 ## Core Design Principle: Radicle as Single Source of Truth
 
@@ -23,7 +84,7 @@ InterBrain is fundamentally a **specialized GUI client for Radicle**, implementi
 }
 ```
 
-## The Three Constraints: Pure P2P Configuration
+## The Three Constraints: Trust-Based Configuration
 
 Every InterBrain DreamNode is configured with these mandatory Radicle settings:
 
@@ -177,26 +238,42 @@ interface CachedRadicleState {
 
 ## Implementation Patterns
 
-**DreamNode Creation** (Alice):
+### DreamNode Creation (Alice)
+
 ```bash
-rad init --name "Square" --default-branch main
+rad init --private --name "Square" --default-branch main
 git add . && git commit -m "Initial commit"
 git push rad main
 rad seed <RID> --scope followed
+# Seed-Relayed Mode: Also announce for discoverability
+rad sync --announce
 ```
 
-**Sharing via Obsidian URI** (Alice → Bob):
+### Sharing via Obsidian URI (Alice → Bob)
+
 ```
-obsidian://interbrain-share?
-  rid=rad:z2u2ABsquare...&
-  did=did:key:z6MksAlice...&
-  name=Alice&
-  title=Square
+obsidian://interbrain-clone?
+  ids=rad:z2u2ABsquare...&
+  senderDid=did:key:z6MksAlice...&
+  senderName=Alice&
+  senderEmail=alice@example.com
 ```
 
-**Receiving Share** (Bob, automatic):
+**Note**: The `senderDid` is included for:
+- Creating a Dreamer node for the sender
+- Future direct P2P mode (will be used as `--seed` parameter)
+- Currently used to establish follow/delegate relationships
+
+### Receiving Share (Bob, automatic)
+
 ```bash
-rad clone <RID>                                  # Clone repo
+# Seed-Relayed Mode (current)
+rad clone <RID> --scope followed              # Clone via seeds
+
+# Future Direct P2P Mode
+# rad clone <RID> --scope followed --seed <Alice-NID>
+
+# Both modes: same trust setup
 rad follow <Alice-DID> --alias Alice             # Global trust
 rad id update --delegate <Alice-DID> --threshold 1  # Alice can push
 rad seed <RID> --scope followed                  # Only followed peers
@@ -204,16 +281,19 @@ git remote add alice rad://<RID>/<Alice-DID>    # Track Alice's fork
 # Create Alice Dreamer node in vault
 ```
 
-**Check for Updates** (Bob from Alice):
+### Check for Updates (Bob from Alice)
+
 ```bash
-rad sync                      # Fetch from seed nodes (all followed delegates)
-git fetch alice               # Get Alice's specific fork
-git log HEAD..alice/main      # Preview new commits
-git merge alice/main          # Accept changes (user approval)
-git push rad main             # Share merged state
+rad sync --fetch               # Fetch from seeds (all followed delegates)
+git fetch alice                # Get Alice's specific fork
+git log HEAD..alice/main       # Preview new commits
+git merge alice/main           # Accept changes (user approval)
+git push rad main              # Share merged state
+rad sync --announce            # Announce updated state
 ```
 
-**Discover Collaborators** (pure Radicle query):
+### Discover Collaborators (pure Radicle query)
+
 ```typescript
 // Who collaborates on Square? (intersection query)
 async function getCollaboratorsForDreamNode(dreamNodeRID: string) {
@@ -225,6 +305,19 @@ async function getCollaboratorsForDreamNode(dreamNodeRID: string) {
   // These edges appear in Liminal Web UI automatically
 }
 ```
+
+## Handling Unavailability
+
+In seed-relayed mode, repos may not be immediately available if:
+- The owner hasn't announced to seeds yet
+- Network propagation is still in progress
+
+**User Experience**:
+1. **Inform user**: "DreamNode not yet available on network. The sender may need to sync, or try again shortly."
+2. **Retry mechanism**: Automatic retry with exponential backoff
+3. **Future enhancement**: Background listener that completes clone when available
+
+This is analogous to the future direct P2P scenario where "peer's machine is offline" - both are transient unavailability.
 
 ## Key Architectural Insights
 
@@ -238,6 +331,7 @@ async function getCollaboratorsForDreamNode(dreamNodeRID: string) {
 8. **O(1) Scalability**: Local coherence scales globally
 9. **Git Native**: All merge/conflict resolution via standard git
 10. **Performance Cache Only**: InterBrain caches queries but Radicle CLI is authoritative
+11. **Transport Agnostic**: Trust model works identically across seed-relayed and direct P2P
 
 **InterBrain = Radicle GUI client for trust-based knowledge gardening** 🌱
 
