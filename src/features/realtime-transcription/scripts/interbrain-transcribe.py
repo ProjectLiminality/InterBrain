@@ -202,9 +202,12 @@ class TranscriptionSession:
             # Initialize recorder with faster-whisper model
             print("⏳ Initializing recorder (may take time on first run to download model)...")
 
+            # Handle 'auto' language detection - set to None for RealtimeSTT auto-detect
+            # Only multilingual models support auto-detection; English-only models (.en) always use 'en'
+            effective_language = None if self.language == 'auto' else (self.language or 'en')
+
             recorder_config = {
                 'model': self.model,
-                'language': self.language or 'en',
                 'compute_type': 'float32',  # Explicitly set compute type to avoid float16 warning
                 'no_log_file': True,  # Disable log file (prevents read-only filesystem errors on macOS)
                 'silero_sensitivity': 0.4,  # Voice activity detection sensitivity
@@ -214,6 +217,13 @@ class TranscriptionSession:
                 'min_gap_between_recordings': 0,  # No gap between recordings
                 'level': 'WARNING',  # Reduce log verbosity
             }
+
+            # Only set language if not auto-detecting (None means auto-detect in RealtimeSTT)
+            if effective_language is not None:
+                recorder_config['language'] = effective_language
+                print(f"🌍 Language: {effective_language}")
+            else:
+                print("🌍 Language: Auto-detect")
 
             self.recorder = AudioToTextRecorder(**recorder_config)
 

@@ -31,6 +31,8 @@ export interface InterBrainSettings {
 	hasLaunchedBefore: boolean;
 	transcriptionEnabled: boolean;
 	transcriptionSetupComplete: boolean;
+	transcriptionModel: string;    // Whisper model: 'tiny' | 'base' | 'small.en' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
+	transcriptionLanguage: string; // Language code: 'auto' | 'en' | 'es' | 'fr' | etc.
 	webLinkAnalyzerEnabled: boolean;
 	webLinkAnalyzerSetupComplete: boolean;
 }
@@ -47,6 +49,8 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	hasLaunchedBefore: false,
 	transcriptionEnabled: true,  // Auto-enabled on first launch
 	transcriptionSetupComplete: false,
+	transcriptionModel: 'small',  // Multilingual model, good balance of speed/accuracy
+	transcriptionLanguage: 'auto',   // Auto-detect language
 	webLinkAnalyzerEnabled: false,  // Requires manual setup (needs API key)
 	webLinkAnalyzerSetupComplete: false
 };

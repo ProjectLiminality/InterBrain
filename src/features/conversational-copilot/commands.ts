@@ -1,4 +1,3 @@
-import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
@@ -11,11 +10,12 @@ import { getAudioRecordingService } from '../songline/services/audio-recording-s
 import { getPerspectiveService } from '../songline/services/perspective-service';
 import { getAudioTrimmingService } from '../songline/services/audio-trimming-service';
 import { getInferenceService } from '../ai-magic';
+import type InterBrainPlugin from '../../main';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
  */
-export function registerConversationalCopilotCommands(plugin: Plugin, uiService: UIService): void {
+export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, uiService: UIService): void {
 
   // Start Conversation Mode
   plugin.addCommand({
@@ -97,9 +97,14 @@ export function registerConversationalCopilotCommands(plugin: Plugin, uiService:
         const audioOutputPath = audioRecordingService.getAudioOutputPath(freshNode, transcriptFile.name);
 
         // Start Python real-time transcription with audio recording to the transcript file
+        // Use model and language from plugin settings
         const pythonTranscriptionService = getRealtimeTranscriptionService();
+        const model = plugin.settings.transcriptionModel || 'small.en';
+        const language = plugin.settings.transcriptionLanguage || 'en';
+
         await pythonTranscriptionService.startTranscription(absoluteTranscriptPath, {
-          model: 'small.en',
+          model: model as any,
+          language: language as any,
           audioOutput: audioOutputPath  // Enable audio recording for Songline
         });
 

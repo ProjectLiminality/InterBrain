@@ -35,10 +35,14 @@ export function registerTranscriptionCommands(plugin: InterBrainPlugin): void {
 			const vaultPath = (plugin.app.vault.adapter as any).basePath;
 			const transcriptPath = require('path').join(vaultPath, activeFile.path);
 
-			// Start transcription
+			// Start transcription with settings from plugin
 			try {
+				const model = plugin.settings.transcriptionModel || 'small.en';
+				const language = plugin.settings.transcriptionLanguage || 'en';
+
 				await transcriptionService.startTranscription(transcriptPath, {
-					model: 'small.en'
+					model: model as any,
+					language: language as any
 				});
 			} catch (error) {
 				console.error('[Transcription Commands] Failed to start:', error);

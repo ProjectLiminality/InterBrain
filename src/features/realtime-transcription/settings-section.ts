@@ -10,6 +10,8 @@ import type InterBrainPlugin from '../../main';
 import type { FeatureStatus } from '../settings/settings-status-service';
 import { SettingsStatusService } from '../settings/settings-status-service';
 import { getRealtimeTranscriptionService } from './services/transcription-service';
+import { TranscriptionTestModal } from './ui/TranscriptionTestModal';
+import type { WhisperModel, TranscriptionLanguage } from './types/transcription-types';
 
 /**
  * Check transcription feature status
@@ -200,6 +202,62 @@ async function checkDependenciesInstalledFallback(): Promise<boolean> {
 }
 
 /**
+ * Model options with descriptions for the dropdown
+ */
+const MODEL_OPTIONS: { value: string; label: string; description: string }[] = [
+	{ value: 'tiny', label: 'Tiny', description: 'Fastest, lowest accuracy (39M params)' },
+	{ value: 'base', label: 'Base', description: 'Fast, basic accuracy (74M params)' },
+	{ value: 'small', label: 'Small', description: 'Good balance of speed and accuracy (244M params)' },
+	{ value: 'small.en', label: 'Small (English-optimized)', description: 'Best accuracy for English-only users (244M params)' },
+	{ value: 'medium', label: 'Medium', description: 'Higher accuracy, slower (769M params)' },
+	{ value: 'large-v3', label: 'Large V3', description: 'Best accuracy, requires GPU (1.5B params)' },
+	{ value: 'large-v3-turbo', label: 'Large V3 Turbo', description: 'Near-best accuracy, 8x faster (809M params)' },
+];
+
+/**
+ * Language options for the dropdown
+ */
+const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+	{ value: 'auto', label: 'Auto-detect' },
+	{ value: 'en', label: 'English' },
+	{ value: 'es', label: 'Spanish' },
+	{ value: 'fr', label: 'French' },
+	{ value: 'de', label: 'German' },
+	{ value: 'it', label: 'Italian' },
+	{ value: 'pt', label: 'Portuguese' },
+	{ value: 'nl', label: 'Dutch' },
+	{ value: 'pl', label: 'Polish' },
+	{ value: 'ru', label: 'Russian' },
+	{ value: 'zh', label: 'Chinese' },
+	{ value: 'ja', label: 'Japanese' },
+	{ value: 'ko', label: 'Korean' },
+	{ value: 'ar', label: 'Arabic' },
+	{ value: 'hi', label: 'Hindi' },
+	{ value: 'he', label: 'Hebrew' },
+	{ value: 'tr', label: 'Turkish' },
+	{ value: 'vi', label: 'Vietnamese' },
+	{ value: 'th', label: 'Thai' },
+	{ value: 'uk', label: 'Ukrainian' },
+	{ value: 'cs', label: 'Czech' },
+	{ value: 'el', label: 'Greek' },
+	{ value: 'id', label: 'Indonesian' },
+	{ value: 'ms', label: 'Malay' },
+	{ value: 'ro', label: 'Romanian' },
+	{ value: 'hu', label: 'Hungarian' },
+	{ value: 'sv', label: 'Swedish' },
+	{ value: 'da', label: 'Danish' },
+	{ value: 'fi', label: 'Finnish' },
+	{ value: 'no', label: 'Norwegian' },
+];
+
+/**
+ * Check if a model is English-only
+ */
+function isEnglishOnlyModel(model: string): boolean {
+	return model.endsWith('.en');
+}
+
+/**
  * Create the transcription settings section
  */
 export function createTranscriptionSettingsSection(
@@ -235,17 +293,77 @@ export function createTranscriptionSettingsSection(
 				await refreshDisplay();
 			}));
 
-	// Model info
-	containerEl.createEl('p', {
-		text: 'Transcription uses OpenAI Whisper for real-time speech-to-text. Setup runs automatically on first launch.',
-		cls: 'setting-item-description'
-	});
-
-	// Action buttons (only show if enabled)
+	// Only show model/language settings if enabled
 	if (plugin.settings.transcriptionEnabled) {
+		// Model Selection
+		const currentModel = plugin.settings.transcriptionModel || 'small';
+		const modelOption = MODEL_OPTIONS.find(m => m.value === currentModel);
+		const currentIsEnglishOnly = isEnglishOnlyModel(currentModel);
+
+		new Setting(containerEl)
+			.setName('Whisper Model')
+			.setDesc(modelOption?.description || 'Select the Whisper model for transcription')
+			.addDropdown(dropdown => {
+				MODEL_OPTIONS.forEach(option => {
+					dropdown.addOption(option.value, option.label);
+				});
+				dropdown.setValue(currentModel);
+				dropdown.onChange(async (value) => {
+					const wasEnglishOnly = isEnglishOnlyModel(plugin.settings.transcriptionModel || 'small');
+					const nowEnglishOnly = isEnglishOnlyModel(value);
+
+					plugin.settings.transcriptionModel = value;
+
+					// If switching to English-only model, force language to English
+					if (nowEnglishOnly) {
+						plugin.settings.transcriptionLanguage = 'en';
+					}
+
+					await plugin.saveSettings();
+
+					// Only refresh if switching between multilingual <-> English-only
+					// (need to update language dropdown enabled state)
+					if (wasEnglishOnly !== nowEnglishOnly) {
+						await refreshDisplay();
+					}
+				});
+			});
+
+		// Language Selection (only for multilingual models)
+		const currentLanguage = plugin.settings.transcriptionLanguage || 'auto';
+
+		const languageSetting = new Setting(containerEl)
+			.setName('Language')
+			.setDesc(currentIsEnglishOnly
+				? 'English-only model selected. Switch to a multilingual model for other languages.'
+				: 'Select the language for transcription. "Auto-detect" works well for most cases.');
+
+		if (currentIsEnglishOnly) {
+			// Show disabled dropdown for English-only models
+			languageSetting.addDropdown(dropdown => {
+				dropdown.addOption('en', 'English');
+				dropdown.setValue('en');
+				dropdown.setDisabled(true);
+			});
+		} else {
+			// Show full language dropdown for multilingual models
+			languageSetting.addDropdown(dropdown => {
+				LANGUAGE_OPTIONS.forEach(option => {
+					dropdown.addOption(option.value, option.label);
+				});
+				dropdown.setValue(currentLanguage);
+				dropdown.onChange(async (value) => {
+					plugin.settings.transcriptionLanguage = value;
+					await plugin.saveSettings();
+					// No refresh needed for language change
+				});
+			});
+		}
+
+		// Action buttons
 		const buttonSetting = new Setting(containerEl)
-			.setName('Actions')
-			.setDesc('Set up transcription environment and manage features');
+			.setName('Test')
+			.setDesc('Verify your microphone and transcription settings');
 
 		// Setup Environment button (if not ready)
 		if (status?.status !== 'ready') {
@@ -280,11 +398,13 @@ export function createTranscriptionSettingsSection(
 				}));
 		}
 
-		// Start Transcription button (always available)
+		// Test Transcription button (always available)
 		buttonSetting.addButton(button => button
-			.setButtonText('Start Transcription')
+			.setButtonText('Test Transcription')
 			.onClick(() => {
-				plugin.app.commands.executeCommandById('interbrain:start-realtime-transcription');
+				const model = (plugin.settings.transcriptionModel || 'small') as WhisperModel;
+				const language = (plugin.settings.transcriptionLanguage || 'auto') as TranscriptionLanguage;
+				new TranscriptionTestModal(plugin.app, model, language).open();
 			}));
 
 		// Installation instructions

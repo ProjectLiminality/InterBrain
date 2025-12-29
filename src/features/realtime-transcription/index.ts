@@ -14,7 +14,9 @@ export { registerTranscriptionCommands, cleanupTranscriptionService } from './co
 export type {
 	TranscriptionProcess,
 	TranscriptionConfig,
-	ITranscriptionService
+	ITranscriptionService,
+	WhisperModel,
+	TranscriptionLanguage
 } from './types/transcription-types';
 
 // Settings section

@@ -264,19 +264,29 @@ export class TranscriptionService implements ITranscriptionService {
 			// eslint-disable-next-line no-undef
 			this.currentProcess?.stdout?.on('data', (data: Buffer) => {
 				const output = data.toString().trim();
-				console.log(`[Transcription STDOUT] ${output}`);
+				if (!output) return;
+
+				// Filter out spinner/progress indicators (they flood the console)
+				if (output.match(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/) || output.includes('speak now')) {
+					return;
+				}
 
 				// Show user-friendly notifications for key events
 				if (output.includes('Starting transcription')) {
+					console.log('[Transcription] Starting...');
 					this.uiService.showSuccess('🎙️ Transcription started');
 				} else if (output.includes('Model loaded successfully')) {
-					this.uiService.showSuccess('✅ Whisper model loaded');
 					console.log('[Transcription] Whisper model ready');
+					this.uiService.showSuccess('✅ Whisper model loaded');
 				} else if (output.includes('Listening')) {
+					console.log('[Transcription] Listening for speech');
 					this.uiService.showSuccess('🎤 Listening for speech...');
 				} else if (output.startsWith('✅')) {
 					// This is a transcribed line - show it
 					this.uiService.showInfo(`Transcribed: ${output.substring(2).trim()}`);
+				} else {
+					// Log other meaningful output
+					console.log(`[Transcription] ${output}`);
 				}
 			});
 
@@ -284,14 +294,14 @@ export class TranscriptionService implements ITranscriptionService {
 			// eslint-disable-next-line no-undef
 			this.currentProcess?.stderr?.on('data', (data: Buffer) => {
 				const error = data.toString().trim();
+				if (!error) return;
 
 				// Filter out harmless connection errors from early termination
+				// These occur when process is terminated before fully initialized
 				if (error.includes('EOFError') ||
 				    error.includes('Error receiving data from connection') ||
 				    error.includes('poll_connection')) {
-					// These errors occur when process is terminated before fully initialized
-					// This is expected behavior when user ends call quickly
-					console.log(`[Transcription] Connection closed during startup (expected on early termination)`);
+					// Silently ignore - expected behavior when user ends call quickly
 					return;
 				}
 

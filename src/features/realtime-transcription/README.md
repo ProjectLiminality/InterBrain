@@ -31,7 +31,32 @@ cleanupTranscriptionService()
 ITranscriptionService
 TranscriptionProcess
 TranscriptionConfig
+WhisperModel       // 'tiny' | 'base' | 'small.en' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
+TranscriptionLanguage  // 'auto' | 'en' | 'es' | 'fr' | ... (30 languages)
 ```
+
+## Settings
+
+Settings are managed in InterBrain's settings panel under "Real-Time Transcription":
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Whisper Model** | `small` | Model size/language capability. Multilingual models support 99 languages. English-only models (`.en`) have better English accuracy. |
+| **Language** | `auto` | Target language for transcription. Auto-detect works well for most cases. |
+
+### Model Options
+
+| Model | Params | Speed | Languages | Notes |
+|-------|--------|-------|-----------|-------|
+| Tiny | 39M | Fastest | Multi | Quick drafts, low resources |
+| Base | 74M | Fast | Multi | Light multilingual use |
+| Small | 244M | Good | 99 languages | Good balance (default) |
+| Small (English-optimized) | 244M | Good | English only | Best accuracy for English-only users |
+| Medium | 769M | Slower | 99 languages | Higher accuracy |
+| Large V3 | 1.5B | Slowest | 99 languages | Best accuracy, requires GPU |
+| Large V3 Turbo | 809M | Fast | 99 languages | Near-best accuracy, 8x faster than V3 |
+
+**Note**: English-only models (`.en`) are trained exclusively on English data, giving them better accuracy for English than multilingual models of the same size. If you only transcribe English, consider using "Small (English-optimized)" for best results.
 
 ## Architecture Notes
 
@@ -85,9 +110,22 @@ pip install -r src/features/realtime-transcription/scripts/requirements.txt
 ### Direct CLI Usage
 
 ```bash
+# English-only model (default)
 python3 src/features/realtime-transcription/scripts/interbrain-transcribe.py \
   --output "/path/to/transcript.md" \
   --model "small.en"
+
+# Multilingual with auto-detection
+python3 src/features/realtime-transcription/scripts/interbrain-transcribe.py \
+  --output "/path/to/transcript.md" \
+  --model "small" \
+  --language "auto"
+
+# Specific language (e.g., Spanish)
+python3 src/features/realtime-transcription/scripts/interbrain-transcribe.py \
+  --output "/path/to/transcript.md" \
+  --model "small" \
+  --language "es"
 ```
 
 ## Output Format
