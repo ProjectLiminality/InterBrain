@@ -169,6 +169,14 @@ if (-not (Test-Command "node")) {
         }
     }
     Refresh-Path
+
+    # After fresh install, verify node is accessible
+    if (-not (Test-Command "node")) {
+        Write-Warning "Node.js installed but not in PATH yet."
+        Write-Info "Please close this PowerShell window and open a new one, then run the installer again."
+        Write-Info "This is needed for Windows to recognize the newly installed Node.js."
+        exit 0
+    }
     Write-Success "Node.js installed"
 } else {
     Write-Success "Node.js found ($(node --version))"
@@ -299,15 +307,38 @@ Write-Step -Step 5 -Message "Building plugin"
 
 Set-Location $InterBrainPath
 
+# Determine how to run npm (direct command vs node path)
+$NpmCommand = $null
+if (Test-Command "npm") {
+    $NpmCommand = "npm"
+} else {
+    # npm not in PATH - try to find it via node installation
+    $NodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
+    if ($NodePath) {
+        $NodeDir = Split-Path $NodePath -Parent
+        $NpmCliPath = Join-Path $NodeDir "node_modules\npm\bin\npm-cli.js"
+        if (Test-Path $NpmCliPath) {
+            $NpmCommand = "node `"$NpmCliPath`""
+            Write-Info "Using npm via node directly (npm not in PATH)"
+        }
+    }
+}
+
+if (-not $NpmCommand) {
+    Write-Error "npm not found. Please close this PowerShell window, open a new one, and run the installer again."
+    Write-Info "If the problem persists, reinstall Node.js from https://nodejs.org"
+    exit 1
+}
+
 Write-Info "Installing Node.js dependencies..."
-npm install --silent 2>$null
+Invoke-Expression "$NpmCommand install --silent 2>`$null"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "npm install failed"
     exit 1
 }
 
 Write-Info "Building InterBrain plugin..."
-npm run build 2>$null
+Invoke-Expression "$NpmCommand run build 2>`$null"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "npm run build failed"
     exit 1
