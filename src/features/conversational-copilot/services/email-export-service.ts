@@ -5,8 +5,9 @@ import { URIHandlerService } from '../../uri-handler';
 import { ShareLinkService } from '../../github-publishing/services/share-link-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
-import { getPDFGeneratorService } from './pdf-generator-service';
-import * as os from 'os';
+// PDF generation disabled for now - keeping import for future use
+// import { getPDFGeneratorService } from './pdf-generator-service';
+// import * as os from 'os';
 import * as path from 'path';
 
 /**
@@ -36,9 +37,6 @@ export class EmailExportService {
 	): Promise<void> {
 		try {
 			console.log(`📧 [EmailExport] Generating email for conversation with ${conversationPartner.name}`);
-
-			// Get vault name for deep links
-			const vaultName = this.app.vault.getName();
 
 			// Get recipient DID if available (for automatic delegation)
 			const recipientDid = conversationPartner.did;
@@ -122,54 +120,11 @@ export class EmailExportService {
 				senderEmail
 			);
 
-			// Collect deep links for PDF
-			const deepLinks = sharedLinks.map(link => ({
-				nodeName: link.nodeName,
-				link: link.uri
-			}));
-
-			// Extract identifiers for batch link
-			const allIdentifiers = sharedLinks.map(link => link.identifier);
-
-			// Build install script links for PDF (using interactive mode with bash wrapper)
-			const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
-			const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
-			const conservativeIdentifiers = [interbrainGitHub];
-			const conservativeUri = URIHandlerService.generateBatchNodeLink(vaultName, conservativeIdentifiers, senderDid, senderName, senderEmail);
-			const dreamerUuidParam = dreamerUuid ? ` --dreamer-uuid "${dreamerUuid}"` : '';
-			const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
-
-			let fullInstall: string | undefined;
-			if (invocations.length > 0 && allIdentifiers.length > 0) {
-				const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
-				const fullUri = URIHandlerService.generateBatchNodeLink(vaultName, fullIdentifiers, senderDid, senderName, senderEmail);
-				fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"${dreamerUuidParam}`;
-			}
-
-			const installLinks = {
-				conservative: conservativeInstall,
-				full: fullInstall
-			};
-
-			// Generate PDF with ALL content (no separate email body needed)
-			const pdfPath = path.join(os.tmpdir(), `interbrain-summary-${Date.now()}.pdf`);
-			const pdfGenerator = getPDFGeneratorService();
-			await pdfGenerator.generateCallSummary(
-				conversationPartner,
-				conversationStartTime,
-				conversationEndTime,
-				invocations,
-				aiSummary,
-				deepLinks,
-				installLinks,
-				pdfPath
-			);
-
 			// Get recipient email (from metadata or parameter)
 			const toEmail = recipientEmail || await this.getRecipientEmail(conversationPartner);
 
-			// Create .eml with plain text body + PDF attachment
-			await this.createMailDraftWithPDF(toEmail, subject, body, pdfPath);
+			// Create plain text email draft (PDF generation disabled for now)
+			await this.createMailDraft(toEmail, subject, body);
 
 			new Notice('Email draft created in Apple Mail');
 			console.log(`✅ [EmailExport] Email draft created successfully`);
@@ -199,7 +154,7 @@ export class EmailExportService {
 		aiSummary: string,
 		senderDid?: string,
 		senderName?: string,
-		dreamerUuid?: string,
+		_dreamerUuid?: string,
 		senderEmail?: string
 	): string {
 		const duration = this.calculateDuration(startTime, endTime);
@@ -218,54 +173,33 @@ export class EmailExportService {
 		// Add invoked DreamNodes section if any
 		if (sharedLinks.length > 0) {
 			body += `---\n\n`;
-			body += `## Shared DreamNodes\n\n`;
+			body += `Shared DreamNodes\n\n`;
 			body += `During our conversation, I shared ${sharedLinks.length} DreamNode${sharedLinks.length > 1 ? 's' : ''}:\n\n`;
 
 			sharedLinks.forEach((link, i) => {
-				body += `${i + 1}. **${link.nodeName}**\n`;
-				body += `   → ${link.uri}\n\n`;
+				body += `${i + 1}. ${link.nodeName}\n`;
+				body += `   ${link.uri}\n\n`;
 			});
 
-			// Add batch clone link if multiple nodes shared
-			if (sharedLinks.length > 1) {
-				const allIdentifiers = sharedLinks.map(l => l.identifier);
-				const batchLink = URIHandlerService.generateBatchNodeLink('', allIdentifiers, senderDid, senderName, senderEmail);
-				body += `\n📦 **Clone all shared nodes at once**: ${batchLink}\n\n`;
-			}
-		}
-
-		// Add InterBrain installation options
-		body += `---\n\n`;
-		body += `## 💡 New to InterBrain?\n\n`;
-		body += `Choose your installation path:\n\n`;
-
-		// Build install script URIs (using interactive mode with bash wrapper)
-		const installScriptBase = 'https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh';
-
-		// Conservative install: Just InterBrain + sender connection (always included)
-		const interbrainGitHub = 'github.com/ProjectLiminality/InterBrain';
-		const conservativeIdentifiers = [interbrainGitHub];
-		const conservativeUri = URIHandlerService.generateBatchNodeLink('', conservativeIdentifiers, senderDid, senderName, senderEmail);
-		const dreamerUuidParam = dreamerUuid ? ` --dreamer-uuid "${dreamerUuid}"` : '';
-		const conservativeInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${conservativeUri}"${dreamerUuidParam}`;
-
-		body += `**🌱 Minimal Install** (InterBrain + connection to ${senderName || 'me'}):\n\n`;
-		body += `\`\`\`\n${conservativeInstall}\n\`\`\`\n\n`;
-
-		// Full install: InterBrain + all shared nodes (if any were shared during call)
-		if (sharedLinks.length > 0) {
+			// Add batch clone link
 			const allIdentifiers = sharedLinks.map(l => l.identifier);
-			const fullIdentifiers = [interbrainGitHub, ...allIdentifiers];
-			const fullUri = URIHandlerService.generateBatchNodeLink('', fullIdentifiers, senderDid, senderName, senderEmail);
-			const fullInstall = `bash <(curl -fsSL ${installScriptBase}) --uri "${fullUri}"${dreamerUuidParam}`;
-
-			body += `**🚀 Full Install** (InterBrain + all ${sharedLinks.length} shared DreamNode${sharedLinks.length > 1 ? 's' : ''}):\n\n`;
-			body += `\`\`\`\n${fullInstall}\n\`\`\`\n\n`;
+			const batchLink = URIHandlerService.generateBatchNodeLink('', allIdentifiers, senderDid, senderName, senderEmail);
+			body += `Get all at once: ${batchLink}\n\n`;
 		}
 
-		body += `Copy either command into Terminal to get started!\n\n`;
-		body += `Or visit: https://github.com/ProjectLiminality/InterBrain?tab=readme-ov-file#installation--setup\n\n`;
+		// Add InterBrain installation section
+		body += `---\n\n`;
+		body += `New to InterBrain?\n\n`;
+		body += `Install InterBrain first, then come back and click the links above.\n\n`;
+		body += `Installation Guide: https://github.com/ProjectLiminality/InterBrain#installation--setup\n\n`;
 
+		// Add donation/support section
+		body += `---\n\n`;
+		body += `Support the Mission\n\n`;
+		body += `As a core component of Project Liminality's mission to heal the fragmentation of the human family, InterBrain is being developed 100% independently based on crowdfunding support. If you resonate with this vision consider donating here:\n\n`;
+		body += `https://opencollective.com/projectliminality\n\n`;
+
+		body += `---\n\n`;
 		body += `Looking forward to our next conversation!\n`;
 
 		return body;
@@ -304,22 +238,21 @@ export class EmailExportService {
 	}
 
 	/**
-	 * Create Apple Mail draft using AppleScript with body content + PDF attachment
+	 * Create Apple Mail draft using AppleScript (plain text, no attachment)
 	 */
-	private async createMailDraftWithPDF(to: string, subject: string, body: string, pdfPath: string): Promise<void> {
+	private async createMailDraft(to: string, subject: string, body: string): Promise<void> {
 		console.log(`📧 [EmailExport] Creating Apple Mail draft via AppleScript`);
-		console.log(`📧 [EmailExport] PDF path:`, pdfPath);
 		console.log(`📧 [EmailExport] Recipient:`, to);
 
 		try {
 			const childProcess = (window as any).require('child_process');
 			const fs = (window as any).require('fs');
 			const os = (window as any).require('os');
-			const path = (window as any).require('path');
+			const nodePath = (window as any).require('path');
 			const { exec } = childProcess;
 
 			// Write AppleScript to temp file to avoid shell escaping issues
-			const tempScriptPath = path.join(os.tmpdir(), `interbrain-mail-${Date.now()}.scpt`);
+			const tempScriptPath = nodePath.join(os.tmpdir(), `interbrain-mail-${Date.now()}.scpt`);
 
 			// Build AppleScript with proper string escaping for AppleScript (not shell)
 			const escapeForAppleScript = (str: string): string => {
@@ -332,9 +265,6 @@ tell application "Mail"
 
 	tell newMessage
 		make new to recipient with properties {address:"${escapeForAppleScript(to)}"}
-
-		-- Attach PDF file
-		make new attachment with properties {file name:POSIX file "${escapeForAppleScript(pdfPath)}"} at after the last paragraph
 	end tell
 
 	activate
@@ -365,12 +295,20 @@ end tell
 				});
 			});
 
-			console.log(`✅ [EmailExport] Email draft created with body + PDF attachment`);
+			console.log(`✅ [EmailExport] Email draft created`);
 		} catch (error) {
 			console.error('❌ [EmailExport] Failed to create Mail draft:', error);
 			throw new Error('Failed to create email draft via AppleScript');
 		}
 	}
+
+	// PDF generation disabled for now - keeping method for future use
+	// /**
+	//  * Create Apple Mail draft using AppleScript with body content + PDF attachment
+	//  */
+	// private async createMailDraftWithPDF(to: string, subject: string, body: string, pdfPath: string): Promise<void> {
+	// 	// ... PDF attachment logic preserved for future use
+	// }
 }
 
 // Singleton instance
