@@ -1304,162 +1304,104 @@ export class RadicleServiceImpl implements RadicleService {
    * Does NOT wait for completion - returns immediately
    * Used by "Copy Share Link" to ensure node is discoverable via seeds
    *
-   * SEED-RELAYED MODE (current):
-   * 1. Sets seeding policy to 'all' (simplified for private beta)
-   * 2. Announces to network seeds (CRITICAL for discoverability)
+   * OPTIMIZED: Fast checks (~30ms) before running expensive operations:
+   * 1. Check visibility (~10ms) - if private, needs publish
+   * 2. Check sync status (~20ms) - if out of sync, needs announce
    *
-   * PRIVATE BETA: Using --scope all for simplified onboarding.
-   * Trust model is link-based (only share links with trusted people).
-   * FUTURE: Use --scope followed when backpropagation UX is refined.
-   * See docs/radicle-architecture.md for dual-mode documentation.
+   * This respects the freedom model:
+   * - Local commits stay local until you `git push rad`
+   * - Only what's pushed to rad remote gets announced
+   * - Seeds compare against your rad remote, not local HEAD
    */
   seedInBackground(dreamNodePath: string, radicleId: string): void {
     // Fire-and-forget async operation
     (async () => {
       try {
-        console.log(`🌐 [Background Seed] Starting seed operation for ${radicleId} (scope: all - private beta)...`);
         const radCmd = this.getRadCommand();
-        const { spawn } = require('child_process');
+        const repoName = require('path').basename(dreamNodePath);
 
-        // STEP 0: Publish repo if still private (required for seeds to announce)
-        console.log(`🌐 [Background Seed] Ensuring ${radicleId} is public (rad publish)...`);
-        await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['publish'], {
-            cwd: dreamNodePath,
-            stdio: ['pipe', 'pipe', 'pipe']
-          });
-
-          let stdout = '';
-          let stderr = '';
-
-          child.stdout?.on('data', (data: any) => {
-            stdout += data.toString();
-          });
-
-          child.stderr?.on('data', (data: any) => {
-            stderr += data.toString();
-          });
-
-          child.on('close', (code: number | null) => {
-            const output = stdout + stderr;
-            if (code === 0) {
-              console.log(`✅ [Background Seed] Repository published successfully`);
-            } else if (output.includes('already public')) {
-              console.log(`ℹ️ [Background Seed] Repository already public`);
-            } else {
-              console.warn(`⚠️ [Background Seed] rad publish exited with code ${code}: ${output}`);
+        // STEP 1: Fast visibility check (~10ms)
+        // If private, we MUST publish. If public, check sync status.
+        const isPrivate = await new Promise<boolean>((resolve) => {
+          exec(`"${radCmd}" inspect --identity`, { cwd: dreamNodePath }, (error: Error | null, stdout: string) => {
+            if (error) {
+              resolve(true); // Assume private if can't check
+              return;
             }
-            resolve(); // Always resolve, never fail
+            try {
+              const identity = JSON.parse(stdout);
+              // If visibility field exists and type is 'private', it's private
+              resolve(identity.visibility?.type === 'private');
+            } catch {
+              resolve(true); // Assume private if can't parse
+            }
           });
+        });
 
-          child.on('error', (error: Error) => {
-            console.warn(`⚠️ [Background Seed] rad publish error (non-critical):`, error);
+        if (isPrivate) {
+          // MUST PUBLISH: Repository is private
+          console.log(`🌐 [Background Seed] "${repoName}" is private, publishing...`);
+          await new Promise<void>((resolve) => {
+            exec(`"${radCmd}" publish`, { cwd: dreamNodePath }, (error: Error | null, stdout: string, stderr: string) => {
+              const output = stdout + stderr;
+              if (!error) {
+                console.log(`✅ [Background Seed] "${repoName}" published successfully`);
+              } else if (output.includes('already public')) {
+                console.log(`ℹ️ [Background Seed] "${repoName}" already public`);
+              } else {
+                console.warn(`⚠️ [Background Seed] publish failed for "${repoName}": ${output}`);
+              }
+              resolve();
+            });
+          });
+          // After publish, we're done - publish includes announce
+          return;
+        }
+
+        // STEP 2: Fast sync status check (~20ms)
+        // Check if any seeds are out of sync (✗) or not announced (!)
+        const needsAnnounce = await new Promise<boolean>((resolve) => {
+          exec(`"${radCmd}" sync status`, { cwd: dreamNodePath }, (error: Error | null, stdout: string) => {
+            if (error) {
+              resolve(true); // Assume needs announce if can't check
+              return;
+            }
+            // Check for out-of-sync indicators: ✗ or !
+            // If all seeds show ✓, we're fully synced
+            const hasOutOfSync = stdout.includes('✗') || stdout.includes('!');
+            // Also check if there are no seeds at all (empty table)
+            const hasNoSeeds = !stdout.includes('│') || stdout.split('\n').filter((l: string) => l.includes('│')).length <= 2;
+            resolve(hasOutOfSync || hasNoSeeds);
+          });
+        });
+
+        if (!needsAnnounce) {
+          console.log(`✅ [Background Seed] "${repoName}" already synced with seeds (skipping)`);
+          return;
+        }
+
+        // STEP 3: Announce to seeds (rad remote has newer refs than seeds)
+        console.log(`🌐 [Background Seed] "${repoName}" needs sync, announcing...`);
+        await new Promise<void>((resolve) => {
+          exec(`"${radCmd}" sync --announce`, { cwd: dreamNodePath }, (error: Error | null, stdout: string, stderr: string) => {
+            const output = stdout + stderr;
+            const hasError = output.includes('✗ Error') || output.includes('timed out');
+
+            if (!error && !hasError) {
+              console.log(`✅ [Background Seed] "${repoName}" announced to seeds`);
+            } else if (output.includes('Nothing to announce')) {
+              console.log(`ℹ️ [Background Seed] "${repoName}" nothing to announce`);
+            } else if (hasError) {
+              console.warn(`⚠️ [Background Seed] "${repoName}" announce timed out (will retry)`);
+            } else {
+              console.warn(`⚠️ [Background Seed] "${repoName}" announce issue: ${output}`);
+            }
             resolve();
           });
-
-          child.stdin?.end();
-        });
-
-        // STEP 1: Run rad seed with --scope all --no-fetch (private beta simplification)
-        // --no-fetch: We're announcing, not fetching - skip slow network sync
-        // Trust model: link-based (only share links with trusted people)
-        await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all', '--no-fetch'], {
-            cwd: dreamNodePath,
-            stdio: ['pipe', 'pipe', 'pipe']
-          });
-
-          let stdout = '';
-          let stderr = '';
-
-          child.stdout?.on('data', (data: any) => {
-            stdout += data.toString();
-          });
-
-          child.stderr?.on('data', (data: any) => {
-            stderr += data.toString();
-          });
-
-          child.on('close', (code: number | null) => {
-            const output = stdout + stderr;
-            console.log(`[Background Seed] rad seed output:`, stdout);
-            if (stderr) console.log(`[Background Seed] rad seed stderr:`, stderr);
-
-            // Check for actual errors (not just non-zero exit)
-            const hasError = output.includes('✗ Error') || output.includes('Target not met') || output.includes('timed out');
-
-            if (code === 0 && !hasError) {
-              console.log(`✅ [Background Seed] Successfully seeded ${radicleId} (scope: all - private beta)`);
-            } else if (output.includes('Inventory updated') || output.includes('already seeding') || output.includes('Seeding policy')) {
-              // Partial success - seeding policy set but fetch may have failed
-              console.log(`ℹ️ [Background Seed] Seeding policy set for ${radicleId} (fetch skipped or timed out)`);
-            } else {
-              console.warn(`⚠️ [Background Seed] rad seed issue for ${radicleId}: ${hasError ? 'network timeout' : `code ${code}`}`);
-            }
-            resolve(); // Always resolve, never fail
-          });
-
-          child.on('error', (error: Error) => {
-            console.warn(`⚠️ [Background Seed] rad seed error (non-critical):`, error);
-            resolve(); // Always resolve, never fail
-          });
-
-          child.stdin?.end();
-        });
-
-        // STEP 2: SEED-RELAYED MODE - Announce to network seeds
-        // This is CRITICAL for peers to discover and clone the repo via seeds
-        console.log(`🌐 [Background Seed] Announcing ${radicleId} to network seeds (rad sync --announce)...`);
-        await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['sync', '--announce'], {
-            cwd: dreamNodePath,
-            stdio: ['pipe', 'pipe', 'pipe']
-          });
-
-          let stdout = '';
-          let stderr = '';
-
-          child.stdout?.on('data', (data: any) => {
-            stdout += data.toString();
-          });
-
-          child.stderr?.on('data', (data: any) => {
-            stderr += data.toString();
-          });
-
-          child.on('close', (code: number | null) => {
-            const output = stdout + stderr;
-            console.log(`[Background Seed] rad sync --announce output:`, stdout);
-            if (stderr) console.log(`[Background Seed] rad sync --announce stderr:`, stderr);
-
-            // Check for actual errors
-            const hasError = output.includes('✗ Error') || output.includes('timed out') || output.includes('All seeds timed out');
-            const alreadySynced = output.includes('Nothing to announce') || output.includes('already in sync');
-
-            if (code === 0 && !hasError) {
-              console.log(`✅ [Background Seed] Successfully announced ${radicleId} to network seeds`);
-            } else if (alreadySynced) {
-              console.log(`ℹ️ [Background Seed] ${radicleId} already synced with seeds`);
-            } else if (output.includes('No seeds found')) {
-              console.warn(`⚠️ [Background Seed] No seeds found for ${radicleId} - repo may not be discoverable yet`);
-            } else if (hasError) {
-              console.warn(`⚠️ [Background Seed] Announce timed out for ${radicleId} (will retry on next sync)`);
-            } else {
-              console.warn(`⚠️ [Background Seed] rad sync --announce exited with code ${code} (non-critical)`);
-            }
-            resolve(); // Always resolve, never fail
-          });
-
-          child.on('error', (error: Error) => {
-            console.warn(`⚠️ [Background Seed] rad sync --announce error (non-critical):`, error);
-            resolve(); // Always resolve, never fail
-          });
-
-          child.stdin?.end();
         });
 
       } catch (error) {
-        console.warn(`⚠️ [Background Seed] Failed to seed ${radicleId} (non-critical):`, error);
+        console.warn(`⚠️ [Background Seed] Failed for ${radicleId} (non-critical):`, error);
       }
     })();
   }

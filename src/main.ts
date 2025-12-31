@@ -994,6 +994,21 @@ export default class InterBrainPlugin extends Plugin {
         (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
         // Note: Not awaiting - let it run in background while plugin reloads
 
+        // Ensure all DreamNodes are indexed for semantic search
+        // Fast idempotent check: ~1ms per already-indexed node, only indexes missing nodes
+        console.log(`[Refresh] Ensuring all nodes are indexed...`);
+        try {
+          const { indexingService } = await import('./features/semantic-search/services/indexing-service');
+          const indexResult = await indexingService.ensureAllIndexed();
+          if (indexResult.indexed > 0) {
+            console.log(`[Refresh] Indexed ${indexResult.indexed} new nodes (${indexResult.skipped} already indexed)`);
+          } else {
+            console.log(`[Refresh] All ${indexResult.skipped} nodes already indexed`);
+          }
+        } catch (error) {
+          console.warn(`[Refresh] Indexing check failed (non-critical):`, error);
+        }
+
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs
         console.log(`[Refresh] Triggering lightweight plugin reload...`);
