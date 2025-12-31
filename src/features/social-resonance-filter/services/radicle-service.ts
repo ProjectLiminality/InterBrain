@@ -1360,10 +1360,11 @@ export class RadicleServiceImpl implements RadicleService {
           child.stdin?.end();
         });
 
-        // STEP 1: Run rad seed with --scope all (private beta simplification)
+        // STEP 1: Run rad seed with --scope all --no-fetch (private beta simplification)
+        // --no-fetch: We're announcing, not fetching - skip slow network sync
         // Trust model: link-based (only share links with trusted people)
         await new Promise<void>((resolve) => {
-          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all'], {
+          const child = spawn(radCmd, ['seed', radicleId, '--scope', 'all', '--no-fetch'], {
             cwd: dreamNodePath,
             stdio: ['pipe', 'pipe', 'pipe']
           });
@@ -1380,13 +1381,20 @@ export class RadicleServiceImpl implements RadicleService {
           });
 
           child.on('close', (code: number | null) => {
+            const output = stdout + stderr;
             console.log(`[Background Seed] rad seed output:`, stdout);
             if (stderr) console.log(`[Background Seed] rad seed stderr:`, stderr);
 
-            if (code === 0 || stdout.includes('Inventory updated') || stdout.includes('already seeding')) {
+            // Check for actual errors (not just non-zero exit)
+            const hasError = output.includes('✗ Error') || output.includes('Target not met') || output.includes('timed out');
+
+            if (code === 0 && !hasError) {
               console.log(`✅ [Background Seed] Successfully seeded ${radicleId} (scope: all - private beta)`);
+            } else if (output.includes('Inventory updated') || output.includes('already seeding') || output.includes('Seeding policy')) {
+              // Partial success - seeding policy set but fetch may have failed
+              console.log(`ℹ️ [Background Seed] Seeding policy set for ${radicleId} (fetch skipped or timed out)`);
             } else {
-              console.warn(`⚠️ [Background Seed] rad seed exited with code ${code} (non-critical)`);
+              console.warn(`⚠️ [Background Seed] rad seed issue for ${radicleId}: ${hasError ? 'network timeout' : `code ${code}`}`);
             }
             resolve(); // Always resolve, never fail
           });
@@ -1420,13 +1428,22 @@ export class RadicleServiceImpl implements RadicleService {
           });
 
           child.on('close', (code: number | null) => {
+            const output = stdout + stderr;
             console.log(`[Background Seed] rad sync --announce output:`, stdout);
             if (stderr) console.log(`[Background Seed] rad sync --announce stderr:`, stderr);
 
-            if (code === 0) {
+            // Check for actual errors
+            const hasError = output.includes('✗ Error') || output.includes('timed out') || output.includes('All seeds timed out');
+            const alreadySynced = output.includes('Nothing to announce') || output.includes('already in sync');
+
+            if (code === 0 && !hasError) {
               console.log(`✅ [Background Seed] Successfully announced ${radicleId} to network seeds`);
-            } else if (stdout.includes('No seeds found') || stderr.includes('No seeds found')) {
+            } else if (alreadySynced) {
+              console.log(`ℹ️ [Background Seed] ${radicleId} already synced with seeds`);
+            } else if (output.includes('No seeds found')) {
               console.warn(`⚠️ [Background Seed] No seeds found for ${radicleId} - repo may not be discoverable yet`);
+            } else if (hasError) {
+              console.warn(`⚠️ [Background Seed] Announce timed out for ${radicleId} (will retry on next sync)`);
             } else {
               console.warn(`⚠️ [Background Seed] rad sync --announce exited with code ${code} (non-critical)`);
             }

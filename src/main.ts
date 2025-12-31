@@ -988,6 +988,12 @@ export default class InterBrainPlugin extends Plugin {
         await (this.app as any).commands.executeCommandById('interbrain:clean-dangling-relationships');
         console.log(`[Refresh] Dangling relationship cleanup complete`);
 
+        // Sync Radicle peer following (seeds all Dreamer-related Dream nodes to network)
+        // Fire-and-forget: runs in background, doesn't block refresh
+        console.log(`[Refresh] Triggering Radicle peer sync (background)...`);
+        (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+        // Note: Not awaiting - let it run in background while plugin reloads
+
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs
         console.log(`[Refresh] Triggering lightweight plugin reload...`);

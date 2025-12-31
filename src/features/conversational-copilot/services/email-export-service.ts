@@ -31,7 +31,7 @@ export class EmailExportService {
 	 */
 	private isMacOS(): boolean {
 		// eslint-disable-next-line no-undef
-		return process.platform === 'darwin';
+		return false; // TESTING: Force modal for testing, revert to: process.platform === 'darwin'
 	}
 
 	/**

@@ -399,6 +399,47 @@ export class PeerSyncService {
 
     await Promise.all(reconcileOps);
 
+    // BACKGROUND SEEDING: Seed ALL Dream nodes related to ANY Dreamer
+    // This ensures nodes are available even when Dreamer has no DID (e.g., historical figures)
+    // Seeding is idempotent - safe to run on already-public repos
+    const allDreamers = Array.from(nodeDataMap.values()).filter(d => d.type === 'dreamer');
+    const dreamerRelatedUuids = new Set<string>();
+
+    for (const dreamer of allDreamers) {
+      for (const relatedUuid of dreamer.relationships) {
+        const relatedData = nodeDataMap.get(relatedUuid);
+        // Only seed Dream nodes (not other Dreamers)
+        if (relatedData && relatedData.type === 'dream') {
+          dreamerRelatedUuids.add(relatedUuid);
+        }
+      }
+    }
+
+    // Fire-and-forget seeding for all dreamer-related Dream nodes (PARALLEL)
+    // Each seedInBackground is already fire-and-forget, so we just need to get Radicle IDs in parallel
+    const seedingPromises = Array.from(dreamerRelatedUuids).map(async (uuid) => {
+      const data = nodeDataMap.get(uuid);
+      if (!data) return false;
+
+      try {
+        const radicleId = await this.radicleService.getRadicleId(data.dirPath, passphrase);
+        if (radicleId) {
+          this.radicleService.seedInBackground(data.dirPath, radicleId);
+          return true;
+        }
+      } catch {
+        // Non-critical: continue with other nodes
+      }
+      return false;
+    });
+
+    const seedingResults = await Promise.all(seedingPromises);
+    const seedingTriggered = seedingResults.filter(Boolean).length;
+
+    if (seedingTriggered > 0) {
+      console.log(`🌐 [PeerSync] Triggered background seeding for ${seedingTriggered} Dream node(s) related to Dreamers`);
+    }
+
     // Build summary
     let summary: string;
     if (totalRelationships === 0) {

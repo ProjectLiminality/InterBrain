@@ -1411,6 +1411,47 @@ export class GitDreamNodeService {
     if (updateTasks.length > 0) {
       await Promise.all(updateTasks);
     }
+
+    // RADICLE SEEDING: If either node is a Dreamer, seed both nodes to the network
+    // This ensures DreamNodes are available for sharing when related to peers
+    // Seeding is idempotent (safe to run multiple times)
+    if (node.type === 'dreamer' || relatedNode.type === 'dreamer') {
+      this.triggerBackgroundSeeding(node, relatedNode);
+    }
+  }
+
+  /**
+   * Trigger background seeding for nodes involved in a peer relationship
+   * Fire-and-forget: doesn't block the relationship creation
+   */
+  private triggerBackgroundSeeding(node: DreamNode, relatedNode: DreamNode): void {
+    // Fire-and-forget async operation
+    (async () => {
+      try {
+        const radicleService = serviceManager.getRadicleService();
+        if (!await radicleService.isAvailable()) {
+          return; // Radicle not available, skip silently
+        }
+
+        // Seed both nodes if they have Radicle IDs
+        const nodesToSeed = [node, relatedNode];
+
+        for (const n of nodesToSeed) {
+          if (!n.repoPath) continue;
+
+          const absolutePath = path.join(this.vaultPath, n.repoPath);
+          const radicleId = await radicleService.getRadicleId(absolutePath);
+
+          if (radicleId) {
+            console.log(`🌐 [AddRelationship] Triggering background seeding for "${n.name}" (${radicleId})`);
+            radicleService.seedInBackground(absolutePath, radicleId);
+          }
+        }
+      } catch (error) {
+        // Non-critical: don't fail the relationship creation
+        console.warn(`⚠️ [AddRelationship] Background seeding failed (non-critical):`, error);
+      }
+    })();
   }
 
   /**
