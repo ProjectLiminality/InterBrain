@@ -10,7 +10,7 @@
 # CI mode (non-interactive):
 #   .\install.ps1 -CI
 #
-# Note: Radicle requires WSL on Windows. This script will set up WSL if needed.
+# Note: Full Radicle P2P support on Windows is in development by the Radicle team.
 
 param(
     [switch]$CI,
@@ -27,7 +27,7 @@ if ($env:INTERBRAIN_BRANCH) {
 $ErrorActionPreference = "Stop"
 
 # Total steps
-$TOTAL_STEPS = 12
+$TOTAL_STEPS = 11
 
 # Log file
 $LOG_FILE = Join-Path $env:TEMP "interbrain-install-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
@@ -97,6 +97,103 @@ function Refresh-Path {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+# Windows tracking issue number
+$WINDOWS_TRACKING_ISSUE = 363
+
+# Function to sanitize log (remove sensitive data)
+function Get-SanitizedLog {
+    $content = Get-Content -Path $LOG_FILE -Raw -ErrorAction SilentlyContinue
+    if (-not $content) { return "" }
+
+    # Sanitize sensitive info
+    $content = $content -replace [regex]::Escape($env:USERPROFILE), "~"
+    $content = $content -replace [regex]::Escape($env:USERNAME), "<USER>"
+    $content = $content -replace '(api[_-]?key|token|secret|password|passphrase)[:=]\s*\S+', '$1=<REDACTED>'
+    return $content
+}
+
+# Function to report error to GitHub tracking issue
+function Report-ToGitHub {
+    if (-not (Test-Command "gh")) {
+        Write-Warning "GitHub CLI not installed - cannot report automatically"
+        Write-Info "Report manually at: https://github.com/ProjectLiminality/InterBrain/issues/$WINDOWS_TRACKING_ISSUE"
+        return
+    }
+
+    # Check if authenticated
+    $authStatus = gh auth status 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "GitHub CLI not authenticated - cannot report automatically"
+        Write-Info "Authenticate with 'gh auth login' or report manually at:"
+        Write-Info "https://github.com/ProjectLiminality/InterBrain/issues/$WINDOWS_TRACKING_ISSUE"
+        return
+    }
+
+    Write-Info "Adding error report to Windows tracking issue (#$WINDOWS_TRACKING_ISSUE)..."
+
+    $sanitizedLog = Get-SanitizedLog
+    $commentBody = @"
+## Installation Error Report
+
+**Generated**: $(Get-Date)
+**OS**: $([System.Environment]::OSVersion.VersionString)
+**PowerShell**: $($PSVersionTable.PSVersion)
+
+---
+
+### Installation Log
+
+``````
+$sanitizedLog
+``````
+
+---
+
+*Automatically reported by install script*
+"@
+
+    gh issue comment $WINDOWS_TRACKING_ISSUE --repo ProjectLiminality/InterBrain --body $commentBody
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "Error report added to tracking issue!"
+        Write-Info "Opening the issue in your browser..."
+        Start-Process "https://github.com/ProjectLiminality/InterBrain/issues/$WINDOWS_TRACKING_ISSUE"
+        Write-Info "Check the 'Known Solutions' section at the top of the issue."
+    } else {
+        Write-Error "Failed to add comment to tracking issue"
+        Write-Info "Report manually at: https://github.com/ProjectLiminality/InterBrain/issues/$WINDOWS_TRACKING_ISSUE"
+    }
+}
+
+# Error handler
+function Handle-InstallError {
+    param([string]$Step, [string]$ErrorMessage)
+
+    Write-Host ""
+    Write-Host ("=" * 50) -ForegroundColor Red
+    Write-Error "Installation failed at: $Step"
+    Write-Host ("=" * 50) -ForegroundColor Red
+    Write-Host ""
+    Write-Info "Installation log saved to: $LOG_FILE"
+    Write-Host ""
+    Write-Info "You can safely rerun this script - it won't destroy existing data"
+    Write-Host ""
+
+    if (-not $CI) {
+        Write-Host "Would you like to report this issue?" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  1) Report to GitHub (adds to tracking issue + opens browser)"
+        Write-Host "  2) Just show me the log location"
+        Write-Host ""
+        $choice = Read-Host "Choose [1/2]"
+
+        switch ($choice) {
+            "1" { Report-ToGitHub }
+            default { Write-Info "Log: $LOG_FILE" }
+        }
+    }
+}
+
 # Start logging
 Add-Content -Path $LOG_FILE -Value "=== InterBrain Windows Installation Log ==="
 Add-Content -Path $LOG_FILE -Value "Date: $(Get-Date)"
@@ -120,9 +217,12 @@ if ($CI) {
 }
 
 # ============================================================
-# Step 1: Check prerequisites
+# Step 1: GitHub CLI setup (enables error reporting)
 # ============================================================
-Write-Step -Step 1 -Message "Checking prerequisites"
+Write-Step -Step 1 -Message "GitHub CLI setup (enables error reporting)"
+
+Write-Info "Setting up GitHub CLI first so errors can be automatically reported."
+Write-Host ""
 
 # Check for winget or chocolatey
 $HasWinget = Test-Command "winget"
@@ -144,11 +244,75 @@ if (-not $HasWinget -and -not $HasChoco) {
     Write-Info "If winget is not working, install App Installer from Microsoft Store"
 }
 
+# Check for GitHub CLI
+if (-not (Test-Command "gh")) {
+    Write-Warning "GitHub CLI not found. Installing..."
+    if (-not (Install-WithWinget "GitHub.cli" "GitHub CLI")) {
+        if (-not (Install-WithChoco "gh" "GitHub CLI")) {
+            Write-Error "Failed to install GitHub CLI. Please install manually from https://cli.github.com"
+            exit 1
+        }
+    }
+    Refresh-Path
+    Write-Success "GitHub CLI installed"
+} else {
+    Write-Success "GitHub CLI found ($(gh --version | Select-Object -First 1))"
+}
+
+# Authenticate GitHub CLI (enables error reporting)
+if (Test-Command "gh") {
+    $authStatus = gh auth status 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "GitHub CLI already authenticated"
+        try {
+            $ghUser = gh api user -q .login 2>$null
+            Write-Info "Logged in as: $ghUser"
+        } catch { }
+    } else {
+        Write-Host ""
+        Write-Info "GitHub authentication enables:"
+        Write-Info "  - Automatic error reporting if installation fails"
+        Write-Info "  - Collaborative DreamNode sharing"
+        Write-Info "  - Version control and backups"
+        Write-Host ""
+
+        if ($CI) {
+            Write-Info "CI mode: Skipping GitHub authentication"
+        } else {
+            $authChoice = Read-Host "Authenticate GitHub now? [Y/n]"
+            if ($authChoice -eq "" -or $authChoice -match "^[Yy]") {
+                gh auth login -h github.com -p https -w
+                $authStatus = gh auth status 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "GitHub authenticated"
+                    try {
+                        $ghUser = gh api user -q .login 2>$null
+                        Write-Info "Logged in as: $ghUser"
+                    } catch { }
+                } else {
+                    Write-Warning "Authentication incomplete - you can complete it later with: gh auth login"
+                }
+            } else {
+                Write-Info "Skipping - you can authenticate later with: gh auth login"
+            }
+        }
+    }
+}
+
+Write-Success "Error reporting is now available for subsequent steps"
+Write-Host ""
+
+# ============================================================
+# Step 2: Installing other prerequisites
+# ============================================================
+Write-Step -Step 2 -Message "Installing other prerequisites"
+
 # Check for Git
 if (-not (Test-Command "git")) {
     Write-Warning "Git not found. Installing..."
     if (-not (Install-WithWinget "Git.Git" "Git")) {
         if (-not (Install-WithChoco "git" "Git")) {
+            Handle-InstallError -Step "Git installation" -ErrorMessage "Failed to install Git"
             Write-Error "Failed to install Git. Please install manually from https://git-scm.com"
             exit 1
         }
@@ -164,6 +328,7 @@ if (-not (Test-Command "node")) {
     Write-Warning "Node.js not found. Installing..."
     if (-not (Install-WithWinget "OpenJS.NodeJS.LTS" "Node.js")) {
         if (-not (Install-WithChoco "nodejs-lts" "Node.js")) {
+            Handle-InstallError -Step "Node.js installation" -ErrorMessage "Failed to install Node.js"
             Write-Error "Failed to install Node.js. Please install manually from https://nodejs.org"
             exit 1
         }
@@ -182,25 +347,10 @@ if (-not (Test-Command "node")) {
     Write-Success "Node.js found ($(node --version))"
 }
 
-# Check for GitHub CLI
-if (-not (Test-Command "gh")) {
-    Write-Warning "GitHub CLI not found. Installing..."
-    if (-not (Install-WithWinget "GitHub.cli" "GitHub CLI")) {
-        if (-not (Install-WithChoco "gh" "GitHub CLI")) {
-            Write-Error "Failed to install GitHub CLI. Please install manually from https://cli.github.com"
-            exit 1
-        }
-    }
-    Refresh-Path
-    Write-Success "GitHub CLI installed"
-} else {
-    Write-Success "GitHub CLI found ($(gh --version | Select-Object -First 1))"
-}
-
 # ============================================================
 # Step 2: Check for Obsidian
 # ============================================================
-Write-Step -Step 2 -Message "Checking for Obsidian"
+Write-Step -Step 3 -Message "Checking for Obsidian"
 
 $ObsidianPath = Join-Path $env:LOCALAPPDATA "Obsidian\Obsidian.exe"
 if (Test-Path $ObsidianPath) {
@@ -226,7 +376,7 @@ if (Test-Path $ObsidianPath) {
 # ============================================================
 # Step 3: Set up vault
 # ============================================================
-Write-Step -Step 3 -Message "Setting up vault"
+Write-Step -Step 4 -Message "Setting up vault"
 
 if (-not $CI) {
     Write-Info "InterBrain works best in a dedicated vault (not mixed with regular notes)"
@@ -268,7 +418,7 @@ New-Item -ItemType Directory -Path $ObsidianDir -Force | Out-Null
 # ============================================================
 # Step 4: Clone InterBrain
 # ============================================================
-Write-Step -Step 4 -Message "Cloning InterBrain"
+Write-Step -Step 5 -Message "Cloning InterBrain"
 
 $InterBrainPath = Join-Path $VaultPath "InterBrain"
 
@@ -303,7 +453,7 @@ Write-Success "InterBrain code ready at: $InterBrainPath"
 # ============================================================
 # Step 5: Build plugin
 # ============================================================
-Write-Step -Step 5 -Message "Building plugin"
+Write-Step -Step 6 -Message "Building plugin"
 
 Set-Location $InterBrainPath
 
@@ -349,7 +499,7 @@ Write-Success "Plugin built successfully"
 # ============================================================
 # Step 6: Install theme
 # ============================================================
-Write-Step -Step 6 -Message "Installing InterBrain theme"
+Write-Step -Step 7 -Message "Installing InterBrain theme"
 
 $SnippetsDir = Join-Path $VaultPath ".obsidian\snippets"
 New-Item -ItemType Directory -Path $SnippetsDir -Force | Out-Null
@@ -376,7 +526,7 @@ Write-Success "Theme configuration created"
 # ============================================================
 # Step 7: Install Ollama
 # ============================================================
-Write-Step -Step 7 -Message "Installing Ollama for semantic search"
+Write-Step -Step 8 -Message "Installing Ollama for semantic search"
 
 if (-not (Test-Command "ollama")) {
     Write-Info "Installing Ollama..."
@@ -391,22 +541,73 @@ if (-not (Test-Command "ollama")) {
     Write-Success "Ollama found"
 }
 
-# Pull embedding model if Ollama is available
+# Pull embedding model if Ollama is available (with timeout/skip option)
 if (Test-Command "ollama") {
     $OllamaList = ollama list 2>$null
     if ($OllamaList -match "nomic-embed-text") {
         Write-Success "nomic-embed-text model already installed"
     } else {
-        Write-Info "Downloading nomic-embed-text model (this may take 1-2 minutes)..."
-        ollama pull nomic-embed-text 2>$null
-        Write-Success "nomic-embed-text model installed"
+        Write-Info "Downloading nomic-embed-text model..."
+        Write-Info "This may take 1-2 minutes depending on your connection."
+        Write-Host ""
+
+        # Start download in background job
+        $Job = Start-Job -ScriptBlock { ollama pull nomic-embed-text 2>$null }
+
+        # Timeout after 2 minutes
+        $Timeout = 120
+        $Elapsed = 0
+
+        while ($Job.State -eq "Running") {
+            if ($Elapsed -ge $Timeout) {
+                Write-Host ""
+                Write-Warning "Download is taking longer than expected."
+                Write-Host ""
+
+                if (-not $CI) {
+                    Write-Host "What would you like to do?"
+                    Write-Host "  1) Keep waiting"
+                    Write-Host "  2) Skip for now (you can download later in InterBrain settings)"
+                    $OllamaChoice = Read-Host "Choose [1/2]"
+
+                    if ($OllamaChoice -eq "2") {
+                        Stop-Job -Job $Job
+                        Remove-Job -Job $Job -Force
+                        Write-Warning "Skipped Ollama model download"
+                        Write-Info "You can download it later via InterBrain settings or run:"
+                        Write-Info "  ollama pull nomic-embed-text"
+                        break
+                    } else {
+                        # Reset timeout and continue waiting
+                        $Elapsed = 0
+                        Write-Info "Continuing to wait..."
+                    }
+                } else {
+                    # CI mode, just keep waiting
+                    $Elapsed = 0
+                }
+            }
+            Start-Sleep -Seconds 1
+            $Elapsed++
+            # Show progress dots every 10 seconds
+            if ($Elapsed % 10 -eq 0) {
+                Write-Host "." -NoNewline
+            }
+        }
+
+        # Clean up job
+        if ($Job.State -eq "Completed") {
+            Remove-Job -Job $Job
+            Write-Host ""
+            Write-Success "nomic-embed-text model installed"
+        }
     }
 }
 
 # ============================================================
 # Step 8: Link plugin to vault
 # ============================================================
-Write-Step -Step 8 -Message "Linking plugin to vault"
+Write-Step -Step 9 -Message "Linking plugin to vault"
 
 $PluginsDir = Join-Path $VaultPath ".obsidian\plugins"
 New-Item -ItemType Directory -Path $PluginsDir -Force | Out-Null
@@ -434,294 +635,13 @@ if ($LASTEXITCODE -eq 0) {
 Set-Content -Path (Join-Path $VaultPath ".obsidian\community-plugins.json") -Value '["interbrain"]'
 
 # ============================================================
-# Step 9: GitHub authentication
+# Step 10: Python setup for transcription
 # ============================================================
-Write-Step -Step 9 -Message "GitHub authentication"
+Write-Step -Step 10 -Message "Python setup for transcription"
 
-$GhAuthStatus = gh auth status 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Success "GitHub CLI already authenticated"
-    $GhUser = gh api user -q .login 2>$null
-    Write-Info "Logged in as: $GhUser"
-} else {
-    Write-Warning "GitHub CLI not authenticated"
-    if (-not $CI) {
-        Write-Info "InterBrain uses GitHub for collaborative DreamNode sharing."
-        $AuthChoice = Read-Host "Authenticate now? [Y/n]"
-        if ($AuthChoice -ne "n" -and $AuthChoice -ne "N") {
-            gh auth login -h github.com -p https -w
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "GitHub authenticated"
-            } else {
-                Write-Warning "Authentication incomplete. Run 'gh auth login' later."
-            }
-        } else {
-            Write-Info "Skipping. Run 'gh auth login' later."
-        }
-    } else {
-        Write-Info "CI mode: Skipping GitHub authentication"
-    }
-}
-
-# ============================================================
-# Step 10: Radicle setup (WSL + Radicle installation)
-# ============================================================
-Write-Step -Step 10 -Message "Radicle P2P setup (WSL + Radicle)"
-
-# Track if we need a reboot for WSL
-$NeedsReboot = $false
-$RadicleReady = $false
-
-# Check if WSL is installed and has a distribution
-function Test-WslReady {
-    try {
-        $distros = wsl -l -q 2>$null
-        if ($LASTEXITCODE -eq 0 -and $distros) {
-            return $true
-        }
-    } catch {}
-    return $false
-}
-
-# Check if Radicle is installed in WSL
-function Test-RadicleInWsl {
-    try {
-        $result = wsl bash -c "command -v rad" 2>$null
-        return ($LASTEXITCODE -eq 0 -and $result)
-    } catch {}
-    return $false
-}
-
-# Check if Radicle identity exists in WSL
-function Test-RadicleIdentity {
-    try {
-        $result = wsl bash -c "rad self 2>/dev/null" 2>$null
-        return ($LASTEXITCODE -eq 0)
-    } catch {}
-    return $false
-}
-
-if (Test-WslReady) {
-    Write-Success "WSL is installed with a Linux distribution"
-
-    # Check if Radicle is already installed
-    if (Test-RadicleInWsl) {
-        Write-Success "Radicle is installed in WSL"
-
-        if (Test-RadicleIdentity) {
-            Write-Success "Radicle identity exists"
-            $RadicleReady = $true
-        } else {
-            Write-Warning "Radicle installed but no identity created"
-            if (-not $CI) {
-                Write-Info "Creating Radicle identity..."
-                Write-Info "You'll be prompted to set a passphrase for your Radicle key."
-                wsl bash -c "rad auth"
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Success "Radicle identity created"
-                    $RadicleReady = $true
-                } else {
-                    Write-Warning "Failed to create identity. Run 'wsl rad auth' later."
-                }
-            } else {
-                Write-Info "CI mode: Skipping Radicle identity creation"
-            }
-        }
-    } else {
-        Write-Info "Installing Radicle in WSL..."
-
-        # Install Radicle using the official installer
-        $RadicleInstallScript = @'
-#!/bin/bash
-set -e
-
-# Install Radicle via official installer
-curl -sSf https://radicle.xyz/install | sh
-
-# Add to PATH for current session
-export PATH="$HOME/.radicle/bin:$PATH"
-
-# Add to .bashrc for future sessions
-if ! grep -q 'radicle/bin' ~/.bashrc 2>/dev/null; then
-    echo 'export PATH="$HOME/.radicle/bin:$PATH"' >> ~/.bashrc
-fi
-
-# Verify installation
-rad --version
-'@
-
-        $RadicleInstallScript | wsl bash
-
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "Radicle installed in WSL"
-
-            # Create identity if not in CI mode
-            if (-not $CI) {
-                Write-Info "Creating Radicle identity..."
-                wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad auth'
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Success "Radicle identity created"
-                    $RadicleReady = $true
-                }
-            }
-        } else {
-            Write-Warning "Radicle installation failed. You can install manually later:"
-            Write-Info "  wsl bash -c 'curl -sSf https://radicle.xyz/install | sh'"
-        }
-    }
-} else {
-    # WSL not installed - need to install it
-    Write-Warning "WSL not installed. Installing WSL with Ubuntu..."
-
-    if ($CI) {
-        Write-Info "CI mode: Skipping WSL installation (requires reboot)"
-        Write-Info "In production, WSL would be installed here."
-    } else {
-        # Check if we're running as admin (required for WSL install)
-        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
-        if (-not $isAdmin) {
-            Write-Warning "WSL installation requires administrator privileges."
-            Write-Info "Please run this script as Administrator, or install WSL manually:"
-            Write-Info "  1. Open PowerShell as Administrator"
-            Write-Info "  2. Run: wsl --install"
-            Write-Info "  3. Restart your computer"
-            Write-Info "  4. Run this installer again"
-        } else {
-            Write-Info "Installing WSL (this may take a few minutes)..."
-            wsl --install --no-launch -d Ubuntu
-
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "WSL installed successfully"
-                $NeedsReboot = $true
-                Write-Warning "A system restart is required to complete WSL setup."
-                Write-Info "After restarting, run this installer again to complete Radicle setup."
-            } else {
-                Write-Error "WSL installation failed"
-                Write-Info "Try installing manually: wsl --install"
-            }
-        }
-    }
-}
-
-# Configure WSL networking for Radicle communication
-if (Test-WslReady -and -not $NeedsReboot) {
-    Write-Info "Configuring WSL networking for Radicle..."
-
-    # Check Windows version for mirrored networking support
-    $WinVersion = [System.Environment]::OSVersion.Version
-    $WslConfigPath = Join-Path $env:USERPROFILE ".wslconfig"
-
-    # Windows 11 22H2+ supports mirrored networking (build 22621+)
-    if ($WinVersion.Build -ge 22621) {
-        Write-Info "Windows 11 22H2+ detected - enabling mirrored networking"
-
-        # Create or update .wslconfig for mirrored networking
-        $WslConfig = @"
-[wsl2]
-networkingMode=mirrored
-"@
-
-        if (Test-Path $WslConfigPath) {
-            $existingConfig = Get-Content $WslConfigPath -Raw
-            if ($existingConfig -notmatch "networkingMode=mirrored") {
-                # Append mirrored networking if not present
-                if ($existingConfig -match "\[wsl2\]") {
-                    $existingConfig = $existingConfig -replace "(\[wsl2\])", "`$1`nnetworkingMode=mirrored"
-                } else {
-                    $existingConfig += "`n$WslConfig"
-                }
-                Set-Content -Path $WslConfigPath -Value $existingConfig
-                Write-Success "Updated .wslconfig with mirrored networking"
-                Write-Info "Run 'wsl --shutdown' and restart WSL for changes to take effect"
-            } else {
-                Write-Success "Mirrored networking already configured"
-            }
-        } else {
-            Set-Content -Path $WslConfigPath -Value $WslConfig
-            Write-Success "Created .wslconfig with mirrored networking"
-        }
-    } else {
-        Write-Info "Windows 10 or older Windows 11 detected - using port forwarding"
-        Write-Info "Radicle ports will be forwarded from WSL to Windows"
-
-        # Create a startup script for port forwarding
-        $PortForwardScript = @'
-# Radicle WSL Port Forwarding Script
-# This script forwards Radicle ports from WSL to Windows
-# Run this after each Windows restart if using Windows 10
-
-$wslIp = (wsl hostname -I).Trim().Split()[0]
-if ($wslIp) {
-    # Remove existing rules
-    netsh interface portproxy reset | Out-Null
-
-    # Forward Radicle P2P port (8776) and HTTP API port (8777)
-    netsh interface portproxy add v4tov4 listenport=8776 listenaddress=0.0.0.0 connectport=8776 connectaddress=$wslIp
-    netsh interface portproxy add v4tov4 listenport=8777 listenaddress=0.0.0.0 connectport=8777 connectaddress=$wslIp
-
-    Write-Host "Radicle ports forwarded to WSL ($wslIp)"
-} else {
-    Write-Host "Could not get WSL IP address. Is WSL running?"
-}
-'@
-
-        $ScriptsDir = Join-Path $env:USERPROFILE ".interbrain"
-        New-Item -ItemType Directory -Path $ScriptsDir -Force | Out-Null
-        $PortForwardScriptPath = Join-Path $ScriptsDir "forward-radicle-ports.ps1"
-        Set-Content -Path $PortForwardScriptPath -Value $PortForwardScript
-
-        Write-Success "Created port forwarding script: $PortForwardScriptPath"
-        Write-Info "Run this script after each Windows restart for Radicle connectivity"
-    }
-}
-
-# Create Windows wrapper for rad command
-if (Test-WslReady -and (Test-RadicleInWsl)) {
-    Write-Info "Creating Windows 'rad' command wrapper..."
-
-    $RadWrapper = @'
-@echo off
-REM Wrapper to run Radicle commands in WSL from Windows
-wsl bash -c "export PATH=\"\$HOME/.radicle/bin:\$PATH\" && rad %*"
-'@
-
-    # Create wrapper in a directory that's in PATH
-    $WrapperDir = Join-Path $env:USERPROFILE ".interbrain\bin"
-    New-Item -ItemType Directory -Path $WrapperDir -Force | Out-Null
-    $WrapperPath = Join-Path $WrapperDir "rad.cmd"
-    Set-Content -Path $WrapperPath -Value $RadWrapper
-
-    # Add to user PATH if not already there
-    $UserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-    if ($UserPath -notlike "*$WrapperDir*") {
-        [System.Environment]::SetEnvironmentVariable("Path", "$UserPath;$WrapperDir", "User")
-        $env:Path = "$env:Path;$WrapperDir"
-        Write-Success "Added rad wrapper to PATH"
-    }
-
-    Write-Success "Created Windows 'rad' command wrapper"
-    Write-Info "You can now run 'rad' commands directly from PowerShell/CMD"
-}
-
-# Summary
-if ($RadicleReady) {
-    Write-Success "Radicle P2P is fully configured!"
-    $radSelf = wsl bash -c 'export PATH="$HOME/.radicle/bin:$PATH" && rad self 2>/dev/null | head -3'
-    Write-Info "Your Radicle identity:"
-    Write-Host $radSelf
-} elseif ($NeedsReboot) {
-    Write-Warning "Restart required to complete Radicle setup"
-    Write-Info "After restart, run this installer again"
-} else {
-    Write-Warning "Radicle setup incomplete"
-    Write-Info "Run 'wsl rad auth' to create your Radicle identity"
-}
-
-# ============================================================
-# Step 11: Python setup for transcription
-# ============================================================
-Write-Step -Step 11 -Message "Python setup for transcription"
+Write-Info "Note: Full Radicle P2P support on Windows is in development by the Radicle team."
+Write-Info "GitHub-based sharing is available now. P2P sharing will be enabled once Radicle has full Windows support."
+Write-Host ""
 
 if (-not (Test-Command "python")) {
     Write-Warning "Python not found. Installing..."
@@ -764,7 +684,7 @@ if (Test-Path $TranscriptionDir) {
 # ============================================================
 # Step 12: Final verification and summary
 # ============================================================
-Write-Step -Step 12 -Message "Final verification"
+Write-Step -Step 11 -Message "Final verification"
 
 $AllGood = $true
 

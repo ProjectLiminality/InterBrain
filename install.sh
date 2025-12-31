@@ -343,12 +343,17 @@ copy_to_clipboard() {
     fi
 }
 
-# Function to create GitHub issue
-create_github_issue() {
+# Tracking issue numbers for each platform
+MACOS_TRACKING_ISSUE=374
+LINUX_TRACKING_ISSUE=375
+
+# Function to report to GitHub (append comment to tracking issue)
+report_to_github() {
     if ! command_exists gh; then
         warning "GitHub CLI ('gh') not installed yet."
         echo ""
-        info "Install complete and this error will be reportable via GitHub CLI"
+        info "GitHub CLI enables automatic error reporting."
+        info "You can report manually at: https://github.com/ProjectLiminality/InterBrain/issues"
         echo ""
         copy_to_clipboard
         return
@@ -356,25 +361,31 @@ create_github_issue() {
 
     # Check if gh is authenticated
     if ! gh auth status >/dev/null 2>&1; then
-        warning "GitHub CLI not authenticated yet."
+        warning "GitHub CLI not authenticated."
         echo ""
-        info "Complete the installation and authenticate, then you can report issues directly"
+        info "Authenticate with 'gh auth login' to enable automatic reporting."
+        info "Or report manually at: https://github.com/ProjectLiminality/InterBrain/issues"
         echo ""
         copy_to_clipboard
         return
     fi
 
-    info "Creating GitHub issue with installation log..."
+    # Determine which tracking issue to use
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        TRACKING_ISSUE=$MACOS_TRACKING_ISSUE
+        PLATFORM="macOS"
+    else
+        TRACKING_ISSUE=$LINUX_TRACKING_ISSUE
+        PLATFORM="Linux"
+    fi
+
+    info "Adding error report to $PLATFORM tracking issue (#$TRACKING_ISSUE)..."
 
     # Sanitize log (remove sensitive data)
     SANITIZED_LOG=$(sanitize_log)
 
-    gh issue create \
-        --repo ProjectLiminality/InterBrain \
-        --title "Install failed on $(uname -s) $(uname -r)" \
-        --label "installation,bug" \
-        --body "$(cat <<EOF
-## Installation Error Report
+    # Add comment to tracking issue
+    COMMENT_BODY="## Installation Error Report
 
 **Generated**: $(date)
 **OS**: $(uname -s) $(uname -r)
@@ -383,7 +394,7 @@ create_github_issue() {
 
 ---
 
-## Installation Log
+### Installation Log
 
 \`\`\`bash
 $SANITIZED_LOG
@@ -391,16 +402,28 @@ $SANITIZED_LOG
 
 ---
 
-**Note**: Sensitive information has been automatically sanitized from this log.
-EOF
-)"
+*Automatically reported by install script*"
 
-    if [ $? -eq 0 ]; then
-        success "GitHub issue created!"
+    if gh issue comment "$TRACKING_ISSUE" --repo ProjectLiminality/InterBrain --body "$COMMENT_BODY"; then
+        success "Error report added to tracking issue!"
         echo ""
-        info "Thank you for reporting this issue. We'll investigate and improve the installer."
+        info "Opening the issue in your browser so you can see solutions and other reports..."
+
+        # Open the issue in browser
+        ISSUE_URL="https://github.com/ProjectLiminality/InterBrain/issues/$TRACKING_ISSUE"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            open "$ISSUE_URL"
+        elif command_exists xdg-open; then
+            xdg-open "$ISSUE_URL"
+        else
+            info "Visit: $ISSUE_URL"
+        fi
+
+        echo ""
+        info "Check the 'Known Solutions' section at the top of the issue."
+        info "Your report helps us improve the installer for everyone!"
     else
-        error "Failed to create issue. Falling back to clipboard..."
+        error "Failed to add comment. Falling back to clipboard..."
         copy_to_clipboard
     fi
 }
@@ -425,7 +448,7 @@ handle_error() {
     if [ -t 0 ]; then
         echo "Would you like to report this issue?"
         echo ""
-        echo "  1) Create GitHub issue (if gh CLI is set up)"
+        echo "  1) Report to GitHub (adds to tracking issue + opens browser)"
         echo "  2) Copy log to clipboard"
         echo "  3) Just show me the log location"
         echo ""
@@ -433,7 +456,7 @@ handle_error() {
         echo ""
 
         case $choice in
-            1) create_github_issue ;;
+            1) report_to_github ;;
             2) copy_to_clipboard ;;
             3) echo ""; info "Log: $LOG_FILE" ;;
             *) echo ""; info "No option selected. Log: $LOG_FILE" ;;
@@ -501,10 +524,13 @@ refresh_shell_env() {
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 1/$TOTAL_STEPS: Checking prerequisites"
+echo "Step 1/$TOTAL_STEPS: GitHub CLI setup (enables error reporting)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Check for Homebrew (macOS)
+info "Setting up GitHub CLI first so errors can be automatically reported."
+echo ""
+
+# Check for Homebrew (macOS) - needed for gh installation
 if [[ "$OSTYPE" == "darwin"* ]]; then
     if ! command_exists brew; then
         warning "Homebrew not found."
@@ -611,6 +637,77 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     fi
 fi
 
+# Install GitHub CLI
+if ! command_exists gh; then
+    echo "Installing GitHub CLI..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        brew install gh
+        refresh_shell_env
+    else
+        # Linux installation
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update && sudo apt install gh -y
+    fi
+
+    # Verify it's accessible
+    if command_exists gh; then
+        success "GitHub CLI installed ($(gh --version | head -1))"
+    else
+        warning "GitHub CLI installed but not yet available in PATH"
+        info "It will be available after restarting your terminal"
+    fi
+else
+    success "GitHub CLI found ($(gh --version | head -1))"
+fi
+
+# Authenticate GitHub CLI (enables error reporting)
+if command_exists gh; then
+    if gh auth status >/dev/null 2>&1; then
+        success "GitHub CLI already authenticated"
+        GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
+        info "Logged in as: $GH_USER"
+    else
+        echo ""
+        info "GitHub authentication enables:"
+        info "  • Automatic error reporting if installation fails"
+        info "  • Collaborative DreamNode sharing"
+        info "  • Version control and backups"
+        echo ""
+
+        if [ "$SKIP_AUTH" = "true" ]; then
+            # CI mode - skip auth
+            info "CI mode: Skipping GitHub authentication"
+        elif [ -t 0 ]; then
+            # Interactive mode - offer authentication
+            read -p "Authenticate GitHub now? [Y/n]: " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+                gh auth login -h github.com -p https -w
+                if gh auth status >/dev/null 2>&1; then
+                    success "GitHub authenticated"
+                    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
+                    info "Logged in as: $GH_USER"
+                else
+                    warning "Authentication incomplete - you can complete it later with: gh auth login"
+                fi
+            else
+                info "Skipping - you can authenticate later with: gh auth login"
+            fi
+        else
+            info "Non-interactive mode: Skipping GitHub authentication"
+        fi
+    fi
+fi
+
+success "Error reporting is now available for subsequent steps"
+echo ""
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 2/$TOTAL_STEPS: Installing other prerequisites"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 # Check for Git
 if ! command_exists git; then
     echo "Installing Git..."
@@ -638,36 +735,6 @@ if ! command_exists node; then
     success "Node.js installed"
 else
     success "Node.js found ($(node --version))"
-fi
-
-# TEST: Simulate failure before GitHub CLI (no gh available for issue creation)
-if [ "$TEST_FAIL" = "before-gh" ]; then
-    error "TEST FAILURE: Simulating error before GitHub CLI installation"
-    false  # This triggers the ERR trap properly
-fi
-
-# Check for GitHub CLI
-if ! command_exists gh; then
-    echo "Installing GitHub CLI..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install gh
-        refresh_shell_env
-    else
-        # Linux installation
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-        sudo apt update && sudo apt install gh
-    fi
-
-    # Verify it's accessible
-    if command_exists gh; then
-        success "GitHub CLI installed ($(gh --version | head -1))"
-    else
-        warning "GitHub CLI installed but not yet available in PATH"
-        info "It will be available after restarting your terminal"
-    fi
-else
-    success "GitHub CLI found ($(gh --version | head -1))"
 fi
 
 # Check for Radicle
@@ -814,7 +881,7 @@ fi
 
 # Check for Obsidian
 echo ""
-echo "Step 2/$TOTAL_STEPS: Checking for Obsidian..."
+echo "Step 3/$TOTAL_STEPS: Checking for Obsidian..."
 echo "----------------------------------"
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -878,7 +945,7 @@ else
 fi
 
 echo ""
-echo "Step 3/$TOTAL_STEPS: Setting up vault..."
+echo "Step 4/$TOTAL_STEPS: Setting up vault..."
 echo "----------------------------"
 
 # Vault setup for InterBrain
@@ -954,7 +1021,7 @@ fi
 mkdir -p "$VAULT_PATH/.obsidian/plugins"
 
 echo ""
-echo "Step 4/$TOTAL_STEPS: Cloning InterBrain..."
+echo "Step 5/$TOTAL_STEPS: Cloning InterBrain..."
 echo "------------------------------"
 
 # Clone into vault
@@ -1074,7 +1141,7 @@ EOF
 success "Created theme configuration"
 
 echo ""
-echo "Step 5/$TOTAL_STEPS: Building plugin..."
+echo "Step 6/$TOTAL_STEPS: Building plugin..."
 echo "--------------------------"
 
 cd "$INTERBRAIN_PATH"
@@ -1092,7 +1159,7 @@ wait $!
 success "Plugin built successfully"
 
 echo ""
-echo "Step 6/$TOTAL_STEPS: Installing InterBrain theme..."
+echo "Step 7/$TOTAL_STEPS: Installing InterBrain theme..."
 echo "---------------------------------------"
 
 # Copy theme CSS to snippets directory
@@ -1104,7 +1171,7 @@ else
 fi
 
 echo ""
-echo "Step 7/$TOTAL_STEPS: Installing Ollama for semantic search..."
+echo "Step 8/$TOTAL_STEPS: Installing Ollama for semantic search..."
 echo "-------------------------------------------------"
 
 # Check for Ollama
@@ -1151,19 +1218,69 @@ else
     fi
 fi
 
-# Pull the embedding model
+# Pull the embedding model with timeout/skip option
 if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
     success "nomic-embed-text model already installed"
 else
-    info "Downloading nomic-embed-text model (this may take 1-2 minutes)..."
+    info "Downloading nomic-embed-text model..."
+    info "This may take 1-2 minutes depending on your connection."
+    echo ""
+
+    # Start the download in background
     ollama pull nomic-embed-text > /dev/null 2>&1 &
-    show_spinner $! "Pulling nomic-embed-text model..."
-    wait $!
-    success "nomic-embed-text model installed"
+    OLLAMA_PID=$!
+
+    # Timeout after 2 minutes
+    TIMEOUT=120
+    ELAPSED=0
+
+    while kill -0 $OLLAMA_PID 2>/dev/null; do
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo ""
+            warning "Download is taking longer than expected."
+            echo ""
+            if [ -t 0 ]; then
+                echo "What would you like to do?"
+                echo "  1) Keep waiting"
+                echo "  2) Skip for now (you can download later in InterBrain settings)"
+                read -p "Choose [1/2]: " ollama_choice
+                case $ollama_choice in
+                    2)
+                        kill $OLLAMA_PID 2>/dev/null
+                        wait $OLLAMA_PID 2>/dev/null
+                        warning "Skipped Ollama model download"
+                        info "You can download it later via InterBrain settings or run:"
+                        info "  ollama pull nomic-embed-text"
+                        break
+                        ;;
+                    *)
+                        # Reset timeout and continue waiting
+                        ELAPSED=0
+                        info "Continuing to wait..."
+                        ;;
+                esac
+            else
+                # Non-interactive, just keep waiting
+                ELAPSED=0
+            fi
+        fi
+        sleep 1
+        ELAPSED=$((ELAPSED + 1))
+        # Show progress dots every 10 seconds
+        if [ $((ELAPSED % 10)) -eq 0 ]; then
+            printf "."
+        fi
+    done
+
+    # Check if download completed successfully
+    if ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
+        echo ""
+        success "nomic-embed-text model installed"
+    fi
 fi
 
 echo ""
-echo "Step 8/$TOTAL_STEPS: Linking plugin to vault..."
+echo "Step 9/$TOTAL_STEPS: Linking plugin to vault..."
 echo "-----------------------------------"
 
 PLUGINS_DIR="$VAULT_PATH/.obsidian/plugins"
@@ -1180,114 +1297,6 @@ fi
 # Create symlink
 ln -s "$INTERBRAIN_PATH" "$SYMLINK_PATH"
 success "Symlink created: $SYMLINK_PATH → $INTERBRAIN_PATH"
-
-echo ""
-echo "Step 9/$TOTAL_STEPS: GitHub account & authentication..."
-echo "-------------------------------------------"
-
-# Check if already authenticated
-if gh auth status >/dev/null 2>&1; then
-    success "GitHub CLI already authenticated"
-    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
-    echo "   Logged in as: $GH_USER"
-else
-    warning "GitHub CLI not authenticated"
-    echo ""
-    info "InterBrain uses GitHub for:"
-    info "  • Collaborative DreamNode sharing"
-    info "  • Version control and backups"
-    info "  • Community features"
-    echo ""
-
-    if [ "$SKIP_AUTH" = "true" ]; then
-        # CI mode - skip auth entirely
-        info "CI mode: Skipping GitHub authentication"
-        GH_USER="[CI mode - skipped]"
-    elif [ -t 0 ]; then
-        # Interactive mode - offer authentication
-        echo "Do you have a GitHub account?"
-        echo ""
-        echo "  1) Yes - Log in now"
-        echo "  2) No - Create account and log in"
-        echo "  3) Skip - I'll do this later"
-        echo ""
-        read -p "Choose [1/2/3]: " -n 1 gh_choice
-        echo ""
-        echo ""
-
-        case $gh_choice in
-            1)
-                info "Starting GitHub authentication flow..."
-                echo ""
-                gh auth login -h github.com -p https -w
-
-                if gh auth status >/dev/null 2>&1; then
-                    success "GitHub authenticated successfully"
-                    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
-                    echo "   Logged in as: $GH_USER"
-                else
-                    warning "Authentication incomplete"
-                    info "You can complete it later with: gh auth login"
-                    info "Or rerun this installer - it's safe and non-destructive"
-                    GH_USER="[Not authenticated]"
-                fi
-                ;;
-            2)
-                info "Opening GitHub signup page in your browser..."
-                echo ""
-
-                # Open signup page
-                if [[ "$OSTYPE" == "darwin"* ]]; then
-                    open "https://github.com/signup"
-                elif command_exists xdg-open; then
-                    xdg-open "https://github.com/signup"
-                fi
-
-                echo "After creating your account, press Enter to authenticate GitHub CLI..."
-                read -p ""
-
-                # Now run auth flow
-                gh auth login -h github.com -p https -w
-
-                if gh auth status >/dev/null 2>&1; then
-                    success "GitHub account created and authenticated!"
-                    GH_USER=$(gh api user -q .login 2>/dev/null || echo "Unknown")
-                    echo "   Logged in as: $GH_USER"
-                else
-                    warning "Authentication incomplete"
-                    info "You can complete it later with: gh auth login"
-                    info "Or rerun this installer - it's safe and non-destructive"
-                    GH_USER="[Not authenticated]"
-                fi
-                ;;
-            3)
-                info "Skipping GitHub authentication"
-                info "You can authenticate later with: gh auth login"
-                info "Or rerun this installer - it's safe and non-destructive"
-                GH_USER="[Not authenticated]"
-                ;;
-            *)
-                info "Invalid choice - skipping authentication"
-                GH_USER="[Not authenticated]"
-                ;;
-        esac
-    else
-        # Non-interactive mode
-        info "Non-interactive mode: Skipping GitHub authentication"
-        echo ""
-        info "To authenticate later, run: gh auth login"
-        info "Or rerun this installer in an interactive terminal"
-        GH_USER="[Not authenticated]"
-    fi
-fi
-
-# TEST: Simulate failure after GitHub CLI installed (gh available for issue creation)
-if [ "$TEST_FAIL" = "after-gh" ]; then
-    error "TEST FAILURE: Simulating error after GitHub CLI installation"
-    echo ""
-    info "This should offer GitHub issue creation if gh is installed and authenticated"
-    false  # This triggers the ERR trap properly
-fi
 
 echo ""
 echo "Step 10/$TOTAL_STEPS: Radicle identity setup..."
