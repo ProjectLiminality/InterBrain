@@ -63,15 +63,20 @@ export function registerFaceTimeCommands(
         const contact = email || phone;
 
         // Show loading state
-        uiService.showInfo(`Initiating FaceTime call with ${selectedNode.name}...`);
+        uiService.showInfo(`Initiating video call with ${selectedNode.name}...`);
 
-        // Start the FaceTime call
-        await faceTimeService.startCall(contact);
+        // Start the video call (or get guidance for manual start)
+        const result = await faceTimeService.startCall(contact);
 
         // Trigger the full Start Conversation Mode command (which handles copilot mode + transcription)
         (plugin.app as any).commands.executeCommandById('interbrain:start-conversation-mode');
 
-        uiService.showSuccess(`FaceTime call started with ${selectedNode.name}`);
+        // Show appropriate message based on whether call was auto-started
+        if (result.autoStarted) {
+          uiService.showSuccess(result.message);
+        } else {
+          uiService.showInfo(result.message);
+        }
       } catch (error) {
         console.error('Start Video Call command failed:', error);
         uiService.showError(

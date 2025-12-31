@@ -5,6 +5,7 @@ import { URIHandlerService } from '../../uri-handler';
 import { ShareLinkService } from '../../github-publishing/services/share-link-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { ManualEmailModal } from '../ui/ManualEmailModal';
 // PDF generation disabled for now - keeping import for future use
 // import { getPDFGeneratorService } from './pdf-generator-service';
 // import * as os from 'os';
@@ -13,7 +14,8 @@ import * as path from 'path';
 /**
  * Email Export Service
  *
- * Generates pre-filled Apple Mail drafts with conversation summaries and deep links
+ * - macOS: Generates pre-filled Apple Mail drafts
+ * - Windows/Linux: Shows modal with copyable email fields
  */
 export class EmailExportService {
 	private app: App;
@@ -22,6 +24,14 @@ export class EmailExportService {
 	constructor(app: App, plugin: any) {
 		this.app = app;
 		this.plugin = plugin;
+	}
+
+	/**
+	 * Check if running on macOS
+	 */
+	private isMacOS(): boolean {
+		// eslint-disable-next-line no-undef
+		return process.platform === 'darwin';
 	}
 
 	/**
@@ -123,11 +133,22 @@ export class EmailExportService {
 			// Get recipient email (from metadata or parameter)
 			const toEmail = recipientEmail || await this.getRecipientEmail(conversationPartner);
 
-			// Create plain text email draft (PDF generation disabled for now)
-			await this.createMailDraft(toEmail, subject, body);
-
-			new Notice('Email draft created in Apple Mail');
-			console.log(`✅ [EmailExport] Email draft created successfully`);
+			// Platform-specific email creation
+			if (this.isMacOS()) {
+				// macOS: Create Apple Mail draft
+				await this.createMailDraft(toEmail, subject, body);
+				new Notice('Email draft created in Apple Mail');
+				console.log(`✅ [EmailExport] Email draft created successfully`);
+			} else {
+				// Windows/Linux: Show modal with copyable fields
+				const modal = new ManualEmailModal(this.app, {
+					to: toEmail,
+					subject: subject,
+					body: body
+				});
+				modal.open();
+				console.log(`✅ [EmailExport] Manual email modal opened`);
+			}
 
 		} catch (error) {
 			console.error('Failed to export email:', error);
