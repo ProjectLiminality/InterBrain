@@ -1480,18 +1480,32 @@ echo ""
 echo "Step 12/$TOTAL_STEPS: Setting up real-time transcription (Python + Whisper)..."
 echo "------------------------------------------------------------------"
 
-# Check for Python 3
-if ! command_exists python3; then
-    echo "Installing Python 3..."
+# Check for compatible Python version (3.9-3.12 required by whisper dependencies)
+# Python 3.13+ doesn't have pre-built wheels for scipy/numpy yet
+PYTHON_CMD=""
+if command -v python3.12 &> /dev/null; then
+    PYTHON_CMD=python3.12
+elif command -v python3.11 &> /dev/null; then
+    PYTHON_CMD=python3.11
+elif command -v python3.10 &> /dev/null; then
+    PYTHON_CMD=python3.10
+elif command -v python3.9 &> /dev/null; then
+    PYTHON_CMD=python3.9
+fi
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo "Installing Python 3.12..."
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install python3
+        brew install python@3.12
         refresh_shell_env
+        PYTHON_CMD=python3.12
     else
-        sudo apt-get update && sudo apt-get install -y python3 python3-pip
+        sudo apt-get update && sudo apt-get install -y python3.11 python3.11-venv
+        PYTHON_CMD=python3.11
     fi
-    success "Python 3 installed"
+    success "Python installed ($($PYTHON_CMD --version))"
 else
-    success "Python 3 found ($(python3 --version))"
+    success "Python found ($($PYTHON_CMD --version))"
 fi
 
 # Set up whisper_streaming virtual environment
@@ -1503,9 +1517,9 @@ if [ -d "$TRANSCRIPTION_DIR" ]; then
     if [ ! -d "venv" ]; then
         info "Setting up Python environment (this may take 1-2 minutes)..."
 
-        # Create venv
-        echo "[DEBUG] Creating Python virtual environment..." >> "$LOG_FILE"
-        python3 -m venv venv >> "$LOG_FILE" 2>&1 &
+        # Create venv with compatible Python version
+        echo "[DEBUG] Creating Python virtual environment with $PYTHON_CMD..." >> "$LOG_FILE"
+        $PYTHON_CMD -m venv venv >> "$LOG_FILE" 2>&1 &
         show_spinner $! "Creating virtual environment..."
         wait $!
         VENV_EXIT_CODE=$?

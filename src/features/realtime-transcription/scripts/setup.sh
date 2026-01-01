@@ -45,13 +45,36 @@ fi
 PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
 echo "📍 Found Python $PYTHON_VERSION"
 
-# Create virtual environment if it doesn't exist
+# Create virtual environment if it doesn't exist or has incompatible Python
+NEED_NEW_VENV=false
 if [ ! -d "$VENV_DIR" ]; then
-    echo "📦 Creating virtual environment..."
+    NEED_NEW_VENV=true
+else
+    # Check if existing venv has compatible Python version
+    VENV_PYTHON="$VENV_DIR/bin/python3"
+    if [ -f "$VENV_PYTHON" ]; then
+        VENV_VERSION=$("$VENV_PYTHON" --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+        case "$VENV_VERSION" in
+            3.9|3.10|3.11|3.12)
+                echo "✅ Virtual environment exists with compatible Python $VENV_VERSION"
+                ;;
+            *)
+                echo "⚠️  Existing venv has incompatible Python $VENV_VERSION, recreating..."
+                rm -rf "$VENV_DIR"
+                NEED_NEW_VENV=true
+                ;;
+        esac
+    else
+        echo "⚠️  Existing venv is corrupted, recreating..."
+        rm -rf "$VENV_DIR"
+        NEED_NEW_VENV=true
+    fi
+fi
+
+if [ "$NEED_NEW_VENV" = true ]; then
+    echo "📦 Creating virtual environment with $PYTHON_CMD..."
     $PYTHON_CMD -m venv "$VENV_DIR"
     echo "✅ Virtual environment created at $VENV_DIR"
-else
-    echo "✅ Virtual environment already exists"
 fi
 
 # Activate virtual environment

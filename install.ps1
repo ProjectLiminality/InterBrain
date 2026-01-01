@@ -643,22 +643,46 @@ Write-Info "Note: Full Radicle P2P support on Windows is in development by the R
 Write-Info "GitHub-based sharing is available now. P2P sharing will be enabled once Radicle has full Windows support."
 Write-Host ""
 
-if (-not (Test-Command "python")) {
-    Write-Warning "Python not found. Installing..."
-    if (-not (Install-WithWinget "Python.Python.3.11" "Python")) {
-        if (-not (Install-WithChoco "python" "Python")) {
-            Write-Warning "Could not auto-install Python."
-            Write-Info "Please install from https://python.org"
+# Check for compatible Python version (3.9-3.12 required by whisper dependencies)
+# Python 3.13+ doesn't have pre-built wheels for scipy/numpy yet
+$PythonCmd = $null
+if (Get-Command "py" -ErrorAction SilentlyContinue) {
+    # Use py launcher to find compatible version
+    $pyVersions = @("3.12", "3.11", "3.10", "3.9")
+    foreach ($ver in $pyVersions) {
+        $testResult = py -$ver --version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $PythonCmd = "py -$ver"
+            break
+        }
+    }
+}
+
+if (-not $PythonCmd) {
+    # Fall back to checking specific python commands
+    if (Get-Command "python3.12" -ErrorAction SilentlyContinue) { $PythonCmd = "python3.12" }
+    elseif (Get-Command "python3.11" -ErrorAction SilentlyContinue) { $PythonCmd = "python3.11" }
+    elseif (Get-Command "python3.10" -ErrorAction SilentlyContinue) { $PythonCmd = "python3.10" }
+    elseif (Get-Command "python3.9" -ErrorAction SilentlyContinue) { $PythonCmd = "python3.9" }
+}
+
+if (-not $PythonCmd) {
+    Write-Warning "Python 3.9-3.12 not found. Installing Python 3.11..."
+    if (-not (Install-WithWinget "Python.Python.3.11" "Python 3.11")) {
+        if (-not (Install-WithChoco "python311" "Python 3.11")) {
+            Write-Warning "Could not auto-install Python 3.11."
+            Write-Info "Please install Python 3.11 from https://python.org"
         } else {
             Refresh-Path
-            Write-Success "Python installed"
+            Write-Success "Python 3.11 installed"
         }
     } else {
         Refresh-Path
-        Write-Success "Python installed"
+        Write-Success "Python 3.11 installed"
     }
+    $PythonCmd = "py -3.11"
 } else {
-    Write-Success "Python found ($(python --version))"
+    Write-Success "Python found (compatible version)"
 }
 
 # Set up transcription environment
@@ -668,7 +692,7 @@ if (Test-Path $TranscriptionDir) {
     if (-not (Test-Path $VenvPath)) {
         Write-Info "Setting up Python transcription environment..."
         Set-Location $TranscriptionDir
-        python -m venv venv
+        Invoke-Expression "$PythonCmd -m venv venv"
         & "$VenvPath\Scripts\Activate.ps1"
         pip install --upgrade pip --quiet 2>$null
         pip install -r requirements.txt --quiet 2>$null
