@@ -20,6 +20,9 @@ import { CherryPickPreviewModal, CherryPickPreviewConfig } from './ui/cherry-pic
 import { initializeCherryPickWorkflowService } from './services/cherry-pick-workflow-service';
 
 const path = require('path');
+const { promisify } = require('util');
+const { exec } = require('child_process');
+const execAsync = promisify(exec);
 
 // InterBrain's fixed UUID for routing decisions
 const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -150,20 +153,45 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       // DreamNode: Cherry-pick workflow with commit selection
       initializeCherryPickWorkflowService(plugin.app);
 
-      // For now, treat all commits as coming from a single "upstream" peer
-      // In a full P2P scenario, we'd have multiple peer groups
-      const peerGroups = [{
-        peerUuid: 'upstream',
-        peerName: 'Upstream',
-        peerRepoPath: selectedNode.repoPath,
-        commits: updateStatus!.commits.map((c: CommitInfo) => ({
-          ...c,
-          originalHash: c.hash,
-          offeredBy: ['upstream'],
-          offeredByNames: ['Upstream'],
-          cherryPickRef: c.hash
-        }))
-      }];
+      // Get peer remotes from the repo
+      const { getCherryPickWorkflowService } = await import('./services/cherry-pick-workflow-service');
+      const workflowService = getCherryPickWorkflowService();
+
+      // Build peer list from git remotes (excluding origin)
+      const fullPath = path.join(vaultPath, selectedNode.repoPath);
+      let peers: Array<{ uuid: string; name: string; repoPath: string }> = [];
+
+      try {
+        const { stdout: remoteOutput } = await execAsync('git remote', { cwd: fullPath });
+        const remotes = remoteOutput.trim().split('\n').filter((r: string) => r && r !== 'origin');
+
+        peers = remotes.map((remote: string) => ({
+          uuid: remote,
+          name: remote,
+          repoPath: selectedNode.repoPath // Use DreamNode path for memory storage
+        }));
+      } catch {
+        // Fallback to upstream peer
+        peers = [{
+          uuid: 'upstream',
+          name: 'Upstream',
+          repoPath: selectedNode.repoPath
+        }];
+      }
+
+      // Use getPendingCommits to filter out already accepted/rejected commits
+      const peerGroups = await workflowService.getPendingCommits(
+        selectedNode.repoPath,
+        selectedNode.id,
+        peers
+      );
+
+      // If no pending commits after filtering, show up-to-date message
+      const totalPending = peerGroups.reduce((sum, g) => sum + g.commits.length, 0);
+      if (totalPending === 0) {
+        uiService.showInfo(`${selectedNode.name} is up to date (all commits already processed)`);
+        return;
+      }
 
       const config: CherryPickPreviewConfig = {
         dreamNodePath: selectedNode.repoPath,
