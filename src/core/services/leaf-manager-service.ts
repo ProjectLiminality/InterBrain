@@ -178,7 +178,14 @@ export class LeafManagerService {
    */
   private async openLinkFileInLeaf(dreamNode: DreamNode, mediaFile: MediaFile): Promise<void> {
     try {
-      const linkMetadata = parseLinkFileContent(mediaFile.data);
+      // If data is empty (lazy loading), read the file directly
+      let content = mediaFile.data;
+      if (!content || content.length === 0) {
+        const fs = require('fs').promises;
+        content = await fs.readFile(mediaFile.absolutePath, 'utf-8');
+      }
+
+      const linkMetadata = parseLinkFileContent(content);
 
       if (!linkMetadata) {
         console.error('Failed to parse .link file metadata');
