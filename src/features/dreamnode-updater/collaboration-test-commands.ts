@@ -44,6 +44,26 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 /**
+ * Get exec options with enhanced PATH for Radicle git-remote-rad helper
+ */
+function getRadicleExecOptions(cwd: string): { cwd: string; env: Record<string, string | undefined> } {
+  const homeDir = (globalThis as any).process?.env?.HOME || '';
+  const radicleGitHelperPaths = [
+    `${homeDir}/.radicle/bin`,
+    '/usr/local/bin',
+    '/opt/homebrew/bin'
+  ];
+  const enhancedPath = radicleGitHelperPaths.join(':') + ':' + ((globalThis as any).process?.env?.PATH || '');
+  return {
+    cwd,
+    env: {
+      ...(globalThis as any).process.env,
+      PATH: enhancedPath
+    }
+  };
+}
+
+/**
  * Generate a stable hash from a string input.
  * Used for creating deterministic "original commit" hashes in test scenarios.
  * The same input always produces the same output, which is essential for
@@ -341,12 +361,13 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
           return;
         }
 
-        // Fetch from all remotes
+        // Fetch from all remotes (with enhanced PATH for Radicle)
+        const execOptions = getRadicleExecOptions(fullPath);
         for (const remote of remotes) {
           try {
-            await execAsync(`git fetch ${remote}`, { cwd: fullPath });
-          } catch {
-            console.warn(`[CherryPick] Failed to fetch from ${remote}`);
+            await execAsync(`git fetch ${remote}`, execOptions);
+          } catch (fetchError: any) {
+            console.warn(`[CherryPick] Failed to fetch from ${remote}:`, fetchError.message || fetchError);
           }
         }
 
@@ -555,8 +576,9 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
         } catch { /* doesn't exist */ }
 
         // Re-fetch from peers to ensure we see their commits again
-        await execAsync('git fetch bob', { cwd: testNodePath });
-        await execAsync('git fetch charlie', { cwd: testNodePath });
+        const resetExecOptions = getRadicleExecOptions(testNodePath);
+        await execAsync('git fetch bob', resetExecOptions);
+        await execAsync('git fetch charlie', resetExecOptions);
 
         notice.hide();
         uiService.showSuccess('Test state reset! Bob and Charlie commits are pending again.');
