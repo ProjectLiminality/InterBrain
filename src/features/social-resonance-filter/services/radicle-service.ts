@@ -876,42 +876,67 @@ export class RadicleServiceImpl implements RadicleService {
       console.log(`RadicleService: [DEBUG] env.PATH = ${env.PATH}`);
 
       const { spawn } = require('child_process');
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn('git', ['push', 'rad', 'main'], {
-          env: env,
-          cwd: absoluteDreamNodePath,
-          stdio: ['pipe', 'pipe', 'pipe']
+
+      // Helper to run git push with optional force flag
+      const runGitPush = (useForce: boolean): Promise<{ success: boolean; stdout: string; stderr: string }> => {
+        return new Promise((resolve) => {
+          const args = useForce ? ['push', '--force', 'rad', 'main'] : ['push', 'rad', 'main'];
+          const child = spawn('git', args, {
+            env: env,
+            cwd: absoluteDreamNodePath,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          let stdout = '';
+          let stderr = '';
+
+          child.stdout?.on('data', (data: any) => {
+            stdout += data.toString();
+          });
+
+          child.stderr?.on('data', (data: any) => {
+            stderr += data.toString();
+          });
+
+          child.on('close', (code: number | null) => {
+            resolve({
+              success: code === 0 || stdout.includes('up to date'),
+              stdout,
+              stderr
+            });
+          });
+
+          child.on('error', () => {
+            resolve({ success: false, stdout, stderr });
+          });
+
+          child.stdin?.end();
         });
+      };
 
-        let stdout = '';
-        let stderr = '';
+      // First attempt: normal push
+      let pushResult = await runGitPush(false);
+      console.log('RadicleService: git push output:', pushResult.stdout);
+      if (pushResult.stderr) console.log('RadicleService: git push stderr:', pushResult.stderr);
 
-        child.stdout?.on('data', (data: any) => {
-          stdout += data.toString();
-        });
+      // If rejected due to remote having commits we don't have, force push
+      // This is safe because each user has their own namespace (rad/main)
+      if (!pushResult.success) {
+        const needsForce = pushResult.stderr.includes('fetch first') ||
+                          pushResult.stderr.includes('[rejected]') ||
+                          pushResult.stderr.includes('non-fast-forward');
 
-        child.stderr?.on('data', (data: any) => {
-          stderr += data.toString();
-        });
+        if (needsForce) {
+          console.log('RadicleService: Push rejected (remote diverged). Force pushing to own namespace...');
+          pushResult = await runGitPush(true);
+          console.log('RadicleService: git push --force output:', pushResult.stdout);
+          if (pushResult.stderr) console.log('RadicleService: git push --force stderr:', pushResult.stderr);
+        }
 
-        child.on('close', (code: number | null) => {
-          console.log('RadicleService: git push output:', stdout);
-          if (stderr) console.log('RadicleService: git push stderr:', stderr);
-
-          if (code === 0 || stdout.includes('up to date')) {
-            resolve();
-          } else {
-            reject(new Error(`git push failed with code ${code}`));
-          }
-        });
-
-        child.on('error', (error: Error) => {
-          console.error('RadicleService: git push spawn error:', error);
-          reject(error);
-        });
-
-        child.stdin?.end();
-      });
+        if (!pushResult.success) {
+          throw new Error(`git push failed with code 1`);
+        }
+      }
 
       // STEP 2: Check if already public before attempting to publish
       console.log(`RadicleService: Checking if repository is already public...`);
