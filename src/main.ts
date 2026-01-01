@@ -205,6 +205,12 @@ export default class InterBrainPlugin extends Plugin {
               console.log('[InterBrain] Calling showTutorialPortal()');
               store.showTutorialPortal();
             }, 500);
+
+            // Check for InterBrain updates on fresh launch
+            setTimeout(() => {
+              console.log('[InterBrain] Checking for InterBrain updates...');
+              this.app.commands.executeCommandById('interbrain:check-interbrain-updates');
+            }, 2000); // Delay to let UI settle first
           }
 
           // Set reload flag for next time (persists across plugin reloads but not app restarts)
