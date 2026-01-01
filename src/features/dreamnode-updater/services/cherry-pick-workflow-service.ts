@@ -850,6 +850,15 @@ export class CherryPickWorkflowService {
     const memoryService = getCollaborationMemoryService();
 
     try {
+      // Check for uncommitted changes and stash if needed
+      let didStash = false;
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+      if (statusOutput.trim()) {
+        console.log('[CherryPickWorkflow] Stashing uncommitted changes before accept...');
+        await execAsync('git stash push -m "InterBrain accept stash"', { cwd: fullPath });
+        didStash = true;
+      }
+
       // Sort by timestamp for correct order
       const sortedCommits = [...commits].sort((a, b) => a.timestamp - b.timestamp);
       const appliedHashes: string[] = [];
@@ -939,6 +948,15 @@ export class CherryPickWorkflowService {
             // Ignore
           }
 
+          // Restore stash before returning error
+          if (didStash) {
+            try {
+              await execAsync('git stash pop', { cwd: fullPath });
+            } catch {
+              // Ignore stash errors on failure path
+            }
+          }
+
           return {
             success: false,
             message: `Failed to accept "${commit.subject}": ${cherryPickError.message}`
@@ -955,6 +973,17 @@ export class CherryPickWorkflowService {
       }));
 
       await memoryService.recordAcceptance(dreamerRepoPath, dreamNodeUuid, acceptanceRecords);
+
+      // Restore stash if we stashed
+      if (didStash) {
+        try {
+          await execAsync('git stash pop', { cwd: fullPath });
+          console.log('[CherryPickWorkflow] Restored stashed changes');
+        } catch (stashError: any) {
+          console.warn('[CherryPickWorkflow] Stash pop had conflicts:', stashError.message);
+          // User will need to resolve manually
+        }
+      }
 
       // Open changed files in right pane for user to see what was accepted
       await this.openChangedFilesInRightPane(dreamNodePath, sortedCommits.length);
