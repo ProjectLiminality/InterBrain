@@ -10,6 +10,7 @@ import { getRealtimeTranscriptionService } from '../../realtime-transcription';
  */
 export interface InvocationEvent {
 	timestamp: Date;
+	elapsedSeconds: number; // Seconds since conversation start (for transcript sync)
 	nodeName: string;
 	dreamUUID: string;
 }
@@ -67,14 +68,20 @@ export class ConversationRecordingService {
 			return;
 		}
 
+		// Calculate elapsed seconds using same source as transcript timestamps
+		const pythonTranscriptionService = getRealtimeTranscriptionService();
+		const sessionStartTime = pythonTranscriptionService.getSessionStartTime();
+		const elapsedSeconds = sessionStartTime ? (Date.now() / 1000 - sessionStartTime) : 0;
+
 		const invocationEvent: InvocationEvent = {
 			timestamp: new Date(),
+			elapsedSeconds: elapsedSeconds,
 			nodeName: node.name,
 			dreamUUID: node.id
 		};
 
 		this.invocations.push(invocationEvent);
-		console.log(`🎙️ [Copilot] Invocation #${this.invocations.length}: ${node.name}`);
+		console.log(`🎙️ [Copilot] Invocation #${this.invocations.length}: ${node.name} at ${Math.floor(elapsedSeconds)}s`);
 
 		// Embed invocation marker in transcript
 		await this.embedInvocationInTranscript(node);

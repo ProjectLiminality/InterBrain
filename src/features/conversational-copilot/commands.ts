@@ -215,25 +215,38 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
               // Fallback: No AI summary, just list shared nodes
               aiSummary = ''; // Empty string will trigger basic template in email service
             } else {
-              console.log(`📧 [Copilot-Exit] Starting AI summary and clip generation...`);
-              uiService.showInfo('Generating AI conversation summary and clips...');
+              console.log(`📧 [Copilot-Exit] Starting AI summary generation...`);
+              uiService.showInfo('Generating AI conversation summary...');
 
-              // Generate AI summary and clip suggestions from transcript content
-              console.log(`📧 [Copilot-Exit] Getting summary service...`);
               const summaryService = getConversationSummaryService();
-              console.log(`📧 [Copilot-Exit] Calling generateSummaryFromContent...`);
-              const result = await summaryService.generateSummaryFromContent(
+
+              // Generate PURE summary for email (transcript only, no invocations/clips)
+              console.log(`📧 [Copilot-Exit] Calling generatePureSummary for email...`);
+              aiSummary = await summaryService.generatePureSummary(
                 transcriptContent,
-                invocations,
                 partnerToFocus
               );
+              console.log(`✅ [Copilot-Exit] Pure summary generated (length: ${aiSummary.length})`);
+              if (aiSummary) {
+                console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, Math.min(200, aiSummary.length))}..."`);
+              }
 
-              aiSummary = result.summary;
-              clipSuggestions.push(...result.clips);
-
-              console.log(`✅ [Copilot-Exit] AI summary generated (length: ${aiSummary.length})`);
-              console.log(`✅ [Copilot-Exit] ${clipSuggestions.length} clip suggestions generated`);
-              console.log(`📝 [Copilot-Exit] Summary preview: "${aiSummary.substring(0, Math.min(200, aiSummary.length))}..."`);
+              // Generate clip suggestions separately for Songline (only if there are invocations)
+              if (invocations.length > 0) {
+                console.log(`🎵 [Copilot-Exit] Generating clip suggestions for ${invocations.length} invocations...`);
+                try {
+                  const result = await summaryService.generateSummaryFromContent(
+                    transcriptContent,
+                    invocations,
+                    partnerToFocus
+                  );
+                  clipSuggestions.push(...result.clips);
+                  console.log(`✅ [Copilot-Exit] ${clipSuggestions.length} clip suggestions generated`);
+                } catch (clipError) {
+                  console.error('⚠️ [Copilot-Exit] Clip generation failed (non-fatal):', clipError);
+                  // Continue without clips - email is more important
+                }
+              }
             }
 
             // Export to email (works with or without AI summary)

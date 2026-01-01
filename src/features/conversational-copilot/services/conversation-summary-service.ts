@@ -26,7 +26,7 @@ export interface ConversationSummaryResult {
  * Conversation Summary Service
  *
  * Generates AI-powered summaries of conversations using transcript and invocation data.
- * Also generates clip timestamps for Songline feature.
+ * Also generates clip timestamps for Songline feature (separate from email summary).
  */
 export class ConversationSummaryService {
 	private app: App;
@@ -36,7 +36,63 @@ export class ConversationSummaryService {
 	}
 
 	/**
+	 * Generate a pure conversation summary for email (no clips, no invocation context)
+	 * This is the simple path: transcript in -> summary out
+	 */
+	async generatePureSummary(
+		transcriptContent: string,
+		conversationPartner: DreamNode
+	): Promise<string> {
+		try {
+			// Extract actual conversation text (skip metadata header)
+			const contentLines = transcriptContent.split('\n');
+			const separatorIndex = contentLines.findIndex(line => line === '---');
+			const conversationText = contentLines
+				.slice(separatorIndex + 1)
+				.join('\n')
+				.trim();
+
+			// Check if we have actual content
+			if (!conversationText || conversationText.length < 10) {
+				console.warn(`⚠️ [ConversationSummary] Transcript too short for summary (${conversationText.length} chars)`);
+				return '';
+			}
+
+			// Simple system prompt - just summarize the conversation
+			const systemPrompt = `You are a conversation summarization assistant. Create a concise, informative summary of a conversation between the user and ${conversationPartner.name}.
+
+Your summary should:
+1. Capture the main topics and themes discussed
+2. Highlight key decisions, action items, or insights
+3. Be written in a professional yet warm tone suitable for sharing with the conversation partner
+4. Be concise (2-3 paragraphs maximum)
+
+Do not include greetings, sign-offs, or meta-commentary. Just provide the summary content.
+Do not mention any technical details about the software or system - focus only on the conversation content.`;
+
+			const messages: AIMessage[] = [
+				{ role: 'system', content: systemPrompt },
+				{ role: 'user', content: `Please summarize the following conversation:\n\n${conversationText}` }
+			];
+
+			const response = await generateAI(messages, 'standard', {
+				maxTokens: 1000,
+				temperature: 0.7
+			});
+
+			console.log(`✅ [ConversationSummary] Generated pure summary via ${response.provider} (${response.usage?.outputTokens} tokens)`);
+
+			return response.content.trim();
+
+		} catch (error) {
+			console.error('Failed to generate conversation summary:', error);
+			return ''; // Return empty string on error - email will still work without summary
+		}
+	}
+
+	/**
 	 * Generate conversation summary and clip suggestions from transcript file and invocations
+	 * Used for Songline feature (clips), not for email
 	 */
 	async generateSummary(
 		transcriptFile: TFile,
@@ -55,6 +111,7 @@ export class ConversationSummaryService {
 
 	/**
 	 * Generate conversation summary and clip suggestions from transcript content string and invocations
+	 * Used for Songline feature (clips), not for email
 	 */
 	async generateSummaryFromContent(
 		transcriptContent: string,
@@ -152,14 +209,14 @@ Clip ${i + 1}:
 		if (hasInvocations) {
 			message += `\n\n---\n\nIMPORTANT CONTEXT: During this conversation, ${invocations.length} DreamNode${invocations.length > 1 ? 's were' : ' was'} shared:\n`;
 			invocations.forEach((inv, i) => {
-				// Convert timestamp to MM:SS format for reference
-				const date = inv.timestamp;
-				const minutes = date.getMinutes();
-				const seconds = date.getSeconds();
+				// Use elapsed seconds (synced with transcript timestamps)
+				const totalSeconds = Math.floor(inv.elapsedSeconds);
+				const minutes = Math.floor(totalSeconds / 60);
+				const seconds = totalSeconds % 60;
 				const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 				message += `${i + 1}. "${inv.nodeName}" (UUID: ${inv.dreamUUID}) at approximately ${timeString}\n`;
 			});
-			message += `\nThese are marked in the transcript as "[MM:SS] 🔮 Invoked: NodeName". Please contextualize these invocations in your summary AND suggest clip timestamps for each one.`;
+			message += `\nThese are marked in the transcript as "[M:SS] 🔮 Invoked: NodeName". Please identify the conversation segment around each invocation and suggest clip timestamps that capture the relevant discussion.`;
 		}
 
 		return message;
@@ -178,8 +235,9 @@ Clip ${i + 1}:
 		}
 
 		// Split response into SUMMARY and CLIPS sections
-		const summaryMatch = content.match(/SUMMARY:\s*([\s\S]*?)(?=\n\s*CLIPS:|$)/i);
-		const clipsMatch = content.match(/CLIPS:\s*([\s\S]*?)$/i);
+		// Handle various markdown formats: "SUMMARY:", "## SUMMARY:", "**SUMMARY:**", etc.
+		const summaryMatch = content.match(/(?:#{1,3}\s*)?(?:\*{1,2})?SUMMARY:?\*{0,2}\s*([\s\S]*?)(?=\n\s*(?:#{1,3}\s*)?(?:\*{1,2})?CLIPS|$)/i);
+		const clipsMatch = content.match(/(?:#{1,3}\s*)?(?:\*{1,2})?CLIPS:?\*{0,2}\s*([\s\S]*?)$/i);
 
 		const summary = summaryMatch ? summaryMatch[1].trim() : content.trim();
 		const clipsText = clipsMatch ? clipsMatch[1] : '';
@@ -188,23 +246,25 @@ Clip ${i + 1}:
 		const clips: ClipSuggestion[] = [];
 
 		if (clipsText) {
-			// Match each clip block
-			const clipBlocks = clipsText.split(/Clip \d+:/i).filter(block => block.trim());
+			// Match each clip block - handle "Clip 1:", "**Clip 1:**", etc.
+			const clipBlocks = clipsText.split(/(?:\*{1,2})?Clip \d+:?\*{0,2}/i).filter(block => block.trim());
 
 			for (const block of clipBlocks) {
-				const uuidMatch = block.match(/Node UUID:\s*([a-f0-9-]+)/i);
-				const nameMatch = block.match(/Node Name:\s*(.+)/i);
-				const startMatch = block.match(/Start Time:\s*(\d+:\d+)/i);
-				const endMatch = block.match(/End Time:\s*(\d+:\d+)/i);
-				const transcriptMatch = block.match(/Transcript:\s*([\s\S]+?)(?=\n\s*$|$)/i);
+				// Handle various formats: "- Node UUID:", "Node UUID:", "**Node UUID:**"
+				const uuidMatch = block.match(/(?:-\s*)?(?:\*{1,2})?Node UUID:?\*{0,2}\s*([a-f0-9-]+)/i);
+				const nameMatch = block.match(/(?:-\s*)?(?:\*{1,2})?Node Name:?\*{0,2}\s*(.+)/i);
+				const startMatch = block.match(/(?:-\s*)?(?:\*{1,2})?Start Time:?\*{0,2}\s*(\d+:\d+)/i);
+				const endMatch = block.match(/(?:-\s*)?(?:\*{1,2})?End Time:?\*{0,2}\s*(\d+:\d+)/i);
+				// Transcript can be multi-line and may be wrapped in brackets
+				const transcriptMatch = block.match(/(?:-\s*)?(?:\*{1,2})?Transcript:?\*{0,2}\s*\[?([\s\S]+?)\]?(?=\n\s*(?:\*|$)|$)/i);
 
-				if (uuidMatch && nameMatch && startMatch && endMatch && transcriptMatch) {
+				if (uuidMatch && startMatch && endMatch) {
 					clips.push({
 						nodeUuid: uuidMatch[1].trim(),
-						nodeName: nameMatch[1].trim(),
+						nodeName: nameMatch ? nameMatch[1].trim() : 'Unknown',
 						startTime: startMatch[1].trim(),
 						endTime: endMatch[1].trim(),
-						transcript: transcriptMatch[1].trim()
+						transcript: transcriptMatch ? transcriptMatch[1].trim() : ''
 					});
 				}
 			}
