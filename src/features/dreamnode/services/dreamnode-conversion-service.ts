@@ -31,7 +31,25 @@ export interface ConversionResult {
 export interface ConversionOptions {
   radiclePassphrase?: string;
   skipRadicle?: boolean;
+  skipLfs?: boolean;
 }
+
+// File size threshold for LFS (10MB)
+const LFS_SIZE_THRESHOLD = 10 * 1024 * 1024;
+
+// Extensions to track with LFS (common media files)
+const LFS_EXTENSIONS = [
+  // Video
+  '*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm', '*.m4v', '*.wmv',
+  // Audio
+  '*.mp3', '*.wav', '*.flac', '*.aac', '*.ogg', '*.m4a', '*.wma',
+  // Images (large formats)
+  '*.psd', '*.ai', '*.eps', '*.tiff', '*.tif', '*.bmp', '*.raw', '*.cr2', '*.nef',
+  // Archives
+  '*.zip', '*.tar', '*.gz', '*.7z', '*.rar',
+  // Other large files
+  '*.pdf', '*.iso', '*.dmg',
+];
 
 export class DreamNodeConversionService {
   private vaultPath: string;
@@ -85,6 +103,11 @@ export class DreamNodeConversionService {
       // Initialize git if not present
       if (!hasGit) {
         await this.initializeGitRepository(folderPath);
+      }
+
+      // Setup Git LFS if needed (before staging files)
+      if (!options.skipLfs) {
+        await this.setupLfsIfNeeded(folderPath);
       }
 
       // Create/update .udd file using UDDService
@@ -249,6 +272,120 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
     } else {
       console.log('[ConvertToDreamNode] No uncommitted changes, skipping commit');
     }
+  }
+
+  /**
+   * Check if LFS is needed and set it up
+   * LFS is needed if:
+   * 1. Directory contains files matching LFS extensions, OR
+   * 2. Directory contains any file larger than threshold
+   */
+  private async setupLfsIfNeeded(folderPath: string): Promise<void> {
+    // Check if LFS is already configured
+    const gitattributesPath = path.join(folderPath, '.gitattributes');
+    if (fs.existsSync(gitattributesPath)) {
+      const content = fs.readFileSync(gitattributesPath, 'utf-8');
+      if (content.includes('filter=lfs')) {
+        console.log('[ConvertToDreamNode] LFS already configured, skipping');
+        return;
+      }
+    }
+
+    // Scan for files that need LFS
+    const { hasLargeFiles, hasMediaFiles, largeFiles } = this.scanForLfsFiles(folderPath);
+
+    if (!hasLargeFiles && !hasMediaFiles) {
+      console.log('[ConvertToDreamNode] No large or media files found, skipping LFS');
+      return;
+    }
+
+    console.log('[ConvertToDreamNode] Setting up Git LFS...');
+    if (largeFiles.length > 0) {
+      console.log('[ConvertToDreamNode] Large files found:', largeFiles);
+    }
+
+    // Check if git-lfs is installed
+    try {
+      await execAsync('git lfs version');
+    } catch {
+      console.warn('[ConvertToDreamNode] git-lfs not installed, skipping LFS setup');
+      console.warn('[ConvertToDreamNode] Install with: brew install git-lfs');
+      return;
+    }
+
+    // Initialize LFS in the repository
+    await execAsync('git lfs install --local', { cwd: folderPath });
+    console.log('[ConvertToDreamNode] Git LFS initialized');
+
+    // Track all media extensions
+    for (const ext of LFS_EXTENSIONS) {
+      await execAsync(`git lfs track "${ext}"`, { cwd: folderPath });
+    }
+
+    // Track any additional large files by their specific extensions
+    const additionalExtensions = new Set<string>();
+    for (const file of largeFiles) {
+      const ext = path.extname(file).toLowerCase();
+      if (ext && !LFS_EXTENSIONS.includes(`*${ext}`)) {
+        additionalExtensions.add(`*${ext}`);
+      }
+    }
+    for (const ext of additionalExtensions) {
+      await execAsync(`git lfs track "${ext}"`, { cwd: folderPath });
+      console.log(`[ConvertToDreamNode] Added LFS tracking for: ${ext}`);
+    }
+
+    console.log('[ConvertToDreamNode] Git LFS setup complete');
+  }
+
+  /**
+   * Recursively scan directory for files that need LFS
+   */
+  private scanForLfsFiles(folderPath: string): {
+    hasLargeFiles: boolean;
+    hasMediaFiles: boolean;
+    largeFiles: string[];
+  } {
+    const largeFiles: string[] = [];
+    let hasMediaFiles = false;
+
+    const scanDir = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        // Skip .git directory
+        if (entry.name === '.git') continue;
+
+        if (entry.isDirectory()) {
+          scanDir(fullPath);
+        } else if (entry.isFile()) {
+          // Check extension against LFS patterns
+          const ext = path.extname(entry.name).toLowerCase();
+          if (LFS_EXTENSIONS.some(pattern => pattern === `*${ext}`)) {
+            hasMediaFiles = true;
+          }
+
+          // Check file size
+          try {
+            const stats = fs.statSync(fullPath);
+            if (stats.size > LFS_SIZE_THRESHOLD) {
+              largeFiles.push(path.relative(folderPath, fullPath));
+            }
+          } catch {
+            // Ignore stat errors
+          }
+        }
+      }
+    };
+
+    scanDir(folderPath);
+
+    return {
+      hasLargeFiles: largeFiles.length > 0,
+      hasMediaFiles,
+      largeFiles,
+    };
   }
 
   private async initializeRadicle(
