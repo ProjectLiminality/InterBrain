@@ -212,7 +212,7 @@
 .dreamSongBlockText .dreamSongTextOnly {
   max-width: 90%;
   margin: 0 auto;
-  text-align: left;
+  text-align: center;
 }
 
 /* Media-only blocks - centered */
@@ -236,7 +236,7 @@
 .dreamSongBlockMediaText .dreamSongMediaText {
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center; /* Vertically center text with media */
   width: 100%;
   max-width: 95%;
   margin: 0 auto;
@@ -265,8 +265,6 @@
   padding: 10px;
   text-align: left;
   margin: 0;
-  display: flex;
-  align-items: center;
 }
 
 /* Media elements */
@@ -328,6 +326,7 @@
   color: #ffffff;
   margin: 0 0 8px 0;
   font-weight: 600;
+  text-align: inherit; /* Inherit centering from parent container */
 }
 
 .dreamSongText strong {
@@ -498,6 +497,7 @@
 
   .dreamSongBlockText .dreamSongTextOnly {
     max-width: 100%;
+    text-align: center;
   }
 
   .dreamSongBlockMedia .dreamSongMediaOnly {
