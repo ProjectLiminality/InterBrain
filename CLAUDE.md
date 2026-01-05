@@ -114,13 +114,36 @@ npm run check-all    # Lint + typecheck + test (run before commits)
 
 ## Development Workflow
 
-**Slash commands** for systematic workflow:
+### Branch Strategy
+
+```
+main (stable releases only)
+  └── develop (integration branch, daily work)
+        └── feature/* (quick experiments, improvements)
+```
+
+- **`main`**: Stable, tested releases. Only merge from `develop` when cutting a release.
+- **`develop`**: Your playground. Merge features freely here. Private beta users can follow this branch.
+- **Feature branches**: Branch from `develop`, merge back to `develop`.
+
+**Quick workflow:**
+```bash
+git checkout develop
+git checkout -b feature/my-idea    # new feature
+# ... implement ...
+git checkout develop && git merge feature/my-idea
+git push
+# When ready for release:
+git checkout main && git merge develop && git tag vX.Y.Z && git push --tags
+```
+
+### Slash Commands
+
+For systematic workflow (optional, for larger features):
 - `/epic-start` - Begin new epic with branch setup
 - `/feature-start` - Start feature with issue refinement
 - `/feature-complete` - Complete feature with user testing
 - `/epic-complete` - Finalize epic with QA and release
-
-**Branch Strategy**: `main → epic/N-name → feature/name-from-issue`
 
 **Issue Hierarchy**: Epic → Features (2-tier, simplified)
 
