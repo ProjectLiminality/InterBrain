@@ -367,3 +367,85 @@ export async function convertFolderToDreamNode(
     uiService.showError(`Failed to convert to DreamNode: ${result.error}`);
   }
 }
+
+/**
+ * Open DreamSong for the DreamNode containing a file/folder
+ */
+export async function openDreamSongForFile(
+  plugin: Plugin,
+  uiService: UIService,
+  file: TAbstractFile
+): Promise<void> {
+  const conversionService = new DreamNodeConversionService(plugin.app, plugin.manifest);
+
+  // Find the containing DreamNode
+  const dreamNodePath = conversionService.findContainingDreamNode(file);
+  if (!dreamNodePath) {
+    uiService.showInfo('No DreamNode found for this item');
+    return;
+  }
+
+  // Get the node from store
+  let uuid: string;
+  try {
+    uuid = await UDDService.getUUID(dreamNodePath);
+  } catch (error) {
+    console.error('[OpenDreamSong] Failed to read UUID:', error);
+    uiService.showError('Failed to read DreamNode UUID');
+    return;
+  }
+
+  const store = useInterBrainStore.getState();
+  const nodeData = store.dreamNodes.get(uuid);
+
+  if (!nodeData) {
+    const path = require('path');
+    uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
+    return;
+  }
+
+  // Select the node and execute DreamSong fullscreen command
+  store.setSelectedNode(nodeData.node);
+  (plugin.app as any).commands.executeCommandById('interbrain:open-dreamsong-fullscreen');
+}
+
+/**
+ * Open DreamTalk for the DreamNode containing a file/folder
+ */
+export async function openDreamTalkForFile(
+  plugin: Plugin,
+  uiService: UIService,
+  file: TAbstractFile
+): Promise<void> {
+  const conversionService = new DreamNodeConversionService(plugin.app, plugin.manifest);
+
+  // Find the containing DreamNode
+  const dreamNodePath = conversionService.findContainingDreamNode(file);
+  if (!dreamNodePath) {
+    uiService.showInfo('No DreamNode found for this item');
+    return;
+  }
+
+  // Get the node from store
+  let uuid: string;
+  try {
+    uuid = await UDDService.getUUID(dreamNodePath);
+  } catch (error) {
+    console.error('[OpenDreamTalk] Failed to read UUID:', error);
+    uiService.showError('Failed to read DreamNode UUID');
+    return;
+  }
+
+  const store = useInterBrainStore.getState();
+  const nodeData = store.dreamNodes.get(uuid);
+
+  if (!nodeData) {
+    const path = require('path');
+    uiService.showWarning(`DreamNode not loaded: ${path.basename(dreamNodePath)}`);
+    return;
+  }
+
+  // Select the node and execute DreamTalk fullscreen command
+  store.setSelectedNode(nodeData.node);
+  (plugin.app as any).commands.executeCommandById('interbrain:open-dreamtalk-fullscreen');
+}

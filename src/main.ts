@@ -14,7 +14,9 @@ import {
   DreamNode,
   registerDreamNodeCommands,
   revealContainingDreamNode,
-  convertFolderToDreamNode
+  convertFolderToDreamNode,
+  openDreamSongForFile,
+  openDreamTalkForFile
 } from './features/dreamnode';
 import { registerSemanticSearchCommands } from './features/semantic-search/commands';
 import { registerCameraCommands } from './core/commands/camera-commands';
@@ -1302,6 +1304,26 @@ export default class InterBrainPlugin extends Plugin {
             .setIcon('target')
             .onClick(async () => {
               await revealContainingDreamNode(this, this.uiService, file);
+            });
+        });
+
+        // Open DreamSong for the containing DreamNode
+        menu.addItem((item) => {
+          item
+            .setTitle('Open DreamSong')
+            .setIcon('layout-dashboard')
+            .onClick(async () => {
+              await openDreamSongForFile(this, this.uiService, file);
+            });
+        });
+
+        // Open DreamTalk for the containing DreamNode
+        menu.addItem((item) => {
+          item
+            .setTitle('Open DreamTalk')
+            .setIcon('play-circle')
+            .onClick(async () => {
+              await openDreamTalkForFile(this, this.uiService, file);
             });
         });
 

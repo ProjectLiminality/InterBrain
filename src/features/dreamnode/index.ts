@@ -5,7 +5,13 @@
 export * from './store/slice';
 
 // Commands
-export { registerDreamNodeCommands, revealContainingDreamNode, convertFolderToDreamNode } from './commands';
+export {
+  registerDreamNodeCommands,
+  revealContainingDreamNode,
+  convertFolderToDreamNode,
+  openDreamSongForFile,
+  openDreamTalkForFile
+} from './commands';
 
 // Types
 export * from './types/dreamnode';
