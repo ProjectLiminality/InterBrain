@@ -59,6 +59,7 @@ const SmartVideo: React.FC<SmartVideoProps> = ({ src, className }) => {
   }, []);
 
   // Set up IntersectionObserver for viewport detection
+  // Only triggers when video is 100% visible in viewport
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -69,9 +70,10 @@ const SmartVideo: React.FC<SmartVideoProps> = ({ src, className }) => {
     const observer = new Observer(
       (entries) => {
         const entry = entries[0];
-        setIsInView(entry.isIntersecting && entry.intersectionRatio > 0.5);
+        // Only set in view when fully visible (100% intersection)
+        setIsInView(entry.isIntersecting && entry.intersectionRatio >= 1.0);
       },
-      { threshold: [0, 0.5, 1] }
+      { threshold: 1.0 } // Only fire when 100% visible
     );
 
     observer.observe(video);
