@@ -1,9 +1,144 @@
-import React from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { DreamSongBlock, MediaInfo } from '../types/dreamsong';
 import { MediaFile } from '../../dreamnode';
 import separatorImage from '../assets/Separator.png';
 import styles from '../styles/dreamsong.module.css';
 import { PDFPreview } from '../../dreamnode/components/PDFPreview';
+
+/**
+ * SmartVideo - Intelligent video player that auto-detects audio presence
+ *
+ * For videos WITHOUT audio: Autoplay muted, loop, no controls (GIF-like)
+ * For videos WITH audio: Show controls, user-initiated playback
+ *
+ * Uses IntersectionObserver to play when in view (with 1s delay) and pause when out
+ */
+interface SmartVideoProps {
+  src: string;
+  className?: string;
+}
+
+const SmartVideo: React.FC<SmartVideoProps> = ({ src, className }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null); // eslint-disable-line no-undef
+  const [hasAudio, setHasAudio] = useState<boolean | null>(null);
+  const [isInView, setIsInView] = useState(false);
+  const playTimeoutRef = useRef<number | null>(null);
+
+  // Detect if video has audio tracks
+  const checkForAudio = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Method 1: Check audioTracks API (not universally supported)
+    if ('audioTracks' in video) {
+      const audioTracks = (video as typeof video & { audioTracks?: { length: number } }).audioTracks;
+      if (audioTracks && audioTracks.length === 0) {
+        setHasAudio(false);
+        return;
+      }
+    }
+
+    // Method 2: Check webkitAudioDecodedByteCount (Chrome/Safari)
+    const webkitVideo = video as typeof video & {
+      webkitAudioDecodedByteCount?: number;
+      mozHasAudio?: boolean;
+    };
+
+    // Wait a moment for decoding to start, then check
+    setTimeout(() => {
+      if (webkitVideo.webkitAudioDecodedByteCount !== undefined) {
+        setHasAudio(webkitVideo.webkitAudioDecodedByteCount > 0);
+      } else if (webkitVideo.mozHasAudio !== undefined) {
+        // Firefox
+        setHasAudio(webkitVideo.mozHasAudio);
+      } else {
+        // Fallback: assume has audio to be safe (show controls)
+        setHasAudio(true);
+      }
+    }, 100);
+  }, []);
+
+  // Set up IntersectionObserver for viewport detection
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const Observer = window.IntersectionObserver;
+    if (!Observer) return;
+
+    const observer = new Observer(
+      (entries) => {
+        const entry = entries[0];
+        setIsInView(entry.isIntersecting && entry.intersectionRatio > 0.5);
+      },
+      { threshold: [0, 0.5, 1] }
+    );
+
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+
+  // Handle play/pause based on viewport and audio detection
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || hasAudio === null) return;
+
+    // Only auto-manage playback for videos without audio
+    if (hasAudio) return;
+
+    if (isInView) {
+      // Delay playback by 1 second when entering view
+      playTimeoutRef.current = window.setTimeout(() => {
+        video.play().catch(() => {
+          // Autoplay blocked - that's fine, user can interact
+        });
+      }, 1000);
+    } else {
+      // Clear pending play and pause immediately when leaving view
+      if (playTimeoutRef.current) {
+        window.clearTimeout(playTimeoutRef.current);
+        playTimeoutRef.current = null;
+      }
+      video.pause();
+    }
+
+    return () => {
+      if (playTimeoutRef.current) {
+        window.clearTimeout(playTimeoutRef.current);
+      }
+    };
+  }, [isInView, hasAudio]);
+
+  // Determine video attributes based on audio presence
+  const videoProps = hasAudio === false
+    ? {
+        // No audio: GIF-like behavior
+        muted: true,
+        loop: true,
+        playsInline: true,
+        preload: 'auto' as const,
+        // No controls for silent videos
+      }
+    : {
+        // Has audio (or unknown): Standard player
+        controls: true,
+        loop: true,
+        playsInline: true,
+        preload: 'auto' as const,
+      };
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      className={className}
+      onLoadedMetadata={checkForAudio}
+      {...videoProps}
+    >
+      Your browser does not support video playback.
+    </video>
+  );
+};
 
 interface DreamSongProps {
   blocks: DreamSongBlock[];
@@ -352,26 +487,19 @@ const DreamSongBlockComponent = React.memo<DreamSongBlockProps>(({ block, blockI
           );
         }
 
-        // Regular video handling
-        // No autoplay - user clicks to play with sound for full vibe experience
+        // Regular video handling - use smart autoplay component
         return (
           <div
             style={{
               ...containerStyle,
               position: 'relative'
             }}
+            onClick={clickHandler}
           >
-            <video
-              className={styles.dreamSongMedia}
+            <SmartVideo
               src={media.src}
-              controls
-              preload="auto"
-              playsInline
-              loop
-            >
-              Your browser does not support video playback.
-            </video>
-
+              className={styles.dreamSongMedia}
+            />
           </div>
         );
       
