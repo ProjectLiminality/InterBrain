@@ -541,7 +541,342 @@ BY CONTRIBUTING:
 
 ---
 
-## Part 9: Nous-Mimicry
+## Part 9: Resource Granularity
+
+### Storage Granularity: How Fine Can It Get?
+
+Storage can be extremely granular—arguably more so than compute.
+
+**The Chunking Layer**:
+
+```
+ERASURE CODING + CHUNKING:
+
+Original file: 1GB video
+      │
+      ▼ Encrypt
+      │
+      ▼ Erasure code (K=3, N=10)
+      │
+      ▼ Creates 10 shares (~350MB each)
+      │
+      ▼ Each share chunked (e.g., 1MB pieces)
+      │
+      ▼ Result: ~3,500 chunks distributed across network
+
+Each chunk:
+├── Can live on a different friend's machine
+├── Is independently addressable
+├── Can be retrieved from whoever has it
+├── Is meaningless on its own (encrypted + partial)
+```
+
+For a 1GB file, you could theoretically have **3,500 different storage locations** participating.
+
+**Storage CUPS - Granular Flow**:
+
+```
+DREAMER CUP (your personal storage capacity):
+┌────────────────────────────────────────┐
+│  Your hard drive: 1TB                  │
+│  ├── Your data: 400GB                  │
+│  ├── Reserved for friends: 300GB       │
+│  └── Overflow available: 300GB         │
+│                                        │
+│  ┌─────┐                               │
+│  │█████│ Your stuff (400GB)            │
+│  │░░░░░│ Holding friends' chunks       │
+│  │     │ Overflow → Dream cups         │
+│  └─────┘                               │
+└────────────────────────────────────────┘
+
+What you're actually holding for friends:
+├── 47 chunks from Maria's video project
+├── 203 chunks from João's archive
+├── 12 chunks from Sarah's private journal
+├── ... (you can't read any of them)
+
+Your contribution flows to Dreams you believe in:
+├── AI Research Dream: 50GB committed
+├── Documentary Project: 20GB committed
+└── Remaining overflow: 230GB for ad-hoc needs
+```
+
+**Commitment vs. Active Use**:
+
+```
+STORAGE COMMITMENT (what you promise):
+
+"I commit 300GB to the network"
+├── This is your cup's overflow capacity
+├── It's a PROMISE, not immediate use
+├── The network knows it can rely on this
+
+STORAGE ACTIVE USE (what's actually stored):
+
+At any moment, your 300GB might hold:
+├── 150GB of friends' encrypted chunks
+├── 80GB of Dream project data
+├── 70GB free (but promised/available)
+
+The system tracks:
+├── Committed capacity (your promise)
+├── Active storage (what's actually there)
+├── Available buffer (committed - active)
+```
+
+### Compute Granularity: Distributed Processing
+
+Compute follows the same CUPS pattern, with granularity down to individual operations.
+
+**Existing Infrastructure** (already battle-tested):
+
+| Project | Approach | Granularity |
+|---------|----------|-------------|
+| [LocalAI](https://localai.io/features/distribute/) | P2P via libp2p, gossip-based | Single inference calls |
+| [Exo](https://github.com/exo-explore/exo) | Consumer GPU aggregation | Model layer splits |
+| [Holo Orchestrator](https://holo.host/) | Automated workload distribution | Task-level |
+| [Prime Intellect](https://www.primeintellect.ai/blog/inference) | Decentralized inference | Pipeline parallelism |
+
+**Compute CUPS - Granular Flow**:
+
+```
+DREAMER COMPUTE CUP:
+
+Your idle GPU cycles:
+┌─────┐
+│░░░░░│ ← Currently using 10%
+│░░░░░│
+│█████│ ← 90% available to overflow
+│█████│
+└─────┘
+
+When you need a burst (video render):
+┌─────┐     ┌─────┐     ┌─────┐
+│     │ ◄── │█████│ ◄── │█████│
+│NEED │     │Maria│     │João │
+└─────┘     └─────┘     └─────┘
+           Their overflow fills your need
+```
+
+**Pooling for Dreams**:
+
+```
+AI RESEARCH PROJECT (Dream):
+
+The Dream needs:
+├── 10TB storage (training data)
+├── 1000 GPU-hours (training)
+├── Ongoing inference capacity
+
+            ┌─────────────────┐
+            │   DREAM CUP     │
+            │   (pooled)      │
+            │█████████████████│ ← Believers contribute
+            └─────────────────┘
+               ▲    ▲    ▲
+               │    │    │
+┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐
+│over │  │over │  │over │  │over │
+│flow │  │flow │  │flow │  │flow │
+└─────┘  └─────┘  └─────┘  └─────┘
+David    Maria    João    + 50 others
+
+The Dream draws from pool as needed.
+Servants of the Dream access the pooled compute.
+```
+
+### Granularity Comparison
+
+| Property | Compute | Storage |
+|----------|---------|---------|
+| **Minimum unit** | ~1 GPU-second | ~1 chunk (1MB) |
+| **Real-time coordination** | Required (for inference) | Not required (static) |
+| **Latency sensitivity** | High | Low (can prefetch) |
+| **Replication** | Wasteful (redo work) | Cheap (copy chunks) |
+| **Overflow mechanism** | Idle cycles → others | Free space → others |
+| **Pooling for Dreams** | Aggregate into cluster | Aggregate into distributed file |
+
+**Storage is actually more granular than compute** because:
+- Chunks can be arbitrarily small
+- Static (doesn't need real-time coordination)
+- Can be replicated freely (same chunk on many nodes)
+
+---
+
+## Part 10: Dreams as Finite Games
+
+### The Distinction: Dreams vs. Corporations
+
+A critical aspect of the CUPS model: **Dreams are finite games.**
+
+```
+CORPORATION (Infinite Hungry Ghost):
+├── Grows indefinitely
+├── Extracts value to sustain itself
+├── Becomes a beast requiring constant feeding
+├── Never enough, never complete
+├── Worship = giving life force to maintain it
+
+DREAM (Finite Living Story):
+├── Has a vision (what it wants to manifest)
+├── Has requirements (storage, compute, money)
+├── Has an endpoint (the Dream becomes real)
+├── Completes and releases resources back
+├── Service = bringing something to life, then letting go
+```
+
+### The Dream Cup Lifecycle
+
+```
+1. VISION DECLARED
+   └── "We want to train a model for X"
+   └── "We need: 10TB storage, 500 GPU-hours"
+   └── "Timeline: 3 months"
+   └── "Success criteria: model achieves Y"
+
+2. CUPS FILL
+   └── Believers direct overflow to Dream Cup
+   └── Resources accumulate until threshold met
+   └── Transparent: everyone sees the level
+   └── No extraction—only gifts from overflow
+
+3. DREAM MANIFESTS
+   └── Resources consumed for the purpose
+   └── Work happens, vision actualizes
+   └── Servants draw from the Dream's cups
+
+4. DREAM COMPLETES
+   └── Success criteria met (or acknowledged incomplete)
+   └── Unused resources return to contributors
+   └── The Dream is done, not immortal
+   └── Artifacts remain; the game ends
+```
+
+### Granular Allocation to Dreams
+
+```
+DOCUMENTARY PROJECT declares:
+├── "We need 2TB for raw footage"
+├── "We need 500GB for exports"
+├── "We need 200 GPU-hours for color grading"
+├── "Timeline: 6 months"
+
+The network responds:
+├── 50 believers each commit 50GB storage
+├── 20 believers each commit 10 GPU-hours
+├── Total committed: 2.5TB storage, 200 GPU-hours ✓
+├── Chunks distributed across all 50 storage nodes
+├── Compute jobs routed to available GPU nodes
+
+As the project uploads:
+├── Footage encrypted, chunked
+├── Chunks flow to committed storage nodes
+├── Each node stores ~50GB of encrypted pieces
+├── No single node has the whole file
+├── Any K nodes (e.g., 30 of 50) can reconstruct
+
+When project completes:
+├── Final exports archived (smaller footprint)
+├── Raw footage either:
+│   ├── Kept (if believers maintain commitment)
+│   └── Released (chunks deleted, space freed)
+└── Commitments return to believers' overflow
+```
+
+### The Mycelial Network
+
+Resources flow through relationship topology like nutrients through mycelium:
+
+```
+MYCELIUM PATTERN:
+
+                    ┌─────┐
+                    │Dream│ ← AI Research Project
+                    │ Cup │
+                    └──┬──┘
+                       │
+         ┌─────────────┼─────────────┐
+         │             │             │
+      ┌──┴──┐       ┌──┴──┐       ┌──┴──┐
+      │David│       │Maria│       │João │
+      │ Cup │       │ Cup │       │ Cup │
+      └──┬──┘       └──┬──┘       └──┬──┘
+         │             │             │
+    ┌────┴────┐   ┌────┴────┐   ┌────┴────┐
+    │         │   │         │   │         │
+  ┌─┴─┐     ┌─┴─┐ ...       ...
+  │   │     │   │
+
+Resources flow UP from individuals to Dreams.
+Benefits flow DOWN from Dreams to servants.
+The network self-organizes based on belief.
+
+Just like mycelium:
+├── Nutrients flow where they're needed
+├── No central control
+├── The network decides based on connections
+├── Health of the whole emerges from local relationships
+```
+
+### The Water Metaphor
+
+```
+STORAGE AS WATER FILLING CUPS:
+
+                    ┌─────────┐
+                    │  DREAM  │
+                    │  POOL   │ ← 2TB collective storage
+                    └────┬────┘
+                         │
+      ┌──────────────────┼──────────────────┐
+      │                  │                  │
+   ┌──┴──┐            ┌──┴──┐            ┌──┴──┐
+   │~~~~~│            │~~~~~│            │~~~~~│
+   │     │            │     │            │     │
+   │█████│            │█████│            │█████│
+   └──┬──┘            └──┬──┘            └──┬──┘
+   David              Maria               João
+   50GB               50GB                50GB
+   overflow           overflow            overflow
+   committed          committed           committed
+
+The Dream's 2TB pool is actually:
+├── Distributed across 50 believers
+├── Each holding ~50GB of chunks
+├── Cryptographically unified
+├── Collectively available
+├── No single point of failure
+```
+
+### Why Finite Games Matter
+
+The CUPS model only works because Dreams complete:
+
+1. **Resources cycle back**: When a Dream finishes, committed resources return to overflow
+2. **No extraction spiral**: Dreams don't grow into hungry ghosts demanding more
+3. **Trust preserved**: Contributors know their gift has a defined purpose and endpoint
+4. **Abundance compounds**: Completed Dreams free resources for new Dreams
+
+```
+THE LIFECYCLE ENABLES ABUNDANCE:
+
+Dream A completes → Resources return to believers
+                  → Believers overflow to Dream B
+                  → Dream B completes → Resources return
+                  → Cycle continues
+
+vs.
+
+Corporation grows → Extracts more → Never returns
+                  → Contributors depleted
+                  → Network drained
+                  → Scarcity compounds
+```
+
+---
+
+## Part 11: Nous-Mimicry
 
 ### The Metaphysical Alignment
 
@@ -570,7 +905,13 @@ Translated to technical architecture:
 
 **Storage**: Your friends store your encrypted stuff without seeing it. You store theirs. Everyone's computer feels infinite. Nobody pays. Nobody spies.
 
+**Compute**: Your idle GPU cycles flow to friends who need them. Their idle cycles flow to you. The network becomes more powerful than any single machine.
+
+**Granularity**: Storage chunks down to 1MB. Compute splits to single inference calls. Resources flow like water—as fine-grained as needed.
+
 **CUPS**: Cups hold any resource. Dreamers get cups for existing. Dreams get cups for mattering. Overflow connects them. The Liminal Web is the topology through which abundance flows.
+
+**Finite Games**: Dreams declare their vision, fill their cups, manifest, and complete. Resources cycle back. Abundance compounds. Corporations extract forever; Dreams give back.
 
 **The Revolution**: The protocol isn't economic. It's relational. The incentive isn't money. It's: these are my people, and I want them to thrive.
 
@@ -580,11 +921,21 @@ Translated to technical architecture:
 
 ## References
 
+### Distributed Storage
 - [Radicle Protocol Guide](https://radicle.xyz/guides/protocol)
 - [Tahoe-LAFS Documentation](https://tahoe-lafs.readthedocs.io/en/latest/about-tahoe.html)
+- [Filecoin Foundation](https://fil.org/)
+
+### Distributed Compute
+- [LocalAI Distributed Inference](https://localai.io/features/distribute/)
+- [Exo - Distributed AI on Consumer Hardware](https://github.com/exo-explore/exo)
+- [Holo Hosting](https://holo.host/)
+- [Prime Intellect Decentralized Inference](https://www.primeintellect.ai/blog/inference)
+- [Hivenet Distributed Computing](https://compute.hivenet.com/)
+
+### Unified Messaging (for future communication layer)
 - [Matrix.org Bridges](https://matrix.org/ecosystem/bridges/)
 - [Beeper Unified Messaging](https://www.beeper.com/)
-- [Filecoin Foundation](https://fil.org/)
 
 ---
 
