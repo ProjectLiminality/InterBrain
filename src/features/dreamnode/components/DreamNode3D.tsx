@@ -66,7 +66,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
   // PERFORMANCE FIX: Populate dreamNode media from cache without triggering store updates
   // - Media loads in background via media-loading-service
-  // - Poll cache and update dreamNode properties directly
+  // - Subscribe to load event and update dreamNode properties directly
   // - Trigger re-render when media loads (without store update)
   // - Avoids 72+ store updates that caused re-render storm
   const [mediaLoadedTrigger, setMediaLoadedTrigger] = useState(0);
@@ -74,35 +74,28 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   useEffect(() => {
     const mediaService = getMediaLoadingService();
 
-    // Check immediately
+    // Check immediately if already cached
     const media = mediaService.getCachedMedia(dreamNode.id);
     if (media) {
       // Update dreamNode properties directly (maintains compatibility with existing code)
       dreamNode.dreamTalkMedia = media.dreamTalkMedia;
       dreamNode.dreamSongContent = media.dreamSongContent;
       setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
-      return; // Stop polling once loaded
+      return; // Already loaded, no need to subscribe
     }
 
-    // Poll every 100ms until media is loaded (max 30 seconds)
-    let pollCount = 0;
-    const maxPolls = 300; // 30 seconds
-    const pollInterval = globalThis.setInterval(() => {
-      pollCount++;
-      const media = mediaService.getCachedMedia(dreamNode.id);
-
-      if (media) {
+    // Subscribe to media load event - no timeout, waits indefinitely until media loads
+    const unsubscribe = mediaService.onMediaLoaded(dreamNode.id, () => {
+      const loadedMedia = mediaService.getCachedMedia(dreamNode.id);
+      if (loadedMedia) {
         // Update dreamNode properties directly
-        dreamNode.dreamTalkMedia = media.dreamTalkMedia;
-        dreamNode.dreamSongContent = media.dreamSongContent;
+        dreamNode.dreamTalkMedia = loadedMedia.dreamTalkMedia;
+        dreamNode.dreamSongContent = loadedMedia.dreamSongContent;
         setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
-        globalThis.clearInterval(pollInterval);
-      } else if (pollCount >= maxPolls) {
-        globalThis.clearInterval(pollInterval);
       }
-    }, 100);
+    });
 
-    return () => globalThis.clearInterval(pollInterval);
+    return unsubscribe;
   }, [dreamNode.id]);
   
   // Dual-mode position state

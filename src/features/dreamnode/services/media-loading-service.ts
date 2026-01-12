@@ -215,14 +215,21 @@ export class MediaLoadingService {
     }
     this.isProcessingQueue = true;
 
-    const activeLoads: Promise<void>[] = [];
+    const activeLoads: Set<Promise<void>> = new Set();
 
-    while (this.loadingQueue.length > 0) {
+    while (this.loadingQueue.length > 0 || activeLoads.size > 0) {
       // Wait if we hit concurrency limit
-      if (activeLoads.length >= this.maxConcurrentLoads) {
+      while (activeLoads.size >= this.maxConcurrentLoads && this.loadingQueue.length > 0) {
         await Promise.race(activeLoads);
-        // Remove completed loads
-        activeLoads.splice(0, activeLoads.findIndex(p => p === undefined) + 1);
+        // Promise.race resolved - at least one promise completed and removed itself from the set
+      }
+
+      // If queue is empty but loads are still active, wait for them
+      if (this.loadingQueue.length === 0) {
+        if (activeLoads.size > 0) {
+          await Promise.all(activeLoads);
+        }
+        break;
       }
 
       const task = this.loadingQueue.shift()!;
@@ -235,23 +242,52 @@ export class MediaLoadingService {
       // Start loading (don't await - parallel loading)
       const loadPromise = this.loadNodeMedia(task.nodeId)
         .then(() => {
-          // Remove from active loads when done
-          const index = activeLoads.indexOf(loadPromise);
-          if (index > -1) activeLoads.splice(index, 1);
+          // Remove from active loads when done - this makes Promise.race() work correctly
+          activeLoads.delete(loadPromise);
+          // Emit event so components know media is available
+          this.emitMediaLoaded(task.nodeId);
         })
         .catch(error => {
           console.error(`[MediaLoading] Failed to load ${task.nodeId}:`, error);
+          activeLoads.delete(loadPromise);
         });
 
-      activeLoads.push(loadPromise);
+      activeLoads.add(loadPromise);
     }
 
-    // Don't wait for remaining loads - let them complete in background
+    this.isProcessingQueue = false;
+  }
 
-    // Clean up remaining loads in background without blocking
-    Promise.all(activeLoads).then(() => {
-      this.isProcessingQueue = false;
-    });
+  // Event emitter for media load completion
+  private mediaLoadListeners: Map<string, Set<() => void>> = new Map();
+
+  /**
+   * Subscribe to media load completion for a specific node
+   * Returns unsubscribe function
+   */
+  onMediaLoaded(nodeId: string, callback: () => void): () => void {
+    if (!this.mediaLoadListeners.has(nodeId)) {
+      this.mediaLoadListeners.set(nodeId, new Set());
+    }
+    this.mediaLoadListeners.get(nodeId)!.add(callback);
+
+    return () => {
+      const listeners = this.mediaLoadListeners.get(nodeId);
+      if (listeners) {
+        listeners.delete(callback);
+        if (listeners.size === 0) {
+          this.mediaLoadListeners.delete(nodeId);
+        }
+      }
+    };
+  }
+
+  private emitMediaLoaded(nodeId: string): void {
+    const listeners = this.mediaLoadListeners.get(nodeId);
+    if (listeners) {
+      listeners.forEach(callback => callback());
+      this.mediaLoadListeners.delete(nodeId); // Clean up after notifying
+    }
   }
 
   /**
@@ -416,6 +452,7 @@ export class MediaLoadingService {
     this.loadingQueue = [];
     this.viewportQueue.clear();
     this.requestedNodes.clear();
+    this.mediaLoadListeners.clear();
     if (this.viewportBatchTimer) {
       globalThis.clearTimeout(this.viewportBatchTimer);
       this.viewportBatchTimer = null;
