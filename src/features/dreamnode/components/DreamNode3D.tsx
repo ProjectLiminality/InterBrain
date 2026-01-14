@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { Html, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
@@ -10,8 +11,13 @@ import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-s
 import { VaultService } from '../../../core/services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
+import { DreamTalkMesh } from './DreamTalkMesh';
 import { getMediaLoadingService } from '../services/media-loading-service';
 import '../styles/dreamNodeAnimations.css';
+
+// Feature flag for WebGL-native DreamTalk rendering
+// Set to true to use DreamTalkMesh instead of Html+DreamTalkSide
+const USE_WEBGL_DREAMTALK = true;
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
@@ -567,30 +573,22 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Position calculation and animation frame logic
   useFrame((_state, delta) => {
-    // Calculate current z-position for distance-scaled hover
-    const currentZ = positionMode === 'constellation'
-      ? anchorPosition[2] - normalizedDirection[2] * radialOffset
-      : currentPosition[2];
-
-    // Update target hover scale based on distance (distance-invariant ring thickness)
-    // Treat pending relationship or tutorial highlight as forced hover state
+    // Hover scale animation
     const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
-    targetHoverScale.current = effectiveHover ? getDistanceScaledHoverScale(currentZ) : 1;
-
-    // Smooth hover scale animation (lerp towards target)
     if (hoverGroupRef.current) {
+      const currentZ = positionMode === 'constellation'
+        ? anchorPosition[2] - normalizedDirection[2] * radialOffset
+        : currentPosition[2];
+
+      const targetScale = effectiveHover ? getDistanceScaledHoverScale(currentZ) : 1;
       const currentScale = hoverGroupRef.current.scale.x;
-      const targetScale = targetHoverScale.current;
-      const lerpFactor = 1 - Math.pow(0.00001, delta); // Snappier interpolation (~0.1s feel)
+      const lerpFactor = 1 - Math.pow(0.00001, delta);
       const newScale = currentScale + (targetScale - currentScale) * lerpFactor;
       hoverGroupRef.current.scale.set(newScale, newScale, newScale);
     }
 
     // Constellation mode dynamic scaling
     if (positionMode === 'constellation' && enableDynamicScaling && groupRef.current) {
-      const worldPosition = new Vector3();
-      groupRef.current.getWorldPosition(worldPosition);
-
       const anchorGroup = groupRef.current.parent;
       const anchorVector = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (anchorGroup) {
@@ -605,12 +603,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       if (radialOffset !== newRadialOffset) {
         setRadialOffset(newRadialOffset);
       }
-    } 
-    // Active mode transitions
+    }
+    // Active mode transitions - needs per-frame updates
     else if (positionMode === 'active' && isTransitioning) {
       const elapsed = globalThis.performance.now() - transitionStartTime;
       const progress = Math.min(elapsed / transitionDuration, 1);
-      
+
       let easedProgress: number;
       switch (transitionEasing) {
         case 'easeInQuart':
@@ -624,19 +622,19 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           easedProgress = 1 - Math.pow(1 - progress, 3);
           break;
       }
-      
+
       const newPosition: [number, number, number] = [
         startPosition[0] + (targetPosition[0] - startPosition[0]) * easedProgress,
         startPosition[1] + (targetPosition[1] - startPosition[1]) * easedProgress,
         startPosition[2] + (targetPosition[2] - startPosition[2]) * easedProgress
       ];
-      
+
       setCurrentPosition(newPosition);
-      
+
       if (progress >= 1) {
         setIsTransitioning(false);
         setCurrentPosition(targetPosition);
-        
+
         if (transitionType === 'liminal') {
           // Stay in active mode
         } else if (transitionType === 'constellation') {
@@ -647,41 +645,40 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         }
       }
     }
-    
-    // Flip animation updates
+
+    // Flip animation updates - needs per-frame updates
     if (isFlipping) {
       const targetRotation = nodeFlipState?.flipDirection === 'front-to-back' ? Math.PI : 0;
       const animationDuration = 600;
       const elapsed = globalThis.performance.now() - (nodeFlipState?.animationStartTime || 0);
       const progress = Math.min(elapsed / animationDuration, 1);
-      
-      const easedProgress = progress < 0.5 
-        ? 2 * progress * progress 
+
+      const easedProgress = progress < 0.5
+        ? 2 * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-      
-      const newRotation = nodeFlipState?.flipDirection === 'front-to-back' 
+
+      const newRotation = nodeFlipState?.flipDirection === 'front-to-back'
         ? easedProgress * Math.PI
         : Math.PI - (easedProgress * Math.PI);
-      
+
       setFlipRotation(newRotation);
-      
+
       if (progress >= 1) {
         completeFlipAnimation(dreamNode.id);
         setFlipRotation(targetRotation);
       }
     }
-    
-    // Unified flip-back animation (parallel with position movement, but faster)
+
+    // Unified flip-back animation - needs per-frame updates
     if (shouldAnimateFlip && !isFlipping) {
       const elapsed = globalThis.performance.now() - flipAnimationStartTime;
       const progress = Math.min(elapsed / flipAnimationDuration, 1);
-      
-      // Use easeOutCubic for smooth flip-back animation
+
       const easedProgress = 1 - Math.pow(1 - progress, 3);
-      
+
       const newFlipRotation = startFlipRotation + (targetFlipRotation - startFlipRotation) * easedProgress;
       setFlipRotation(newFlipRotation);
-      
+
       if (progress >= 1) {
         setFlipRotation(targetFlipRotation);
         setShouldAnimateFlip(false);
@@ -730,51 +727,70 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           ref={hoverGroupRef}
           rotation={[0, flipRotation, 0]}
         >
-          {/* First Html component - original DreamTalk */}
-          <Html
-            position={[0, 0, 0.01]}
-            center
-            transform
-            distanceFactor={10}
-            style={{
-              pointerEvents: isDragging ? 'none' : 'auto',
-              userSelect: isHovered ? 'auto' : 'none'
-            }}
-            onOcclude={() => {
-              // Noop - occlude detection not needed
-            }}
-          >
-            {/* Container div */}
-            <div
+          {/* Front side - DreamTalk (WebGL or HTML based on feature flag) */}
+          {USE_WEBGL_DREAMTALK ? (
+            /* WebGL-native DreamTalk rendering for better performance */
+            <DreamTalkMesh
+              dreamNode={dreamNode}
+              isHovered={isHovered}
+              isPendingRelationship={isPendingRelationship}
+              isTutorialHighlighted={isTutorialHighlighted}
+              glowIntensity={glowIntensity}
+              nodeSize={nodeSize}
+              borderWidth={borderWidth}
+              mediaLoadTrigger={mediaLoadedTrigger}
+              onPointerEnter={handleMouseEnter}
+              onPointerLeave={handleMouseLeave}
+              onClick={handleClick as unknown as (e: THREE.Event) => void}
+              onDoubleClick={handleDoubleClick as unknown as (e: THREE.Event) => void}
+            />
+          ) : (
+            /* Original HTML-based DreamTalk rendering */
+            <Html
+              position={[0, 0, 0.01]}
+              center
+              transform
+              distanceFactor={10}
               style={{
-                transformStyle: 'preserve-3d',
-                width: `${nodeSize}px`,
-                height: `${nodeSize}px`,
-                position: 'relative'
+                pointerEvents: isDragging ? 'none' : 'auto',
+                userSelect: isHovered ? 'auto' : 'none'
+              }}
+              onOcclude={() => {
+                // Noop - occlude detection not needed
               }}
             >
-              {/* Front side - DreamTalk */}
-              <DreamTalkSide
-                dreamNode={dreamNode}
-                isHovered={isHovered}
-                isEditModeActive={isEditModeActive}
-                isPendingRelationship={isPendingRelationship}
-                isRelationshipEditMode={spatialLayout === 'relationship-edit'}
-                isTutorialHighlighted={isTutorialHighlighted}
-                shouldShowFlipButton={shouldShowFlipButton}
-                shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
-                nodeSize={nodeSize}
-                borderWidth={borderWidth}
-                glowIntensity={glowIntensity}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                onClick={handleClick}
-                onDoubleClick={handleDoubleClick}
-                onFlipClick={handleFlipClick}
-                onFullScreenClick={handleDreamTalkFullScreen}
-              />
-            </div>
-          </Html>
+              {/* Container div */}
+              <div
+                style={{
+                  transformStyle: 'preserve-3d',
+                  width: `${nodeSize}px`,
+                  height: `${nodeSize}px`,
+                  position: 'relative'
+                }}
+              >
+                {/* Front side - DreamTalk */}
+                <DreamTalkSide
+                  dreamNode={dreamNode}
+                  isHovered={isHovered}
+                  isEditModeActive={isEditModeActive}
+                  isPendingRelationship={isPendingRelationship}
+                  isRelationshipEditMode={spatialLayout === 'relationship-edit'}
+                  isTutorialHighlighted={isTutorialHighlighted}
+                  shouldShowFlipButton={shouldShowFlipButton}
+                  shouldShowFullscreenButton={shouldShowDreamTalkFullscreen}
+                  nodeSize={nodeSize}
+                  borderWidth={borderWidth}
+                  glowIntensity={glowIntensity}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                  onClick={handleClick}
+                  onDoubleClick={handleDoubleClick}
+                  onFlipClick={handleFlipClick}
+                  onFullScreenClick={handleDreamTalkFullScreen}
+                />
+              </div>
+            </Html>
+          )}
 
           {/* Second Html component - DreamSong with 3D offset and rotation */}
           {/* OPTIMIZATION: Only mount DreamSongSide when node is selected in liminal-web mode */}
