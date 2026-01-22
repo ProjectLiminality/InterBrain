@@ -62,26 +62,16 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
 
   // Fetch PDF data for app:// URLs (Obsidian's getResourcePath format)
   useEffect(() => {
-    if (!src) {
-      console.log('[PDFPreview] No src provided');
-      return;
-    }
-
-    console.log('[PDFPreview] src:', src.substring(0, 100));
+    if (!src) return;
 
     // app:// URLs need to be fetched as ArrayBuffer since pdfjs can't load them directly
     if (src.startsWith('app://')) {
-      console.log('[PDFPreview] Fetching app:// URL...');
       setFetchedData(null);
       setFetchError(false);
 
       fetch(src)
-        .then(response => {
-          console.log('[PDFPreview] Fetch response:', response.status, response.statusText);
-          return response.arrayBuffer();
-        })
+        .then(response => response.arrayBuffer())
         .then(buffer => {
-          console.log('[PDFPreview] Fetched PDF, size:', buffer.byteLength);
           setFetchedData(new Uint8Array(buffer));
         })
         .catch(err => {
