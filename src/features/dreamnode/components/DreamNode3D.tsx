@@ -731,9 +731,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           rotation={[0, flipRotation, 0]}
         >
           {/* Front side - DreamTalk */}
-          {/* Use WebGL sprite for non-selected nodes (lightweight), HTML for selected (interactive buttons) */}
-          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING && !(spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode.id) ? (
-            /* Sprite-based rendering with circular-clip shader (non-selected nodes) */
+          {/* Layer 1: WebGL sprite (always rendered when enabled - provides visual continuity during HTML load) */}
+          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING && (
             <DreamTalkSprite
               dreamNode={dreamNode}
               isHovered={isHovered}
@@ -747,10 +746,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               onClick={handleClick as unknown as (e: THREE.Event) => void}
               onDoubleClick={handleDoubleClick as unknown as (e: THREE.Event) => void}
             />
-          ) : (
-            /* HTML-based DreamTalk rendering (selected node - has flip/fullscreen buttons) */
+          )}
+
+          {/* Layer 2: HTML overlay (only for selected node after animation completes - has flip/fullscreen buttons) */}
+          {/* Renders on top of WebGL sprite to prevent black flash during media load */}
+          {(!USE_WEBGL_DREAMTALK || !USE_SPRITE_RENDERING || (spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode.id && !isTransitioning)) && (
             <Html
-              position={[0, 0, 0.01]}
+              position={[0, 0, 0.02]}
               center
               transform
               distanceFactor={10}

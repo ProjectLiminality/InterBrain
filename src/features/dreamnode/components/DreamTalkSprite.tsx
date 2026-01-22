@@ -35,6 +35,63 @@ interface DreamTalkSpriteProps {
 const BORDER_WIDTH_FRACTION = 0.026;
 
 /**
+ * Generate text-only overlay texture (no dark background)
+ * Used for nodes without media - text is always visible
+ */
+function createTextOnlyTexture(name: string, size: number = 512): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  // Clear with full transparency
+  ctx.clearRect(0, 0, size, size);
+
+  // Calculate content radius
+  const contentRadiusFraction = (0.5 - BORDER_WIDTH_FRACTION) / 0.5;
+  const circleRadius = (size / 2) * contentRadiusFraction;
+
+  // Draw centered text (no background)
+  const fontSize = Math.max(28, size * 0.09);
+  ctx.fillStyle = dreamNodeStyles.colors.text.primary;
+  ctx.font = `${fontSize}px ${dreamNodeStyles.typography.fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Word wrap for long names
+  const maxWidth = circleRadius * 1.5;
+  const words = name.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  // Draw lines centered
+  const lineHeight = fontSize * 1.3;
+  const totalHeight = (lines.length - 1) * lineHeight;
+  const centerY = size / 2 + size * 0.02;
+  const startY = centerY - totalHeight / 2;
+
+  lines.forEach((line, i) => {
+    ctx.fillText(line, size / 2, startY + i * lineHeight);
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Generate hover overlay texture: semi-transparent black circle with centered text
  * Sized to fit inside the border (content area only)
  */
@@ -113,6 +170,9 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
   // Load texture directly from disk using Obsidian's getResourcePath
   const { texture } = useContentTexture(dreamNode);
 
+  // Check if node has media
+  const hasMedia = texture !== null;
+
   // Effective hover state (includes pending relationship and tutorial highlight)
   const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
 
@@ -136,6 +196,23 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
   useEffect(() => {
     updateCircularClipTexture(contentMaterial, texture);
   }, [texture, contentMaterial]);
+
+  // Create text-only texture for nodes without media (always visible)
+  const textOnlyTexture = useMemo(() => {
+    return createTextOnlyTexture(dreamNode.name, 512);
+  }, [dreamNode.name]);
+
+  // Create text-only material (always visible when no media)
+  const textOnlyMaterial = useMemo(() => {
+    return new THREE.MeshBasicMaterial({
+      map: textOnlyTexture,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide
+    });
+  }, [textOnlyTexture]);
 
   // Create hover overlay texture (cached per node name)
   const hoverTexture = useMemo(() => {
@@ -167,8 +244,11 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
     }
   });
 
+  // 9 pixel offset in world units (nodeSize / 80 * 2 is the size, so 1px = 2/80 = 0.025)
+  const pixelOffset = 0.225;
+
   return (
-    <group>
+    <group position={[0, pixelOffset, 0]}>
       {/* Content sprite: texture + border + gradient */}
       <mesh
         position={[0, 0, 0]}
@@ -181,13 +261,23 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
         onDoubleClick={onDoubleClick}
       />
 
-      {/* Hover overlay sprite: dark circle (renders on top of content) */}
+      {/* Text-only overlay for nodes without media (always visible) */}
+      {!hasMedia && (
+        <mesh
+          position={[0, 0, 0.05]}
+          geometry={geometry}
+          material={textOnlyMaterial}
+          renderOrder={2}
+        />
+      )}
+
+      {/* Hover overlay sprite: dark circle + text (renders on top) */}
       {hoverOpacity > 0.01 && (
         <mesh
           position={[0, 0, 0.1]}
           geometry={geometry}
           material={hoverMaterial}
-          renderOrder={2}
+          renderOrder={3}
         />
       )}
     </group>
