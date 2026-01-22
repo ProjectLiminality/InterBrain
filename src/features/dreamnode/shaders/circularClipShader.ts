@@ -113,7 +113,9 @@ const fragmentShader = /* glsl */ `
     // Mix texture with black based on fade amount
     vec3 finalColor = mix(texColor.rgb, vec3(0.0), fadeAmount);
 
-    gl_FragColor = vec4(finalColor, 1.0);
+    // Apply same color space compensation as border color
+    // (linearToSRGB counteracts renderer's gamma correction)
+    gl_FragColor = vec4(linearToSRGB(finalColor), 1.0);
   }
 `;
 
