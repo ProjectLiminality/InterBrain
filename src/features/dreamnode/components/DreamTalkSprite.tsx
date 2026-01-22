@@ -157,7 +157,7 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
   // Animate hover opacity
   useFrame((_, delta) => {
     const targetOpacity = effectiveHover ? 1 : 0;
-    const lerpSpeed = 8; // Fast fade
+    const lerpSpeed = 16; // Snappy fade
     const newOpacity = THREE.MathUtils.lerp(hoverOpacity, targetOpacity, Math.min(1, delta * lerpSpeed));
 
     if (Math.abs(newOpacity - hoverOpacity) > 0.001) {

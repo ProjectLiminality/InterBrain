@@ -730,9 +730,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           ref={hoverGroupRef}
           rotation={[0, flipRotation, 0]}
         >
-          {/* Front side - DreamTalk (WebGL or HTML based on feature flag) */}
-          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING ? (
-            /* Sprite-based rendering with circular-clip shader */
+          {/* Front side - DreamTalk */}
+          {/* Use WebGL sprite for non-selected nodes (lightweight), HTML for selected (interactive buttons) */}
+          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING && !(spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode.id) ? (
+            /* Sprite-based rendering with circular-clip shader (non-selected nodes) */
             <DreamTalkSprite
               dreamNode={dreamNode}
               isHovered={isHovered}
@@ -746,24 +747,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               onClick={handleClick as unknown as (e: THREE.Event) => void}
               onDoubleClick={handleDoubleClick as unknown as (e: THREE.Event) => void}
             />
-          ) : USE_WEBGL_DREAMTALK ? (
-            /* Legacy mesh-based WebGL rendering */
-            <DreamTalkMesh
-              dreamNode={dreamNode}
-              isHovered={isHovered}
-              isPendingRelationship={isPendingRelationship}
-              isTutorialHighlighted={isTutorialHighlighted}
-              glowIntensity={glowIntensity}
-              nodeSize={nodeSize}
-              borderWidth={borderWidth}
-              mediaLoadTrigger={mediaLoadedTrigger}
-              onPointerEnter={handleMouseEnter}
-              onPointerLeave={handleMouseLeave}
-              onClick={handleClick as unknown as (e: THREE.Event) => void}
-              onDoubleClick={handleDoubleClick as unknown as (e: THREE.Event) => void}
-            />
           ) : (
-            /* Original HTML-based DreamTalk rendering */
+            /* HTML-based DreamTalk rendering (selected node - has flip/fullscreen buttons) */
             <Html
               position={[0, 0, 0.01]}
               center
@@ -772,9 +757,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
               style={{
                 pointerEvents: isDragging ? 'none' : 'auto',
                 userSelect: isHovered ? 'auto' : 'none'
-              }}
-              onOcclude={() => {
-                // Noop - occlude detection not needed
               }}
             >
               {/* Container div */}
@@ -812,7 +794,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
           {/* Second Html component - DreamSong with 3D offset and rotation */}
           {/* OPTIMIZATION: Only mount DreamSongSide when node is selected in liminal-web mode */}
-          {hasLoadedBackSide && (
+          {/* Only show DreamSong when flipped past 90 degrees (back side visible) */}
+          {hasLoadedBackSide && flipRotation > Math.PI / 2 && (
             <Html
               position={[0, 0, -0.01]}
               rotation={[0, Math.PI, 0]}
