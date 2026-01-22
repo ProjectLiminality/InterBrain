@@ -12,12 +12,15 @@ import { VaultService } from '../../../core/services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
 import { DreamTalkMesh } from './DreamTalkMesh';
+import { DreamTalkSprite } from './DreamTalkSprite';
 import { getMediaLoadingService } from '../services/media-loading-service';
 import '../styles/dreamNodeAnimations.css';
 
-// Feature flag for WebGL-native DreamTalk rendering
-// Set to true to use DreamTalkMesh instead of Html+DreamTalkSide
+// Feature flags for WebGL-native DreamTalk rendering
+// USE_WEBGL_DREAMTALK: Enable WebGL rendering (vs DOM-based Html+DreamTalkSide)
+// USE_SPRITE_RENDERING: Use new sprite-based approach with circular-clip shader
 const USE_WEBGL_DREAMTALK = true;
+const USE_SPRITE_RENDERING = true;
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
@@ -728,8 +731,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           rotation={[0, flipRotation, 0]}
         >
           {/* Front side - DreamTalk (WebGL or HTML based on feature flag) */}
-          {USE_WEBGL_DREAMTALK ? (
-            /* WebGL-native DreamTalk rendering for better performance */
+          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING ? (
+            /* Sprite-based rendering with circular-clip shader */
+            <DreamTalkSprite
+              dreamNode={dreamNode}
+              isHovered={isHovered}
+              isPendingRelationship={isPendingRelationship}
+              isTutorialHighlighted={isTutorialHighlighted}
+              glowIntensity={glowIntensity}
+              nodeSize={nodeSize}
+              borderWidth={borderWidth}
+              onPointerEnter={handleMouseEnter}
+              onPointerLeave={handleMouseLeave}
+              onClick={handleClick as unknown as (e: THREE.Event) => void}
+              onDoubleClick={handleDoubleClick as unknown as (e: THREE.Event) => void}
+            />
+          ) : USE_WEBGL_DREAMTALK ? (
+            /* Legacy mesh-based WebGL rendering */
             <DreamTalkMesh
               dreamNode={dreamNode}
               isHovered={isHovered}
