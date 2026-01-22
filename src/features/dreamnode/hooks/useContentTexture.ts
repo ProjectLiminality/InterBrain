@@ -10,10 +10,15 @@
 
 import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { pdfjs } from 'react-pdf';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { DreamNode } from '../types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export interface ContentTextureResult {
   texture: THREE.Texture | null;
@@ -173,9 +178,13 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
           return;
         }
 
-        // Handle PDF - placeholder for now
+        // Handle PDF - render first page to texture
         if (media.type.startsWith('application/pdf')) {
-          setTexture(null);
+          console.log(`[useContentTexture] ${dreamNode.name}: Loading PDF texture...`);
+          const pdfTex = await loadPdfTexture(resourceUrl);
+          console.log(`[useContentTexture] ${dreamNode.name}: PDF texture loaded!`);
+          textureRef.current = pdfTex;
+          setTexture(pdfTex);
           setIsVideo(false);
           setIsLoading(false);
           return;
@@ -255,6 +264,74 @@ async function loadVideoTexture(src: string): Promise<{ texture: THREE.VideoText
     // Trigger load
     video.load();
   });
+}
+
+/**
+ * Load a PDF URL and render first page to a THREE.Texture
+ * Renders to a square canvas with the PDF centered and scaled to fit (contain mode)
+ * This ensures the full page is visible without cropping the title
+ */
+async function loadPdfTexture(src: string): Promise<THREE.Texture> {
+  // Fetch PDF as ArrayBuffer (needed for app:// URLs)
+  const response = await fetch(src);
+  const arrayBuffer = await response.arrayBuffer();
+
+  // Load PDF document
+  const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+
+  // Target square canvas size
+  const canvasSize = 512;
+
+  // Calculate scale to fit PDF within the canvas with some padding
+  const viewport = page.getViewport({ scale: 1 });
+  const padding = 0.1; // 10% padding on each side
+  const availableSize = canvasSize * (1 - padding * 2);
+  const scale = availableSize / Math.max(viewport.width, viewport.height);
+  const scaledViewport = page.getViewport({ scale });
+
+  // Create square canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  const ctx = canvas.getContext('2d')!;
+
+  // Fill with black background
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+  // Center the PDF on the canvas
+  const offsetX = (canvasSize - scaledViewport.width) / 2;
+  const offsetY = (canvasSize - scaledViewport.height) / 2;
+
+  // Save context state, translate, render, then restore
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+
+  // Clip to the PDF viewport bounds to prevent any overflow
+  ctx.beginPath();
+  ctx.rect(0, 0, scaledViewport.width, scaledViewport.height);
+  ctx.clip();
+
+  // Fill PDF area with white (PDF background)
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, scaledViewport.width, scaledViewport.height);
+
+  // Render PDF page to canvas
+  await page.render({
+    canvasContext: ctx,
+    viewport: scaledViewport,
+    background: 'transparent'
+  }).promise;
+
+  ctx.restore();
+
+  // Create texture from canvas
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+
+  return texture;
 }
 
 export default useContentTexture;
