@@ -314,7 +314,7 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
       transparent: true,
       opacity: 0,
       depthWrite: false,
-      depthTest: false,  // Don't test against depth buffer - always render on top
+      depthTest: false,
       side: THREE.DoubleSide
     });
   }, [hoverTexture]);

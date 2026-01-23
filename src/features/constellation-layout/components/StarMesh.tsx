@@ -71,9 +71,9 @@ function getStarTexture(): THREE.Texture {
 export const StarMesh: React.FC<StarMeshProps> = ({ position, size = 7500 }) => {
   const spriteRef = useRef<THREE.Sprite>(null);
 
-  // Calculate position with offset AWAY from camera (behind the node)
-  // Negative offset pushes the star further from origin (camera)
-  const STAR_OFFSET = -200; // Behind the DreamNode (larger offset to ensure visibility)
+  // Calculate position with offset TOWARD camera (in front of node)
+  // Positive offset pulls the star closer to origin (camera)
+  const STAR_OFFSET = 200; // In front of DreamNode so it occludes the sprite when camera is behind
 
   const offsetPosition = useMemo(() => {
     const direction = [-position[0], -position[1], -position[2]];

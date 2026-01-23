@@ -88,13 +88,10 @@ const fragmentShader = /* glsl */ `
 
     // Apply fade-to-black radial gradient (vignette effect)
     // CSS reference: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,1) 70%)
-    // These percentages are relative to FULL circle radius (0.5 in UV space)
-    // So we use dist directly (0 at center, 0.5 at edge)
-    // 50% of radius = 0.25, 60% = 0.30, 70% = 0.35
-    // But we want the gradient to end right at the border, so scale to contentRadius
-    float fadeStart = contentRadius * 0.70;  // Start fade at 70% of content area
-    float fadeMid = contentRadius * 0.85;    // 50% black at 85%
-    float fadeEnd = contentRadius * 0.98;    // Fully black at 98% (just before border)
+    // These values were manually calibrated to match HTML appearance
+    float fadeStart = contentRadius * 0.69;  // Start fade at 69% of content area
+    float fadeMid = contentRadius * 0.84;    // 50% black at 84%
+    float fadeEnd = contentRadius * 0.97;    // Fully black at 97% (just before border)
 
     float fadeAmount = 0.0;
     if (dist > fadeStart) {
