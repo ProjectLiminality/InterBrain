@@ -9,7 +9,7 @@ export const dreamNodeStyles = {
   // Color scheme for different node types
   colors: {
     dream: {
-      border: '#4FC3F7',  // Blue for Dreams
+      border: '#479FF8',  // Blue for Dreams (RGB: 71, 159, 248)
       fill: '#000000'     // Black background
     },
     dreamer: {

@@ -201,12 +201,12 @@ export default class InterBrainPlugin extends Plugin {
           console.log(`[InterBrain] isFreshLaunch=${isFreshLaunch}, isPluginReload=${isPluginReload}`);
 
           if (!isPluginReload) {
-            console.log('[InterBrain] Fresh app launch detected - showing portal overlay');
-            // Delay slightly to ensure DreamspaceCanvas is mounted
-            setTimeout(() => {
-              console.log('[InterBrain] Calling showTutorialPortal()');
-              store.showTutorialPortal();
-            }, 500);
+            console.log('[InterBrain] Fresh app launch detected - portal disabled for testing');
+            // DISABLED FOR TESTING: Tutorial portal
+            // setTimeout(() => {
+            //   console.log('[InterBrain] Calling showTutorialPortal()');
+            //   store.showTutorialPortal();
+            // }, 500);
 
             // Check for InterBrain updates on fresh launch
             setTimeout(() => {
@@ -272,9 +272,8 @@ export default class InterBrainPlugin extends Plugin {
           store.setSelectedNode(nodeData.node);
           store.setSpatialLayout('liminal-web');
 
-          // Show the tutorial portal overlay for first-time users
-          // (also shown on every fresh Obsidian launch via autoSelectNode)
-          store.showTutorialPortal();
+          // DISABLED FOR TESTING: Tutorial portal
+          // store.showTutorialPortal();
         } else {
           console.warn('[InterBrain] InterBrain node not found for auto-selection');
         }

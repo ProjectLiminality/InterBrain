@@ -1,10 +1,38 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { DreamNode, MediaFile } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaContainerStyle, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 import { PDFPreview } from './PDFPreview';
 import { NodeActionButton } from './NodeActionButton';
+import { serviceManager } from '../../../core/services/service-manager';
+
+/**
+ * Get resource URL from absolutePath using Obsidian's getResourcePath
+ * This avoids base64 encoding and loads directly from disk
+ */
+function getMediaResourceUrl(absolutePath: string | undefined): string | null {
+  if (!absolutePath) return null;
+
+  const app = serviceManager.getApp();
+  if (!app) return null;
+
+  const adapter = app.vault.adapter as { basePath?: string };
+  const vaultPath = adapter.basePath || '';
+
+  if (!vaultPath) return null;
+
+  // Convert absolute path to vault-relative path
+  let vaultRelativePath = absolutePath;
+  if (vaultRelativePath.startsWith(vaultPath)) {
+    vaultRelativePath = vaultRelativePath.slice(vaultPath.length);
+    if (vaultRelativePath.startsWith('/')) {
+      vaultRelativePath = vaultRelativePath.slice(1);
+    }
+  }
+
+  return app.vault.adapter.getResourcePath(vaultRelativePath);
+}
 
 interface DreamTalkSideProps {
   dreamNode: DreamNode;
@@ -79,8 +107,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      {/* DreamTalk Media Container - only show if media has actual data */}
-      {dreamNode.dreamTalkMedia[0]?.data && dreamNode.dreamTalkMedia[0].data.length > 0 && (
+      {/* DreamTalk Media Container - show if media has absolutePath (for direct loading) OR base64 data */}
+      {dreamNode.dreamTalkMedia[0] && (dreamNode.dreamTalkMedia[0].absolutePath || (dreamNode.dreamTalkMedia[0].data && dreamNode.dreamTalkMedia[0].data.length > 0)) && (
         <div style={getMediaContainerStyle()}>
           <MediaRenderer media={dreamNode.dreamTalkMedia[0]} />
           {/* Fade-to-black overlay */}
@@ -122,8 +150,8 @@ export const DreamTalkSide: React.FC<DreamTalkSideProps> = ({
         </div>
       )}
 
-      {/* Empty state text - when no media OR media data not loaded yet */}
-      {(!dreamNode.dreamTalkMedia[0] || !dreamNode.dreamTalkMedia[0].data || dreamNode.dreamTalkMedia[0].data.length === 0) && (
+      {/* Empty state text - when no media available */}
+      {(!dreamNode.dreamTalkMedia[0] || (!dreamNode.dreamTalkMedia[0].absolutePath && (!dreamNode.dreamTalkMedia[0].data || dreamNode.dreamTalkMedia[0].data.length === 0))) && (
         <div
           style={{
             width: '100%',
@@ -204,8 +232,13 @@ function MediaRenderer({ media }: { media: MediaFile }) {
     contentVisibility: 'auto' as const
   };
 
-  // Don't render anything if media data not yet loaded (no loading placeholder)
-  if (!media.data || media.data.length === 0) {
+  // Try to get resource URL from absolutePath (fast, no base64)
+  // Fall back to media.data (base64) if absolutePath not available
+  const resourceUrl = useMemo(() => getMediaResourceUrl(media.absolutePath), [media.absolutePath]);
+  const mediaSrc = resourceUrl || media.data;
+
+  // Don't render anything if no media source available
+  if (!mediaSrc || mediaSrc.length === 0) {
     return null;
   }
 
@@ -402,7 +435,7 @@ function MediaRenderer({ media }: { media: MediaFile }) {
   if (media.type.startsWith('image/')) {
     return (
       <img
-        src={media.data}
+        src={mediaSrc}
         alt="DreamTalk symbol"
         style={mediaStyle}
         draggable={false}
@@ -413,7 +446,7 @@ function MediaRenderer({ media }: { media: MediaFile }) {
   if (media.type.startsWith('video/')) {
     return (
       <video
-        src={media.data}
+        src={mediaSrc}
         style={mediaStyle}
         muted
         loop
@@ -436,7 +469,7 @@ function MediaRenderer({ media }: { media: MediaFile }) {
       >
         <audio
           controls
-          src={media.data}
+          src={mediaSrc}
           style={{
             width: '90%',
             maxWidth: '80px',
@@ -450,9 +483,10 @@ function MediaRenderer({ media }: { media: MediaFile }) {
   if (media.type.startsWith('application/pdf')) {
     // Use a larger width for better quality PDF rendering that fills the circle
     // Render at 600px for crisp display and let CSS scale/clip to fit
+    // Note: PDF still needs base64 data for pdfjs
     return (
       <PDFPreview
-        src={media.data}
+        src={media.data || mediaSrc}
         width={600}
         thumbnailMode={true}
         style={{

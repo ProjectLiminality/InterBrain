@@ -5,6 +5,10 @@ import { FlyControls } from '@react-three/drei';
 import { DreamNode3D } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { Star3D, SphereRotationControls, ConstellationEdges, shouldShowConstellationEdges } from '../../features/constellation-layout';
+import { StarMesh } from '../../features/constellation-layout/components/StarMesh';
+
+// Feature flag for WebGL-native star rendering
+const USE_WEBGL_STARS = true;
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
@@ -622,10 +626,11 @@ export default function DreamspaceCanvas() {
             const renderedNodes = dreamNodes.map((node) => (
               <React.Fragment key={node.id}>
                 {/* Star component - purely visual, positioned slightly closer than anchor */}
-                <Star3D
-                  position={node.position}
-                  size={5000}
-                />
+                {USE_WEBGL_STARS ? (
+                  <StarMesh position={node.position} size={5000} />
+                ) : (
+                  <Star3D position={node.position} size={5000} />
+                )}
                 
                 {/* DreamNode component - handles all interactions and dynamic positioning */}
                 <DreamNode3D

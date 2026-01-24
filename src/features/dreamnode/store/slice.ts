@@ -72,9 +72,22 @@ export interface DreamNodeSlice {
 
 /**
  * Extract dreamNodes data for persistence (Map → Array)
+ *
+ * IMPORTANT: Strips dreamTalkMedia[].data to avoid localStorage quota issues.
+ * Media is loaded directly from disk via getResourcePath() - no base64 needed.
  */
 export const extractDreamNodePersistenceData = (state: DreamNodeSlice) => ({
-  dreamNodes: Array.from(state.dreamNodes.entries()),
+  dreamNodes: Array.from(state.dreamNodes.entries()).map(([id, nodeData]) => {
+    // Strip media data from persistence - we load via getResourcePath() now
+    const strippedNode = {
+      ...nodeData.node,
+      dreamTalkMedia: nodeData.node.dreamTalkMedia.map(media => ({
+        ...media,
+        data: '' // Don't persist base64 - loaded from disk on demand
+      }))
+    };
+    return [id, { ...nodeData, node: strippedNode }] as [string, DreamNodeData];
+  }),
 });
 
 /**

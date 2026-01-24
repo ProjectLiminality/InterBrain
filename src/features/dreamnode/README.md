@@ -31,9 +31,17 @@ dreamnode/
 │   └── git-operations.ts     # Legacy class (deprecated)
 ├── components/
 │   ├── DreamNode3D.tsx       # Main 3D component with flip animations
-│   ├── DreamTalkSide.tsx     # Front face (symbolic media)
+│   ├── DreamTalkSide.tsx     # Front face HTML (selected node, buttons)
+│   ├── DreamTalkSprite.tsx   # Front face WebGL (non-selected nodes)
+│   ├── DreamTalkMesh.tsx     # Legacy mesh-based WebGL approach
 │   ├── DreamSongSide.tsx     # Back face (canvas content)
 │   └── PDFPreview.tsx        # PDF rendering
+├── hooks/
+│   ├── useContentTexture.ts  # Load media into THREE.Texture via getResourcePath
+│   └── useMediaTexture.ts    # Legacy base64-based texture loading
+├── shaders/
+│   ├── circularClipShader.ts # Circular clip with border and vignette
+│   └── radialGradient.ts     # Radial fade-to-black shader
 ├── styles/
 │   ├── dreamNodeStyles.ts    # Colors, dimensions, glows
 │   └── dreamNodeAnimations.css
@@ -74,7 +82,14 @@ export { sanitizeTitleToPascalCase } from './utils/title-sanitization';
 export { default as DreamNode3D } from './components/DreamNode3D';
 export type { DreamNode3DRef } from './components/DreamNode3D';
 export { DreamTalkSide } from './components/DreamTalkSide';
+export { DreamTalkSprite } from './components/DreamTalkSprite';
 export { DreamSongSide } from './components/DreamSongSide';
+
+// Hooks
+export { useContentTexture } from './hooks/useContentTexture';
+
+// Shaders
+export * from './shaders/circularClipShader';
 
 // Commands
 export { registerDreamNodeCommands } from './commands';
@@ -140,3 +155,38 @@ export { registerDreamNodeCommands } from './commands';
 - **Radicle failures**: Don't block node creation (graceful degradation)
 - **Legacy `git-operations.ts`**: Deprecated, use `gitUtils` namespace
 - **⚠️ Creator Mode**: DEPRECATED - The `creatorMode` state in the store slice is leftover from an early UX experiment and will be removed in a future update. Do not build new features on this pattern.
+
+## WebGL Rendering Architecture
+
+The DreamTalk visualization uses a dual-mode rendering strategy:
+
+### Rendering Modes
+
+| Mode | Component | When Used |
+|------|-----------|-----------|
+| WebGL Sprite | `DreamTalkSprite` | Non-selected nodes (performance) |
+| HTML Overlay | `DreamTalkSide` | Selected node (buttons, interactions) |
+
+### Texture Pipeline
+
+```
+Media File → getResourcePath() → THREE.Texture → Circular Clip Shader → Screen
+```
+
+1. **`useContentTexture`**: Loads media via Obsidian's `getResourcePath()` API
+   - Bypasses Electron `file://` restrictions
+   - No base64 encoding (better performance, no storage quota issues)
+   - Supports images, videos, PDFs
+
+2. **`circularClipShader`**: WebGL shader for DreamTalk appearance
+   - Circular clipping with soft edges
+   - Type-colored border ring (blue=Dream, red=Dreamer)
+   - Radial vignette fade-to-black
+   - Aspect ratio correction (cover fit)
+
+### Why Dual Rendering?
+
+- **WebGL sprites** are GPU-native and scale to hundreds of nodes
+- **HTML overlays** provide DOM interactivity (flip button, fullscreen)
+- Selected node transitions from sprite to HTML when animation completes
+- Prevents visual artifacts on high-DPI displays from sprite/HTML mismatch
