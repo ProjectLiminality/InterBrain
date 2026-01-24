@@ -34,8 +34,10 @@ export function calculateSpawnPosition(
   // Calculate radial distance from the Z-axis (camera depth axis)
   const r = Math.sqrt(x * x + y * y);
 
-  // If node is near the Z-axis, spawn from above (arbitrary direction)
-  if (r < 0.01) {
+  // If node is near the Z-axis (e.g., center node in liminal web), the polar angle
+  // is undefined. We hardcode the direction to "up" (positive Y) for these cases.
+  // Use a generous threshold to catch nodes that are nearly centered.
+  if (r < 100) {
     // Node is directly in front of camera, spawn from above
     return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
@@ -72,8 +74,10 @@ export function calculateExitPosition(
   // Calculate radial distance from the Z-axis
   const r = Math.sqrt(x * x + y * y);
 
-  // If node is near the Z-axis, exit upward (arbitrary direction)
-  if (r < 0.01) {
+  // If node is near the Z-axis (e.g., center node in liminal web), the polar angle
+  // is undefined. We hardcode the direction to "up" (positive Y) for these cases.
+  // Use a generous threshold to catch nodes that are nearly centered.
+  if (r < 100) {
     return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
 

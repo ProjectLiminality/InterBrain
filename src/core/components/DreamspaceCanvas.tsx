@@ -588,11 +588,15 @@ export default function DreamspaceCanvas() {
               // Dismiss search interface and return to constellation
               console.log('Empty space clicked in search interface - dismissing search');
               store.setSearchActive(false);
-              store.setSpatialLayout('constellation');
             } else {
-              // Clear search results and return to constellation
+              // Clear search results
               console.log('Empty space clicked in search results mode - clearing search');
               store.setSearchResults([]);
+            }
+            // Use orchestrator to animate back to constellation (handles ephemeral exit)
+            if (spatialOrchestratorRef.current) {
+              spatialOrchestratorRef.current.returnToConstellation();
+            } else {
               store.setSpatialLayout('constellation');
             }
           } else if (store.spatialLayout === 'liminal-web') {
@@ -601,7 +605,12 @@ export default function DreamspaceCanvas() {
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
-            store.setSpatialLayout('constellation');
+            // Use orchestrator to animate back to constellation (handles ephemeral exit)
+            if (spatialOrchestratorRef.current) {
+              spatialOrchestratorRef.current.returnToConstellation();
+            } else {
+              store.setSpatialLayout('constellation');
+            }
           } else {
             // Already in constellation mode, just log
             console.log('Empty space clicked in constellation mode');

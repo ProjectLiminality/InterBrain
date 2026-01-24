@@ -107,10 +107,13 @@ export function useEscapeKeyHandler(
             store.setSelectedNode(null);
             // Use orchestrator to animate nodes back (including ephemeral exit animations)
             // The orchestrator will set the layout to 'constellation'
+            console.log('[Escape] liminal-web: orchestratorRef.current =', !!orchestratorRef.current);
             if (orchestratorRef.current) {
+              console.log('[Escape] Calling orchestrator.returnToConstellation()');
               orchestratorRef.current.returnToConstellation();
             } else {
               // Fallback if no orchestrator available
+              console.log('[Escape] No orchestrator, falling back to setSpatialLayout');
               store.setSpatialLayout('constellation');
             }
             break;
