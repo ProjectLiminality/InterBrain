@@ -731,8 +731,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           rotation={[0, flipRotation, 0]}
         >
           {/* Front side - DreamTalk */}
-          {/* Layer 1: WebGL sprite (always rendered when enabled - provides visual continuity during HTML load) */}
-          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING && (
+          {/* WebGL sprite: renders for all nodes EXCEPT the selected node when HTML is active */}
+          {/* This prevents visual artifacts from sprite/HTML overlay mismatch on high-DPI displays */}
+          {USE_WEBGL_DREAMTALK && USE_SPRITE_RENDERING &&
+           !(spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode.id && !isTransitioning) && (
             <DreamTalkSprite
               dreamNode={dreamNode}
               isHovered={isHovered}
@@ -752,7 +754,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           {/* Renders on top of WebGL sprite to prevent black flash during media load */}
           {(!USE_WEBGL_DREAMTALK || !USE_SPRITE_RENDERING || (spatialLayout === 'liminal-web' && selectedNode?.id === dreamNode.id && !isTransitioning)) && (
             <Html
-              position={[0, 0, 0.02]}
+              position={[0, -0.1125, 0.02]}
               center
               transform
               distanceFactor={10}

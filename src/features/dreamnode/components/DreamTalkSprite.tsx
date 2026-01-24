@@ -229,10 +229,9 @@ function createHoverOverlayTexture(name: string, size: number = 512): THREE.Canv
   const lines = wrapText(ctx, name, maxWidth);
 
   // Draw lines centered vertically and horizontally
-  // Offset slightly lower for visual balance
   const lineHeight = fontSize * 1.3;
   const totalHeight = (lines.length - 1) * lineHeight; // Space between lines only
-  const centerY = size / 2 + size * 0.02; // 2% lower
+  const centerY = size / 2; // True center
   const startY = centerY - totalHeight / 2;
 
   lines.forEach((line, i) => {
@@ -332,11 +331,8 @@ export const DreamTalkSprite: React.FC<DreamTalkSpriteProps> = ({
     }
   });
 
-  // 9 pixel offset in world units (nodeSize / 80 * 2 is the size, so 1px = 2/80 = 0.025)
-  const pixelOffset = 0.225;
-
   return (
-    <group position={[0, pixelOffset, 0]}>
+    <group position={[0, 0, 0]}>
       {/* Content sprite: texture + border + gradient */}
       <mesh
         position={[0, 0, 0]}
