@@ -363,10 +363,22 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     };
   };
 
+  /**
+   * Build relationship graph from ALL nodes in the store, not just mounted nodes.
+   * This ensures liminal web can reference ephemeral nodes that aren't yet mounted.
+   */
+  const buildFullRelationshipGraph = () => {
+    const store = useInterBrainStore.getState();
+    const allNodes = Array.from(store.dreamNodes.values()).map(data => data.node);
+    return buildRelationshipGraph(allNodes);
+  };
+
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
       try {
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        // Use full relationship graph from ALL nodes, not just mounted ones
+        // This enables spawning ephemeral nodes for related nodes not in constellation
+        const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
 
         if (!positions?.ring1Nodes || !positions?.ring2Nodes || !positions?.ring3Nodes) {
@@ -422,7 +434,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     focusOnNodeWithFlyIn: (nodeId: string, newNodeId: string) => {
       try {
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
 
         liminalWebRoles.current = {
@@ -518,7 +530,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     showSearchResults: (searchResults: DreamNode[]) => {
       try {
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const relationshipGraph = buildFullRelationshipGraph();
         const orderedNodes = searchResults.map(node => ({ id: node.id, name: node.name, type: node.type }));
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
 
@@ -587,7 +599,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = true;
         
         // Build relationship graph from current nodes
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const relationshipGraph = buildFullRelationshipGraph();
         
         // Get current pending relationships from store for priority ordering
         const store = useInterBrainStore.getState();
@@ -759,7 +771,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.log('SpatialOrchestrator: Performing position swapping based on relationship changes');
         
         // Build relationship graph from current nodes
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const relationshipGraph = buildFullRelationshipGraph();
         
         // Get current pending relationships from store
         const store = useInterBrainStore.getState();
@@ -856,7 +868,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     animateToLiminalWebFromEdit: (nodeId: string) => {
       try {
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
 
         liminalWebRoles.current = {
@@ -1029,7 +1041,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       try {
         if (!liminalWebRoles.current.centerNodeId) return;
 
-        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(
           liminalWebRoles.current.centerNodeId,
           relationshipGraph,
