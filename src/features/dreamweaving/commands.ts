@@ -818,7 +818,6 @@ export function registerDreamweavingCommands(
           const { metadata } = result.graph;
           const existingGraph = store.dreamSongRelationships.graph;
           const relationshipsChanged = hasDreamSongRelationshipsChanged(existingGraph, result.graph);
-          const isFirstScan = existingGraph === null;
 
           store.setDreamSongRelationshipGraph(result.graph);
 
@@ -826,11 +825,10 @@ export function registerDreamweavingCommands(
           const status = relationshipsChanged ? 'UPDATED' : 'unchanged';
           console.log(`[DreamSong] Scan: ${metadata.totalEdges} edges, ${metadata.totalDreamSongs} songs (${status}, ${result.stats.scanTimeMs}ms)`);
 
-          // Always apply layout on first scan (startup) to enforce constellation filter
-          // Also apply when relationships change
-          if (isFirstScan || relationshipsChanged) {
-            store.requestNavigation({ type: 'applyLayout' });
-          }
+          // Always apply layout on scan completion to enforce constellation filter
+          // This ensures maxNodes setting takes effect on every reload
+          // The operation is idempotent so safe to run repeatedly
+          store.requestNavigation({ type: 'applyLayout' });
 
         } else {
           store.setDreamSongRelationshipScanning(false);

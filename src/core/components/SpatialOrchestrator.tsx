@@ -303,15 +303,19 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
   /**
    * Return a node to constellation position, interrupting any current animation.
+   * For ephemeral nodes, this triggers an exit animation with world rotation correction.
    */
   const returnNodeToConstellation = (nodeId: string, duration: number, easing: string) => {
     const nodeRef = nodeRefs.current.get(nodeId);
     if (!nodeRef?.current) return;
 
+    // Get world rotation for ephemeral exit animation correction
+    const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
     if (nodeRef.current.isMoving()) {
-      nodeRef.current.interruptAndReturnToConstellation(duration, easing);
+      nodeRef.current.interruptAndReturnToConstellation(duration, easing, worldRotation);
     } else {
-      nodeRef.current.returnToConstellation(duration, easing);
+      nodeRef.current.returnToConstellation(duration, easing, worldRotation);
     }
   };
 
