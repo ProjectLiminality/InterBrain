@@ -91,10 +91,15 @@ export default function DreamspaceCanvas() {
   }, [dreamNodesMap, constellationFilter.mountedNodes, ephemeralNodesMap]);
 
   // Track which nodes are ephemeral for rendering differences
-  const ephemeralNodeIds = React.useMemo(() =>
-    new Set(ephemeralNodesMap.keys()),
-    [ephemeralNodesMap]
-  );
+  // IMPORTANT: When filter is not initialized (mountedNodes empty), treat ALL nodes as constellation
+  // (they have home positions). Ephemeral behavior only applies after filter is computed.
+  const ephemeralNodeIds = React.useMemo(() => {
+    // If filter not initialized, no nodes are ephemeral
+    if (constellationFilter.mountedNodes.size === 0) {
+      return new Set<string>();
+    }
+    return new Set(ephemeralNodesMap.keys());
+  }, [ephemeralNodesMap, constellationFilter.mountedNodes.size]);
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);

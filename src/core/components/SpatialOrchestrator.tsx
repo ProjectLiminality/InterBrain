@@ -182,6 +182,36 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   };
 
   /**
+   * Calculate spawn position for ephemeral nodes in camera-relative coordinates.
+   * The spawn ring is at z=0 (camera plane), corrected for world rotation.
+   */
+  const calculateWorldCorrectedSpawnPosition = (
+    targetPosition: [number, number, number]
+  ): [number, number, number] => {
+    // Calculate base spawn position in camera space (z=0 plane)
+    const spawnPos = calculateSpawnPosition(
+      targetPosition,
+      DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnRadiusFactor
+    );
+
+    // If no world rotation, return as-is
+    if (!dreamWorldRef.current) {
+      return spawnPos;
+    }
+
+    // The spawn position is in camera space (z=0).
+    // To make it appear at z=0 from camera's perspective regardless of group rotation,
+    // we need to apply the inverse rotation (same as liminal web positions).
+    const sphereRotation = dreamWorldRef.current.quaternion.clone();
+    const inverseRotation = sphereRotation.invert();
+
+    const spawnVec = new Vector3(spawnPos[0], spawnPos[1], spawnPos[2]);
+    spawnVec.applyQuaternion(inverseRotation);
+
+    return [spawnVec.x, spawnVec.y, spawnVec.z];
+  };
+
+  /**
    * Ensure a node is mounted, spawning it as ephemeral if necessary.
    * Returns true if the node is/will be mounted, false if the node doesn't exist.
    */
@@ -207,11 +237,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       return true;
     }
 
-    // Need to spawn as ephemeral
-    const spawnPosition = calculateSpawnPosition(
-      targetPosition,
-      DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnRadiusFactor
-    );
+    // Calculate spawn position with world rotation correction
+    const spawnPosition = calculateWorldCorrectedSpawnPosition(targetPosition);
 
     console.log(`[Orchestrator] Spawning ephemeral node ${nodeId}`, {
       from: spawnPosition,
