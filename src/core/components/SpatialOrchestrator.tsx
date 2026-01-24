@@ -151,6 +151,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   const relatedNodesList = useRef<Array<{ id: string; name: string; type: string }>>([]);
   const unrelatedSearchResultsList = useRef<Array<{ id: string; name: string; type: string }>>([]);
 
+  // Queue of pending movements for nodes that are being spawned as ephemeral
+  // These will be executed once the node's ref becomes available
+  const pendingMovements = useRef<Map<string, {
+    position: [number, number, number];
+    duration: number;
+    easing: string;
+    setActive: boolean;
+  }>>(new Map());
+
   /**
    * Apply inverse world rotation to positions so they appear correct regardless of sphere rotation.
    * This is the key transform that makes layouts appear in camera-relative positions.
@@ -252,6 +261,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   /**
    * Move a node to a position, interrupting any current animation.
    * If the node is not mounted, it will be spawned as ephemeral first.
+   * If the node was just spawned, the movement is queued until the ref is available.
    */
   const moveNode = (
     nodeId: string,
@@ -268,12 +278,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     const nodeRef = nodeRefs.current.get(nodeId);
 
     // If node was just spawned as ephemeral, the ref might not exist yet
-    // The ephemeral spawn animation will handle the initial movement
+    // Queue the movement to be executed once the ref becomes available
     if (!nodeRef?.current) {
-      // Check if this is an ephemeral node that was just spawned
       const store = useInterBrainStore.getState();
       if (store.ephemeralNodes.has(nodeId)) {
-        // Ephemeral node will handle its own spawn animation
+        console.log(`[Orchestrator] Queuing movement for ephemeral node ${nodeId} (ref not yet available)`);
+        pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
         return;
       }
       return;
@@ -892,6 +902,29 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     
     registerNodeRef: (nodeId: string, nodeRef: React.RefObject<DreamNode3DRef>) => {
       nodeRefs.current.set(nodeId, nodeRef);
+
+      // Check if there's a pending movement for this node (ephemeral spawn case)
+      const pendingMovement = pendingMovements.current.get(nodeId);
+      if (pendingMovement && nodeRef.current) {
+        console.log(`[Orchestrator] Executing queued movement for node ${nodeId}`);
+        pendingMovements.current.delete(nodeId);
+
+        // Use a short delay to ensure the node is fully initialized
+        globalThis.setTimeout(() => {
+          if (nodeRef.current) {
+            if (pendingMovement.setActive) {
+              nodeRef.current.setActiveState(true);
+            }
+            // The ephemeral node already has a spawn animation, so we use moveToPosition
+            // to animate from spawn position to target position
+            nodeRef.current.moveToPosition(
+              pendingMovement.position,
+              pendingMovement.duration,
+              pendingMovement.easing
+            );
+          }
+        }, 50); // Small delay for React to stabilize
+      }
     },
     
     unregisterNodeRef: (nodeId: string) => {
