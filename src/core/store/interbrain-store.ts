@@ -125,6 +125,48 @@ import {
 // Note: 'edit' is for metadata editing, 'relationship-edit' is for relationship editing (peer-level modes)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'relationship-edit' | 'copilot';
 
+// ============================================================================
+// CONSTELLATION FILTERING TYPES
+// ============================================================================
+
+/**
+ * Configuration for constellation filtering - controls how many nodes load at startup
+ */
+export interface ConstellationConfig {
+  /** Maximum nodes to mount in constellation view (e.g., 150) */
+  maxNodes: number;
+  /** Whether to prioritize larger clusters when selecting nodes */
+  prioritizeClusters: boolean;
+}
+
+/**
+ * Result of constellation filtering - categorizes nodes by their mounting behavior
+ */
+export interface ConstellationFilterResult {
+  /** VIP seats: Nodes connected by edges (constellation members) - always mounted */
+  vipNodes: Set<string>;
+  /** Standing room: DreamSong owners (from edge.dreamSongPath) - always mounted */
+  parentNodes: Set<string>;
+  /** General admission: Random sample to fill remaining slots */
+  sampledNodes: Set<string>;
+  /** Ephemeral: Everything else - spawned on-demand, not mounted at startup */
+  ephemeralNodes: Set<string>;
+  /** Combined set of all mounted nodes (vip + parent + sampled) for quick lookup */
+  mountedNodes: Set<string>;
+}
+
+/**
+ * State for dynamically spawned ephemeral nodes
+ */
+export interface EphemeralNodeState {
+  /** Position where the node spawns from (radially outward from target) */
+  spawnPosition: [number, number, number];
+  /** Target position the node animates to */
+  targetPosition: [number, number, number];
+  /** Timestamp when node was mounted */
+  mountedAt: number;
+}
+
 // Re-export types for backward compatibility
 export type { CopilotModeState };
 export type { EditModeState, EditModeValidationErrors };
@@ -200,6 +242,18 @@ export interface CoreSlice {
   navigationRequest: NavigationRequest | null;
   requestNavigation: (request: NavigationRequest) => void;
   clearNavigationRequest: () => void;
+
+  // Constellation filtering - controls which nodes mount at startup
+  constellationConfig: ConstellationConfig;
+  setConstellationConfig: (config: Partial<ConstellationConfig>) => void;
+  constellationFilter: ConstellationFilterResult;
+  setConstellationFilter: (filter: ConstellationFilterResult) => void;
+
+  // Ephemeral nodes - dynamically spawned nodes not in the constellation
+  ephemeralNodes: Map<string, EphemeralNodeState>;
+  spawnEphemeralNode: (nodeId: string, targetPosition: [number, number, number], spawnPosition: [number, number, number]) => void;
+  despawnEphemeralNode: (nodeId: string) => void;
+  clearEphemeralNodes: () => void;
 }
 
 // ============================================================================
@@ -250,6 +304,23 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   debugFlyingControls: false,
 
   navigationRequest: null,
+
+  // Constellation filtering defaults
+  constellationConfig: {
+    maxNodes: 150,
+    prioritizeClusters: true,
+  },
+
+  constellationFilter: {
+    vipNodes: new Set<string>(),
+    parentNodes: new Set<string>(),
+    sampledNodes: new Set<string>(),
+    ephemeralNodes: new Set<string>(),
+    mountedNodes: new Set<string>(),
+  },
+
+  // Ephemeral nodes (spawned on-demand)
+  ephemeralNodes: new Map<string, EphemeralNodeState>(),
 
   // Actions - update both dreamNodes and realNodes for backward compatibility
   setRealNodes: (nodes) => set({ dreamNodes: nodes, realNodes: nodes }),
@@ -315,6 +386,32 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   requestNavigation: (request) => set({ navigationRequest: request }),
 
   clearNavigationRequest: () => set({ navigationRequest: null }),
+
+  // Constellation filtering actions
+  setConstellationConfig: (config) => set((state: InterBrainState) => ({
+    constellationConfig: { ...state.constellationConfig, ...config }
+  })),
+
+  setConstellationFilter: (filter) => set({ constellationFilter: filter }),
+
+  // Ephemeral node actions
+  spawnEphemeralNode: (nodeId, targetPosition, spawnPosition) => set((state: InterBrainState) => {
+    const newMap = new Map(state.ephemeralNodes);
+    newMap.set(nodeId, {
+      spawnPosition,
+      targetPosition,
+      mountedAt: Date.now(),
+    });
+    return { ephemeralNodes: newMap };
+  }),
+
+  despawnEphemeralNode: (nodeId) => set((state: InterBrainState) => {
+    const newMap = new Map(state.ephemeralNodes);
+    newMap.delete(nodeId);
+    return { ephemeralNodes: newMap };
+  }),
+
+  clearEphemeralNodes: () => set({ ephemeralNodes: new Map<string, EphemeralNodeState>() }),
 });
 
 // ============================================================================
