@@ -16,7 +16,7 @@ import { DreamNodeEditor3D, RelationshipEditor3D } from '../../features/dreamnod
 import { RadialButtonRing3D } from '../../features/action-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/action-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../../features/dreamnode';
-import { useInterBrainStore, EphemeralNodeState } from '../store/interbrain-store';
+import { useInterBrainStore } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
@@ -37,6 +37,7 @@ import { getCherryPickWorkflowService } from '../../features/dreamnode-updater/s
 // Tutorial system disabled for current version
 // import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
 import { TutorialPortalOverlay } from '../../features/tutorial';
+import { EphemeralNodeManager } from './EphemeralNodeManager';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -742,6 +743,9 @@ export default function DreamspaceCanvas() {
             }}
           />
           */}
+
+          {/* Ephemeral node manager - handles dynamic node spawning/despawning lifecycle */}
+          <EphemeralNodeManager />
         </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}

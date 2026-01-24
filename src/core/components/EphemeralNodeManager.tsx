@@ -14,7 +14,7 @@
  * 4. Cleans up ephemeral nodes when no longer needed
  */
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 
