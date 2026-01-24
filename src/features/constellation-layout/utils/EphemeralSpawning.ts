@@ -4,48 +4,51 @@
  * Calculates spawn positions for ephemeral nodes that are dynamically loaded
  * when needed by the orchestrator (e.g., for liminal web, search results).
  *
- * Ephemeral nodes spawn from a position radially outward from their target,
- * creating a "fly in from the distance" effect.
+ * Ephemeral nodes spawn from a fixed radius ring around the camera,
+ * creating a "fly in from the distance" effect. Using a fixed radius
+ * ensures all nodes travel similar distances for consistent visual effect.
  */
+
+/** Fixed radius for spawn/exit ring (in world units) */
+export const EPHEMERAL_SPAWN_RADIUS = 8000;
 
 /**
  * Calculate spawn position for an ephemeral node
  *
  * The spawn position is calculated by:
  * 1. Taking the target position (where the node will end up)
- * 2. Converting to cylindrical coordinates with camera depth as Z-axis
- * 3. Moving the spawn point radially outward (multiplying R)
- * 4. Setting Z to camera plane (0) so nodes appear to fly in from the distance
+ * 2. Finding the direction from camera (origin) to target in XY plane
+ * 3. Placing spawn point at fixed radius in that direction
+ * 4. Setting Z to camera plane (0) so nodes appear to fly in from the edge
  *
  * @param targetPosition Where the node will animate to
- * @param spawnRadiusFactor How far out to spawn (multiplier on radial distance)
+ * @param _spawnRadiusFactor Deprecated - now uses fixed EPHEMERAL_SPAWN_RADIUS
  * @returns Spawn position for the ephemeral node
  */
 export function calculateSpawnPosition(
   targetPosition: [number, number, number],
-  spawnRadiusFactor: number = 3
+  _spawnRadiusFactor: number = 3
 ): [number, number, number] {
-  const [x, y, z] = targetPosition;
+  const [x, y, _z] = targetPosition;
 
   // Calculate radial distance from the Z-axis (camera depth axis)
   const r = Math.sqrt(x * x + y * y);
 
-  // If node is near the Z-axis, spawn from a default offset
+  // If node is near the Z-axis, spawn from above (arbitrary direction)
   if (r < 0.01) {
     // Node is directly in front of camera, spawn from above
-    return [0, Math.abs(z) * spawnRadiusFactor, 0];
+    return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
 
-  // Calculate polar angle in the XY plane
+  // Calculate polar angle in the XY plane (direction from camera to target)
   const theta = Math.atan2(y, x);
 
-  // Spawn at multiplied radial distance, at camera plane (z=0)
-  const spawnR = r * spawnRadiusFactor;
+  // Spawn at fixed radius in the same angular direction, at camera plane (z=0)
   const spawnZ = 0; // Camera plane
 
   return [
-    spawnR * Math.cos(theta),
-    spawnR * Math.sin(theta),
+    EPHEMERAL_SPAWN_RADIUS * Math.cos(theta),
+    EPHEMERAL_SPAWN_RADIUS * Math.sin(theta),
     spawnZ
   ];
 }
@@ -53,18 +56,38 @@ export function calculateSpawnPosition(
 /**
  * Calculate exit position for an ephemeral node returning to nowhere
  *
- * Similar to spawn position but animates outward before unmounting.
+ * Calculates exit position at fixed radius in the direction from camera to node.
+ * Uses the same fixed radius as spawn for visual consistency.
  *
  * @param currentPosition Current position of the node
- * @param exitRadiusFactor How far out to animate before unmounting
+ * @param _exitRadiusFactor Deprecated - now uses fixed EPHEMERAL_SPAWN_RADIUS
  * @returns Exit position for the ephemeral node
  */
 export function calculateExitPosition(
   currentPosition: [number, number, number],
-  exitRadiusFactor: number = 3
+  _exitRadiusFactor: number = 3
 ): [number, number, number] {
-  // Reuse spawn calculation logic - just animate in reverse
-  return calculateSpawnPosition(currentPosition, exitRadiusFactor);
+  const [x, y, _z] = currentPosition;
+
+  // Calculate radial distance from the Z-axis
+  const r = Math.sqrt(x * x + y * y);
+
+  // If node is near the Z-axis, exit upward (arbitrary direction)
+  if (r < 0.01) {
+    return [0, EPHEMERAL_SPAWN_RADIUS, 0];
+  }
+
+  // Calculate polar angle in the XY plane (direction from camera to node)
+  const theta = Math.atan2(y, x);
+
+  // Exit at fixed radius in the same angular direction, at camera plane (z=0)
+  const exitZ = 0;
+
+  return [
+    EPHEMERAL_SPAWN_RADIUS * Math.cos(theta),
+    EPHEMERAL_SPAWN_RADIUS * Math.sin(theta),
+    exitZ
+  ];
 }
 
 /**

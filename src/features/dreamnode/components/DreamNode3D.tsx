@@ -468,6 +468,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
+        console.log(`[DreamNode3D] returnToScaledPosition called for ephemeral node ${dreamNode.id}, starting exit animation`);
         // Get current position for exit animation
         let actualCurrentPosition: [number, number, number];
         if (positionMode === 'constellation') {

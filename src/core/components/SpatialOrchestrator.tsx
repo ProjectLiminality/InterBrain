@@ -498,8 +498,19 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
       const worldRotation = dreamWorldRef.current?.quaternion.clone();
 
+      // Check for ephemeral nodes to log them
+      const store = useInterBrainStore.getState();
+      const ephemeralNodeIds = Array.from(store.ephemeralNodes.keys());
+      if (ephemeralNodeIds.length > 0) {
+        console.log(`[Orchestrator] Returning to constellation with ${ephemeralNodeIds.length} ephemeral nodes:`, ephemeralNodeIds);
+      }
+
       // Return all nodes with role-based easing
       nodeRefs.current.forEach((_, nodeId) => {
+        const isEphemeral = store.ephemeralNodes.has(nodeId);
+        if (isEphemeral) {
+          console.log(`[Orchestrator] Triggering exit animation for ephemeral node: ${nodeId}`);
+        }
         returnNodeToScaledPosition(nodeId, transitionDuration, worldRotation, getEasingForRole(nodeId));
       });
 
