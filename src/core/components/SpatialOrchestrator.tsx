@@ -17,6 +17,7 @@ import { DreamNode } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { buildRelationshipGraph, calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../../features/liminal-web-layout';
 import { computeConstellationLayout, createFallbackLayout } from '../../features/constellation-layout/ConstellationLayout';
+import { computeConstellationFilter } from '../../features/constellation-layout/services/constellation-filter-service';
 import { useInterBrainStore } from '../store/interbrain-store';
 
 export interface SpatialOrchestratorRef {
@@ -847,6 +848,28 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Store the positions in the store for persistence
         store.setConstellationPositions(completePositions);
+
+        // Compute constellation filter to determine which nodes should be mounted
+        const { maxNodes, prioritizeClusters } = store.constellationConfig;
+        const allNodeIds = dreamNodes.map(node => node.id);
+        const constellationFilter = computeConstellationFilter(
+          relationshipGraph,
+          allNodeIds,
+          maxNodes,
+          prioritizeClusters
+        );
+
+        // Store the filter result
+        store.setConstellationFilter(constellationFilter);
+
+        console.log(`🎯 [SpatialOrchestrator] Constellation filter computed:`, {
+          vipNodes: constellationFilter.vipNodes.size,
+          parentNodes: constellationFilter.parentNodes.size,
+          sampledNodes: constellationFilter.sampledNodes.size,
+          ephemeralNodes: constellationFilter.ephemeralNodes.size,
+          mountedTotal: constellationFilter.mountedNodes.size,
+          maxNodes
+        });
 
         // Update node positions in single batch transaction (100x faster than sequential updates)
         store.batchUpdateNodePositions(completePositions);
