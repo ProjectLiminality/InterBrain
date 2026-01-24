@@ -77,13 +77,12 @@ export const RadialGradientMaterial = shaderMaterial(
   radialGradientFragmentShader
 );
 
-// Extend THREE namespace for TypeScript
+// Extend JSX namespace for TypeScript
+import type { JSX as ReactJSX } from 'react';
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
-      radialGradientMaterial: React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & {
+      radialGradientMaterial: ReactJSX.IntrinsicElements['meshBasicMaterial'] & {
           mediaTexture?: THREE.Texture | null;
           fadeStart?: number;
           fadeEnd?: number;
@@ -91,9 +90,7 @@ declare global {
           opacity?: number;
           transparent?: boolean;
           side?: THREE.Side;
-        },
-        HTMLElement
-      >;
+        };
     }
   }
 }

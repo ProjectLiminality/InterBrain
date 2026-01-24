@@ -11,7 +11,6 @@ import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-s
 import { VaultService } from '../../../core/services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
-import { DreamTalkMesh } from './DreamTalkMesh';
 import { DreamTalkSprite } from './DreamTalkSprite';
 import { getMediaLoadingService } from '../services/media-loading-service';
 import '../styles/dreamNodeAnimations.css';
@@ -64,7 +63,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const groupRef = useRef<Group>(null);
   const hitSphereRef = useRef<Mesh>(null);
   const hoverGroupRef = useRef<Group>(null); // Ref for animated hover group
-  const targetHoverScale = useRef(1); // Target scale for smooth animation
 
   // Flip animation state
   const [flipRotation, setFlipRotation] = useState(0);

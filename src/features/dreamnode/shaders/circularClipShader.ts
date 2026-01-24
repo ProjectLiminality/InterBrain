@@ -48,6 +48,7 @@ const fragmentShader = /* glsl */ `
 
     // Border ring: outer edge of circle
     // borderWidth is fraction of radius, so border starts at (0.5 - borderWidth)
+    // Extend border to cover the softened edge zone
     float borderStart = 0.5 - borderWidth;
     if (dist > borderStart) {
       gl_FragColor = vec4(borderColor, 1.0);
@@ -140,9 +141,9 @@ export function createCircularClipMaterial(
   // Calculate aspect ratio from texture if available
   let aspectRatio = 1.0;
   if (texture?.image) {
-    const img = texture.image as HTMLImageElement | HTMLVideoElement;
-    const width = img.width || (img as HTMLVideoElement).videoWidth || 1;
-    const height = img.height || (img as HTMLVideoElement).videoHeight || 1;
+    const img = texture.image as globalThis.HTMLImageElement | globalThis.HTMLVideoElement;
+    const width = img.width || (img as globalThis.HTMLVideoElement).videoWidth || 1;
+    const height = img.height || (img as globalThis.HTMLVideoElement).videoHeight || 1;
     aspectRatio = width / height;
   }
 
@@ -176,9 +177,9 @@ export function updateCircularClipTexture(
 
   // Update aspect ratio from new texture
   if (texture?.image) {
-    const img = texture.image as HTMLImageElement | HTMLVideoElement;
-    const width = img.width || (img as HTMLVideoElement).videoWidth || 1;
-    const height = img.height || (img as HTMLVideoElement).videoHeight || 1;
+    const img = texture.image as globalThis.HTMLImageElement | globalThis.HTMLVideoElement;
+    const width = img.width || (img as globalThis.HTMLVideoElement).videoWidth || 1;
+    const height = img.height || (img as globalThis.HTMLVideoElement).videoHeight || 1;
     const aspectRatio = width / height;
     material.uniforms.aspectRatio.value = aspectRatio;
   } else {

@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { DreamNode, MediaFile } from '../types/dreamnode';
+import { DreamNode } from '../types/dreamnode';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 
@@ -31,7 +31,7 @@ export function useMediaTexture(dreamNode: DreamNode, mediaLoadTrigger?: number)
   const [error, setError] = useState<string | null>(null);
 
   // Keep refs for cleanup
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = useRef<globalThis.HTMLVideoElement | null>(null);
   const textureRef = useRef<THREE.Texture | null>(null);
 
   useEffect(() => {
@@ -156,7 +156,6 @@ export function useMediaTexture(dreamNode: DreamNode, mediaLoadTrigger?: number)
 
     return cleanup;
     // Use stable reference - only re-run when node ID changes, media data changes, or trigger fires
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dreamNode.id, dreamNode.dreamTalkMedia?.[0]?.data, mediaLoadTrigger]);
 
   return { texture, isVideo, isLoading, error };
@@ -186,7 +185,7 @@ async function loadImageTexture(src: string): Promise<THREE.Texture> {
 /**
  * Load a video URL into a THREE.VideoTexture
  */
-async function loadVideoTexture(src: string): Promise<{ texture: THREE.VideoTexture; video: HTMLVideoElement }> {
+async function loadVideoTexture(src: string): Promise<{ texture: THREE.VideoTexture; video: globalThis.HTMLVideoElement }> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.src = src;

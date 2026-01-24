@@ -39,7 +39,7 @@ const BORDER_WIDTH_FRACTION = 0.026;
  * Handles spaces, hyphens, and very long words that need character-level breaks
  * Returns array of lines
  */
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+function wrapText(ctx: globalThis.CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   // Split on spaces first, preserving hyphenated segments
   const words = text.split(' ');
   const lines: string[] = [];
@@ -86,7 +86,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
  * Break a long word that doesn't fit within maxWidth
  * First tries to break on hyphens, then falls back to character breaks
  */
-function breakLongWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
+function breakLongWord(ctx: globalThis.CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
   const parts: string[] = [];
 
   // First, try breaking on hyphens
@@ -124,7 +124,7 @@ function breakLongWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: nu
 /**
  * Break text by characters when no other break points exist
  */
-function breakByCharacters(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+function breakByCharacters(ctx: globalThis.CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const parts: string[] = [];
   let currentPart = '';
 

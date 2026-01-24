@@ -40,7 +40,7 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
   const [error, setError] = useState<string | null>(null);
 
   // Keep refs for cleanup
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = useRef<globalThis.HTMLVideoElement | null>(null);
   const textureRef = useRef<THREE.Texture | null>(null);
 
   useEffect(() => {
@@ -235,7 +235,7 @@ async function loadImageTexture(src: string): Promise<THREE.Texture> {
 /**
  * Load a video URL into a THREE.VideoTexture
  */
-async function loadVideoTexture(src: string): Promise<{ texture: THREE.VideoTexture; video: HTMLVideoElement }> {
+async function loadVideoTexture(src: string): Promise<{ texture: THREE.VideoTexture; video: globalThis.HTMLVideoElement }> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.src = src;
@@ -320,6 +320,7 @@ async function loadPdfTexture(src: string): Promise<THREE.Texture> {
   // Render PDF page to canvas
   await page.render({
     canvasContext: ctx,
+    canvas: canvas,
     viewport: scaledViewport,
     background: 'transparent'
   }).promise;
