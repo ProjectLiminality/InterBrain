@@ -16,7 +16,7 @@ import { DreamNodeEditor3D, RelationshipEditor3D } from '../../features/dreamnod
 import { RadialButtonRing3D } from '../../features/action-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/action-buttons/ActiveVideoCallButton';
 import { DreamNode } from '../../features/dreamnode';
-import { useInterBrainStore } from '../store/interbrain-store';
+import { useInterBrainStore, EphemeralNodeState } from '../store/interbrain-store';
 import { serviceManager } from '../services/service-manager';
 import { VaultService } from '../services/vault-service';
 import { CanvasParserService } from '../../features/dreamweaving/services/canvas-parser-service';
@@ -56,6 +56,8 @@ export default function DreamspaceCanvas() {
   }, []); // Run once on mount
   
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
+  const constellationFilter = useInterBrainStore(state => state.constellationFilter);
+  const ephemeralNodesMap = useInterBrainStore(state => state.ephemeralNodes);
 
   // No need to load initial nodes - they come from store.dreamNodes
 
@@ -68,8 +70,30 @@ export default function DreamspaceCanvas() {
   // Drag and drop state - tracks mouse position for 3D drop positioning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Get nodes from store
-  const dreamNodes: DreamNode[] = Array.from(dreamNodesMap.values()).map(data => data.node);
+  // Get nodes from store - filter based on constellation filter and ephemeral nodes
+  // If filter has mounted nodes, use it; otherwise show all (pre-filter state)
+  const dreamNodes: DreamNode[] = React.useMemo(() => {
+    const allNodes = Array.from(dreamNodesMap.values());
+
+    // If constellation filter is not initialized (empty mountedNodes), show all nodes
+    if (constellationFilter.mountedNodes.size === 0) {
+      return allNodes.map(data => data.node);
+    }
+
+    // Filter to only mounted nodes (constellation) + ephemeral nodes
+    return allNodes
+      .filter(data =>
+        constellationFilter.mountedNodes.has(data.node.id) ||
+        ephemeralNodesMap.has(data.node.id)
+      )
+      .map(data => data.node);
+  }, [dreamNodesMap, constellationFilter.mountedNodes, ephemeralNodesMap]);
+
+  // Track which nodes are ephemeral for rendering differences
+  const ephemeralNodeIds = React.useMemo(() =>
+    new Set(ephemeralNodesMap.keys()),
+    [ephemeralNodesMap]
+  );
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
@@ -623,28 +647,37 @@ export default function DreamspaceCanvas() {
               prevRenderCountRef.current = dreamNodes.length;
             }
 
-            const renderedNodes = dreamNodes.map((node) => (
-              <React.Fragment key={node.id}>
-                {/* Star component - purely visual, positioned slightly closer than anchor */}
-                {USE_WEBGL_STARS ? (
-                  <StarMesh position={node.position} size={5000} />
-                ) : (
-                  <Star3D position={node.position} size={5000} />
-                )}
-                
-                {/* DreamNode component - handles all interactions and dynamic positioning */}
-                <DreamNode3D
-                  ref={getDreamNodeRef(node.id)}
-                  dreamNode={node}
-                  onHover={handleNodeHover}
-                  onClick={handleNodeClick}
-                  enableDynamicScaling={shouldEnableDynamicScaling}
-                  onHitSphereRef={handleHitSphereRef}
-                  vaultService={vaultService}
-                  canvasParserService={canvasParserService}
-                />
-              </React.Fragment>
-            ));
+            const renderedNodes = dreamNodes.map((node) => {
+              const isEphemeral = ephemeralNodeIds.has(node.id);
+              const ephemeralState = isEphemeral ? ephemeralNodesMap.get(node.id) : undefined;
+
+              return (
+                <React.Fragment key={node.id}>
+                  {/* Star component - only for constellation nodes (not ephemeral) */}
+                  {!isEphemeral && (
+                    USE_WEBGL_STARS ? (
+                      <StarMesh position={node.position} size={5000} />
+                    ) : (
+                      <Star3D position={node.position} size={5000} />
+                    )
+                  )}
+
+                  {/* DreamNode component - handles all interactions and dynamic positioning */}
+                  <DreamNode3D
+                    ref={getDreamNodeRef(node.id)}
+                    dreamNode={node}
+                    onHover={handleNodeHover}
+                    onClick={handleNodeClick}
+                    enableDynamicScaling={shouldEnableDynamicScaling}
+                    onHitSphereRef={handleHitSphereRef}
+                    vaultService={vaultService}
+                    canvasParserService={canvasParserService}
+                    ephemeral={isEphemeral}
+                    ephemeralState={ephemeralState}
+                  />
+                </React.Fragment>
+              );
+            });
 
             return renderedNodes;
           })()}

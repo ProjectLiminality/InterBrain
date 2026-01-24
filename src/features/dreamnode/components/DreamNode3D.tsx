@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
-import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { useInterBrainStore, EphemeralNodeState } from '../../../core/store/interbrain-store';
 import { dreamNodeStyles, getDistanceScaledGlowIntensity, getDistanceScaledHoverScale } from '../styles/dreamNodeStyles';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { VaultService } from '../../../core/services/vault-service';
@@ -43,20 +43,26 @@ interface DreamNode3DProps {
   onHitSphereRef?: (nodeId: string, meshRef: React.RefObject<Mesh | null>) => void;
   vaultService?: VaultService;
   canvasParserService?: CanvasParserService;
+  /** Whether this node is ephemeral (spawned on-demand, not part of constellation) */
+  ephemeral?: boolean;
+  /** Ephemeral node state with spawn/target positions */
+  ephemeralState?: EphemeralNodeState;
 }
 
 /**
  * Clean 3D DreamNode component with Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
  */
-const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({ 
-  dreamNode, 
-  onHover, 
-  onClick, 
+const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
+  dreamNode,
+  onHover,
+  onClick,
   onDoubleClick,
   enableDynamicScaling = false,
   onHitSphereRef,
   vaultService: _vaultService,
-  canvasParserService: _canvasParserService
+  canvasParserService: _canvasParserService,
+  ephemeral = false,
+  ephemeralState: _ephemeralState
 }, ref) => {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
