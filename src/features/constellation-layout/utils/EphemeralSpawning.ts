@@ -10,7 +10,7 @@
  */
 
 /** Fixed radius for spawn/exit ring (in world units) */
-export const EPHEMERAL_SPAWN_RADIUS = 8000;
+export const EPHEMERAL_SPAWN_RADIUS = 2000;
 
 /**
  * Calculate spawn position for an ephemeral node

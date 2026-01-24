@@ -5,6 +5,7 @@ import { FlyControls } from '@react-three/drei';
 import { DreamNode3D } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { Star3D, SphereRotationControls, ConstellationEdges, shouldShowConstellationEdges } from '../../features/constellation-layout';
+import { EPHEMERAL_SPAWN_RADIUS } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { StarMesh } from '../../features/constellation-layout/components/StarMesh';
 
 // Feature flag for WebGL-native star rendering
@@ -121,6 +122,7 @@ export default function DreamspaceCanvas() {
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
   const debugIntersectionPoint = useInterBrainStore(state => state.debugIntersectionPoint);
   const debugFlyingControls = useInterBrainStore(state => state.debugFlyingControls);
+  const debugEphemeralRing = useInterBrainStore(state => state.debugEphemeralRing);
   
   // Layout state for controlling dynamic view scaling
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
@@ -631,6 +633,16 @@ export default function DreamspaceCanvas() {
         {/* Active video call button - visible during copilot mode (outside rotatable group) */}
         {copilotMode.isActive && copilotMode.conversationPartner && (
           <ActiveVideoCallButton />
+        )}
+
+        {/* Debug ephemeral spawn/exit ring - shows where ephemeral nodes spawn from/exit to
+            This ring is in CAMERA SPACE (not world space), so it stays fixed at z=0
+            The ring should be perpendicular to the camera view axis */}
+        {debugEphemeralRing && (
+          <mesh rotation={[0, 0, 0]} position={[0, 0, 0]}>
+            <ringGeometry args={[EPHEMERAL_SPAWN_RADIUS - 50, EPHEMERAL_SPAWN_RADIUS + 50, 64]} />
+            <meshBasicMaterial color="#ff00ff" transparent={true} opacity={0.5} side={2} />
+          </mesh>
         )}
 
         {/* Rotatable group containing all DreamNodes */}
