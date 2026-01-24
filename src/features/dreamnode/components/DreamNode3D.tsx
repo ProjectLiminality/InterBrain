@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
+import { calculateExitPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore, EphemeralNodeState } from '../../../core/store/interbrain-store';
 import { dreamNodeStyles, getDistanceScaledGlowIntensity, getDistanceScaledHoverScale } from '../styles/dreamNodeStyles';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
@@ -62,7 +63,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   vaultService: _vaultService,
   canvasParserService: _canvasParserService,
   ephemeral = false,
-  ephemeralState: _ephemeralState
+  ephemeralState
 }, ref) => {
   const [isHovered, setIsHovered] = useState(false);
   const [radialOffset, setRadialOffset] = useState(0);
@@ -119,7 +120,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionStartTime, setTransitionStartTime] = useState(0);
   const [transitionDuration, setTransitionDuration] = useState(1000);
-  const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled'>('liminal');
+  const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled' | 'ephemeral-exit'>('liminal');
   const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart'>('easeOutCubic');
   
   // Add flip rotation to transition system for unified animations
@@ -244,7 +245,33 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   }, [shouldLoadBackSide, hasLoadedBackSide, dreamNode.name, spatialLayout, selectedNode?.id, isTransitioning]);
   
   // DreamSong logic now handled by DreamSongSide component via hook
-  
+
+  // Ephemeral spawn animation - triggers when ephemeral node first mounts
+  const hasTriggeredSpawnRef = useRef(false);
+  useEffect(() => {
+    if (ephemeral && ephemeralState && !hasTriggeredSpawnRef.current) {
+      hasTriggeredSpawnRef.current = true;
+
+      // Start from spawn position
+      setCurrentPosition(ephemeralState.spawnPosition);
+      setStartPosition(ephemeralState.spawnPosition);
+
+      // Immediately trigger animation to target position
+      setTargetPosition(ephemeralState.targetPosition);
+      setTransitionDuration(DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnAnimationDuration);
+      setTransitionStartTime(globalThis.performance.now());
+      setPositionMode('active');
+      setIsTransitioning(true);
+      setTransitionType('liminal'); // Use liminal type to stay in active mode
+      setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+
+      console.log(`[DreamNode3D] Spawning ephemeral node ${dreamNode.id}`, {
+        from: ephemeralState.spawnPosition,
+        to: ephemeralState.targetPosition
+      });
+    }
+  }, [ephemeral, ephemeralState, dreamNode.id]);
+
   // Reset flip state when node is no longer selected
   useEffect(() => {
     if (spatialLayout !== 'liminal-web' || selectedNode?.id !== dreamNode.id) {
@@ -377,15 +404,14 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
-      
       let actualCurrentPosition: [number, number, number];
-      
+
       if (positionMode === 'constellation') {
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
         const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-        
+
         actualCurrentPosition = [
           anchorPos[0] - normalizedDir[0] * radialOffset,
           anchorPos[1] - normalizedDir[1] * radialOffset,
@@ -394,10 +420,30 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
+
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();
-      
+
+      // For ephemeral nodes, animate to exit position instead of constellation
+      if (ephemeral) {
+        const exitPosition = calculateExitPosition(
+          actualCurrentPosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        );
+        const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
+
+        setStartPosition(actualCurrentPosition);
+        setCurrentPosition(actualCurrentPosition);
+        setTargetPosition(exitPosition);
+        setTransitionDuration(exitDuration);
+        setTransitionStartTime(globalThis.performance.now());
+        setPositionMode('active');
+        setIsTransitioning(true);
+        setTransitionType('ephemeral-exit');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        return;
+      }
+
       const constellationPosition = dreamNode.position;
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -649,6 +695,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           setRadialOffset(0);
         } else if (transitionType === 'scaled') {
           setPositionMode('constellation');
+        } else if (transitionType === 'ephemeral-exit') {
+          // Ephemeral node finished exit animation - signal for garbage collection
+          // The node will be unmounted by EphemeralNodeManager
+          console.log(`[DreamNode3D] Ephemeral node ${dreamNode.id} finished exit animation`);
+          useInterBrainStore.getState().despawnEphemeralNode(dreamNode.id);
         }
       }
     }
