@@ -456,28 +456,66 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
+      // For ephemeral nodes, delegate to returnToConstellation which handles exit
+      if (ephemeral) {
+        // Get current position for exit animation
+        let actualCurrentPosition: [number, number, number];
+        if (positionMode === 'constellation') {
+          const anchorPos = dreamNode.position;
+          const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
+          const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
+          const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
+          actualCurrentPosition = [
+            anchorPos[0] - normalizedDir[0] * radialOffset,
+            anchorPos[1] - normalizedDir[1] * radialOffset,
+            anchorPos[2] - normalizedDir[2] * radialOffset
+          ];
+        } else {
+          actualCurrentPosition = [...currentPosition];
+        }
+
+        const exitPosition = calculateExitPosition(
+          actualCurrentPosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        );
+        const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
+
+        startFlipBackAnimation();
+
+        setStartPosition(actualCurrentPosition);
+        setCurrentPosition(actualCurrentPosition);
+        setTargetPosition(exitPosition);
+        setTransitionDuration(exitDuration);
+        setTransitionStartTime(globalThis.performance.now());
+        setPositionMode('active');
+        setIsTransitioning(true);
+        setTransitionType('ephemeral-exit');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        return;
+      }
+
       const anchorPosition = dreamNode.position;
-      
+
       const worldAnchorPosition = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (worldRotation) {
         worldAnchorPosition.applyQuaternion(worldRotation);
       }
-      
+
       const { radialOffset: targetRadialOffset } = calculateDynamicScaling(
         worldAnchorPosition,
         DEFAULT_SCALING_CONFIG
       );
-      
+
       const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
       const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
       const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-      
+
       const targetScaledPosition: [number, number, number] = [
         anchorPosition[0] - normalizedDir[0] * targetRadialOffset,
         anchorPosition[1] - normalizedDir[1] * targetRadialOffset,
         anchorPosition[2] - normalizedDir[2] * targetRadialOffset
       ];
-      
+
       let actualCurrentPosition: [number, number, number];
       if (positionMode === 'constellation') {
         actualCurrentPosition = [
@@ -488,10 +526,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
+
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();
-      
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(targetScaledPosition);
@@ -501,7 +539,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setIsTransitioning(true);
       setTransitionType('scaled');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
-      
+
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
       }, duration - 100);
@@ -536,13 +574,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     },
     interruptAndReturnToConstellation: (duration = 1000, easing = 'easeInQuart') => {
       let actualCurrentPosition: [number, number, number];
-      
+
       if (positionMode === 'constellation') {
         const anchorPos = dreamNode.position;
         const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
         const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
         const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-        
+
         actualCurrentPosition = [
           anchorPos[0] - normalizedDir[0] * radialOffset,
           anchorPos[1] - normalizedDir[1] * radialOffset,
@@ -551,7 +589,27 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
+
+      // For ephemeral nodes, animate to exit position instead of constellation
+      if (ephemeral) {
+        const exitPosition = calculateExitPosition(
+          actualCurrentPosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        );
+        const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
+
+        setStartPosition(actualCurrentPosition);
+        setCurrentPosition(actualCurrentPosition);
+        setTargetPosition(exitPosition);
+        setTransitionDuration(exitDuration);
+        setTransitionStartTime(globalThis.performance.now());
+        setPositionMode('active');
+        setIsTransitioning(true);
+        setTransitionType('ephemeral-exit');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        return;
+      }
+
       const constellationPosition = dreamNode.position;
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -564,28 +622,63 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
     },
     interruptAndReturnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
+      // For ephemeral nodes, animate to exit position
+      if (ephemeral) {
+        let actualCurrentPosition: [number, number, number];
+        if (positionMode === 'constellation') {
+          const anchorPos = dreamNode.position;
+          const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
+          const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
+          const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
+          actualCurrentPosition = [
+            anchorPos[0] - normalizedDir[0] * radialOffset,
+            anchorPos[1] - normalizedDir[1] * radialOffset,
+            anchorPos[2] - normalizedDir[2] * radialOffset
+          ];
+        } else {
+          actualCurrentPosition = [...currentPosition];
+        }
+
+        const exitPosition = calculateExitPosition(
+          actualCurrentPosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        );
+        const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
+
+        setStartPosition(actualCurrentPosition);
+        setCurrentPosition(actualCurrentPosition);
+        setTargetPosition(exitPosition);
+        setTransitionDuration(exitDuration);
+        setTransitionStartTime(globalThis.performance.now());
+        setPositionMode('active');
+        setIsTransitioning(true);
+        setTransitionType('ephemeral-exit');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        return;
+      }
+
       const anchorPosition = dreamNode.position;
-      
+
       const worldAnchorPosition = new Vector3(anchorPosition[0], anchorPosition[1], anchorPosition[2]);
       if (worldRotation) {
         worldAnchorPosition.applyQuaternion(worldRotation);
       }
-      
+
       const { radialOffset: targetRadialOffset } = calculateDynamicScaling(
         worldAnchorPosition,
         DEFAULT_SCALING_CONFIG
       );
-      
+
       const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
       const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
       const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-      
+
       const targetScaledPosition: [number, number, number] = [
         anchorPosition[0] - normalizedDir[0] * targetRadialOffset,
         anchorPosition[1] - normalizedDir[1] * targetRadialOffset,
         anchorPosition[2] - normalizedDir[2] * targetRadialOffset
       ];
-      
+
       let actualCurrentPosition: [number, number, number];
       if (positionMode === 'constellation') {
         actualCurrentPosition = [
@@ -596,7 +689,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(targetScaledPosition);
@@ -606,7 +699,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setIsTransitioning(true);
       setTransitionType('scaled');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
-      
+
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
       }, duration - 100);

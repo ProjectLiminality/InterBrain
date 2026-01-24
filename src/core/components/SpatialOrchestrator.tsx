@@ -18,6 +18,7 @@ import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNo
 import { buildRelationshipGraph, calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../../features/liminal-web-layout';
 import { computeConstellationLayout, createFallbackLayout } from '../../features/constellation-layout/ConstellationLayout';
 import { computeConstellationFilter } from '../../features/constellation-layout/services/constellation-filter-service';
+import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore } from '../store/interbrain-store';
 
 export interface SpatialOrchestratorRef {
@@ -181,7 +182,49 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   };
 
   /**
+   * Ensure a node is mounted, spawning it as ephemeral if necessary.
+   * Returns true if the node is/will be mounted, false if the node doesn't exist.
+   */
+  const ensureNodeMounted = (
+    nodeId: string,
+    targetPosition: [number, number, number]
+  ): boolean => {
+    const store = useInterBrainStore.getState();
+
+    // Check if node exists in vault
+    if (!store.dreamNodes.has(nodeId)) {
+      console.warn(`[Orchestrator] Node ${nodeId} not found in dreamNodes`);
+      return false;
+    }
+
+    // Check if already mounted in constellation
+    if (store.constellationFilter.mountedNodes.has(nodeId)) {
+      return true;
+    }
+
+    // Check if already spawned as ephemeral
+    if (store.ephemeralNodes.has(nodeId)) {
+      return true;
+    }
+
+    // Need to spawn as ephemeral
+    const spawnPosition = calculateSpawnPosition(
+      targetPosition,
+      DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnRadiusFactor
+    );
+
+    console.log(`[Orchestrator] Spawning ephemeral node ${nodeId}`, {
+      from: spawnPosition,
+      to: targetPosition
+    });
+
+    store.spawnEphemeralNode(nodeId, targetPosition, spawnPosition);
+    return true;
+  };
+
+  /**
    * Move a node to a position, interrupting any current animation.
+   * If the node is not mounted, it will be spawned as ephemeral first.
    */
   const moveNode = (
     nodeId: string,
@@ -190,8 +233,24 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     easing: string,
     setActive = true
   ) => {
+    // Ensure node is mounted (spawn as ephemeral if needed)
+    if (!ensureNodeMounted(nodeId, position)) {
+      return; // Node doesn't exist
+    }
+
     const nodeRef = nodeRefs.current.get(nodeId);
-    if (!nodeRef?.current) return;
+
+    // If node was just spawned as ephemeral, the ref might not exist yet
+    // The ephemeral spawn animation will handle the initial movement
+    if (!nodeRef?.current) {
+      // Check if this is an ephemeral node that was just spawned
+      const store = useInterBrainStore.getState();
+      if (store.ephemeralNodes.has(nodeId)) {
+        // Ephemeral node will handle its own spawn animation
+        return;
+      }
+      return;
+    }
 
     if (setActive) {
       nodeRef.current.setActiveState(true);
