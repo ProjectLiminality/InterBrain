@@ -18,6 +18,7 @@ import { createGitHubSettingsSection } from '../github-publishing/settings-secti
 import { createFeedbackSettingsSection } from '../feedback/settings-section';
 import { createAIMagicSettingsSection } from '../ai-magic/settings-section';
 import { createTutorialSettingsSection } from '../tutorial/settings-section';
+import { createConstellationSettingsSection } from '../constellation-layout/settings-section';
 
 export interface InterBrainSettings {
 	claudeApiKey: string;
@@ -115,6 +116,14 @@ export class InterBrainSettingTab extends PluginSettingTab {
 			containerEl,
 			this.plugin,
 			this.systemStatus?.semanticSearch
+		);
+
+		// ============================================================
+		// Constellation View Section (feature-owned)
+		// ============================================================
+		createConstellationSettingsSection(
+			containerEl,
+			this.plugin
 		);
 
 		// ============================================================
