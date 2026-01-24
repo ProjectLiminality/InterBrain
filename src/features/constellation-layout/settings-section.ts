@@ -3,6 +3,7 @@
  *
  * Feature-owned settings UI for constellation filtering and node limits.
  * Rendered within the main settings panel.
+ * Settings are persisted via plugin.settings and synced to Zustand store.
  */
 
 import { Setting } from 'obsidian';
@@ -14,7 +15,7 @@ import { useInterBrainStore } from '../../core/store/interbrain-store';
  */
 export function createConstellationSettingsSection(
 	containerEl: HTMLElement,
-	_plugin: InterBrainPlugin
+	plugin: InterBrainPlugin
 ): void {
 	const header = containerEl.createEl('h2', { text: '🌌 Constellation View' });
 	header.id = 'constellation-section';
@@ -24,30 +25,47 @@ export function createConstellationSettingsSection(
 		cls: 'setting-item-description'
 	});
 
-	const store = useInterBrainStore.getState();
-	const config = store.constellationConfig;
+	// Get current values from plugin settings (persisted)
+	const maxNodes = plugin.settings.constellationMaxNodes ?? 150;
+	const prioritizeClusters = plugin.settings.constellationPrioritizeClusters ?? true;
 
-	// Max Nodes setting
+	// Max Nodes setting - integer input field
 	new Setting(containerEl)
 		.setName('Maximum Mounted Nodes')
 		.setDesc('Maximum number of DreamNodes to render in the constellation. Nodes beyond this limit are loaded on-demand. Lower values improve performance. (Requires re-applying constellation layout)')
-		.addSlider(slider => slider
-			.setLimits(50, 500, 10)
-			.setValue(config.maxNodes)
-			.setDynamicTooltip()
-			.onChange((value) => {
-				useInterBrainStore.getState().setConstellationConfig({ maxNodes: value });
-			}))
+		.addText(text => {
+			text.inputEl.type = 'number';
+			text.inputEl.min = '50';
+			text.inputEl.max = '500';
+			text.inputEl.style.width = '80px';
+			text.setValue(maxNodes.toString());
+			text.setPlaceholder('150');
+			text.onChange(async (value) => {
+				const numValue = parseInt(value, 10);
+				if (!isNaN(numValue)) {
+					// Clamp to valid range
+					const clampedValue = Math.max(50, Math.min(500, numValue));
+					// Persist to plugin settings
+					plugin.settings.constellationMaxNodes = clampedValue;
+					await plugin.saveSettings();
+					// Sync to Zustand store
+					useInterBrainStore.getState().setConstellationConfig({ maxNodes: clampedValue });
+				}
+			});
+		})
 		.addExtraButton(button => button
 			.setIcon('reset')
 			.setTooltip('Reset to default (150)')
-			.onClick(() => {
+			.onClick(async () => {
+				// Persist to plugin settings
+				plugin.settings.constellationMaxNodes = 150;
+				await plugin.saveSettings();
+				// Sync to Zustand store
 				useInterBrainStore.getState().setConstellationConfig({ maxNodes: 150 });
-				// Refresh display by triggering re-render
-				const sliderEl = containerEl.querySelector('.constellation-maxnodes-slider input[type="range"]') as HTMLInputElement;
-				if (sliderEl) {
-					sliderEl.value = '150';
-					sliderEl.dispatchEvent(new Event('input'));
+				// Refresh the input field
+				const inputEl = containerEl.querySelector('input[type="number"]') as HTMLInputElement;
+				if (inputEl) {
+					inputEl.value = '150';
 				}
 			}));
 
@@ -56,12 +74,17 @@ export function createConstellationSettingsSection(
 		.setName('Prioritize Clusters')
 		.setDesc('When sampling nodes to display, prefer nodes that are part of larger relationship clusters. This keeps constellations more intact.')
 		.addToggle(toggle => toggle
-			.setValue(config.prioritizeClusters)
-			.onChange((value) => {
+			.setValue(prioritizeClusters)
+			.onChange(async (value) => {
+				// Persist to plugin settings
+				plugin.settings.constellationPrioritizeClusters = value;
+				await plugin.saveSettings();
+				// Sync to Zustand store
 				useInterBrainStore.getState().setConstellationConfig({ prioritizeClusters: value });
 			}));
 
 	// Current filter stats
+	const store = useInterBrainStore.getState();
 	const filter = store.constellationFilter;
 	if (filter.mountedNodes.size > 0) {
 		const statsDiv = containerEl.createDiv({ cls: 'constellation-filter-stats' });

@@ -37,6 +37,9 @@ export interface InterBrainSettings {
 	transcriptionSearchBufferSize: number; // Rolling buffer size for semantic search (50-2000 chars)
 	webLinkAnalyzerEnabled: boolean;
 	webLinkAnalyzerSetupComplete: boolean;
+	// Constellation view settings
+	constellationMaxNodes: number;  // Max nodes to mount in constellation (50-500)
+	constellationPrioritizeClusters: boolean;  // Prioritize cluster members when sampling
 }
 
 export const DEFAULT_SETTINGS: InterBrainSettings = {
@@ -55,7 +58,10 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	transcriptionLanguage: 'auto',   // Auto-detect language
 	transcriptionSearchBufferSize: 500,  // 500 chars is ~75-100 words, good for semantic context
 	webLinkAnalyzerEnabled: false,  // Requires manual setup (needs API key)
-	webLinkAnalyzerSetupComplete: false
+	webLinkAnalyzerSetupComplete: false,
+	// Constellation view defaults
+	constellationMaxNodes: 150,  // Good balance of performance and visibility
+	constellationPrioritizeClusters: true  // Keep constellations intact
 };
 
 export class InterBrainSettingTab extends PluginSettingTab {
