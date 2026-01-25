@@ -492,6 +492,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     },
     
     returnToConstellation: () => {
+      // Guard against double-calls during transition
+      if (isTransitioning.current) {
+        console.log('[Orchestrator] returnToConstellation blocked - already transitioning');
+        return;
+      }
+
       isTransitioning.current = true;
       focusedNodeId.current = null;
       setSpatialLayout('constellation');
@@ -505,13 +511,35 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.log(`[Orchestrator] Returning to constellation with ${ephemeralNodeIds.length} ephemeral nodes:`, ephemeralNodeIds);
       }
 
+      // Capture roles BEFORE clearing them so we can use correct easing
+      const rolesSnapshot = {
+        centerNodeId: liminalWebRoles.current.centerNodeId,
+        ring1NodeIds: new Set(liminalWebRoles.current.ring1NodeIds),
+        ring2NodeIds: new Set(liminalWebRoles.current.ring2NodeIds),
+        ring3NodeIds: new Set(liminalWebRoles.current.ring3NodeIds),
+        sphereNodeIds: new Set(liminalWebRoles.current.sphereNodeIds),
+      };
+
+      // Get easing from snapshot instead of live roles
+      const getEasingFromSnapshot = (nodeId: string): string => {
+        if (nodeId === rolesSnapshot.centerNodeId ||
+            rolesSnapshot.ring1NodeIds.has(nodeId) ||
+            rolesSnapshot.ring2NodeIds.has(nodeId) ||
+            rolesSnapshot.ring3NodeIds.has(nodeId)) {
+          return 'easeInQuart';
+        } else if (rolesSnapshot.sphereNodeIds.has(nodeId)) {
+          return 'easeOutQuart';
+        }
+        return 'easeOutCubic';
+      };
+
       // Return all nodes with role-based easing
       nodeRefs.current.forEach((_, nodeId) => {
         const isEphemeral = store.ephemeralNodes.has(nodeId);
         if (isEphemeral) {
           console.log(`[Orchestrator] Triggering exit animation for ephemeral node: ${nodeId}`);
         }
-        returnNodeToScaledPosition(nodeId, transitionDuration, worldRotation, getEasingForRole(nodeId));
+        returnNodeToScaledPosition(nodeId, transitionDuration, worldRotation, getEasingFromSnapshot(nodeId));
       });
 
       clearLiminalWebRoles();

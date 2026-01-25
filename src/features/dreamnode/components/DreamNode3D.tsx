@@ -441,6 +441,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         }
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
+        console.log(`[DreamNode3D] Ephemeral exit animation starting for ${dreamNode.id}: from [${actualCurrentPosition.map(n => n.toFixed(0)).join(',')}] to [${exitPosition.map(n => n.toFixed(0)).join(',')}] over ${exitDuration}ms`);
 
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
@@ -468,7 +469,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
-        console.log(`[DreamNode3D] returnToScaledPosition called for ephemeral node ${dreamNode.id}, starting exit animation`);
         // Get current position for exit animation
         let actualCurrentPosition: [number, number, number];
         if (positionMode === 'constellation') {
@@ -500,6 +500,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         }
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
+        const exitEasing = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing;
+
+        // SURGICAL LOGGING: Ephemeral exit animation parameters
+        const distance = Math.sqrt(
+          Math.pow(exitPosition[0] - actualCurrentPosition[0], 2) +
+          Math.pow(exitPosition[1] - actualCurrentPosition[1], 2) +
+          Math.pow(exitPosition[2] - actualCurrentPosition[2], 2)
+        );
+        console.log(`[EXIT-ANIM] EPHEMERAL ${dreamNode.id.slice(0,8)}:`, {
+          from: actualCurrentPosition.map(n => n.toFixed(0)),
+          to: exitPosition.map(n => n.toFixed(0)),
+          distance: distance.toFixed(0),
+          duration: exitDuration,
+          easing: exitEasing,
+          positionMode,
+          hasWorldRotation: !!worldRotation
+        });
 
         startFlipBackAnimation();
 
@@ -511,7 +528,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setPositionMode('active');
         setIsTransitioning(true);
         setTransitionType('ephemeral-exit');
-        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        setTransitionEasing(exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
         return;
       }
 
@@ -547,6 +564,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       } else {
         actualCurrentPosition = [...currentPosition];
       }
+
+      // SURGICAL LOGGING: Persistent node return animation parameters
+      const distance = Math.sqrt(
+        Math.pow(targetScaledPosition[0] - actualCurrentPosition[0], 2) +
+        Math.pow(targetScaledPosition[1] - actualCurrentPosition[1], 2) +
+        Math.pow(targetScaledPosition[2] - actualCurrentPosition[2], 2)
+      );
+      console.log(`[EXIT-ANIM] PERSISTENT ${dreamNode.id.slice(0,8)}:`, {
+        from: actualCurrentPosition.map(n => n.toFixed(0)),
+        to: targetScaledPosition.map(n => n.toFixed(0)),
+        distance: distance.toFixed(0),
+        duration,
+        easing,
+        positionMode,
+        radialOffset: radialOffset.toFixed(0),
+        targetRadialOffset: targetRadialOffset.toFixed(0)
+      });
 
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();

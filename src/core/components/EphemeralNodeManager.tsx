@@ -148,18 +148,18 @@ export function EphemeralNodeManager({ onSpawnNode, onDespawnNode }: EphemeralNo
   const clearEphemeralNodes = useInterBrainStore(state => state.clearEphemeralNodes);
   const prevLayoutRef = useRef(spatialLayout);
 
-  // Clean up ephemeral nodes when returning to constellation
+  // Track layout changes (no longer auto-clears - let animations complete first)
+  // Individual DreamNode3D components call despawnEphemeralNode() after their exit animation
   useEffect(() => {
     const prevLayout = prevLayoutRef.current;
     prevLayoutRef.current = spatialLayout;
 
     if (spatialLayout === 'constellation' && prevLayout !== 'constellation') {
-      // Transitioning to constellation - clear ephemeral nodes
-      // The DreamNode3D components should animate out before this triggers
-      console.log('[EphemeralNodeManager] Clearing ephemeral nodes on constellation return');
-      clearEphemeralNodes();
+      // Transitioning to constellation - ephemeral nodes will animate out
+      // Each node calls despawnEphemeralNode() when its exit animation completes
+      console.log('[EphemeralNodeManager] Layout changed to constellation - ephemeral nodes will animate out individually');
     }
-  }, [spatialLayout, clearEphemeralNodes]);
+  }, [spatialLayout]);
 
   // Track spawn/despawn events for callbacks
   const prevEphemeralRef = useRef(new Set<string>());

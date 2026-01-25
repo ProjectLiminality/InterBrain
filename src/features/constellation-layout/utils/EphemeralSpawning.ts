@@ -10,7 +10,7 @@
  */
 
 /** Fixed radius for spawn/exit ring (in world units) */
-export const EPHEMERAL_SPAWN_RADIUS = 2000;
+export const EPHEMERAL_SPAWN_RADIUS = 500;
 
 /**
  * Calculate spawn position for an ephemeral node
@@ -144,8 +144,8 @@ export interface EphemeralSpawnConfig {
 export const DEFAULT_EPHEMERAL_SPAWN_CONFIG: EphemeralSpawnConfig = {
   spawnRadiusFactor: 3,
   exitRadiusFactor: 3,
-  spawnAnimationDuration: 800,
-  exitAnimationDuration: 600,
+  spawnAnimationDuration: 1000,  // Canonical 1s heartbeat
+  exitAnimationDuration: 1000,   // Canonical 1s heartbeat
   spawnEasing: 'easeOutQuart',
   exitEasing: 'easeInQuart'
 };
