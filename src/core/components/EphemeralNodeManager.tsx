@@ -157,7 +157,6 @@ export function EphemeralNodeManager({ onSpawnNode, onDespawnNode }: EphemeralNo
     if (spatialLayout === 'constellation' && prevLayout !== 'constellation') {
       // Transitioning to constellation - ephemeral nodes will animate out
       // Each node calls despawnEphemeralNode() when its exit animation completes
-      console.log('[EphemeralNodeManager] Layout changed to constellation - ephemeral nodes will animate out individually');
     }
   }, [spatialLayout]);
 

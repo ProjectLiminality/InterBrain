@@ -27,31 +27,24 @@ export const EPHEMERAL_SPAWN_RADIUS = 500;
  */
 export function calculateSpawnPosition(
   targetPosition: [number, number, number],
-  _spawnRadiusFactor: number = 3
+  _spawnRadiusFactor: number = 3,
+  isCenterNode: boolean = false
 ): [number, number, number] {
-  const [x, y, _z] = targetPosition;
-
-  // Calculate radial distance from the Z-axis (camera depth axis)
-  const r = Math.sqrt(x * x + y * y);
-
-  // If node is near the Z-axis (e.g., center node in liminal web), the polar angle
-  // is undefined. We hardcode the direction to "up" (positive Y) for these cases.
-  // Use a generous threshold to catch nodes that are nearly centered.
-  if (r < 100) {
-    // Node is directly in front of camera, spawn from above
+  // Center node spawns from above (positive Y direction)
+  if (isCenterNode) {
     return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
+
+  const [x, y, _z] = targetPosition;
 
   // Calculate polar angle in the XY plane (direction from camera to target)
   const theta = Math.atan2(y, x);
 
   // Spawn at fixed radius in the same angular direction, at camera plane (z=0)
-  const spawnZ = 0; // Camera plane
-
   return [
     EPHEMERAL_SPAWN_RADIUS * Math.cos(theta),
     EPHEMERAL_SPAWN_RADIUS * Math.sin(theta),
-    spawnZ
+    0
   ];
 }
 
@@ -67,30 +60,24 @@ export function calculateSpawnPosition(
  */
 export function calculateExitPosition(
   currentPosition: [number, number, number],
-  _exitRadiusFactor: number = 3
+  _exitRadiusFactor: number = 3,
+  isCenterNode: boolean = false
 ): [number, number, number] {
-  const [x, y, _z] = currentPosition;
-
-  // Calculate radial distance from the Z-axis
-  const r = Math.sqrt(x * x + y * y);
-
-  // If node is near the Z-axis (e.g., center node in liminal web), the polar angle
-  // is undefined. We hardcode the direction to "up" (positive Y) for these cases.
-  // Use a generous threshold to catch nodes that are nearly centered.
-  if (r < 100) {
+  // Center node exits upward (positive Y direction)
+  if (isCenterNode) {
     return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
+
+  const [x, y, _z] = currentPosition;
 
   // Calculate polar angle in the XY plane (direction from camera to node)
   const theta = Math.atan2(y, x);
 
   // Exit at fixed radius in the same angular direction, at camera plane (z=0)
-  const exitZ = 0;
-
   return [
     EPHEMERAL_SPAWN_RADIUS * Math.cos(theta),
     EPHEMERAL_SPAWN_RADIUS * Math.sin(theta),
-    exitZ
+    0
   ];
 }
 

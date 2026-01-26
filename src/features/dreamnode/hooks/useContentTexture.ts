@@ -50,7 +50,6 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
     const app = serviceManager.getApp();
 
     if (!media?.absolutePath) {
-      console.log(`[useContentTexture] ${dreamNode.name}: No media absolutePath, skipping`);
       setIsLoading(false);
       setTexture(null);
       return;
@@ -152,13 +151,9 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
 
         const resourceUrl = app.vault.adapter.getResourcePath(vaultRelativePath);
 
-        console.log(`[useContentTexture] ${dreamNode.name}: Loading from ${vaultRelativePath}`);
-        console.log(`[useContentTexture] ${dreamNode.name}: Resource URL = ${resourceUrl}`);
-
         // Handle image media
         if (media.type.startsWith('image/')) {
           const tex = await loadImageTexture(resourceUrl);
-          console.log(`[useContentTexture] ${dreamNode.name}: Image texture loaded!`);
           textureRef.current = tex;
           setTexture(tex);
           setIsVideo(false);
@@ -169,7 +164,6 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
         // Handle video media
         if (media.type.startsWith('video/')) {
           const { texture: videoTex, video } = await loadVideoTexture(resourceUrl);
-          console.log(`[useContentTexture] ${dreamNode.name}: Video texture loaded!`);
           videoRef.current = video;
           textureRef.current = videoTex;
           setTexture(videoTex);
@@ -180,9 +174,7 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
 
         // Handle PDF - render first page to texture
         if (media.type.startsWith('application/pdf')) {
-          console.log(`[useContentTexture] ${dreamNode.name}: Loading PDF texture...`);
           const pdfTex = await loadPdfTexture(resourceUrl);
-          console.log(`[useContentTexture] ${dreamNode.name}: PDF texture loaded!`);
           textureRef.current = pdfTex;
           setTexture(pdfTex);
           setIsVideo(false);

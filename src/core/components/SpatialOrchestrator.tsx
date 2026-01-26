@@ -249,11 +249,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     // Calculate spawn position with world rotation correction
     const spawnPosition = calculateWorldCorrectedSpawnPosition(targetPosition);
 
-    console.log(`[Orchestrator] Spawning ephemeral node ${nodeId}`, {
-      from: spawnPosition,
-      to: targetPosition
-    });
-
     store.spawnEphemeralNode(nodeId, targetPosition, spawnPosition);
     return true;
   };
@@ -282,7 +277,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     if (!nodeRef?.current) {
       const store = useInterBrainStore.getState();
       if (store.ephemeralNodes.has(nodeId)) {
-        console.log(`[Orchestrator] Queuing movement for ephemeral node ${nodeId} (ref not yet available)`);
         pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
         return;
       }
@@ -494,7 +488,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     returnToConstellation: () => {
       // Guard against double-calls during transition
       if (isTransitioning.current) {
-        console.log('[Orchestrator] returnToConstellation blocked - already transitioning');
         return;
       }
 
@@ -504,12 +497,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
       const worldRotation = dreamWorldRef.current?.quaternion.clone();
 
-      // Check for ephemeral nodes to log them
       const store = useInterBrainStore.getState();
-      const ephemeralNodeIds = Array.from(store.ephemeralNodes.keys());
-      if (ephemeralNodeIds.length > 0) {
-        console.log(`[Orchestrator] Returning to constellation with ${ephemeralNodeIds.length} ephemeral nodes:`, ephemeralNodeIds);
-      }
 
       // Capture roles BEFORE clearing them so we can use correct easing
       const rolesSnapshot = {
@@ -535,10 +523,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
       // Return all nodes with role-based easing
       nodeRefs.current.forEach((_, nodeId) => {
-        const isEphemeral = store.ephemeralNodes.has(nodeId);
-        if (isEphemeral) {
-          console.log(`[Orchestrator] Triggering exit animation for ephemeral node: ${nodeId}`);
-        }
         returnNodeToScaledPosition(nodeId, transitionDuration, worldRotation, getEasingFromSnapshot(nodeId));
       });
 
@@ -961,7 +945,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Check if there's a pending movement for this node (ephemeral spawn case)
       const pendingMovement = pendingMovements.current.get(nodeId);
       if (pendingMovement && nodeRef.current) {
-        console.log(`[Orchestrator] Executing queued movement for node ${nodeId}`);
         pendingMovements.current.delete(nodeId);
 
         // Use a short delay to ensure the node is fully initialized
@@ -997,35 +980,51 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     },
 
     applyConstellationLayout: async () => {
-      console.log('🌌 [SpatialOrchestrator] Applying constellation layout...');
-
       const store = useInterBrainStore.getState();
       // Read relationship graph from dreamweaving slice (source of truth for DreamSong relationships)
       const relationshipGraph = store.dreamSongRelationships.graph;
 
       if (!relationshipGraph) {
-        console.warn('⚠️ [SpatialOrchestrator] No relationship graph available for constellation layout');
+        console.warn('[LAYOUT] No relationship graph available');
         return;
       }
 
       try {
-        // Compute constellation layout
+        // TRACE LOGGING: Understanding the position assignment flow
+        const { maxNodes, prioritizeClusters } = store.constellationConfig;
+        const allNodeIds = dreamNodes.map(node => node.id);
+
+        console.log(`[LAYOUT-TRACE] Step 1: Input data`, {
+          totalNodesInVault: dreamNodes.length,
+          maxNodesConfig: maxNodes,
+          prioritizeClusters
+        });
+
+        // Compute constellation layout - currently for ALL nodes
         const layoutResult = computeConstellationLayout(relationshipGraph, dreamNodes);
 
         if (layoutResult.nodePositions.size === 0) {
-          console.warn('⚠️ [SpatialOrchestrator] Constellation layout returned no positions');
+          console.warn('[LAYOUT] Layout returned no positions');
           return;
         }
 
-        // Create fallback positions for any missing nodes
+        console.log(`[LAYOUT-TRACE] Step 2: After computeConstellationLayout`, {
+          positionsFromLayout: layoutResult.nodePositions.size,
+          nodesPassedIn: dreamNodes.length
+        });
+
+        // Create fallback positions for any missing nodes - currently for ALL nodes
         const completePositions = createFallbackLayout(dreamNodes, layoutResult.nodePositions);
+
+        console.log(`[LAYOUT-TRACE] Step 3: After createFallbackLayout`, {
+          completePositions: completePositions.size,
+          addedByFallback: completePositions.size - layoutResult.nodePositions.size
+        });
 
         // Store the positions in the store for persistence
         store.setConstellationPositions(completePositions);
 
         // Compute constellation filter to determine which nodes should be mounted
-        const { maxNodes, prioritizeClusters } = store.constellationConfig;
-        const allNodeIds = dreamNodes.map(node => node.id);
         const constellationFilter = computeConstellationFilter(
           relationshipGraph,
           allNodeIds,
@@ -1036,28 +1035,25 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Store the filter result
         store.setConstellationFilter(constellationFilter);
 
-        console.log(`🎯 [SpatialOrchestrator] Constellation filter computed:`, {
+        console.log(`[LAYOUT-TRACE] Step 4: After computeConstellationFilter`, {
+          mountedNodes: constellationFilter.mountedNodes.size,
+          ephemeralNodes: constellationFilter.ephemeralNodes.size,
           vipNodes: constellationFilter.vipNodes.size,
           parentNodes: constellationFilter.parentNodes.size,
-          sampledNodes: constellationFilter.sampledNodes.size,
-          ephemeralNodes: constellationFilter.ephemeralNodes.size,
-          mountedTotal: constellationFilter.mountedNodes.size,
-          maxNodes
+          sampledNodes: constellationFilter.sampledNodes.size
         });
 
-        // Update node positions in single batch transaction (100x faster than sequential updates)
+        // ⚠️ PROBLEM: Update node positions for ALL nodes, not just mounted ones
         store.batchUpdateNodePositions(completePositions);
 
-        console.log(`✅ [SpatialOrchestrator] Constellation layout applied to ${completePositions.size} nodes via batch update`);
-        console.log(`📊 [SpatialOrchestrator] Layout stats:`, {
-          clusters: layoutResult.stats.totalClusters,
-          nodes: layoutResult.stats.totalNodes,
-          edges: layoutResult.stats.totalEdges,
-          computationTime: `${layoutResult.stats.computationTimeMs.toFixed(1)}ms`
+        console.log(`[LAYOUT-TRACE] Step 5: After batchUpdateNodePositions`, {
+          positionsAssigned: completePositions.size,
+          shouldOnlyBe: constellationFilter.mountedNodes.size,
+          excessPositions: completePositions.size - constellationFilter.mountedNodes.size
         });
 
       } catch (error) {
-        console.error('❌ [SpatialOrchestrator] Failed to apply constellation layout:', error);
+        console.error('[LAYOUT] Failed:', error);
       }
     },
 
