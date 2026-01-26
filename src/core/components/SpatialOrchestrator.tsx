@@ -912,14 +912,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             // Skip the center node - it stays where it is
             return;
           }
-          
-          const nodeRef = nodeRefs.current.get(searchNodeId);
-          if (nodeRef?.current) {
-            nodeRef.current.setActiveState(true);
-            nodeRef.current.moveToPosition(position, transitionDuration, 'easeOutQuart');
-          } else {
-            console.warn(`⚠️ [Orchestrator-EditMode] Node ref not found for ring node ${searchNodeId}`);
-          }
+
+          // Use moveNode which handles ephemeral spawning for non-mounted nodes
+          moveNode(searchNodeId, position, transitionDuration, 'easeOutQuart');
         });
         
         // Move sphere nodes to sphere surface
@@ -1028,12 +1023,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             // Skip the center node - it stays where it is
             return;
           }
-          
-          const nodeRef = nodeRefs.current.get(searchNodeId);
-          if (nodeRef?.current) {
-            nodeRef.current.setActiveState(true);
-            nodeRef.current.moveToPosition(position, fastTransitionDuration, 'easeOutQuart');
-          }
+
+          // Use moveNode which handles ephemeral spawning for non-mounted nodes
+          moveNode(searchNodeId, position, fastTransitionDuration, 'easeOutQuart');
         });
         
         // Move sphere nodes to sphere surface
