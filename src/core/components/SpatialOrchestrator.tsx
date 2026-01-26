@@ -124,6 +124,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   // Current state tracking
   const focusedNodeId = useRef<string | null>(null);
   const isTransitioning = useRef<boolean>(false);
+  const lastFocusTimestamp = useRef<number>(0);
   
   // Track node roles during liminal-web mode for proper constellation return
   const liminalWebRoles = useRef<{
@@ -380,6 +381,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
       try {
+        // Deduplicate rapid calls (e.g., direct call + useEffect reaction to same state change).
+        // The second call would clear ephemeral nodes that the first call just spawned.
+        const now = globalThis.performance.now();
+        if (focusedNodeId.current === nodeId && (now - lastFocusTimestamp.current) < 100) {
+          console.log(`[FOCUS] focusOnNode SKIPPED for ${nodeId.slice(0,8)} (duplicate within 100ms)`);
+          return;
+        }
+        lastFocusTimestamp.current = now;
+
         const currentLayout = useInterBrainStore.getState().spatialLayout;
         console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}`);
 
