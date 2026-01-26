@@ -382,7 +382,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     focusOnNode: (nodeId: string) => {
       try {
         // Deduplicate rapid calls (e.g., direct call + useEffect reaction to same state change).
-        // The second call would clear ephemeral nodes that the first call just spawned.
         const now = globalThis.performance.now();
         if (focusedNodeId.current === nodeId && (now - lastFocusTimestamp.current) < 100) {
           console.log(`[FOCUS] focusOnNode SKIPPED for ${nodeId.slice(0,8)} (duplicate within 100ms)`);
@@ -391,30 +390,22 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         lastFocusTimestamp.current = now;
 
         const currentLayout = useInterBrainStore.getState().spatialLayout;
-        console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}`);
+        const isLiminalToLiminal = currentLayout === 'liminal-web';
+        console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}, isLiminalToLiminal=${isLiminalToLiminal}`);
 
-        // Clear any stale ephemeral nodes before setting up a new layout.
-        // This handles the case where a previous returnToConstellation was interrupted
-        // (e.g., by Cmd+Z undo) before ephemeral exit animations could complete.
-        // Without this, stale ephemeral nodes still have refs and get interruptAndMove
-        // instead of a fresh spawn animation from the ring.
-        const store = useInterBrainStore.getState();
-        if (store.ephemeralNodes.size > 0) {
-          console.log(`[FOCUS] Clearing ${store.ephemeralNodes.size} stale ephemeral nodes`);
-          // Unregister refs for ephemeral nodes so they get fresh refs on re-spawn
-          for (const ephNodeId of store.ephemeralNodes.keys()) {
-            nodeRefs.current.delete(ephNodeId);
-          }
-          store.clearEphemeralNodes();
-        }
-        // Clear any stale pending movements from previous transitions
-        pendingMovements.current.clear();
+        // ── Step 1: Snapshot previous state BEFORE mutating anything ──
+        // This is critical for liminal→liminal transitions where we need to know
+        // which nodes were already on screen (move smoothly) vs new (fly in from ring).
+        const previousCenterId = focusedNodeId.current;
+        const previousRingNodeIds = new Set([
+          ...(liminalWebRoles.current?.ring1NodeIds || []),
+          ...(liminalWebRoles.current?.ring2NodeIds || []),
+          ...(liminalWebRoles.current?.ring3NodeIds || []),
+        ]);
+        const previousEphemeralIds = new Set(useInterBrainStore.getState().ephemeralNodes.keys());
+        const wasInLiminalWeb = (id: string) => id === previousCenterId || previousRingNodeIds.has(id);
 
-        // Also clear the transitioning flag if it was left set by an interrupted return
-        isTransitioning.current = false;
-
-        // Use full relationship graph from ALL nodes, not just mounted ones
-        // This enables spawning ephemeral nodes for related nodes not in constellation
+        // ── Step 2: Compute new layout ──
         const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
 
@@ -422,7 +413,41 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           throw new Error('Failed to calculate ring layout positions');
         }
 
-        // Track node roles for proper constellation return
+        const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+        const newLayoutNodeIds = new Set<string>();
+        if (positions.centerNode) newLayoutNodeIds.add(positions.centerNode.nodeId);
+        allRingNodes.forEach(n => newLayoutNodeIds.add(n.nodeId));
+
+        // ── Step 3: Selective ephemeral cleanup ──
+        // Only despawn ephemeral nodes that are NOT in the new layout.
+        // Ephemeral nodes that ARE in the new layout keep their refs and move smoothly.
+        const store = useInterBrainStore.getState();
+        const mountedNodes = store.constellationFilter.mountedNodes;
+
+        if (store.ephemeralNodes.size > 0) {
+          const keepIds: string[] = [];
+          const despawnIds: string[] = [];
+          for (const ephNodeId of store.ephemeralNodes.keys()) {
+            if (newLayoutNodeIds.has(ephNodeId)) {
+              keepIds.push(ephNodeId);
+            } else {
+              despawnIds.push(ephNodeId);
+            }
+          }
+          console.log(`[FOCUS] Ephemeral cleanup: ${keepIds.length} kept (in new layout), ${despawnIds.length} despawned`);
+          for (const despawnId of despawnIds) {
+            nodeRefs.current.delete(despawnId);
+            store.despawnEphemeralNode(despawnId);
+          }
+        }
+
+        // Clear stale pending movements from previous transitions
+        pendingMovements.current.clear();
+
+        // Clear the transitioning flag if it was left set by an interrupted return
+        isTransitioning.current = false;
+
+        // ── Step 4: Update roles and state ──
         liminalWebRoles.current = {
           centerNodeId: positions.centerNode?.nodeId || null,
           ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
@@ -442,37 +467,28 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           setSpatialLayout('liminal-web');
         }
 
+        // ── Step 5: Categorize and log ──
         const storeSnapshot = useInterBrainStore.getState();
-        const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
-        const ephemeralRingNodes = allRingNodes.filter(n => !storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
-        const mountedRingNodes = allRingNodes.filter(n => storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
+        const ephemeralRingNodes = allRingNodes.filter(n => !mountedNodes.has(n.nodeId));
+        const mountedRingNodes = allRingNodes.filter(n => mountedNodes.has(n.nodeId));
         console.log(`[FOCUS] Ring nodes: ${allRingNodes.length} total, ${mountedRingNodes.length} mounted, ${ephemeralRingNodes.length} ephemeral, sphere=${positions.sphereNodes?.length || 0}`);
 
-        // Determine the previously focused node for easing decisions
-        // Nodes already in liminal web (old center, old ring nodes) should use easeInOutQuart
-        // for smooth acceleration + deceleration. Nodes flying in from constellation or
-        // spawn ring should use easeOutQuart (they're already moving fast).
-        const previousCenterId = focusedNodeId.current;
-        const previousRingNodeIds = new Set([
-          ...(liminalWebRoles.current?.ring1NodeIds || []),
-          ...(liminalWebRoles.current?.ring2NodeIds || []),
-          ...(liminalWebRoles.current?.ring3NodeIds || []),
-        ]);
-        const wasInLiminalWeb = (id: string) => id === previousCenterId || previousRingNodeIds.has(id);
-        const isLiminalToLiminal = currentLayout === 'liminal-web';
+        // ── Step 6: Animate nodes ──
+        // Easing logic: nodes already visible in the previous liminal web get easeInOutQuart
+        // (smooth acceleration + deceleration). New nodes flying in get easeOutQuart.
+        const getEasing = (id: string) => {
+          if (isLiminalToLiminal && wasInLiminalWeb(id)) return 'easeInOutQuart';
+          return 'easeOutQuart';
+        };
 
         // Move center node
         if (positions.centerNode) {
-          const centerEasing = isLiminalToLiminal && wasInLiminalWeb(positions.centerNode.nodeId)
-            ? 'easeInOutQuart' : 'easeOutQuart';
-          moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, centerEasing);
+          moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, getEasing(positions.centerNode.nodeId));
         }
 
         // Move ring nodes
         allRingNodes.forEach(({ nodeId: ringNodeId, position }) => {
-          const ringEasing = isLiminalToLiminal && wasInLiminalWeb(ringNodeId)
-            ? 'easeInOutQuart' : 'easeOutQuart';
-          moveNode(ringNodeId, position, transitionDuration, ringEasing);
+          moveNode(ringNodeId, position, transitionDuration, getEasing(ringNodeId));
         });
 
         // Move unrelated nodes to constellation
