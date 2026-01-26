@@ -265,6 +265,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     easing: string,
     setActive = true
   ) => {
+    const isMounted = useInterBrainStore.getState().constellationFilter.mountedNodes.has(nodeId);
+    const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
+    const hasRef = !!nodeRefs.current.get(nodeId)?.current;
+    console.log(`[MOVE-NODE] ${nodeId.slice(0,8)}: enter, mounted=${isMounted}, ephemeral=${isEphemeral}, hasRef=${hasRef}, target=[${position.map(n=>n.toFixed(0))}]`);
+
     // Ensure node is mounted (spawn as ephemeral if needed)
     if (!ensureNodeMounted(nodeId, position)) {
       return; // Node doesn't exist
@@ -277,6 +282,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     if (!nodeRef?.current) {
       const store = useInterBrainStore.getState();
       if (store.ephemeralNodes.has(nodeId)) {
+        console.log(`[MOVE-NODE] ${nodeId.slice(0,8)}: ephemeral, ref not ready, queuing pending movement`);
         pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
         return;
       }
@@ -374,6 +380,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   useImperativeHandle(ref, () => ({
     focusOnNode: (nodeId: string) => {
       try {
+        const currentLayout = useInterBrainStore.getState().spatialLayout;
+        console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}`);
+
         // Use full relationship graph from ALL nodes, not just mounted ones
         // This enables spawning ephemeral nodes for related nodes not in constellation
         const relationshipGraph = buildFullRelationshipGraph();
@@ -398,19 +407,42 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         focusedNodeId.current = nodeId;
 
         // Only update to liminal-web if not in a mode that manages its own layout
-        const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout !== 'edit' && currentLayout !== 'relationship-edit' && currentLayout !== 'copilot') {
+        const currentLayout2 = useInterBrainStore.getState().spatialLayout;
+        if (currentLayout2 !== 'edit' && currentLayout2 !== 'relationship-edit' && currentLayout2 !== 'copilot') {
           setSpatialLayout('liminal-web');
         }
 
+        const store = useInterBrainStore.getState();
+        const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+        const ephemeralRingNodes = allRingNodes.filter(n => !store.constellationFilter.mountedNodes.has(n.nodeId));
+        const mountedRingNodes = allRingNodes.filter(n => store.constellationFilter.mountedNodes.has(n.nodeId));
+        console.log(`[FOCUS] Ring nodes: ${allRingNodes.length} total, ${mountedRingNodes.length} mounted, ${ephemeralRingNodes.length} ephemeral, sphere=${positions.sphereNodes?.length || 0}`);
+
+        // Determine the previously focused node for easing decisions
+        // Nodes already in liminal web (old center, old ring nodes) should use easeInOutQuart
+        // for smooth acceleration + deceleration. Nodes flying in from constellation or
+        // spawn ring should use easeOutQuart (they're already moving fast).
+        const previousCenterId = focusedNodeId.current;
+        const previousRingNodeIds = new Set([
+          ...(liminalWebRoles.current?.ring1NodeIds || []),
+          ...(liminalWebRoles.current?.ring2NodeIds || []),
+          ...(liminalWebRoles.current?.ring3NodeIds || []),
+        ]);
+        const wasInLiminalWeb = (id: string) => id === previousCenterId || previousRingNodeIds.has(id);
+        const isLiminalToLiminal = currentLayout === 'liminal-web';
+
         // Move center node
         if (positions.centerNode) {
-          moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, 'easeOutQuart');
+          const centerEasing = isLiminalToLiminal && wasInLiminalWeb(positions.centerNode.nodeId)
+            ? 'easeInOutQuart' : 'easeOutQuart';
+          moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, centerEasing);
         }
 
         // Move ring nodes
-        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId: ringNodeId, position }) => {
-          moveNode(ringNodeId, position, transitionDuration, 'easeOutQuart');
+        allRingNodes.forEach(({ nodeId: ringNodeId, position }) => {
+          const ringEasing = isLiminalToLiminal && wasInLiminalWeb(ringNodeId)
+            ? 'easeInOutQuart' : 'easeOutQuart';
+          moveNode(ringNodeId, position, transitionDuration, ringEasing);
         });
 
         // Move unrelated nodes to constellation
@@ -488,8 +520,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     returnToConstellation: () => {
       // Guard against double-calls during transition
       if (isTransitioning.current) {
+        console.log(`[LIFECYCLE] returnToConstellation: BLOCKED by isTransitioning guard`);
         return;
       }
+
+      const ephemeralCount = useInterBrainStore.getState().ephemeralNodes.size;
+      const totalRefs = nodeRefs.current.size;
+      console.log(`[LIFECYCLE] returnToConstellation: starting, ${totalRefs} refs, ${ephemeralCount} ephemeral nodes`);
 
       isTransitioning.current = true;
       focusedNodeId.current = null;
@@ -953,8 +990,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             if (pendingMovement.setActive) {
               nodeRef.current.setActiveState(true);
             }
-            // The ephemeral node already has a spawn animation, so we use moveToPosition
-            // to animate from spawn position to target position
             nodeRef.current.moveToPosition(
               pendingMovement.position,
               pendingMovement.duration,
@@ -964,8 +999,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }, 50); // Small delay for React to stabilize
       }
     },
-    
+
     unregisterNodeRef: (nodeId: string) => {
+      console.log(`[LIFECYCLE] ${nodeId.slice(0,8)}: unregisterNodeRef called`);
       nodeRefs.current.delete(nodeId);
     },
     

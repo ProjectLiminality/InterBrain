@@ -406,6 +406,7 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   }),
 
   despawnEphemeralNode: (nodeId) => set((state: InterBrainState) => {
+    console.log(`[LIFECYCLE] ${nodeId.slice(0,8)}: despawnEphemeralNode, remaining=${state.ephemeralNodes.size - 1}`);
     const newMap = new Map(state.ephemeralNodes);
     newMap.delete(nodeId);
     return { ephemeralNodes: newMap };

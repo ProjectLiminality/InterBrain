@@ -121,7 +121,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [transitionStartTime, setTransitionStartTime] = useState(0);
   const [transitionDuration, setTransitionDuration] = useState(1000);
   const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled' | 'ephemeral-exit'>('liminal');
-  const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart'>('easeOutCubic');
+  const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart'>('easeOutCubic');
   
   // Add flip rotation to transition system for unified animations
   const [targetFlipRotation, setTargetFlipRotation] = useState(0);
@@ -252,13 +252,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (ephemeral && ephemeralState && !hasTriggeredSpawnRef.current) {
       hasTriggeredSpawnRef.current = true;
 
-      // TRACE: Log ephemeral node's stored position vs spawn position
-      console.log(`[EPHEMERAL-SPAWN] ${dreamNode.id.slice(0,8)}:`, {
-        storedPosition: dreamNode.position.map(n => n.toFixed(0)),
-        spawnPosition: ephemeralState.spawnPosition.map(n => n.toFixed(0)),
-        targetPosition: ephemeralState.targetPosition.map(n => n.toFixed(0)),
-        note: 'storedPosition should NOT exist for ephemeral nodes'
-      });
+      console.log(`[SPAWN-ANIM] ${dreamNode.id.slice(0,8)}: effect fired at t=${globalThis.performance.now().toFixed(0)}, from=[${ephemeralState.spawnPosition.map(n=>n.toFixed(0))}] to=[${ephemeralState.targetPosition.map(n=>n.toFixed(0))}]`);
 
       // Start from spawn position
       setCurrentPosition(ephemeralState.spawnPosition);
@@ -271,7 +265,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('liminal'); // Use liminal type to stay in active mode
-      setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     }
   }, [ephemeral, ephemeralState, dreamNode.id]);
 
@@ -375,7 +369,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Universal Movement API implementation (keeping all the complex logic)
   useImperativeHandle(ref, () => ({
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
-      
+
+      console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: called at t=${globalThis.performance.now().toFixed(0)} with target=[${newTargetPosition.map(n=>n.toFixed(0))}], positionMode=${positionMode}, isTransitioning=${isTransitioning}, ephemeral=${ephemeral}`);
+
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
@@ -404,7 +400,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('liminal');
-      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
       let actualCurrentPosition: [number, number, number];
@@ -429,31 +425,47 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       // For ephemeral nodes, animate to exit position instead of constellation
       if (ephemeral) {
-        // Calculate base exit position
-        let exitPosition = calculateExitPosition(
-          actualCurrentPosition,
-          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        // Transform current position from local (DreamWorld) space to camera space.
+        // DreamWorld group has rotation Q, so visual position = Q * local position.
+        // To get camera space: apply Q (worldRotation) to local position.
+        let cameraSpacePosition = [...actualCurrentPosition] as [number, number, number];
+        if (worldRotation) {
+          const posVec = new Vector3(...actualCurrentPosition);
+          posVec.applyQuaternion(worldRotation);
+          cameraSpacePosition = [posVec.x, posVec.y, posVec.z];
+        }
+
+        const selectedNodeId = useInterBrainStore.getState().selectedNode?.id;
+        const isCenterNode = dreamNode.id === selectedNodeId;
+
+        // Calculate exit position in camera space (ring at z=0)
+        const exitPosition = calculateExitPosition(
+          cameraSpacePosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor,
+          isCenterNode
         );
 
-        // Apply world rotation correction so exit ring is camera-relative
+        // Transform exit position from camera space back to local (DreamWorld) space.
+        // To get local space from camera: apply Q^-1 (inverse rotation).
+        let worldExitPosition = [...exitPosition] as [number, number, number];
         if (worldRotation) {
-          const exitVec = new Vector3(exitPosition[0], exitPosition[1], exitPosition[2]);
+          const exitVec = new Vector3(...exitPosition);
           const inverseRotation = worldRotation.clone().invert();
           exitVec.applyQuaternion(inverseRotation);
-          exitPosition = [exitVec.x, exitVec.y, exitVec.z];
+          worldExitPosition = [exitVec.x, exitVec.y, exitVec.z];
         }
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
 
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
-        setTargetPosition(exitPosition);
+        setTargetPosition(worldExitPosition);
         setTransitionDuration(exitDuration);
         setTransitionStartTime(globalThis.performance.now());
         setPositionMode('active');
         setIsTransitioning(true);
         setTransitionType('ephemeral-exit');
-        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
         return;
       }
 
@@ -466,7 +478,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('constellation');
-      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
@@ -496,10 +508,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
         let cameraSpacePosition = [...actualCurrentPosition] as [number, number, number];
         if (worldRotation) {
-          // Transform current position from world space to camera space
+          // Transform current position from local (DreamWorld) space to camera space
+          // DreamWorld has rotation Q, so camera position = Q * local position
           const posVec = new Vector3(actualCurrentPosition[0], actualCurrentPosition[1], actualCurrentPosition[2]);
-          const inverseRotation = worldRotation.clone().invert();
-          posVec.applyQuaternion(inverseRotation);
+          posVec.applyQuaternion(worldRotation);
           cameraSpacePosition = [posVec.x, posVec.y, posVec.z];
         }
 
@@ -514,15 +526,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           isCenterNode
         );
 
-        // Exit position is already in camera space - no rotation needed
-        // The node will animate from actualCurrentPosition (world) to exitPosition (camera)
-        // But wait - we need both positions in the same coordinate system!
-        // Since DreamNode3D renders in world space, we need exitPosition in world space too
+        // Transform exit position from camera space back to local (DreamWorld) space.
+        // To get local space from camera: apply Q^-1 (inverse rotation).
         let worldExitPosition = [...exitPosition] as [number, number, number];
         if (worldRotation) {
-          // Transform exit position from camera space back to world space
           const exitVec = new Vector3(exitPosition[0], exitPosition[1], exitPosition[2]);
-          exitVec.applyQuaternion(worldRotation);
+          const inverseRotation = worldRotation.clone().invert();
+          exitVec.applyQuaternion(inverseRotation);
           worldExitPosition = [exitVec.x, exitVec.y, exitVec.z];
         }
 
@@ -539,7 +549,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setPositionMode('active');
         setIsTransitioning(true);
         setTransitionType('ephemeral-exit');
-        setTransitionEasing(exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        setTransitionEasing(exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
         return;
       }
 
@@ -587,7 +597,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('scaled');
-      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
 
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
@@ -619,7 +629,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('liminal');
-      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     interruptAndReturnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
       let actualCurrentPosition: [number, number, number];
@@ -641,31 +651,47 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       // For ephemeral nodes, animate to exit position instead of constellation
       if (ephemeral) {
-        // Calculate base exit position
-        let exitPosition = calculateExitPosition(
-          actualCurrentPosition,
-          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        // Transform current position from local (DreamWorld) space to camera space.
+        // DreamWorld group has rotation Q, so visual position = Q * local position.
+        // To get camera space: apply Q (worldRotation) to local position.
+        let cameraSpacePosition = [...actualCurrentPosition] as [number, number, number];
+        if (worldRotation) {
+          const posVec = new Vector3(...actualCurrentPosition);
+          posVec.applyQuaternion(worldRotation);
+          cameraSpacePosition = [posVec.x, posVec.y, posVec.z];
+        }
+
+        const selectedNodeId = useInterBrainStore.getState().selectedNode?.id;
+        const isCenterNode = dreamNode.id === selectedNodeId;
+
+        // Calculate exit position in camera space (ring at z=0)
+        const exitPosition = calculateExitPosition(
+          cameraSpacePosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor,
+          isCenterNode
         );
 
-        // Apply world rotation correction so exit ring is camera-relative
+        // Transform exit position from camera space back to local (DreamWorld) space.
+        // To get local space from camera: apply Q^-1 (inverse rotation).
+        let worldExitPosition = [...exitPosition] as [number, number, number];
         if (worldRotation) {
-          const exitVec = new Vector3(exitPosition[0], exitPosition[1], exitPosition[2]);
+          const exitVec = new Vector3(...exitPosition);
           const inverseRotation = worldRotation.clone().invert();
           exitVec.applyQuaternion(inverseRotation);
-          exitPosition = [exitVec.x, exitVec.y, exitVec.z];
+          worldExitPosition = [exitVec.x, exitVec.y, exitVec.z];
         }
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
 
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
-        setTargetPosition(exitPosition);
+        setTargetPosition(worldExitPosition);
         setTransitionDuration(exitDuration);
         setTransitionStartTime(globalThis.performance.now());
         setPositionMode('active');
         setIsTransitioning(true);
         setTransitionType('ephemeral-exit');
-        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
         return;
       }
 
@@ -678,7 +704,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('constellation');
-      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     interruptAndReturnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
@@ -698,31 +724,47 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           actualCurrentPosition = [...currentPosition];
         }
 
-        // Calculate base exit position in camera space
-        let exitPosition = calculateExitPosition(
-          actualCurrentPosition,
-          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor
+        // Transform current position from local (DreamWorld) space to camera space.
+        // DreamWorld group has rotation Q, so visual position = Q * local position.
+        // To get camera space: apply Q (worldRotation) to local position.
+        let cameraSpacePosition = [...actualCurrentPosition] as [number, number, number];
+        if (worldRotation) {
+          const posVec = new Vector3(...actualCurrentPosition);
+          posVec.applyQuaternion(worldRotation);
+          cameraSpacePosition = [posVec.x, posVec.y, posVec.z];
+        }
+
+        const selectedNodeId = useInterBrainStore.getState().selectedNode?.id;
+        const isCenterNode = dreamNode.id === selectedNodeId;
+
+        // Calculate exit position in camera space (ring at z=0)
+        const exitPosition = calculateExitPosition(
+          cameraSpacePosition,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor,
+          isCenterNode
         );
 
-        // Apply world rotation correction so exit ring is camera-relative
+        // Transform exit position from camera space back to local (DreamWorld) space.
+        // To get local space from camera: apply Q^-1 (inverse rotation).
+        let worldExitPosition = [...exitPosition] as [number, number, number];
         if (worldRotation) {
-          const exitVec = new Vector3(exitPosition[0], exitPosition[1], exitPosition[2]);
+          const exitVec = new Vector3(...exitPosition);
           const inverseRotation = worldRotation.clone().invert();
           exitVec.applyQuaternion(inverseRotation);
-          exitPosition = [exitVec.x, exitVec.y, exitVec.z];
+          worldExitPosition = [exitVec.x, exitVec.y, exitVec.z];
         }
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
 
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
-        setTargetPosition(exitPosition);
+        setTargetPosition(worldExitPosition);
         setTransitionDuration(exitDuration);
         setTransitionStartTime(globalThis.performance.now());
         setPositionMode('active');
         setIsTransitioning(true);
         setTransitionType('ephemeral-exit');
-        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+        setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
         return;
       }
 
@@ -767,7 +809,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setPositionMode('active');
       setIsTransitioning(true);
       setTransitionType('scaled');
-      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart');
+      setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
 
       globalThis.setTimeout(() => {
         setRadialOffset(targetRadialOffset);
@@ -832,6 +874,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         case 'easeOutQuart':
           easedProgress = 1 - Math.pow(1 - progress, 4);
           break;
+        case 'easeInOutQuart':
+          easedProgress = progress < 0.5
+            ? 8 * Math.pow(progress, 4)
+            : 1 - Math.pow(-2 * progress + 2, 4) / 2;
+          break;
         case 'easeOutCubic':
         default:
           easedProgress = 1 - Math.pow(1 - progress, 3);
@@ -859,6 +906,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           setPositionMode('constellation');
         } else if (transitionType === 'ephemeral-exit') {
           // Ephemeral node finished exit animation - signal for garbage collection
+          console.log(`[LIFECYCLE] ${dreamNode.id.slice(0,8)}: ephemeral-exit animation complete, calling despawnEphemeralNode`);
           useInterBrainStore.getState().despawnEphemeralNode(dreamNode.id);
         }
       }
