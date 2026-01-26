@@ -652,9 +652,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       clearLiminalWebRoles();
 
       globalThis.setTimeout(() => {
-        nodeRefs.current.forEach((nodeRef) => {
-          nodeRef.current?.setActiveState(false);
-        });
+        // Only deactivate nodes if we're still in constellation mode.
+        // If a new layout transition started (e.g., search), don't override it.
+        const currentLayout = useInterBrainStore.getState().spatialLayout;
+        if (currentLayout === 'constellation') {
+          nodeRefs.current.forEach((nodeRef) => {
+            nodeRef.current?.setActiveState(false);
+          });
+        }
         isTransitioning.current = false;
       }, transitionDuration);
 
