@@ -133,6 +133,6 @@ export const DEFAULT_EPHEMERAL_SPAWN_CONFIG: EphemeralSpawnConfig = {
   exitRadiusFactor: 3,
   spawnAnimationDuration: 1000,  // Canonical 1s heartbeat
   exitAnimationDuration: 1000,   // Canonical 1s heartbeat
-  spawnEasing: 'easeOutQuart',
+  spawnEasing: 'easeInOutQuart',
   exitEasing: 'easeInQuart'
 };
