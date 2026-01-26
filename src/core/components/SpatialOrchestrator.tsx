@@ -719,7 +719,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Move search results to ring positions
         allRingNodes.forEach(({ nodeId: ringNodeId, position }) => {
           const ref = nodeRefs.current.get(ringNodeId);
-          const isMounted = mountedNodes.has(ringNodeId);
+          const isMounted = storeSnapshot.constellationFilter.mountedNodes.has(ringNodeId);
           if (isMounted && ref?.current) {
             console.log(`[SEARCH] Moving constellation node ${ringNodeId.slice(0,8)}: isMoving=${ref.current.isMoving()}, currentPos=[${ref.current.getCurrentPosition().map(n=>n.toFixed(0))}], target=[${position.map(n=>n.toFixed(0))}]`);
           }
