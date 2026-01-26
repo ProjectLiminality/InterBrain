@@ -53,6 +53,25 @@ interface DreamNode3DProps {
 /**
  * Clean 3D DreamNode component with Billboard → RotatableGroup → [DreamTalk, DreamSong] hierarchy
  */
+/**
+ * Compute the actual world position of a constellation-mode node,
+ * accounting for radial offset along the inward direction.
+ * Guards against zero-length positions (nodes at origin) that would produce NaN.
+ */
+function getConstellationPosition(anchorPos: [number, number, number], radialOffset: number): [number, number, number] {
+  if (radialOffset === 0) return [...anchorPos];
+  const dirLength = Math.sqrt(anchorPos[0]**2 + anchorPos[1]**2 + anchorPos[2]**2);
+  if (dirLength === 0) return [...anchorPos]; // Node at origin — no direction to offset
+  const nx = -anchorPos[0] / dirLength;
+  const ny = -anchorPos[1] / dirLength;
+  const nz = -anchorPos[2] / dirLength;
+  return [
+    anchorPos[0] - nx * radialOffset,
+    anchorPos[1] - ny * radialOffset,
+    anchorPos[2] - nz * radialOffset
+  ];
+}
+
 const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   dreamNode,
   onHover,
@@ -387,23 +406,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: ephemeral, positionMode=${positionMode}, target=[${newTargetPosition.map(n=>n.toFixed(0))}]`);
       }
 
-      let actualCurrentPosition: [number, number, number];
-      
-      if (positionMode === 'constellation') {
-        const anchorPos = dreamNode.position;
-        const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
-        const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-        const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-        
-        actualCurrentPosition = [
-          anchorPos[0] - normalizedDir[0] * radialOffset,
-          anchorPos[1] - normalizedDir[1] * radialOffset,
-          anchorPos[2] - normalizedDir[2] * radialOffset
-        ];
-      } else {
-        actualCurrentPosition = [...currentPosition];
-      }
-      
+      const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+        ? getConstellationPosition(dreamNode.position, radialOffset)
+        : [...currentPosition];
+
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();
       
@@ -418,22 +424,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
-      let actualCurrentPosition: [number, number, number];
-
-      if (positionMode === 'constellation') {
-        const anchorPos = dreamNode.position;
-        const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
-        const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-        const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-
-        actualCurrentPosition = [
-          anchorPos[0] - normalizedDir[0] * radialOffset,
-          anchorPos[1] - normalizedDir[1] * radialOffset,
-          anchorPos[2] - normalizedDir[2] * radialOffset
-        ];
-      } else {
-        actualCurrentPosition = [...currentPosition];
-      }
+      const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+        ? getConstellationPosition(dreamNode.position, radialOffset)
+        : [...currentPosition];
 
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();
@@ -498,21 +491,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
-        // Get current position for exit animation
-        let actualCurrentPosition: [number, number, number];
-        if (positionMode === 'constellation') {
-          const anchorPos = dreamNode.position;
-          const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
-          const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-          const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-          actualCurrentPosition = [
-            anchorPos[0] - normalizedDir[0] * radialOffset,
-            anchorPos[1] - normalizedDir[1] * radialOffset,
-            anchorPos[2] - normalizedDir[2] * radialOffset
-          ];
-        } else {
-          actualCurrentPosition = [...currentPosition];
-        }
+        const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+          ? getConstellationPosition(dreamNode.position, radialOffset)
+          : [...currentPosition];
 
         // Calculate exit position - need to work in camera space
         // The problem: actualCurrentPosition is in WORLD space (rotated with sphere)
@@ -580,23 +561,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         DEFAULT_SCALING_CONFIG
       );
 
-      const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
-      const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-      const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-
-      const targetScaledPosition: [number, number, number] = [
-        anchorPosition[0] - normalizedDir[0] * targetRadialOffset,
-        anchorPosition[1] - normalizedDir[1] * targetRadialOffset,
-        anchorPosition[2] - normalizedDir[2] * targetRadialOffset
-      ];
+      const targetScaledPosition = getConstellationPosition(anchorPosition, targetRadialOffset);
 
       let actualCurrentPosition: [number, number, number];
       if (positionMode === 'constellation') {
-        actualCurrentPosition = [
-          anchorPosition[0] - normalizedDir[0] * radialOffset,
-          anchorPosition[1] - normalizedDir[1] * radialOffset,
-          anchorPosition[2] - normalizedDir[2] * radialOffset
-        ];
+        actualCurrentPosition = getConstellationPosition(anchorPosition, radialOffset);
       } else {
         actualCurrentPosition = [...currentPosition];
       }
@@ -622,20 +591,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       let actualCurrentPosition: [number, number, number];
       
       if (positionMode === 'constellation') {
-        const anchorPos = dreamNode.position;
-        const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
-        const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-        const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-        
-        actualCurrentPosition = [
-          anchorPos[0] - normalizedDir[0] * radialOffset,
-          anchorPos[1] - normalizedDir[1] * radialOffset,
-          anchorPos[2] - normalizedDir[2] * radialOffset
-        ];
+        actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
       } else {
         actualCurrentPosition = [...currentPosition];
       }
-      
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(newTargetPosition);
@@ -650,16 +610,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       let actualCurrentPosition: [number, number, number];
 
       if (positionMode === 'constellation') {
-        const anchorPos = dreamNode.position;
-        const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
-        const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-        const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-
-        actualCurrentPosition = [
-          anchorPos[0] - normalizedDir[0] * radialOffset,
-          anchorPos[1] - normalizedDir[1] * radialOffset,
-          anchorPos[2] - normalizedDir[2] * radialOffset
-        ];
+        actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
       } else {
         actualCurrentPosition = [...currentPosition];
       }
@@ -726,15 +677,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       if (ephemeral) {
         let actualCurrentPosition: [number, number, number];
         if (positionMode === 'constellation') {
-          const anchorPos = dreamNode.position;
-          const direction = [-anchorPos[0], -anchorPos[1], -anchorPos[2]];
-          const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-          const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-          actualCurrentPosition = [
-            anchorPos[0] - normalizedDir[0] * radialOffset,
-            anchorPos[1] - normalizedDir[1] * radialOffset,
-            anchorPos[2] - normalizedDir[2] * radialOffset
-          ];
+          actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
         } else {
           actualCurrentPosition = [...currentPosition];
         }
@@ -795,23 +738,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         DEFAULT_SCALING_CONFIG
       );
 
-      const direction = [-anchorPosition[0], -anchorPosition[1], -anchorPosition[2]];
-      const dirLength = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2);
-      const normalizedDir = [direction[0]/dirLength, direction[1]/dirLength, direction[2]/dirLength];
-
-      const targetScaledPosition: [number, number, number] = [
-        anchorPosition[0] - normalizedDir[0] * targetRadialOffset,
-        anchorPosition[1] - normalizedDir[1] * targetRadialOffset,
-        anchorPosition[2] - normalizedDir[2] * targetRadialOffset
-      ];
+      const targetScaledPosition = getConstellationPosition(anchorPosition, targetRadialOffset);
 
       let actualCurrentPosition: [number, number, number];
       if (positionMode === 'constellation') {
-        actualCurrentPosition = [
-          anchorPosition[0] - normalizedDir[0] * radialOffset,
-          anchorPosition[1] - normalizedDir[1] * radialOffset,
-          anchorPosition[2] - normalizedDir[2] * radialOffset
-        ];
+        actualCurrentPosition = getConstellationPosition(anchorPosition, radialOffset);
       } else {
         actualCurrentPosition = [...currentPosition];
       }
@@ -832,8 +763,14 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     },
     setActiveState: (active: boolean) => {
       if (active) {
+        // When switching from constellation to active mode, compute the actual
+        // world position (with radial offset) so the node starts from its
+        // visual position, not the raw anchor.
+        const resolvedPosition: [number, number, number] = positionMode === 'constellation'
+          ? getConstellationPosition(dreamNode.position, radialOffset)
+          : [...currentPosition] as [number, number, number];
         setPositionMode('active');
-        setCurrentPosition([...currentPosition]);
+        setCurrentPosition(resolvedPosition);
       } else {
         setPositionMode('constellation');
         setCurrentPosition(dreamNode.position);
