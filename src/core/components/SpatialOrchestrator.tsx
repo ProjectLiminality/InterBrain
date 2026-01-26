@@ -383,6 +383,24 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const currentLayout = useInterBrainStore.getState().spatialLayout;
         console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}`);
 
+        // Clear any stale ephemeral nodes before setting up a new layout.
+        // This handles the case where a previous returnToConstellation was interrupted
+        // (e.g., by Cmd+Z undo) before ephemeral exit animations could complete.
+        // Without this, stale ephemeral nodes still have refs and get interruptAndMove
+        // instead of a fresh spawn animation from the ring.
+        const store = useInterBrainStore.getState();
+        if (store.ephemeralNodes.size > 0) {
+          console.log(`[FOCUS] Clearing ${store.ephemeralNodes.size} stale ephemeral nodes`);
+          // Unregister refs for ephemeral nodes so they get fresh refs on re-spawn
+          for (const ephNodeId of store.ephemeralNodes.keys()) {
+            nodeRefs.current.delete(ephNodeId);
+          }
+          store.clearEphemeralNodes();
+        }
+
+        // Also clear the transitioning flag if it was left set by an interrupted return
+        isTransitioning.current = false;
+
         // Use full relationship graph from ALL nodes, not just mounted ones
         // This enables spawning ephemeral nodes for related nodes not in constellation
         const relationshipGraph = buildFullRelationshipGraph();
@@ -412,10 +430,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           setSpatialLayout('liminal-web');
         }
 
-        const store = useInterBrainStore.getState();
+        const storeSnapshot = useInterBrainStore.getState();
         const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
-        const ephemeralRingNodes = allRingNodes.filter(n => !store.constellationFilter.mountedNodes.has(n.nodeId));
-        const mountedRingNodes = allRingNodes.filter(n => store.constellationFilter.mountedNodes.has(n.nodeId));
+        const ephemeralRingNodes = allRingNodes.filter(n => !storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
+        const mountedRingNodes = allRingNodes.filter(n => storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
         console.log(`[FOCUS] Ring nodes: ${allRingNodes.length} total, ${mountedRingNodes.length} mounted, ${ephemeralRingNodes.length} ephemeral, sphere=${positions.sphereNodes?.length || 0}`);
 
         // Determine the previously focused node for easing decisions
