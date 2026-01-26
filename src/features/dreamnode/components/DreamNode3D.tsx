@@ -382,7 +382,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   useImperativeHandle(ref, () => ({
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
 
-      console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: called at t=${globalThis.performance.now().toFixed(0)} with target=[${newTargetPosition.map(n=>n.toFixed(0))}], positionMode=${positionMode}, isTransitioning=${isTransitioning}, ephemeral=${ephemeral}`);
+      // Diagnostic log only for ephemeral nodes (constellation nodes move routinely)
+      if (ephemeral) {
+        console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: ephemeral, positionMode=${positionMode}, target=[${newTargetPosition.map(n=>n.toFixed(0))}]`);
+      }
 
       let actualCurrentPosition: [number, number, number];
       

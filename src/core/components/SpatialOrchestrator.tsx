@@ -283,7 +283,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     const isMounted = useInterBrainStore.getState().constellationFilter.mountedNodes.has(nodeId);
     const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
     const hasRef = !!nodeRefs.current.get(nodeId)?.current;
-    console.log(`[MOVE-NODE] ${nodeId.slice(0,8)}: enter, mounted=${isMounted}, ephemeral=${isEphemeral}, hasRef=${hasRef}, target=[${position.map(n=>n.toFixed(0))}]`);
 
     // Ensure node is mounted (spawn as ephemeral if needed)
     if (!ensureNodeMounted(nodeId, position)) {
@@ -297,7 +296,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     if (!nodeRef?.current) {
       const store = useInterBrainStore.getState();
       if (store.ephemeralNodes.has(nodeId)) {
-        console.log(`[MOVE-NODE] ${nodeId.slice(0,8)}: ephemeral, ref not ready, queuing pending movement`);
+        console.log(`[MOVE] ${nodeId.slice(0,8)}: ephemeral, ref not ready, queuing`);
         pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
         return;
       }
@@ -685,6 +684,19 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const orderedNodes = searchResults.map(node => ({ id: node.id, name: node.name, type: node.type }));
         const positions = calculateRingLayoutPositionsForSearch(orderedNodes, relationshipGraph, DEFAULT_RING_CONFIG);
 
+        const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+
+        // Diagnostic: classify search result nodes by mount status
+        const storeSnapshot = useInterBrainStore.getState();
+        const constellationResults = allRingNodes.filter(n => storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
+        const ephemeralResults = allRingNodes.filter(n => !storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
+        const constellationWithRefs = constellationResults.filter(n => !!nodeRefs.current.get(n.nodeId)?.current);
+        const constellationWithoutRefs = constellationResults.filter(n => !nodeRefs.current.get(n.nodeId)?.current);
+        console.log(`[SEARCH] showSearchResults: ${searchResults.length} results, ${allRingNodes.length} in rings (${constellationResults.length} constellation [${constellationWithRefs.length} w/ref, ${constellationWithoutRefs.length} no ref], ${ephemeralResults.length} ephemeral), ${positions.sphereNodes.length} sphere`);
+        if (constellationWithoutRefs.length > 0) {
+          console.log(`[SEARCH] WARNING: constellation nodes without refs:`, constellationWithoutRefs.map(n => n.nodeId.slice(0,8)));
+        }
+
         liminalWebRoles.current = {
           centerNodeId: null,
           ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
@@ -700,13 +712,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         setSpatialLayout('search');
 
         // Move search results to ring positions
-        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
-          moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
+        allRingNodes.forEach(({ nodeId: ringNodeId, position }) => {
+          moveNode(ringNodeId, position, transitionDuration, 'easeOutQuart');
         });
 
         // Move non-search nodes to constellation
-        positions.sphereNodes.forEach(nodeId => {
-          returnNodeToConstellation(nodeId, transitionDuration, 'easeInQuart');
+        positions.sphereNodes.forEach(sphereNodeId => {
+          returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
         });
 
         globalThis.setTimeout(() => {
@@ -1077,7 +1089,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // movement starting from [0,0,0] (constellation positionMode), causing spawn-in-place.
         const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
         if (isEphemeral) {
-          console.log(`[REGISTER] ${nodeId.slice(0,8)}: ephemeral node, skipping pending movement (spawn effect handles animation)`);
+          console.log(`[REGISTER] ${nodeId.slice(0,8)}: ephemeral, skipping pending movement`);
           // Still set active state so the node participates in the layout
           if (pendingMovement.setActive && nodeRef.current) {
             nodeRef.current.setActiveState(true);
@@ -1102,7 +1114,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     },
 
     unregisterNodeRef: (nodeId: string) => {
-      console.log(`[LIFECYCLE] ${nodeId.slice(0,8)}: unregisterNodeRef called`);
       nodeRefs.current.delete(nodeId);
     },
     
