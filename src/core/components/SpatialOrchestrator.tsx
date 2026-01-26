@@ -419,39 +419,45 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         allRingNodes.forEach(n => newLayoutNodeIds.add(n.nodeId));
 
         // ── Step 3: Selective ephemeral cleanup ──
-        // Ephemeral nodes in the new layout keep their refs and move smoothly.
-        // Ephemeral nodes NOT in the new layout:
-        //   - liminal→liminal: animate exit (fly out to ring), then despawn on completion
-        //   - other→liminal: immediately despawn (stale from interrupted transitions)
+        // For each existing ephemeral node, decide: keep, animate exit, or immediately despawn.
+        // The decision depends on whether the node was an active participant in the previous
+        // liminal web layout (wasInLiminalWeb), NOT just whether the layout mode is liminal-web.
+        // This handles edge cases like interrupted returnToConstellation leaving stale ephemeral
+        // nodes that technically exist but weren't in the previous rings.
         const store = useInterBrainStore.getState();
         const mountedNodes = store.constellationFilter.mountedNodes;
         const exitingEphemeralIds: string[] = [];
 
         if (store.ephemeralNodes.size > 0) {
           const keepIds: string[] = [];
-          const removeIds: string[] = [];
+          const exitIds: string[] = [];
+          const staleIds: string[] = [];
+
           for (const ephNodeId of store.ephemeralNodes.keys()) {
-            if (newLayoutNodeIds.has(ephNodeId)) {
+            if (newLayoutNodeIds.has(ephNodeId) && wasInLiminalWeb(ephNodeId)) {
+              // Node is in BOTH old and new layout — keep it, move smoothly
               keepIds.push(ephNodeId);
+            } else if (wasInLiminalWeb(ephNodeId)) {
+              // Node was in old layout but NOT in new — animate exit
+              exitIds.push(ephNodeId);
+            } else if (newLayoutNodeIds.has(ephNodeId)) {
+              // Node is in new layout but wasn't in old — it's stale, despawn and re-spawn fresh
+              staleIds.push(ephNodeId);
             } else {
-              removeIds.push(ephNodeId);
+              // Node in neither old nor new layout — stale, despawn immediately
+              staleIds.push(ephNodeId);
             }
           }
 
-          if (isLiminalToLiminal) {
-            // Animate exiting ephemeral nodes out — they'll despawn when animation completes
-            // (DreamNode3D's returnToConstellation sets transitionType='ephemeral-exit',
-            //  and on completion calls despawnEphemeralNode)
-            console.log(`[FOCUS] Ephemeral: ${keepIds.length} kept, ${removeIds.length} exiting with animation`);
-            exitingEphemeralIds.push(...removeIds);
-            // Don't delete refs or despawn — the exit animation will handle cleanup
-          } else {
-            // Not in liminal web yet — these are stale from interrupted transitions, despawn immediately
-            console.log(`[FOCUS] Ephemeral: ${keepIds.length} kept, ${removeIds.length} despawned (stale)`);
-            for (const despawnId of removeIds) {
-              nodeRefs.current.delete(despawnId);
-              store.despawnEphemeralNode(despawnId);
-            }
+          console.log(`[FOCUS] Ephemeral: ${keepIds.length} kept, ${exitIds.length} exiting, ${staleIds.length} stale`);
+
+          // Animate exit for nodes that were active in the previous layout
+          exitingEphemeralIds.push(...exitIds);
+
+          // Immediately despawn stale nodes (from interrupted transitions or not in any layout)
+          for (const despawnId of staleIds) {
+            nodeRefs.current.delete(despawnId);
+            store.despawnEphemeralNode(despawnId);
           }
         }
 
