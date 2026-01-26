@@ -198,9 +198,27 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   const calculateWorldCorrectedSpawnPosition = (
     targetPosition: [number, number, number]
   ): [number, number, number] => {
-    // Calculate base spawn position in camera space (z=0 plane)
+    // Mirror the exit path exactly:
+    // 1. Transform target from world space to camera space (apply Q)
+    // 2. Calculate spawn position in camera space (atan2 on camera-space x,y)
+    // 3. Transform spawn position back to world space (apply Q^-1)
+    //
+    // Without step 1, the atan2 direction is computed in world space, which
+    // differs from camera space when the DreamWorld group is rotated — causing
+    // nodes to all fly in from a biased direction instead of radially.
+
+    let cameraSpaceTarget = [...targetPosition] as [number, number, number];
+
+    if (dreamWorldRef.current) {
+      const worldRotation = dreamWorldRef.current.quaternion.clone();
+      const targetVec = new Vector3(...targetPosition);
+      targetVec.applyQuaternion(worldRotation);
+      cameraSpaceTarget = [targetVec.x, targetVec.y, targetVec.z];
+    }
+
+    // Calculate spawn position in camera space (direction from camera to target)
     const spawnPos = calculateSpawnPosition(
-      targetPosition,
+      cameraSpaceTarget,
       DEFAULT_EPHEMERAL_SPAWN_CONFIG.spawnRadiusFactor
     );
 
@@ -209,12 +227,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       return spawnPos;
     }
 
-    // The spawn position is in camera space (z=0).
-    // To make it appear at z=0 from camera's perspective regardless of group rotation,
-    // we need to apply the inverse rotation (same as liminal web positions).
-    const sphereRotation = dreamWorldRef.current.quaternion.clone();
-    const inverseRotation = sphereRotation.invert();
-
+    // Transform spawn position from camera space back to world space (apply Q^-1)
+    const inverseRotation = dreamWorldRef.current.quaternion.clone().invert();
     const spawnVec = new Vector3(spawnPos[0], spawnPos[1], spawnPos[2]);
     spawnVec.applyQuaternion(inverseRotation);
 
