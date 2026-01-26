@@ -84,8 +84,11 @@ export default function SearchOrchestrator({ onSearchResults }: SearchOrchestrat
         includeSnippets: true
       });
       
-      console.log(`📊 SearchOrchestrator: Found ${results.length} results`);
-      
+      console.log(`📊 SearchOrchestrator: Found ${results.length} results:`);
+      results.forEach((r, i) => {
+        console.log(`  [${i}] ${r.node.name} (${r.node.id.slice(0,8)}) score=${r.score.toFixed(3)}${r.snippet ? ` snippet="${r.snippet.slice(0,40)}..."` : ''}`);
+      });
+
       // Pass results to parent component
       onSearchResults(results);
       

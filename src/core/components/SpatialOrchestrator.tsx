@@ -307,6 +307,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       nodeRef.current.setActiveState(true);
     }
 
+    // Log constellation node movements (ephemeral nodes log via [MOVE-TO-POS] in DreamNode3D)
+    if (isMounted && !isEphemeral) {
+      const resolvedPos = nodeRef.current.getCurrentPosition();
+      console.log(`[MOVE] ${nodeId.slice(0,8)}: constellation, resolvedPos=[${resolvedPos.map(n=>n.toFixed(0))}], target=[${position.map(n=>n.toFixed(0))}], isMoving=${nodeRef.current.isMoving()}`);
+    }
+
     // Always use interrupt-capable movement for smooth transitions
     if (nodeRef.current.isMoving()) {
       nodeRef.current.interruptAndMoveToPosition(position, duration, easing);
@@ -697,7 +703,24 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const ephemeralResults = allRingNodes.filter(n => !storeSnapshot.constellationFilter.mountedNodes.has(n.nodeId));
         const constellationWithRefs = constellationResults.filter(n => !!nodeRefs.current.get(n.nodeId)?.current);
         const constellationWithoutRefs = constellationResults.filter(n => !nodeRefs.current.get(n.nodeId)?.current);
-        console.log(`[SEARCH] showSearchResults: ${searchResults.length} results, ${allRingNodes.length} in rings (${constellationResults.length} constellation [${constellationWithRefs.length} w/ref, ${constellationWithoutRefs.length} no ref], ${ephemeralResults.length} ephemeral), ${positions.sphereNodes.length} sphere`);
+        console.log(`[SEARCH] showSearchResults: ${searchResults.length} results → ${allRingNodes.length} ring nodes (${constellationResults.length} constellation [${constellationWithRefs.length} w/ref, ${constellationWithoutRefs.length} no ref], ${ephemeralResults.length} ephemeral), ${positions.sphereNodes.length} sphere`);
+
+        // Log each ring node with its name, ring assignment, and mount status
+        const dreamNodesMap = storeSnapshot.dreamNodes;
+        const ringLabels = new Map<string, string>();
+        positions.ring1Nodes.forEach(n => ringLabels.set(n.nodeId, 'ring1'));
+        positions.ring2Nodes.forEach(n => ringLabels.set(n.nodeId, 'ring2'));
+        positions.ring3Nodes.forEach(n => ringLabels.set(n.nodeId, 'ring3'));
+        allRingNodes.forEach(({ nodeId, position }) => {
+          const nodeData = dreamNodesMap.get(nodeId);
+          const name = nodeData?.node?.name || '???';
+          const ring = ringLabels.get(nodeId) || '?';
+          const isMounted = storeSnapshot.constellationFilter.mountedNodes.has(nodeId);
+          const hasRef = !!nodeRefs.current.get(nodeId)?.current;
+          const anchorPos = nodeData?.node?.position;
+          console.log(`[SEARCH]   ${name} (${nodeId.slice(0,8)}): ${ring}, target=[${position.map(n=>n.toFixed(0))}], ${isMounted ? 'constellation' : 'ephemeral'}, ref=${hasRef}${isMounted && anchorPos ? `, anchor=[${anchorPos.map((n: number)=>n.toFixed(0))}]` : ''}`);
+        });
+
         if (constellationWithoutRefs.length > 0) {
           console.log(`[SEARCH] WARNING: constellation nodes without refs:`, constellationWithoutRefs.map(n => n.nodeId.slice(0,8)));
         }
@@ -718,11 +741,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Move search results to ring positions
         allRingNodes.forEach(({ nodeId: ringNodeId, position }) => {
-          const ref = nodeRefs.current.get(ringNodeId);
-          const isMounted = storeSnapshot.constellationFilter.mountedNodes.has(ringNodeId);
-          if (isMounted && ref?.current) {
-            console.log(`[SEARCH] Moving constellation node ${ringNodeId.slice(0,8)}: isMoving=${ref.current.isMoving()}, currentPos=[${ref.current.getCurrentPosition().map(n=>n.toFixed(0))}], target=[${position.map(n=>n.toFixed(0))}]`);
-          }
           moveNode(ringNodeId, position, transitionDuration, 'easeOutQuart');
         });
 
