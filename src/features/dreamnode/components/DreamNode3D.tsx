@@ -246,8 +246,20 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // DreamSong logic now handled by DreamSongSide component via hook
 
-  // Ephemeral spawn animation - triggers when ephemeral node first mounts
+  // Ephemeral spawn animation - triggers when ephemeral node first mounts or re-spawns.
+  // Uses ephemeralState.mountedAt as a stable identity for detecting re-spawns:
+  // when clearEphemeralNodes + spawnEphemeralNode happens synchronously, React reconciles
+  // (same key={node.id}), so the component isn't unmounted — but mountedAt changes,
+  // allowing the spawn animation to re-trigger.
   const hasTriggeredSpawnRef = useRef(false);
+  const lastSpawnTimestampRef = useRef<number>(0);
+  useEffect(() => {
+    // Reset the guard if ephemeralState changed (re-spawn with new mountedAt)
+    if (ephemeralState && ephemeralState.mountedAt !== lastSpawnTimestampRef.current) {
+      hasTriggeredSpawnRef.current = false;
+      lastSpawnTimestampRef.current = ephemeralState.mountedAt;
+    }
+  }, [ephemeralState]);
   useEffect(() => {
     if (ephemeral && ephemeralState && !hasTriggeredSpawnRef.current) {
       hasTriggeredSpawnRef.current = true;

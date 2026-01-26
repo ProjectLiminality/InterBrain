@@ -407,6 +407,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           }
           store.clearEphemeralNodes();
         }
+        // Clear any stale pending movements from previous transitions
+        pendingMovements.current.clear();
 
         // Also clear the transitioning flag if it was left set by an interrupted return
         isTransitioning.current = false;
@@ -1011,6 +1013,20 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       const pendingMovement = pendingMovements.current.get(nodeId);
       if (pendingMovement && nodeRef.current) {
         pendingMovements.current.delete(nodeId);
+
+        // For ephemeral nodes, the spawn animation effect in DreamNode3D already handles
+        // the ring→target animation using ephemeralState.spawnPosition → ephemeralState.targetPosition.
+        // Executing the pending moveToPosition would override the spawn animation with a
+        // movement starting from [0,0,0] (constellation positionMode), causing spawn-in-place.
+        const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
+        if (isEphemeral) {
+          console.log(`[REGISTER] ${nodeId.slice(0,8)}: ephemeral node, skipping pending movement (spawn effect handles animation)`);
+          // Still set active state so the node participates in the layout
+          if (pendingMovement.setActive && nodeRef.current) {
+            nodeRef.current.setActiveState(true);
+          }
+          return;
+        }
 
         // Use a short delay to ensure the node is fully initialized
         globalThis.setTimeout(() => {
