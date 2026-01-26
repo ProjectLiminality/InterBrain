@@ -419,25 +419,39 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         allRingNodes.forEach(n => newLayoutNodeIds.add(n.nodeId));
 
         // ── Step 3: Selective ephemeral cleanup ──
-        // Only despawn ephemeral nodes that are NOT in the new layout.
-        // Ephemeral nodes that ARE in the new layout keep their refs and move smoothly.
+        // Ephemeral nodes in the new layout keep their refs and move smoothly.
+        // Ephemeral nodes NOT in the new layout:
+        //   - liminal→liminal: animate exit (fly out to ring), then despawn on completion
+        //   - other→liminal: immediately despawn (stale from interrupted transitions)
         const store = useInterBrainStore.getState();
         const mountedNodes = store.constellationFilter.mountedNodes;
+        const exitingEphemeralIds: string[] = [];
 
         if (store.ephemeralNodes.size > 0) {
           const keepIds: string[] = [];
-          const despawnIds: string[] = [];
+          const removeIds: string[] = [];
           for (const ephNodeId of store.ephemeralNodes.keys()) {
             if (newLayoutNodeIds.has(ephNodeId)) {
               keepIds.push(ephNodeId);
             } else {
-              despawnIds.push(ephNodeId);
+              removeIds.push(ephNodeId);
             }
           }
-          console.log(`[FOCUS] Ephemeral cleanup: ${keepIds.length} kept (in new layout), ${despawnIds.length} despawned`);
-          for (const despawnId of despawnIds) {
-            nodeRefs.current.delete(despawnId);
-            store.despawnEphemeralNode(despawnId);
+
+          if (isLiminalToLiminal) {
+            // Animate exiting ephemeral nodes out — they'll despawn when animation completes
+            // (DreamNode3D's returnToConstellation sets transitionType='ephemeral-exit',
+            //  and on completion calls despawnEphemeralNode)
+            console.log(`[FOCUS] Ephemeral: ${keepIds.length} kept, ${removeIds.length} exiting with animation`);
+            exitingEphemeralIds.push(...removeIds);
+            // Don't delete refs or despawn — the exit animation will handle cleanup
+          } else {
+            // Not in liminal web yet — these are stale from interrupted transitions, despawn immediately
+            console.log(`[FOCUS] Ephemeral: ${keepIds.length} kept, ${removeIds.length} despawned (stale)`);
+            for (const despawnId of removeIds) {
+              nodeRefs.current.delete(despawnId);
+              store.despawnEphemeralNode(despawnId);
+            }
           }
         }
 
@@ -494,6 +508,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Move unrelated nodes to constellation
         positions.sphereNodes.forEach(sphereNodeId => {
           returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+        });
+
+        // Animate exiting ephemeral nodes out to spawn ring (liminal→liminal only).
+        // These nodes have refs and are still mounted — returnNodeToConstellation triggers
+        // the ephemeral exit animation, which calls despawnEphemeralNode on completion.
+        exitingEphemeralIds.forEach(ephNodeId => {
+          returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
         });
 
         globalThis.setTimeout(() => {
