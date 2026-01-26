@@ -990,67 +990,65 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
 
       try {
-        // TRACE LOGGING: Understanding the position assignment flow
         const { maxNodes, prioritizeClusters } = store.constellationConfig;
         const allNodeIds = dreamNodes.map(node => node.id);
 
-        console.log(`[LAYOUT-TRACE] Step 1: Input data`, {
-          totalNodesInVault: dreamNodes.length,
-          maxNodesConfig: maxNodes,
-          prioritizeClusters
-        });
-
-        // Compute constellation layout - currently for ALL nodes
-        const layoutResult = computeConstellationLayout(relationshipGraph, dreamNodes);
-
-        if (layoutResult.nodePositions.size === 0) {
-          console.warn('[LAYOUT] Layout returned no positions');
-          return;
-        }
-
-        console.log(`[LAYOUT-TRACE] Step 2: After computeConstellationLayout`, {
-          positionsFromLayout: layoutResult.nodePositions.size,
-          nodesPassedIn: dreamNodes.length
-        });
-
-        // Create fallback positions for any missing nodes - currently for ALL nodes
-        const completePositions = createFallbackLayout(dreamNodes, layoutResult.nodePositions);
-
-        console.log(`[LAYOUT-TRACE] Step 3: After createFallbackLayout`, {
-          completePositions: completePositions.size,
-          addedByFallback: completePositions.size - layoutResult.nodePositions.size
-        });
-
-        // Store the positions in the store for persistence
-        store.setConstellationPositions(completePositions);
-
-        // Compute constellation filter to determine which nodes should be mounted
+        // Step 1: Compute filter FIRST to determine which nodes should be mounted
         const constellationFilter = computeConstellationFilter(
           relationshipGraph,
           allNodeIds,
           maxNodes,
           prioritizeClusters
         );
-
-        // Store the filter result
         store.setConstellationFilter(constellationFilter);
 
-        console.log(`[LAYOUT-TRACE] Step 4: After computeConstellationFilter`, {
-          mountedNodes: constellationFilter.mountedNodes.size,
-          ephemeralNodes: constellationFilter.ephemeralNodes.size,
-          vipNodes: constellationFilter.vipNodes.size,
-          parentNodes: constellationFilter.parentNodes.size,
-          sampledNodes: constellationFilter.sampledNodes.size
-        });
+        // Step 2: Filter dreamNodes to only mounted nodes for position calculation
+        const mountedDreamNodes = dreamNodes.filter(
+          node => constellationFilter.mountedNodes.has(node.id)
+        );
 
-        // ⚠️ PROBLEM: Update node positions for ALL nodes, not just mounted ones
-        store.batchUpdateNodePositions(completePositions);
+        console.log(`[LAYOUT] Filter: ${mountedDreamNodes.length} mounted, ${constellationFilter.ephemeralNodes.size} ephemeral (of ${dreamNodes.length} total)`);
 
-        console.log(`[LAYOUT-TRACE] Step 5: After batchUpdateNodePositions`, {
-          positionsAssigned: completePositions.size,
-          shouldOnlyBe: constellationFilter.mountedNodes.size,
-          excessPositions: completePositions.size - constellationFilter.mountedNodes.size
-        });
+        // Step 3: Create a filtered relationship graph containing ONLY mounted nodes
+        // This is critical because computeConstellationLayout clusters from the graph's
+        // nodes map, not from the dreamNodes array. Without filtering, the graph still
+        // contains all 82 nodes and produces positions for all of them.
+        const mountedNodeIds = new Set(mountedDreamNodes.map(n => n.id));
+        const filteredNodes = new Map(
+          Array.from(relationshipGraph.nodes.entries())
+            .filter(([id]) => mountedNodeIds.has(id))
+        );
+        const filteredEdges = relationshipGraph.edges.filter(
+          edge => mountedNodeIds.has(edge.source) && mountedNodeIds.has(edge.target)
+        );
+        const filteredGraph = {
+          ...relationshipGraph,
+          nodes: filteredNodes,
+          edges: filteredEdges,
+          metadata: {
+            ...relationshipGraph.metadata,
+            totalNodes: filteredNodes.size,
+          }
+        };
+
+        // Step 4: Compute layout for ONLY mounted nodes using filtered graph
+        const layoutResult = computeConstellationLayout(filteredGraph, mountedDreamNodes);
+
+        if (layoutResult.nodePositions.size === 0) {
+          console.warn('[LAYOUT] Layout returned no positions');
+          return;
+        }
+
+        // Step 5: Create fallback positions for any mounted nodes missing from layout
+        const mountedPositions = createFallbackLayout(mountedDreamNodes, layoutResult.nodePositions);
+
+        // Step 6: Store positions and assign ONLY to mounted nodes
+        // setConstellationPositions replaces the entire positions map (only 50 entries),
+        // so future plugin loads won't have stale ephemeral positions.
+        store.setConstellationPositions(mountedPositions);
+        store.batchUpdateNodePositions(mountedPositions);
+
+        console.log(`[LAYOUT] Assigned ${mountedPositions.size} positions for ${mountedDreamNodes.length} mounted nodes`);
 
       } catch (error) {
         console.error('[LAYOUT] Failed:', error);
