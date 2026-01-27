@@ -174,20 +174,47 @@ src/features/[feature]/
 
 **Ensure comprehensive test coverage for all implemented features.**
 
-- Review the branch history to identify all significant functionality added
-- Verify each piece has appropriate tests
-- Tests may be:
-  - **Vitest unit tests** (`.test.ts` files, co-located with source)
-  - **Integration test scripts** (in feature's `scripts/` directory)
-  - **Obsidian test commands** (for manual UI testing - acceptable for UI-heavy features)
-- If test coverage is missing, create the tests
+#### CRITICAL: Verify Test Files Exist for New Code
+
+You MUST programmatically check — do NOT eyeball this or trust your memory.
+
+```bash
+# List all NEW .ts/.tsx files added on this branch (excluding tests themselves)
+git diff main --name-only --diff-filter=A | grep -E '\.(ts|tsx)$' | grep -v '\.test\.' | grep -v '\.spec\.'
+
+# For each new file, check if a co-located test file exists
+# Example: src/core/services/foo.ts → src/core/services/foo.test.ts
+```
+
+**For EVERY new service, utility, or module file added on this branch:**
+1. Check if a `.test.ts` file exists next to it
+2. If not, **CREATE the test file** — do not mark coverage as "adequate" without tests
+3. Pure UI components (React components that only render JSX) are exempt
+4. Services, utilities, store actions, algorithms, and stateful modules are NOT exempt
+
+**What "adequate" actually means:**
+- Every new service file has a co-located `.test.ts`
+- Every new utility/algorithm file has a co-located `.test.ts`
+- Every new store action (e.g., `spawnEphemeralNode`) is tested in the store test file
+- Tests cover the happy path AND at least one edge case per function
+- Tests for stateful modules (queues, caches) verify state transitions
+
+**Do NOT report "ADEQUATE" if:**
+- New `.ts` files exist without corresponding `.test.ts` files
+- Store actions were added but the store test file doesn't cover them
+- You didn't actually run the search to check
+
+Tests may be:
+- **Vitest unit tests** (`.test.ts` files, co-located with source) — **preferred**
+- **Integration test scripts** (in feature's `scripts/` directory)
+- **Obsidian test commands** (for manual UI testing - acceptable ONLY for pure UI components)
 
 ### 2.3 Codebase Hygiene
 
 **Remove cruft and ensure cleanliness:**
 
 - Remove unused functions, variables, and imports
-- Delete dead code paths and commented-out code
+- **DELETE dead code — never comment it out.** Commented-out code is not "preserved for future use." Git history preserves everything. If code is unused, delete it completely.
 - Remove temporary/debug code (console.logs for debugging)
 - Clean up any orphaned files
 - Ensure no files outside proper directory structure
@@ -202,21 +229,40 @@ Hierarchy:
 3. `src/features/README.md` - Feature catalog and patterns
 4. `src/features/[feature]/README.md` - Individual feature docs
 
+#### CRITICAL: Verify README Content, Not Just Existence
+
+Do NOT simply confirm READMEs "exist" and report "UP TO DATE." You must:
+
+1. **Read each affected README** and compare its content against what the branch actually implemented
+2. **Check for conceptual gaps**: If the branch adds a new system (e.g., a queue, a filter algorithm, a lifecycle pattern), the README must explain the concept — not just list the file names
+3. **A developer who only reads READMEs should be able to understand the system** without reverse-engineering the TypeScript
+
 **For each feature slice touched on this branch:**
-1. Check if `src/features/[feature]/README.md` exists and is accurate
-2. Verify it describes:
-   - Purpose of the feature
+1. Check if `src/features/[feature]/README.md` exists
+2. **Read it and verify it describes the CURRENT state**, including:
+   - Purpose of the feature (updated if the branch changed its scope)
+   - **Conceptual explanation of new systems** (algorithms, lifecycle patterns, performance optimizations)
    - Directory structure (especially if non-standard subdirs exist)
-   - Main exports
+   - Main exports (including new ones added on this branch)
+   - Configuration options (settings, tunables)
    - Commands (if any)
    - Test commands/scripts (if any)
    - Dependencies
-3. Update if functionality changed significantly
+3. **Update or add sections** if the branch introduced new subsystems, algorithms, or architectural patterns
 4. Create if missing for new features
+
+**For core infrastructure changes:**
+1. If new services/components were added to `src/core/`, update `src/core/README.md`
+2. New core services MUST be listed with a brief description of what they do and why they exist
 
 **Update the feature catalog** in `src/features/README.md` if:
 - A new feature was created
-- An existing feature's purpose/complexity changed significantly
+- An existing feature's purpose/description no longer reflects what it does
+
+**Do NOT report "UP TO DATE" if:**
+- New files/subsystems exist that aren't mentioned in any README
+- The README describes the feature's old scope but not its expanded scope
+- A developer reading the README would miss an entire subsystem
 
 ### 2.5 Elegance Pass
 
@@ -307,7 +353,13 @@ Final structure: COMPLIANT
 Merge Preparation
 -----------------
 Test coverage: [ADEQUATE/ADDED TESTS/NEEDS ATTENTION]
+  New source files without test files: [list any, or "none"]
+  New store actions without test coverage: [list any, or "none"]
+  Tests created: [list new test files, or "none needed"]
 READMEs: [UP TO DATE/UPDATED - list which]
+  READMEs read and verified: [list each README checked]
+  Sections added/updated: [list specific sections, or "none needed"]
+  New subsystems not yet documented: [list any, or "none"]
 Hygiene: [CLEAN/CLEANED - list removals]
 
 Changes Made
