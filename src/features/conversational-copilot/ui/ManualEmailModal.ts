@@ -7,8 +7,6 @@
  * Shows: To, Subject, Body - each with a copy button
  */
 
-/* eslint-disable no-undef */
-
 import { App, Modal } from 'obsidian';
 
 export interface EmailContent {

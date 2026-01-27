@@ -5,6 +5,7 @@ import { FlyControls } from '@react-three/drei';
 import { DreamNode3D } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { Star3D, SphereRotationControls, ConstellationEdges, shouldShowConstellationEdges } from '../../features/constellation-layout';
+import { EPHEMERAL_SPAWN_RADIUS } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { StarMesh } from '../../features/constellation-layout/components/StarMesh';
 
 // Feature flag for WebGL-native star rendering
@@ -37,6 +38,7 @@ import { getCherryPickWorkflowService } from '../../features/dreamnode-updater/s
 // Tutorial system disabled for current version
 // import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
 import { TutorialPortalOverlay } from '../../features/tutorial';
+import { EphemeralNodeManager } from './EphemeralNodeManager';
 
 export default function DreamspaceCanvas() {
   // Get services inside component so they're available after plugin initialization
@@ -56,6 +58,8 @@ export default function DreamspaceCanvas() {
   }, []); // Run once on mount
   
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
+  const constellationFilter = useInterBrainStore(state => state.constellationFilter);
+  const ephemeralNodesMap = useInterBrainStore(state => state.ephemeralNodes);
 
   // No need to load initial nodes - they come from store.dreamNodes
 
@@ -68,8 +72,47 @@ export default function DreamspaceCanvas() {
   // Drag and drop state - tracks mouse position for 3D drop positioning
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Get nodes from store
-  const dreamNodes: DreamNode[] = Array.from(dreamNodesMap.values()).map(data => data.node);
+  // Get nodes from store - filter based on constellation filter and ephemeral nodes
+  // If filter has mounted nodes, use it; otherwise show all (pre-filter state)
+  const prevMountedCountRef = React.useRef(0);
+  const dreamNodes: DreamNode[] = React.useMemo(() => {
+    const allNodes = Array.from(dreamNodesMap.values());
+
+    // If constellation filter is not initialized (empty mountedNodes), show all nodes
+    if (constellationFilter.mountedNodes.size === 0) {
+      const result = allNodes.map(data => data.node);
+      prevMountedCountRef.current = result.length;
+      return result;
+    }
+
+    // Filter to only mounted nodes (constellation) + ephemeral nodes
+    const result = allNodes
+      .filter(data =>
+        constellationFilter.mountedNodes.has(data.node.id) ||
+        ephemeralNodesMap.has(data.node.id)
+      )
+      .map(data => data.node);
+
+    // Diagnostic: detect significant changes in mounted node count
+    const currentLayout = useInterBrainStore.getState().spatialLayout;
+    if (prevMountedCountRef.current > 0 && result.length !== prevMountedCountRef.current) {
+      console.log(`[CANVAS] dreamNodes recomputed: ${prevMountedCountRef.current} → ${result.length} (mounted=${constellationFilter.mountedNodes.size}, ephemeral=${ephemeralNodesMap.size}, layout=${currentLayout})`);
+    }
+    prevMountedCountRef.current = result.length;
+
+    return result;
+  }, [dreamNodesMap, constellationFilter.mountedNodes, ephemeralNodesMap]);
+
+  // Track which nodes are ephemeral for rendering differences
+  // IMPORTANT: When filter is not initialized (mountedNodes empty), treat ALL nodes as constellation
+  // (they have home positions). Ephemeral behavior only applies after filter is computed.
+  const ephemeralNodeIds = React.useMemo(() => {
+    // If filter not initialized, no nodes are ephemeral
+    if (constellationFilter.mountedNodes.size === 0) {
+      return new Set<string>();
+    }
+    return new Set(ephemeralNodesMap.keys());
+  }, [ephemeralNodesMap, constellationFilter.mountedNodes.size]);
   
   // Reference to the group containing all DreamNodes for rotation
   const dreamWorldRef = useRef<Group>(null);
@@ -91,6 +134,7 @@ export default function DreamspaceCanvas() {
   const debugWireframeSphere = useInterBrainStore(state => state.debugWireframeSphere);
   const debugIntersectionPoint = useInterBrainStore(state => state.debugIntersectionPoint);
   const debugFlyingControls = useInterBrainStore(state => state.debugFlyingControls);
+  const debugEphemeralRing = useInterBrainStore(state => state.debugEphemeralRing);
   
   // Layout state for controlling dynamic view scaling
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
@@ -556,11 +600,15 @@ export default function DreamspaceCanvas() {
               // Dismiss search interface and return to constellation
               console.log('Empty space clicked in search interface - dismissing search');
               store.setSearchActive(false);
-              store.setSpatialLayout('constellation');
             } else {
-              // Clear search results and return to constellation
+              // Clear search results
               console.log('Empty space clicked in search results mode - clearing search');
               store.setSearchResults([]);
+            }
+            // Use orchestrator to animate back to constellation (handles ephemeral exit)
+            if (spatialOrchestratorRef.current) {
+              spatialOrchestratorRef.current.returnToConstellation();
+            } else {
               store.setSpatialLayout('constellation');
             }
           } else if (store.spatialLayout === 'liminal-web') {
@@ -569,7 +617,12 @@ export default function DreamspaceCanvas() {
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
-            store.setSpatialLayout('constellation');
+            // Use orchestrator to animate back to constellation (handles ephemeral exit)
+            if (spatialOrchestratorRef.current) {
+              spatialOrchestratorRef.current.returnToConstellation();
+            } else {
+              store.setSpatialLayout('constellation');
+            }
           } else {
             // Already in constellation mode, just log
             console.log('Empty space clicked in constellation mode');
@@ -603,6 +656,16 @@ export default function DreamspaceCanvas() {
           <ActiveVideoCallButton />
         )}
 
+        {/* Debug ephemeral spawn/exit ring - shows where ephemeral nodes spawn from/exit to
+            This ring is in CAMERA SPACE (not world space), so it stays fixed at z=0
+            The ring should be perpendicular to the camera view axis */}
+        {debugEphemeralRing && (
+          <mesh rotation={[0, 0, 0]} position={[0, 0, 0]}>
+            <ringGeometry args={[EPHEMERAL_SPAWN_RADIUS - 50, EPHEMERAL_SPAWN_RADIUS + 50, 64]} />
+            <meshBasicMaterial color="#ff00ff" transparent={true} opacity={0.5} side={2} />
+          </mesh>
+        )}
+
         {/* Rotatable group containing all DreamNodes */}
         <group ref={dreamWorldRef}>
           {/* Debug wireframe sphere - toggleable via Obsidian commands */}
@@ -623,28 +686,37 @@ export default function DreamspaceCanvas() {
               prevRenderCountRef.current = dreamNodes.length;
             }
 
-            const renderedNodes = dreamNodes.map((node) => (
-              <React.Fragment key={node.id}>
-                {/* Star component - purely visual, positioned slightly closer than anchor */}
-                {USE_WEBGL_STARS ? (
-                  <StarMesh position={node.position} size={5000} />
-                ) : (
-                  <Star3D position={node.position} size={5000} />
-                )}
-                
-                {/* DreamNode component - handles all interactions and dynamic positioning */}
-                <DreamNode3D
-                  ref={getDreamNodeRef(node.id)}
-                  dreamNode={node}
-                  onHover={handleNodeHover}
-                  onClick={handleNodeClick}
-                  enableDynamicScaling={shouldEnableDynamicScaling}
-                  onHitSphereRef={handleHitSphereRef}
-                  vaultService={vaultService}
-                  canvasParserService={canvasParserService}
-                />
-              </React.Fragment>
-            ));
+            const renderedNodes = dreamNodes.map((node) => {
+              const isEphemeral = ephemeralNodeIds.has(node.id);
+              const ephemeralState = isEphemeral ? ephemeralNodesMap.get(node.id) : undefined;
+
+              return (
+                <React.Fragment key={node.id}>
+                  {/* Star component - only for constellation nodes (not ephemeral) */}
+                  {!isEphemeral && (
+                    USE_WEBGL_STARS ? (
+                      <StarMesh position={node.position} size={5000} />
+                    ) : (
+                      <Star3D position={node.position} size={5000} />
+                    )
+                  )}
+
+                  {/* DreamNode component - handles all interactions and dynamic positioning */}
+                  <DreamNode3D
+                    ref={getDreamNodeRef(node.id)}
+                    dreamNode={node}
+                    onHover={handleNodeHover}
+                    onClick={handleNodeClick}
+                    enableDynamicScaling={shouldEnableDynamicScaling}
+                    onHitSphereRef={handleHitSphereRef}
+                    vaultService={vaultService}
+                    canvasParserService={canvasParserService}
+                    ephemeral={isEphemeral}
+                    ephemeralState={ephemeralState}
+                  />
+                </React.Fragment>
+              );
+            });
 
             return renderedNodes;
           })()}
@@ -709,6 +781,9 @@ export default function DreamspaceCanvas() {
             }}
           />
           */}
+
+          {/* Ephemeral node manager - handles dynamic node spawning/despawning lifecycle */}
+          <EphemeralNodeManager />
         </OrchestratorContext.Provider>
 
         {/* Flying camera controls for debugging - toggleable */}

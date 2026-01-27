@@ -64,8 +64,8 @@ Features → Core → Obsidian/React
 ```
 core/
 ├── store/          → Zustand store + slice composition
-├── components/     → DreamspaceCanvas, SpatialOrchestrator, DreamspaceView
-├── services/       → VaultService, LeafManagerService, UIService, ServiceManager
+├── components/     → DreamspaceCanvas, SpatialOrchestrator, EphemeralNodeManager, DreamspaceView
+├── services/       → VaultService, LeafManagerService, UIService, ServiceManager, ephemeral-despawn-queue
 ├── hooks/          → useEscapeKeyHandler, useOptionKeyHandlers
 ├── context/        → OrchestratorContext (spatial orchestrator ref)
 ├── commands/       → camera-commands
@@ -79,7 +79,11 @@ core/
 
 **Canvas**: `components/DreamspaceCanvas.tsx` (~670 lines) - R3F canvas, user input, overlay mounting. Delegates drop logic to `features/drag-and-drop`.
 
-**Orchestrator**: `components/SpatialOrchestrator.tsx` (~935 lines) - Node positioning, layout animations, interrupt-capable movement. Uses ring layout from `liminal-web-layout` feature.
+**Orchestrator**: `components/SpatialOrchestrator.tsx` (~935 lines) - Node positioning, layout animations, interrupt-capable movement. Uses ring layout from `liminal-web-layout` feature. Manages ephemeral node spawning with staggered timing (40ms per node) to prevent main thread blocking.
+
+**EphemeralNodeManager**: `components/EphemeralNodeManager.tsx` - React hooks for ephemeral node lifecycle:
+- `useEphemeralSpawner()` — spawns unmounted nodes that enter a liminal web layout
+- `useEphemeralGarbageCollector()` — cleans up stale ephemeral nodes after layout transitions
 
 ## Services
 
@@ -90,6 +94,12 @@ core/
 **LeafManagerService** (`services/leaf-manager-service.ts`) - Obsidian workspace leaves, 50/50 splits, tab stacking.
 
 **UIService** (`services/ui-service.ts`) - Notices, modals, user prompts.
+
+**Ephemeral Despawn Queue** (`services/ephemeral-despawn-queue.ts`) - Staggers ephemeral node unmounts to prevent main thread blocking. When multiple exit animations complete in the same frame, each would trigger a Zustand `set()` + React unmount. With 15+ nodes finishing simultaneously, that blocks the main thread for 50-100ms. The queue collects despawn requests and drains them one-by-one:
+- **500ms initial delay**: Lets spawn animations settle before any despawns begin
+- **40ms interval**: Between individual despawn operations
+- **Cancellation**: `cancelEphemeralDespawn(nodeId)` rescues a node from the queue when a new layout reclaims it (e.g., rapid navigation: InterBrain → person → back to InterBrain)
+- **Flush**: `flushDespawnQueue()` drains everything immediately (used when returning to constellation with no animations running)
 
 ## Notes
 

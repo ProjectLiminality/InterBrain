@@ -22,6 +22,7 @@ export default [
         document: 'readonly',
         HTMLElement: 'readonly',
         HTMLDivElement: 'readonly',
+        HTMLInputElement: 'readonly',
         SVGSVGElement: 'readonly',
         Element: 'readonly',
         navigator: 'readonly',

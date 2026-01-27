@@ -7,6 +7,12 @@ export * from './store/slice';
 // Commands
 export { registerConstellationDebugCommands } from './commands';
 
+// Settings
+export { createConstellationSettingsSection } from './settings-section';
+
+// Services
+export { computeConstellationFilter, isNodeMounted, getNodeCategory } from './services/constellation-filter-service';
+
 // Components
 export { default as ConstellationEdges, shouldShowConstellationEdges, useConstellationStats } from './components/ConstellationEdges';
 export { default as DreamSongThread3D, groupEdgesByDreamSong, sortEdgesBySequence, extractDreamNodeIdFromPath } from './components/DreamSongThread3D';

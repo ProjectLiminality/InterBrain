@@ -87,7 +87,12 @@ export function useEscapeKeyHandler(
           case 'search':
             // Exit global search, go to constellation
             store.setSearchResults([]);
-            store.setSpatialLayout('constellation');
+            // Use orchestrator to animate nodes back (including ephemeral exit animations)
+            if (orchestratorRef.current) {
+              orchestratorRef.current.returnToConstellation();
+            } else {
+              store.setSpatialLayout('constellation');
+            }
             break;
 
           case 'copilot':
@@ -100,7 +105,17 @@ export function useEscapeKeyHandler(
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
-            store.setSpatialLayout('constellation');
+            // Use orchestrator to animate nodes back (including ephemeral exit animations)
+            // The orchestrator will set the layout to 'constellation'
+            console.log('[Escape] liminal-web: orchestratorRef.current =', !!orchestratorRef.current);
+            if (orchestratorRef.current) {
+              console.log('[Escape] Calling orchestrator.returnToConstellation()');
+              orchestratorRef.current.returnToConstellation();
+            } else {
+              // Fallback if no orchestrator available
+              console.log('[Escape] No orchestrator, falling back to setSpatialLayout');
+              store.setSpatialLayout('constellation');
+            }
             break;
 
           case 'constellation':

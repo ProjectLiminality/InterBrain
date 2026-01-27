@@ -10,8 +10,6 @@
  * - Rejection history with restore capability
  */
 
-/* eslint-disable no-undef */
-
 import { App, Modal, Setting, Notice } from 'obsidian';
 import {
   PeerCommitGroup,

@@ -1357,6 +1357,13 @@ export default class InterBrainPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+
+    // Sync constellation settings to Zustand store
+    // This ensures persisted values are reflected in runtime state
+    useInterBrainStore.getState().setConstellationConfig({
+      maxNodes: this.settings.constellationMaxNodes ?? 150,
+      prioritizeClusters: this.settings.constellationPrioritizeClusters ?? true
+    });
   }
 
   async saveSettings() {

@@ -10,7 +10,7 @@
  * The standalone GitHub Pages viewer uses DreamSong directly.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DreamSong } from './DreamSong';
 import { PerspectivesSection } from '../../songline/components/PerspectivesSection';
 import { ConversationsSection } from '../../songline/components/ConversationsSection';
@@ -19,6 +19,7 @@ import { DreamSongBlock } from '../types/dreamsong';
 import { MediaFile, DreamNode } from '../../dreamnode';
 import { Perspective, getPerspectiveService } from '../../songline/services/perspective-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
+import { serviceManager } from '../../../core/services/service-manager';
 
 interface DreamSongWithExtensionsProps {
   blocks: DreamSongBlock[];
@@ -65,6 +66,38 @@ export const DreamSongWithExtensions: React.FC<DreamSongWithExtensionsProps> = (
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
 
+  // Resolve DreamTalk media: convert absolutePath → app:// resource URL
+  // This bridges the disk-based loading (used by DreamTalkSide/useContentTexture)
+  // into the pure DreamSong component which only reads MediaFile.data
+  const resolvedDreamTalkMedia = useMemo(() => {
+    if (!dreamTalkMedia || dreamTalkMedia.length === 0) return dreamTalkMedia;
+
+    const app = serviceManager.getApp();
+    if (!app) return dreamTalkMedia;
+
+    const adapter = app.vault.adapter as { basePath?: string; getResourcePath: (path: string) => string };
+    const vaultBasePath = adapter.basePath || '';
+    if (!vaultBasePath) return dreamTalkMedia;
+
+    return dreamTalkMedia.map(media => {
+      // Already has data (e.g. newly-created node with base64) — pass through
+      if (media.data && media.data.length > 0) return media;
+      // No absolutePath to resolve — pass through
+      if (!media.absolutePath) return media;
+
+      // Convert absolutePath → vault-relative → app:// resource URL
+      let vaultRelativePath = media.absolutePath;
+      if (vaultRelativePath.startsWith(vaultBasePath)) {
+        vaultRelativePath = vaultRelativePath.slice(vaultBasePath.length);
+        if (vaultRelativePath.startsWith('/')) {
+          vaultRelativePath = vaultRelativePath.slice(1);
+        }
+      }
+
+      return { ...media, data: adapter.getResourcePath(vaultRelativePath) };
+    });
+  }, [dreamTalkMedia]);
+
   // Lazy-load perspectives only when node is selected in liminal-web mode
   useEffect(() => {
     const loadPerspectives = async () => {
@@ -109,7 +142,7 @@ export const DreamSongWithExtensions: React.FC<DreamSongWithExtensionsProps> = (
         className={className}
         sourceDreamNodeId={sourceDreamNodeId}
         dreamNodeName={dreamNodeName}
-        dreamTalkMedia={dreamTalkMedia}
+        dreamTalkMedia={resolvedDreamTalkMedia}
         onMediaClick={onMediaClick}
         embedded={embedded}
         githubPagesUrl={githubPagesUrl}

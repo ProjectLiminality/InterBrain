@@ -14,6 +14,9 @@ const process = require('process');
 
 const execAsync = promisify(exec);
 
+/** Set to true to enable verbose RadicleService logging (seeding, reconcile, announce, etc.) */
+const RADICLE_VERBOSE = false;
+
 export interface RadicleIdentity {
   /** Radicle DID (Decentralized Identifier) */
   did: string;
@@ -533,7 +536,7 @@ export class RadicleServiceImpl implements RadicleService {
       const radicleId = stdout.trim();
 
       if (radicleId && radicleId.startsWith('rad:')) {
-        console.log(`RadicleService: Got Radicle ID: ${radicleId}`);
+        if (RADICLE_VERBOSE) console.log(`RadicleService: Got Radicle ID: ${radicleId}`);
         return radicleId;
       }
 
@@ -542,7 +545,7 @@ export class RadicleServiceImpl implements RadicleService {
     } catch (error: any) {
       // Log the error for debugging with full details
       const errorOutput = error.stderr || error.stdout || error.message || 'Unknown error';
-      console.log(`RadicleService: rad . failed for ${repoPath}:`, errorOutput);
+      if (RADICLE_VERBOSE) console.log(`RadicleService: rad . failed for ${repoPath}:`, errorOutput);
       // Silent failure - repository may not be initialized yet
       return null;
     }
@@ -916,8 +919,8 @@ export class RadicleServiceImpl implements RadicleService {
 
       // First attempt: normal push
       let pushResult = await runGitPush(false);
-      console.log('RadicleService: git push output:', pushResult.stdout);
-      if (pushResult.stderr) console.log('RadicleService: git push stderr:', pushResult.stderr);
+      if (RADICLE_VERBOSE) console.log('RadicleService: git push output:', pushResult.stdout);
+      if (RADICLE_VERBOSE && pushResult.stderr) console.log('RadicleService: git push stderr:', pushResult.stderr);
 
       // If rejected due to remote having commits we don't have, force push
       // This is safe because each user has their own namespace (rad/main)
@@ -927,10 +930,10 @@ export class RadicleServiceImpl implements RadicleService {
                           pushResult.stderr.includes('non-fast-forward');
 
         if (needsForce) {
-          console.log('RadicleService: Push rejected (remote diverged). Force pushing to own namespace...');
+          if (RADICLE_VERBOSE) console.log('RadicleService: Push rejected (remote diverged). Force pushing to own namespace...');
           pushResult = await runGitPush(true);
-          console.log('RadicleService: git push --force output:', pushResult.stdout);
-          if (pushResult.stderr) console.log('RadicleService: git push --force stderr:', pushResult.stderr);
+          if (RADICLE_VERBOSE) console.log('RadicleService: git push --force output:', pushResult.stdout);
+          if (RADICLE_VERBOSE && pushResult.stderr) console.log('RadicleService: git push --force stderr:', pushResult.stderr);
         }
 
         if (!pushResult.success) {
@@ -939,7 +942,7 @@ export class RadicleServiceImpl implements RadicleService {
       }
 
       // STEP 2: Check if already public before attempting to publish
-      console.log(`RadicleService: Checking if repository is already public...`);
+      if (RADICLE_VERBOSE) console.log(`RadicleService: Checking if repository is already public...`);
       const isAlreadyPublic = await new Promise<boolean>((resolve) => {
         const child = spawn(radCmd, ['inspect'], {
           env: env,
@@ -971,14 +974,14 @@ export class RadicleServiceImpl implements RadicleService {
         console.log(`ℹ️ RadicleService: Repository is already public - skipping rad publish`);
         // Still add delegate if recipient specified
         if (recipientDid) {
-          console.log(`RadicleService: Adding ${recipientDid} as delegate (repo already public)...`);
+          if (RADICLE_VERBOSE) console.log(`RadicleService: Adding ${recipientDid} as delegate (repo already public)...`);
           await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
         }
         return; // Skip publish, exit successfully
       }
 
       // STEP 3: Publish to network (use rad publish for proper network announcement)
-      console.log(`RadicleService: Publishing to Radicle network (rad publish)...`);
+      if (RADICLE_VERBOSE) console.log(`RadicleService: Publishing to Radicle network (rad publish)...`);
       await new Promise<void>((resolve, reject) => {
         const child = spawn(radCmd, ['publish'], {
           env: env,
@@ -998,17 +1001,17 @@ export class RadicleServiceImpl implements RadicleService {
         });
 
         child.on('close', (code: number | null) => {
-          console.log('RadicleService: rad publish output:', stdout);
-          if (stderr) console.log('RadicleService: rad publish stderr:', stderr);
+          if (RADICLE_VERBOSE) console.log('RadicleService: rad publish output:', stdout);
+          if (RADICLE_VERBOSE && stderr) console.log('RadicleService: rad publish stderr:', stderr);
 
           // Combine stdout and stderr for error checking
           const output = stdout + stderr;
 
           if (code === 0) {
-            console.log('✅ RadicleService: Successfully published to network!');
+            if (RADICLE_VERBOSE) console.log('✅ RadicleService: Successfully published to network!');
             resolve();
           } else if (output.includes('already public') || output.includes('No identity updates')) {
-            console.log('ℹ️ RadicleService: Repository already public (no changes needed)');
+            if (RADICLE_VERBOSE) console.log('ℹ️ RadicleService: Repository already public (no changes needed)');
             resolve(); // Not an error
           } else {
             reject(new Error(`rad publish exited with code ${code}`));
@@ -1025,7 +1028,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       // STEP 4: Announce to network with inventory for immediate seed discovery
       // --inventory forces full announcement including routing table updates
-      console.log(`RadicleService: Announcing repository to network (rad sync --inventory)...`);
+      if (RADICLE_VERBOSE) console.log(`RadicleService: Announcing repository to network (rad sync --inventory)...`);
       await new Promise<void>((resolve) => {
         const child = spawn(radCmd, ['sync', '--inventory'], {
           env: env,
@@ -1045,12 +1048,12 @@ export class RadicleServiceImpl implements RadicleService {
         });
 
         child.on('close', (code: number | null) => {
-          console.log('RadicleService: rad sync --announce output:', stdout);
-          if (stderr) console.log('RadicleService: rad sync --announce stderr:', stderr);
+          if (RADICLE_VERBOSE) console.log('RadicleService: rad sync --announce output:', stdout);
+          if (RADICLE_VERBOSE && stderr) console.log('RadicleService: rad sync --announce stderr:', stderr);
 
           // Announce can fail if no seeds found (not critical)
           if (code === 0 || stdout.includes('No seeds found')) {
-            console.log('✅ RadicleService: Repository announced to network');
+            if (RADICLE_VERBOSE) console.log('✅ RadicleService: Repository announced to network');
             resolve();
           } else {
             console.warn(`⚠️ RadicleService: rad sync --announce exited with code ${code} (not critical)`);
@@ -1209,7 +1212,7 @@ export class RadicleServiceImpl implements RadicleService {
 
       if (identity.delegates && Array.isArray(identity.delegates)) {
         if (identity.delegates.includes(peerDID)) {
-          console.log(`RadicleService: ${peerDID} is already a delegate (canonical) - skipping`);
+          if (RADICLE_VERBOSE) console.log(`RadicleService: ${peerDID} is already a delegate (canonical) - skipping`);
           return false; // Already exists in canonical state
         }
       }
@@ -1298,10 +1301,10 @@ export class RadicleServiceImpl implements RadicleService {
           const currentScope = columns[columns.length - 1];
 
           if (currentScope === scope) {
-            console.log(`RadicleService: Seeding scope for ${radicleId} already set to '${scope}' - skipping`);
+            if (RADICLE_VERBOSE) console.log(`RadicleService: Seeding scope for ${radicleId} already set to '${scope}' - skipping`);
             return false; // Already correct
           } else {
-            console.log(`RadicleService: Seeding scope for ${radicleId} is '${currentScope}', updating to '${scope}'`);
+            if (RADICLE_VERBOSE) console.log(`RadicleService: Seeding scope for ${radicleId} is '${currentScope}', updating to '${scope}'`);
           }
           break;
         }
@@ -1365,16 +1368,16 @@ export class RadicleServiceImpl implements RadicleService {
 
         if (isPrivate) {
           // MUST PUBLISH: Repository is private
-          console.log(`🌐 [Background Seed] "${repoName}" is private, publishing...`);
+          if (RADICLE_VERBOSE) console.log(`🌐 [Background Seed] "${repoName}" is private, publishing...`);
           await new Promise<void>((resolve) => {
             exec(`"${radCmd}" publish`, { cwd: dreamNodePath }, (error: Error | null, stdout: string, stderr: string) => {
               const output = stdout + stderr;
               if (!error) {
-                console.log(`✅ [Background Seed] "${repoName}" published successfully`);
+                if (RADICLE_VERBOSE) console.log(`✅ [Background Seed] "${repoName}" published successfully`);
               } else if (output.includes('already public')) {
-                console.log(`ℹ️ [Background Seed] "${repoName}" already public`);
+                if (RADICLE_VERBOSE) console.log(`ℹ️ [Background Seed] "${repoName}" already public`);
               } else {
-                console.warn(`⚠️ [Background Seed] publish failed for "${repoName}": ${output}`);
+                if (RADICLE_VERBOSE) console.warn(`⚠️ [Background Seed] publish failed for "${repoName}": ${output}`);
               }
               resolve();
             });
@@ -1401,25 +1404,25 @@ export class RadicleServiceImpl implements RadicleService {
         });
 
         if (!needsAnnounce) {
-          console.log(`✅ [Background Seed] "${repoName}" already synced with seeds (skipping)`);
+          if (RADICLE_VERBOSE) console.log(`✅ [Background Seed] "${repoName}" already synced with seeds (skipping)`);
           return;
         }
 
         // STEP 3: Announce to seeds (rad remote has newer refs than seeds)
-        console.log(`🌐 [Background Seed] "${repoName}" needs sync, announcing...`);
+        if (RADICLE_VERBOSE) console.log(`🌐 [Background Seed] "${repoName}" needs sync, announcing...`);
         await new Promise<void>((resolve) => {
           exec(`"${radCmd}" sync --announce`, { cwd: dreamNodePath }, (error: Error | null, stdout: string, stderr: string) => {
             const output = stdout + stderr;
             const hasError = output.includes('✗ Error') || output.includes('timed out');
 
             if (!error && !hasError) {
-              console.log(`✅ [Background Seed] "${repoName}" announced to seeds`);
+              if (RADICLE_VERBOSE) console.log(`✅ [Background Seed] "${repoName}" announced to seeds`);
             } else if (output.includes('Nothing to announce')) {
-              console.log(`ℹ️ [Background Seed] "${repoName}" nothing to announce`);
+              if (RADICLE_VERBOSE) console.log(`ℹ️ [Background Seed] "${repoName}" nothing to announce`);
             } else if (hasError) {
-              console.warn(`⚠️ [Background Seed] "${repoName}" announce timed out (will retry)`);
+              if (RADICLE_VERBOSE) console.warn(`⚠️ [Background Seed] "${repoName}" announce timed out (will retry)`);
             } else {
-              console.warn(`⚠️ [Background Seed] "${repoName}" announce issue: ${output}`);
+              if (RADICLE_VERBOSE) console.warn(`⚠️ [Background Seed] "${repoName}" announce issue: ${output}`);
             }
             resolve();
           });
@@ -1554,10 +1557,10 @@ export class RadicleServiceImpl implements RadicleService {
           const did = desiredPeers.get(peerName)!;
           await this.addPeerRemote(dreamNodePath, peerName, radicleId, did);
           result.added++;
-          console.log(`🔧 [Reconcile] ADDED remote '${peerName}' -> ${desiredUrl}`);
+          if (RADICLE_VERBOSE) console.log(`🔧 [Reconcile] ADDED remote '${peerName}' -> ${desiredUrl}`);
         } else if (current.fetch !== desiredUrl || current.push !== desiredUrl) {
           // UPDATE: Remote exists but points to wrong DID
-          console.log(`🔧 [Reconcile] UPDATE remote '${peerName}': ${current.fetch} -> ${desiredUrl}`);
+          if (RADICLE_VERBOSE) console.log(`🔧 [Reconcile] UPDATE remote '${peerName}': ${current.fetch} -> ${desiredUrl}`);
           await this.removeRemote(dreamNodePath, peerName);
           const did = desiredPeers.get(peerName)!;
           await this.addPeerRemote(dreamNodePath, peerName, radicleId, did);
@@ -1565,7 +1568,7 @@ export class RadicleServiceImpl implements RadicleService {
         } else {
           // UNCHANGED: Remote exists and is correct
           result.unchanged++;
-          console.log(`✅ [Reconcile] OK remote '${peerName}' -> ${desiredUrl}`);
+          if (RADICLE_VERBOSE) console.log(`✅ [Reconcile] OK remote '${peerName}' -> ${desiredUrl}`);
         }
       }
 
@@ -1573,19 +1576,19 @@ export class RadicleServiceImpl implements RadicleService {
       for (const [remoteName, remote] of currentRemotes) {
         // Skip 'rad' remote (default Radicle remote) and 'origin' (if exists)
         if (remoteName === 'rad' || remoteName === 'origin') {
-          console.log(`✅ [Reconcile] SKIP system remote '${remoteName}'`);
+          if (RADICLE_VERBOSE) console.log(`✅ [Reconcile] SKIP system remote '${remoteName}'`);
           continue;
         }
 
         // Skip remotes that don't look like Radicle peer remotes
         if (!remote.fetch.startsWith('rad://')) {
-          console.log(`✅ [Reconcile] SKIP non-Radicle remote '${remoteName}'`);
+          if (RADICLE_VERBOSE) console.log(`✅ [Reconcile] SKIP non-Radicle remote '${remoteName}'`);
           continue;
         }
 
         if (!desiredRemotes.has(remoteName)) {
           // REMOVE: Remote exists but not in desired state
-          console.log(`🔧 [Reconcile] REMOVE orphaned remote '${remoteName}' (not in liminal-web)`);
+          if (RADICLE_VERBOSE) console.log(`🔧 [Reconcile] REMOVE orphaned remote '${remoteName}' (not in liminal-web)`);
           await this.removeRemote(dreamNodePath, remoteName);
           result.removed++;
         }
