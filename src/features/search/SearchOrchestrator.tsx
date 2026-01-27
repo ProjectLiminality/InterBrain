@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { DreamNode } from '../dreamnode';
+import { hybridSearchService } from './services/hybrid-search-service';
 
 interface SearchResult {
   node: DreamNode;
@@ -75,10 +76,7 @@ export default function SearchOrchestrator({ onSearchResults }: SearchOrchestrat
     try {
       console.log(`🔍 SearchOrchestrator: Triggering search for "${currentQuery}"`);
       
-      // Dynamic import to avoid loading semantic search service unless needed
-      const { semanticSearchService } = await import('../semantic-search/services/semantic-search-service');
-      
-      const results = await semanticSearchService.searchByText(currentQuery, {
+      const results = await hybridSearchService.search(currentQuery, {
         maxResults: 36, // Honeycomb layout capacity
         similarityThreshold: 0.50, // 50% similarity minimum
         includeSnippets: true

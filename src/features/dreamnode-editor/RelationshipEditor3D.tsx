@@ -3,7 +3,7 @@ import { Html } from '@react-three/drei';
 import { dreamNodeStyles, getNodeColors } from '../dreamnode/styles/dreamNodeStyles';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
-import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
+import { hybridSearchService } from '../search/services/hybrid-search-service';
 import { saveEditModeChanges, cancelEditMode } from './services/editor-service';
 import { UIService } from '../../core/services/ui-service';
 
@@ -116,13 +116,7 @@ export default function RelationshipEditor3D() {
       setIsSearching(true);
       setSearchError(null);
 
-      const isAvailable = await semanticSearchService.isSemanticSearchAvailable();
-      if (!isAvailable) {
-        setSearchError('Semantic search not available. Please check Ollama configuration.');
-        return;
-      }
-
-      const searchResults = await semanticSearchService.searchOppositeTypeNodes(
+      const searchResults = await hybridSearchService.searchOppositeType(
         query,
         editingNode,
         {
