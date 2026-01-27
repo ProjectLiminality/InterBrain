@@ -272,36 +272,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   };
 
   /**
-   * Batch-mount multiple ephemeral nodes in a single store update.
-   * Returns the list of nodeIds that were newly spawned.
-   */
-  // const ensureNodesMountedBatch = (
-  //   nodes: Array<{ nodeId: string; position: [number, number, number] }>
-  // ): string[] => {
-  //   const store = useInterBrainStore.getState();
-  //   const toSpawn: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }> = [];
-  //
-  //   for (const { nodeId, position } of nodes) {
-  //     if (!store.dreamNodes.has(nodeId)) continue;
-  //     if (store.constellationFilter.mountedNodes.has(nodeId)) continue;
-  //     if (store.ephemeralNodes.has(nodeId)) {
-  //       // Already ephemeral — cancel any pending despawn so it stays alive
-  //       cancelEphemeralDespawn(nodeId);
-  //       continue;
-  //     }
-  //
-  //     const spawnPosition = calculateWorldCorrectedSpawnPosition(position);
-  //     toSpawn.push({ nodeId, targetPosition: position, spawnPosition });
-  //   }
-  //
-  //   if (toSpawn.length > 0) {
-  //     store.spawnEphemeralNodesBatch(toSpawn);
-  //   }
-  //
-  //   return toSpawn.map(n => n.nodeId);
-  // };
-
-  /**
    * Move a node to a position, interrupting any current animation.
    * If the node is not mounted, it will be spawned as ephemeral first.
    * If the node was just spawned, the movement is queued until the ref is available.
@@ -390,22 +360,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       nodeRef.current.returnToScaledPosition(duration, worldRotation, easing);
     }
   };
-
-  /**
-   * Get the appropriate easing for a node based on its role in liminal web.
-   * Active nodes (center/rings) use ease-in (accelerate out),
-   * inactive nodes (sphere) use ease-out (decelerate in).
-   */
-  // const getEasingForRole = (nodeId: string): string => {
-  //   const { centerNodeId, ring1NodeIds, ring2NodeIds, ring3NodeIds, sphereNodeIds } = liminalWebRoles.current;
-  //
-  //   if (nodeId === centerNodeId || ring1NodeIds.has(nodeId) || ring2NodeIds.has(nodeId) || ring3NodeIds.has(nodeId)) {
-  //     return 'easeInQuart';
-  //   } else if (sphereNodeIds.has(nodeId)) {
-  //     return 'easeOutQuart';
-  //   }
-  //   return 'easeOutCubic';
-  // };
 
   /**
    * Clear liminal web role tracking.
