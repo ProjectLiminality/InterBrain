@@ -1,3 +1,21 @@
+# P2P Collaboration E2E
+#
+# Two test modes:
+#
+#   single-runner (default)
+#     Runs automatically on push to collaboration-related files.
+#     Both Alice and Bob run on the same Ubuntu runner using localhost.
+#     Tests P2P logic (rad init, clone, push) without real networking.
+#
+#   multi-runner (manual only)
+#     Triggered manually: Actions → Run workflow → select "multi-runner".
+#     Alice and Bob run on separate Ubuntu VMs connected via Tailscale VPN.
+#     Tests real network P2P between actual separate machines.
+#     Requires repository secrets: TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET.
+#
+# On push events, the Tailscale jobs (p2p-tailscale-alice, p2p-tailscale-bob,
+# p2p-tailscale-summary) will show as "Skipped" — this is expected.
+
 name: P2P Collaboration E2E
 
 on:
