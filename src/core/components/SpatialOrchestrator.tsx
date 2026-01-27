@@ -20,6 +20,7 @@ import { computeConstellationLayout, createFallbackLayout } from '../../features
 import { computeConstellationFilter } from '../../features/constellation-layout/services/constellation-filter-service';
 import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephemeral-despawn-queue';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
@@ -256,8 +257,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       return true;
     }
 
-    // Check if already spawned as ephemeral
+    // Check if already spawned as ephemeral — cancel any pending despawn
+    // so the node isn't pulled out from under the new layout.
     if (store.ephemeralNodes.has(nodeId)) {
+      cancelEphemeralDespawn(nodeId);
       return true;
     }
 
@@ -281,7 +284,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     for (const { nodeId, position } of nodes) {
       if (!store.dreamNodes.has(nodeId)) continue;
       if (store.constellationFilter.mountedNodes.has(nodeId)) continue;
-      if (store.ephemeralNodes.has(nodeId)) continue;
+      if (store.ephemeralNodes.has(nodeId)) {
+        // Already ephemeral — cancel any pending despawn so it stays alive
+        cancelEphemeralDespawn(nodeId);
+        continue;
+      }
 
       const spawnPosition = calculateWorldCorrectedSpawnPosition(position);
       toSpawn.push({ nodeId, targetPosition: position, spawnPosition });
@@ -500,10 +507,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           // Animate exit for nodes that were active in the previous layout
           exitingEphemeralIds.push(...exitIds);
 
-          // Immediately despawn stale nodes (from interrupted transitions or not in any layout)
+          // Stagger despawn of stale nodes to avoid blocking main thread
           for (const despawnId of staleIds) {
             nodeRefs.current.delete(despawnId);
-            store.despawnEphemeralNode(despawnId);
+            queueEphemeralDespawn(despawnId);
           }
         }
 

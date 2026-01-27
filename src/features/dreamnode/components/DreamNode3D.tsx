@@ -7,6 +7,7 @@ import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
 import { calculateExitPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore, EphemeralNodeState } from '../../../core/store/interbrain-store';
+import { queueEphemeralDespawn } from '../../../core/services/ephemeral-despawn-queue';
 import { dreamNodeStyles, getDistanceScaledGlowIntensity, getDistanceScaledHoverScale } from '../styles/dreamNodeStyles';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { VaultService } from '../../../core/services/vault-service';
@@ -857,9 +858,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         } else if (transitionType === 'scaled') {
           setPositionMode('constellation');
         } else if (transitionType === 'ephemeral-exit') {
-          // Ephemeral node finished exit animation - signal for garbage collection
-          console.log(`[LIFECYCLE] ${dreamNode.id.slice(0,8)}: ephemeral-exit animation complete, calling despawnEphemeralNode`);
-          useInterBrainStore.getState().despawnEphemeralNode(dreamNode.id);
+          // Ephemeral node finished exit animation — queue for staggered despawn
+          // so multiple nodes completing in the same frame don't all unmount at once.
+          console.log(`[LIFECYCLE] ${dreamNode.id.slice(0,8)}: ephemeral-exit animation complete, queuing despawn`);
+          queueEphemeralDespawn(dreamNode.id);
         }
       }
     }
