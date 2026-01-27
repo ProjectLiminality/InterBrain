@@ -203,6 +203,101 @@ describe('InterBrainStore', () => {
     })
   })
 
+  describe('ephemeralNodes', () => {
+    beforeEach(() => {
+      useInterBrainStore.getState().clearEphemeralNodes()
+    })
+
+    it('should start with empty ephemeral nodes map', () => {
+      expect(useInterBrainStore.getState().ephemeralNodes.size).toBe(0)
+    })
+
+    describe('spawnEphemeralNode', () => {
+      it('should add a node to the ephemeral map', () => {
+        useInterBrainStore.getState().spawnEphemeralNode(
+          'eph-1',
+          [100, 200, 0],
+          [500, 0, 0]
+        )
+        const state = useInterBrainStore.getState()
+        expect(state.ephemeralNodes.has('eph-1')).toBe(true)
+        const node = state.ephemeralNodes.get('eph-1')!
+        expect(node.targetPosition).toEqual([100, 200, 0])
+        expect(node.spawnPosition).toEqual([500, 0, 0])
+        expect(node.mountedAt).toBeGreaterThan(0)
+      })
+
+      it('should overwrite existing node if re-spawned', () => {
+        useInterBrainStore.getState().spawnEphemeralNode('eph-1', [10, 20, 0], [100, 0, 0])
+        useInterBrainStore.getState().spawnEphemeralNode('eph-1', [30, 40, 0], [200, 0, 0])
+
+        const node = useInterBrainStore.getState().ephemeralNodes.get('eph-1')!
+        expect(node.targetPosition).toEqual([30, 40, 0])
+      })
+    })
+
+    describe('spawnEphemeralNodesBatch', () => {
+      it('should add multiple nodes in a single update', () => {
+        useInterBrainStore.getState().spawnEphemeralNodesBatch([
+          { nodeId: 'b-1', targetPosition: [10, 0, 0], spawnPosition: [500, 0, 0] },
+          { nodeId: 'b-2', targetPosition: [20, 0, 0], spawnPosition: [0, 500, 0] },
+          { nodeId: 'b-3', targetPosition: [30, 0, 0], spawnPosition: [-500, 0, 0] },
+        ])
+
+        const state = useInterBrainStore.getState()
+        expect(state.ephemeralNodes.size).toBe(3)
+        expect(state.ephemeralNodes.has('b-1')).toBe(true)
+        expect(state.ephemeralNodes.has('b-2')).toBe(true)
+        expect(state.ephemeralNodes.has('b-3')).toBe(true)
+      })
+
+      it('should not overwrite existing nodes in batch', () => {
+        useInterBrainStore.getState().spawnEphemeralNode('b-1', [99, 99, 0], [500, 0, 0])
+        useInterBrainStore.getState().spawnEphemeralNodesBatch([
+          { nodeId: 'b-1', targetPosition: [10, 0, 0], spawnPosition: [500, 0, 0] },
+          { nodeId: 'b-2', targetPosition: [20, 0, 0], spawnPosition: [0, 500, 0] },
+        ])
+
+        const state = useInterBrainStore.getState()
+        expect(state.ephemeralNodes.size).toBe(2)
+        // b-1 should keep original position
+        expect(state.ephemeralNodes.get('b-1')!.targetPosition).toEqual([99, 99, 0])
+      })
+    })
+
+    describe('despawnEphemeralNode', () => {
+      it('should remove a node from the map', () => {
+        useInterBrainStore.getState().spawnEphemeralNode('eph-1', [10, 0, 0], [500, 0, 0])
+        expect(useInterBrainStore.getState().ephemeralNodes.has('eph-1')).toBe(true)
+
+        useInterBrainStore.getState().despawnEphemeralNode('eph-1')
+        expect(useInterBrainStore.getState().ephemeralNodes.has('eph-1')).toBe(false)
+      })
+
+      it('should not affect other ephemeral nodes', () => {
+        useInterBrainStore.getState().spawnEphemeralNode('eph-1', [10, 0, 0], [500, 0, 0])
+        useInterBrainStore.getState().spawnEphemeralNode('eph-2', [20, 0, 0], [0, 500, 0])
+
+        useInterBrainStore.getState().despawnEphemeralNode('eph-1')
+
+        const state = useInterBrainStore.getState()
+        expect(state.ephemeralNodes.has('eph-1')).toBe(false)
+        expect(state.ephemeralNodes.has('eph-2')).toBe(true)
+      })
+    })
+
+    describe('clearEphemeralNodes', () => {
+      it('should remove all ephemeral nodes', () => {
+        useInterBrainStore.getState().spawnEphemeralNode('eph-1', [10, 0, 0], [500, 0, 0])
+        useInterBrainStore.getState().spawnEphemeralNode('eph-2', [20, 0, 0], [0, 500, 0])
+        expect(useInterBrainStore.getState().ephemeralNodes.size).toBe(2)
+
+        useInterBrainStore.getState().clearEphemeralNodes()
+        expect(useInterBrainStore.getState().ephemeralNodes.size).toBe(0)
+      })
+    })
+  })
+
   describe('store subscription', () => {
     it('should notify subscribers of state changes', () => {
       const store = useInterBrainStore

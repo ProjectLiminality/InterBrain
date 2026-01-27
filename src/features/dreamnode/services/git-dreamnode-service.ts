@@ -93,8 +93,8 @@ export class GitDreamNodeService {
     const repoName = this.sanitizeRepoName(title);
     const repoPath = path.join(this.vaultPath, repoName);
     
-    // Calculate position if not provided
-    const nodePosition = position || this.calculateNewNodePosition();
+    // Position defaults to origin; applyConstellationLayout assigns real positions
+    const nodePosition = position || [0, 0, 0] as [number, number, number];
     
     // Process dreamTalk media
     let dreamTalkMedia: Array<{
@@ -755,14 +755,16 @@ export class GitDreamNodeService {
     // Dream nodes: relationships array stays empty here
     // They get populated bidirectionally during vault scan by inverting Dreamer relationships
 
-    // Use cached constellation position if available, otherwise random
-    const cachedPosition = store.constellationData.positions?.get(udd.uuid);
+    // Preserve existing position if node already has one assigned by applyConstellationLayout.
+    // New nodes start at origin; applyConstellationLayout assigns real positions later.
+    const existingPosition = existingData?.node.position;
+    const hasRealPosition = existingPosition && (existingPosition[0] !== 0 || existingPosition[1] !== 0 || existingPosition[2] !== 0);
 
     const node: DreamNode = {
       id: udd.uuid,
       type: udd.type,
       name: udd.title,
-      position: cachedPosition || this.calculateNewNodePosition(),
+      position: hasRealPosition ? existingPosition : [0, 0, 0],
       dreamTalkMedia,
       dreamSongContent: [],
       liminalWebConnections: relationships,
@@ -1541,10 +1543,8 @@ export class GitDreamNodeService {
       throw new Error('VaultService not initialized');
     }
 
-    // Use provided position or calculate random position
-    const nodePosition = position
-      ? position
-      : this.calculateNewNodePosition();
+    // Position defaults to origin; applyConstellationLayout assigns real positions
+    const nodePosition = position || [0, 0, 0] as [number, number, number];
 
     // Create node using existing create method without files
     const node = await this.create(title, type, undefined, nodePosition);

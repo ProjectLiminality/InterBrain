@@ -3,7 +3,7 @@ import { Html } from '@react-three/drei';
 import { dreamNodeStyles, getNodeColors } from '../dreamnode/styles/dreamNodeStyles';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
-import { semanticSearchService } from '../semantic-search/services/semantic-search-service';
+import { hybridSearchService } from '../search/services/hybrid-search-service';
 import { saveEditModeChanges, cancelEditMode } from './services/editor-service';
 import { UIService } from '../../core/services/ui-service';
 
@@ -41,7 +41,6 @@ export default function RelationshipEditor3D() {
 
   // Local UI state
   const [localQuery, setLocalQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -98,38 +97,30 @@ export default function RelationshipEditor3D() {
       globalThis.clearTimeout(debounceTimeoutRef.current);
     }
 
-    if (!newQuery.trim()) {
+    const trimmed = newQuery.trim();
+    if (trimmed.length < 2) {
       setEditModeSearchResults([]);
       return;
     }
 
-    debounceTimeoutRef.current = globalThis.setTimeout(async () => {
-      await performSearch(newQuery.trim());
-    }, 500);
+    debounceTimeoutRef.current = globalThis.setTimeout(() => {
+      performSearch(trimmed);
+    }, 150);
   };
 
-  // Perform semantic search
-  const performSearch = async (query: string) => {
+  // Perform fuzzy name search (instant, no semantic overhead)
+  const performSearch = (query: string) => {
     if (!editingNode || !query.trim()) return;
 
     try {
-      setIsSearching(true);
       setSearchError(null);
 
-      const isAvailable = await semanticSearchService.isSemanticSearchAvailable();
-      if (!isAvailable) {
-        setSearchError('Semantic search not available. Please check Ollama configuration.');
-        return;
-      }
-
-      const searchResults = await semanticSearchService.searchOppositeTypeNodes(
-        query,
-        editingNode,
-        {
-          maxResults: 35,
-          includeSnippets: false
-        }
-      );
+      const oppositeType = editingNode.type === 'dream' ? 'dreamer' : 'dream';
+      const searchResults = hybridSearchService.fuzzyNameSearch(query, {
+        maxResults: 12,
+        nodeTypes: [oppositeType],
+        excludeNodeId: editingNode.id,
+      });
 
       const resultNodes = searchResults.map(result => result.node);
       setEditModeSearchResults(resultNodes);
@@ -138,8 +129,6 @@ export default function RelationshipEditor3D() {
     } catch (error) {
       console.error('RelationshipEditor3D: Search failed:', error);
       setSearchError(error instanceof Error ? error.message : 'Search failed');
-    } finally {
-      setIsSearching(false);
     }
   };
 
@@ -269,55 +258,6 @@ export default function RelationshipEditor3D() {
             }}
           />
 
-          {/* Elegant Spinning Ring Loading Indicator - inside input pill */}
-          {isSearching && (
-            <div
-              style={{
-                position: 'absolute',
-                right: `${inputBorderRadius}px`,
-                top: '50%',
-                transform: 'translate(50%, -50%)',
-                width: `${inputHeight * 0.8}px`,
-                height: `${inputHeight * 0.8}px`,
-                pointerEvents: 'none'
-              }}
-            >
-              {/* Background circle */}
-              <div
-                style={{
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  background: 'rgba(0, 0, 0, 1.0)'
-                }}
-              />
-              {/* Spinning gradient ring */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '12.5%',
-                  left: '12.5%',
-                  width: '75%',
-                  height: '75%',
-                  borderRadius: '50%',
-                  background: `conic-gradient(from 0deg, transparent 0%, transparent 75%, ${nodeColors.border} 100%)`,
-                  mask: 'radial-gradient(circle, transparent 60%, black 65%)',
-                  WebkitMask: 'radial-gradient(circle, transparent 60%, black 65%)',
-                  animation: 'spin 1s linear infinite',
-                  opacity: 0.9
-                }}
-              />
-              <style>
-                {`
-                  @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                  }
-                `}
-              </style>
-            </div>
-          )}
 
           {/* Error message - only show errors */}
           {searchError && (

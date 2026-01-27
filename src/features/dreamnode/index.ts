@@ -42,10 +42,20 @@ export { default as DreamNode3D } from './components/DreamNode3D';
 export type { DreamNode3DRef } from './components/DreamNode3D';
 export { DreamTalkSide } from './components/DreamTalkSide';
 export { DreamSongSide } from './components/DreamSongSide';
+export { DreamTalkSprite } from './components/DreamTalkSprite';
+export { DreamTalkMesh } from './components/DreamTalkMesh';
 export { PDFPreview } from './components/PDFPreview';
 // Shared UI components for Creator and Editor
 export { DropZone, ValidationError } from './components/shared-ui';
 export { NodeActionButton } from './components/NodeActionButton';
+
+// Hooks (WebGL texture management)
+export { useContentTexture } from './hooks/useContentTexture';
+export { useMediaTexture } from './hooks/useMediaTexture';
+
+// Shaders (WebGL rendering)
+export * from './shaders/circularClipShader';
+export { RadialGradientMaterial } from './shaders/radialGradient';
 
 // Styles
 export * from './styles/dreamNodeStyles';

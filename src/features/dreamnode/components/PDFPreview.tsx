@@ -56,10 +56,40 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     onError?.(err);
   };
 
+  // State for fetched PDF data (for app:// URLs that pdfjs can't load directly)
+  const [fetchedData, setFetchedData] = useState<Uint8Array | null>(null);
+  const [fetchError, setFetchError] = useState<boolean>(false);
+
+  // Fetch PDF data for app:// URLs (Obsidian's getResourcePath format)
+  useEffect(() => {
+    if (!src) return;
+
+    // app:// URLs need to be fetched as ArrayBuffer since pdfjs can't load them directly
+    if (src.startsWith('app://')) {
+      setFetchedData(null);
+      setFetchError(false);
+
+      fetch(src)
+        .then(response => response.arrayBuffer())
+        .then(buffer => {
+          setFetchedData(new Uint8Array(buffer));
+        })
+        .catch(err => {
+          console.error('[PDFPreview] Failed to fetch PDF:', err);
+          setFetchError(true);
+        });
+    }
+  }, [src]);
+
   // Convert data URL to object for react-pdf
   // react-pdf can have issues with very long data URLs, so we convert to Uint8Array
   const fileData = useMemo(() => {
     if (!src) return null;
+
+    // If we fetched data for app:// URL, use that
+    if (src.startsWith('app://')) {
+      return fetchedData ? { data: fetchedData } : null;
+    }
 
     // If it's a data URL, extract the base64 and convert to Uint8Array
     if (src.startsWith('data:')) {
@@ -79,9 +109,9 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
       }
     }
 
-    // Otherwise return as-is (could be a URL)
+    // Otherwise return as-is (could be a regular URL)
     return src;
-  }, [src]);
+  }, [src, fetchedData]);
 
   const containerStyle: React.CSSProperties = {
     width: style?.width || width,
@@ -95,7 +125,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     ...style
   };
 
-  if (error) {
+  if (error || fetchError) {
     return (
       <div style={{
         ...containerStyle,
@@ -125,6 +155,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
   );
 
   if (!fileData) {
+    // Show loading indicator while fetching app:// URLs
+    const isFetching = src?.startsWith('app://') && !fetchedData && !fetchError;
     return (
       <div style={{
         ...containerStyle,
@@ -135,7 +167,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
       }}>
         <div>
           <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>📄</span>
-          No PDF
+          {isFetching ? 'Loading...' : 'No PDF'}
         </div>
       </div>
     );

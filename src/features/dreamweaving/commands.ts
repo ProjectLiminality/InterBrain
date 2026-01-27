@@ -825,9 +825,10 @@ export function registerDreamweavingCommands(
           const status = relationshipsChanged ? 'UPDATED' : 'unchanged';
           console.log(`[DreamSong] Scan: ${metadata.totalEdges} edges, ${metadata.totalDreamSongs} songs (${status}, ${result.stats.scanTimeMs}ms)`);
 
-          if (relationshipsChanged) {
-            store.requestNavigation({ type: 'applyLayout' });
-          }
+          // Always apply layout on scan completion to enforce constellation filter
+          // This ensures maxNodes setting takes effect on every reload
+          // The operation is idempotent so safe to run repeatedly
+          store.requestNavigation({ type: 'applyLayout' });
 
         } else {
           store.setDreamSongRelationshipScanning(false);

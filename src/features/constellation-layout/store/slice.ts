@@ -62,6 +62,8 @@ export interface ConstellationSlice {
   setDebugWireframeSphere: (visible: boolean) => void;
   debugIntersectionPoint: boolean;
   setDebugIntersectionPoint: (visible: boolean) => void;
+  debugEphemeralRing: boolean;
+  setDebugEphemeralRing: (visible: boolean) => void;
 }
 
 /**
@@ -108,6 +110,8 @@ export const createConstellationSlice: StateCreator<
   setDebugWireframeSphere: (visible) => set({ debugWireframeSphere: visible }),
   debugIntersectionPoint: false,
   setDebugIntersectionPoint: (visible) => set({ debugIntersectionPoint: visible }),
+  debugEphemeralRing: false,
+  setDebugEphemeralRing: (visible) => set({ debugEphemeralRing: visible }),
 });
 
 /**

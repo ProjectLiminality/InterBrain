@@ -31,6 +31,18 @@ export function registerConstellationDebugCommands(plugin: Plugin, uiService: UI
     }
   });
 
+  // Debug: Toggle ephemeral spawn/exit ring visualization
+  plugin.addCommand({
+    id: 'toggle-debug-ephemeral-ring',
+    name: '[Dev] Toggle Debug Ephemeral Ring',
+    callback: () => {
+      const store = useInterBrainStore.getState();
+      const newState = !store.debugEphemeralRing;
+      store.setDebugEphemeralRing(newState);
+      uiService.showSuccess(`Debug ephemeral ring ${newState ? 'enabled' : 'disabled'}`);
+    }
+  });
+
   // Apply constellation layout positioning - reads relationship data from dreamweaving slice
   plugin.addCommand({
     id: 'apply-constellation-layout',

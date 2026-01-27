@@ -292,6 +292,13 @@ export class MediaLoadingService {
 
   /**
    * Load media for a single node
+   *
+   * NOTE: DreamTalkMedia no longer needs base64 conversion - we use Obsidian's
+   * getResourcePath(absolutePath) for direct file loading. This is handled by:
+   * - useContentTexture.ts (WebGL sprite rendering)
+   * - DreamTalkSide.tsx (HTML rendering)
+   *
+   * DreamSongContent (canvas files) still needs to be loaded as text content.
    */
   private async loadNodeMedia(nodeId: string): Promise<void> {
     const store = useInterBrainStore.getState();
@@ -304,32 +311,12 @@ export class MediaLoadingService {
 
     const fs = require('fs').promises;
 
-    // Load dreamTalkMedia
-    const dreamTalkMedia: MediaFile[] = await Promise.all(
-      node.dreamTalkMedia.map(async (media) => {
-        // Skip if already loaded
-        if (media.data && media.data.length > 0) {
-          return media;
-        }
+    // DreamTalkMedia: No base64 conversion needed!
+    // absolutePath is already set during node discovery.
+    // Rendering components use getResourcePath(absolutePath) for direct file loading.
+    const dreamTalkMedia: MediaFile[] = node.dreamTalkMedia;
 
-        try {
-          // Read file and convert to base64 data URL
-          const buffer = await fs.readFile(media.absolutePath);
-          const base64 = buffer.toString('base64');
-          const dataUrl = `data:${media.type};base64,${base64}`;
-
-          return {
-            ...media,
-            data: dataUrl
-          };
-        } catch (error) {
-          console.error(`[MediaLoading] Failed to load ${media.path}:`, error);
-          return media; // Return with empty data
-        }
-      })
-    );
-
-    // Load dreamSongContent (canvas files)
+    // Load dreamSongContent (canvas files) - still needs text content
     const dreamSongContent: CanvasFile[] = await Promise.all(
       node.dreamSongContent.map(async (canvas) => {
         // Skip if already loaded

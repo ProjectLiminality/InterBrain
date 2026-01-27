@@ -552,19 +552,8 @@ export function calculateRingLayoutPositionsForSearch(
   relationshipGraph: RelationshipGraph,
   config: RingLayoutConfig = DEFAULT_RING_CONFIG
 ): RingLayoutPositions {
-  console.log('[RingLayout] Input:', {
-    orderedNodesReceived: orderedNodes.length,
-    orderedNodeIds: orderedNodes.map(n => n.id),
-    maxActiveNodes: config.maxActiveNodes
-  });
-  
   // Apply priority wrapper: Pre-sort nodes to ensure related nodes get priority positions
   const prioritySortedNodes = applyPriorityMapping(orderedNodes, relationshipGraph);
-  
-  console.log('[RingLayout] After priority mapping:', {
-    originalOrder: orderedNodes.map(n => n.id),
-    prioritySortedOrder: prioritySortedNodes.map(n => n.id)
-  });
   
   // Limit to max active nodes (36 = 6+12+18)
   const limitedNodes = prioritySortedNodes.slice(0, config.maxActiveNodes);
@@ -646,18 +635,6 @@ export function calculateRingLayoutPositionsForSearch(
   const searchNodeIds = new Set(limitedNodes.map(n => n.id));
   const allNodeIds = Array.from(relationshipGraph.nodes.keys());
   const sphereNodes = allNodeIds.filter(nodeId => !searchNodeIds.has(nodeId));
-  
-  console.log('[RingLayout] Output classification:', {
-    limitedNodesCount: limitedNodes.length,
-    ring1Count: ring1Nodes.length,
-    ring2Count: ring2Nodes.length,
-    ring3Count: ring3Nodes.length,
-    sphereNodesCount: sphereNodes.length,
-    ring1Ids: ring1Nodes.map(n => n.nodeId),
-    ring2Ids: ring2Nodes.map(n => n.nodeId),
-    ring3Ids: ring3Nodes.map(n => n.nodeId),
-    sphereNodeIds: sphereNodes
-  });
   
   return {
     centerNode,

@@ -5,6 +5,87 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-01-27 - InterBrain Scalability
+
+### Overview
+
+Removes the need for multiple vaults. InterBrain now scales to thousands of DreamNodes without performance degradation, through three complementary systems: GPU-native rendering, dynamic node loading, and progressive media streaming.
+
+### Added
+
+**WebGL-Native DreamTalk Rendering (Issue #373)**
+- GPU-native sprite-based DreamTalk rendering replacing DOM `<Html>` components
+- Radial gradient vignette shader for edge fade effect
+- WebGL texture support for images, video, and PDF previews
+- Gamma correction for accurate color reproduction
+- Black flash prevention during WebGL-to-HTML swap on flip
+- 3-4x node capacity improvement from eliminating DOM↔WebGL sync overhead
+
+**Dynamic Node Loading & Constellation Filter (Issue #344)**
+- Constellation filter service categorizing nodes into four tiers:
+  - **VIP**: Nodes connected by DreamSong edges — always mounted
+  - **Parent**: DreamSong canvas owners — always mounted
+  - **Sampled**: Random fill of remaining slots (cluster-connected preferred)
+  - **Ephemeral**: Everything else — spawned on-demand when navigated to
+- Configurable `maxNodes` setting (default 150, range 50-500) in plugin settings
+- Ephemeral node spawning with fly-in animation from fixed-radius ring (500 world units)
+- Staggered spawning: 40ms intervals between individual ephemeral node mounts, preventing main thread blocking during liminal web transitions
+- Staggered despawning: queue with 500ms initial delay + 40ms drain intervals
+- Despawn cancellation: nodes reclaimed by a new layout mid-despawn are rescued from the queue and reused without re-spawning
+- Batch store updates (`spawnEphemeralNodesBatch`) reducing N Zustand updates to 1
+- EphemeralNodeManager with `useEphemeralSpawner` and `useEphemeralGarbageCollector` hooks
+- Constellation settings section with filter stats display
+
+**Progressive Media Loading (Issue #351)**
+- Eliminated base64 encoding from media loading pipeline
+- Direct `file://` streaming via Obsidian's vault adapter
+- Removed media data from localStorage persistence, fixing storage quota errors
+- Support for `app://` URLs in PDF preview
+
+**Hybrid Search (Feature)**
+- Fuzzy name matching combined with semantic search
+- Relationship editor search switched to fuzzy name matching
+- Hybrid search service combining both approaches
+
+### Changed
+
+**Rendering Pipeline**
+- DreamNode3D: WebGL sprite for DreamTalk face, HTML only for interactive DreamSong back face
+- Media loading service: returns file paths instead of base64 data URLs
+- Star/sprite occlusion fix with strengthened vignette
+- Text wrapping parity between WebGL and HTML rendering
+
+**Animation System**
+- `easeInOutQuart` for ephemeral spawn animations (smoother feel)
+- `easeInQuart` for exit animations (accelerating departure)
+- Animated ephemeral exit during liminal-to-liminal transitions (was instant despawn)
+- Selective ephemeral cleanup: nodes that stay in a new layout are kept, only stale ones exit
+
+**Spatial Orchestrator**
+- Constellation-mounted nodes move immediately during focusOnNode (no spawn cost)
+- Ephemeral nodes stagger one-by-one with 40ms gaps
+- Deduplication of rapid focusOnNode calls to prevent ephemeral thrashing
+- Escape key routed through orchestrator for proper constellation return
+
+### Technical
+
+- 56 files changed, 4687 insertions, 580 deletions
+- 419 tests passing (up from 371), 48 new tests for ephemeral system
+- QA Guardian agent hardened: enforces test file existence and README content verification
+- Zero lint warnings, zero TypeScript errors
+- Comprehensive README updates: constellation-layout, core, features catalog
+
+### Fixed
+
+- DreamTalk media not showing in DreamSong fullscreen view
+- Constellation nodes losing positions during vault rescan
+- NaN positions for constellation nodes via `getConstellationPosition` helper
+- Search results snapping to constellation on `setActiveState(false)` timeout
+- Ephemeral spawn-in-place: reset spawn guard on re-spawn
+- Exit rotation transforms producing incorrect directions
+- Double-call race condition in ephemeral node exit animations
+- Storage quota errors from base64 media data in localStorage
+
 ## [0.12.0] - 2025-12-24 - Private Beta Release
 
 ### Added

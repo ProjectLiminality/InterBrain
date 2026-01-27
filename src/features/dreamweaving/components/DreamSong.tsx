@@ -248,27 +248,17 @@ export const DreamSong: React.FC<DreamSongProps> = ({
     if (mimeType === 'application/pdf') {
       return (
         <div
-          style={{
-            background: 'rgba(255,255,255,0.1)',
-            padding: '12px',
-            borderRadius: '8px',
-            cursor: onMediaClick ? 'pointer' : 'default'
-          }}
+          style={{ cursor: onMediaClick ? 'pointer' : 'default' }}
           onClick={onMediaClick && sourceDreamNodeId ? () => onMediaClick(sourceDreamNodeId) : undefined}
         >
-          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: '500' }}>
-            DreamTalk PDF
-          </div>
           <PDFPreview
             src={primaryMedia.data}
             width={600}
-            thumbnailMode={false}
+            thumbnailMode={true}
             style={{
-              width: '100%',
-              maxHeight: '500px',
-              overflow: 'auto',
-              borderRadius: '8px',
-              backgroundColor: 'white'
+              maxWidth: '100%',
+              height: 'auto',
+              borderRadius: '8px'
             }}
           />
         </div>
@@ -286,7 +276,7 @@ export const DreamSong: React.FC<DreamSongProps> = ({
       data-node-id={sourceDreamNodeId}
     >
       {/* DreamTalk media displayed above everything - only in non-embedded mode */}
-      {!embedded && renderDreamTalkMedia() && (
+      {!embedded && dreamTalkMedia && dreamTalkMedia.length > 0 && (
         <div className={styles.dreamTalkSection}>
           {renderDreamTalkMedia()}
         </div>
