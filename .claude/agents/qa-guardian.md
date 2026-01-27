@@ -264,7 +264,55 @@ Do NOT simply confirm READMEs "exist" and report "UP TO DATE." You must:
 - The README describes the feature's old scope but not its expanded scope
 - A developer reading the README would miss an entire subsystem
 
-### 2.5 Elegance Pass
+### 2.5 Version File Consistency
+
+**All version files must agree.** Check these files:
+
+```bash
+grep '"version"' package.json manifest.json
+grep -o '"version": "[^"]*"' CHANGELOG.md | head -1
+```
+
+**Version files in this project:**
+- `package.json` — npm package version
+- `manifest.json` — Obsidian plugin version (what users see)
+- `CHANGELOG.md` — latest `## [x.y.z]` entry
+
+**All three MUST show the same version.** If the CHANGELOG has a newer version than package.json/manifest.json, bump them to match. This has been missed in past releases.
+
+**Do NOT report "COMPLIANT" if versions disagree.**
+
+### 2.6 CHANGELOG Verification
+
+**Every merge-worthy branch MUST have a CHANGELOG entry.**
+
+```bash
+# Check if CHANGELOG.md was modified on this branch
+git diff main --name-only | grep -q 'CHANGELOG.md' && echo "CHANGELOG updated" || echo "CHANGELOG NOT updated"
+
+# If updated, verify the latest entry matches the work done
+head -30 CHANGELOG.md
+```
+
+**Rules:**
+1. If the branch adds features, fixes bugs, or makes any user-visible changes, `CHANGELOG.md` MUST have a new entry
+2. The entry MUST accurately describe what the branch accomplished — not just file names, but what changed for the user
+3. The entry version MUST match `package.json` and `manifest.json` (see Section 2.5)
+4. Group changes under standard headings: `### Added`, `### Changed`, `### Fixed`, `### Removed`
+5. Each item should be a concise, user-facing description (not developer jargon)
+
+**If CHANGELOG.md was NOT updated on this branch:**
+1. Determine the appropriate version bump (major/minor/patch based on scope)
+2. Add a new `## [x.y.z] - YYYY-MM-DD` entry at the top (below the header)
+3. Summarize all user-visible changes from the branch's commit history
+4. Bump `package.json` and `manifest.json` to match
+
+**Do NOT report "COMPLIANT" if:**
+- The branch has user-visible changes but no CHANGELOG entry
+- The CHANGELOG entry doesn't reflect the actual work done
+- The CHANGELOG version disagrees with package.json/manifest.json
+
+### 2.7 Elegance Pass
 
 **Look for quick wins to improve code quality:**
 
@@ -312,7 +360,7 @@ Confirm ZERO errors before proceeding.
 Check for misplaced files, relocate as needed.
 
 ### Step 7: Merge Preparation
-Work through test coverage, hygiene, READMEs, elegance.
+Work through test coverage, hygiene, READMEs, version files, changelog, elegance.
 
 ### Step 8: Final Verification
 ```bash
@@ -361,6 +409,11 @@ READMEs: [UP TO DATE/UPDATED - list which]
   Sections added/updated: [list specific sections, or "none needed"]
   New subsystems not yet documented: [list any, or "none"]
 Hygiene: [CLEAN/CLEANED - list removals]
+Version files: [COMPLIANT/BUMPED - list which files were updated]
+  package.json: [version]
+  manifest.json: [version]
+  CHANGELOG.md latest entry: [version]
+CHANGELOG: [UP TO DATE/ADDED ENTRY - version and summary]
 
 Changes Made
 ------------
