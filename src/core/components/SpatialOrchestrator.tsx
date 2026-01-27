@@ -269,6 +269,32 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   };
 
   /**
+   * Batch-mount multiple ephemeral nodes in a single store update.
+   * Returns the list of nodeIds that were newly spawned.
+   */
+  const ensureNodesMountedBatch = (
+    nodes: Array<{ nodeId: string; position: [number, number, number] }>
+  ): string[] => {
+    const store = useInterBrainStore.getState();
+    const toSpawn: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }> = [];
+
+    for (const { nodeId, position } of nodes) {
+      if (!store.dreamNodes.has(nodeId)) continue;
+      if (store.constellationFilter.mountedNodes.has(nodeId)) continue;
+      if (store.ephemeralNodes.has(nodeId)) continue;
+
+      const spawnPosition = calculateWorldCorrectedSpawnPosition(position);
+      toSpawn.push({ nodeId, targetPosition: position, spawnPosition });
+    }
+
+    if (toSpawn.length > 0) {
+      store.spawnEphemeralNodesBatch(toSpawn);
+    }
+
+    return toSpawn.map(n => n.nodeId);
+  };
+
+  /**
    * Move a node to a position, interrupting any current animation.
    * If the node is not mounted, it will be spawned as ephemeral first.
    * If the node was just spawned, the movement is queued until the ref is available.
@@ -526,9 +552,39 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, getEasing(positions.centerNode.nodeId));
         }
 
-        // Move ring nodes
-        allRingNodes.forEach(({ nodeId: ringNodeId, position }) => {
+        // ── Step 6b: Stagger ephemeral node spawning for smooth cascading ──
+        // Strategy: Constellation-mounted nodes (already have refs) move immediately.
+        // Ephemeral nodes (need React mount) spawn one-by-one with delays, inner ring first.
+        // This spreads component mount cost across frames for jank-free animation.
+        const EPHEMERAL_SPAWN_INTERVAL_MS = 40; // Gap between individual ephemeral spawns
+
+        // Separate mounted (instant) from ephemeral (staggered)
+        const mountedRingMoves: typeof allRingNodes = [];
+        const ephemeralRingQueue: typeof allRingNodes = [];
+
+        // Ordered: ring1 → ring2 → ring3 (inner first)
+        for (const node of allRingNodes) {
+          if (mountedNodes.has(node.nodeId)) {
+            mountedRingMoves.push(node);
+          } else {
+            ephemeralRingQueue.push(node);
+          }
+        }
+
+        // Move all constellation-mounted ring nodes immediately (no spawn cost)
+        for (const { nodeId: ringNodeId, position } of mountedRingMoves) {
           moveNode(ringNodeId, position, transitionDuration, getEasing(ringNodeId));
+        }
+
+        // Stagger ephemeral node spawns: one node per interval, inner ring first.
+        // Each spawn is a single store update (1 node) → 1 React mount per frame window.
+        ephemeralRingQueue.forEach(({ nodeId: ephNodeId, position }, index) => {
+          globalThis.setTimeout(() => {
+            // Spawn single ephemeral node
+            ensureNodeMounted(ephNodeId, position);
+            // Issue move command (will queue if ref not ready yet)
+            moveNode(ephNodeId, position, transitionDuration, getEasing(ephNodeId));
+          }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
         });
 
         // Move unrelated nodes to constellation
@@ -831,24 +887,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           relatedNodesList.current = [...relatedNodes];
           unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
         } else {
-          // Check if we're in copilot mode vs edit mode
-          const store = useInterBrainStore.getState();
-          const isInCopilotMode = store.spatialLayout === 'copilot';
-
-          if (isInCopilotMode) {
-            // COPILOT MODE: Replace entire list with new search results
-            // Copilot needs complete replacement on each search, not accumulation
-            unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
-          } else {
-            // EDIT MODE: Keep existing stable list management for relationship editing
-            // Subsequent call (new search results) - merge new unrelated nodes with existing lists
-            // Keep existing related nodes, but update unrelated list with new search results
-            const existingUnrelatedIds = new Set(unrelatedSearchResultsList.current.map(n => n.id));
-            const newUnrelatedNodes = unrelatedSearchNodes.filter(node => !existingUnrelatedIds.has(node.id));
-
-            // Add new unrelated nodes to the list
-            unrelatedSearchResultsList.current.push(...newUnrelatedNodes);
-          }
+          // Subsequent search — replace with fresh results
+          // Relationship toggle stability is handled by relatedNodesList, not here
+          unrelatedSearchResultsList.current = [...unrelatedSearchNodes];
         }
         
         // Check if we're in copilot mode with show/hide functionality

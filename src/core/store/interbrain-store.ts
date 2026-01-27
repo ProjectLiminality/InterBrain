@@ -252,6 +252,7 @@ export interface CoreSlice {
   // Ephemeral nodes - dynamically spawned nodes not in the constellation
   ephemeralNodes: Map<string, EphemeralNodeState>;
   spawnEphemeralNode: (nodeId: string, targetPosition: [number, number, number], spawnPosition: [number, number, number]) => void;
+  spawnEphemeralNodesBatch: (nodes: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }>) => void;
   despawnEphemeralNode: (nodeId: string) => void;
   clearEphemeralNodes: () => void;
 }
@@ -402,6 +403,20 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
       targetPosition,
       mountedAt: Date.now(),
     });
+    return { ephemeralNodes: newMap };
+  }),
+
+  spawnEphemeralNodesBatch: (nodes) => set((state: InterBrainState) => {
+    const newMap = new Map(state.ephemeralNodes);
+    for (const { nodeId, targetPosition, spawnPosition } of nodes) {
+      if (!newMap.has(nodeId)) {
+        newMap.set(nodeId, {
+          spawnPosition,
+          targetPosition,
+          mountedAt: Date.now(),
+        });
+      }
+    }
     return { ephemeralNodes: newMap };
   }),
 
