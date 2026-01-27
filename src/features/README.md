@@ -146,7 +146,7 @@ export { registerDreamNodeCommands } from './commands';
 | [dreamnode-creator](./dreamnode-creator/README.md) | Creation workflow UI (builds on dreamnode) | Medium |
 | [dreamnode-editor](./dreamnode-editor/README.md) | Editing workflow UI (builds on dreamnode) | Medium |
 | **Layout & Navigation** | | |
-| [constellation-layout](./constellation-layout/README.md) | Fibonacci sphere distribution of all nodes | Medium |
+| [constellation-layout](./constellation-layout/README.md) | Fibonacci sphere layout + node filtering for scalability (ephemeral loading) | High |
 | [liminal-web-layout](./liminal-web-layout/README.md) | Focused node with related nodes in rings | Medium |
 | [songline](./songline/README.md) | Songline navigation feature | Low |
 | **Content & Canvas** | | |

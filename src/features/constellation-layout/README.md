@@ -1,6 +1,6 @@
 # Constellation Layout Feature
 
-**Purpose**: Arranges DreamNodes on a 3D sphere surface using relationship-based clustering and force-directed algorithms, providing a "night sky" visualization with Apple Watch-style distance scaling and Google Earth-style rotation controls.
+**Purpose**: Arranges DreamNodes on a 3D sphere surface using relationship-based clustering and force-directed algorithms, providing a "night sky" visualization with Apple Watch-style distance scaling and Google Earth-style rotation controls. Includes a **node filtering system** that caps the number of rendered nodes, enabling InterBrain to scale to thousands of DreamNodes without performance degradation.
 
 ## Directory Structure
 
@@ -14,13 +14,16 @@ constellation-layout/
 │   ├── Edge3D.tsx                # Spherical arc (great circle) between two nodes
 │   ├── Star3D.tsx                # Pure visual star for night sky occlusion
 │   └── SphereRotationControls.tsx # Virtual trackball with quaternion math and momentum
+├── services/
+│   └── constellation-filter-service.ts  # Node filtering: categorizes VIP/parent/sampled/ephemeral
 ├── utils/
 │   ├── Clustering.ts             # Connected components detection (DFS)
 │   ├── ClusterRefinement.ts      # Spring-mass simulation for overlap elimination
 │   ├── ForceDirected.ts          # Fruchterman-Reingold algorithm
 │   ├── SphericalProjection.ts    # Exponential map: 2D tangent → 3D sphere
 │   ├── FibonacciSphereLayout.ts  # Golden ratio sphere distribution
-│   └── DynamicViewScaling.ts     # Apple Watch-style distance scaling
+│   ├── DynamicViewScaling.ts     # Apple Watch-style distance scaling
+│   └── EphemeralSpawning.ts      # Spawn/exit position math for ephemeral nodes
 ├── docs/
 │   ├── constellation-layout.md          # Algorithm documentation
 │   ├── full-constellation-system.html   # Interactive full system demo
@@ -71,10 +74,72 @@ export { exponentialMap, fibonacciSphere, geodesicDistance } from './utils/Spher
 export { calculateFibonacciSpherePositions, DEFAULT_FIBONACCI_CONFIG } from './utils/FibonacciSphereLayout';
 export { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from './utils/DynamicViewScaling';
 
+// Node Filtering
+export { computeConstellationFilter, isNodeMounted, getNodeCategory } from './services/constellation-filter-service';
+
+// Ephemeral Spawning
+export { calculateSpawnPosition, calculateExitPosition, calculateRandomSpawnPosition } from './utils/EphemeralSpawning';
+export { EPHEMERAL_SPAWN_RADIUS, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from './utils/EphemeralSpawning';
+
 // Config & Types
 export type { ConstellationLayoutConfig, ConstellationCluster, LayoutStatistics } from './LayoutConfig';
 export type { DreamSongRelationshipGraph, DreamSongNode, DreamSongEdge } from './types';
 ```
+
+## Node Filtering & Dynamic Loading
+
+The constellation supports vaults with thousands of DreamNodes by **limiting how many are mounted at startup** and **spawning the rest on-demand** as the user navigates.
+
+### How It Works
+
+At startup, `computeConstellationFilter()` categorizes every node in the vault into one of four tiers:
+
+| Category | Criteria | Mounted at startup? |
+|----------|----------|---------------------|
+| **VIP** | Nodes connected by DreamSong edges (source + target) | Always |
+| **Parent** | DreamNodes whose DreamSong.canvas defines an edge | Always |
+| **Sampled** | Random sample to fill remaining slots (cluster-connected preferred) | Yes |
+| **Ephemeral** | Everything else | No — spawned on-demand |
+
+The **`maxNodes`** setting (default: 150, range: 50-500) caps total mounted nodes. VIP and parent nodes are always mounted regardless of the cap. Remaining slots are filled by random sampling, with nodes that have some connection (incoming references or outgoing DreamSongs) preferred over fully disconnected nodes.
+
+### Ephemeral Node Lifecycle
+
+When a user selects a node and enters the liminal web, relationships may reference nodes that weren't mounted at startup (ephemeral nodes). These are spawned dynamically:
+
+```
+User selects node → focusOnNode() → SpatialOrchestrator
+  ↓
+  Constellation-mounted nodes: move immediately (already have React refs)
+  ↓
+  Ephemeral nodes: stagger one-by-one with 40ms gaps
+    → spawnEphemeralNode() adds to Zustand store
+    → React mounts DreamNode3D component
+    → Node animates in from fixed-radius spawn ring (500 world units)
+  ↓
+  User navigates away → exit animations play
+    → Completed exits queue for staggered despawn (500ms initial delay, 40ms intervals)
+    → If node is reclaimed by a new layout mid-despawn, cancel the despawn
+```
+
+This staggering prevents main thread blocking: instead of 30 simultaneous React mounts/unmounts (50-120ms jank), work is spread across frames (~16ms each).
+
+### Configuration
+
+Settings are in the plugin settings panel under "Constellation View":
+
+- **Maximum Mounted Nodes**: How many nodes render at startup (default: 150)
+- **Prioritize Clusters**: When sampling, prefer nodes with relationship connections (default: on)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `services/constellation-filter-service.ts` | `computeConstellationFilter()` — categorization algorithm |
+| `utils/EphemeralSpawning.ts` | Spawn/exit position math (polar angle from camera to target) |
+| `settings-section.ts` | Settings UI for maxNodes and cluster priority |
+| `core/services/ephemeral-despawn-queue.ts` | Staggered unmount queue (lives in core, shared infrastructure) |
+| `core/components/EphemeralNodeManager.tsx` | React hooks for spawning/garbage-collecting ephemeral nodes |
 
 ## Algorithm Pipeline
 
@@ -122,6 +187,7 @@ Apple Watch-style scaling zones:
 | `SphericalProjection.ts` | Exponential/log maps | 2D ↔ 3D sphere projection |
 | `FibonacciSphereLayout.ts` | Golden ratio spiral | Even point distribution |
 | `DynamicViewScaling.ts` | Perspective correction | Distance-based sizing |
+| `EphemeralSpawning.ts` | Polar angle projection | Spawn/exit position calculation |
 
 ## Integration Points
 
@@ -134,17 +200,23 @@ Apple Watch-style scaling zones:
 
 - **Spherical geometry**: Uses exponential/logarithmic maps (differential geometry)
 - **Quaternion rotation**: No gimbal lock, smooth rotation at all orientations
-- **36-node capacity**: Works seamlessly with liminal-web layout
+- **Scalable node limit**: Configurable maxNodes (default 150) with dynamic ephemeral loading
 - **Persistent state**: Positions cached in constellation slice, relationships in dreamweaving slice
 - **Intelligent diff**: Layout recomputes when dreamweaving relationship graph changes
 - **Performance**: Nodes at `radius: 5000` for proper night sky scale
 
 ## Test Coverage
 
-All utility algorithms have comprehensive unit tests:
+Layout algorithms:
 - `Clustering.test.ts` - Connected components, cluster colors
 - `ClusterRefinement.test.ts` - Overlap detection, refinement
 - `ForceDirected.test.ts` - Layout convergence, positioning
 - `SphericalProjection.test.ts` - Exp/log maps, geodesic distance
 - `FibonacciSphereLayout.test.ts` - Golden ratio distribution
 - `DynamicViewScaling.test.ts` - Perspective-corrected scaling
+
+Node filtering and ephemeral system:
+- `constellation-filter-service.test.ts` - Node categorization (VIP/parent/sampled/ephemeral), maxNodes enforcement, edge cases
+- `EphemeralSpawning.test.ts` - Spawn/exit position math, center node handling, radius consistency
+- `ephemeral-despawn-queue.test.ts` (in core) - Queue timing, cancellation, flush behavior
+- `interbrain-store.test.ts` (in core) - Store ephemeral actions: spawn, batch spawn, despawn, clear
