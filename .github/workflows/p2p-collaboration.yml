@@ -244,7 +244,7 @@ jobs:
         run: |
           # Run actual service tests if they exist
           if [ -f "scripts/ci/test-p2p-collaboration.ts" ]; then
-            npx ts-node scripts/ci/test-p2p-collaboration.ts
+            npx tsx scripts/ci/test-p2p-collaboration.ts
           else
             echo "TODO: Create scripts/ci/test-p2p-collaboration.ts"
             echo ""
