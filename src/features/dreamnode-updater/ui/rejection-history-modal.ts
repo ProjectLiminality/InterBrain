@@ -7,8 +7,6 @@
  * - Filter by peer
  */
 
-/* eslint-disable no-undef */
-
 import { App, Modal, Setting } from 'obsidian';
 import {
   RejectedCommit,

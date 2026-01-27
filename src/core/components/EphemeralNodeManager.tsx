@@ -145,7 +145,6 @@ export function useEphemeralGarbageCollector() {
 export function EphemeralNodeManager({ onSpawnNode, onDespawnNode }: EphemeralNodeManagerProps) {
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   const ephemeralNodes = useInterBrainStore(state => state.ephemeralNodes);
-  const clearEphemeralNodes = useInterBrainStore(state => state.clearEphemeralNodes);
   const prevLayoutRef = useRef(spatialLayout);
 
   // Track layout changes (no longer auto-clears - let animations complete first)

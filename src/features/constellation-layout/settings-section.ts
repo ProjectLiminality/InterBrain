@@ -63,7 +63,7 @@ export function createConstellationSettingsSection(
 				// Sync to Zustand store
 				useInterBrainStore.getState().setConstellationConfig({ maxNodes: 150 });
 				// Refresh the input field
-				const inputEl = containerEl.querySelector('input[type="number"]') as HTMLInputElement;
+				const inputEl = containerEl.querySelector('input[type="number"]') as HTMLInputElement | null;
 				if (inputEl) {
 					inputEl.value = '150';
 				}

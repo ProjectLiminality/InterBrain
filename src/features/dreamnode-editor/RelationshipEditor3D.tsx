@@ -41,7 +41,6 @@ export default function RelationshipEditor3D() {
 
   // Local UI state
   const [localQuery, setLocalQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -259,55 +258,6 @@ export default function RelationshipEditor3D() {
             }}
           />
 
-          {/* Elegant Spinning Ring Loading Indicator - inside input pill */}
-          {isSearching && (
-            <div
-              style={{
-                position: 'absolute',
-                right: `${inputBorderRadius}px`,
-                top: '50%',
-                transform: 'translate(50%, -50%)',
-                width: `${inputHeight * 0.8}px`,
-                height: `${inputHeight * 0.8}px`,
-                pointerEvents: 'none'
-              }}
-            >
-              {/* Background circle */}
-              <div
-                style={{
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  background: 'rgba(0, 0, 0, 1.0)'
-                }}
-              />
-              {/* Spinning gradient ring */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '12.5%',
-                  left: '12.5%',
-                  width: '75%',
-                  height: '75%',
-                  borderRadius: '50%',
-                  background: `conic-gradient(from 0deg, transparent 0%, transparent 75%, ${nodeColors.border} 100%)`,
-                  mask: 'radial-gradient(circle, transparent 60%, black 65%)',
-                  WebkitMask: 'radial-gradient(circle, transparent 60%, black 65%)',
-                  animation: 'spin 1s linear infinite',
-                  opacity: 0.9
-                }}
-              />
-              <style>
-                {`
-                  @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                  }
-                `}
-              </style>
-            </div>
-          )}
 
           {/* Error message - only show errors */}
           {searchError && (

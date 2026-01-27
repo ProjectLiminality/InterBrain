@@ -35,7 +35,7 @@ export function calculateSpawnPosition(
     return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
 
-  const [x, y, _z] = targetPosition;
+  const [x, y] = targetPosition;
 
   // Calculate polar angle in the XY plane (direction from camera to target)
   const theta = Math.atan2(y, x);
@@ -68,7 +68,7 @@ export function calculateExitPosition(
     return [0, EPHEMERAL_SPAWN_RADIUS, 0];
   }
 
-  const [x, y, _z] = currentPosition;
+  const [x, y] = currentPosition;
 
   // Calculate polar angle in the XY plane (direction from camera to node)
   const theta = Math.atan2(y, x);

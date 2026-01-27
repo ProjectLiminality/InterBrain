@@ -275,31 +275,31 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
    * Batch-mount multiple ephemeral nodes in a single store update.
    * Returns the list of nodeIds that were newly spawned.
    */
-  const ensureNodesMountedBatch = (
-    nodes: Array<{ nodeId: string; position: [number, number, number] }>
-  ): string[] => {
-    const store = useInterBrainStore.getState();
-    const toSpawn: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }> = [];
-
-    for (const { nodeId, position } of nodes) {
-      if (!store.dreamNodes.has(nodeId)) continue;
-      if (store.constellationFilter.mountedNodes.has(nodeId)) continue;
-      if (store.ephemeralNodes.has(nodeId)) {
-        // Already ephemeral — cancel any pending despawn so it stays alive
-        cancelEphemeralDespawn(nodeId);
-        continue;
-      }
-
-      const spawnPosition = calculateWorldCorrectedSpawnPosition(position);
-      toSpawn.push({ nodeId, targetPosition: position, spawnPosition });
-    }
-
-    if (toSpawn.length > 0) {
-      store.spawnEphemeralNodesBatch(toSpawn);
-    }
-
-    return toSpawn.map(n => n.nodeId);
-  };
+  // const ensureNodesMountedBatch = (
+  //   nodes: Array<{ nodeId: string; position: [number, number, number] }>
+  // ): string[] => {
+  //   const store = useInterBrainStore.getState();
+  //   const toSpawn: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }> = [];
+  //
+  //   for (const { nodeId, position } of nodes) {
+  //     if (!store.dreamNodes.has(nodeId)) continue;
+  //     if (store.constellationFilter.mountedNodes.has(nodeId)) continue;
+  //     if (store.ephemeralNodes.has(nodeId)) {
+  //       // Already ephemeral — cancel any pending despawn so it stays alive
+  //       cancelEphemeralDespawn(nodeId);
+  //       continue;
+  //     }
+  //
+  //     const spawnPosition = calculateWorldCorrectedSpawnPosition(position);
+  //     toSpawn.push({ nodeId, targetPosition: position, spawnPosition });
+  //   }
+  //
+  //   if (toSpawn.length > 0) {
+  //     store.spawnEphemeralNodesBatch(toSpawn);
+  //   }
+  //
+  //   return toSpawn.map(n => n.nodeId);
+  // };
 
   /**
    * Move a node to a position, interrupting any current animation.
@@ -315,7 +315,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   ) => {
     const isMounted = useInterBrainStore.getState().constellationFilter.mountedNodes.has(nodeId);
     const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
-    const hasRef = !!nodeRefs.current.get(nodeId)?.current;
 
     // Ensure node is mounted (spawn as ephemeral if needed)
     if (!ensureNodeMounted(nodeId, position)) {
@@ -397,16 +396,16 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
    * Active nodes (center/rings) use ease-in (accelerate out),
    * inactive nodes (sphere) use ease-out (decelerate in).
    */
-  const getEasingForRole = (nodeId: string): string => {
-    const { centerNodeId, ring1NodeIds, ring2NodeIds, ring3NodeIds, sphereNodeIds } = liminalWebRoles.current;
-
-    if (nodeId === centerNodeId || ring1NodeIds.has(nodeId) || ring2NodeIds.has(nodeId) || ring3NodeIds.has(nodeId)) {
-      return 'easeInQuart';
-    } else if (sphereNodeIds.has(nodeId)) {
-      return 'easeOutQuart';
-    }
-    return 'easeOutCubic';
-  };
+  // const getEasingForRole = (nodeId: string): string => {
+  //   const { centerNodeId, ring1NodeIds, ring2NodeIds, ring3NodeIds, sphereNodeIds } = liminalWebRoles.current;
+  //
+  //   if (nodeId === centerNodeId || ring1NodeIds.has(nodeId) || ring2NodeIds.has(nodeId) || ring3NodeIds.has(nodeId)) {
+  //     return 'easeInQuart';
+  //   } else if (sphereNodeIds.has(nodeId)) {
+  //     return 'easeOutQuart';
+  //   }
+  //   return 'easeOutCubic';
+  // };
 
   /**
    * Clear liminal web role tracking.
@@ -455,7 +454,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           ...(liminalWebRoles.current?.ring2NodeIds || []),
           ...(liminalWebRoles.current?.ring3NodeIds || []),
         ]);
-        const previousEphemeralIds = new Set(useInterBrainStore.getState().ephemeralNodes.keys());
         const wasInLiminalWeb = (id: string) => id === previousCenterId || previousRingNodeIds.has(id);
 
         // ── Step 2: Compute new layout ──
@@ -541,7 +539,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
 
         // ── Step 5: Categorize and log ──
-        const storeSnapshot = useInterBrainStore.getState();
         const ephemeralRingNodes = allRingNodes.filter(n => !mountedNodes.has(n.nodeId));
         const mountedRingNodes = allRingNodes.filter(n => mountedNodes.has(n.nodeId));
         console.log(`[FOCUS] Ring nodes: ${allRingNodes.length} total, ${mountedRingNodes.length} mounted, ${ephemeralRingNodes.length} ephemeral, sphere=${positions.sphereNodes?.length || 0}`);
@@ -689,8 +686,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       setSpatialLayout('constellation');
 
       const worldRotation = dreamWorldRef.current?.quaternion.clone();
-
-      const store = useInterBrainStore.getState();
 
       // Capture roles BEFORE clearing them so we can use correct easing
       const rolesSnapshot = {
