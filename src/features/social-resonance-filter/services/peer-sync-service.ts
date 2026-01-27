@@ -437,7 +437,7 @@ export class PeerSyncService {
     const seedingTriggered = seedingResults.filter(Boolean).length;
 
     if (seedingTriggered > 0) {
-      console.log(`🌐 [PeerSync] Triggered background seeding for ${seedingTriggered} Dream node(s) related to Dreamers`);
+      // Verbose peer sync logging disabled — enable RADICLE_VERBOSE in radicle-service.ts to see details
     }
 
     // Build summary

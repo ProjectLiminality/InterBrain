@@ -300,6 +300,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
         return;
       }
+      console.warn(`[MOVE] ${nodeId.slice(0,8)}: constellation node has NO REF, skipping move (isMounted=${isMounted}, isEphemeral=${isEphemeral})`);
       return;
     }
 
@@ -1149,6 +1150,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
     applyConstellationLayout: async () => {
       const store = useInterBrainStore.getState();
+      const currentLayout = store.spatialLayout;
+      const searchActive = store.searchInterface.isActive;
+      console.log(`[LAYOUT] applyConstellationLayout called — spatialLayout=${currentLayout}, searchActive=${searchActive}`);
+
       // Read relationship graph from dreamweaving slice (source of truth for DreamSong relationships)
       const relationshipGraph = store.dreamSongRelationships.graph;
 
@@ -1168,6 +1173,26 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           maxNodes,
           prioritizeClusters
         );
+        // Diagnostic: check if any currently active ring nodes will be affected
+        const activeRingNodeIds = [
+          ...liminalWebRoles.current.ring1NodeIds,
+          ...liminalWebRoles.current.ring2NodeIds,
+          ...liminalWebRoles.current.ring3NodeIds,
+        ];
+        if (activeRingNodeIds.length > 0) {
+          const ringNodesDropped = activeRingNodeIds.filter(id => !constellationFilter.mountedNodes.has(id));
+          const ringNodesKept = activeRingNodeIds.filter(id => constellationFilter.mountedNodes.has(id));
+          console.log(`[LAYOUT] ⚠️ Ring nodes vs new filter: ${ringNodesKept.length} kept, ${ringNodesDropped.length} dropped`);
+          if (ringNodesDropped.length > 0) {
+            const nodesMap = store.dreamNodes;
+            ringNodesDropped.forEach(id => {
+              const name = nodesMap.get(id)?.node?.name || '???';
+              const isEphemeral = store.ephemeralNodes.has(id);
+              console.log(`[LAYOUT]   DROPPED from ring: ${name} (${id.slice(0,8)}), ephemeral=${isEphemeral}`);
+            });
+          }
+        }
+
         store.setConstellationFilter(constellationFilter);
 
         // Step 2: Filter dreamNodes to only mounted nodes for position calculation
@@ -1214,6 +1239,21 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // setConstellationPositions replaces the entire positions map (only 50 entries),
         // so future plugin loads won't have stale ephemeral positions.
         store.setConstellationPositions(mountedPositions);
+
+        // Diagnostic: warn if batchUpdateNodePositions will overwrite active ring node positions
+        if (activeRingNodeIds.length > 0) {
+          const ringNodesGettingNewPositions = activeRingNodeIds.filter(id => mountedPositions.has(id));
+          if (ringNodesGettingNewPositions.length > 0) {
+            const nodesMap = store.dreamNodes;
+            console.log(`[LAYOUT] ⚠️ batchUpdateNodePositions will overwrite ${ringNodesGettingNewPositions.length} active ring node anchor positions:`);
+            ringNodesGettingNewPositions.forEach(id => {
+              const name = nodesMap.get(id)?.node?.name || '???';
+              const newPos = mountedPositions.get(id);
+              console.log(`[LAYOUT]   ${name} (${id.slice(0,8)}): new anchor=${newPos ? `[${newPos.map((n: number)=>n.toFixed(0))}]` : 'none'}`);
+            });
+          }
+        }
+
         store.batchUpdateNodePositions(mountedPositions);
 
         console.log(`[LAYOUT] Assigned ${mountedPositions.size} positions for ${mountedDreamNodes.length} mounted nodes`);

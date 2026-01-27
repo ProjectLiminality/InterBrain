@@ -755,16 +755,16 @@ export class GitDreamNodeService {
     // Dream nodes: relationships array stays empty here
     // They get populated bidirectionally during vault scan by inverting Dreamer relationships
 
-    // Nodes start at origin. applyConstellationLayout assigns real positions
-    // only to mounted nodes after the constellation filter is computed.
-    // Cached positions in constellationData.positions are used by the layout
-    // algorithm for positional consistency, not baked into nodes at creation.
+    // Preserve existing position if node already has one assigned by applyConstellationLayout.
+    // New nodes start at origin; applyConstellationLayout assigns real positions later.
+    const existingPosition = existingData?.node.position;
+    const hasRealPosition = existingPosition && (existingPosition[0] !== 0 || existingPosition[1] !== 0 || existingPosition[2] !== 0);
 
     const node: DreamNode = {
       id: udd.uuid,
       type: udd.type,
       name: udd.title,
-      position: [0, 0, 0],
+      position: hasRealPosition ? existingPosition : [0, 0, 0],
       dreamTalkMedia,
       dreamSongContent: [],
       liminalWebConnections: relationships,

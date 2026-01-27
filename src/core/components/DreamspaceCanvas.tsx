@@ -74,21 +74,33 @@ export default function DreamspaceCanvas() {
 
   // Get nodes from store - filter based on constellation filter and ephemeral nodes
   // If filter has mounted nodes, use it; otherwise show all (pre-filter state)
+  const prevMountedCountRef = React.useRef(0);
   const dreamNodes: DreamNode[] = React.useMemo(() => {
     const allNodes = Array.from(dreamNodesMap.values());
 
     // If constellation filter is not initialized (empty mountedNodes), show all nodes
     if (constellationFilter.mountedNodes.size === 0) {
-      return allNodes.map(data => data.node);
+      const result = allNodes.map(data => data.node);
+      prevMountedCountRef.current = result.length;
+      return result;
     }
 
     // Filter to only mounted nodes (constellation) + ephemeral nodes
-    return allNodes
+    const result = allNodes
       .filter(data =>
         constellationFilter.mountedNodes.has(data.node.id) ||
         ephemeralNodesMap.has(data.node.id)
       )
       .map(data => data.node);
+
+    // Diagnostic: detect significant changes in mounted node count
+    const currentLayout = useInterBrainStore.getState().spatialLayout;
+    if (prevMountedCountRef.current > 0 && result.length !== prevMountedCountRef.current) {
+      console.log(`[CANVAS] dreamNodes recomputed: ${prevMountedCountRef.current} → ${result.length} (mounted=${constellationFilter.mountedNodes.size}, ephemeral=${ephemeralNodesMap.size}, layout=${currentLayout})`);
+    }
+    prevMountedCountRef.current = result.length;
+
+    return result;
   }, [dreamNodesMap, constellationFilter.mountedNodes, ephemeralNodesMap]);
 
   // Track which nodes are ephemeral for rendering differences
