@@ -23,8 +23,8 @@ class HybridSearchService {
     return this.fuseIndex;
   }
 
-  /** Fuzzy search on node names */
-  private fuzzyNameSearch(query: string, options: SearchOptions = {}): SearchResult[] {
+  /** Fuzzy search on node names — instant, synchronous */
+  fuzzyNameSearch(query: string, options: SearchOptions = {}): SearchResult[] {
     const fuse = this.ensureIndex();
     const store = useInterBrainStore.getState();
     const results = fuse.search(query);

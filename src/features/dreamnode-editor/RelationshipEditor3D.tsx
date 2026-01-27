@@ -98,32 +98,30 @@ export default function RelationshipEditor3D() {
       globalThis.clearTimeout(debounceTimeoutRef.current);
     }
 
-    if (!newQuery.trim()) {
+    const trimmed = newQuery.trim();
+    if (trimmed.length < 2) {
       setEditModeSearchResults([]);
       return;
     }
 
-    debounceTimeoutRef.current = globalThis.setTimeout(async () => {
-      await performSearch(newQuery.trim());
-    }, 500);
+    debounceTimeoutRef.current = globalThis.setTimeout(() => {
+      performSearch(trimmed);
+    }, 150);
   };
 
-  // Perform semantic search
-  const performSearch = async (query: string) => {
+  // Perform fuzzy name search (instant, no semantic overhead)
+  const performSearch = (query: string) => {
     if (!editingNode || !query.trim()) return;
 
     try {
-      setIsSearching(true);
       setSearchError(null);
 
-      const searchResults = await hybridSearchService.searchOppositeType(
-        query,
-        editingNode,
-        {
-          maxResults: 35,
-          includeSnippets: false
-        }
-      );
+      const oppositeType = editingNode.type === 'dream' ? 'dreamer' : 'dream';
+      const searchResults = hybridSearchService.fuzzyNameSearch(query, {
+        maxResults: 12,
+        nodeTypes: [oppositeType],
+        excludeNodeId: editingNode.id,
+      });
 
       const resultNodes = searchResults.map(result => result.node);
       setEditModeSearchResults(resultNodes);
@@ -132,8 +130,6 @@ export default function RelationshipEditor3D() {
     } catch (error) {
       console.error('RelationshipEditor3D: Search failed:', error);
       setSearchError(error instanceof Error ? error.message : 'Search failed');
-    } finally {
-      setIsSearching(false);
     }
   };
 
