@@ -27,6 +27,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { CONSTELLATION_DEFAULTS } from '../../features/constellation-layout/constants';
 // Feature slice imports
 import {
   DreamweavingSlice,
@@ -133,7 +134,7 @@ export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'limin
  * Configuration for constellation filtering - controls how many nodes load at startup
  */
 export interface ConstellationConfig {
-  /** Maximum nodes to mount in constellation view (e.g., 75) */
+  /** Maximum nodes to mount in constellation view */
   maxNodes: number;
   /** Whether to prioritize larger clusters when selecting nodes */
   prioritizeClusters: boolean;
@@ -308,8 +309,8 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
 
   // Constellation filtering defaults
   constellationConfig: {
-    maxNodes: 75,
-    prioritizeClusters: true,
+    maxNodes: CONSTELLATION_DEFAULTS.MAX_NODES,
+    prioritizeClusters: CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS,
   },
 
   constellationFilter: {

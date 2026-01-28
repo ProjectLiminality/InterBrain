@@ -9,6 +9,7 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './featu
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/components/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
+import { CONSTELLATION_DEFAULTS } from './features/constellation-layout/constants';
 import { calculateFibonacciSpherePositions } from './features/constellation-layout';
 import {
   DreamNode,
@@ -1361,8 +1362,8 @@ export default class InterBrainPlugin extends Plugin {
     // Sync constellation settings to Zustand store
     // This ensures persisted values are reflected in runtime state
     useInterBrainStore.getState().setConstellationConfig({
-      maxNodes: this.settings.constellationMaxNodes ?? 75,
-      prioritizeClusters: this.settings.constellationPrioritizeClusters ?? true
+      maxNodes: this.settings.constellationMaxNodes ?? CONSTELLATION_DEFAULTS.MAX_NODES,
+      prioritizeClusters: this.settings.constellationPrioritizeClusters ?? CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS
     });
   }
 
