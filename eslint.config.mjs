@@ -37,7 +37,10 @@ export default [
         MutationObserver: 'readonly',
         MutationRecord: 'readonly',
         performance: 'readonly',
-        require: 'readonly'
+        require: 'readonly',
+        indexedDB: 'readonly',
+        IDBDatabase: 'readonly',
+        IDBOpenDBRequest: 'readonly'
       }
     },
     plugins: {
