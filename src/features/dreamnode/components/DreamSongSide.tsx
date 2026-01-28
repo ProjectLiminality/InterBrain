@@ -143,11 +143,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     cycleCarousel(dreamNode.id, 'right', totalItems);
   }, [dreamNode.id, cycleCarousel, totalItems]);
 
-  // Determine current view title
-  const currentViewTitle = isHolarchyView
-    ? 'Holarchy'
-    : currentCanvasFile?.displayTitle || 'DreamSong';
-
   // Should show carousel buttons (only if there are multiple items)
   const shouldShowCarouselButtons = totalItems > 1;
 
@@ -172,24 +167,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      {/* View title indicator at top */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '12px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          fontSize: '11px',
-          color: dreamNodeStyles.colors.text.secondary,
-          opacity: 0.7,
-          zIndex: 50,
-          whiteSpace: 'nowrap',
-          pointerEvents: 'none'
-        }}
-      >
-        {currentViewTitle}
-      </div>
-
       {/* Circular mask container */}
       <div
         style={{

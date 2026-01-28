@@ -7,13 +7,14 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DreamNode, MediaFile } from '../types/dreamnode';
+import { DreamNode } from '../types/dreamnode';
 import { VaultService } from '../../../core/services/vault-service';
 import { UDDService } from '../services/udd-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { useOrchestrator } from '../../../core/context/orchestrator-context';
 import { packCirclesInParent } from '../utils/circle-packing';
-import { dreamNodeStyles, getNodeColors, getMediaContainerStyle } from '../styles/dreamNodeStyles';
+import { dreamNodeStyles, getNodeColors, getMediaContainerStyle, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
+import { MediaRenderer } from './MediaRenderer';
 
 interface HolonViewProps {
   dreamNode: DreamNode;
@@ -32,6 +33,7 @@ interface SubmoduleCircleProps {
 
 /**
  * Individual submodule circle component
+ * Uses shared MediaRenderer for identical styling to DreamTalkSide
  */
 const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
   submoduleNode,
@@ -46,7 +48,14 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
 
   // Get media from submodule
   const media = submoduleNode.dreamTalkMedia[0];
-  const hasMedia = media?.data && media.data.length > 0;
+  const hasMedia = media && (media.absolutePath || (media.data && media.data.length > 0));
+
+  // Visual radius is 90% of packed radius to create spacing between circles
+  const visualRadius = radius * 0.9;
+
+  // Calculate border width proportional to visual radius (same ratio as main nodes)
+  // Main nodes: 25px border on 240px node = ~10.4%, but cap it for small circles
+  const borderWidth = Math.max(2, Math.min(8, Math.round(visualRadius * 0.08)));
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -56,7 +65,6 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
   // Calculate styles for zoom animation
   const getTransformStyle = (): React.CSSProperties => {
     if (isZooming && isZoomTarget) {
-      // Zooming circle scales up and moves to center
       return {
         transform: `translate(${position.x}px, ${position.y}px) scale(4)`,
         zIndex: 999,
@@ -64,13 +72,11 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
       };
     }
     if (isZooming && !isZoomTarget) {
-      // Other circles fade out during zoom
       return {
         transform: `translate(${position.x}px, ${position.y}px) scale(1)`,
         opacity: 0
       };
     }
-    // Normal state
     return {
       transform: `translate(${position.x}px, ${position.y}px) scale(1)`,
       opacity: 1
@@ -81,41 +87,69 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
     <div
       style={{
         position: 'absolute',
-        width: radius * 2,
-        height: radius * 2,
+        width: visualRadius * 2,
+        height: visualRadius * 2,
         left: '50%',
         top: '50%',
-        marginLeft: -radius,
-        marginTop: -radius,
-        borderRadius: '50%',
-        border: `2px solid ${nodeColors.border}`,
+        marginLeft: -visualRadius,
+        marginTop: -visualRadius,
+        borderRadius: dreamNodeStyles.dimensions.borderRadius,
+        border: `${borderWidth}px solid ${nodeColors.border}`,
         background: nodeColors.fill,
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: isZooming ? 'all 0.8s ease-in-out' : 'all 0.2s ease',
+        transition: isZooming ? 'all 0.8s ease-in-out' : dreamNodeStyles.transitions.default,
+        contain: 'layout style paint',
+        contentVisibility: 'auto',
         ...getTransformStyle()
       }}
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Media content */}
+      {/* Media content - using shared MediaRenderer for identical styling */}
       {hasMedia ? (
         <div style={getMediaContainerStyle()}>
-          <img
-            src={media.data}
-            alt={submoduleNode.name}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              borderRadius: '50%'
-            }}
-            draggable={false}
-          />
+          <MediaRenderer media={media} />
+          {/* Fade-to-black overlay - same as DreamTalkSide */}
+          <div style={getMediaOverlayStyle()} />
+
+          {/* Hover overlay with name */}
+          {isHovered && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                borderRadius: dreamNodeStyles.dimensions.borderRadius,
+                background: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 1,
+                transition: 'opacity 0.2s ease-in-out',
+                pointerEvents: 'none',
+                zIndex: 10
+              }}
+            >
+              <div
+                style={{
+                  color: dreamNodeStyles.colors.text.primary,
+                  fontFamily: dreamNodeStyles.typography.fontFamily,
+                  fontSize: Math.max(8, visualRadius * 0.15),
+                  textAlign: 'center',
+                  padding: '8px'
+                }}
+              >
+                {submoduleNode.name}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        // Empty state - show name
+        // Empty state - show name (matching DreamTalkSide empty state)
         <div
           style={{
             width: '100%',
@@ -124,43 +158,13 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             color: dreamNodeStyles.colors.text.primary,
-            fontSize: Math.max(8, radius * 0.3),
+            fontFamily: dreamNodeStyles.typography.fontFamily,
+            fontSize: Math.max(8, visualRadius * 0.15),
             textAlign: 'center',
-            padding: '4px'
+            padding: '8px'
           }}
         >
           {submoduleNode.name}
-        </div>
-      )}
-
-      {/* Hover overlay with name */}
-      {isHovered && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            borderRadius: '50%',
-            background: 'rgba(0, 0, 0, 0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            pointerEvents: 'none',
-            zIndex: 10
-          }}
-        >
-          <div
-            style={{
-              color: dreamNodeStyles.colors.text.primary,
-              fontSize: Math.max(8, radius * 0.25),
-              textAlign: 'center',
-              padding: '4px'
-            }}
-          >
-            {submoduleNode.name}
-          </div>
         </div>
       )}
     </div>
@@ -235,18 +239,24 @@ export const HolonView: React.FC<HolonViewProps> = ({
   }, [orchestrator, dreamNode.id, supermoduleIds, isLoading]);
 
   // Resolve submodule IDs to DreamNode objects
+  // Priority: radicleId (canonical) > UUID (legacy) > name (last resort)
   const submoduleNodes = useMemo(() => {
     return submoduleIds
       .map(id => {
-        // First try to find by UUID/ID
+        // First try to find by radicleId (canonical schema)
+        for (const data of dreamNodesMap.values()) {
+          if (data.node.radicleId === id) {
+            return data.node;
+          }
+        }
+
+        // Fallback: try to find by UUID/ID (legacy data)
         const byId = dreamNodesMap.get(id);
         if (byId) return byId.node;
 
-        // Then try to find by radicleId
-        for (const [_, data] of dreamNodesMap) {
-          // Check if this node's UDD has a matching radicleId
-          // For now, just match by name as a fallback
-          if (data.node.id === id || data.node.name === id) {
+        // Last resort: try to find by name
+        for (const data of dreamNodesMap.values()) {
+          if (data.node.name === id) {
             return data.node;
           }
         }
@@ -256,7 +266,7 @@ export const HolonView: React.FC<HolonViewProps> = ({
   }, [submoduleIds, dreamNodesMap]);
 
   // Calculate circle positions
-  const parentRadius = nodeSize / 2 * 0.85; // Leave some margin
+  const parentRadius = nodeSize / 2 * 0.95; // Use most of the node area for submodules
   const circlePositions = useMemo(() => {
     return packCirclesInParent(submoduleNodes.length, parentRadius, 0.15);
   }, [submoduleNodes.length, parentRadius]);
