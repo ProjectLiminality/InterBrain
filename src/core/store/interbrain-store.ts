@@ -133,7 +133,7 @@ export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'limin
  * Configuration for constellation filtering - controls how many nodes load at startup
  */
 export interface ConstellationConfig {
-  /** Maximum nodes to mount in constellation view (e.g., 150) */
+  /** Maximum nodes to mount in constellation view (e.g., 75) */
   maxNodes: number;
   /** Whether to prioritize larger clusters when selecting nodes */
   prioritizeClusters: boolean;
@@ -308,7 +308,7 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
 
   // Constellation filtering defaults
   constellationConfig: {
-    maxNodes: 150,
+    maxNodes: 75,
     prioritizeClusters: true,
   },
 

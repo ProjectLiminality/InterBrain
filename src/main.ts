@@ -1361,7 +1361,7 @@ export default class InterBrainPlugin extends Plugin {
     // Sync constellation settings to Zustand store
     // This ensures persisted values are reflected in runtime state
     useInterBrainStore.getState().setConstellationConfig({
-      maxNodes: this.settings.constellationMaxNodes ?? 150,
+      maxNodes: this.settings.constellationMaxNodes ?? 75,
       prioritizeClusters: this.settings.constellationPrioritizeClusters ?? true
     });
   }

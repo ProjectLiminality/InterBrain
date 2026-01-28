@@ -26,7 +26,7 @@ export function createConstellationSettingsSection(
 	});
 
 	// Get current values from plugin settings (persisted)
-	const maxNodes = plugin.settings.constellationMaxNodes ?? 150;
+	const maxNodes = plugin.settings.constellationMaxNodes ?? 75;
 	const prioritizeClusters = plugin.settings.constellationPrioritizeClusters ?? true;
 
 	// Max Nodes setting - integer input field
@@ -39,7 +39,7 @@ export function createConstellationSettingsSection(
 			text.inputEl.max = '500';
 			text.inputEl.style.width = '80px';
 			text.setValue(maxNodes.toString());
-			text.setPlaceholder('150');
+			text.setPlaceholder('75');
 			text.onChange(async (value) => {
 				const numValue = parseInt(value, 10);
 				if (!isNaN(numValue)) {
@@ -55,17 +55,17 @@ export function createConstellationSettingsSection(
 		})
 		.addExtraButton(button => button
 			.setIcon('reset')
-			.setTooltip('Reset to default (150)')
+			.setTooltip('Reset to default (75)')
 			.onClick(async () => {
 				// Persist to plugin settings
-				plugin.settings.constellationMaxNodes = 150;
+				plugin.settings.constellationMaxNodes = 75;
 				await plugin.saveSettings();
 				// Sync to Zustand store
-				useInterBrainStore.getState().setConstellationConfig({ maxNodes: 150 });
+				useInterBrainStore.getState().setConstellationConfig({ maxNodes: 75 });
 				// Refresh the input field
 				const inputEl = containerEl.querySelector('input[type="number"]') as HTMLInputElement | null;
 				if (inputEl) {
-					inputEl.value = '150';
+					inputEl.value = '75';
 				}
 			}));
 

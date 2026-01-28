@@ -60,7 +60,7 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	webLinkAnalyzerEnabled: false,  // Requires manual setup (needs API key)
 	webLinkAnalyzerSetupComplete: false,
 	// Constellation view defaults
-	constellationMaxNodes: 150,  // Good balance of performance and visibility
+	constellationMaxNodes: 75,  // Good balance of performance and visibility
 	constellationPrioritizeClusters: true  // Keep constellations intact
 };
 
