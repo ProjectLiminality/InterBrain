@@ -28,6 +28,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { CONSTELLATION_DEFAULTS } from '../../features/constellation-layout/constants';
+import { indexedDBStorage } from './indexeddb-storage';
 // Feature slice imports
 import {
   DreamweavingSlice,
@@ -456,7 +457,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage',
-      storage: createJSONStorage(() => indexedDB),
+      storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
         ...extractDreamNodePersistenceData(state),
         ...extractSearchPersistenceData(state),
