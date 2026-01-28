@@ -26,7 +26,7 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 // Feature slice imports
 import {
   DreamweavingSlice,
@@ -455,6 +455,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage',
+      storage: createJSONStorage(() => indexedDB),
       partialize: (state) => ({
         ...extractDreamNodePersistenceData(state),
         ...extractSearchPersistenceData(state),
