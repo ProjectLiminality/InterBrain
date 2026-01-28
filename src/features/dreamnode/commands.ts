@@ -112,6 +112,70 @@ export function registerDreamNodeCommands(
   });
 
   // ========================================
+  // Carousel Navigation Commands (Back Side)
+  // ========================================
+
+  // Cycle DreamSong Carousel Left - Navigate to previous view (holarchy/DreamSongs)
+  plugin.addCommand({
+    id: 'cycle-dreamsong-left',
+    name: 'Cycle DreamSong View Left',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'ArrowLeft' }],
+    checkCallback: (checking: boolean) => {
+      const store = useInterBrainStore.getState();
+      const { selectedNode, spatialLayout, flipState } = store;
+
+      // Only available in liminal web mode with a flipped node
+      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
+      const canCycle = spatialLayout === 'liminal-web' &&
+                      selectedNode !== null &&
+                      currentFlipState?.isFlipped === true &&
+                      !currentFlipState?.isFlipping;
+
+      if (checking) {
+        return canCycle;
+      }
+
+      if (canCycle && selectedNode) {
+        // Note: totalItems is determined by the component, so we use a large number here
+        // The cycleCarousel function handles wrapping correctly
+        // A better approach would be to store totalItems in the store, but for now this works
+        store.cycleCarousel(selectedNode.id, 'left', 100);
+      }
+
+      return true;
+    }
+  });
+
+  // Cycle DreamSong Carousel Right - Navigate to next view (holarchy/DreamSongs)
+  plugin.addCommand({
+    id: 'cycle-dreamsong-right',
+    name: 'Cycle DreamSong View Right',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'ArrowRight' }],
+    checkCallback: (checking: boolean) => {
+      const store = useInterBrainStore.getState();
+      const { selectedNode, spatialLayout, flipState } = store;
+
+      // Only available in liminal web mode with a flipped node
+      const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
+      const canCycle = spatialLayout === 'liminal-web' &&
+                      selectedNode !== null &&
+                      currentFlipState?.isFlipped === true &&
+                      !currentFlipState?.isFlipping;
+
+      if (checking) {
+        return canCycle;
+      }
+
+      if (canCycle && selectedNode) {
+        // Note: totalItems is determined by the component, so we use a large number here
+        store.cycleCarousel(selectedNode.id, 'right', 100);
+      }
+
+      return true;
+    }
+  });
+
+  // ========================================
   // Full-Screen Commands
   // ========================================
 

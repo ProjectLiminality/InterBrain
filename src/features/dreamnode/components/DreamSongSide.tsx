@@ -1,27 +1,27 @@
 import React, { useCallback, useMemo } from 'react';
 import { DreamNode } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
-import { DreamSong } from '../../dreamweaving/components/DreamSong'; // Use pure DreamSong for 3D back side (embedded context)
+import { DreamSong } from '../../dreamweaving/components/DreamSong';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { useDreamSongData } from '../../dreamweaving/hooks/useDreamSongData';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { NodeActionButton } from './NodeActionButton';
+import { useCanvasFiles } from '../hooks/useCanvasFiles';
+import { HolonView } from './HolonView';
 
 interface DreamSongSideProps {
   dreamNode: DreamNode;
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
-  isRelationshipEditMode?: boolean; // In relationship-edit layout (hover shows glow preview)
-  isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
+  isRelationshipEditMode?: boolean;
+  isTutorialHighlighted?: boolean;
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
-  glowIntensity?: number; // Distance-scaled glow intensity
-  // dreamSongData and isLoadingDreamSong removed - handled by hook
-  // isVisible removed - relying on CSS backface-visibility for optimization
+  glowIntensity?: number;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: (e: React.MouseEvent) => void;
@@ -29,6 +29,13 @@ interface DreamSongSideProps {
   onFlipClick: (e: React.MouseEvent) => void;
   onFullScreenClick?: (e: React.MouseEvent) => void;
 }
+
+/**
+ * Carousel view types:
+ * - Index 0: Holarchy view (submodules)
+ * - Index 1+: Individual .canvas files (DreamSongs)
+ */
+const HOLARCHY_VIEW_INDEX = 0;
 
 export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   dreamNode,
@@ -39,11 +46,9 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
-  nodeSize: _nodeSize,
+  nodeSize,
   borderWidth,
   glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
-  // dreamSongData and isLoadingDreamSong removed - using hook
-  // isVisible parameter removed for simplicity
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -68,33 +73,54 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     return service;
   }, []);
 
+  // Scan for all canvas files in the DreamNode
+  const { canvasFiles, isLoading: isLoadingCanvasFiles } = useCanvasFiles(
+    dreamNode.repoPath,
+    vaultService
+  );
 
-  // Use the new hook for DreamSong data (with dreamNode for Songline feature detection)
-  const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+  // Total carousel items: 1 (holarchy view) + canvas files count
+  const totalItems = 1 + canvasFiles.length;
+
+  // Get carousel state from store
+  const carouselIndex = useInterBrainStore(state => state.getCarouselIndex(dreamNode.id));
+  const cycleCarousel = useInterBrainStore(state => state.cycleCarousel);
+
+  // Determine if currently showing holarchy view or a canvas
+  const isHolarchyView = carouselIndex === HOLARCHY_VIEW_INDEX;
+
+  // Get current canvas file if showing a DreamSong
+  const currentCanvasFile = !isHolarchyView && canvasFiles.length > 0
+    ? canvasFiles[carouselIndex - 1] // -1 because index 0 is holarchy
+    : null;
+
+  // Determine canvas path for the hook
+  const canvasPath = currentCanvasFile
+    ? currentCanvasFile.path
+    : `${dreamNode.repoPath}/DreamSong.canvas`; // Fallback for hook, won't be used if holarchy view
+
+  // Use DreamSong data hook (only used when showing a canvas)
   const { blocks, isLoading: isLoadingDreamSong, error } = useDreamSongData(
     canvasPath,
     dreamNode.repoPath,
     { canvasParser, vaultService, dreamNode },
     dreamNode.id
   );
+
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Glow conditions (no general hover glow - only specific contexts):
-  // 1. isPendingRelationship - already marked as pending relationship
-  // 2. isTutorialHighlighted - explicitly highlighted by tutorial system
-  // 3. Hover in relationship-edit mode - preview that clicking would add relationship
+  // Glow conditions
   const shouldShowGlow = isPendingRelationship || isTutorialHighlighted || (isHovered && isRelationshipEditMode);
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
   const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
 
-  // Convert dreamNodes Map to array (same pattern as DreamspaceCanvas)
+  // Convert dreamNodes Map to array
   const dreamNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
 
   // Handler for media click navigation
   const handleMediaClick = useCallback((sourceDreamNodeId: string) => {
-    // Find the DreamNode by ID or name
     const targetNode = dreamNodes?.find(node =>
       node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
     );
@@ -105,6 +131,25 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
       console.warn(`DreamSongSide: No matching DreamNode found for "${sourceDreamNodeId}"`);
     }
   }, [dreamNodes, setSelectedNode]);
+
+  // Carousel navigation handlers
+  const handleCarouselLeft = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    cycleCarousel(dreamNode.id, 'left', totalItems);
+  }, [dreamNode.id, cycleCarousel, totalItems]);
+
+  const handleCarouselRight = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    cycleCarousel(dreamNode.id, 'right', totalItems);
+  }, [dreamNode.id, cycleCarousel, totalItems]);
+
+  // Determine current view title
+  const currentViewTitle = isHolarchyView
+    ? 'Holarchy'
+    : currentCanvasFile?.displayTitle || 'DreamSong';
+
+  // Should show carousel buttons (only if there are multiple items)
+  const shouldShowCarouselButtons = totalItems > 1;
 
   return (
     <div
@@ -119,7 +164,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         cursor: 'pointer !important',
         transition: dreamNodeStyles.transitions.default,
         boxShadow: shouldShowGlow ? getGoldenGlow(glowIntensity) : 'none',
-        // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
       }}
@@ -128,6 +172,24 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
+      {/* View title indicator at top */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontSize: '11px',
+          color: dreamNodeStyles.colors.text.secondary,
+          opacity: 0.7,
+          zIndex: 50,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none'
+        }}
+      >
+        {currentViewTitle}
+      </div>
+
       {/* Circular mask container */}
       <div
         style={{
@@ -145,11 +207,17 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             width: '100%',
             height: '100%',
             overflow: 'auto',
-            pointerEvents: 'auto' // Enable scrolling interaction
+            pointerEvents: 'auto'
           }}
         >
-          {/* Always render DreamSong - it handles empty states internally */}
-          {isLoadingDreamSong ? (
+          {isHolarchyView ? (
+            // Holarchy view - submodule circles
+            <HolonView
+              dreamNode={dreamNode}
+              nodeSize={nodeSize}
+              vaultService={vaultService}
+            />
+          ) : isLoadingDreamSong || isLoadingCanvasFiles ? (
             <div
               style={{
                 width: '100%',
@@ -161,7 +229,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 pointerEvents: 'auto'
               }}
             >
-              Loading DreamSong...
+              Loading...
             </div>
           ) : error ? (
             <div
@@ -206,7 +274,27 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         <div style={getMediaOverlayStyle()} />
       </div>
 
-      {/* Full-screen button (top-center, on back side) */}
+      {/* Carousel navigation buttons (left/right) */}
+      {shouldShowCarouselButtons && (
+        <>
+          <NodeActionButton
+            icon="lucide-chevron-left"
+            position="left"
+            onClick={handleCarouselLeft}
+            size={64}
+            iconSize={28}
+          />
+          <NodeActionButton
+            icon="lucide-chevron-right"
+            position="right"
+            onClick={handleCarouselRight}
+            size={64}
+            iconSize={28}
+          />
+        </>
+      )}
+
+      {/* Full-screen button (top-center) */}
       {shouldShowFullscreenButton && onFullScreenClick && (
         <NodeActionButton
           icon="lucide-maximize"
@@ -215,7 +303,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         />
       )}
 
-      {/* Flip button (bottom-center, on back side) */}
+      {/* Flip button (bottom-center) */}
       {shouldShowFlipButton && (
         <NodeActionButton
           icon="lucide-rotate-3d"

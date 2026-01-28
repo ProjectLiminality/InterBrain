@@ -35,6 +35,15 @@ export interface FlipAnimationState {
   flipStates: Map<string, FlipState>;
 }
 
+/**
+ * Carousel state for DreamSong side (multiple .canvas files + holarchy view)
+ * Index 0: Holarchy view (submodules)
+ * Index 1+: Actual .canvas files
+ */
+export interface CarouselState {
+  carouselIndices: Map<string, number>; // nodeId -> current carousel index
+}
+
 // ============================================================================
 // DREAMNODE SLICE INTERFACE
 // ============================================================================
@@ -64,6 +73,12 @@ export interface DreamNodeSlice {
   completeFlipAnimation: (nodeId: string) => void;
   resetAllFlips: () => void;
   getNodeFlipState: (nodeId: string) => FlipState | null;
+
+  // Carousel state for DreamSong side (holarchy view + multiple .canvas files)
+  carouselState: CarouselState;
+  getCarouselIndex: (nodeId: string) => number;
+  setCarouselIndex: (nodeId: string, index: number) => void;
+  cycleCarousel: (nodeId: string, direction: 'left' | 'right', totalItems: number) => void;
 }
 
 // ============================================================================
@@ -250,4 +265,45 @@ export const createDreamNodeSlice: StateCreator<
   getNodeFlipState: (nodeId) => {
     return get().flipState.flipStates.get(nodeId) || null;
   },
+
+  // Carousel state for DreamSong side (holarchy view + .canvas files)
+  carouselState: {
+    carouselIndices: new Map<string, number>()
+  },
+
+  getCarouselIndex: (nodeId) => {
+    return get().carouselState.carouselIndices.get(nodeId) || 0;
+  },
+
+  setCarouselIndex: (nodeId, index) => set((state) => {
+    const newIndices = new Map(state.carouselState.carouselIndices);
+    newIndices.set(nodeId, index);
+    return {
+      carouselState: {
+        carouselIndices: newIndices
+      }
+    };
+  }),
+
+  cycleCarousel: (nodeId, direction, totalItems) => set((state) => {
+    if (totalItems <= 0) return state;
+
+    const currentIndex = state.carouselState.carouselIndices.get(nodeId) || 0;
+    let newIndex: number;
+
+    if (direction === 'right') {
+      newIndex = (currentIndex + 1) % totalItems;
+    } else {
+      newIndex = (currentIndex - 1 + totalItems) % totalItems;
+    }
+
+    const newIndices = new Map(state.carouselState.carouselIndices);
+    newIndices.set(nodeId, newIndex);
+
+    return {
+      carouselState: {
+        carouselIndices: newIndices
+      }
+    };
+  }),
 });

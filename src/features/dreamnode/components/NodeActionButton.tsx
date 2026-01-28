@@ -13,8 +13,8 @@ interface NodeActionButtonProps {
   icon: string;
   /** Click handler */
   onClick: (e: React.MouseEvent) => void;
-  /** Button position: 'top' or 'bottom' */
-  position: 'top' | 'bottom';
+  /** Button position: 'top', 'bottom', 'left', or 'right' */
+  position: 'top' | 'bottom' | 'left' | 'right';
   /** Optional size in pixels (default: 84) */
   size?: number;
   /** Optional icon size in pixels (default: 36) */
@@ -31,13 +31,25 @@ export const NodeActionButton: React.FC<NodeActionButtonProps> = ({
   size = 84,
   iconSize = 36
 }) => {
+  // Calculate position styles based on position prop
+  const getPositionStyles = (): React.CSSProperties => {
+    switch (position) {
+      case 'top':
+        return { top: '8px', left: '50%', transform: 'translateX(-50%)' };
+      case 'bottom':
+        return { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
+      case 'left':
+        return { top: '50%', left: '8px', transform: 'translateY(-50%)' };
+      case 'right':
+        return { top: '50%', right: '8px', transform: 'translateY(-50%)' };
+    }
+  };
+
   return (
     <div
       style={{
         position: 'absolute',
-        [position]: '8px',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        ...getPositionStyles(),
         width: `${size}px`,
         height: `${size}px`,
         cursor: 'pointer',

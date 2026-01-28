@@ -25,43 +25,43 @@ import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephem
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
   focusOnNode: (nodeId: string) => void;
-  
+
   /** Focus on a specific node with smooth fly-in animation for newly created node */
   focusOnNodeWithFlyIn: (nodeId: string, newNodeId: string) => void;
-  
+
   /** Return all nodes to constellation layout */
   returnToConstellation: () => void;
-  
+
   /** Focus on a specific node with mid-flight interruption support */
   interruptAndFocusOnNode: (nodeId: string) => void;
-  
+
   /** Return all nodes to constellation with mid-flight interruption support */
   interruptAndReturnToConstellation: () => void;
-  
+
   /** Get current focused node ID */
   getFocusedNodeId: () => string | null;
-  
+
   /** Check if currently in focused mode (any node is focused) */
   isFocusedMode: () => boolean;
-  
+
   /** Show search results in honeycomb layout */
   showSearchResults: (searchResults: DreamNode[]) => void;
-  
+
   /** Move all nodes to sphere surface for search interface mode (like liminal web) */
   moveAllToSphereForSearch: () => void;
-  
+
   /** Special transition for edit mode save - center node doesn't move */
   animateToLiminalWebFromEdit: (nodeId: string) => void;
-  
+
   /** Show search results for edit mode - keep center node in place */
   showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => void;
-  
+
   /** Reorder edit mode search results based on current pending relationships */
   reorderEditModeSearchResults: () => void;
-  
+
   /** Clear stale edit mode data when exiting edit mode */
   clearEditModeData: () => void;
-  
+
   /** Register a DreamNode3D ref for orchestration */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
 
@@ -82,6 +82,12 @@ export interface SpatialOrchestratorRef {
 
   /** Get a node's current rendered position (from DreamNode3D ref) */
   getNodeCurrentPosition: (nodeId: string) => [number, number, number] | null;
+
+  /** Show supermodules in rings around the center node (holarchy navigation) */
+  showSupermodulesInRings: (centerNodeId: string, supermoduleIds: string[]) => void;
+
+  /** Restore related dreamers in rings (after exiting holarchy view) */
+  showDreamersInRings: (centerNodeId: string) => void;
 }
 
 interface SpatialOrchestratorProps {
@@ -1327,6 +1333,142 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         return null;
       }
       return nodeRef.current.getCurrentPosition();
+    },
+
+    showSupermodulesInRings: (centerNodeId: string, supermoduleIds: string[]) => {
+      try {
+        console.log(`[SpatialOrchestrator] Showing supermodules in rings for ${centerNodeId}`, supermoduleIds);
+
+        if (supermoduleIds.length === 0) {
+          console.log('[SpatialOrchestrator] No supermodules to display');
+          return;
+        }
+
+        // Find DreamNodes matching supermodule IDs
+        const supermoduleNodes = supermoduleIds
+          .map(id => {
+            // First try exact ID match
+            const byId = dreamNodes.find(n => n.id === id);
+            if (byId) return byId;
+
+            // Try radicleId match (from UDD)
+            // For now, just match by name as fallback
+            return dreamNodes.find(n => n.name === id);
+          })
+          .filter((node): node is DreamNode => node !== undefined);
+
+        if (supermoduleNodes.length === 0) {
+          console.log('[SpatialOrchestrator] No matching DreamNodes found for supermodule IDs');
+          return;
+        }
+
+        // Build relationship graph and calculate positions
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const orderedNodes = supermoduleNodes.map(node => ({
+          id: node.id,
+          name: node.name,
+          type: node.type
+        }));
+
+        // Use search layout to position supermodules in rings
+        const positions = calculateRingLayoutPositionsForSearch(
+          orderedNodes,
+          relationshipGraph,
+          DEFAULT_RING_CONFIG
+        );
+
+        // Apply world rotation correction
+        if (dreamWorldRef.current) {
+          const sphereRotation = dreamWorldRef.current.quaternion.clone();
+          const inverseRotation = sphereRotation.invert();
+
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+            const originalPos = new Vector3(...node.position);
+            originalPos.applyQuaternion(inverseRotation);
+            node.position = [originalPos.x, originalPos.y, originalPos.z];
+          });
+        }
+
+        // Update liminal web roles with supermodule IDs
+        liminalWebRoles.current = {
+          centerNodeId: centerNodeId,
+          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
+          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
+          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
+          sphereNodeIds: new Set(positions.sphereNodes)
+        };
+
+        isTransitioning.current = true;
+
+        // Move supermodule nodes to ring positions
+        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
+          moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
+        });
+
+        // Move all other nodes (except center) to constellation
+        positions.sphereNodes.forEach(sphereNodeId => {
+          if (sphereNodeId !== centerNodeId) {
+            returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+          }
+        });
+
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration);
+
+        console.log(`[SpatialOrchestrator] Supermodule layout complete - showing ${supermoduleNodes.length} supermodules`);
+
+      } catch (error) {
+        console.error('[SpatialOrchestrator] Error showing supermodules:', error);
+        isTransitioning.current = false;
+      }
+    },
+
+    showDreamersInRings: (centerNodeId: string) => {
+      try {
+        console.log(`[SpatialOrchestrator] Restoring dreamers in rings for ${centerNodeId}`);
+
+        // Rebuild the normal liminal web layout with social relationships (dreamers)
+        const relationshipGraph = buildRelationshipGraph(dreamNodes);
+        const positions = calculateRingLayoutPositions(centerNodeId, relationshipGraph, DEFAULT_RING_CONFIG);
+
+        if (!positions?.ring1Nodes || !positions?.ring2Nodes || !positions?.ring3Nodes) {
+          throw new Error('Failed to calculate ring layout positions');
+        }
+
+        // Update liminal web roles
+        liminalWebRoles.current = {
+          centerNodeId: positions.centerNode?.nodeId || null,
+          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
+          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
+          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
+          sphereNodeIds: new Set(positions.sphereNodes || [])
+        };
+
+        applyWorldRotationCorrection(positions);
+
+        isTransitioning.current = true;
+
+        // Move ring nodes to their positions
+        [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
+          moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
+        });
+
+        // Move unrelated nodes to constellation
+        positions.sphereNodes.forEach(sphereNodeId => {
+          returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+        });
+
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, transitionDuration);
+
+        console.log('[SpatialOrchestrator] Dreamer layout restored');
+
+      } catch (error) {
+        console.error('[SpatialOrchestrator] Error restoring dreamers:', error);
+        isTransitioning.current = false;
+      }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 
