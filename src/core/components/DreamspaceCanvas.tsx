@@ -453,11 +453,28 @@ export default function DreamspaceCanvas() {
       console.log('Clicking search result - exiting search mode cleanly');
       store.setSearchActive(false); // This clears search query and results
     }
-    
+
+    // Check if we're in holarchy navigation mode (current node is flipped to back)
+    // If so, clicking another node should also flip it to maintain holarchy view
+    const currentFlippedNodeId = store.flipState.flippedNodeId;
+    const currentFlipState = currentFlippedNodeId
+      ? store.flipState.flipStates.get(currentFlippedNodeId)
+      : null;
+    const isInHolarchyMode = currentFlipState?.isFlipped === true && !currentFlipState?.isFlipping;
+
     store.setSelectedNode(node);
     // Trigger focused layout via SpatialOrchestrator
     if (spatialOrchestratorRef.current) {
       spatialOrchestratorRef.current.focusOnNode(node.id);
+    }
+
+    // If we were in holarchy mode, flip the newly selected node to stay in holarchy view
+    if (isInHolarchyMode && node.id !== currentFlippedNodeId) {
+      console.log('[DreamSpace] Holarchy mode: flipping newly selected node to back');
+      // Small delay to let the selection and focus animation start first
+      setTimeout(() => {
+        store.startFlipAnimation(node.id, 'front-to-back');
+      }, 100);
     }
   };
 
