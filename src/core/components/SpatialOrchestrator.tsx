@@ -1488,6 +1488,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   // Subscribe to flip state changes to swap between dreamers and supermodules
   // When a node flips to back side, show its supermodules in the rings
   // When a node flips to front side, restore the dreamers (liminal web relationships)
+  //
+  // IMPORTANT: In holarchy navigation mode, we DON'T restore dreamers when switching
+  // from one flipped node to another. We only restore dreamers when:
+  // 1. Manually flipping a node back to front (same node, flip direction change)
+  // 2. Deselecting a flipped node without selecting another
   useEffect(() => {
     // Track the previous flip state to detect transitions
     let previousFlippedNodeId: string | null = null;
@@ -1611,8 +1616,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
 
       // Detect transition to front side (was back, now front or unflipped)
-      if (previousFlippedNodeId && previousIsFlipped &&
-          (!currentIsFlipped || currentFlippedNodeId !== previousFlippedNodeId)) {
+      // ONLY restore dreamers when the SAME node flips from back to front.
+      // If we switched to a different node, don't restore - let the new node's flip state drive layout.
+      const sameNodeFlippedToFront = previousFlippedNodeId &&
+                                       previousIsFlipped &&
+                                       currentFlippedNodeId === previousFlippedNodeId &&
+                                       !currentIsFlipped;
+      if (sameNodeFlippedToFront) {
         console.log(`[SpatialOrchestrator] Flip to front detected, restoring dreamers for ${previousFlippedNodeId}`);
 
         // Restore the normal liminal web layout with social relationships (dreamers)
