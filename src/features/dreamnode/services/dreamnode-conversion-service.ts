@@ -11,6 +11,7 @@
 
 import { TFolder, TAbstractFile, App, PluginManifest } from 'obsidian';
 import { UDDService } from './udd-service';
+import { UDDFile } from '../types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
 
 const path = require('path');
@@ -136,12 +137,22 @@ export class DreamNodeConversionService {
       await this.commitIfNeeded(folderPath, title);
 
       // Initialize Radicle if not already initialized
+      // Check both .rad directory AND if UDD already has a radicleId
       if (!options.skipRadicle) {
         const hasRadicle = fs.existsSync(path.join(folderPath, '.rad'));
-        if (!hasRadicle) {
+        const udd = await UDDService.readUDD(folderPath);
+        const hasRadicleId = !!udd.radicleId;
+
+        if (!hasRadicle && !hasRadicleId) {
           await this.initializeRadicle(folderPath, folderName, type, options.radiclePassphrase);
+        } else if (hasRadicleId) {
+          console.log('[ConvertToDreamNode] Already has Radicle ID:', udd.radicleId);
         }
       }
+
+      // Sync holarchy relationships (submodules <-> supermodules)
+      // This handles existing git submodules and populates .udd arrays with radicleIds
+      await this.syncHolarchyRelationships(folderPath, options);
 
       // Refresh the vault to pick up the new DreamNode
       console.log('[ConvertToDreamNode] Rescanning vault...');
@@ -314,8 +325,25 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
     }
 
     // Initialize LFS in the repository
-    await execAsync('git lfs install --local', { cwd: folderPath });
-    console.log('[ConvertToDreamNode] Git LFS initialized');
+    // Use --skip-smudge to avoid hook conflicts with DreamNode template hooks
+    // The LFS filter config is what matters, not the hooks
+    try {
+      await execAsync('git lfs install --local --skip-smudge', { cwd: folderPath });
+      console.log('[ConvertToDreamNode] Git LFS initialized');
+    } catch (lfsError: any) {
+      // If hooks conflict, try without hooks (just set up filters)
+      if (lfsError.message?.includes('Hook already exists')) {
+        console.log('[ConvertToDreamNode] LFS hooks conflict with DreamNode hooks, configuring filters only...');
+        // Manually configure LFS filter without hooks
+        await execAsync('git config --local filter.lfs.clean "git-lfs clean -- %f"', { cwd: folderPath });
+        await execAsync('git config --local filter.lfs.smudge "git-lfs smudge -- %f"', { cwd: folderPath });
+        await execAsync('git config --local filter.lfs.process "git-lfs filter-process"', { cwd: folderPath });
+        await execAsync('git config --local filter.lfs.required true', { cwd: folderPath });
+        console.log('[ConvertToDreamNode] Git LFS filters configured manually');
+      } else {
+        throw lfsError;
+      }
+    }
 
     // Track all media extensions
     for (const ext of LFS_EXTENSIONS) {
@@ -460,6 +488,406 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
       }
     } catch (radError) {
       console.warn('[ConvertToDreamNode] Radicle init failed (continuing anyway):', radError);
+    }
+  }
+
+  /**
+   * Sync holarchy relationships for a DreamNode
+   *
+   * This method:
+   * 1. Parses .gitmodules to find existing git submodules
+   * 2. For each submodule, ensures it has a radicleId (recursively converts if needed)
+   * 3. Populates the parent's .udd submodules array with child radicleIds
+   * 4. Populates each child's .udd supermodules array with parent's radicleId
+   *
+   * This is idempotent - safe to run multiple times.
+   */
+  private async syncHolarchyRelationships(
+    folderPath: string,
+    options: ConversionOptions = {}
+  ): Promise<void> {
+    console.log('[ConvertToDreamNode] Syncing holarchy relationships...');
+
+    const gitmodulesPath = path.join(folderPath, '.gitmodules');
+
+    // Check if .gitmodules exists
+    if (!fs.existsSync(gitmodulesPath)) {
+      console.log('[ConvertToDreamNode] No .gitmodules file - no submodules to sync');
+      return;
+    }
+
+    try {
+      // Get parent's radicleId
+      const parentUDD = await UDDService.readUDD(folderPath);
+      const parentRadicleId = parentUDD.radicleId;
+      const parentTitle = parentUDD.title;
+
+      if (!parentRadicleId) {
+        console.warn('[ConvertToDreamNode] Parent has no radicleId - skipping holarchy sync');
+        return;
+      }
+
+      console.log(`[ConvertToDreamNode] Parent radicleId: ${parentRadicleId}`);
+
+      // Parse .gitmodules to get submodule paths
+      const gitmodulesContent = fs.readFileSync(gitmodulesPath, 'utf-8');
+      const submodules = this.parseGitmodules(gitmodulesContent);
+
+      console.log(`[ConvertToDreamNode] Found ${submodules.length} git submodules:`,
+        submodules.map(s => s.name));
+
+      let parentModified = false;
+
+      for (const submodule of submodules) {
+        const submodulePath = path.join(folderPath, submodule.path);
+
+        // Check if submodule directory exists and has .git
+        if (!fs.existsSync(path.join(submodulePath, '.git'))) {
+          console.log(`[ConvertToDreamNode] Submodule ${submodule.name} not initialized - initializing...`);
+          try {
+            await execAsync(`git submodule update --init "${submodule.path}"`, { cwd: folderPath });
+          } catch (initError) {
+            console.warn(`[ConvertToDreamNode] Could not initialize submodule ${submodule.name}:`, initError);
+            continue;
+          }
+        }
+
+        // Verify submodule is a functional git repo (handles broken .git references)
+        try {
+          await execAsync('git rev-parse --git-dir', { cwd: submodulePath });
+        } catch (gitCheckError) {
+          console.warn(`[ConvertToDreamNode] Submodule ${submodule.name} has broken git reference - attempting repair...`);
+          try {
+            // Try to repair by re-initializing the submodule
+            await execAsync(`git submodule deinit -f "${submodule.path}"`, { cwd: folderPath });
+            await execAsync(`git submodule update --init "${submodule.path}"`, { cwd: folderPath });
+          } catch (repairError) {
+            console.warn(`[ConvertToDreamNode] Could not repair submodule ${submodule.name} - skipping:`, repairError);
+            continue;
+          }
+        }
+
+        // Check if submodule has .udd file
+        const hasSubmoduleUdd = UDDService.uddExists(submodulePath);
+
+        if (!hasSubmoduleUdd) {
+          console.log(`[ConvertToDreamNode] Submodule ${submodule.name} has no .udd - creating...`);
+          // Create basic .udd for the submodule
+          const submoduleUuid = crypto.randomUUID();
+          await UDDService.createUDD(submodulePath, {
+            uuid: submoduleUuid,
+            title: submodule.name,
+            type: 'dream'
+          });
+        }
+
+        // Get or create radicleId for submodule
+        let childUDD = await UDDService.readUDD(submodulePath);
+        let childRadicleId = childUDD.radicleId;
+
+        if (!childRadicleId && !options.skipRadicle) {
+          // Initialize Radicle for the submodule
+          console.log(`[ConvertToDreamNode] Submodule ${submodule.name} has no radicleId - initializing Radicle...`);
+          const hasRadicle = fs.existsSync(path.join(submodulePath, '.rad'));
+          if (!hasRadicle) {
+            await this.initializeRadicle(
+              submodulePath,
+              submodule.name,
+              'dream',
+              options.radiclePassphrase
+            );
+            // Re-read UDD to get the new radicleId
+            childUDD = await UDDService.readUDD(submodulePath);
+            childRadicleId = childUDD.radicleId;
+          }
+        }
+
+        if (!childRadicleId) {
+          console.warn(`[ConvertToDreamNode] Submodule ${submodule.name} still has no radicleId - skipping`);
+          continue;
+        }
+
+        console.log(`[ConvertToDreamNode] Submodule ${submodule.name} radicleId: ${childRadicleId}`);
+
+        // Add child's radicleId to parent's submodules array
+        if (await UDDService.addSubmodule(folderPath, childRadicleId)) {
+          console.log(`[ConvertToDreamNode] Added ${submodule.name} to parent's submodules array`);
+          parentModified = true;
+        }
+
+        // Add parent's radicleId to child's supermodules array
+        const supermoduleEntry = {
+          radicleId: parentRadicleId,
+          title: parentTitle,
+          atCommit: await this.getCurrentCommitHash(folderPath),
+          addedAt: Date.now()
+        };
+
+        if (await UDDService.addSupermoduleEntry(submodulePath, supermoduleEntry)) {
+          console.log(`[ConvertToDreamNode] Added parent to ${submodule.name}'s supermodules array`);
+
+          // Commit the change in the submodule
+          try {
+            await execAsync('git add .udd', { cwd: submodulePath });
+            const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: submodulePath });
+            if (statusOutput.trim()) {
+              await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: submodulePath });
+              console.log(`[ConvertToDreamNode] Committed supermodule relationship in ${submodule.name}`);
+            }
+          } catch (commitError) {
+            console.warn(`[ConvertToDreamNode] Could not commit submodule .udd:`, commitError);
+          }
+        }
+
+        // === SOVEREIGN REPO SYNC ===
+        // Ensure submodule has a sovereign clone at vault root
+        await this.ensureSovereignRepo(submodulePath, submodule.name, childUDD);
+      }
+
+      // Commit parent's .udd changes if modified
+      if (parentModified) {
+        try {
+          await execAsync('git add .udd', { cwd: folderPath });
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: folderPath });
+          if (statusOutput.trim()) {
+            await execAsync('git commit -m "Sync holarchy relationships in .udd"', { cwd: folderPath });
+            console.log('[ConvertToDreamNode] Committed holarchy relationships');
+          }
+        } catch (commitError) {
+          console.warn('[ConvertToDreamNode] Could not commit parent .udd:', commitError);
+        }
+      }
+
+      console.log('[ConvertToDreamNode] Holarchy sync complete');
+
+    } catch (error) {
+      console.error('[ConvertToDreamNode] Error syncing holarchy:', error);
+      // Non-fatal - continue with conversion
+    }
+  }
+
+  /**
+   * Parse .gitmodules file to extract submodule information
+   */
+  private parseGitmodules(content: string): Array<{ name: string; path: string; url: string }> {
+    const submodules: Array<{ name: string; path: string; url: string }> = [];
+
+    // Match [submodule "name"] sections
+    const sectionRegex = /\[submodule "([^"]+)"\]\s*((?:(?!\[submodule).)*)/gs;
+    let match;
+
+    while ((match = sectionRegex.exec(content)) !== null) {
+      const name = match[1];
+      const section = match[2];
+
+      // Extract path and url from section
+      const pathMatch = section.match(/path\s*=\s*(.+)/);
+      const urlMatch = section.match(/url\s*=\s*(.+)/);
+
+      if (pathMatch) {
+        submodules.push({
+          name,
+          path: pathMatch[1].trim(),
+          url: urlMatch ? urlMatch[1].trim() : ''
+        });
+      }
+    }
+
+    return submodules;
+  }
+
+  /**
+   * Get current commit hash for a repository
+   */
+  private async getCurrentCommitHash(repoPath: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync('git rev-parse HEAD', { cwd: repoPath });
+      return stdout.trim();
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Ensure a submodule has a sovereign clone at the vault root
+   *
+   * This method:
+   * 1. Checks if a sovereign repo exists at vault root with the same name
+   * 2. If exists: syncs metadata from submodule to sovereign (radicleId, supermodules, etc.)
+   * 3. If missing: clones from submodule to create sovereign repo at vault root
+   * 4. Ensures submodule's remote points to the sovereign repo
+   *
+   * @param submodulePath - Full path to the submodule inside parent
+   * @param submoduleName - Name of the submodule (used for sovereign path)
+   * @param submoduleUDD - The submodule's current UDD data
+   */
+  private async ensureSovereignRepo(
+    submodulePath: string,
+    submoduleName: string,
+    submoduleUDD: UDDFile
+  ): Promise<void> {
+    const sovereignPath = path.join(this.vaultPath, submoduleName);
+    const sovereignExists = fs.existsSync(path.join(sovereignPath, '.git'));
+
+    console.log(`[ConvertToDreamNode] Checking sovereign repo for ${submoduleName}...`);
+
+    if (sovereignExists) {
+      // Sovereign exists - sync metadata from submodule
+      await this.syncToSovereignRepo(submodulePath, sovereignPath, submoduleName, submoduleUDD);
+    } else {
+      // Sovereign missing - clone from submodule to create it
+      await this.createSovereignFromSubmodule(submodulePath, sovereignPath, submoduleName);
+    }
+  }
+
+  /**
+   * Sync metadata from submodule to existing sovereign repo
+   */
+  private async syncToSovereignRepo(
+    submodulePath: string,
+    sovereignPath: string,
+    submoduleName: string,
+    submoduleUDD: UDDFile
+  ): Promise<void> {
+    console.log(`[ConvertToDreamNode] Syncing metadata to sovereign repo: ${submoduleName}`);
+
+    try {
+      // Read sovereign's current UDD
+      if (!UDDService.uddExists(sovereignPath)) {
+        console.warn(`[ConvertToDreamNode] Sovereign ${submoduleName} has no .udd - skipping sync`);
+        return;
+      }
+
+      const sovereignUDD = await UDDService.readUDD(sovereignPath);
+      let modified = false;
+
+      // Sync radicleId if missing in sovereign
+      if (submoduleUDD.radicleId && !sovereignUDD.radicleId) {
+        console.log(`[ConvertToDreamNode] Adding radicleId to sovereign: ${submoduleUDD.radicleId}`);
+        await UDDService.setRadicleId(sovereignPath, submoduleUDD.radicleId);
+        modified = true;
+      }
+
+      // Sync supermodules from submodule to sovereign
+      for (const supermodule of submoduleUDD.supermodules || []) {
+        const radicleId = typeof supermodule === 'string' ? supermodule : supermodule.radicleId;
+
+        if (typeof supermodule === 'string') {
+          // Legacy format
+          if (await UDDService.addSupermodule(sovereignPath, supermodule)) {
+            console.log(`[ConvertToDreamNode] Added supermodule ${supermodule} to sovereign`);
+            modified = true;
+          }
+        } else {
+          // Enhanced format
+          if (await UDDService.addSupermoduleEntry(sovereignPath, supermodule)) {
+            console.log(`[ConvertToDreamNode] Added supermodule ${radicleId} to sovereign`);
+            modified = true;
+          }
+        }
+      }
+
+      // Commit changes if modified
+      if (modified) {
+        try {
+          await execAsync('git add .udd', { cwd: sovereignPath });
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: sovereignPath });
+          if (statusOutput.trim()) {
+            await execAsync('git commit -m "Sync metadata from submodule"', { cwd: sovereignPath });
+            console.log(`[ConvertToDreamNode] Committed metadata sync to sovereign ${submoduleName}`);
+          }
+        } catch (commitError) {
+          console.warn(`[ConvertToDreamNode] Could not commit sovereign .udd:`, commitError);
+        }
+      } else {
+        console.log(`[ConvertToDreamNode] Sovereign ${submoduleName} already in sync`);
+      }
+
+      // Ensure submodule's origin remote points to sovereign
+      await this.ensureSubmoduleRemote(submodulePath, sovereignPath, submoduleName);
+
+    } catch (error) {
+      console.error(`[ConvertToDreamNode] Error syncing to sovereign ${submoduleName}:`, error);
+    }
+  }
+
+  /**
+   * Create a sovereign repo at vault root by cloning from submodule
+   */
+  private async createSovereignFromSubmodule(
+    submodulePath: string,
+    sovereignPath: string,
+    submoduleName: string
+  ): Promise<void> {
+    console.log(`[ConvertToDreamNode] Creating sovereign repo from submodule: ${submoduleName}`);
+
+    try {
+      // Clone the submodule to the vault root as a new sovereign repo
+      // Use --no-hardlinks to ensure it's a true copy
+      await execAsync(`git clone --no-hardlinks "${submodulePath}" "${sovereignPath}"`);
+      console.log(`[ConvertToDreamNode] Cloned submodule to sovereign: ${sovereignPath}`);
+
+      // Remove the origin remote (it points to submodule path, not useful)
+      try {
+        await execAsync('git remote remove origin', { cwd: sovereignPath });
+      } catch {
+        // Origin might not exist, that's fine
+      }
+
+      // If the submodule had a useful remote (GitHub, Radicle URL), add it back
+      try {
+        const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: submodulePath });
+        const url = remoteUrl.trim();
+        // Only add back if it's a real URL (not a local path)
+        if (url && (url.startsWith('http') || url.startsWith('git@') || url.startsWith('rad://'))) {
+          await execAsync(`git remote add origin "${url}"`, { cwd: sovereignPath });
+          console.log(`[ConvertToDreamNode] Set sovereign remote to: ${url}`);
+        }
+      } catch {
+        // No remote to copy, that's fine
+      }
+
+      // Now update submodule's origin to point to the new sovereign
+      await this.ensureSubmoduleRemote(submodulePath, sovereignPath, submoduleName);
+
+      console.log(`[ConvertToDreamNode] Successfully created sovereign repo: ${submoduleName}`);
+
+    } catch (error) {
+      console.error(`[ConvertToDreamNode] Failed to create sovereign from submodule:`, error);
+    }
+  }
+
+  /**
+   * Ensure submodule's origin remote points to the sovereign repo
+   * This allows changes in submodule to be pushed to sovereign
+   */
+  private async ensureSubmoduleRemote(
+    submodulePath: string,
+    sovereignPath: string,
+    submoduleName: string
+  ): Promise<void> {
+    try {
+      // Check current origin
+      let currentOrigin = '';
+      try {
+        const { stdout } = await execAsync('git remote get-url origin', { cwd: submodulePath });
+        currentOrigin = stdout.trim();
+      } catch {
+        // No origin set
+      }
+
+      // If origin doesn't point to sovereign, update it
+      if (currentOrigin !== sovereignPath) {
+        try {
+          await execAsync('git remote remove origin', { cwd: submodulePath });
+        } catch {
+          // Origin might not exist
+        }
+        await execAsync(`git remote add origin "${sovereignPath}"`, { cwd: submodulePath });
+        console.log(`[ConvertToDreamNode] Updated submodule ${submoduleName} origin to sovereign`);
+      }
+    } catch (error) {
+      console.warn(`[ConvertToDreamNode] Could not update submodule remote:`, error);
     }
   }
 }
