@@ -394,8 +394,20 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
         lastFocusTimestamp.current = now;
 
-        const currentLayout = useInterBrainStore.getState().spatialLayout;
+        const store = useInterBrainStore.getState();
+        const currentLayout = store.spatialLayout;
         const isLiminalToLiminal = currentLayout === 'liminal-web';
+
+        // Check if we're in holarchy mode - this node or another is flipping/flipped
+        // In holarchy mode, we only move the center node; ring layout is handled by flip state subscription
+        const nodeFlipState = store.flipState.flipStates.get(nodeId);
+        const isNodeFlipping = nodeFlipState?.isFlipping || false;
+        const isNodeFlipped = nodeFlipState?.isFlipped || false;
+        const isInHolarchyMode = isNodeFlipping || isNodeFlipped ||
+                                  (store.flipState.flippedNodeId !== null &&
+                                   store.flipState.flipStates.get(store.flipState.flippedNodeId)?.isFlipped);
+
+        console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}, isLiminalToLiminal=${isLiminalToLiminal}, isInHolarchyMode=${isInHolarchyMode}`);
 
         // ── Step 1: Snapshot previous state BEFORE mutating anything ──
         // This is critical for liminal→liminal transitions where we need to know
@@ -427,7 +439,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // liminal web layout (wasInLiminalWeb), NOT just whether the layout mode is liminal-web.
         // This handles edge cases like interrupted returnToConstellation leaving stale ephemeral
         // nodes that technically exist but weren't in the previous rings.
-        const store = useInterBrainStore.getState();
         const mountedNodes = store.constellationFilter.mountedNodes;
         const exitingEphemeralIds: string[] = [];
 
@@ -506,52 +517,63 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, getEasing(positions.centerNode.nodeId));
         }
 
-        // ── Step 6b: Stagger ephemeral node spawning for smooth cascading ──
-        // Strategy: Constellation-mounted nodes (already have refs) move immediately.
-        // Ephemeral nodes (need React mount) spawn one-by-one with delays, inner ring first.
-        // This spreads component mount cost across frames for jank-free animation.
-        const EPHEMERAL_SPAWN_INTERVAL_MS = 40; // Gap between individual ephemeral spawns
+        // ── Step 6b: Move ring nodes (SKIP in holarchy mode) ──
+        // In holarchy mode, ring layout is handled by flip state subscription
+        // which shows supermodules instead of dreamers
+        if (!isInHolarchyMode) {
+          // Stagger ephemeral node spawning for smooth cascading.
+          // Strategy: Constellation-mounted nodes (already have refs) move immediately.
+          // Ephemeral nodes (need React mount) spawn one-by-one with delays, inner ring first.
+          // This spreads component mount cost across frames for jank-free animation.
+          const EPHEMERAL_SPAWN_INTERVAL_MS = 40; // Gap between individual ephemeral spawns
 
-        // Separate mounted (instant) from ephemeral (staggered)
-        const mountedRingMoves: typeof allRingNodes = [];
-        const ephemeralRingQueue: typeof allRingNodes = [];
+          // Separate mounted (instant) from ephemeral (staggered)
+          const mountedRingMoves: typeof allRingNodes = [];
+          const ephemeralRingQueue: typeof allRingNodes = [];
 
-        // Ordered: ring1 → ring2 → ring3 (inner first)
-        for (const node of allRingNodes) {
-          if (mountedNodes.has(node.nodeId)) {
-            mountedRingMoves.push(node);
-          } else {
-            ephemeralRingQueue.push(node);
+          // Ordered: ring1 → ring2 → ring3 (inner first)
+          for (const node of allRingNodes) {
+            if (mountedNodes.has(node.nodeId)) {
+              mountedRingMoves.push(node);
+            } else {
+              ephemeralRingQueue.push(node);
+            }
           }
+
+          // Move all constellation-mounted ring nodes immediately (no spawn cost)
+          for (const { nodeId: ringNodeId, position } of mountedRingMoves) {
+            moveNode(ringNodeId, position, transitionDuration, getEasing(ringNodeId));
+          }
+
+          // Stagger ephemeral node spawns: one node per interval, inner ring first.
+          // Each spawn is a single store update (1 node) → 1 React mount per frame window.
+          ephemeralRingQueue.forEach(({ nodeId: ephNodeId, position }, index) => {
+            globalThis.setTimeout(() => {
+              // Spawn single ephemeral node
+              ensureNodeMounted(ephNodeId, position);
+              // Issue move command (will queue if ref not ready yet)
+              moveNode(ephNodeId, position, transitionDuration, getEasing(ephNodeId));
+            }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
+          });
+
+          // Move unrelated nodes to constellation
+          positions.sphereNodes.forEach(sphereNodeId => {
+            returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+          });
+
+          // Animate exiting ephemeral nodes out to spawn ring (liminal→liminal only).
+          // These nodes have refs and are still mounted — returnNodeToConstellation triggers
+          // the ephemeral exit animation, which calls despawnEphemeralNode on completion.
+          exitingEphemeralIds.forEach(ephNodeId => {
+            returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
+          });
+        } else {
+          console.log(`[FOCUS] Holarchy mode - skipping ring node layout, will be handled by flip state`);
+          // In holarchy mode, still clean up exiting ephemeral nodes
+          exitingEphemeralIds.forEach(ephNodeId => {
+            returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
+          });
         }
-
-        // Move all constellation-mounted ring nodes immediately (no spawn cost)
-        for (const { nodeId: ringNodeId, position } of mountedRingMoves) {
-          moveNode(ringNodeId, position, transitionDuration, getEasing(ringNodeId));
-        }
-
-        // Stagger ephemeral node spawns: one node per interval, inner ring first.
-        // Each spawn is a single store update (1 node) → 1 React mount per frame window.
-        ephemeralRingQueue.forEach(({ nodeId: ephNodeId, position }, index) => {
-          globalThis.setTimeout(() => {
-            // Spawn single ephemeral node
-            ensureNodeMounted(ephNodeId, position);
-            // Issue move command (will queue if ref not ready yet)
-            moveNode(ephNodeId, position, transitionDuration, getEasing(ephNodeId));
-          }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
-        });
-
-        // Move unrelated nodes to constellation
-        positions.sphereNodes.forEach(sphereNodeId => {
-          returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
-        });
-
-        // Animate exiting ephemeral nodes out to spawn ring (liminal→liminal only).
-        // These nodes have refs and are still mounted — returnNodeToConstellation triggers
-        // the ephemeral exit animation, which calls despawnEphemeralNode on completion.
-        exitingEphemeralIds.forEach(ephNodeId => {
-          returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
-        });
 
         globalThis.setTimeout(() => {
           isTransitioning.current = false;
