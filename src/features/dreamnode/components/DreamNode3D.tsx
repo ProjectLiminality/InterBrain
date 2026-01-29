@@ -105,6 +105,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [targetPosition, setTargetPosition] = useState<[number, number, number]>(dreamNode.position);
   const [currentPosition, setCurrentPosition] = useState<[number, number, number]>(dreamNode.position);
   const [startPosition, setStartPosition] = useState<[number, number, number]>(dreamNode.position);
+
+  // Ref to track the TRUE visual position synchronously (not affected by React state batching)
+  // This is critical for smooth transitions when calling moveToPosition immediately after setActiveState
+  const visualPositionRef = useRef<[number, number, number]>(dreamNode.position);
+  const positionModeRef = useRef<'constellation' | 'active'>('constellation');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionStartTime, setTransitionStartTime] = useState(0);
   const [transitionDuration, setTransitionDuration] = useState(1000);
@@ -356,14 +361,20 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       // Diagnostic log only for ephemeral nodes (constellation nodes move routinely)
       if (ephemeral) {
+        console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: ephemeral, positionMode=${positionModeRef.current}, target=[${newTargetPosition.map(n=>n.toFixed(0))}]`);
       }
 
-      const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+      // Use refs for the TRUE current position (not affected by React state batching)
+      const actualCurrentPosition: [number, number, number] = positionModeRef.current === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
-        : [...currentPosition];
+        : [...visualPositionRef.current];
 
       // NOTE: Removed auto flip-back - flip state is now managed explicitly by holarchy navigation
       // Flip animations should be triggered via store.startFlipAnimation() when needed
+
+      // Update refs synchronously FIRST
+      positionModeRef.current = 'active';
+      visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
 
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -376,9 +387,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     returnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
-      const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+      // Use refs for the TRUE current position (not affected by React state batching)
+      const actualCurrentPosition: [number, number, number] = positionModeRef.current === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
-        : [...currentPosition];
+        : [...visualPositionRef.current];
 
       // NOTE: Removed auto flip-back - flip state is now managed explicitly
       // Non-selected nodes returning to constellation should flip back via store
@@ -417,6 +429,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
 
+        // Update refs synchronously
+        positionModeRef.current = 'active';
+        visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
+
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
         setTargetPosition(worldExitPosition);
@@ -430,6 +446,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       }
 
       const constellationPosition = dreamNode.position;
+
+      // Update refs synchronously
+      positionModeRef.current = 'active';
+      visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(constellationPosition);
@@ -443,9 +464,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
-        const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+        // Use refs for the TRUE current position (not affected by React state batching)
+        const actualCurrentPosition: [number, number, number] = positionModeRef.current === 'constellation'
           ? getConstellationPosition(dreamNode.position, radialOffset)
-          : [...currentPosition];
+          : [...visualPositionRef.current];
 
         // Calculate exit position - need to work in camera space
         // The problem: actualCurrentPosition is in WORLD space (rotated with sphere)
@@ -489,6 +511,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
         // NOTE: Flip-back is now handled by the caller via store.startFlipAnimation if needed
 
+        // Update refs synchronously
+        positionModeRef.current = 'active';
+        visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
+
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
         setTargetPosition(worldExitPosition);
@@ -515,14 +541,19 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       const targetScaledPosition = getConstellationPosition(anchorPosition, targetRadialOffset);
 
+      // Use refs for the TRUE current position (not affected by React state batching)
       let actualCurrentPosition: [number, number, number];
-      if (positionMode === 'constellation') {
+      if (positionModeRef.current === 'constellation') {
         actualCurrentPosition = getConstellationPosition(anchorPosition, radialOffset);
       } else {
-        actualCurrentPosition = [...currentPosition];
+        actualCurrentPosition = [...visualPositionRef.current];
       }
 
       // NOTE: Flip-back is now handled by the caller via store.startFlipAnimation if needed
+
+      // Update refs synchronously
+      positionModeRef.current = 'active';
+      visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
 
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -539,13 +570,18 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       }, duration - 100);
     },
     interruptAndMoveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
+      // Use refs for the TRUE current position (not affected by React state batching)
       let actualCurrentPosition: [number, number, number];
-      
-      if (positionMode === 'constellation') {
+
+      if (positionModeRef.current === 'constellation') {
         actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
       } else {
-        actualCurrentPosition = [...currentPosition];
+        actualCurrentPosition = [...visualPositionRef.current];
       }
+
+      // Update refs synchronously
+      positionModeRef.current = 'active';
+      visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
 
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -558,12 +594,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
     interruptAndReturnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
+      // Use refs for the TRUE current position (not affected by React state batching)
       let actualCurrentPosition: [number, number, number];
 
-      if (positionMode === 'constellation') {
+      if (positionModeRef.current === 'constellation') {
         actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
       } else {
-        actualCurrentPosition = [...currentPosition];
+        actualCurrentPosition = [...visualPositionRef.current];
       }
 
       // For ephemeral nodes, animate to exit position instead of constellation
@@ -600,6 +637,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
 
+        // Update refs synchronously
+        positionModeRef.current = 'active';
+        visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
+
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
         setTargetPosition(worldExitPosition);
@@ -613,6 +654,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       }
 
       const constellationPosition = dreamNode.position;
+
+      // Update refs synchronously
+      positionModeRef.current = 'active';
+      visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(constellationPosition);
@@ -626,11 +672,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     interruptAndReturnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
+        // Use refs for the TRUE current position (not affected by React state batching)
         let actualCurrentPosition: [number, number, number];
-        if (positionMode === 'constellation') {
+        if (positionModeRef.current === 'constellation') {
           actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
         } else {
-          actualCurrentPosition = [...currentPosition];
+          actualCurrentPosition = [...visualPositionRef.current];
         }
 
         // Transform current position from local (DreamWorld) space to camera space.
@@ -665,6 +712,10 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
 
+        // Update refs synchronously
+        positionModeRef.current = 'active';
+        visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
+
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
         setTargetPosition(worldExitPosition);
@@ -691,12 +742,17 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       const targetScaledPosition = getConstellationPosition(anchorPosition, targetRadialOffset);
 
+      // Use refs for the TRUE current position (not affected by React state batching)
       let actualCurrentPosition: [number, number, number];
-      if (positionMode === 'constellation') {
+      if (positionModeRef.current === 'constellation') {
         actualCurrentPosition = getConstellationPosition(anchorPosition, radialOffset);
       } else {
-        actualCurrentPosition = [...currentPosition];
+        actualCurrentPosition = [...visualPositionRef.current];
       }
+
+      // Update refs synchronously
+      positionModeRef.current = 'active';
+      visualPositionRef.current = [...actualCurrentPosition] as [number, number, number];
 
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -714,20 +770,27 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     },
     setActiveState: (active: boolean) => {
       if (active) {
-        // When switching from constellation to active mode, compute the actual
-        // world position (with radial offset) so the node starts from its
-        // visual position, not the raw anchor.
-        const resolvedPosition: [number, number, number] = positionMode === 'constellation'
+        // Use ref to get the TRUE current visual position (not affected by React batching)
+        const resolvedPosition: [number, number, number] = positionModeRef.current === 'constellation'
           ? getConstellationPosition(dreamNode.position, radialOffset)
-          : [...currentPosition] as [number, number, number];
+          : [...visualPositionRef.current] as [number, number, number];
+        // Update refs synchronously FIRST
+        positionModeRef.current = 'active';
+        visualPositionRef.current = resolvedPosition;
+        // Then update React state
         setPositionMode('active');
         setCurrentPosition(resolvedPosition);
       } else {
+        const constellationPos = getConstellationPosition(dreamNode.position, radialOffset);
+        // Update refs synchronously FIRST
+        positionModeRef.current = 'constellation';
+        visualPositionRef.current = constellationPos;
+        // Then update React state
         setPositionMode('constellation');
         setCurrentPosition(dreamNode.position);
       }
     },
-    getCurrentPosition: () => currentPosition,
+    getCurrentPosition: () => visualPositionRef.current,
     isMoving: () => isTransitioning
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing]);
   
@@ -794,18 +857,23 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         startPosition[2] + (targetPosition[2] - startPosition[2]) * easedProgress
       ];
 
+      // Update ref synchronously for accurate position tracking
+      visualPositionRef.current = newPosition;
       setCurrentPosition(newPosition);
 
       if (progress >= 1) {
         setIsTransitioning(false);
+        visualPositionRef.current = targetPosition;
         setCurrentPosition(targetPosition);
 
         if (transitionType === 'liminal') {
           // Stay in active mode
         } else if (transitionType === 'constellation') {
+          positionModeRef.current = 'constellation';
           setPositionMode('constellation');
           setRadialOffset(0);
         } else if (transitionType === 'scaled') {
+          positionModeRef.current = 'constellation';
           setPositionMode('constellation');
         } else if (transitionType === 'ephemeral-exit') {
           // Ephemeral node finished exit animation — queue for staggered despawn
