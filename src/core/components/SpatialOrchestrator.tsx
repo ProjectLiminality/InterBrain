@@ -569,6 +569,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           });
         } else {
           console.log(`[FOCUS] Holarchy mode - skipping ring node layout, will be handled by flip state`);
+
+          // In holarchy mode, return the PREVIOUS center node to constellation
+          // This is the node that was just deselected when we clicked on a supermodule
+          if (previousCenterId && previousCenterId !== nodeId) {
+            console.log(`[FOCUS] Holarchy mode - returning previous center ${previousCenterId.slice(0,8)} to constellation`);
+            returnNodeToConstellation(previousCenterId, transitionDuration, 'easeInQuart');
+          }
+
           // In holarchy mode, still clean up exiting ephemeral nodes
           exitingEphemeralIds.forEach(ephNodeId => {
             returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
