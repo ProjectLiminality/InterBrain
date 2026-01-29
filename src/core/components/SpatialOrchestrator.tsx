@@ -1519,6 +1519,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     // Track the previous flip state to detect transitions
     let previousFlippedNodeId: string | null = null;
     let previousIsFlipped: boolean = false;
+    // Guard against duplicate "flip to back" processing for the same node
+    let lastProcessedFlipToBack: string | null = null;
 
     const unsubscribe = useInterBrainStore.subscribe((state) => {
       const currentFlippedNodeId = state.flipState.flippedNodeId;
@@ -1529,16 +1531,26 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Check if currently flipped to back (isFlipped = true means showing back side)
       const currentIsFlipped = currentFlipStateObj?.isFlipped === true && !currentFlipStateObj?.isFlipping;
 
+      // Reset the flip-to-back guard when switching to a different node
+      if (currentFlippedNodeId !== previousFlippedNodeId) {
+        lastProcessedFlipToBack = null;
+      }
+
       // Detect transition to back side (flip animation completed to back)
+      // Guard against duplicate processing for the same node
       if (currentFlippedNodeId && currentIsFlipped &&
-          (previousFlippedNodeId !== currentFlippedNodeId || !previousIsFlipped)) {
+          (previousFlippedNodeId !== currentFlippedNodeId || !previousIsFlipped) &&
+          lastProcessedFlipToBack !== currentFlippedNodeId) {
+        lastProcessedFlipToBack = currentFlippedNodeId;
         console.log(`[SpatialOrchestrator] Flip to back detected for ${currentFlippedNodeId}`);
 
         // Load supermodules from UDD and show them in rings
+        // Capture the node ID for stale check
+        const targetNodeId = currentFlippedNodeId;
         const loadAndShowSupermodules = async () => {
           try {
             // Find the flipped node to get its repoPath
-            const nodeData = state.dreamNodes.get(currentFlippedNodeId);
+            const nodeData = state.dreamNodes.get(targetNodeId);
             if (!nodeData?.node.repoPath) {
               console.log('[SpatialOrchestrator] No repoPath for flipped node');
               return;
@@ -1553,13 +1565,21 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             const fullPath = vaultService.getFullPath(nodeData.node.repoPath);
             const udd = await UDDService.readUDD(fullPath);
 
+            // STALE CHECK: Verify this node is still the currently flipped node
+            // If user clicked another node while we were loading, abort
+            const currentState = useInterBrainStore.getState();
+            if (currentState.flipState.flippedNodeId !== targetNodeId) {
+              console.log(`[SpatialOrchestrator] Aborting supermodule layout - node ${targetNodeId.slice(0,8)} is no longer flipped`);
+              return;
+            }
+
             // Extract supermodule IDs (handle both string and SupermoduleEntry formats)
             const supermoduleIds = (udd.supermodules || []).map(entry =>
               typeof entry === 'string' ? entry : entry.radicleId
             );
 
             if (supermoduleIds.length > 0) {
-              console.log(`[SpatialOrchestrator] Showing ${supermoduleIds.length} supermodules for ${currentFlippedNodeId}`);
+              console.log(`[SpatialOrchestrator] Showing ${supermoduleIds.length} supermodules for ${targetNodeId}`);
               // Use the imperative handle methods directly via ref
               const orchestratorMethods = useInterBrainStore.getState();
               // Call showSupermodulesInRings through the ref
@@ -1600,7 +1620,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
               // Update liminal web roles with supermodule IDs
               liminalWebRoles.current = {
-                centerNodeId: currentFlippedNodeId,
+                centerNodeId: targetNodeId,
                 ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
                 ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
                 ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
@@ -1616,7 +1636,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
               // Move all other nodes (except center) to constellation
               positions.sphereNodes.forEach(sphereNodeId => {
-                if (sphereNodeId !== currentFlippedNodeId) {
+                if (sphereNodeId !== targetNodeId) {
                   returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
                 }
               });
@@ -1638,13 +1658,47 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
 
       // Detect transition to front side (was back, now front or unflipped)
-      // ONLY restore dreamers when the SAME node flips from back to front.
-      // If we switched to a different node, don't restore - let the new node's flip state drive layout.
+      // ONLY restore dreamers when the SAME node flips from back to front AND no other node
+      // is being flipped to back (holarchy navigation). If another node is flipping to back,
+      // we're switching nodes in holarchy mode - don't restore dreamers.
       const sameNodeFlippedToFront = previousFlippedNodeId &&
                                        previousIsFlipped &&
                                        currentFlippedNodeId === previousFlippedNodeId &&
                                        !currentIsFlipped;
-      if (sameNodeFlippedToFront) {
+
+      // Check if any OTHER node is currently flipping to back or already flipped
+      // This indicates holarchy navigation - user clicked a supermodule/submodule
+      let anotherNodeIsFlipping = false;
+      for (const [nodeId, flipStateObj] of state.flipState.flipStates.entries()) {
+        if (nodeId !== previousFlippedNodeId) {
+          // Another node is either flipping to back or already on back side
+          if (flipStateObj.isFlipping && flipStateObj.flipDirection === 'front-to-back') {
+            anotherNodeIsFlipping = true;
+            console.log(`[SpatialOrchestrator] Another node ${nodeId.slice(0,8)} is flipping to back - holarchy navigation`);
+            break;
+          }
+          if (flipStateObj.isFlipped && !flipStateObj.isFlipping) {
+            anotherNodeIsFlipping = true;
+            console.log(`[SpatialOrchestrator] Another node ${nodeId.slice(0,8)} is already on back side - holarchy navigation`);
+            break;
+          }
+        }
+      }
+
+      // Also check if we just switched selected nodes (holarchy navigation in progress)
+      // When clicking a supermodule, selectedNode changes first, then flip animation starts after 100ms
+      // So we need to detect this intermediate state where the old node is flipping back
+      // but the new node hasn't started flipping yet
+      const selectedNodeId = state.selectedNode?.id;
+      const selectedNodeIsDifferent = selectedNodeId && selectedNodeId !== previousFlippedNodeId;
+      if (selectedNodeIsDifferent && sameNodeFlippedToFront) {
+        // A different node is now selected - this is holarchy navigation
+        // The new node will start flipping shortly
+        console.log(`[SpatialOrchestrator] Selected node changed to ${selectedNodeId?.slice(0,8)} - holarchy navigation, skipping dreamer restore`);
+        anotherNodeIsFlipping = true;
+      }
+
+      if (sameNodeFlippedToFront && !anotherNodeIsFlipping) {
         console.log(`[SpatialOrchestrator] Flip to front detected, restoring dreamers for ${previousFlippedNodeId}`);
 
         // Restore the normal liminal web layout with social relationships (dreamers)
