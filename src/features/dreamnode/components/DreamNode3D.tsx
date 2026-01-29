@@ -111,12 +111,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled' | 'ephemeral-exit'>('liminal');
   const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart'>('easeOutCubic');
   
-  // Add flip rotation to transition system for unified animations
-  const [targetFlipRotation, setTargetFlipRotation] = useState(0);
-  const [startFlipRotation, setStartFlipRotation] = useState(0);
-  const [shouldAnimateFlip, setShouldAnimateFlip] = useState(false);
-  const [flipAnimationStartTime, setFlipAnimationStartTime] = useState(0);
-  const [flipAnimationDuration, setFlipAnimationDuration] = useState(1000); // Same duration as position movement
+  // NOTE: Flip animations are now fully controlled by the store via startFlipAnimation/completeFlipAnimation
+  // The local flip animation system (shouldAnimateFlip, startFlipBackAnimation) has been removed
+  // to establish a single source of truth for flip state
   
   // No longer need to track flip state - we access live store state directly
   
@@ -131,6 +128,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Flip state management
   const flipState = useInterBrainStore(state => state.flipState);
   const setFlippedNode = useInterBrainStore(state => state.setFlippedNode);
+  const startFlipAnimation = useInterBrainStore(state => state.startFlipAnimation);
   const completeFlipAnimation = useInterBrainStore(state => state.completeFlipAnimation);
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
@@ -267,17 +265,22 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     }
   }, [ephemeral, ephemeralState, dreamNode.id]);
 
-  // Reset flip state when node is no longer selected
+  // Trigger flip-back animation when node is no longer selected but was flipped
   useEffect(() => {
     if (spatialLayout !== 'liminal-web' || selectedNode?.id !== dreamNode.id) {
-      if (flipState.flippedNodeId === dreamNode.id) {
+      // Check if this node is currently flipped (showing back side)
+      const nodeFlipStateObj = flipState.flipStates.get(dreamNode.id);
+      const isCurrentlyFlipped = nodeFlipStateObj?.isFlipped && !nodeFlipStateObj?.isFlipping;
+
+      if (isCurrentlyFlipped) {
+        // Trigger smooth flip-back animation via store
+        startFlipAnimation(dreamNode.id, 'back-to-front');
+      } else if (flipState.flippedNodeId === dreamNode.id) {
+        // Node was flipped but animation didn't complete - just clear the state
         setFlippedNode(null);
-        // Note: Flip rotation now animates smoothly via Universal Movement API
-        // setFlipRotation(0); // Removed - handled by flip-back animation
-        // Note: Keep dreamSongData in memory for performance - cache handles invalidation
       }
     }
-  }, [spatialLayout, selectedNode, dreamNode.id, flipState.flippedNodeId, setFlippedNode]);
+  }, [spatialLayout, selectedNode, dreamNode.id, flipState.flippedNodeId, flipState.flipStates, setFlippedNode, startFlipAnimation]);
 
   // Handle mouse events
   const handleMouseEnter = () => {
@@ -344,25 +347,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     onDoubleClick?.(dreamNode);
   };
 
-  // Helper to start flip-back animation alongside movement
-  const startFlipBackAnimation = () => {
-    // Get LIVE store state (not stale component state)
-    const liveStoreState = useInterBrainStore.getState();
-    const currentFlipRotation = flipRotation;
-    const storeFlippedNodeId = liveStoreState.flipState.flippedNodeId;
-    const wasFlipped = storeFlippedNodeId === dreamNode.id;
-    
-    // Check if this node was recently flipped (check live store state)
-    if (currentFlipRotation !== 0 || wasFlipped) {
-      // Use current rotation if available, otherwise assume it was Math.PI (fully flipped)
-      const startRotation = currentFlipRotation !== 0 ? currentFlipRotation : Math.PI;
-      setStartFlipRotation(startRotation);
-      setTargetFlipRotation(0);
-      setShouldAnimateFlip(true);
-      setFlipAnimationStartTime(globalThis.performance.now());
-      setFlipAnimationDuration(1000); // 1000ms - same duration as position movement
-    }
-  };
+  // NOTE: startFlipBackAnimation has been removed - flip state is now managed via store
+  // Use store.startFlipAnimation(nodeId, 'back-to-front') when a node needs to flip back
 
   // Universal Movement API implementation (keeping all the complex logic)
   useImperativeHandle(ref, () => ({
@@ -376,9 +362,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         ? getConstellationPosition(dreamNode.position, radialOffset)
         : [...currentPosition];
 
-      // Start flip-back animation alongside position movement
-      startFlipBackAnimation();
-      
+      // NOTE: Removed auto flip-back - flip state is now managed explicitly by holarchy navigation
+      // Flip animations should be triggered via store.startFlipAnimation() when needed
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(newTargetPosition);
@@ -394,8 +380,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         ? getConstellationPosition(dreamNode.position, radialOffset)
         : [...currentPosition];
 
-      // Start flip-back animation alongside position movement
-      startFlipBackAnimation();
+      // NOTE: Removed auto flip-back - flip state is now managed explicitly
+      // Non-selected nodes returning to constellation should flip back via store
 
       // For ephemeral nodes, animate to exit position instead of constellation
       if (ephemeral) {
@@ -501,7 +487,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         const exitDuration = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration;
         const exitEasing = DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing;
 
-        startFlipBackAnimation();
+        // NOTE: Flip-back is now handled by the caller via store.startFlipAnimation if needed
 
         setStartPosition(actualCurrentPosition);
         setCurrentPosition(actualCurrentPosition);
@@ -536,8 +522,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         actualCurrentPosition = [...currentPosition];
       }
 
-      // Start flip-back animation alongside position movement
-      startFlipBackAnimation();
+      // NOTE: Flip-back is now handled by the caller via store.startFlipAnimation if needed
 
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
@@ -852,22 +837,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setFlipRotation(targetRotation);
       }
     }
-
-    // Unified flip-back animation - needs per-frame updates
-    if (shouldAnimateFlip && !isFlipping) {
-      const elapsed = globalThis.performance.now() - flipAnimationStartTime;
-      const progress = Math.min(elapsed / flipAnimationDuration, 1);
-
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
-
-      const newFlipRotation = startFlipRotation + (targetFlipRotation - startFlipRotation) * easedProgress;
-      setFlipRotation(newFlipRotation);
-
-      if (progress >= 1) {
-        setFlipRotation(targetFlipRotation);
-        setShouldAnimateFlip(false);
-      }
-    }
+    // NOTE: Local flip-back animation system removed - all flip animations now go through store
   });
 
   // Calculate final position
