@@ -222,11 +222,16 @@ export const createDreamNodeSlice: StateCreator<
 
     updatedFlipStates.set(nodeId, newFlipState);
 
+    // Only update flippedNodeId for front-to-back flips (new node becoming center of attention)
+    // For back-to-front flips (node leaving center), keep the current flippedNodeId
+    // This prevents race conditions when switching nodes in holarchy navigation
+    const newFlippedNodeId = direction === 'front-to-back' ? nodeId : state.flipState.flippedNodeId;
+
     return {
       flipState: {
         ...state.flipState,
         flipStates: updatedFlipStates,
-        flippedNodeId: nodeId
+        flippedNodeId: newFlippedNodeId
       }
     };
   }),
