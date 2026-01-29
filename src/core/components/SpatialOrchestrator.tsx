@@ -570,12 +570,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         } else {
           console.log(`[FOCUS] Holarchy mode - skipping ring node layout, will be handled by flip state`);
 
-          // In holarchy mode, return the PREVIOUS center node to constellation
-          // This is the node that was just deselected when we clicked on a supermodule
-          if (previousCenterId && previousCenterId !== nodeId) {
-            console.log(`[FOCUS] Holarchy mode - returning previous center ${previousCenterId.slice(0,8)} to constellation`);
-            returnNodeToConstellation(previousCenterId, transitionDuration, 'easeInQuart');
-          }
+          // In holarchy mode, DON'T return the previous center to constellation here.
+          // The flip state subscription will handle it:
+          // - If old node is a supermodule of the new node → positioned in rings
+          // - If old node is NOT a supermodule → sent to constellation via sphereNodes
+          // This prevents the "detour" animation where the old node first flies to
+          // constellation, then gets redirected to ring position.
 
           // In holarchy mode, still clean up exiting ephemeral nodes
           exitingEphemeralIds.forEach(ephNodeId => {
@@ -1626,6 +1626,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
               // Apply world rotation correction
               applyWorldRotationCorrection(positions);
 
+              // Capture the previous center BEFORE updating liminalWebRoles
+              const prevCenterId = liminalWebRoles.current.centerNodeId;
+
               // Update liminal web roles with supermodule IDs
               liminalWebRoles.current = {
                 centerNodeId: targetNodeId,
@@ -1638,9 +1641,22 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
               isTransitioning.current = true;
 
               // Move supermodule nodes to ring positions
+              const supermoduleNodeIds = new Set([
+                ...positions.ring1Nodes.map(n => n.nodeId),
+                ...positions.ring2Nodes.map(n => n.nodeId),
+                ...positions.ring3Nodes.map(n => n.nodeId)
+              ]);
+
               [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
                 moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
               });
+
+              // Return the PREVIOUS center node to constellation if it's NOT a supermodule
+              // This handles the case of clicking a supermodule (navigating UP)
+              if (prevCenterId && prevCenterId !== targetNodeId && !supermoduleNodeIds.has(prevCenterId)) {
+                console.log(`[SpatialOrchestrator] Previous center ${prevCenterId.slice(0,8)} is not a supermodule - returning to constellation`);
+                returnNodeToConstellation(prevCenterId, transitionDuration, 'easeInQuart');
+              }
 
               // Move all other nodes (except center) to constellation
               positions.sphereNodes.forEach(sphereNodeId => {
