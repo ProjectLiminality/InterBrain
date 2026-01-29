@@ -11,7 +11,6 @@ import { DreamNode } from '../types/dreamnode';
 import { VaultService } from '../../../core/services/vault-service';
 import { UDDService } from '../services/udd-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
-import { useOrchestrator } from '../../../core/context/orchestrator-context';
 import { packCirclesInParent } from '../utils/circle-packing';
 import { dreamNodeStyles, getNodeColors, getMediaContainerStyle, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { MediaRenderer } from './MediaRenderer';
@@ -180,7 +179,6 @@ export const HolonView: React.FC<HolonViewProps> = ({
   vaultService
 }) => {
   const [submoduleIds, setSubmoduleIds] = useState<string[]>([]);
-  const [supermoduleIds, setSupermoduleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zoomingSubmoduleId, setZoomingSubmoduleId] = useState<string | null>(null);
@@ -188,11 +186,10 @@ export const HolonView: React.FC<HolonViewProps> = ({
   // Get all DreamNodes from store to resolve submodule IDs
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
   const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
+  const startFlipAnimation = useInterBrainStore(state => state.startFlipAnimation);
 
-  // Get orchestrator for supermodule spatial layout
-  const orchestrator = useOrchestrator();
-
-  // Load submodule and supermodule IDs from UDD file
+  // Load submodule IDs from UDD file
+  // Note: Supermodule spatial layout is handled by SpatialOrchestrator subscribing to flip state
   useEffect(() => {
     const loadHolarchyData = async () => {
       if (!dreamNode.repoPath || !vaultService) return;
@@ -204,17 +201,10 @@ export const HolonView: React.FC<HolonViewProps> = ({
         const fullPath = vaultService.getFullPath(dreamNode.repoPath);
         const udd = await UDDService.readUDD(fullPath);
         setSubmoduleIds(udd.submodules || []);
-
-        // Extract supermodule IDs (handle both string and SupermoduleEntry formats)
-        const extractedSupermoduleIds = (udd.supermodules || []).map(entry =>
-          typeof entry === 'string' ? entry : entry.radicleId
-        );
-        setSupermoduleIds(extractedSupermoduleIds);
       } catch (err) {
         console.error('Failed to load holarchy data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load holarchy data');
         setSubmoduleIds([]);
-        setSupermoduleIds([]);
       } finally {
         setIsLoading(false);
       }
@@ -222,21 +212,6 @@ export const HolonView: React.FC<HolonViewProps> = ({
 
     loadHolarchyData();
   }, [dreamNode.repoPath, vaultService]);
-
-  // Trigger supermodule spatial layout when HolonView mounts with supermodules
-  useEffect(() => {
-    if (!orchestrator || supermoduleIds.length === 0 || isLoading) {
-      return; // Early return with no cleanup needed
-    }
-
-    // Show supermodules in rings around the center node
-    orchestrator.showSupermodulesInRings(dreamNode.id, supermoduleIds);
-
-    // Cleanup: restore dreamers when HolonView unmounts
-    return () => {
-      orchestrator.showDreamersInRings(dreamNode.id);
-    };
-  }, [orchestrator, dreamNode.id, supermoduleIds, isLoading]);
 
   // Resolve submodule IDs to DreamNode objects
   // Priority: radicleId (canonical) > UUID (legacy) > name (last resort)
@@ -272,16 +247,19 @@ export const HolonView: React.FC<HolonViewProps> = ({
   }, [submoduleNodes.length, parentRadius]);
 
   // Handle submodule click - initiate zoom animation then navigate
+  // Stays in holarchy mode: selects the submodule AND flips it to show its holarchy
   const handleSubmoduleClick = useCallback((submodule: DreamNode) => {
     // Start zoom animation
     setZoomingSubmoduleId(submodule.id);
 
-    // After animation, navigate to submodule
+    // After animation, navigate to submodule and flip it to back side
     setTimeout(() => {
       setSelectedNode(submodule);
+      // Flip the newly selected node to back side to stay in holarchy navigation mode
+      startFlipAnimation(submodule.id, 'front-to-back');
       setZoomingSubmoduleId(null);
     }, 800); // Match animation duration
-  }, [setSelectedNode]);
+  }, [setSelectedNode, startFlipAnimation]);
 
   // Loading state
   if (isLoading) {
