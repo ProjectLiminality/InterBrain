@@ -150,8 +150,29 @@ export class DreamSongRelationshipService {
   }
 
   /**
+   * Helper: Process items in batches to avoid overwhelming the system
+   */
+  private async processBatched<T, R>(
+    items: T[],
+    batchSize: number,
+    processor: (item: T) => Promise<R>
+  ): Promise<R[]> {
+    const results: R[] = [];
+
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(item => processor(item).catch(() => null as unknown as R))
+      );
+      results.push(...batchResults);
+    }
+
+    return results;
+  }
+
+  /**
    * Phase 2: Extract relationships from all DreamSongs
-   * OPTIMIZED: Uses parallel I/O operations for maximum performance
+   * OPTIMIZED: Uses batched parallel I/O to avoid overwhelming the system
    */
   private async extractAllRelationships(
     dreamNodes: DreamNode[],
@@ -162,24 +183,33 @@ export class DreamSongRelationshipService {
     dreamSongsFound: number;
     dreamSongsParsed: number;
   }> {
-    // Check all DreamSongs in parallel
-    const dreamSongChecks = await Promise.all(
-      dreamNodes.map(async (node) => ({
+    // Batch size limits concurrent operations to prevent resource exhaustion
+    const BATCH_SIZE = 50;
+
+    // Check all DreamSongs in batches
+    const dreamSongChecks = await this.processBatched(
+      dreamNodes,
+      BATCH_SIZE,
+      async (node) => ({
         node,
         hasDreamSong: await this.dreamSongParser.hasDreamSong(node.repoPath)
-      }))
+      })
     );
 
-    // Filter to only nodes with DreamSongs
+    // Filter to only nodes with DreamSongs (filter out null from error catches)
     const nodesWithDreamSongs = dreamSongChecks
-      .filter(check => check.hasDreamSong)
+      .filter((check): check is { node: DreamNode; hasDreamSong: boolean } =>
+        check !== null && check.hasDreamSong
+      )
       .map(check => check.node);
 
     const dreamSongsFound = nodesWithDreamSongs.length;
 
-    // Parse all DreamSongs in parallel
-    const parseResults = await Promise.all(
-      nodesWithDreamSongs.map(async (dreamNode) => {
+    // Parse all DreamSongs in batches
+    const parseResults = await this.processBatched(
+      nodesWithDreamSongs,
+      BATCH_SIZE,
+      async (dreamNode) => {
         const dreamSongPath = `${dreamNode.repoPath}/DreamSong.canvas`;
 
         try {
@@ -189,7 +219,7 @@ export class DreamSongRelationshipService {
           );
 
           if (!dreamSongResult.success || !dreamSongResult.data) {
-            return { success: false, edges: [] };
+            return { success: false, edges: [] as DreamSongEdge[] };
           }
 
           // Extract relationships from this DreamSong
@@ -204,17 +234,17 @@ export class DreamSongRelationshipService {
           return { success: true, edges };
 
         } catch {
-          return { success: false, edges: [] };
+          return { success: false, edges: [] as DreamSongEdge[] };
         }
-      })
+      }
     );
 
-    // Aggregate results
+    // Aggregate results (filter out null from error catches)
     const allEdges: DreamSongEdge[] = [];
     let dreamSongsParsed = 0;
 
     for (const result of parseResults) {
-      if (result.success) {
+      if (result !== null && result.success) {
         dreamSongsParsed++;
         allEdges.push(...result.edges);
       }

@@ -401,9 +401,13 @@ export default class InterBrainPlugin extends Plugin {
     }, 100); // Tiny delay to let vault scan finish first
 
     // Run DreamSong relationship scan after vault scan completes
-    setTimeout(() => {
-      // Run the scan via dreamweaving commands
-      this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
+    setTimeout(async () => {
+      try {
+        // Run the scan via dreamweaving commands
+        this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
+      } catch (error) {
+        console.error('[Plugin] DreamSong relationship scan failed:', error);
+      }
     }, 600); // Wait for vault scan to complete (after update checker)
 
   }
