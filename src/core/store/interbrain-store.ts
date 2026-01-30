@@ -467,50 +467,57 @@ export const useInterBrainStore = create<InterBrainState>()(
         ...extractTutorialPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
-        const persistedData = persisted as {
-          dreamNodes?: [string, DreamNodeData][];
-          // Legacy field - will be migrated to dreamNodes
-          realNodes?: [string, DreamNodeData][];
-          constellationData?: {
-            relationshipGraph: SerializableDreamSongGraph | null;
-            lastScanTimestamp: number | null;
-            isScanning: boolean;
-            positions: [string, [number, number, number]][] | null;
-            lastLayoutTimestamp: number | null;
-            nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
-          } | null;
-          // DreamSong relationships (from dreamweaving slice)
-          dreamSongRelationships?: {
-            graph: DreamweavingSerializableGraph | null;
-            lastScanTimestamp: number | null;
-            isScanning: boolean;
-          } | null;
-          vectorData?: [string, VectorData][];
-          ollamaConfig?: OllamaConfig;
-          feedbackPreferences?: {
-            autoReportPreference?: AutoReportPreference;
-            includeLogs?: boolean;
-            includeState?: boolean;
+        // Wrap entire merge in try-catch to prevent crashes from corrupted persisted data
+        try {
+          const persistedData = persisted as {
+            dreamNodes?: [string, DreamNodeData][];
+            // Legacy field - will be migrated to dreamNodes
+            realNodes?: [string, DreamNodeData][];
+            constellationData?: {
+              relationshipGraph: SerializableDreamSongGraph | null;
+              lastScanTimestamp: number | null;
+              isScanning: boolean;
+              positions: [string, [number, number, number]][] | null;
+              lastLayoutTimestamp: number | null;
+              nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
+            } | null;
+            // DreamSong relationships (from dreamweaving slice)
+            dreamSongRelationships?: {
+              graph: DreamweavingSerializableGraph | null;
+              lastScanTimestamp: number | null;
+              isScanning: boolean;
+            } | null;
+            vectorData?: [string, VectorData][];
+            ollamaConfig?: OllamaConfig;
+            feedbackPreferences?: {
+              autoReportPreference?: AutoReportPreference;
+              includeLogs?: boolean;
+              includeState?: boolean;
+            };
+            // Tutorial completion state
+            hasCompleted?: boolean;
           };
-          // Tutorial completion state
-          hasCompleted?: boolean;
-        };
 
-        // Support migration from legacy realNodes to dreamNodes
-        const dreamNodesData = persistedData.dreamNodes || persistedData.realNodes;
-        const restoredDreamNodes = restoreDreamNodePersistenceData({ dreamNodes: dreamNodesData });
+          // Support migration from legacy realNodes to dreamNodes
+          const dreamNodesData = persistedData.dreamNodes || persistedData.realNodes;
+          const restoredDreamNodes = restoreDreamNodePersistenceData({ dreamNodes: dreamNodesData });
 
-        return {
-          ...current,
-          ...restoredDreamNodes,
-          // Keep realNodes in sync with dreamNodes for backward compatibility
-          realNodes: restoredDreamNodes.dreamNodes,
-          ...restoreSearchPersistenceData(persistedData),
-          ...restoreConstellationPersistenceData(persistedData),
-          ...restoreDreamweavingPersistenceData(persistedData),
-          ...restoreFeedbackPersistenceData(persistedData),
-          ...restoreTutorialPersistenceData(current as TutorialSlice, persistedData),
-        };
+          return {
+            ...current,
+            ...restoredDreamNodes,
+            // Keep realNodes in sync with dreamNodes for backward compatibility
+            realNodes: restoredDreamNodes.dreamNodes,
+            ...restoreSearchPersistenceData(persistedData),
+            ...restoreConstellationPersistenceData(persistedData),
+            ...restoreDreamweavingPersistenceData(persistedData),
+            ...restoreFeedbackPersistenceData(persistedData),
+            ...restoreTutorialPersistenceData(current as TutorialSlice, persistedData),
+          };
+        } catch (error) {
+          console.error('[Store] Failed to restore persisted state, starting fresh:', error);
+          // Return current state unchanged - app will start fresh
+          return current;
+        }
       },
     }
   )
