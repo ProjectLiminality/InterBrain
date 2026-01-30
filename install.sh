@@ -1076,8 +1076,15 @@ info "Configuring Obsidian vault exclusions from .gitignore..."
 
 GITIGNORE_PATH="$INTERBRAIN_PATH/.gitignore"
 
-# Always exclude .git directory (not in .gitignore but critical)
-FILTERS='["InterBrain/.git"'
+# CRITICAL: Global exclusions for DreamNode vaults
+# Each DreamNode is a git repo, so we must exclude all .git directories vault-wide
+# Also exclude node_modules and common dev artifacts that may exist in any DreamNode
+# And large media files that would slow down indexing (they're still accessible, just not indexed)
+FILTERS='["**/.git", "**/node_modules", "**/.DS_Store"'
+
+# Large media exclusions - these files work fine in canvases, just not indexed for search
+FILTERS="$FILTERS, \"**/*.mp4\", \"**/*.mov\", \"**/*.avi\", \"**/*.mkv\", \"**/*.webm\""
+FILTERS="$FILTERS, \"**/*.wav\", \"**/*.mp3\", \"**/*.flac\", \"**/*.aac\", \"**/*.ogg\""
 
 if [ -f "$GITIGNORE_PATH" ]; then
     # Parse .gitignore: filter comments, empty lines, and convert to JSON array
@@ -1114,7 +1121,7 @@ if [ ! -f "$VAULT_PATH/.obsidian/app.json" ] || [ "$GITIGNORE_PATH" -nt "$VAULT_
   "userIgnoreFilters": $FILTERS
 }
 EOF
-    success "Created Obsidian config with $(echo "$FILTERS" | grep -o "InterBrain/" | wc -l | tr -d ' ') exclusion patterns"
+    success "Created Obsidian config with global exclusions (.git, node_modules, large media) + InterBrain patterns"
 else
     success "Obsidian config already up to date"
 fi
