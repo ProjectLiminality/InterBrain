@@ -778,11 +778,10 @@ export class GitDreamNodeService {
       githubPagesUrl: udd.githubPagesUrl
     };
     
-    // Calculate file hash if needed
+    // Get file identifier from git's index (instant - no file reading)
     let fileHash: string | undefined;
     if (dreamTalkMedia.length > 0 && udd.dreamTalk) {
-      const mediaPath = path.join(dirPath, udd.dreamTalk);
-      fileHash = await this.calculateFileHashFromPath(mediaPath);
+      fileHash = await this.getGitFileHash(dirPath, udd.dreamTalk);
     }
 
     // Return node data without updating store
@@ -844,12 +843,12 @@ export class GitDreamNodeService {
       updated = true;
     }
     
-    // Check dreamTalk changes
+    // Check dreamTalk changes using git's index (instant - no file reading)
     if (udd.dreamTalk) {
       const mediaPath = path.join(dirPath, udd.dreamTalk);
       if (await this.fileExists(mediaPath)) {
-        const newHash = await this.calculateFileHashFromPath(mediaPath);
-        
+        const newHash = await this.getGitFileHash(dirPath, udd.dreamTalk);
+
         if (newHash !== existingData.fileHash) {
           // File changed - reload metadata only (data will lazy load)
           const stats = await fsPromises.stat(mediaPath);
@@ -1093,6 +1092,62 @@ export class GitDreamNodeService {
     return hash.digest('hex');
   }
   
+  /**
+   * Get file identifier from git's index - instant, no file reading required.
+   * For LFS files: returns the SHA256 oid (content hash) from the pointer
+   * For regular files: returns git's blob SHA1 hash
+   * Falls back to mtime if file is untracked
+   */
+  private async getGitFileHash(repoPath: string, fileName: string): Promise<string> {
+    try {
+      // Get git's stored info for this file
+      const { stdout: lsOutput } = await execAsync(
+        `git ls-files -s "${fileName}"`,
+        { cwd: repoPath }
+      );
+
+      if (!lsOutput.trim()) {
+        // File not tracked by git - use mtime as fallback
+        const filePath = path.join(repoPath, fileName);
+        const stats = await fsPromises.stat(filePath);
+        return `mtime:${stats.mtimeMs}`;
+      }
+
+      // Parse: "100644 <blob-hash> 0 <filename>"
+      const blobHash = lsOutput.trim().split(/\s+/)[1];
+
+      // Check if it's an LFS pointer by reading the blob content
+      const { stdout: blobContent } = await execAsync(
+        `git cat-file -p ${blobHash}`,
+        { cwd: repoPath }
+      );
+
+      if (blobContent.startsWith('version https://git-lfs.github.com/spec/v1')) {
+        // LFS file - extract the oid (SHA256 of actual content)
+        const match = blobContent.match(/oid sha256:([a-f0-9]+)/);
+        if (match) {
+          return `lfs:${match[1]}`;
+        }
+      }
+
+      // Regular git-tracked file - use blob hash
+      return `git:${blobHash}`;
+    } catch (error) {
+      // Git command failed - file might be untracked or repo issue
+      // Fall back to mtime
+      try {
+        const filePath = path.join(repoPath, fileName);
+        const stats = await fsPromises.stat(filePath);
+        return `mtime:${stats.mtimeMs}`;
+      } catch {
+        return 'unknown';
+      }
+    }
+  }
+
+  /**
+   * @deprecated Use getGitFileHash instead - reads entire file into memory
+   */
   private async calculateFileHashFromPath(filePath: string): Promise<string> {
     const buffer = await fsPromises.readFile(filePath);
     const hash = crypto.createHash('sha256');
