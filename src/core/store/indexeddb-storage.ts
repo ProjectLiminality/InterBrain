@@ -80,40 +80,53 @@ function getVaultSpecificKey(key: string): string {
 function openDB(): Promise<IDBDatabase> {
   // Return cached connection if still valid
   if (cachedDB) {
+    console.log('[IndexedDB] Using cached connection');
     return Promise.resolve(cachedDB);
   }
 
   // Return existing open promise if one is in progress
   if (dbOpenPromise) {
+    console.log('[IndexedDB] Waiting for existing open promise');
     return dbOpenPromise;
   }
 
+  console.log('[IndexedDB] Opening new connection...');
+
   // Create new connection
   dbOpenPromise = new Promise((resolve, reject) => {
-    // Increased timeout (30s) for large vaults with many concurrent operations
+    // Timeout for this connection attempt
     const timeout = setTimeout(() => {
+      console.error('[IndexedDB] Connection timeout after 30s - database may be blocked');
       dbOpenPromise = null;
       reject(new Error('IndexedDB open timeout'));
     }, 30000);
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
+    request.onblocked = () => {
+      console.warn('[IndexedDB] Database open blocked - close other tabs/windows using this database');
+    };
+
     request.onerror = () => {
+      console.error('[IndexedDB] Open error:', request.error);
       clearTimeout(timeout);
       dbOpenPromise = null;
       reject(request.error);
     };
 
     request.onsuccess = () => {
+      console.log('[IndexedDB] Connection opened successfully');
       clearTimeout(timeout);
       cachedDB = request.result;
 
       // Clear cache on connection close/error
       cachedDB.onclose = () => {
+        console.log('[IndexedDB] Connection closed');
         cachedDB = null;
         dbOpenPromise = null;
       };
-      cachedDB.onerror = () => {
+      cachedDB.onerror = (event) => {
+        console.error('[IndexedDB] Database error:', event);
         cachedDB = null;
         dbOpenPromise = null;
       };
@@ -123,9 +136,11 @@ function openDB(): Promise<IDBDatabase> {
     };
 
     request.onupgradeneeded = (event) => {
+      console.log('[IndexedDB] Upgrading database schema...');
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
+        console.log('[IndexedDB] Created object store:', STORE_NAME);
       }
     };
   });
