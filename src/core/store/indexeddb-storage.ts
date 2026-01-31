@@ -267,4 +267,6 @@ export function closeIndexedDBConnection(): void {
     cachedDB = null;
   }
   dbOpenPromise = null;
+  // Also reset vaultId so it must be set again on reload
+  vaultId = null;
 }
