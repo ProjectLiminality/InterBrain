@@ -62,7 +62,9 @@ import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
-import { closeIndexedDBConnection, setVaultId } from './core/store/indexeddb-storage';
+import { closeIndexedDBConnection, setVaultId, gracefulShutdown, markHydrationComplete } from './core/store/indexeddb-storage';
+import { serviceLifecycleManager, LifecyclePhase } from './core/services/service-lifecycle-manager';
+import { vaultStateService } from './core/services/vault-state-service';
 import { SettingsStatusService } from './features/settings/settings-status-service';
 import {
   registerFeedbackCommands,
@@ -90,60 +92,149 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
-    // CRITICAL: Set vault ID for IndexedDB namespacing FIRST
-    // This must happen before any store operations to prevent cross-vault contamination
+    console.log('[Plugin] InterBrain loading with lifecycle manager...');
+    const loadStartTime = Date.now();
+
+    // Get vault path for all services
     const vaultPath = (this.app.vault.adapter as any).basePath;
-    setVaultId(vaultPath);
 
-    // NOW trigger hydration - this uses the vault-specific key we just set
-    // We use skipHydration: true in the store config to prevent automatic hydration
-    // before the vault ID is known, which would use the wrong storage key
-    console.log('[Plugin] Triggering manual store hydration...');
-    await useInterBrainStore.persist.rehydrate();
-    console.log('[Plugin] Store hydration complete');
+    // =========================================================================
+    // PHASE 1: BOOTSTRAP - Set context, load settings
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BOOTSTRAP, async () => {
+      // Set vault ID for IndexedDB namespacing FIRST
+      setVaultId(vaultPath);
+      vaultStateService.initialize(vaultPath);
 
-    // Load settings
-    await this.loadSettings();
+      // Load settings
+      await this.loadSettings();
 
-    // Cache settings for services that need runtime access
-    SettingsStatusService.setSettings({
-      claudeApiKey: this.settings.claudeApiKey,
-      radiclePassphrase: this.settings.radiclePassphrase,
+      // Cache settings for services that need runtime access
+      SettingsStatusService.setSettings({
+        claudeApiKey: this.settings.claudeApiKey,
+        radiclePassphrase: this.settings.radiclePassphrase,
+      });
+
+      // Initialize AI Magic inference service
+      initializeInferenceService({
+        defaultProvider: (this.settings.defaultAIProvider || 'claude') as any,
+        offlineMode: this.settings.offlineMode ?? false,
+        preferLocal: false,
+        claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined,
+        openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
+        groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
+        xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
+      });
+
+      return { vaultPath };
     });
 
-    // Initialize AI Magic inference service with all configured API keys
-    initializeInferenceService({
-      defaultProvider: (this.settings.defaultAIProvider || 'claude') as any,
-      offlineMode: this.settings.offlineMode ?? false,
-      preferLocal: false, // Legacy field, ignored
-      claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined,
-      openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
-      groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
-      xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
+    // =========================================================================
+    // PHASE 2: HYDRATE - Read IndexedDB, validate persisted data
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.HYDRATE, async () => {
+      console.log('[Plugin] Triggering manual store hydration...');
+      await useInterBrainStore.persist.rehydrate();
+
+      // Mark hydration complete - this enables writes to IndexedDB
+      // Must happen AFTER rehydrate to prevent empty state from overwriting persisted data
+      markHydrationComplete();
+
+      // Check if persisted data matches current vault
+      const store = useInterBrainStore.getState();
+      const nodeCount = store.dreamNodes.size;
+
+      console.log(`[Plugin] Hydrated ${nodeCount} nodes from IndexedDB`);
+      return { nodeCount };
     });
 
-    // Initialize error capture for bug reporting
-    this.initializeErrorCapture();
+    // =========================================================================
+    // PHASE 3: SCAN - Scan vault (only if needed based on vault state)
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.SCAN, async () => {
+      // Initialize core services (creates GitDreamNodeService)
+      this.initializeServices();
+
+      // Check if vault has changed since last scan
+      const changeResult = await vaultStateService.hasVaultChanged();
+
+      if (!changeResult.hasChanges && changeResult.cachedState) {
+        // Validate persisted node count matches
+        const store = useInterBrainStore.getState();
+        const persistedCount = store.dreamNodes.size;
+        const cachedCount = changeResult.cachedState.nodeCount;
+
+        if (persistedCount === cachedCount && persistedCount > 0) {
+          console.log(`[Plugin] Vault unchanged, using ${persistedCount} cached nodes (skipping scan)`);
+          return { scanned: false, nodeCount: persistedCount, reason: 'cached' };
+        }
+      }
+
+      // Need to scan - either vault changed or no cached data
+      console.log(`[Plugin] Scanning vault (reason: ${changeResult.reason})...`);
+      const scanResult = await serviceManager.scanVault();
+
+      if (scanResult) {
+        // Save vault state for next startup
+        const store = useInterBrainStore.getState();
+        const nodeCount = store.dreamNodes.size;
+        await vaultStateService.saveState(nodeCount);
+
+        return {
+          scanned: true,
+          nodeCount,
+          added: scanResult.added,
+          updated: scanResult.updated,
+          removed: scanResult.removed
+        };
+      }
+
+      return { scanned: true, nodeCount: 0, error: 'scan returned null' };
+    });
+
+    // =========================================================================
+    // PHASE 4: READY - UI can interact, services available
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.READY, async () => {
+      // Initialize media loading service (needed for two-phase loading)
+      initializeMediaLoadingService();
+
+      // Initialize essential services for URI handling
+      const radicleService = serviceManager.getRadicleService();
+      const dreamNodeService = serviceManager.getActive();
+      initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
+      initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
+      initializeGitHubBatchShareService(this, dreamNodeService as any);
+
+      // Initialize error capture for bug reporting
+      this.initializeErrorCapture();
+
+      return { ready: true };
+    });
+
+    // =========================================================================
+    // PHASE 5: BACKGROUND - Heavy operations (deferred)
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BACKGROUND, async () => {
+      // These run after READY, non-blocking
+      this.initializeBackgroundServices();
+      return { backgroundStarted: true };
+    });
+
+    // =========================================================================
+    // RUN LIFECYCLE
+    // =========================================================================
+    await serviceLifecycleManager.runLifecycle();
+
+    const loadDuration = Date.now() - loadStartTime;
+    console.log(`[Plugin] Lifecycle complete in ${loadDuration}ms`);
+
+    // =========================================================================
+    // POST-LIFECYCLE SETUP (sync, non-blocking)
+    // =========================================================================
 
     // Add settings tab
     this.addSettingTab(new InterBrainSettingTab(this.app, this));
-
-    // Initialize core services first (triggers vault scan)
-    this.initializeServices();
-
-    // Initialize media loading service immediately (needed for two-phase loading)
-    initializeMediaLoadingService();
-
-    // Initialize essential services needed for URI handling
-    const radicleService = serviceManager.getRadicleService();
-    const dreamNodeService = serviceManager.getActive();
-    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
-    initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
-    initializeGitHubBatchShareService(this, dreamNodeService as any);
-
-    // Defer heavy copilot/songline services until after critical path
-    // These will initialize in background after plugin loads
-    this.initializeBackgroundServices();
 
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
@@ -166,7 +257,6 @@ export default class InterBrainPlugin extends Plugin {
     const ribbonIconEl = this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
       this.app.commands.executeCommandById('interbrain:open-dreamspace');
     });
-    // Rotate icon 90° clockwise so it's upright
     ribbonIconEl.style.transform = 'rotate(90deg)';
 
     // First launch experience: auto-open DreamSpace with InterBrain selected
@@ -180,7 +270,7 @@ export default class InterBrainPlugin extends Plugin {
     console.log(`[InterBrain] globalThis.__interbrainReloadTargetUUID =`, reloadTargetUUID);
     if (reloadTargetUUID) {
       console.log(`[InterBrain] ✅ Reload target UUID detected: ${reloadTargetUUID}`);
-      delete (globalThis as any).__interbrainReloadTargetUUID; // Clean up after use
+      delete (globalThis as any).__interbrainReloadTargetUUID;
     } else {
       console.log(`[InterBrain] ℹ️ No reload target UUID - will select default InterBrain node`);
     }
@@ -972,89 +1062,111 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Refresh plugin with node reselection
-    // Uses lightweight plugin disable/enable instead of full app reload
+    // =========================================================================
+    // REFRESH COMMANDS - Separated by concern for faster Cmd+R
+    // =========================================================================
+
+    // FAST: Refresh plugin (Cmd+R) - Just reload plugin, no heavy operations
     this.addCommand({
       id: 'refresh-plugin',
-      name: 'Refresh Plugin (with node reselection)',
+      name: 'Refresh Plugin (fast)',
       hotkeys: [{ modifiers: ['Mod'], key: 'r' }],
       callback: async () => {
+        const refreshStart = Date.now();
+        console.log(`[Refresh] Starting fast refresh...`);
+
         const store = useInterBrainStore.getState();
         const currentNode = store.selectedNode;
 
-        // CRITICAL: Only set UUID if not already set by another flow (e.g., URI handler)
-        // This prevents refresh command from overwriting explicit auto-selection targets
+        // Store current node UUID for reselection after reload
         const existingUUID = (globalThis as any).__interbrainReloadTargetUUID;
-        if (existingUUID) {
-          console.log(`[Refresh] ℹ️ UUID already set externally: ${existingUUID}`);
-          console.log(`[Refresh] Preserving external auto-selection target (not using current node)`);
-        } else {
-          // Store current node UUID for reselection after reload
-          let nodeUUID: string | undefined;
-          if (currentNode) {
-            nodeUUID = currentNode.id;
-            console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
-            console.log(`[Refresh] Storing UUID for reselection...`);
-          } else {
-            console.log(`[Refresh] ℹ️ No node currently selected`);
-          }
-
-          // Store UUID in a global variable that persists across plugin reload
-          (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
-          console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
+        if (!existingUUID && currentNode) {
+          (globalThis as any).__interbrainReloadTargetUUID = currentNode.id;
+          console.log(`[Refresh] Will reselect: ${currentNode.name}`);
         }
 
-        // Note: Bidirectional relationship sync is no longer needed with liminal-web.json architecture
-        // Relationships are computed from Dreamer → Dream pointers during vault scan
+        // Use graceful shutdown to wait for pending writes
+        await gracefulShutdown(2000);
 
-        // Clean up dangling relationships before reload
-        // This ensures deleted nodes are properly removed from relationship references
-        console.log(`[Refresh] Cleaning dangling relationships...`);
-        await (this.app as any).commands.executeCommandById('interbrain:clean-dangling-relationships');
-        console.log(`[Refresh] Dangling relationship cleanup complete`);
-
-        // Sync Radicle peer following (seeds all Dreamer-related Dream nodes to network)
-        // Fire-and-forget: runs in background, doesn't block refresh
-        console.log(`[Refresh] Triggering Radicle peer sync (background)...`);
-        (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-        // Note: Not awaiting - let it run in background while plugin reloads
-
-        // Ensure all DreamNodes are indexed for semantic search
-        // Fast idempotent check: ~1ms per already-indexed node, only indexes missing nodes
-        console.log(`[Refresh] Ensuring all nodes are indexed...`);
-        let didIndex = false;
-        try {
-          const { indexingService } = await import('./features/semantic-search/services/indexing-service');
-          const indexResult = await indexingService.ensureAllIndexed();
-          if (indexResult.indexed > 0) {
-            console.log(`[Refresh] Indexed ${indexResult.indexed} new nodes (${indexResult.skipped} already indexed)`);
-            didIndex = true;
-          } else {
-            console.log(`[Refresh] All ${indexResult.skipped} nodes already indexed`);
-          }
-        } catch (error) {
-          console.warn(`[Refresh] Indexing check failed (non-critical):`, error);
-        }
-
-        // Wait for Zustand persist middleware to flush pending IndexedDB writes
-        // This prevents a race condition where the new plugin instance tries to
-        // hydrate from IndexedDB while writes are still in flight
-        if (didIndex) {
-          console.log(`[Refresh] Waiting for IndexedDB persistence to settle...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-
-        // Close IndexedDB connection before reload to ensure clean state
-        console.log(`[Refresh] Closing IndexedDB connection...`);
-        closeIndexedDBConnection();
-
-        // Lightweight plugin reload using Obsidian's plugin manager
-        // This is much faster than app:reload and preserves console logs
-        console.log(`[Refresh] Triggering lightweight plugin reload...`);
+        // Lightweight plugin reload
+        console.log(`[Refresh] Reloading plugin...`);
         const plugins = (this.app as any).plugins;
         await plugins.disablePlugin('interbrain');
         await plugins.enablePlugin('interbrain');
-        console.log(`[Refresh] Plugin reload complete`);
+
+        console.log(`[Refresh] Complete in ${Date.now() - refreshStart}ms`);
+      }
+    });
+
+    // FULL: Refresh with cleanup and indexing (manual)
+    this.addCommand({
+      id: 'refresh-full',
+      name: 'Refresh Full (cleanup + indexing)',
+      callback: async () => {
+        const refreshStart = Date.now();
+        console.log(`[Refresh Full] Starting full refresh...`);
+
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+
+        // Store current node UUID for reselection
+        if (currentNode) {
+          (globalThis as any).__interbrainReloadTargetUUID = currentNode.id;
+        }
+
+        // Clean up dangling relationships
+        console.log(`[Refresh Full] Cleaning dangling relationships...`);
+        await (this.app as any).commands.executeCommandById('interbrain:clean-dangling-relationships');
+
+        // Index any missing nodes
+        console.log(`[Refresh Full] Ensuring all nodes are indexed...`);
+        try {
+          const { indexingService } = await import('./features/semantic-search/services/indexing-service');
+          const indexResult = await indexingService.ensureAllIndexed();
+          console.log(`[Refresh Full] Indexed ${indexResult.indexed} nodes (${indexResult.skipped} already indexed)`);
+        } catch (error) {
+          console.warn(`[Refresh Full] Indexing failed (non-critical):`, error);
+        }
+
+        // Use graceful shutdown
+        await gracefulShutdown(3000);
+
+        // Reload plugin
+        console.log(`[Refresh Full] Reloading plugin...`);
+        const plugins = (this.app as any).plugins;
+        await plugins.disablePlugin('interbrain');
+        await plugins.enablePlugin('interbrain');
+
+        console.log(`[Refresh Full] Complete in ${Date.now() - refreshStart}ms`);
+      }
+    });
+
+    // SYNC: Radicle sync (manual, opt-in)
+    this.addCommand({
+      id: 'sync-network',
+      name: 'Sync with Radicle Network',
+      callback: async () => {
+        console.log(`[Sync] Triggering Radicle peer sync...`);
+        await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+        console.log(`[Sync] Radicle sync initiated`);
+      }
+    });
+
+    // REINDEX: Force full reindex (manual, heavy)
+    this.addCommand({
+      id: 'force-reindex',
+      name: 'Force Reindex All Nodes',
+      callback: async () => {
+        const loadingNotice = this.uiService.showLoading('Re-indexing all nodes...');
+        try {
+          const { indexingService } = await import('./features/semantic-search/services/indexing-service');
+          const result = await indexingService.indexAllNodes();
+          this.uiService.showSuccess(`Indexed ${result.indexed} nodes (${result.errors} errors)`);
+        } catch (error) {
+          this.uiService.showError(`Indexing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          loadingNotice.hide();
+        }
       }
     });
 
@@ -1402,8 +1514,8 @@ export default class InterBrainPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  onunload() {
-    console.log('InterBrain plugin unloaded');
+  async onunload() {
+    console.log('[Plugin] InterBrain unloading...');
 
     // Note: Passphrase is stored in settings, not cleared on unload
     // This preserves user's passphrase configuration across reloads
@@ -1421,7 +1533,20 @@ export default class InterBrainPlugin extends Plugin {
     // Clean up transcription service
     cleanupTranscriptionService();
 
+    // GRACEFUL SHUTDOWN: Wait for pending IndexedDB writes before closing
+    // This prevents the "open timeout" error caused by interrupted transactions
+    console.log('[Plugin] Waiting for pending IndexedDB writes...');
+    await gracefulShutdown(3000); // 3 second timeout
+
+    // Shutdown lifecycle manager
+    await serviceLifecycleManager.shutdown();
+
     // Close IndexedDB connection to allow clean re-initialization on reload
     closeIndexedDBConnection();
+
+    // Reset lifecycle manager for next load
+    serviceLifecycleManager.reset();
+
+    console.log('[Plugin] InterBrain unload complete');
   }
 }
