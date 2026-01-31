@@ -95,6 +95,13 @@ export default class InterBrainPlugin extends Plugin {
     const vaultPath = (this.app.vault.adapter as any).basePath;
     setVaultId(vaultPath);
 
+    // NOW trigger hydration - this uses the vault-specific key we just set
+    // We use skipHydration: true in the store config to prevent automatic hydration
+    // before the vault ID is known, which would use the wrong storage key
+    console.log('[Plugin] Triggering manual store hydration...');
+    await useInterBrainStore.persist.rehydrate();
+    console.log('[Plugin] Store hydration complete');
+
     // Load settings
     await this.loadSettings();
 

@@ -519,6 +519,11 @@ export const useInterBrainStore = create<InterBrainState>()(
           return current;
         }
       },
+      // Skip automatic hydration - we'll trigger it manually after setVaultId()
+      // This prevents the race condition where hydration happens before we know
+      // which vault we're in, causing cross-vault data contamination
+      skipHydration: true,
+
       // Hydration lifecycle callbacks for debugging persistence issues
       onRehydrateStorage: () => {
         console.log('[Store] Starting hydration from IndexedDB...');
