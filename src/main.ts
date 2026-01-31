@@ -57,7 +57,6 @@ import { initializePerspectiveService } from './features/songline/services/persp
 import { initializeAudioTrimmingService } from './features/songline/services/audio-trimming-service';
 import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
-import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
 import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
@@ -196,9 +195,6 @@ export default class InterBrainPlugin extends Plugin {
     // PHASE 4: READY - UI can interact, services available
     // =========================================================================
     serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.READY, async () => {
-      // Initialize media loading service (needed for two-phase loading)
-      initializeMediaLoadingService();
-
       // Initialize essential services for URI handling
       const radicleService = serviceManager.getRadicleService();
       const dreamNodeService = serviceManager.getActive();
@@ -1044,15 +1040,6 @@ export default class InterBrainPlugin extends Plugin {
             this.uiService.showSuccess(
               `Scan complete: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed`
             );
-
-            // Trigger two-phase media loading after vault scan
-            try {
-              const { getMediaLoadingService } = await import('./features/dreamnode/services/media-loading-service');
-              const mediaLoadingService = getMediaLoadingService();
-              mediaLoadingService.loadAllNodesByDistance();
-            } catch (error) {
-              console.warn('[Main] Failed to start media loading:', error);
-            }
           }
         } catch (error) {
           this.uiService.showError(error instanceof Error ? error.message : 'Vault scan failed');

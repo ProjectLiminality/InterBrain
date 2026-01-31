@@ -19,7 +19,6 @@ export * from './types/dreamnode';
 // Services (orchestrators with state)
 export { GitDreamNodeService } from './services/git-dreamnode-service';
 export { UDDService } from './services/udd-service';
-export { MediaLoadingService, getMediaLoadingService } from './services/media-loading-service';
 
 // Utilities (stateless functions)
 // git-utils: Git command wrappers

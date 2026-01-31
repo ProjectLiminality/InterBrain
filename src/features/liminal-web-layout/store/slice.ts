@@ -84,19 +84,8 @@ export const createLiminalWebSlice: StateCreator<
     const previousNode = state.selectedNode;
     const currentLayout = state.spatialLayout;
 
-    // Trigger lazy media loading for node and 2-degree neighborhood
-    if (node) {
-      import('../../dreamnode/services/media-loading-service').then(({ getMediaLoadingService }) => {
-        try {
-          const mediaLoadingService = getMediaLoadingService();
-          mediaLoadingService.loadNodeWithNeighborhood(node.id);
-        } catch (error) {
-          console.warn('[Store] MediaLoadingService not initialized:', error);
-        }
-      }).catch(error => {
-        console.error('[Store] Failed to load media service:', error);
-      });
-    }
+    // Media is loaded on-demand via useContentTexture hook (uses absolutePath)
+    // No explicit pre-loading needed
 
     // Detect meaningful node selection changes for history tracking
     // Track both: navigating between nodes in liminal-web AND initial selection from constellation
