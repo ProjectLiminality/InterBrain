@@ -1,3 +1,6 @@
+// DIAGNOSTIC: Log at very start of module load (before all imports)
+console.log('[InterBrain] 🔴 MODULE LOAD START - before imports');
+
 import { Plugin, TFolder, TAbstractFile, Menu, Notice } from 'obsidian';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
@@ -76,6 +79,9 @@ import {
   initializeInferenceService
 } from './features/ai-magic';
 
+// DIAGNOSTIC: Log after all imports complete
+console.log('[InterBrain] 🟡 MODULE IMPORTS COMPLETE - before class definition');
+
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
 
@@ -92,6 +98,7 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
+    console.log('[InterBrain] 🟢 ONLOAD START - beginning plugin initialization');
     console.log('[Plugin] InterBrain loading with lifecycle manager...');
     const loadStartTime = Date.now();
 
@@ -236,8 +243,8 @@ export default class InterBrainPlugin extends Plugin {
     // PHASE 5: BACKGROUND - Heavy operations (deferred)
     // =========================================================================
     serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BACKGROUND, async () => {
-      // These run after READY, non-blocking
-      this.initializeBackgroundServices();
+      // These run after READY is complete - no setTimeout needed
+      await this.initializeBackgroundServices();
       return { backgroundStarted: true };
     });
 
@@ -499,40 +506,35 @@ export default class InterBrainPlugin extends Plugin {
     useInterBrainStore.getState().resetSessionCounts();
   }
 
-  private initializeBackgroundServices(): void {
-    // Defer heavy copilot/songline services to background
-    // These aren't needed until user actually opens those features
-    setTimeout(() => {
-      console.log('[Plugin] Initializing background services...');
-      initializeTranscriptionService(this.app);
-      initializeConversationRecordingService(this.app);
-      initializeConversationSummaryService(this.app);
-      initializePDFGeneratorService();
-      initializeEmailExportService(this.app, this);
-      initializeAudioRecordingService(this);
-      initializePerspectiveService(this);
-      initializeAudioTrimmingService();
-      initializeConversationsService(this);
-      initializeAudioStreamingService(this);
+  private async initializeBackgroundServices(): Promise<void> {
+    // These run after READY phase is complete - lifecycle manager ensures ordering
+    console.log('[Plugin] Initializing background services...');
 
-      // Initialize collaboration services
-      const vaultPath = (this.app.vault.adapter as any).basePath;
-      initializeCollaborationMemoryService(vaultPath);
-      initializeCherryPickWorkflowService(this.app);
+    // Initialize copilot/songline services (fast setup, no I/O)
+    initializeTranscriptionService(this.app);
+    initializeConversationRecordingService(this.app);
+    initializeConversationSummaryService(this.app);
+    initializePDFGeneratorService();
+    initializeEmailExportService(this.app, this);
+    initializeAudioRecordingService(this);
+    initializePerspectiveService(this);
+    initializeAudioTrimmingService();
+    initializeConversationsService(this);
+    initializeAudioStreamingService(this);
 
-      console.log('[Plugin] Background services initialized');
-    }, 100); // Tiny delay to let vault scan finish first
+    // Initialize collaboration services
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+    initializeCollaborationMemoryService(vaultPath);
+    initializeCherryPickWorkflowService(this.app);
 
-    // Run DreamSong relationship scan after vault scan completes
-    setTimeout(async () => {
-      try {
-        // Run the scan via dreamweaving commands
-        this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
-      } catch (error) {
-        console.error('[Plugin] DreamSong relationship scan failed:', error);
-      }
-    }, 600); // Wait for vault scan to complete (after update checker)
+    console.log('[Plugin] Background services initialized');
 
+    // Run DreamSong relationship scan (previously setTimeout 600ms)
+    try {
+      this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
+    } catch (error) {
+      console.error('[Plugin] DreamSong relationship scan failed:', error);
+    }
   }
 
   private initializeServices(): void {
