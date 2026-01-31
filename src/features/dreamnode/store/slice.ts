@@ -75,17 +75,19 @@ export interface DreamNodeSlice {
  *
  * IMPORTANT: Strips transient fields that depend on current filesystem state:
  * - dreamTalkMedia[].data - base64 data loaded from disk on demand
- * - dreamTalkMedia[].absolutePath - depends on current vault path, regenerated on load
+ *
+ * NOTE: absolutePath IS persisted - it's needed for media loading via useContentTexture.
+ * If vault moves, a rescan will regenerate the correct paths.
  */
 export const extractDreamNodePersistenceData = (state: DreamNodeSlice) => ({
   dreamNodes: Array.from(state.dreamNodes.entries()).map(([id, nodeData]) => {
-    // Strip transient fields from persistence - regenerated from vault scan
+    // Strip only truly transient fields (base64 data) - keep absolutePath for media loading
     const strippedNode = {
       ...nodeData.node,
       dreamTalkMedia: nodeData.node.dreamTalkMedia.map(media => ({
         ...media,
         data: '', // Don't persist base64 - loaded from disk on demand
-        absolutePath: '' // Don't persist - depends on vault path, regenerated on scan
+        // absolutePath IS persisted - needed for useContentTexture to load media
       }))
     };
     return [id, { ...nodeData, node: strippedNode }] as [string, DreamNodeData];
