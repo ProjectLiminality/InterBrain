@@ -69,6 +69,9 @@ export default function DreamspaceCanvas() {
   // SpatialOrchestrator reference for controlling all spatial interactions
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
 
+  // Track when orchestrator is ready so layout effects can re-run
+  const [orchestratorReady, setOrchestratorReady] = useState(false);
+
   // Unified escape key handler - extracted to core hook
   useEscapeKeyHandler(spatialOrchestratorRef);
 
@@ -318,7 +321,7 @@ export default function DreamspaceCanvas() {
         spatialOrchestratorRef.current.returnToConstellation();
         break;
     }
-  }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
+  }, [spatialLayout, searchResults, selectedNode, orchestratorReady]); // Watch spatial layout, search results, selected node, and orchestrator readiness
 
   // React to navigation requests from features
   // This is the universal pattern for feature → core communication
@@ -754,6 +757,8 @@ export default function DreamspaceCanvas() {
                 spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
               }
             });
+            // Mark orchestrator as ready so layout effects can re-run
+            setOrchestratorReady(true);
           }}
           transitionDuration={1000}
         />
