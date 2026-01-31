@@ -16,25 +16,57 @@ const DB_VERSION = 1;
 // Maximum size for stored data (50MB) - if exceeded, skip vector data
 const MAX_STORAGE_SIZE = 50 * 1024 * 1024;
 
+// Connection pool - reuse connections to avoid exhausting IndexedDB
+let cachedDB: IDBDatabase | null = null;
+let dbOpenPromise: Promise<IDBDatabase> | null = null;
+
 /**
- * Open IndexedDB connection with timeout
+ * Open IndexedDB connection with connection reuse
+ * Prevents connection pool exhaustion during rapid writes
  */
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    // Add timeout to prevent hanging (15s for large vaults)
+  // Return cached connection if still valid
+  if (cachedDB) {
+    return Promise.resolve(cachedDB);
+  }
+
+  // Return existing open promise if one is in progress
+  if (dbOpenPromise) {
+    return dbOpenPromise;
+  }
+
+  // Create new connection
+  dbOpenPromise = new Promise((resolve, reject) => {
+    // Increased timeout (30s) for large vaults with many concurrent operations
     const timeout = setTimeout(() => {
+      dbOpenPromise = null;
       reject(new Error('IndexedDB open timeout'));
-    }, 15000);
+    }, 30000);
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
       clearTimeout(timeout);
+      dbOpenPromise = null;
       reject(request.error);
     };
+
     request.onsuccess = () => {
       clearTimeout(timeout);
-      resolve(request.result);
+      cachedDB = request.result;
+
+      // Clear cache on connection close/error
+      cachedDB.onclose = () => {
+        cachedDB = null;
+        dbOpenPromise = null;
+      };
+      cachedDB.onerror = () => {
+        cachedDB = null;
+        dbOpenPromise = null;
+      };
+
+      dbOpenPromise = null;
+      resolve(cachedDB);
     };
 
     request.onupgradeneeded = (event) => {
@@ -44,6 +76,8 @@ function openDB(): Promise<IDBDatabase> {
       }
     };
   });
+
+  return dbOpenPromise;
 }
 
 /**
@@ -137,3 +171,15 @@ export const indexedDBStorage: StateStorage = {
     }
   },
 };
+
+/**
+ * Close and clear the cached database connection
+ * Call this before plugin reload to ensure clean state
+ */
+export function closeIndexedDBConnection(): void {
+  if (cachedDB) {
+    cachedDB.close();
+    cachedDB = null;
+  }
+  dbOpenPromise = null;
+}

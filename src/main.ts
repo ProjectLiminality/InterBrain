@@ -62,6 +62,7 @@ import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
+import { closeIndexedDBConnection } from './core/store/indexeddb-storage';
 import { SettingsStatusService } from './features/settings/settings-status-service';
 import {
   registerFeedbackCommands,
@@ -1028,8 +1029,12 @@ export default class InterBrainPlugin extends Plugin {
         // hydrate from IndexedDB while writes are still in flight
         if (didIndex) {
           console.log(`[Refresh] Waiting for IndexedDB persistence to settle...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+
+        // Close IndexedDB connection before reload to ensure clean state
+        console.log(`[Refresh] Closing IndexedDB connection...`);
+        closeIndexedDBConnection();
 
         // Lightweight plugin reload using Obsidian's plugin manager
         // This is much faster than app:reload and preserves console logs
@@ -1403,5 +1408,8 @@ export default class InterBrainPlugin extends Plugin {
 
     // Clean up transcription service
     cleanupTranscriptionService();
+
+    // Close IndexedDB connection to allow clean re-initialization on reload
+    closeIndexedDBConnection();
   }
 }
