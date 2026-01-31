@@ -306,69 +306,42 @@ export default class InterBrainPlugin extends Plugin {
 
   /**
    * Auto-select a node on plugin startup (or reload)
-   * Uses the same reliable logic as first launch
+   * Called after lifecycle completes, so store is guaranteed to have nodes.
    * @param targetUUID - Optional UUID to select. Defaults to InterBrain UUID if not provided.
    */
   private autoSelectNode(targetUUID?: string): void {
+    // Wait for Obsidian's workspace layout to be ready (event-driven, not time-based)
     this.app.workspace.onLayoutReady(() => {
-      setTimeout(() => {
-        // Detect fresh Obsidian launch vs plugin reload
-        // On fresh launch, DreamSpace view won't exist yet
-        const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
-        const isFreshLaunch = existingDreamspaceLeaf.length === 0;
+      // Detect fresh Obsidian launch vs plugin reload
+      const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
+      const isFreshLaunch = existingDreamspaceLeaf.length === 0;
 
-        const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
-        const store = useInterBrainStore.getState();
-        const nodeData = store.dreamNodes.get(uuidToSelect);
+      const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
+      const store = useInterBrainStore.getState();
+      const nodeData = store.dreamNodes.get(uuidToSelect);
 
-        if (nodeData) {
-          console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
-          store.setSelectedNode(nodeData.node);
-          store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
+      if (nodeData) {
+        console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
+        store.setSelectedNode(nodeData.node);
+        store.setSpatialLayout('liminal-web');
 
-          // Show portal overlay on fresh Obsidian launch (not plugin reload)
-          // Check if this is a reload by looking for the reload flag
-          const isPluginReload = (globalThis as any).__interbrainPluginReloaded === true;
-          console.log(`[InterBrain] isFreshLaunch=${isFreshLaunch}, isPluginReload=${isPluginReload}`);
+        // Check if this is a fresh app launch (not plugin reload)
+        const isPluginReload = (globalThis as any).__interbrainPluginReloaded === true;
+        console.log(`[InterBrain] isFreshLaunch=${isFreshLaunch}, isPluginReload=${isPluginReload}`);
 
-          if (!isPluginReload) {
-            console.log('[InterBrain] Fresh app launch detected - portal disabled for testing');
-            // DISABLED FOR TESTING: Tutorial portal
-            // setTimeout(() => {
-            //   console.log('[InterBrain] Calling showTutorialPortal()');
-            //   store.showTutorialPortal();
-            // }, 500);
-
-            // Check for InterBrain updates on fresh launch
-            setTimeout(() => {
-              console.log('[InterBrain] Checking for InterBrain updates...');
-              this.app.commands.executeCommandById('interbrain:check-interbrain-updates');
-            }, 2000); // Delay to let UI settle first
-          }
-
-          // Set reload flag for next time (persists across plugin reloads but not app restarts)
-          (globalThis as any).__interbrainPluginReloaded = true;
-        } else {
-          console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect}`);
-
-          // Fallback: Try again after vault scan completes
-          if (targetUUID) {
-            console.log(`[InterBrain] Retrying node selection after brief delay...`);
-            setTimeout(() => {
-              const retryStore = useInterBrainStore.getState();
-              const retryNodeData = retryStore.dreamNodes.get(uuidToSelect);
-
-              if (retryNodeData) {
-                console.log(`[InterBrain] Auto-selecting node (retry): ${retryNodeData.node.name} (${uuidToSelect})`);
-                retryStore.setSelectedNode(retryNodeData.node);
-                retryStore.setSpatialLayout('liminal-web');
-              } else {
-                console.warn(`[InterBrain] Node still not found after retry: ${uuidToSelect}`);
-              }
-            }, 500); // Additional 500ms delay for vault scan to complete
-          }
+        if (!isPluginReload) {
+          console.log('[InterBrain] Fresh app launch detected');
+          // Check for InterBrain updates - lifecycle is complete, so this is safe to run immediately
+          console.log('[InterBrain] Checking for InterBrain updates...');
+          this.app.commands.executeCommandById('interbrain:check-interbrain-updates');
         }
-      }, 1000); // Same 1 second delay as first launch
+
+        // Set reload flag for next time (persists across plugin reloads but not app restarts)
+        (globalThis as any).__interbrainPluginReloaded = true;
+      } else {
+        // Node not found - this shouldn't happen if lifecycle completed correctly
+        console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect} (store has ${store.dreamNodes.size} nodes)`);
+      }
     });
   }
 
@@ -376,50 +349,42 @@ export default class InterBrainPlugin extends Plugin {
    * First launch experience: open DreamSpace and select InterBrain node
    */
   private async handleFirstLaunch(): Promise<void> {
-    // Wait for workspace to be ready
+    // Wait for Obsidian's workspace layout to be ready (event-driven, not time-based)
     this.app.workspace.onLayoutReady(async () => {
-      // Small delay to ensure everything is initialized
-      setTimeout(async () => {
-        console.log('[InterBrain] First launch detected - opening DreamSpace');
+      console.log('[InterBrain] First launch detected - opening DreamSpace');
 
-        // Open DreamSpace
-        const leaf = this.app.workspace.getLeaf(true);
-        await leaf.setViewState({
-          type: DREAMSPACE_VIEW_TYPE,
-          active: true
-        });
-        this.app.workspace.revealLeaf(leaf);
+      // Open DreamSpace - setViewState returns a promise that resolves when view is ready
+      const leaf = this.app.workspace.getLeaf(true);
+      await leaf.setViewState({
+        type: DREAMSPACE_VIEW_TYPE,
+        active: true
+      });
+      this.app.workspace.revealLeaf(leaf);
 
-        // Wait for DreamSpace to initialize
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // Find and select the InterBrain node by UUID
+      // Lifecycle has completed, so nodes are guaranteed to be in store
+      const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
+      const store = useInterBrainStore.getState();
+      const nodeData = store.dreamNodes.get(interbrainUUID);
 
-        // Find and select the InterBrain node by UUID
-        const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
-        const store = useInterBrainStore.getState();
-        const nodeData = store.dreamNodes.get(interbrainUUID);
+      if (nodeData) {
+        console.log('[InterBrain] Selecting InterBrain node');
+        store.setSelectedNode(nodeData.node);
+        store.setSpatialLayout('liminal-web');
+      } else {
+        console.warn('[InterBrain] InterBrain node not found for auto-selection');
+      }
 
-        if (nodeData) {
-          console.log('[InterBrain] Selecting InterBrain node');
-          store.setSelectedNode(nodeData.node);
-          store.setSpatialLayout('liminal-web');
+      // Run transcription auto-setup if enabled
+      if (this.settings.transcriptionEnabled && !this.settings.transcriptionSetupComplete) {
+        console.log('[InterBrain] Starting transcription auto-setup...');
+        this.uiService.showInfo('Setting up transcription in background...');
+        this.runTranscriptionAutoSetup();
+      }
 
-          // DISABLED FOR TESTING: Tutorial portal
-          // store.showTutorialPortal();
-        } else {
-          console.warn('[InterBrain] InterBrain node not found for auto-selection');
-        }
-
-        // Run transcription auto-setup if enabled
-        if (this.settings.transcriptionEnabled && !this.settings.transcriptionSetupComplete) {
-          console.log('[InterBrain] Starting transcription auto-setup...');
-          this.uiService.showInfo('Setting up transcription in background...');
-          this.runTranscriptionAutoSetup();
-        }
-
-        // Mark first launch as complete
-        this.settings.hasLaunchedBefore = true;
-        await this.saveSettings();
-      }, 1000); // 1 second delay for full initialization
+      // Mark first launch as complete
+      this.settings.hasLaunchedBefore = true;
+      await this.saveSettings();
     });
   }
 
