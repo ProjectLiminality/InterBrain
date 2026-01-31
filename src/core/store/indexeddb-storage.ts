@@ -21,10 +21,10 @@ const MAX_STORAGE_SIZE = 50 * 1024 * 1024;
  */
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    // Add timeout to prevent hanging
+    // Add timeout to prevent hanging (15s for large vaults)
     const timeout = setTimeout(() => {
       reject(new Error('IndexedDB open timeout'));
-    }, 5000);
+    }, 15000);
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
