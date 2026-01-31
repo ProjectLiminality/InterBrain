@@ -5,6 +5,9 @@
  * This allows us to store much larger datasets (GB instead of 10MB).
  *
  * Includes error recovery to prevent corrupted data from crashing the app.
+ *
+ * IMPORTANT: Storage is vault-specific using a vault ID suffix.
+ * Call setVaultId() during plugin initialization before any store operations.
  */
 
 import { StateStorage } from 'zustand/middleware';
@@ -19,6 +22,56 @@ const MAX_STORAGE_SIZE = 50 * 1024 * 1024;
 // Connection pool - reuse connections to avoid exhausting IndexedDB
 let cachedDB: IDBDatabase | null = null;
 let dbOpenPromise: Promise<IDBDatabase> | null = null;
+
+// Vault identifier for namespacing storage keys
+// This MUST be set before any store operations via setVaultId()
+let vaultId: string | null = null;
+
+/**
+ * Set the vault identifier for storage namespacing.
+ * This creates a unique storage key per vault to prevent cross-vault contamination.
+ *
+ * @param vaultPath - The absolute path to the vault (e.g., /Users/foo/MyVault)
+ */
+export function setVaultId(vaultPath: string): void {
+  // Create a simple hash of the vault path for the storage key
+  // Using a hash keeps the key short while being unique per vault
+  vaultId = simpleHash(vaultPath);
+  console.log(`[IndexedDB] Vault ID set: ${vaultId} (from ${vaultPath})`);
+}
+
+/**
+ * Get the current vault ID (for debugging)
+ */
+export function getVaultId(): string | null {
+  return vaultId;
+}
+
+/**
+ * Simple hash function for creating vault identifiers
+ * Uses djb2 algorithm - fast and produces good distribution
+ */
+function simpleHash(str: string): string {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  // Convert to hex string, ensure positive
+  return Math.abs(hash).toString(16);
+}
+
+/**
+ * Transform a storage key to be vault-specific
+ * If vaultId is not set, returns the key unchanged (with a warning)
+ */
+function getVaultSpecificKey(key: string): string {
+  if (!vaultId) {
+    console.warn(`[IndexedDB] WARNING: vaultId not set! Using unnamespaced key '${key}'. Call setVaultId() first.`);
+    return key;
+  }
+  return `${key}-${vaultId}`;
+}
 
 /**
  * Open IndexedDB connection with connection reuse
@@ -82,19 +135,39 @@ function openDB(): Promise<IDBDatabase> {
 
 /**
  * IndexedDB storage adapter compatible with Zustand persist middleware
+ *
+ * Keys are automatically namespaced by vault ID to prevent cross-vault contamination.
  */
 export const indexedDBStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
+    const vaultKey = getVaultSpecificKey(name);
     try {
       const db = await openDB();
       const result = await new Promise<string | null>((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readonly');
         const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(name);
+        const request = store.get(vaultKey);
 
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result ?? null);
       });
+
+      // Debug: Log what we're getting from IndexedDB
+      if (result) {
+        const size = result.length;
+        console.log(`[IndexedDB] getItem('${vaultKey}'): ${(size / 1024).toFixed(1)}KB`);
+        // Parse and log structure for debugging
+        try {
+          const parsed = JSON.parse(result);
+          const nodeCount = parsed.state?.dreamNodes?.length ?? 0;
+          const vectorCount = parsed.state?.vectorData?.length ?? 0;
+          console.log(`[IndexedDB] Parsed: ${nodeCount} dreamNodes, ${vectorCount} vectors`);
+        } catch (e) {
+          console.log(`[IndexedDB] Parse error:`, e);
+        }
+      } else {
+        console.log(`[IndexedDB] getItem('${vaultKey}'): null (empty)`);
+      }
 
       // Validate that we can parse the result before returning
       if (result) {
@@ -116,6 +189,7 @@ export const indexedDBStorage: StateStorage = {
   },
 
   setItem: async (name: string, value: string): Promise<void> => {
+    const vaultKey = getVaultSpecificKey(name);
     try {
       // Check size before storing
       if (value.length > MAX_STORAGE_SIZE) {
@@ -140,13 +214,23 @@ export const indexedDBStorage: StateStorage = {
       }
 
       const db = await openDB();
+
+      // Debug: Log what we're writing
+      console.log(`[IndexedDB] setItem('${vaultKey}'): ${(value.length / 1024).toFixed(1)}KB`);
+
       return new Promise((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-        const request = store.put(value, name);
+        const request = store.put(value, vaultKey);
 
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
+        request.onerror = () => {
+          console.error(`[IndexedDB] setItem FAILED:`, request.error);
+          reject(request.error);
+        };
+        request.onsuccess = () => {
+          console.log(`[IndexedDB] setItem SUCCESS`);
+          resolve();
+        };
       });
     } catch (error) {
       console.error('IndexedDB setItem error:', error);
@@ -155,12 +239,13 @@ export const indexedDBStorage: StateStorage = {
   },
 
   removeItem: async (name: string): Promise<void> => {
+    const vaultKey = getVaultSpecificKey(name);
     try {
       const db = await openDB();
       return new Promise((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-        const request = store.delete(name);
+        const request = store.delete(vaultKey);
 
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve();

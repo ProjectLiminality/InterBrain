@@ -62,7 +62,7 @@ import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
-import { closeIndexedDBConnection } from './core/store/indexeddb-storage';
+import { closeIndexedDBConnection, setVaultId } from './core/store/indexeddb-storage';
 import { SettingsStatusService } from './features/settings/settings-status-service';
 import {
   registerFeedbackCommands,
@@ -90,6 +90,11 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
+    // CRITICAL: Set vault ID for IndexedDB namespacing FIRST
+    // This must happen before any store operations to prevent cross-vault contamination
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+    setVaultId(vaultPath);
+
     // Load settings
     await this.loadSettings();
 
