@@ -257,6 +257,11 @@ export interface CoreSlice {
   spawnEphemeralNodesBatch: (nodes: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }>) => void;
   despawnEphemeralNode: (nodeId: string) => void;
   clearEphemeralNodes: () => void;
+
+  // Lifecycle gate - prevents UI rendering until lifecycle is complete
+  // This is critical for large vaults to prevent all nodes mounting at once
+  lifecycleReady: boolean;
+  setLifecycleReady: (ready: boolean) => void;
 }
 
 // ============================================================================
@@ -430,6 +435,10 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   }),
 
   clearEphemeralNodes: () => set({ ephemeralNodes: new Map<string, EphemeralNodeState>() }),
+
+  // Lifecycle gate - prevents UI rendering until lifecycle phases complete
+  lifecycleReady: false,
+  setLifecycleReady: (ready) => set({ lifecycleReady: ready }),
 });
 
 // ============================================================================

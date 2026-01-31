@@ -41,10 +41,13 @@ import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
 
 export default function DreamspaceCanvas() {
+  // NOTE: Lifecycle gate is now handled by DreamspaceView with lazy loading
+  // This component is only mounted AFTER lifecycleReady is true
+
   // Get services inside component so they're available after plugin initialization
   const [vaultService, setVaultService] = useState<VaultService | undefined>(undefined);
   const [canvasParserService, setCanvasParserService] = useState<CanvasParserService | undefined>(undefined);
-  
+
   // Load services on component mount (after plugin has initialized)
   useEffect(() => {
     try {
@@ -56,7 +59,7 @@ export default function DreamspaceCanvas() {
       console.log('Services not available, flip functionality will be disabled');
     }
   }, []); // Run once on mount
-  
+
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
   const constellationFilter = useInterBrainStore(state => state.constellationFilter);
   const ephemeralNodesMap = useInterBrainStore(state => state.ephemeralNodes);

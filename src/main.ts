@@ -224,6 +224,11 @@ export default class InterBrainPlugin extends Plugin {
         console.log(`[Plugin] Constellation filter: ${filter.mountedNodes.size} mounted, ${filter.ephemeralNodes.size} ephemeral (of ${allNodeIds.length} total)`);
       }
 
+      // CRITICAL: Signal that lifecycle is ready - this unblocks DreamspaceCanvas rendering
+      // Must happen AFTER constellation filter is set to prevent all nodes mounting at once
+      store.setLifecycleReady(true);
+      console.log(`[Plugin] Lifecycle ready - DreamspaceCanvas rendering enabled`);
+
       return { ready: true };
     });
 
