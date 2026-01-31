@@ -73,16 +73,17 @@ export default function DreamspaceCanvas() {
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
 
   // Get nodes from store - filter based on constellation filter and ephemeral nodes
-  // If filter has mounted nodes, use it; otherwise show all (pre-filter state)
+  // CRITICAL: If filter is empty, show NOTHING to prevent 167-node crash
   const prevMountedCountRef = React.useRef(0);
   const dreamNodes: DreamNode[] = React.useMemo(() => {
     const allNodes = Array.from(dreamNodesMap.values());
 
-    // If constellation filter is not initialized (empty mountedNodes), show all nodes
+    // If constellation filter is not initialized (empty mountedNodes), show NO nodes
+    // This prevents WebGL crash from mounting all 167 nodes at once
+    // The filter will be computed in the lifecycle READY phase, then nodes will appear
     if (constellationFilter.mountedNodes.size === 0) {
-      const result = allNodes.map(data => data.node);
-      prevMountedCountRef.current = result.length;
-      return result;
+      prevMountedCountRef.current = 0;
+      return [];
     }
 
     // Filter to only mounted nodes (constellation) + ephemeral nodes

@@ -11,6 +11,7 @@ import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
 import { CONSTELLATION_DEFAULTS } from './features/constellation-layout/constants';
 import { calculateFibonacciSpherePositions } from './features/constellation-layout';
+import { computeConstellationFilter } from './features/constellation-layout/services/constellation-filter-service';
 import {
   DreamNode,
   registerDreamNodeCommands,
@@ -204,6 +205,24 @@ export default class InterBrainPlugin extends Plugin {
 
       // Initialize error capture for bug reporting
       this.initializeErrorCapture();
+
+      // CRITICAL: Compute constellation filter BEFORE UI renders
+      // This prevents all 167 nodes from mounting at once and crashing WebGL
+      const store = useInterBrainStore.getState();
+      const allNodeIds = Array.from(store.dreamNodes.keys());
+      const relationshipGraph = store.dreamSongRelationships.graph;
+      const { maxNodes, prioritizeClusters } = store.constellationConfig;
+
+      if (allNodeIds.length > 0) {
+        const filter = computeConstellationFilter(
+          relationshipGraph,
+          allNodeIds,
+          maxNodes,
+          prioritizeClusters
+        );
+        store.setConstellationFilter(filter);
+        console.log(`[Plugin] Constellation filter: ${filter.mountedNodes.size} mounted, ${filter.ephemeralNodes.size} ephemeral (of ${allNodeIds.length} total)`);
+      }
 
       return { ready: true };
     });
