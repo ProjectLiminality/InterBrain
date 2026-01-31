@@ -8,6 +8,8 @@
  *
  * IMPORTANT: Storage is vault-specific using a vault ID suffix.
  * Call setVaultId() during plugin initialization before any store operations.
+ *
+ * SHUTDOWN AWARE: Tracks pending writes and can wait for them during shutdown.
  */
 
 import { StateStorage } from 'zustand/middleware';
@@ -27,13 +29,29 @@ let dbOpenPromise: Promise<IDBDatabase> | null = null;
 // This MUST be set before any store operations via setVaultId()
 let vaultId: string | null = null;
 
+// Shutdown state - prevents new writes during shutdown
+let isShuttingDown = false;
+
+// Hydration state - prevents writes until hydration is complete
+// This prevents the empty initial state from overwriting persisted data
+let hydrationComplete = false;
+
+// Track pending write operations for graceful shutdown
+const pendingWrites = new Set<Promise<void>>();
+
 /**
  * Set the vault identifier for storage namespacing.
  * This creates a unique storage key per vault to prevent cross-vault contamination.
  *
+ * Also resets the shutdown flag since this is called at the start of a new plugin lifecycle.
+ *
  * @param vaultPath - The absolute path to the vault (e.g., /Users/foo/MyVault)
  */
 export function setVaultId(vaultPath: string): void {
+  // Reset shutdown flag for new plugin instance
+  // This allows the new instance to write to IndexedDB
+  isShuttingDown = false;
+
   // Create a simple hash of the vault path for the storage key
   // Using a hash keeps the key short while being unique per vault
   vaultId = simpleHash(vaultPath);
@@ -204,6 +222,19 @@ export const indexedDBStorage: StateStorage = {
   },
 
   setItem: async (name: string, value: string): Promise<void> => {
+    // Reject writes during shutdown
+    if (isShuttingDown) {
+      console.log('[IndexedDB] Rejecting write during shutdown');
+      return;
+    }
+
+    // Reject writes before hydration is complete
+    // This prevents the empty initial state from overwriting persisted data
+    if (!hydrationComplete) {
+      console.log('[IndexedDB] Skipping write before hydration complete');
+      return;
+    }
+
     const vaultKey = getVaultSpecificKey(name);
     try {
       // Check size before storing
@@ -233,7 +264,8 @@ export const indexedDBStorage: StateStorage = {
       // Debug: Log what we're writing
       console.log(`[IndexedDB] setItem('${vaultKey}'): ${(value.length / 1024).toFixed(1)}KB`);
 
-      return new Promise((resolve, reject) => {
+      // Create tracked promise for graceful shutdown
+      const writePromise = new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.put(value, vaultKey);
@@ -247,6 +279,14 @@ export const indexedDBStorage: StateStorage = {
           resolve();
         };
       });
+
+      // Track this write for graceful shutdown
+      pendingWrites.add(writePromise);
+      writePromise.finally(() => {
+        pendingWrites.delete(writePromise);
+      });
+
+      return writePromise;
     } catch (error) {
       console.error('IndexedDB setItem error:', error);
       // Don't throw - allow app to continue even if persistence fails
@@ -275,6 +315,10 @@ export const indexedDBStorage: StateStorage = {
 /**
  * Close and clear the cached database connection
  * Call this before plugin reload to ensure clean state
+ *
+ * NOTE: We do NOT reset isShuttingDown here because writes may still be
+ * attempted by Zustand after the connection is closed. The flag is reset
+ * when the NEW plugin instance calls setVaultId() during BOOTSTRAP.
  */
 export function closeIndexedDBConnection(): void {
   if (cachedDB) {
@@ -282,6 +326,70 @@ export function closeIndexedDBConnection(): void {
     cachedDB = null;
   }
   dbOpenPromise = null;
-  // Also reset vaultId so it must be set again on reload
+  // Reset vaultId so it must be set again on reload
   vaultId = null;
+  // NOTE: Keep isShuttingDown=true to block any late writes from the old plugin instance
+}
+
+/**
+ * Initiate graceful shutdown - waits for pending writes to complete
+ * Call this BEFORE closeIndexedDBConnection()
+ *
+ * @param timeoutMs Maximum time to wait for pending writes (default 5000ms)
+ */
+export async function gracefulShutdown(timeoutMs: number = 5000): Promise<void> {
+  isShuttingDown = true;
+
+  if (pendingWrites.size === 0) {
+    console.log('[IndexedDB] No pending writes, shutdown immediate');
+    return;
+  }
+
+  console.log(`[IndexedDB] Waiting for ${pendingWrites.size} pending writes...`);
+
+  // Create timeout promise
+  const timeout = new Promise<void>((resolve) => {
+    setTimeout(() => {
+      console.warn(`[IndexedDB] Shutdown timeout after ${timeoutMs}ms - ${pendingWrites.size} writes may be incomplete`);
+      resolve();
+    }, timeoutMs);
+  });
+
+  // Wait for all pending writes or timeout
+  await Promise.race([
+    Promise.allSettled(Array.from(pendingWrites)),
+    timeout,
+  ]);
+
+  console.log('[IndexedDB] Graceful shutdown complete');
+}
+
+/**
+ * Get count of pending writes (for debugging)
+ */
+export function getPendingWriteCount(): number {
+  return pendingWrites.size;
+}
+
+/**
+ * Check if shutdown is in progress
+ */
+export function isShutdownInProgress(): boolean {
+  return isShuttingDown;
+}
+
+/**
+ * Mark hydration as complete - enables writes to IndexedDB
+ * Call this AFTER store.persist.rehydrate() completes
+ */
+export function markHydrationComplete(): void {
+  hydrationComplete = true;
+  console.log('[IndexedDB] Hydration complete - writes enabled');
+}
+
+/**
+ * Check if hydration is complete
+ */
+export function isHydrationComplete(): boolean {
+  return hydrationComplete;
 }
