@@ -467,6 +467,12 @@ export const useInterBrainStore = create<InterBrainState>()(
         ...extractTutorialPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
+        // Handle null/undefined persisted state (fresh vault, new storage key, etc.)
+        if (!persisted) {
+          console.log('[Store] No persisted state found, using defaults');
+          return current;
+        }
+
         // Wrap entire merge in try-catch to prevent crashes from corrupted persisted data
         try {
           const persistedData = persisted as {
