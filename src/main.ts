@@ -1009,16 +1009,26 @@ export default class InterBrainPlugin extends Plugin {
         // Ensure all DreamNodes are indexed for semantic search
         // Fast idempotent check: ~1ms per already-indexed node, only indexes missing nodes
         console.log(`[Refresh] Ensuring all nodes are indexed...`);
+        let didIndex = false;
         try {
           const { indexingService } = await import('./features/semantic-search/services/indexing-service');
           const indexResult = await indexingService.ensureAllIndexed();
           if (indexResult.indexed > 0) {
             console.log(`[Refresh] Indexed ${indexResult.indexed} new nodes (${indexResult.skipped} already indexed)`);
+            didIndex = true;
           } else {
             console.log(`[Refresh] All ${indexResult.skipped} nodes already indexed`);
           }
         } catch (error) {
           console.warn(`[Refresh] Indexing check failed (non-critical):`, error);
+        }
+
+        // Wait for Zustand persist middleware to flush pending IndexedDB writes
+        // This prevents a race condition where the new plugin instance tries to
+        // hydrate from IndexedDB while writes are still in flight
+        if (didIndex) {
+          console.log(`[Refresh] Waiting for IndexedDB persistence to settle...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         // Lightweight plugin reload using Obsidian's plugin manager

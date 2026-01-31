@@ -519,6 +519,21 @@ export const useInterBrainStore = create<InterBrainState>()(
           return current;
         }
       },
+      // Hydration lifecycle callbacks for debugging persistence issues
+      onRehydrateStorage: () => {
+        console.log('[Store] Starting hydration from IndexedDB...');
+        return (state, error) => {
+          if (error) {
+            console.error('[Store] Hydration failed:', error);
+          } else if (state) {
+            const nodeCount = state.dreamNodes?.size ?? 0;
+            const vectorCount = state.vectorData?.size ?? 0;
+            console.log(`[Store] Hydration complete: ${nodeCount} nodes, ${vectorCount} vectors`);
+          } else {
+            console.log('[Store] Hydration complete: no persisted state found');
+          }
+        };
+      },
     }
   )
 );
