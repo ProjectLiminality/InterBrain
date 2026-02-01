@@ -1159,6 +1159,21 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         return;
       }
 
+      // Check position cache validity - skip recomputation if positions are still valid
+      const persistedPositions = store.constellationData.positions;
+      const persistedGraphHash = store.constellationData.graphHashWhenPositionsComputed;
+      const currentGraphHash = store.dreamSongRelationships.submoduleStructureHash;
+
+      if (persistedPositions && persistedPositions.size > 0 &&
+          persistedGraphHash === currentGraphHash && currentGraphHash !== null) {
+        console.log(`[LAYOUT] Positions still valid for current graph (hash: ${currentGraphHash}), skipping recomputation`);
+        // Still need to apply existing positions to node objects
+        store.batchUpdateNodePositions(persistedPositions);
+        return;
+      }
+
+      console.log(`[LAYOUT] Position recomputation needed (persistedHash=${persistedGraphHash}, currentHash=${currentGraphHash})`);
+
       try {
         const { maxNodes, prioritizeClusters } = store.constellationConfig;
         const allNodeIds = dreamNodes.map(node => node.id);
@@ -1236,6 +1251,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // setConstellationPositions replaces the entire positions map (only 50 entries),
         // so future plugin loads won't have stale ephemeral positions.
         store.setConstellationPositions(mountedPositions);
+        // Track which graph these positions were computed for
+        if (currentGraphHash) {
+          store.setGraphHashWhenPositionsComputed(currentGraphHash);
+        }
 
         // Diagnostic: warn if batchUpdateNodePositions will overwrite active ring node positions
         if (activeRingNodeIds.length > 0) {

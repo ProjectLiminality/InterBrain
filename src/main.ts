@@ -13,8 +13,9 @@ import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/compo
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
 import { CONSTELLATION_DEFAULTS } from './features/constellation-layout/constants';
-import { calculateFibonacciSpherePositions } from './features/constellation-layout';
+import { calculateFibonacciSpherePositions, DEFAULT_FIBONACCI_CONFIG } from './features/constellation-layout';
 import { computeConstellationFilter } from './features/constellation-layout/services/constellation-filter-service';
+import { computeConstellationLayout, createFallbackLayout } from './features/constellation-layout/ConstellationLayout';
 import {
   DreamNode,
   registerDreamNodeCommands,
@@ -30,6 +31,8 @@ import { registerConstellationDebugCommands } from './features/constellation-lay
 import { registerEditModeCommands } from './features/dreamnode-editor';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
+import { DreamSongRelationshipService } from './features/dreamweaving/services/dreamsong-relationship-service';
+import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG } from './features/dreamweaving/types/relationship';
 import { registerRadicleCommands } from './features/social-resonance-filter/commands';
 import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
@@ -229,10 +232,128 @@ export default class InterBrainPlugin extends Plugin {
         );
         store.setConstellationFilter(filter);
         console.log(`[Plugin] Constellation filter: ${filter.mountedNodes.size} mounted, ${filter.ephemeralNodes.size} ephemeral (of ${allNodeIds.length} total)`);
+
+        // CRITICAL: Apply constellation positions to mounted nodes BEFORE rendering
+        // This ensures nodes have real positions on the Fibonacci sphere, not [0,0,0]
+        const persistedPositions = store.constellationData.positions;
+        const mountedNodeIds = Array.from(filter.mountedNodes);
+
+        // Check if persisted positions exist and are valid for current graph
+        let positionsToApply: Map<string, [number, number, number]> | null = null;
+        const persistedGraphHash = store.constellationData.graphHashWhenPositionsComputed;
+        const currentGraphHash = store.dreamSongRelationships.submoduleStructureHash;
+
+        if (persistedPositions && persistedPositions.size > 0) {
+          // Check 1: Do persisted positions match mounted nodes?
+          const matchCount = mountedNodeIds.filter(id => persistedPositions.has(id)).length;
+          const matchRatio = matchCount / mountedNodeIds.length;
+
+          // Check 2: Is the persisted graph hash still valid?
+          const hashValid = currentGraphHash === persistedGraphHash;
+
+          // Debug: Log comparison details
+          const persistedIds = Array.from(persistedPositions.keys()).slice(0, 5);
+          const mountedIds = mountedNodeIds.slice(0, 5);
+          console.log(`[Plugin] Position ID comparison - persisted: ${persistedIds.join(', ')}`);
+          console.log(`[Plugin] Position ID comparison - mounted: ${mountedIds.join(', ')}`);
+          console.log(`[Plugin] Graph hash comparison - persisted: ${persistedGraphHash}, current: ${currentGraphHash}, valid: ${hashValid}`);
+
+          if (matchRatio >= 0.9 && hashValid) {
+            // 90%+ match AND graph unchanged - use persisted positions
+            console.log(`[Plugin] Using persisted positions (${matchCount}/${mountedNodeIds.length} matched, graph unchanged)`);
+            positionsToApply = persistedPositions;
+          } else if (matchRatio >= 0.9 && !hashValid) {
+            console.log(`[Plugin] Positions match but graph changed (hash: ${persistedGraphHash} → ${currentGraphHash}), recomputing`);
+          } else {
+            console.log(`[Plugin] Persisted positions outdated (${matchCount}/${mountedNodeIds.length} matched), computing fresh`);
+          }
+        } else {
+          console.log(`[Plugin] No persisted positions found (size=${persistedPositions?.size || 0}), computing fresh`);
+        }
+
+        // Compute fresh positions if needed
+        console.log(`[Plugin] Position computation check: positionsToApply=${!!positionsToApply}, relationshipGraph=${!!relationshipGraph}, graphNodes=${relationshipGraph?.nodes?.size || 0}`);
+
+        if (!positionsToApply) {
+          const mountedDreamNodes = mountedNodeIds
+            .map(id => store.dreamNodes.get(id)?.node)
+            .filter((node): node is DreamNode => !!node);
+
+          console.log(`[Plugin] Mounted DreamNodes for layout: ${mountedDreamNodes.length}`);
+
+          if (mountedDreamNodes.length > 0) {
+            try {
+              if (relationshipGraph && relationshipGraph.nodes && relationshipGraph.nodes.size > 0) {
+                // Filter relationship graph to only mounted nodes
+                const mountedNodeIdSet = new Set(mountedNodeIds);
+                const filteredNodes = new Map(
+                  Array.from(relationshipGraph.nodes.entries())
+                    .filter(([id]) => mountedNodeIdSet.has(id))
+                );
+                const filteredEdges = relationshipGraph.edges.filter(
+                  edge => mountedNodeIdSet.has(edge.source) && mountedNodeIdSet.has(edge.target)
+                );
+                const filteredGraph = {
+                  ...relationshipGraph,
+                  nodes: filteredNodes,
+                  edges: filteredEdges,
+                  metadata: {
+                    ...relationshipGraph.metadata,
+                    totalNodes: filteredNodes.size,
+                  }
+                };
+
+                console.log(`[Plugin] Computing layout with ${filteredNodes.size} nodes, ${filteredEdges.length} edges`);
+                const layoutResult = computeConstellationLayout(filteredGraph, mountedDreamNodes);
+                positionsToApply = createFallbackLayout(mountedDreamNodes, layoutResult.nodePositions);
+              } else {
+                // No relationship graph - use Fibonacci sphere fallback
+                console.log(`[Plugin] No relationship graph, using Fibonacci sphere for ${mountedDreamNodes.length} nodes`);
+                const fibPositions = calculateFibonacciSpherePositions({
+                  nodeCount: mountedDreamNodes.length,
+                  radius: DEFAULT_FIBONACCI_CONFIG.radius
+                });
+                console.log(`[Plugin] Fibonacci returned ${fibPositions.length} positions, radius=${DEFAULT_FIBONACCI_CONFIG.radius}`);
+                if (fibPositions.length > 0) {
+                  console.log(`[Plugin] First fib position:`, JSON.stringify(fibPositions[0]));
+                }
+                positionsToApply = new Map(
+                  mountedDreamNodes.map((node, i) => [node.id, fibPositions[i].position])
+                );
+              }
+
+              // Persist the computed positions and graph hash for future startups
+              if (positionsToApply && positionsToApply.size > 0) {
+                store.setConstellationPositions(positionsToApply);
+                if (currentGraphHash) {
+                  store.setGraphHashWhenPositionsComputed(currentGraphHash);
+                }
+                console.log(`[Plugin] Computed and persisted ${positionsToApply.size} positions (graphHash: ${currentGraphHash})`);
+              }
+            } catch (error) {
+              console.error(`[Plugin] Position computation failed:`, error);
+              // Fallback to Fibonacci sphere on error
+              console.log(`[Plugin] Falling back to Fibonacci sphere due to error`);
+              const fibPositions = calculateFibonacciSpherePositions({
+                nodeCount: mountedDreamNodes.length,
+                radius: DEFAULT_FIBONACCI_CONFIG.radius
+              });
+              positionsToApply = new Map(
+                mountedDreamNodes.map((node, i) => [node.id, fibPositions[i].position])
+              );
+            }
+          }
+        }
+
+        // Apply positions to node objects in store
+        if (positionsToApply && positionsToApply.size > 0) {
+          store.batchUpdateNodePositions(positionsToApply);
+          console.log(`[Plugin] Applied positions to ${positionsToApply.size} mounted nodes`);
+        }
       }
 
       // CRITICAL: Signal that lifecycle is ready - this unblocks DreamspaceCanvas rendering
-      // Must happen AFTER constellation filter is set to prevent all nodes mounting at once
+      // Must happen AFTER constellation filter AND positions are set
       store.setLifecycleReady(true);
       console.log(`[Plugin] Lifecycle ready - DreamspaceCanvas rendering enabled`);
 
@@ -245,6 +366,61 @@ export default class InterBrainPlugin extends Plugin {
     serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BACKGROUND, async () => {
       // These run after READY is complete - no setTimeout needed
       await this.initializeBackgroundServices();
+
+      // DreamSong Relationship Scan with change detection:
+      // Only rescan if submodule structure has changed since last scan
+      const bgStore = useInterBrainStore.getState();
+      const existingGraph = bgStore.dreamSongRelationships.graph;
+      const existingHash = bgStore.dreamSongRelationships.submoduleStructureHash;
+
+      // Defer scan check to run after lifecycle completes for UI stability
+      setTimeout(async () => {
+        try {
+          const relationshipService = new DreamSongRelationshipService(this);
+          const dreamNodes = Array.from(bgStore.dreamNodes.values()).map(d => d.node);
+
+          // Compute current submodule structure hash
+          const currentHash = await relationshipService.computeSubmoduleStructureHash(dreamNodes);
+          console.log(`[Plugin] Submodule hash: current=${currentHash}, cached=${existingHash}`);
+
+          // Check if rescan needed
+          // IMPORTANT: Also rescan if graph has nodes but NO edges (indicates a failed/partial scan)
+          const hasValidEdges = existingGraph && existingGraph.edges.length > 0;
+          if (existingHash === currentHash && existingGraph && existingGraph.nodes.size > 0 && hasValidEdges) {
+            console.log(`[Plugin] Submodule structure unchanged (hash: ${currentHash}), using cached graph with ${existingGraph.edges.length} edges`);
+            return;
+          }
+
+          // If graph has nodes but no edges, force rescan (previous scan likely failed)
+          if (existingGraph && existingGraph.nodes.size > 0 && existingGraph.edges.length === 0) {
+            console.log(`[Plugin] Graph has ${existingGraph.nodes.size} nodes but 0 edges - forcing rescan`);
+          }
+
+          // Hash changed or no graph - need to scan
+          const reason = !existingGraph ? 'no graph' :
+                         existingGraph.nodes.size === 0 ? 'empty graph' :
+                         existingHash !== currentHash ? 'hash changed' : 'unknown';
+          console.log(`[Plugin] DreamSong scan needed (${reason}), scanning ${dreamNodes.length} nodes...`);
+
+          const result = await relationshipService.scanVaultForDreamSongRelationships(
+            DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
+          );
+
+          if (result.success && result.graph) {
+            console.log(`[Plugin] DreamSong scan complete: ${result.graph.edges.length} edges, ${result.stats.scanTimeMs}ms`);
+            // Get fresh store reference inside setTimeout
+            const scanStore = useInterBrainStore.getState();
+            scanStore.setDreamSongRelationshipGraph(result.graph);
+            scanStore.setSubmoduleStructureHash(currentHash);
+            console.log(`[Plugin] DreamSong graph saved with hash ${currentHash}. Clusters will appear after next refresh.`);
+          } else {
+            console.warn(`[Plugin] DreamSong scan failed:`, result.error?.message);
+          }
+        } catch (error) {
+          console.error(`[Plugin] DreamSong relationship scan error:`, error);
+        }
+      }, 3000); // Wait 3s to ensure UI is fully stable
+
       return { backgroundStarted: true };
     });
 
@@ -273,6 +449,23 @@ export default class InterBrainPlugin extends Plugin {
 
     // Register commands
     this.registerCommands();
+
+    // DreamSong relationship scan DISABLED - was causing crash
+    // TODO: Investigate why scan causes UI to become unresponsive
+    // The scan command can still be triggered manually via command palette
+    // setTimeout(() => {
+    //   const store = useInterBrainStore.getState();
+    //   const existingGraph = store.dreamSongRelationships.graph;
+    //   const hasNodes = existingGraph?.nodes?.size ?? 0;
+    //
+    //   if (hasNodes === 0) {
+    //     console.log('[Plugin] No DreamSong relationship graph found - triggering scan');
+    //     this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
+    //   } else {
+    //     console.log(`[Plugin] DreamSong relationship graph already loaded: ${hasNodes} nodes`);
+    //   }
+    // }, 100);
+    console.log('[Plugin] DreamSong auto-scan disabled - use command palette to scan manually');
 
     // Register file explorer context menu handler
     this.registerFileExplorerContextMenu();
@@ -493,13 +686,7 @@ export default class InterBrainPlugin extends Plugin {
     initializeCherryPickWorkflowService(this.app);
 
     console.log('[Plugin] Background services initialized');
-
-    // Run DreamSong relationship scan (previously setTimeout 600ms)
-    try {
-      this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
-    } catch (error) {
-      console.error('[Plugin] DreamSong relationship scan failed:', error);
-    }
+    // Note: DreamSong relationship scan moved to post-lifecycle (after commands are registered)
   }
 
   private initializeServices(): void {
