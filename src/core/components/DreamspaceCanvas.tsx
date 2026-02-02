@@ -41,10 +41,13 @@ import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
 
 export default function DreamspaceCanvas() {
+  // NOTE: Lifecycle gate is now handled by DreamspaceView with lazy loading
+  // This component is only mounted AFTER lifecycleReady is true
+
   // Get services inside component so they're available after plugin initialization
   const [vaultService, setVaultService] = useState<VaultService | undefined>(undefined);
   const [canvasParserService, setCanvasParserService] = useState<CanvasParserService | undefined>(undefined);
-  
+
   // Load services on component mount (after plugin has initialized)
   useEffect(() => {
     try {
@@ -56,7 +59,7 @@ export default function DreamspaceCanvas() {
       console.log('Services not available, flip functionality will be disabled');
     }
   }, []); // Run once on mount
-  
+
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
   const constellationFilter = useInterBrainStore(state => state.constellationFilter);
   const ephemeralNodesMap = useInterBrainStore(state => state.ephemeralNodes);
@@ -66,6 +69,9 @@ export default function DreamspaceCanvas() {
   // SpatialOrchestrator reference for controlling all spatial interactions
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
 
+  // Track when orchestrator is ready so layout effects can re-run
+  const [orchestratorReady, setOrchestratorReady] = useState(false);
+
   // Unified escape key handler - extracted to core hook
   useEscapeKeyHandler(spatialOrchestratorRef);
 
@@ -73,16 +79,17 @@ export default function DreamspaceCanvas() {
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
 
   // Get nodes from store - filter based on constellation filter and ephemeral nodes
-  // If filter has mounted nodes, use it; otherwise show all (pre-filter state)
+  // CRITICAL: If filter is empty, show NOTHING to prevent 167-node crash
   const prevMountedCountRef = React.useRef(0);
   const dreamNodes: DreamNode[] = React.useMemo(() => {
     const allNodes = Array.from(dreamNodesMap.values());
 
-    // If constellation filter is not initialized (empty mountedNodes), show all nodes
+    // If constellation filter is not initialized (empty mountedNodes), show NO nodes
+    // This prevents WebGL crash from mounting all 167 nodes at once
+    // The filter will be computed in the lifecycle READY phase, then nodes will appear
     if (constellationFilter.mountedNodes.size === 0) {
-      const result = allNodes.map(data => data.node);
-      prevMountedCountRef.current = result.length;
-      return result;
+      prevMountedCountRef.current = 0;
+      return [];
     }
 
     // Filter to only mounted nodes (constellation) + ephemeral nodes
@@ -314,7 +321,7 @@ export default function DreamspaceCanvas() {
         spatialOrchestratorRef.current.returnToConstellation();
         break;
     }
-  }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
+  }, [spatialLayout, searchResults, selectedNode, orchestratorReady]); // Watch spatial layout, search results, selected node, and orchestrator readiness
 
   // React to navigation requests from features
   // This is the universal pattern for feature → core communication
@@ -750,6 +757,8 @@ export default function DreamspaceCanvas() {
                 spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
               }
             });
+            // Mark orchestrator as ready so layout effects can re-run
+            setOrchestratorReady(true);
           }}
           transitionDuration={1000}
         />

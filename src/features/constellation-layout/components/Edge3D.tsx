@@ -129,40 +129,19 @@ export default function Edge3D({
     [sourcePosition, targetPosition]
   );
 
+  // PERFORMANCE: Single Line component instead of 3 separate ones
+  // The hit detection area is provided by lineWidth, glow effect via opacity/width changes
   return (
-    <group>
-      {/* Invisible thick line for easier intersection detection */}
-      <Line
-        points={arcPoints}
-        color="transparent"
-        lineWidth={12} // Much thicker for easier clicking
-        transparent
-        opacity={0} // Completely invisible
-        onClick={handleClick}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      />
-
-      {/* Glow effect layer (only visible on hover) */}
-      {(isHovered || localHover) && (
-        <Line
-          points={arcPoints}
-          color={finalColor}
-          lineWidth={lineWidth + 1} // Extra thickness for glow
-          transparent
-          opacity={0.3} // Soft glow
-        />
-      )}
-
-      {/* Main visible line */}
-      <Line
-        points={arcPoints}
-        color={finalColor}
-        lineWidth={lineWidth}
-        transparent
-        opacity={finalOpacity}
-      />
-    </group>
+    <Line
+      points={arcPoints}
+      color={finalColor}
+      lineWidth={lineWidth}
+      transparent
+      opacity={finalOpacity}
+      onClick={handleClick}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+    />
   );
 }
 

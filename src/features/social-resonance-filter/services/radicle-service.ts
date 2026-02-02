@@ -937,7 +937,8 @@ export class RadicleServiceImpl implements RadicleService {
         }
 
         if (!pushResult.success) {
-          throw new Error(`git push failed with code 1`);
+          const errorDetail = pushResult.stderr?.trim() || 'unknown error';
+          throw new Error(`git push failed: ${errorDetail}`);
         }
       }
 

@@ -83,6 +83,11 @@ export class ServiceManager {
 
   /**
    * Initialize with plugin instance (required for services)
+   *
+   * NOTE: Vault scan is NO LONGER triggered here. The ServiceLifecycleManager
+   * calls scanVault() during the SCAN phase, after HYDRATE completes.
+   * This prevents the race condition where UI renders stale data from IndexedDB
+   * while the scan is still in progress.
    */
   initialize(plugin: Plugin): void {
     this.plugin = plugin;
@@ -100,12 +105,8 @@ export class ServiceManager {
     this.leafManagerService = pluginWithServices.leafManagerService;
     this.submoduleManagerService = pluginWithServices.submoduleManagerService;
 
-    // Perform initial vault scan
-    if (this.dreamNodeService) {
-      this.dreamNodeService.scanVault().catch(error => {
-        console.error('Initial vault scan failed:', error);
-      });
-    }
+    // NOTE: Vault scan is now triggered by ServiceLifecycleManager.SCAN phase
+    // This ensures proper sequencing: BOOTSTRAP → HYDRATE → SCAN → READY
   }
 
   /**

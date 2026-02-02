@@ -21,6 +21,7 @@ export class CanvasObserverService {
 
   /**
    * Start observing canvas changes
+   * Called after lifecycle READY phase, so DOM is guaranteed to be available.
    */
   start(): void {
     if (this.isEnabled) {
@@ -30,8 +31,8 @@ export class CanvasObserverService {
     this.observeCanvasChanges();
     this.isEnabled = true;
 
-    // Process any existing canvas nodes after a brief delay
-    setTimeout(() => this.processExistingCanvasNodes(), 500);
+    // Process any existing canvas nodes immediately - lifecycle ensures DOM is ready
+    this.processExistingCanvasNodes();
   }
 
   /**

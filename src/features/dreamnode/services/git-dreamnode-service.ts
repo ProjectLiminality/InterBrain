@@ -435,17 +435,8 @@ export class GitDreamNodeService {
       store.setDreamNodes(newDreamNodes);
       store.setNodeMetadata(nodeMetadata);
 
-      // CRITICAL: Defer media loading to give React time to render placeholders first
-      setTimeout(() => {
-        import('./media-loading-service').then(({ getMediaLoadingService }) => {
-          try {
-            const mediaLoadingService = getMediaLoadingService();
-            mediaLoadingService.loadAllNodesByDistance();
-          } catch (error) {
-            console.warn('[VaultScan] Failed to start media loading:', error);
-          }
-        });
-      }, 50); // 50ms delay to let React render
+      // Media is loaded on-demand via useContentTexture hook
+      // No explicit media loading step needed - absolutePath is already set on dreamTalkMedia
 
     } catch (error) {
       console.error('Vault scan error:', error);
@@ -853,7 +844,7 @@ export class GitDreamNodeService {
           // File changed - reload metadata only (data will lazy load)
           const stats = await fsPromises.stat(mediaPath);
           const mimeType = this.getMimeType(udd.dreamTalk);
-          // Skip loading media data - will lazy load via MediaLoadingService
+          // Media loaded on-demand via useContentTexture (uses absolutePath)
 
           node.dreamTalkMedia = [{
             path: udd.dreamTalk,
