@@ -66,6 +66,7 @@ import { initializeConversationsService } from './features/songline/services/con
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
 import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
+import { getPeerSyncService } from './features/social-resonance-filter/services/peer-sync-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
 import { closeIndexedDBConnection, setVaultId, gracefulShutdown, markHydrationComplete } from './core/store/indexeddb-storage';
@@ -366,6 +367,10 @@ export default class InterBrainPlugin extends Plugin {
     serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BACKGROUND, async () => {
       // These run after READY is complete - no setTimeout needed
       await this.initializeBackgroundServices();
+
+      // Radicle Peer Sync (fire-and-forget, non-blocking)
+      // Ensures liminal web relationships are synced with Radicle network
+      this.syncRadiclePeersInBackground();
 
       // DreamSong Relationship Scan with change detection:
       // Only rescan if submodule structure has changed since last scan
@@ -687,6 +692,43 @@ export default class InterBrainPlugin extends Plugin {
 
     console.log('[Plugin] Background services initialized');
     // Note: DreamSong relationship scan moved to post-lifecycle (after commands are registered)
+  }
+
+  /**
+   * Sync Radicle peer following in background (fire-and-forget)
+   * Ensures liminal web relationships are mirrored in Radicle network config
+   */
+  private syncRadiclePeersInBackground(): void {
+    // Fire-and-forget async operation - doesn't block lifecycle
+    (async () => {
+      try {
+        const radicleService = serviceManager.getRadicleService();
+
+        // Quick bail-out if Radicle CLI not available (Windows, or not installed)
+        if (!await radicleService.isAvailable()) {
+          console.log('[Plugin] Radicle CLI not available, skipping peer sync');
+          return;
+        }
+
+        // Check if passphrase is configured - required for all Radicle operations
+        const passphrase = this.settings?.radiclePassphrase;
+        if (!passphrase) {
+          console.log('[Plugin] Radicle passphrase not configured, skipping peer sync');
+          new Notice('Configure your Radicle passphrase in Settings → InterBrain to enable P2P collaboration');
+          return;
+        }
+
+        const vaultPath = (this.app.vault.adapter as any).basePath;
+
+        console.log('[Plugin] Starting background Radicle peer sync...');
+        const peerSyncService = getPeerSyncService(radicleService);
+        const result = await peerSyncService.syncPeerFollowing(vaultPath, passphrase);
+        console.log(`[Plugin] Radicle peer sync complete: ${result.summary}`);
+      } catch (error) {
+        // Non-critical - log and continue
+        console.warn('[Plugin] Background Radicle peer sync failed (non-critical):', error);
+      }
+    })();
   }
 
   private initializeServices(): void {
