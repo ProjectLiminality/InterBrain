@@ -220,12 +220,10 @@ class ServiceLifecycleManagerImpl {
       LifecyclePhase.BACKGROUND,
     ];
 
-    console.log('[Lifecycle] Starting lifecycle execution...');
     const startTime = Date.now();
 
     for (const phase of phaseOrder) {
       if (this.isShuttingDown) {
-        console.log(`[Lifecycle] Shutdown requested, stopping at ${phase}`);
         break;
       }
 
@@ -245,7 +243,6 @@ class ServiceLifecycleManagerImpl {
       throw new Error(`Unknown phase: ${phase}`);
     }
 
-    console.log(`[Lifecycle] Phase ${phase}: starting...`);
     this.currentPhase = phase;
     this.emitter.emit('phase:start', phase);
 
@@ -272,8 +269,6 @@ class ServiceLifecycleManagerImpl {
         duration,
         metadata: metadata as Record<string, unknown> | undefined,
       };
-
-      console.log(`[Lifecycle] Phase ${phase}: complete in ${duration}ms`);
 
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -325,21 +320,16 @@ class ServiceLifecycleManagerImpl {
    */
   async shutdown(): Promise<void> {
     if (this.isShuttingDown) {
-      console.log('[Lifecycle] Shutdown already in progress');
       return;
     }
 
-    console.log('[Lifecycle] Initiating graceful shutdown...');
     this.isShuttingDown = true;
     this.emitter.emit('shutdown:start');
 
     // Wait for pending operations with timeout
     if (this.pendingOperations.length > 0) {
-      console.log(`[Lifecycle] Waiting for ${this.pendingOperations.length} pending operations...`);
-
       const timeout = new Promise<void>((resolve) => {
         setTimeout(() => {
-          console.warn('[Lifecycle] Shutdown timeout - some operations may be incomplete');
           resolve();
         }, 5000);
       });
@@ -350,7 +340,6 @@ class ServiceLifecycleManagerImpl {
       ]);
     }
 
-    console.log('[Lifecycle] Shutdown complete');
     this.emitter.emit('shutdown:complete');
   }
 

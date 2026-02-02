@@ -247,15 +247,9 @@ export class RadicleServiceImpl implements RadicleService {
     const env = { ...(globalThis as any).process.env };
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
-      console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
-    } else {
-      console.log('RadicleService: No passphrase provided, relying on ssh-agent');
     }
 
-    // Debug: Check if directory exists and has .git
     const fs = require('fs');
-    const gitPath = require('path').join(dreamNodePath, '.git');
-    console.log(`RadicleService: Checking if ${gitPath} exists:`, fs.existsSync(gitPath));
 
     try {
       // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
@@ -278,8 +272,6 @@ export class RadicleServiceImpl implements RadicleService {
         spawnArgs.push('--description', description);
       }
 
-      console.log(`RadicleService: Running rad ${spawnArgs.join(' ')}`);
-
       const spawnPromise = () => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
         const child = spawn(radCmd, spawnArgs, {
           env: env,
@@ -299,10 +291,6 @@ export class RadicleServiceImpl implements RadicleService {
         });
 
         child.on('close', (code: number | null) => {
-          console.log(`RadicleService: spawn closed with code ${code}`);
-          console.log(`RadicleService: stdout:`, stdout);
-          console.log(`RadicleService: stderr:`, stderr);
-
           if (code === 0) {
             resolve({ stdout, stderr });
           } else {
@@ -324,39 +312,29 @@ export class RadicleServiceImpl implements RadicleService {
 
       const result = await spawnPromise();
 
-      console.log('RadicleService: rad init output:', result.stdout);
-      if (result.stderr) {
-        console.warn('RadicleService: rad init stderr:', result.stderr);
-      }
-
       // Extract RID from rad init output
       // Expected format: "Repository rad:z... created."
       const ridMatch = result.stdout.match(/rad:z[a-zA-Z0-9]+/);
       if (ridMatch) {
         const radicleId = ridMatch[0];
-        console.log(`RadicleService: Captured Radicle ID: ${radicleId}`);
         return radicleId;
       }
 
-      console.warn('RadicleService: Could not extract RID from rad init output');
       return null;
     } catch (error: any) {
       const errorOutput = error.stderr || error.stdout || error.message || '';
 
       // Check if already initialized in storage - extract RID if possible
       if (errorOutput.includes('reinitialize') && errorOutput.includes('/storage/')) {
-        console.log(`RadicleService: Repository exists in Radicle storage`);
         const storageMatch = errorOutput.match(/\/storage\/(z[A-Za-z0-9]+)/);
         if (storageMatch && storageMatch[1]) {
           const radicleId = `rad:${storageMatch[1]}`;
-          console.log(`RadicleService: Found existing Radicle ID: ${radicleId}`);
           return radicleId;
         }
       }
 
       // Check if already initialized normally - try to get existing RID
       if (errorOutput.includes('already initialized')) {
-        console.log(`RadicleService: Repository already initialized, attempting to get existing RID`);
         try {
           const existingRid = await this.getRadicleId(dreamNodePath, passphrase);
           if (existingRid) {
@@ -387,10 +365,6 @@ export class RadicleServiceImpl implements RadicleService {
       // - Radicle 1.5: "✓ Node is running with Node ID z6Mks..."
       const isRunning = stdout.includes('Node is running');
 
-      // Reduced logging - only log when NOT running (actionable)
-      if (!isRunning) {
-        console.log(`RadicleService: Node not running, will start it`);
-      }
       return isRunning;
     } catch {
       return false;
@@ -457,20 +431,15 @@ export class RadicleServiceImpl implements RadicleService {
     const execOptions: any = { env };
     if (repoPath) {
       execOptions.cwd = repoPath;
-      console.log(`RadicleService: Following peer ${peerDid} in repo ${repoPath}...`);
-    } else {
-      console.log(`RadicleService: Following peer ${peerDid} globally...`);
     }
 
     try {
       await execAsync(`"${radCmd}" follow ${peerDid}`, execOptions);
-      console.log(`RadicleService: ✅ Now following ${peerDid} - will receive their updates`);
     } catch (error: any) {
       const errorOutput = error.stderr || error.stdout || error.message || '';
 
       // Check if already following - not an error
       if (errorOutput.includes('already following') || errorOutput.includes('Already following')) {
-        console.log(`RadicleService: Already following ${peerDid} (not an error)`);
         return;
       }
 
@@ -505,12 +474,9 @@ export class RadicleServiceImpl implements RadicleService {
       const delegateMatch = stdout.match(/delegate:\s*(did:key:[A-Za-z0-9]+)/i);
 
       if (delegateMatch && delegateMatch[1]) {
-        const delegateDid = delegateMatch[1];
-        console.log(`RadicleService: Found delegate for ${radicleId}: ${delegateDid}`);
-        return delegateDid;
+        return delegateMatch[1];
       }
 
-      console.warn(`RadicleService: Could not parse delegate DID from rad inspect output`);
       return null;
     } catch (error: any) {
       console.warn(`RadicleService: Failed to get repository delegate:`, error.message);
@@ -540,7 +506,6 @@ export class RadicleServiceImpl implements RadicleService {
         return radicleId;
       }
 
-      console.log(`RadicleService: rad . returned output but not a valid Radicle ID: "${radicleId}"`);
       return null;
     } catch (error: any) {
       // Log the error for debugging with full details
@@ -574,7 +539,7 @@ export class RadicleServiceImpl implements RadicleService {
             const udd = JSON.parse(uddContent);
 
             if (udd.radicleId === radicleId) {
-              return { dirName: dir.name, found: true, method: '.udd file' };
+              return { dirName: dir.name, found: true };
             }
           } catch {
             // .udd file doesn't exist or couldn't be read
@@ -587,7 +552,6 @@ export class RadicleServiceImpl implements RadicleService {
       // OPTIMIZATION 2: Early exit if found in .udd files
       const uddMatch = uddChecks.find(check => check.found);
       if (uddMatch) {
-        console.log(`RadicleService: Found matching Radicle ID in "${uddMatch.dirName}" (${uddMatch.method})`);
         return [uddMatch.dirName];
       }
 
@@ -608,7 +572,6 @@ export class RadicleServiceImpl implements RadicleService {
       // OPTIMIZATION 4: Early exit after first git match
       const gitMatch = gitChecks.find(check => check.found);
       if (gitMatch) {
-        console.log(`RadicleService: Found matching Radicle ID in "${gitMatch.dirName}" (git repository)`);
         return [gitMatch.dirName];
       }
 
@@ -628,13 +591,10 @@ export class RadicleServiceImpl implements RadicleService {
     const path = require('path');
     const fs = require('fs');
 
-    console.log(`RadicleService: Checking if ${radicleId} already exists...`);
     const existingRepos = await this.findReposByRadicleId(destinationPath, radicleId);
 
     if (existingRepos.length > 0) {
       const existingRepoName = existingRepos[0];
-      console.log(`RadicleService: ✅ Repository already exists as "${existingRepoName}" - skipping clone`);
-
       // Return existing repo name with alreadyExisted flag
       return { repoName: existingRepoName, alreadyExisted: true };
     }
@@ -648,9 +608,6 @@ export class RadicleServiceImpl implements RadicleService {
     const env = { ...process.env };
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
-      console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
-    } else {
-      console.log('RadicleService: No passphrase provided, relying on ssh-agent');
     }
 
     // CRITICAL: Add Radicle bin to PATH so rad can find radicle-node binary
@@ -673,13 +630,6 @@ export class RadicleServiceImpl implements RadicleService {
       // See docs/radicle-architecture.md for dual-mode documentation.
       const cloneCmd = `"${radCmd}" clone ${radicleId} --scope all`;
 
-      // Log the mode we're using
-      if (peerNid) {
-        console.log(`RadicleService: Running '${cloneCmd}' (seed-relayed mode, peerNid preserved for future direct P2P: ${peerNid})`);
-      } else {
-        console.log(`RadicleService: Running '${cloneCmd}' (seed-relayed mode, from routing table)`);
-      }
-
       // FUTURE DIRECT P2P MODE (when hole-punching ships):
       // if (peerNid) {
       //   const rawNid = peerNid.replace(/^did:key:/, '');
@@ -689,10 +639,6 @@ export class RadicleServiceImpl implements RadicleService {
         cwd: destinationPath,
         env: env,
       });
-      console.log('RadicleService: rad clone output:', cloneResult.stdout);
-      if (cloneResult.stderr) {
-        console.warn('RadicleService: rad clone stderr:', cloneResult.stderr);
-      }
     } catch (cloneError: any) {
       const errorOutput = cloneError.stdout || cloneError.stderr || cloneError.message || '';
 
@@ -728,10 +674,8 @@ export class RadicleServiceImpl implements RadicleService {
     let repoName: string;
     if (match && match[1]) {
       repoName = match[1];
-      console.log(`RadicleService: Parsed repository name from clone output: ${repoName}`);
     } else {
       // Fallback: Try to list directories and find the newest one
-      console.warn('RadicleService: Could not parse repo name from output, falling back to directory scan');
       const entries = await fs.promises.readdir(destinationPath, { withFileTypes: true });
       const dirs = entries.filter((e: any) => e.isDirectory() && !e.name.startsWith('.'));
 
@@ -748,7 +692,6 @@ export class RadicleServiceImpl implements RadicleService {
       );
       dirsWithStats.sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs);
       repoName = dirsWithStats[0].name;
-      console.log(`RadicleService: Using newest directory as repo name: ${repoName}`);
     }
 
     // POST-CLONE CLEANUP: Strip UUID suffix from directory name if present
@@ -814,10 +757,6 @@ export class RadicleServiceImpl implements RadicleService {
 
       // Write back to .udd file
       await fs.promises.writeFile(uddPath, JSON.stringify(udd, null, 2), 'utf-8');
-      console.log(`RadicleService: ✅ Saved Radicle ID to .udd file for instant future lookups`);
-      if (titleNormalized) {
-        console.log(`RadicleService: ✅ Normalized title to human-readable format: "${udd.title}"`);
-      }
     } catch (error) {
       console.warn(`RadicleService: ⚠️ Could not save Radicle ID to .udd file (non-critical):`, error);
       // Don't fail the clone if .udd update fails
@@ -838,10 +777,6 @@ export class RadicleServiceImpl implements RadicleService {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
 
-    if (recipientDid) {
-      console.log(`RadicleService: Will add ${recipientDid} as delegate after publishing`);
-    }
-
     const radCmd = this.getRadCommand();
 
     // Convert to absolute path if needed
@@ -849,8 +784,6 @@ export class RadicleServiceImpl implements RadicleService {
     const absoluteDreamNodePath = path.isAbsolute(dreamNodePath)
       ? dreamNodePath
       : path.resolve(dreamNodePath);
-    console.log(`RadicleService: [DEBUG] Original path: ${dreamNodePath}`);
-    console.log(`RadicleService: [DEBUG] Absolute path: ${absoluteDreamNodePath}`);
 
     // Prepare environment with passphrase and enhanced PATH for git-remote-rad helper
     const process = require('process');
@@ -867,16 +800,10 @@ export class RadicleServiceImpl implements RadicleService {
     env.PATH = enhancedPath;
     if (passphrase) {
       env.RAD_PASSPHRASE = passphrase;
-      console.log('RadicleService: Using provided passphrase via RAD_PASSPHRASE');
-    } else {
-      console.log('RadicleService: No passphrase provided, relying on ssh-agent');
     }
 
     try {
       // STEP 1: Push commits to Radicle storage
-      console.log(`RadicleService: Pushing commits to Radicle storage...`);
-      console.log(`RadicleService: [DEBUG] absoluteDreamNodePath = ${absoluteDreamNodePath}`);
-      console.log(`RadicleService: [DEBUG] env.PATH = ${env.PATH}`);
 
       const { spawn } = require('child_process');
 
@@ -972,10 +899,8 @@ export class RadicleServiceImpl implements RadicleService {
       });
 
       if (isAlreadyPublic) {
-        console.log(`ℹ️ RadicleService: Repository is already public - skipping rad publish`);
         // Still add delegate if recipient specified
         if (recipientDid) {
-          if (RADICLE_VERBOSE) console.log(`RadicleService: Adding ${recipientDid} as delegate (repo already public)...`);
           await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
         }
         return; // Skip publish, exit successfully
@@ -1128,7 +1053,6 @@ export class RadicleServiceImpl implements RadicleService {
 
       // STEP 6: Add recipient as delegate if specified
       if (recipientDid) {
-        console.log(`RadicleService: Adding ${recipientDid} as delegate after successful publish...`);
         await this.addDelegate(absoluteDreamNodePath, recipientDid, passphrase);
       }
     } catch (error: any) {
@@ -1253,16 +1177,10 @@ export class RadicleServiceImpl implements RadicleService {
     }
 
     try {
-      const result = await execAsync(
+      await execAsync(
         `"${radCmd}" id update --delegate "${peerDID}" --threshold 1 --title "${title}" --description "${description}"`,
         { cwd: dreamNodePath, env }
       );
-      console.log(`RadicleService: Added ${peerDID} as delegate:`, result.stdout);
-
-      // Note: With threshold=1, the revision is implicitly accepted by the author
-      // Radicle automatically applies your verdict when you create the revision
-      // The revision will reach quorum and move to "accepted" state automatically
-      console.log(`ℹ️ RadicleService: Revision created and implicitly accepted (threshold=1, you are sole delegate)`);
 
       return true; // Successfully added
     } catch (error: any) {
@@ -1317,11 +1235,10 @@ export class RadicleServiceImpl implements RadicleService {
     try {
       // Use --no-fetch to avoid blocking on seed node sync
       // The Radicle node will naturally sync in the background later
-      const result = await execAsync(
+      await execAsync(
         `"${radCmd}" seed "${radicleId}" --scope ${scope} --no-fetch`,
         { cwd: dreamNodePath }
       );
-      console.log(`RadicleService: Set seeding scope to '${scope}' (no-fetch):`, result.stdout);
       return true; // Successfully set
     } catch (error: any) {
       throw new Error(`Failed to set seeding scope: ${error.message}`);

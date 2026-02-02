@@ -105,14 +105,12 @@ export default function SphereRotationControls({ groupRef }: SphereRotationContr
     // Check if rotation is locked (liminal-web mode) - get current state to avoid stale closure
     const currentLayout = useInterBrainStore.getState().spatialLayout;
     if (currentLayout === 'liminal-web') {
-      console.log('🔒 Sphere rotation locked - in liminal-web mode');
       return; // Rotation disabled in liminal-web mode
     }
     
     // Check if the mouse event is over UI elements (like proto-node HTML)
     const target = event.target as globalThis.HTMLElement;
     if (target && (target.closest('[data-ui-element]') || target.style?.pointerEvents === 'auto')) {
-      console.log('Mouse down over UI element, skipping rotation controls');
       return; // Don't handle rotation if over UI elements
     }
     

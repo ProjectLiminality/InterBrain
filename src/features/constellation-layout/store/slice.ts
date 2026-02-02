@@ -82,21 +82,6 @@ export const createConstellationSlice: StateCreator<
   constellationData: INITIAL_CONSTELLATION_LAYOUT,
 
   setConstellationPositions: (positions) => {
-    // Debug: ALWAYS log when this function is called
-    console.log(`[ConstellationSlice] setConstellationPositions called:`, {
-      hasPositions: !!positions,
-      size: positions?.size ?? 0,
-      isMap: positions instanceof Map
-    });
-
-    // Debug: verify positions have actual values before storing
-    if (positions && positions.size > 0) {
-      const firstEntry = Array.from(positions.entries())[0];
-      console.log(`[ConstellationSlice] First entry:`, JSON.stringify(firstEntry));
-      if (!firstEntry[1] || !Array.isArray(firstEntry[1])) {
-        console.error(`[ConstellationSlice] CORRUPTED INPUT: Position value is not an array:`, firstEntry[1]);
-      }
-    }
 
     // Store a COPY of the Map to prevent external mutation
     const positionsCopy = positions ? new Map(positions) : null;
@@ -156,21 +141,6 @@ const arrayToMap = <K, V>(array: [K, V][]): Map<K, V> => new Map(array);
  * Extracts persistence data for the constellation slice (positions only)
  */
 export function extractConstellationPersistenceData(state: ConstellationSlice) {
-  const positionsCount = state.constellationData.positions?.size ?? 0;
-  const graphHash = state.constellationData.graphHashWhenPositionsComputed;
-  console.log(`[ConstellationSlice] Extracting ${positionsCount} positions for persistence (graphHash=${graphHash})`);
-
-  // Debug: log first 3 positions to verify they have actual values
-  if (state.constellationData.positions && state.constellationData.positions.size > 0) {
-    const entries = Array.from(state.constellationData.positions.entries()).slice(0, 3);
-    console.log(`[ConstellationSlice] First 3 positions being extracted: ${JSON.stringify(entries)}`);
-    // Check if any values are undefined
-    const hasUndefined = entries.some(([_k, v]) => v === undefined || v === null);
-    if (hasUndefined) {
-      console.error(`[ConstellationSlice] EXTRACTION BUG: Positions have undefined values!`);
-    }
-  }
-
   return {
     constellationData: (state.constellationData.positions || state.constellationData.nodeMetadata) ? {
       positions: state.constellationData.positions ?
@@ -199,20 +169,12 @@ export function restoreConstellationPersistenceData(persistedData: {
   } | null;
 }): Partial<ConstellationSlice> {
   if (!persistedData.constellationData) {
-    console.log('[ConstellationSlice] No constellationData in persisted state');
     return { constellationData: INITIAL_CONSTELLATION_LAYOUT };
   }
 
   try {
     const positionsArray = persistedData.constellationData.positions;
-    const positionsCount = positionsArray?.length ?? 0;
     const graphHash = persistedData.constellationData.graphHashWhenPositionsComputed ?? null;
-    console.log(`[ConstellationSlice] Restoring ${positionsCount} positions from persisted state (graphHash=${graphHash})`);
-
-    // Debug: log first 3 entries to verify data structure
-    if (positionsArray && positionsArray.length > 0) {
-      console.log(`[ConstellationSlice] First 3 position entries:`, positionsArray.slice(0, 3));
-    }
 
     let positionsMap = positionsArray ? arrayToMap(positionsArray) : null;
 
@@ -221,7 +183,6 @@ export function restoreConstellationPersistenceData(persistedData: {
     if (positionsMap) {
       const firstKey = Array.from(positionsMap.keys())[0];
       const firstValue = positionsMap.get(firstKey);
-      console.log(`[ConstellationSlice] Map created: size=${positionsMap.size}, firstKey=${firstKey}, firstValue=${JSON.stringify(firstValue)}`);
 
       // Check if values are corrupted (null, undefined, or arrays with null elements)
       const isCorrupted = !firstValue ||
@@ -230,7 +191,6 @@ export function restoreConstellationPersistenceData(persistedData: {
         firstValue.some(v => v === null || v === undefined || !Number.isFinite(v));
 
       if (isCorrupted) {
-        console.warn(`[ConstellationSlice] CORRUPTED: Position values are invalid (${JSON.stringify(firstValue)}), clearing positions for recomputation`);
         positionsMap = null;
       }
     }

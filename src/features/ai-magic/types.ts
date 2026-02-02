@@ -217,10 +217,8 @@ export function detectHardwareTier(): HardwareTier {
 		// In Electron/Node context, we can access os module
 		const os = require('os');
 		const totalMemoryGB = os.totalmem() / (1024 * 1024 * 1024);
-		console.log(`[AI Magic] Detected system RAM: ${totalMemoryGB.toFixed(1)} GB`);
 		return totalMemoryGB >= HIGH_TIER_RAM_THRESHOLD_GB ? 'high' : 'standard';
 	} catch {
-		console.warn('[AI Magic] Could not detect system RAM, defaulting to standard tier');
 		return 'standard';
 	}
 }

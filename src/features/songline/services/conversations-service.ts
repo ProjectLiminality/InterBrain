@@ -203,7 +203,6 @@ let _conversationsServiceInstance: ConversationsServiceImpl | null = null;
 
 export function initializeConversationsService(plugin: InterBrainPlugin): void {
 	_conversationsServiceInstance = new ConversationsServiceImpl(plugin);
-	console.log('[Conversations] Service initialized');
 }
 
 export function getConversationsService(): ConversationsServiceImpl {

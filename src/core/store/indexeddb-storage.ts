@@ -98,17 +98,13 @@ function getVaultSpecificKey(key: string): string {
 function openDB(): Promise<IDBDatabase> {
   // Return cached connection if still valid
   if (cachedDB) {
-    console.log('[IndexedDB] Using cached connection');
     return Promise.resolve(cachedDB);
   }
 
   // Return existing open promise if one is in progress
   if (dbOpenPromise) {
-    console.log('[IndexedDB] Waiting for existing open promise');
     return dbOpenPromise;
   }
-
-  console.log('[IndexedDB] Opening new connection...');
 
   // Create new connection
   dbOpenPromise = new Promise((resolve, reject) => {
@@ -133,13 +129,11 @@ function openDB(): Promise<IDBDatabase> {
     };
 
     request.onsuccess = () => {
-      console.log('[IndexedDB] Connection opened successfully');
       globalThis.clearTimeout(timeout);
       cachedDB = request.result;
 
       // Clear cache on connection close/error
       cachedDB.onclose = () => {
-        console.log('[IndexedDB] Connection closed');
         cachedDB = null;
         dbOpenPromise = null;
       };
@@ -154,11 +148,9 @@ function openDB(): Promise<IDBDatabase> {
     };
 
     request.onupgradeneeded = (event) => {
-      console.log('[IndexedDB] Upgrading database schema...');
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
-        console.log('[IndexedDB] Created object store:', STORE_NAME);
       }
     };
   });
@@ -185,23 +177,6 @@ export const indexedDBStorage: StateStorage = {
         request.onsuccess = () => resolve(request.result ?? null);
       });
 
-      // Debug: Log what we're getting from IndexedDB
-      if (result) {
-        const size = result.length;
-        console.log(`[IndexedDB] getItem('${vaultKey}'): ${(size / 1024).toFixed(1)}KB`);
-        // Parse and log structure for debugging
-        try {
-          const parsed = JSON.parse(result);
-          const nodeCount = parsed.state?.dreamNodes?.length ?? 0;
-          const vectorCount = parsed.state?.vectorData?.length ?? 0;
-          console.log(`[IndexedDB] Parsed: ${nodeCount} dreamNodes, ${vectorCount} vectors`);
-        } catch (e) {
-          console.log(`[IndexedDB] Parse error:`, e);
-        }
-      } else {
-        console.log(`[IndexedDB] getItem('${vaultKey}'): null (empty)`);
-      }
-
       // Validate that we can parse the result before returning
       if (result) {
         try {
@@ -224,14 +199,12 @@ export const indexedDBStorage: StateStorage = {
   setItem: async (name: string, value: string): Promise<void> => {
     // Reject writes during shutdown
     if (isShuttingDown) {
-      console.log('[IndexedDB] Rejecting write during shutdown');
       return;
     }
 
     // Reject writes before hydration is complete
     // This prevents the empty initial state from overwriting persisted data
     if (!hydrationComplete) {
-      console.log('[IndexedDB] Skipping write before hydration complete');
       return;
     }
 
@@ -261,9 +234,6 @@ export const indexedDBStorage: StateStorage = {
 
       const db = await openDB();
 
-      // Debug: Log what we're writing
-      console.log(`[IndexedDB] setItem('${vaultKey}'): ${(value.length / 1024).toFixed(1)}KB`);
-
       // Create tracked promise for graceful shutdown
       const writePromise = new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readwrite');
@@ -275,7 +245,6 @@ export const indexedDBStorage: StateStorage = {
           reject(request.error);
         };
         request.onsuccess = () => {
-          console.log(`[IndexedDB] setItem SUCCESS`);
           resolve();
         };
       });
@@ -341,16 +310,12 @@ export async function gracefulShutdown(timeoutMs: number = 5000): Promise<void> 
   isShuttingDown = true;
 
   if (pendingWrites.size === 0) {
-    console.log('[IndexedDB] No pending writes, shutdown immediate');
     return;
   }
-
-  console.log(`[IndexedDB] Waiting for ${pendingWrites.size} pending writes...`);
 
   // Create timeout promise
   const timeout = new Promise<void>((resolve) => {
     setTimeout(() => {
-      console.warn(`[IndexedDB] Shutdown timeout after ${timeoutMs}ms - ${pendingWrites.size} writes may be incomplete`);
       resolve();
     }, timeoutMs);
   });
@@ -360,8 +325,6 @@ export async function gracefulShutdown(timeoutMs: number = 5000): Promise<void> 
     Promise.allSettled(Array.from(pendingWrites)),
     timeout,
   ]);
-
-  console.log('[IndexedDB] Graceful shutdown complete');
 }
 
 /**
@@ -384,7 +347,6 @@ export function isShutdownInProgress(): boolean {
  */
 export function markHydrationComplete(): void {
   hydrationComplete = true;
-  console.log('[IndexedDB] Hydration complete - writes enabled');
 }
 
 /**

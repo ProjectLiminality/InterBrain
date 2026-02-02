@@ -286,7 +286,6 @@ let _pdfGeneratorService: PDFGeneratorService | null = null;
 
 export function initializePDFGeneratorService(): void {
 	_pdfGeneratorService = new PDFGeneratorService();
-	console.log('📄 [PDFGenerator] Service initialized');
 }
 
 export function getPDFGeneratorService(): PDFGeneratorService {

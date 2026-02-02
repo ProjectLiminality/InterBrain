@@ -120,7 +120,6 @@ let _audioRecordingServiceInstance: AudioRecordingServiceImpl | null = null;
 
 export function initializeAudioRecordingService(plugin: InterBrainPlugin): void {
 	_audioRecordingServiceInstance = new AudioRecordingServiceImpl(plugin);
-	console.log('[AudioRecording] Service initialized');
 }
 
 export function getAudioRecordingService(): AudioRecordingServiceImpl {

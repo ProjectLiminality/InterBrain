@@ -103,7 +103,6 @@ export default function DreamspaceCanvas() {
     // Diagnostic: detect significant changes in mounted node count
     const currentLayout = useInterBrainStore.getState().spatialLayout;
     if (prevMountedCountRef.current > 0 && result.length !== prevMountedCountRef.current) {
-      console.log(`[CANVAS] dreamNodes recomputed: ${prevMountedCountRef.current} → ${result.length} (mounted=${constellationFilter.mountedNodes.size}, ephemeral=${ephemeralNodesMap.size}, layout=${currentLayout})`);
     }
     prevMountedCountRef.current = result.length;
 
@@ -317,7 +316,6 @@ export default function DreamspaceCanvas() {
         }
 
         // Return to constellation
-        console.log('DreamspaceCanvas: Returning to constellation mode');
         spatialOrchestratorRef.current.returnToConstellation();
         break;
     }
@@ -581,19 +579,16 @@ export default function DreamspaceCanvas() {
 
           // Suppress empty space clicks during collaboration preview mode
           if (getCherryPickWorkflowService()?.isPreviewActive()) {
-            console.log('Empty space clicked during collaboration preview - ignoring');
             return;
           }
 
           // Suppress empty space clicks during edit mode
           if (store.editMode.isActive) {
-            console.log('Empty space clicked during edit mode - ignoring');
             return;
           }
 
           // Suppress empty space clicks during copilot mode to prevent accidental navigation
           if (store.copilotMode.isActive) {
-            console.log('Empty space clicked during copilot mode - ignoring to prevent accidental constellation return');
             return;
           }
 
@@ -605,11 +600,9 @@ export default function DreamspaceCanvas() {
           if (store.spatialLayout === 'search') {
             if (store.searchInterface.isActive) {
               // Dismiss search interface and return to constellation
-              console.log('Empty space clicked in search interface - dismissing search');
               store.setSearchActive(false);
             } else {
               // Clear search results
-              console.log('Empty space clicked in search results mode - clearing search');
               store.setSearchResults([]);
             }
             // Use orchestrator to animate back to constellation (handles ephemeral exit)
@@ -620,7 +613,6 @@ export default function DreamspaceCanvas() {
             }
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
-            console.log('Empty space clicked in liminal web - deselecting node');
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
@@ -630,9 +622,6 @@ export default function DreamspaceCanvas() {
             } else {
               store.setSpatialLayout('constellation');
             }
-          } else {
-            // Already in constellation mode, just log
-            console.log('Empty space clicked in constellation mode');
           }
         }}
       >
@@ -687,11 +676,8 @@ export default function DreamspaceCanvas() {
           {(() => {
             const shouldEnableDynamicScaling = spatialLayout === 'constellation';
 
-            // DIAGNOSTIC: Only log when node count changes significantly
-            if (Math.abs(dreamNodes.length - prevRenderCountRef.current) > 2) {
-              console.log(`[DreamNodeRendering] 🎨 Rendering ${dreamNodes.length} nodes`);
-              prevRenderCountRef.current = dreamNodes.length;
-            }
+            // Track render count (without logging)
+            prevRenderCountRef.current = dreamNodes.length;
 
             const renderedNodes = dreamNodes.map((node) => {
               const isEphemeral = ephemeralNodeIds.has(node.id);
@@ -748,7 +734,7 @@ export default function DreamspaceCanvas() {
             // Node focused by orchestrator
           }}
           onConstellationReturn={() => {
-            console.log('DreamspaceCanvas: Returned to constellation by orchestrator');
+            // Constellation return complete
           }}
           onOrchestratorReady={() => {
             // Register all existing refs when orchestrator is ready

@@ -48,7 +48,6 @@ let _audioStreamingServiceInstance: AudioStreamingServiceImpl | null = null;
 
 export function initializeAudioStreamingService(plugin: InterBrainPlugin): void {
 	_audioStreamingServiceInstance = new AudioStreamingServiceImpl(plugin);
-	console.log('[AudioStreaming] Service initialized');
 }
 
 export function getAudioStreamingService(): AudioStreamingServiceImpl {

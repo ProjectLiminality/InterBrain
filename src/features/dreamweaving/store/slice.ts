@@ -191,7 +191,6 @@ export const createDreamweavingSlice: StateCreator<
 export function extractDreamweavingPersistenceData(state: DreamweavingSlice) {
   const graph = state.dreamSongRelationships.graph;
   const hash = state.dreamSongRelationships.submoduleStructureHash;
-  console.log(`[DreamweavingSlice] Extracting persistence: hasGraph=${!!graph}, nodes=${graph?.nodes?.size ?? 0}, edges=${graph?.edges?.length ?? 0}, hash=${hash}`);
   return {
     dreamSongRelationships: graph ? {
       graph: serializeRelationshipGraph(graph),
@@ -213,20 +212,15 @@ export function restoreDreamweavingPersistenceData(persistedData: {
     submoduleStructureHash?: string | null;
   } | null;
 }): Partial<DreamweavingSlice> {
-  console.log(`[DreamweavingSlice] Restoring: hasPersistedData=${!!persistedData.dreamSongRelationships}, hasGraph=${!!persistedData.dreamSongRelationships?.graph}`);
-
   if (!persistedData.dreamSongRelationships?.graph) {
-    console.log(`[DreamweavingSlice] No persisted graph, returning initial state`);
     return { dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE };
   }
 
   try {
     const serializedGraph = persistedData.dreamSongRelationships.graph;
     const hash = persistedData.dreamSongRelationships.submoduleStructureHash ?? null;
-    console.log(`[DreamweavingSlice] Deserializing graph: nodes=${serializedGraph.nodes?.length ?? 0}, edges=${serializedGraph.edges?.length ?? 0}, hash=${hash}`);
 
     const restoredGraph = deserializeRelationshipGraph(serializedGraph);
-    console.log(`[DreamweavingSlice] Restored graph: nodes=${restoredGraph.nodes?.size ?? 0}, edges=${restoredGraph.edges?.length ?? 0}`);
 
     return {
       dreamSongRelationships: {
@@ -237,7 +231,6 @@ export function restoreDreamweavingPersistenceData(persistedData: {
       }
     };
   } catch (error) {
-    console.warn('[DreamweavingSlice] Failed to deserialize DreamSong relationship data:', error);
     return { dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE };
   }
 }

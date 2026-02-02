@@ -68,7 +68,6 @@ class VaultStateServiceImpl {
     this.vaultPath = vaultPath;
     this.currentVaultId = this.hashVaultPath(vaultPath);
     this.cachedState = null;
-    console.log(`[VaultState] Initialized for vault: ${vaultPath} (id: ${this.currentVaultId})`);
   }
 
   /**
@@ -87,11 +86,9 @@ class VaultStateServiceImpl {
       const content = await fsPromises.readFile(statePath, 'utf-8');
       const state = JSON.parse(content) as VaultState;
       this.cachedState = state;
-      console.log(`[VaultState] Loaded state: ${state.nodeCount} nodes, last scan ${new Date(state.lastScanTimestamp).toISOString()}`);
       return state;
     } catch {
       // File doesn't exist or is corrupted - this is normal on first run
-      console.log('[VaultState] No existing state found (fresh vault or first run)');
       return null;
     }
   }
@@ -119,8 +116,6 @@ class VaultStateServiceImpl {
 
       await fsPromises.writeFile(statePath, JSON.stringify(state, null, 2));
       this.cachedState = state;
-
-      console.log(`[VaultState] Saved state: ${nodeCount} nodes at ${new Date().toISOString()}`);
     } catch (error) {
       console.error('[VaultState] Failed to save state:', error);
       // Non-fatal - vault will just rescan next time
@@ -140,30 +135,25 @@ class VaultStateServiceImpl {
 
     // Check vault ID matches
     if (state.vaultId !== this.currentVaultId) {
-      console.log(`[VaultState] Vault ID mismatch: ${state.vaultId} !== ${this.currentVaultId}`);
       return { hasChanges: true, reason: 'vault_mismatch', cachedState: state };
     }
 
     // Check schema version
     if (state.schemaVersion !== CURRENT_SCHEMA_VERSION) {
-      console.log(`[VaultState] Schema upgrade needed: ${state.schemaVersion} → ${CURRENT_SCHEMA_VERSION}`);
       return { hasChanges: true, reason: 'schema_upgrade', cachedState: state };
     }
 
     // Quick check: .obsidian folder mtime
     const currentMtime = await this.getObsidianMtime();
     if (currentMtime !== state.obsidianMtime) {
-      console.log(`[VaultState] .obsidian mtime changed: ${state.obsidianMtime} → ${currentMtime}`);
       return { hasChanges: true, reason: 'mtime_changed', cachedState: state };
     }
 
     // Node count sanity check if provided
     if (expectedNodeCount !== undefined && expectedNodeCount !== state.nodeCount) {
-      console.log(`[VaultState] Node count mismatch: expected ${expectedNodeCount}, cached ${state.nodeCount}`);
       return { hasChanges: true, reason: 'node_count_mismatch', cachedState: state };
     }
 
-    console.log(`[VaultState] No changes detected (${state.nodeCount} nodes, last scan ${this.formatAge(state.lastScanTimestamp)} ago)`);
     return { hasChanges: false, reason: 'no_changes', cachedState: state };
   }
 
@@ -189,7 +179,6 @@ class VaultStateServiceImpl {
       const statePath = this.getStatePath();
       await fsPromises.unlink(statePath);
       this.cachedState = null;
-      console.log('[VaultState] State cleared');
     } catch {
       // File might not exist, that's fine
     }

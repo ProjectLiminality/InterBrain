@@ -428,7 +428,6 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   }),
 
   despawnEphemeralNode: (nodeId) => set((state: InterBrainState) => {
-    console.log(`[LIFECYCLE] ${nodeId.slice(0,8)}: despawnEphemeralNode, remaining=${state.ephemeralNodes.size - 1}`);
     const newMap = new Map(state.ephemeralNodes);
     newMap.delete(nodeId);
     return { ephemeralNodes: newMap };
@@ -478,7 +477,6 @@ export const useInterBrainStore = create<InterBrainState>()(
       merge: (persisted: unknown, current) => {
         // Handle null/undefined persisted state (fresh vault, new storage key, etc.)
         if (!persisted) {
-          console.log('[Store] No persisted state found, using defaults');
           return current;
         }
 
@@ -541,16 +539,9 @@ export const useInterBrainStore = create<InterBrainState>()(
 
       // Hydration lifecycle callbacks for debugging persistence issues
       onRehydrateStorage: () => {
-        console.log('[Store] Starting hydration from IndexedDB...');
         return (state, error) => {
           if (error) {
             console.error('[Store] Hydration failed:', error);
-          } else if (state) {
-            const nodeCount = state.dreamNodes?.size ?? 0;
-            const vectorCount = state.vectorData?.size ?? 0;
-            console.log(`[Store] Hydration complete: ${nodeCount} nodes, ${vectorCount} vectors`);
-          } else {
-            console.log('[Store] Hydration complete: no persisted state found');
           }
         };
       },

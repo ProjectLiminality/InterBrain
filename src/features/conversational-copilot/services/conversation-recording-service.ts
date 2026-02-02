@@ -160,7 +160,6 @@ let _conversationRecordingService: ConversationRecordingService | null = null;
 
 export function initializeConversationRecordingService(app: App): void {
 	_conversationRecordingService = new ConversationRecordingService(app);
-	console.log(`🎙️ [ConversationRecording] Service initialized`);
 }
 
 export function getConversationRecordingService(): ConversationRecordingService {

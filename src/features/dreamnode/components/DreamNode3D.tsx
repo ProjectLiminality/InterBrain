@@ -251,7 +251,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (ephemeral && ephemeralState && !hasTriggeredSpawnRef.current) {
       hasTriggeredSpawnRef.current = true;
 
-      console.log(`[SPAWN-ANIM] ${dreamNode.id.slice(0,8)}: effect fired at t=${globalThis.performance.now().toFixed(0)}, from=[${ephemeralState.spawnPosition.map(n=>n.toFixed(0))}] to=[${ephemeralState.targetPosition.map(n=>n.toFixed(0))}]`);
 
       // Start from spawn position
       setCurrentPosition(ephemeralState.spawnPosition);
@@ -371,7 +370,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       // Diagnostic log only for ephemeral nodes (constellation nodes move routinely)
       if (ephemeral) {
-        console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: ephemeral, positionMode=${positionMode}, target=[${newTargetPosition.map(n=>n.toFixed(0))}]`);
       }
 
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
@@ -827,7 +825,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         } else if (transitionType === 'ephemeral-exit') {
           // Ephemeral node finished exit animation — queue for staggered despawn
           // so multiple nodes completing in the same frame don't all unmount at once.
-          console.log(`[LIFECYCLE] ${dreamNode.id.slice(0,8)}: ephemeral-exit animation complete, queuing despawn`);
           queueEphemeralDespawn(dreamNode.id);
         }
       }

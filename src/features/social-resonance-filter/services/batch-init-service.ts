@@ -295,7 +295,6 @@ let _radicleBatchInitService: RadicleBatchInitService | null = null;
 
 export function initializeRadicleBatchInitService(plugin: Plugin, radicleService: RadicleService, dreamNodeService: GitDreamNodeService): void {
 	_radicleBatchInitService = new RadicleBatchInitService(plugin, radicleService, dreamNodeService);
-	console.log(`🔮 [RadicleBatchInit] Service initialized`);
 }
 
 export function getRadicleBatchInitService(): RadicleBatchInitService {

@@ -525,7 +525,6 @@ let _transcriptionServiceInstance: TranscriptionService | null = null;
 
 export function initializeRealtimeTranscriptionService(plugin: InterBrainPlugin): void {
 	_transcriptionServiceInstance = new TranscriptionService(plugin);
-	console.log('[RealtimeTranscription] Service initialized');
 }
 
 export function getRealtimeTranscriptionService(): TranscriptionService {
