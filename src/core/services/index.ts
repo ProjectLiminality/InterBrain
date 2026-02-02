@@ -9,4 +9,3 @@ export * from '../../features/social-resonance-filter/services/passphrase-manage
 // Re-exports from dreamnode feature for backwards compatibility
 export * from '../../features/dreamnode/services/udd-service';
 export * from '../../features/dreamnode/services/git-dreamnode-service';
-export * from '../../features/dreamnode/services/media-loading-service';

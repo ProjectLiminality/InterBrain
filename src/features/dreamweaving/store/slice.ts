@@ -31,6 +31,8 @@ export interface DreamSongRelationshipState {
   lastScanTimestamp: number | null;
   /** Whether a scan is currently in progress */
   isScanning: boolean;
+  /** Hash of submodule structure for change detection */
+  submoduleStructureHash: string | null;
 }
 
 /**
@@ -39,7 +41,8 @@ export interface DreamSongRelationshipState {
 export const INITIAL_DREAMSONG_RELATIONSHIP_STATE: DreamSongRelationshipState = {
   graph: null,
   lastScanTimestamp: null,
-  isScanning: false
+  isScanning: false,
+  submoduleStructureHash: null
 };
 
 /**
@@ -60,6 +63,7 @@ export interface DreamweavingSlice {
   dreamSongRelationships: DreamSongRelationshipState;
   setDreamSongRelationshipGraph: (graph: DreamSongRelationshipGraph | null) => void;
   setDreamSongRelationshipScanning: (scanning: boolean) => void;
+  setSubmoduleStructureHash: (hash: string | null) => void;
   clearDreamSongRelationships: () => void;
 }
 
@@ -169,6 +173,13 @@ export const createDreamweavingSlice: StateCreator<
     }
   })),
 
+  setSubmoduleStructureHash: (hash) => set((state) => ({
+    dreamSongRelationships: {
+      ...state.dreamSongRelationships,
+      submoduleStructureHash: hash
+    }
+  })),
+
   clearDreamSongRelationships: () => set({
     dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE
   }),
@@ -178,11 +189,14 @@ export const createDreamweavingSlice: StateCreator<
  * Extracts persistence data for dreamweaving slice (DreamSong relationships)
  */
 export function extractDreamweavingPersistenceData(state: DreamweavingSlice) {
+  const graph = state.dreamSongRelationships.graph;
+  const hash = state.dreamSongRelationships.submoduleStructureHash;
   return {
-    dreamSongRelationships: state.dreamSongRelationships.graph ? {
-      graph: serializeRelationshipGraph(state.dreamSongRelationships.graph),
+    dreamSongRelationships: graph ? {
+      graph: serializeRelationshipGraph(graph),
       lastScanTimestamp: state.dreamSongRelationships.lastScanTimestamp,
-      isScanning: false
+      isScanning: false,
+      submoduleStructureHash: hash
     } : null
   };
 }
@@ -195,6 +209,7 @@ export function restoreDreamweavingPersistenceData(persistedData: {
     graph: SerializableDreamSongGraph | null;
     lastScanTimestamp: number | null;
     isScanning: boolean;
+    submoduleStructureHash?: string | null;
   } | null;
 }): Partial<DreamweavingSlice> {
   if (!persistedData.dreamSongRelationships?.graph) {
@@ -202,15 +217,20 @@ export function restoreDreamweavingPersistenceData(persistedData: {
   }
 
   try {
+    const serializedGraph = persistedData.dreamSongRelationships.graph;
+    const hash = persistedData.dreamSongRelationships.submoduleStructureHash ?? null;
+
+    const restoredGraph = deserializeRelationshipGraph(serializedGraph);
+
     return {
       dreamSongRelationships: {
-        graph: deserializeRelationshipGraph(persistedData.dreamSongRelationships.graph),
+        graph: restoredGraph,
         lastScanTimestamp: persistedData.dreamSongRelationships.lastScanTimestamp,
-        isScanning: false
+        isScanning: false,
+        submoduleStructureHash: hash
       }
     };
   } catch (error) {
-    console.warn('Failed to deserialize DreamSong relationship data:', error);
     return { dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE };
   }
 }

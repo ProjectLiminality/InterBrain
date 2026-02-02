@@ -75,7 +75,6 @@ export class IndexingService implements IIndexingService {
 
   constructor(embeddingService?: IEmbeddingService) {
     this.embeddingService = embeddingService || ollamaEmbeddingService;
-    console.log('IndexingService: Initialized with embedding service');
   }
   
   /**

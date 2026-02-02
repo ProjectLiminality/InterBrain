@@ -30,6 +30,8 @@ export interface ConstellationLayoutState {
   lastLayoutTimestamp: number | null;
   /** Lightweight node metadata for instant startup rendering */
   nodeMetadata: Map<string, { name: string; type: string; uuid: string }> | null;
+  /** Hash of the graph when positions were computed (for cache validation) */
+  graphHashWhenPositionsComputed: string | null;
 }
 
 /**
@@ -38,7 +40,8 @@ export interface ConstellationLayoutState {
 export const INITIAL_CONSTELLATION_LAYOUT: ConstellationLayoutState = {
   positions: null,
   lastLayoutTimestamp: null,
-  nodeMetadata: null
+  nodeMetadata: null,
+  graphHashWhenPositionsComputed: null
 };
 
 /**
@@ -50,6 +53,7 @@ export interface ConstellationSlice {
   constellationData: ConstellationLayoutState;
   setConstellationPositions: (positions: Map<string, [number, number, number]> | null) => void;
   setNodeMetadata: (metadata: Map<string, { name: string; type: string; uuid: string }> | null) => void;
+  setGraphHashWhenPositionsComputed: (hash: string | null) => void;
   clearConstellationData: () => void;
 
   // Fibonacci sphere layout configuration
@@ -77,18 +81,31 @@ export const createConstellationSlice: StateCreator<
 > = (set) => ({
   constellationData: INITIAL_CONSTELLATION_LAYOUT,
 
-  setConstellationPositions: (positions) => set((state) => ({
-    constellationData: {
-      ...state.constellationData,
-      positions,
-      lastLayoutTimestamp: positions ? Date.now() : null
-    }
-  })),
+  setConstellationPositions: (positions) => {
+
+    // Store a COPY of the Map to prevent external mutation
+    const positionsCopy = positions ? new Map(positions) : null;
+
+    return set((state) => ({
+      constellationData: {
+        ...state.constellationData,
+        positions: positionsCopy,
+        lastLayoutTimestamp: positionsCopy ? Date.now() : null
+      }
+    }));
+  },
 
   setNodeMetadata: (metadata) => set((state) => ({
     constellationData: {
       ...state.constellationData,
       nodeMetadata: metadata
+    }
+  })),
+
+  setGraphHashWhenPositionsComputed: (hash) => set((state) => ({
+    constellationData: {
+      ...state.constellationData,
+      graphHashWhenPositionsComputed: hash
     }
   })),
 
@@ -130,7 +147,8 @@ export function extractConstellationPersistenceData(state: ConstellationSlice) {
         mapToArray(state.constellationData.positions) : null,
       lastLayoutTimestamp: state.constellationData.lastLayoutTimestamp,
       nodeMetadata: state.constellationData.nodeMetadata ?
-        mapToArray(state.constellationData.nodeMetadata) : null
+        mapToArray(state.constellationData.nodeMetadata) : null,
+      graphHashWhenPositionsComputed: state.constellationData.graphHashWhenPositionsComputed
     } : null,
   };
 }
@@ -143,6 +161,7 @@ export function restoreConstellationPersistenceData(persistedData: {
     positions: [string, [number, number, number]][] | null;
     lastLayoutTimestamp: number | null;
     nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
+    graphHashWhenPositionsComputed?: string | null;
     // Legacy fields for migration (will be ignored, data now in dreamweaving slice)
     relationshipGraph?: unknown;
     lastScanTimestamp?: unknown;
@@ -154,13 +173,35 @@ export function restoreConstellationPersistenceData(persistedData: {
   }
 
   try {
+    const positionsArray = persistedData.constellationData.positions;
+    const graphHash = persistedData.constellationData.graphHashWhenPositionsComputed ?? null;
+
+    let positionsMap = positionsArray ? arrayToMap(positionsArray) : null;
+
+    // CRITICAL: Validate that position values are actual coordinate arrays with real numbers
+    // Corrupted data can be: null, undefined, or [null, null, null]
+    if (positionsMap) {
+      const firstKey = Array.from(positionsMap.keys())[0];
+      const firstValue = positionsMap.get(firstKey);
+
+      // Check if values are corrupted (null, undefined, or arrays with null elements)
+      const isCorrupted = !firstValue ||
+        !Array.isArray(firstValue) ||
+        firstValue.length !== 3 ||
+        firstValue.some(v => v === null || v === undefined || !Number.isFinite(v));
+
+      if (isCorrupted) {
+        positionsMap = null;
+      }
+    }
+
     return {
       constellationData: {
-        positions: persistedData.constellationData.positions ?
-          arrayToMap(persistedData.constellationData.positions) : null,
+        positions: positionsMap,
         lastLayoutTimestamp: persistedData.constellationData.lastLayoutTimestamp,
         nodeMetadata: persistedData.constellationData.nodeMetadata ?
-          arrayToMap(persistedData.constellationData.nodeMetadata) : null
+          arrayToMap(persistedData.constellationData.nodeMetadata) : null,
+        graphHashWhenPositionsComputed: graphHash
       }
     };
   } catch (error) {

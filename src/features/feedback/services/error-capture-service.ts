@@ -67,8 +67,6 @@ class ErrorCaptureService {
     this.setupConsoleCapture();
     this.setupErrorHandlers();
     this.isInitialized = true;
-
-    console.log('[ErrorCaptureService] Initialized');
   }
 
   /**

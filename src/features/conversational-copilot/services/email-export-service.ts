@@ -337,7 +337,6 @@ let _emailExportService: EmailExportService | null = null;
 
 export function initializeEmailExportService(app: App, plugin: any): void {
 	_emailExportService = new EmailExportService(app, plugin);
-	console.log(`📧 [EmailExport] Service initialized`);
 }
 
 export function getEmailExportService(): EmailExportService {

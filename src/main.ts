@@ -9,7 +9,10 @@ import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './featu
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/components/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
-import { calculateFibonacciSpherePositions } from './features/constellation-layout';
+import { CONSTELLATION_DEFAULTS } from './features/constellation-layout/constants';
+import { calculateFibonacciSpherePositions, DEFAULT_FIBONACCI_CONFIG } from './features/constellation-layout';
+import { computeConstellationFilter } from './features/constellation-layout/services/constellation-filter-service';
+import { computeConstellationLayout, createFallbackLayout } from './features/constellation-layout/ConstellationLayout';
 import {
   DreamNode,
   registerDreamNodeCommands,
@@ -25,6 +28,8 @@ import { registerConstellationDebugCommands } from './features/constellation-lay
 import { registerEditModeCommands } from './features/dreamnode-editor';
 import { registerConversationalCopilotCommands } from './features/conversational-copilot/commands';
 import { registerDreamweavingCommands, registerLinkFileCommands, enhanceFileSuggestions } from './features/dreamweaving';
+import { DreamSongRelationshipService } from './features/dreamweaving/services/dreamsong-relationship-service';
+import { DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG } from './features/dreamweaving/types/relationship';
 import { registerRadicleCommands } from './features/social-resonance-filter/commands';
 import { registerGitHubCommands } from './features/github-publishing/commands';
 import { registerCoherenceBeaconCommands } from './features/coherence-beacon/commands';
@@ -56,11 +61,14 @@ import { initializePerspectiveService } from './features/songline/services/persp
 import { initializeAudioTrimmingService } from './features/songline/services/audio-trimming-service';
 import { initializeConversationsService } from './features/songline/services/conversations-service';
 import { initializeAudioStreamingService } from './features/dreamweaving/services/audio-streaming-service';
-import { initializeMediaLoadingService } from './features/dreamnode/services/media-loading-service';
 import { initializeURIHandlerService } from './features/uri-handler';
 import { initializeRadicleBatchInitService } from './features/social-resonance-filter/services/batch-init-service';
+import { getPeerSyncService } from './features/social-resonance-filter/services/peer-sync-service';
 import { initializeGitHubBatchShareService } from './features/github-publishing/services/batch-share-service';
 import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './features/settings';
+import { closeIndexedDBConnection, setVaultId, gracefulShutdown, markHydrationComplete } from './core/store/indexeddb-storage';
+import { serviceLifecycleManager, LifecyclePhase } from './core/services/service-lifecycle-manager';
+import { vaultStateService } from './core/services/vault-state-service';
 import { SettingsStatusService } from './features/settings/settings-status-service';
 import {
   registerFeedbackCommands,
@@ -88,48 +96,294 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
-    // Load settings
-    await this.loadSettings();
+    const loadStartTime = Date.now();
 
-    // Cache settings for services that need runtime access
-    SettingsStatusService.setSettings({
-      claudeApiKey: this.settings.claudeApiKey,
-      radiclePassphrase: this.settings.radiclePassphrase,
+    // Get vault path for all services
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+
+    // =========================================================================
+    // PHASE 1: BOOTSTRAP - Set context, load settings
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BOOTSTRAP, async () => {
+      // Set vault ID for IndexedDB namespacing FIRST
+      setVaultId(vaultPath);
+      vaultStateService.initialize(vaultPath);
+
+      // Load settings
+      await this.loadSettings();
+
+      // Cache settings for services that need runtime access
+      SettingsStatusService.setSettings({
+        claudeApiKey: this.settings.claudeApiKey,
+        radiclePassphrase: this.settings.radiclePassphrase,
+      });
+
+      // Initialize AI Magic inference service
+      initializeInferenceService({
+        defaultProvider: (this.settings.defaultAIProvider || 'claude') as any,
+        offlineMode: this.settings.offlineMode ?? false,
+        preferLocal: false,
+        claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined,
+        openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
+        groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
+        xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
+      });
+
+      return { vaultPath };
     });
 
-    // Initialize AI Magic inference service with all configured API keys
-    initializeInferenceService({
-      defaultProvider: (this.settings.defaultAIProvider || 'claude') as any,
-      offlineMode: this.settings.offlineMode ?? false,
-      preferLocal: false, // Legacy field, ignored
-      claude: this.settings.claudeApiKey ? { apiKey: this.settings.claudeApiKey } : undefined,
-      openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
-      groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
-      xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
+    // =========================================================================
+    // PHASE 2: HYDRATE - Read IndexedDB, validate persisted data
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.HYDRATE, async () => {
+      await useInterBrainStore.persist.rehydrate();
+
+      // Mark hydration complete - this enables writes to IndexedDB
+      // Must happen AFTER rehydrate to prevent empty state from overwriting persisted data
+      markHydrationComplete();
+
+      // Check if persisted data matches current vault
+      const store = useInterBrainStore.getState();
+      const nodeCount = store.dreamNodes.size;
+
+      return { nodeCount };
     });
 
-    // Initialize error capture for bug reporting
-    this.initializeErrorCapture();
+    // =========================================================================
+    // PHASE 3: SCAN - Scan vault (only if needed based on vault state)
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.SCAN, async () => {
+      // Initialize core services (creates GitDreamNodeService)
+      this.initializeServices();
+
+      // Check if vault has changed since last scan
+      const changeResult = await vaultStateService.hasVaultChanged();
+
+      if (!changeResult.hasChanges && changeResult.cachedState) {
+        // Validate persisted node count matches
+        const store = useInterBrainStore.getState();
+        const persistedCount = store.dreamNodes.size;
+        const cachedCount = changeResult.cachedState.nodeCount;
+
+        if (persistedCount === cachedCount && persistedCount > 0) {
+          return { scanned: false, nodeCount: persistedCount, reason: 'cached' };
+        }
+      }
+
+      // Need to scan - either vault changed or no cached data
+      const scanResult = await serviceManager.scanVault();
+
+      if (scanResult) {
+        // Save vault state for next startup
+        const store = useInterBrainStore.getState();
+        const nodeCount = store.dreamNodes.size;
+        await vaultStateService.saveState(nodeCount);
+
+        return {
+          scanned: true,
+          nodeCount,
+          added: scanResult.added,
+          updated: scanResult.updated,
+          removed: scanResult.removed
+        };
+      }
+
+      return { scanned: true, nodeCount: 0, error: 'scan returned null' };
+    });
+
+    // =========================================================================
+    // PHASE 4: READY - UI can interact, services available
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.READY, async () => {
+      // Initialize essential services for URI handling
+      const radicleService = serviceManager.getRadicleService();
+      const dreamNodeService = serviceManager.getActive();
+      initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
+      initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
+      initializeGitHubBatchShareService(this, dreamNodeService as any);
+
+      // Initialize error capture for bug reporting
+      this.initializeErrorCapture();
+
+      // CRITICAL: Compute constellation filter BEFORE UI renders
+      // This prevents all 167 nodes from mounting at once and crashing WebGL
+      const store = useInterBrainStore.getState();
+      const allNodeIds = Array.from(store.dreamNodes.keys());
+      const relationshipGraph = store.dreamSongRelationships.graph;
+      const { maxNodes, prioritizeClusters } = store.constellationConfig;
+
+      if (allNodeIds.length > 0) {
+        const filter = computeConstellationFilter(
+          relationshipGraph,
+          allNodeIds,
+          maxNodes,
+          prioritizeClusters
+        );
+        store.setConstellationFilter(filter);
+
+        // CRITICAL: Apply constellation positions to mounted nodes BEFORE rendering
+        // This ensures nodes have real positions on the Fibonacci sphere, not [0,0,0]
+        const persistedPositions = store.constellationData.positions;
+        const mountedNodeIds = Array.from(filter.mountedNodes);
+
+        // Check if persisted positions exist and are valid for current graph
+        let positionsToApply: Map<string, [number, number, number]> | null = null;
+        const persistedGraphHash = store.constellationData.graphHashWhenPositionsComputed;
+        const currentGraphHash = store.dreamSongRelationships.submoduleStructureHash;
+
+        if (persistedPositions && persistedPositions.size > 0) {
+          // Check 1: Do persisted positions match mounted nodes?
+          const matchCount = mountedNodeIds.filter(id => persistedPositions.has(id)).length;
+          const matchRatio = matchCount / mountedNodeIds.length;
+
+          // Check 2: Is the persisted graph hash still valid?
+          const hashValid = currentGraphHash === persistedGraphHash;
+
+          if (matchRatio >= 0.9 && hashValid) {
+            // 90%+ match AND graph unchanged - use persisted positions
+            positionsToApply = persistedPositions;
+          }
+        }
+
+        if (!positionsToApply) {
+          const mountedDreamNodes = mountedNodeIds
+            .map(id => store.dreamNodes.get(id)?.node)
+            .filter((node): node is DreamNode => !!node);
+
+          if (mountedDreamNodes.length > 0) {
+            try {
+              if (relationshipGraph && relationshipGraph.nodes && relationshipGraph.nodes.size > 0) {
+                // Filter relationship graph to only mounted nodes
+                const mountedNodeIdSet = new Set(mountedNodeIds);
+                const filteredNodes = new Map(
+                  Array.from(relationshipGraph.nodes.entries())
+                    .filter(([id]) => mountedNodeIdSet.has(id))
+                );
+                const filteredEdges = relationshipGraph.edges.filter(
+                  edge => mountedNodeIdSet.has(edge.source) && mountedNodeIdSet.has(edge.target)
+                );
+                const filteredGraph = {
+                  ...relationshipGraph,
+                  nodes: filteredNodes,
+                  edges: filteredEdges,
+                  metadata: {
+                    ...relationshipGraph.metadata,
+                    totalNodes: filteredNodes.size,
+                  }
+                };
+
+                const layoutResult = computeConstellationLayout(filteredGraph, mountedDreamNodes);
+                positionsToApply = createFallbackLayout(mountedDreamNodes, layoutResult.nodePositions);
+              } else {
+                // No relationship graph - use Fibonacci sphere fallback
+                const fibPositions = calculateFibonacciSpherePositions({
+                  nodeCount: mountedDreamNodes.length,
+                  radius: DEFAULT_FIBONACCI_CONFIG.radius
+                });
+                positionsToApply = new Map(
+                  mountedDreamNodes.map((node, i) => [node.id, fibPositions[i].position])
+                );
+              }
+
+              // Persist the computed positions and graph hash for future startups
+              if (positionsToApply && positionsToApply.size > 0) {
+                store.setConstellationPositions(positionsToApply);
+                if (currentGraphHash) {
+                  store.setGraphHashWhenPositionsComputed(currentGraphHash);
+                }
+              }
+            } catch (error) {
+              console.error(`[Plugin] Position computation failed:`, error);
+              // Fallback to Fibonacci sphere on error
+              const fibPositions = calculateFibonacciSpherePositions({
+                nodeCount: mountedDreamNodes.length,
+                radius: DEFAULT_FIBONACCI_CONFIG.radius
+              });
+              positionsToApply = new Map(
+                mountedDreamNodes.map((node, i) => [node.id, fibPositions[i].position])
+              );
+            }
+          }
+        }
+
+        // Apply positions to node objects in store
+        if (positionsToApply && positionsToApply.size > 0) {
+          store.batchUpdateNodePositions(positionsToApply);
+        }
+      }
+
+      // CRITICAL: Signal that lifecycle is ready - this unblocks DreamspaceCanvas rendering
+      // Must happen AFTER constellation filter AND positions are set
+      store.setLifecycleReady(true);
+
+      return { ready: true };
+    });
+
+    // =========================================================================
+    // PHASE 5: BACKGROUND - Heavy operations (deferred)
+    // =========================================================================
+    serviceLifecycleManager.registerPhaseHandler(LifecyclePhase.BACKGROUND, async () => {
+      // These run after READY is complete - no setTimeout needed
+      await this.initializeBackgroundServices();
+
+      // Radicle Peer Sync (fire-and-forget, non-blocking)
+      // Ensures liminal web relationships are synced with Radicle network
+      this.syncRadiclePeersInBackground();
+
+      // DreamSong Relationship Scan with change detection:
+      // Only rescan if submodule structure has changed since last scan
+      const bgStore = useInterBrainStore.getState();
+      const existingGraph = bgStore.dreamSongRelationships.graph;
+      const existingHash = bgStore.dreamSongRelationships.submoduleStructureHash;
+
+      // Defer scan check to run after lifecycle completes for UI stability
+      setTimeout(async () => {
+        try {
+          const relationshipService = new DreamSongRelationshipService(this);
+          const dreamNodes = Array.from(bgStore.dreamNodes.values()).map(d => d.node);
+
+          // Compute current submodule structure hash
+          const currentHash = await relationshipService.computeSubmoduleStructureHash(dreamNodes);
+
+          // Check if rescan needed
+          // IMPORTANT: Also rescan if graph has nodes but NO edges (indicates a failed/partial scan)
+          const hasValidEdges = existingGraph && existingGraph.edges.length > 0;
+          if (existingHash === currentHash && existingGraph && existingGraph.nodes.size > 0 && hasValidEdges) {
+            return;
+          }
+
+          const result = await relationshipService.scanVaultForDreamSongRelationships(
+            DEFAULT_DREAMSONG_RELATIONSHIP_CONFIG
+          );
+
+          if (result.success && result.graph) {
+            // Get fresh store reference inside setTimeout
+            const scanStore = useInterBrainStore.getState();
+            scanStore.setDreamSongRelationshipGraph(result.graph);
+            scanStore.setSubmoduleStructureHash(currentHash);
+          }
+        } catch (error) {
+          console.error(`[Plugin] DreamSong relationship scan error:`, error);
+        }
+      }, 3000); // Wait 3s to ensure UI is fully stable
+
+      return { backgroundStarted: true };
+    });
+
+    // =========================================================================
+    // RUN LIFECYCLE
+    // =========================================================================
+    await serviceLifecycleManager.runLifecycle();
+
+    const loadDuration = Date.now() - loadStartTime;
+    console.log(`[Plugin] Lifecycle complete in ${loadDuration}ms`);
+
+    // =========================================================================
+    // POST-LIFECYCLE SETUP (sync, non-blocking)
+    // =========================================================================
 
     // Add settings tab
     this.addSettingTab(new InterBrainSettingTab(this.app, this));
-
-    // Initialize core services first (triggers vault scan)
-    this.initializeServices();
-
-    // Initialize media loading service immediately (needed for two-phase loading)
-    initializeMediaLoadingService();
-
-    // Initialize essential services needed for URI handling
-    const radicleService = serviceManager.getRadicleService();
-    const dreamNodeService = serviceManager.getActive();
-    initializeURIHandlerService(this.app, this, radicleService, dreamNodeService as any);
-    initializeRadicleBatchInitService(this, radicleService, dreamNodeService as any);
-    initializeGitHubBatchShareService(this, dreamNodeService as any);
-
-    // Defer heavy copilot/songline services until after critical path
-    // These will initialize in background after plugin loads
-    this.initializeBackgroundServices();
 
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
@@ -142,6 +396,10 @@ export default class InterBrainPlugin extends Plugin {
     // Register commands
     this.registerCommands();
 
+    // DreamSong relationship scan DISABLED - was causing crash
+    // TODO: Investigate why scan causes UI to become unresponsive
+    // The scan command can still be triggered manually via command palette
+
     // Register file explorer context menu handler
     this.registerFileExplorerContextMenu();
 
@@ -152,7 +410,6 @@ export default class InterBrainPlugin extends Plugin {
     const ribbonIconEl = this.addRibbonIcon('brain-circuit', 'Open DreamSpace', () => {
       this.app.commands.executeCommandById('interbrain:open-dreamspace');
     });
-    // Rotate icon 90° clockwise so it's upright
     ribbonIconEl.style.transform = 'rotate(90deg)';
 
     // First launch experience: auto-open DreamSpace with InterBrain selected
@@ -162,82 +419,45 @@ export default class InterBrainPlugin extends Plugin {
 
     // Every launch: check for reload target UUID, otherwise auto-select InterBrain
     const reloadTargetUUID = (globalThis as any).__interbrainReloadTargetUUID;
-    console.log(`[InterBrain] Checking for reload target UUID...`);
-    console.log(`[InterBrain] globalThis.__interbrainReloadTargetUUID =`, reloadTargetUUID);
     if (reloadTargetUUID) {
-      console.log(`[InterBrain] ✅ Reload target UUID detected: ${reloadTargetUUID}`);
-      delete (globalThis as any).__interbrainReloadTargetUUID; // Clean up after use
-    } else {
-      console.log(`[InterBrain] ℹ️ No reload target UUID - will select default InterBrain node`);
+      delete (globalThis as any).__interbrainReloadTargetUUID;
     }
     this.autoSelectNode(reloadTargetUUID);
   }
 
   /**
    * Auto-select a node on plugin startup (or reload)
-   * Uses the same reliable logic as first launch
+   * Called after lifecycle completes, so store is guaranteed to have nodes.
    * @param targetUUID - Optional UUID to select. Defaults to InterBrain UUID if not provided.
    */
   private autoSelectNode(targetUUID?: string): void {
+    // Wait for Obsidian's workspace layout to be ready (event-driven, not time-based)
     this.app.workspace.onLayoutReady(() => {
-      setTimeout(() => {
-        // Detect fresh Obsidian launch vs plugin reload
-        // On fresh launch, DreamSpace view won't exist yet
-        const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
-        const isFreshLaunch = existingDreamspaceLeaf.length === 0;
+      // Detect fresh Obsidian launch vs plugin reload
+      const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
 
-        const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
-        const store = useInterBrainStore.getState();
-        const nodeData = store.dreamNodes.get(uuidToSelect);
+      const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
+      const store = useInterBrainStore.getState();
+      const nodeData = store.dreamNodes.get(uuidToSelect);
 
-        if (nodeData) {
-          console.log(`[InterBrain] Auto-selecting node: ${nodeData.node.name} (${uuidToSelect})`);
-          store.setSelectedNode(nodeData.node);
-          store.setSpatialLayout('liminal-web'); // Switch to liminal-web to prevent constellation return
+      if (nodeData) {
+        store.setSelectedNode(nodeData.node);
+        store.setSpatialLayout('liminal-web');
 
-          // Show portal overlay on fresh Obsidian launch (not plugin reload)
-          // Check if this is a reload by looking for the reload flag
-          const isPluginReload = (globalThis as any).__interbrainPluginReloaded === true;
-          console.log(`[InterBrain] isFreshLaunch=${isFreshLaunch}, isPluginReload=${isPluginReload}`);
+        // Check if this is a fresh app launch (not plugin reload)
+        const isPluginReload = (globalThis as any).__interbrainPluginReloaded === true;
 
-          if (!isPluginReload) {
-            console.log('[InterBrain] Fresh app launch detected - portal disabled for testing');
-            // DISABLED FOR TESTING: Tutorial portal
-            // setTimeout(() => {
-            //   console.log('[InterBrain] Calling showTutorialPortal()');
-            //   store.showTutorialPortal();
-            // }, 500);
-
-            // Check for InterBrain updates on fresh launch
-            setTimeout(() => {
-              console.log('[InterBrain] Checking for InterBrain updates...');
-              this.app.commands.executeCommandById('interbrain:check-interbrain-updates');
-            }, 2000); // Delay to let UI settle first
-          }
-
-          // Set reload flag for next time (persists across plugin reloads but not app restarts)
-          (globalThis as any).__interbrainPluginReloaded = true;
-        } else {
-          console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect}`);
-
-          // Fallback: Try again after vault scan completes
-          if (targetUUID) {
-            console.log(`[InterBrain] Retrying node selection after brief delay...`);
-            setTimeout(() => {
-              const retryStore = useInterBrainStore.getState();
-              const retryNodeData = retryStore.dreamNodes.get(uuidToSelect);
-
-              if (retryNodeData) {
-                console.log(`[InterBrain] Auto-selecting node (retry): ${retryNodeData.node.name} (${uuidToSelect})`);
-                retryStore.setSelectedNode(retryNodeData.node);
-                retryStore.setSpatialLayout('liminal-web');
-              } else {
-                console.warn(`[InterBrain] Node still not found after retry: ${uuidToSelect}`);
-              }
-            }, 500); // Additional 500ms delay for vault scan to complete
-          }
+        if (!isPluginReload) {
+          // Check for InterBrain updates - lifecycle is complete, so this is safe to run immediately
+          this.app.commands.executeCommandById('interbrain:check-interbrain-updates');
         }
-      }, 1000); // Same 1 second delay as first launch
+
+        // Set reload flag for next time (persists across plugin reloads but not app restarts)
+        (globalThis as any).__interbrainPluginReloaded = true;
+      } else {
+        // Node not found - this shouldn't happen if lifecycle completed correctly
+        console.warn(`[InterBrain] Node not found for UUID: ${uuidToSelect} (store has ${store.dreamNodes.size} nodes)`);
+      }
     });
   }
 
@@ -245,50 +465,36 @@ export default class InterBrainPlugin extends Plugin {
    * First launch experience: open DreamSpace and select InterBrain node
    */
   private async handleFirstLaunch(): Promise<void> {
-    // Wait for workspace to be ready
+    // Wait for Obsidian's workspace layout to be ready (event-driven, not time-based)
     this.app.workspace.onLayoutReady(async () => {
-      // Small delay to ensure everything is initialized
-      setTimeout(async () => {
-        console.log('[InterBrain] First launch detected - opening DreamSpace');
+      // Open DreamSpace - setViewState returns a promise that resolves when view is ready
+      const leaf = this.app.workspace.getLeaf(true);
+      await leaf.setViewState({
+        type: DREAMSPACE_VIEW_TYPE,
+        active: true
+      });
+      this.app.workspace.revealLeaf(leaf);
 
-        // Open DreamSpace
-        const leaf = this.app.workspace.getLeaf(true);
-        await leaf.setViewState({
-          type: DREAMSPACE_VIEW_TYPE,
-          active: true
-        });
-        this.app.workspace.revealLeaf(leaf);
+      // Find and select the InterBrain node by UUID
+      // Lifecycle has completed, so nodes are guaranteed to be in store
+      const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
+      const store = useInterBrainStore.getState();
+      const nodeData = store.dreamNodes.get(interbrainUUID);
 
-        // Wait for DreamSpace to initialize
-        await new Promise(resolve => setTimeout(resolve, 500));
+      if (nodeData) {
+        store.setSelectedNode(nodeData.node);
+        store.setSpatialLayout('liminal-web');
+      }
 
-        // Find and select the InterBrain node by UUID
-        const interbrainUUID = '550e8400-e29b-41d4-a716-446655440000';
-        const store = useInterBrainStore.getState();
-        const nodeData = store.dreamNodes.get(interbrainUUID);
+      // Run transcription auto-setup if enabled
+      if (this.settings.transcriptionEnabled && !this.settings.transcriptionSetupComplete) {
+        this.uiService.showInfo('Setting up transcription in background...');
+        this.runTranscriptionAutoSetup();
+      }
 
-        if (nodeData) {
-          console.log('[InterBrain] Selecting InterBrain node');
-          store.setSelectedNode(nodeData.node);
-          store.setSpatialLayout('liminal-web');
-
-          // DISABLED FOR TESTING: Tutorial portal
-          // store.showTutorialPortal();
-        } else {
-          console.warn('[InterBrain] InterBrain node not found for auto-selection');
-        }
-
-        // Run transcription auto-setup if enabled
-        if (this.settings.transcriptionEnabled && !this.settings.transcriptionSetupComplete) {
-          console.log('[InterBrain] Starting transcription auto-setup...');
-          this.uiService.showInfo('Setting up transcription in background...');
-          this.runTranscriptionAutoSetup();
-        }
-
-        // Mark first launch as complete
-        this.settings.hasLaunchedBefore = true;
-        await this.saveSettings();
-      }, 1000); // 1 second delay for full initialization
+      // Mark first launch as complete
+      this.settings.hasLaunchedBefore = true;
+      await this.saveSettings();
     });
   }
 
@@ -301,14 +507,10 @@ export default class InterBrainPlugin extends Plugin {
     const { exec } = require('child_process');
 
     exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
-      async (error: Error | null, stdout: string, stderr: string) => {
+      async (error: Error | null) => {
         if (error) {
-          console.error('[InterBrain] Transcription setup error:', error);
-          console.error('stderr:', stderr);
           this.uiService.showWarning('Transcription setup failed. You can retry from settings.');
         } else {
-          console.log('[InterBrain] ✅ Transcription setup complete!');
-          console.log('Setup output:', stdout);
           this.settings.transcriptionSetupComplete = true;
           await this.saveSettings();
           this.uiService.showInfo('Transcription setup complete! Ready to use.');
@@ -332,8 +534,6 @@ export default class InterBrainPlugin extends Plugin {
         const preference = store.feedback.autoReportPreference;
 
         if (preference === 'never') {
-          // Just log, don't prompt
-          console.log('[ErrorCapture] Error captured but auto-report is disabled');
           return;
         }
 
@@ -375,36 +575,61 @@ export default class InterBrainPlugin extends Plugin {
     useInterBrainStore.getState().resetSessionCounts();
   }
 
-  private initializeBackgroundServices(): void {
-    // Defer heavy copilot/songline services to background
-    // These aren't needed until user actually opens those features
-    setTimeout(() => {
-      console.log('[Plugin] Initializing background services...');
-      initializeTranscriptionService(this.app);
-      initializeConversationRecordingService(this.app);
-      initializeConversationSummaryService(this.app);
-      initializePDFGeneratorService();
-      initializeEmailExportService(this.app, this);
-      initializeAudioRecordingService(this);
-      initializePerspectiveService(this);
-      initializeAudioTrimmingService();
-      initializeConversationsService(this);
-      initializeAudioStreamingService(this);
+  private async initializeBackgroundServices(): Promise<void> {
+    // These run after READY phase is complete - lifecycle manager ensures ordering
 
-      // Initialize collaboration services
-      const vaultPath = (this.app.vault.adapter as any).basePath;
-      initializeCollaborationMemoryService(vaultPath);
-      initializeCherryPickWorkflowService(this.app);
+    // Initialize copilot/songline services (fast setup, no I/O)
+    initializeTranscriptionService(this.app);
+    initializeConversationRecordingService(this.app);
+    initializeConversationSummaryService(this.app);
+    initializePDFGeneratorService();
+    initializeEmailExportService(this.app, this);
+    initializeAudioRecordingService(this);
+    initializePerspectiveService(this);
+    initializeAudioTrimmingService();
+    initializeConversationsService(this);
+    initializeAudioStreamingService(this);
 
-      console.log('[Plugin] Background services initialized');
-    }, 100); // Tiny delay to let vault scan finish first
+    // Initialize collaboration services
+    const vaultPath = (this.app.vault.adapter as any).basePath;
+    initializeCollaborationMemoryService(vaultPath);
+    initializeCherryPickWorkflowService(this.app);
+    // Note: DreamSong relationship scan moved to post-lifecycle (after commands are registered)
+  }
 
-    // Run DreamSong relationship scan after vault scan completes
-    setTimeout(() => {
-      // Run the scan via dreamweaving commands
-      this.app.commands.executeCommandById('interbrain:scan-dreamsong-relationships');
-    }, 600); // Wait for vault scan to complete (after update checker)
+  /**
+   * Sync Radicle peer following in background (fire-and-forget)
+   * Ensures liminal web relationships are mirrored in Radicle network config
+   */
+  private syncRadiclePeersInBackground(): void {
+    // Fire-and-forget async operation - doesn't block lifecycle
+    (async () => {
+      try {
+        const radicleService = serviceManager.getRadicleService();
 
+        // Quick bail-out if Radicle CLI not available (Windows, or not installed)
+        if (!await radicleService.isAvailable()) {
+          return;
+        }
+
+        // Check if passphrase is configured - required for all Radicle operations
+        const passphrase = this.settings?.radiclePassphrase;
+        if (!passphrase) {
+          new Notice('Configure your Radicle passphrase in Settings → InterBrain to enable P2P collaboration');
+          return;
+        }
+
+        const vaultPath = (this.app.vault.adapter as any).basePath;
+
+        console.log('[Plugin] Starting background Radicle peer sync...');
+        const peerSyncService = getPeerSyncService(radicleService);
+        const result = await peerSyncService.syncPeerFollowing(vaultPath, passphrase);
+        console.log(`[Plugin] Radicle peer sync complete: ${result.summary}`);
+      } catch (error) {
+        // Non-critical - log and continue
+        console.warn('[Plugin] Background Radicle peer sync failed (non-critical):', error);
+      }
+    })();
   }
 
   private initializeServices(): void {
@@ -521,7 +746,6 @@ export default class InterBrainPlugin extends Plugin {
       id: 'open-dreamspace',
       name: 'Open DreamSpace',
       callback: async () => {
-        console.log('Open DreamSpace command executed');
         const leaf = this.app.workspace.getLeaf(true);
         await leaf.setViewState({
           type: DREAMSPACE_VIEW_TYPE,
@@ -608,7 +832,6 @@ export default class InterBrainPlugin extends Plugin {
             throw new Error('No DreamNode selected');
           }
 
-          console.log(`💾 [Save Changes] Starting save workflow for: ${currentNode.name}`);
           const { exec } = require('child_process');
           const { promisify } = require('util');
           const path = require('path');
@@ -621,7 +844,6 @@ export default class InterBrainPlugin extends Plugin {
           const hasDreamSong = dreamSongFile !== null;
 
           if (hasDreamSong) {
-            console.log(`💾 [Save Changes] Step 1: DreamSong.canvas detected - syncing submodules (LOCAL-ONLY mode)...`);
             loadingNotice.hide();
             const syncNotice = this.uiService.showLoading('Syncing canvas submodules...');
 
@@ -637,28 +859,21 @@ export default class InterBrainPlugin extends Plugin {
                 throw new Error(`Canvas sync failed: ${syncResult.error}`);
               }
 
-              console.log(`💾 [Save Changes] ✓ Canvas synced (${syncResult.submodulesImported.length} submodules, Radicle skipped)`);
               syncNotice.hide();
             } catch (syncError) {
               syncNotice.hide();
-              console.error('💾 [Save Changes] Canvas sync error:', syncError);
               // Non-fatal - continue with regular commit
               this.uiService.showWarning('Canvas sync had issues - continuing with commit');
             }
-          } else {
-            console.log(`💾 [Save Changes] Step 1: No DreamSong.canvas - skipping canvas sync`);
           }
 
           // STEP 2: Stage all remaining changes (anything not already committed by canvas sync)
-          console.log(`💾 [Save Changes] Step 2: Staging all changes...`);
           await execAsync('git add -A', { cwd: fullRepoPath });
 
           // STEP 3: Check if there are changes to commit
-          console.log(`💾 [Save Changes] Step 3: Checking for uncommitted changes...`);
           const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullRepoPath });
 
           if (!statusOutput.trim()) {
-            console.log(`💾 [Save Changes] ✓ No changes to commit - repository is clean`);
             this.uiService.showSuccess('No changes to commit - all changes already saved');
 
             // Exit creator mode even if no changes
@@ -672,14 +887,12 @@ export default class InterBrainPlugin extends Plugin {
           }
 
           // STEP 4: Commit remaining changes
-          console.log(`💾 [Save Changes] Step 4: Committing remaining changes...`);
           const commitNotice = this.uiService.showLoading('Creating commit...');
 
           try {
             const commitMessage = `Save changes in ${currentNode.name}`;
             await execAsync(`git commit -m "${commitMessage}"`, { cwd: fullRepoPath });
             commitNotice.hide();
-            console.log(`💾 [Save Changes] ✓ Changes committed`);
           } catch (commitError) {
             commitNotice.hide();
             throw commitError;
@@ -689,7 +902,6 @@ export default class InterBrainPlugin extends Plugin {
           const { creatorMode } = store;
           if (creatorMode.isActive && creatorMode.nodeId === currentNode.id) {
             store.setCreatorMode(false);
-            console.log(`💾 [Save Changes] ✓ Exited creator mode`);
           }
 
           // STEP 6: Success feedback
@@ -697,7 +909,6 @@ export default class InterBrainPlugin extends Plugin {
             ? 'DreamSong synced and all changes committed'
             : 'All changes committed';
           this.uiService.showSuccess(summary);
-          console.log(`💾 [Save Changes] ✓ Save workflow complete`);
 
         } catch (error) {
           console.error('💾 [Save Changes] Failed:', error);
@@ -714,7 +925,6 @@ export default class InterBrainPlugin extends Plugin {
       name: 'Create new DreamNode',
       hotkeys: [{ modifiers: ['Ctrl'], key: 'n' }],
       callback: async () => {
-        console.log('Create DreamNode command executed (via command palette)');
         
         // Check if DreamSpace is open
         const dreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE)[0];
@@ -733,14 +943,12 @@ export default class InterBrainPlugin extends Plugin {
         
         // Check current layout to determine transition path
         if (store.spatialLayout === 'liminal-web') {
-          // From liminal-web: First return to constellation, then trigger creation command  
-          console.log(`🛠️ [Create-Toggle] Phase 1: liminal-web → constellation`);
+          // From liminal-web: First return to constellation, then trigger creation command
           store.setSelectedNode(null);
           store.setSpatialLayout('constellation');
-          
+
           // Wait for constellation transition to complete, then trigger creation
           globalThis.setTimeout(() => {
-            console.log(`🛠️ [Create-Toggle] Phase 2: triggering creation mode`);
             const freshStore = useInterBrainStore.getState();
             freshStore.startCreationWithData(spawnPosition);
           }, 1100); // Animation duration (1000ms) + buffer (100ms)
@@ -749,14 +957,6 @@ export default class InterBrainPlugin extends Plugin {
           store.startCreationWithData(spawnPosition);
         }
         
-        // Debug logging to verify state
-        const newState = useInterBrainStore.getState();
-        console.log('Creation mode activated - state:', {
-          isCreating: newState.creationState.isCreating,
-          draft: newState.creationState.draft,
-          position: spawnPosition
-        });
-        console.log('DreamNodeCreator should appear in DreamSpace');
       }
     });
 
@@ -772,7 +972,6 @@ export default class InterBrainPlugin extends Plugin {
           this.uiService.showError('Select at least 2 DreamNodes to weave');
           return;
         }
-        console.log('Would weave node:', selectedNode.name);
         this.uiService.showPlaceholder('Dream weaving coming soon!');
       }
     });
@@ -860,13 +1059,12 @@ export default class InterBrainPlugin extends Plugin {
           
           // Clear the selection since the node no longer exists
           store.setSelectedNode(null);
-          
+
           // Return to constellation view
           store.setSpatialLayout('constellation');
-          
+
           this.uiService.showSuccess(`Successfully deleted "${currentNode.name}"`);
-          console.log(`DreamNode deleted: ${currentNode.name} (${currentNode.id})`);
-          
+
         } catch (error) {
           console.error('Failed to delete DreamNode:', error);
           this.uiService.showError(`Failed to delete "${currentNode.name}": ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -887,7 +1085,6 @@ export default class InterBrainPlugin extends Plugin {
           this.uiService.showError('No DreamNode selected');
           return;
         }
-        console.log('Would share node:', currentNode.name);
         this.uiService.showPlaceholder('Coherence Beacon coming soon!');
       }
     });
@@ -936,15 +1133,6 @@ export default class InterBrainPlugin extends Plugin {
             this.uiService.showSuccess(
               `Scan complete: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed`
             );
-
-            // Trigger two-phase media loading after vault scan
-            try {
-              const { getMediaLoadingService } = await import('./features/dreamnode/services/media-loading-service');
-              const mediaLoadingService = getMediaLoadingService();
-              mediaLoadingService.loadAllNodesByDistance();
-            } catch (error) {
-              console.warn('[Main] Failed to start media loading:', error);
-            }
           }
         } catch (error) {
           this.uiService.showError(error instanceof Error ? error.message : 'Vault scan failed');
@@ -954,75 +1142,97 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Refresh plugin with node reselection
-    // Uses lightweight plugin disable/enable instead of full app reload
+    // =========================================================================
+    // REFRESH COMMANDS - Separated by concern for faster Cmd+R
+    // =========================================================================
+
+    // FAST: Refresh plugin (Cmd+R) - Just reload plugin, no heavy operations
     this.addCommand({
       id: 'refresh-plugin',
-      name: 'Refresh Plugin (with node reselection)',
+      name: 'Refresh Plugin (fast)',
       hotkeys: [{ modifiers: ['Mod'], key: 'r' }],
+      callback: async () => {
+        console.log(`[Refresh] Starting`);
+
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+
+        // Store current node UUID for reselection after reload
+        const existingUUID = (globalThis as any).__interbrainReloadTargetUUID;
+        if (!existingUUID && currentNode) {
+          (globalThis as any).__interbrainReloadTargetUUID = currentNode.id;
+        }
+
+        // Use graceful shutdown to wait for pending writes
+        await gracefulShutdown(2000);
+
+        // Lightweight plugin reload
+        const plugins = (this.app as any).plugins;
+        await plugins.disablePlugin('interbrain');
+        await plugins.enablePlugin('interbrain');
+
+        console.log(`[Refresh] Complete`);
+      }
+    });
+
+    // FULL: Refresh with cleanup and indexing (manual)
+    this.addCommand({
+      id: 'refresh-full',
+      name: 'Refresh Full (cleanup + indexing)',
       callback: async () => {
         const store = useInterBrainStore.getState();
         const currentNode = store.selectedNode;
 
-        // CRITICAL: Only set UUID if not already set by another flow (e.g., URI handler)
-        // This prevents refresh command from overwriting explicit auto-selection targets
-        const existingUUID = (globalThis as any).__interbrainReloadTargetUUID;
-        if (existingUUID) {
-          console.log(`[Refresh] ℹ️ UUID already set externally: ${existingUUID}`);
-          console.log(`[Refresh] Preserving external auto-selection target (not using current node)`);
-        } else {
-          // Store current node UUID for reselection after reload
-          let nodeUUID: string | undefined;
-          if (currentNode) {
-            nodeUUID = currentNode.id;
-            console.log(`[Refresh] ✅ Current node selected: ${currentNode.name} (${nodeUUID})`);
-            console.log(`[Refresh] Storing UUID for reselection...`);
-          } else {
-            console.log(`[Refresh] ℹ️ No node currently selected`);
-          }
-
-          // Store UUID in a global variable that persists across plugin reload
-          (globalThis as any).__interbrainReloadTargetUUID = nodeUUID;
-          console.log(`[Refresh] globalThis.__interbrainReloadTargetUUID set to:`, (globalThis as any).__interbrainReloadTargetUUID);
+        // Store current node UUID for reselection
+        if (currentNode) {
+          (globalThis as any).__interbrainReloadTargetUUID = currentNode.id;
         }
 
-        // Note: Bidirectional relationship sync is no longer needed with liminal-web.json architecture
-        // Relationships are computed from Dreamer → Dream pointers during vault scan
-
-        // Clean up dangling relationships before reload
-        // This ensures deleted nodes are properly removed from relationship references
-        console.log(`[Refresh] Cleaning dangling relationships...`);
+        // Clean up dangling relationships
         await (this.app as any).commands.executeCommandById('interbrain:clean-dangling-relationships');
-        console.log(`[Refresh] Dangling relationship cleanup complete`);
 
-        // Sync Radicle peer following (seeds all Dreamer-related Dream nodes to network)
-        // Fire-and-forget: runs in background, doesn't block refresh
-        console.log(`[Refresh] Triggering Radicle peer sync (background)...`);
-        (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
-        // Note: Not awaiting - let it run in background while plugin reloads
-
-        // Ensure all DreamNodes are indexed for semantic search
-        // Fast idempotent check: ~1ms per already-indexed node, only indexes missing nodes
-        console.log(`[Refresh] Ensuring all nodes are indexed...`);
+        // Index any missing nodes
         try {
           const { indexingService } = await import('./features/semantic-search/services/indexing-service');
-          const indexResult = await indexingService.ensureAllIndexed();
-          if (indexResult.indexed > 0) {
-            console.log(`[Refresh] Indexed ${indexResult.indexed} new nodes (${indexResult.skipped} already indexed)`);
-          } else {
-            console.log(`[Refresh] All ${indexResult.skipped} nodes already indexed`);
-          }
-        } catch (error) {
-          console.warn(`[Refresh] Indexing check failed (non-critical):`, error);
+          await indexingService.ensureAllIndexed();
+        } catch {
+          // Indexing failed (non-critical)
         }
 
-        // Lightweight plugin reload using Obsidian's plugin manager
-        // This is much faster than app:reload and preserves console logs
-        console.log(`[Refresh] Triggering lightweight plugin reload...`);
+        // Use graceful shutdown
+        await gracefulShutdown(3000);
+
+        // Reload plugin
         const plugins = (this.app as any).plugins;
         await plugins.disablePlugin('interbrain');
         await plugins.enablePlugin('interbrain');
-        console.log(`[Refresh] Plugin reload complete`);
+      }
+    });
+
+    // SYNC: Radicle sync (manual, opt-in)
+    this.addCommand({
+      id: 'sync-network',
+      name: 'Sync with Radicle Network',
+      callback: async () => {
+        await (this.app as any).commands.executeCommandById('interbrain:sync-radicle-peer-following');
+      }
+    });
+
+    // REINDEX: Force full reindex (manual, heavy)
+    this.addCommand({
+      id: 'force-reindex',
+      name: 'Force Reindex All Nodes',
+      callback: async () => {
+        const loadingNotice = this.uiService.showLoading('Re-indexing all nodes...');
+        try {
+          const { indexingService } = await import('./features/semantic-search/services/indexing-service');
+          const result = await indexingService.indexAllNodes();
+          this.uiService.showSuccess(`Indexed ${result.indexed} nodes (${result.errors} errors)`);
+        } catch (error) {
+          this.uiService.showError(`Indexing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          loadingNotice.hide();
+        }
       }
     });
 
@@ -1060,14 +1270,12 @@ export default class InterBrainPlugin extends Plugin {
               position: newPosition
             });
             
-            console.log(`Updated position for "${node.name}": [${newPosition.join(', ')}]`);
           }
-          
+
           // The store will automatically reflect the updates via service.update()
           // No need to manually refresh
-          
+
           this.uiService.showSuccess(`Redistributed ${dreamNodes.length} DreamNodes using Fibonacci sphere algorithm`);
-          console.log(`Redistributed ${dreamNodes.length} nodes with radius ${store.fibonacciConfig.radius}`);
           
         } catch (error) {
           console.error('Failed to redistribute DreamNodes:', error);
@@ -1084,7 +1292,6 @@ export default class InterBrainPlugin extends Plugin {
         const store = useInterBrainStore.getState();
         store.setSpatialLayout('constellation');
         this.uiService.showSuccess('Switched to constellation view');
-        console.log('Layout switched to constellation');
       }
     });
 
@@ -1096,7 +1303,6 @@ export default class InterBrainPlugin extends Plugin {
         const store = useInterBrainStore.getState();
         store.setSpatialLayout('search');
         this.uiService.showSuccess('Switched to search view');
-        console.log('Layout switched to search');
       }
     });
 
@@ -1113,7 +1319,6 @@ export default class InterBrainPlugin extends Plugin {
         }
         store.setSpatialLayout('liminal-web');
         this.uiService.showSuccess(`Focused on: ${currentNode.name}`);
-        console.log('Layout switched to focused on:', currentNode.name);
       }
     });
 
@@ -1122,16 +1327,14 @@ export default class InterBrainPlugin extends Plugin {
       id: 'refresh-git-status',
       name: 'Refresh Git Status Indicators',
       callback: async () => {
-        console.log('Refresh git status command executed');
         const loadingNotice = this.uiService.showLoading('Refreshing git status...');
-        
+
         try {
           const service = serviceManager.getActive();
-          
+
           if (service.refreshGitStatus) {
             const result = await service.refreshGitStatus();
             this.uiService.showSuccess(`Git status refreshed: ${result.updated} updated, ${result.errors} errors`);
-            console.log('Git status refresh result:', result);
           } else {
             this.uiService.showError('Git status refresh not available in current mode');
           }
@@ -1361,8 +1564,8 @@ export default class InterBrainPlugin extends Plugin {
     // Sync constellation settings to Zustand store
     // This ensures persisted values are reflected in runtime state
     useInterBrainStore.getState().setConstellationConfig({
-      maxNodes: this.settings.constellationMaxNodes ?? 150,
-      prioritizeClusters: this.settings.constellationPrioritizeClusters ?? true
+      maxNodes: this.settings.constellationMaxNodes ?? CONSTELLATION_DEFAULTS.MAX_NODES,
+      prioritizeClusters: this.settings.constellationPrioritizeClusters ?? CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS
     });
   }
 
@@ -1370,9 +1573,7 @@ export default class InterBrainPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  onunload() {
-    console.log('InterBrain plugin unloaded');
-
+  async onunload() {
     // Note: Passphrase is stored in settings, not cleared on unload
     // This preserves user's passphrase configuration across reloads
 
@@ -1388,5 +1589,18 @@ export default class InterBrainPlugin extends Plugin {
 
     // Clean up transcription service
     cleanupTranscriptionService();
+
+    // GRACEFUL SHUTDOWN: Wait for pending IndexedDB writes before closing
+    // This prevents the "open timeout" error caused by interrupted transactions
+    await gracefulShutdown(3000); // 3 second timeout
+
+    // Shutdown lifecycle manager
+    await serviceLifecycleManager.shutdown();
+
+    // Close IndexedDB connection to allow clean re-initialization on reload
+    closeIndexedDBConnection();
+
+    // Reset lifecycle manager for next load
+    serviceLifecycleManager.reset();
   }
 }

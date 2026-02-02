@@ -21,7 +21,6 @@ dreamnode/
 ├── services/
 │   ├── git-dreamnode-service.ts   # CRUD orchestrator with git + store sync
 │   ├── udd-service.ts             # .udd file read/write
-│   ├── media-loading-service.ts   # Lazy media loading by camera distance
 │   └── dreamnode-conversion-service.ts # Convert existing folders to DreamNodes
 ├── utils/
 │   ├── git-utils.ts          # Stateless git commands (status, stash, commit)
@@ -70,7 +69,6 @@ export * from './types/dreamnode';
 // Services
 export { GitDreamNodeService } from './services/git-dreamnode-service';
 export { UDDService } from './services/udd-service';
-export { MediaLoadingService, getMediaLoadingService } from './services/media-loading-service';
 
 // Utilities (namespaced)
 export * as gitUtils from './utils/git-utils';
@@ -120,7 +118,6 @@ export { registerDreamNodeCommands } from './commands';
 
 **Services** (stateful orchestrators):
 - `GitDreamNodeService` - Coordinates git operations + store updates
-- `MediaLoadingService` - Singleton with camera-distance loading queue
 
 **Utilities** (stateless functions):
 - `gitUtils.*` - Pure git command wrappers
@@ -151,7 +148,7 @@ export { registerDreamNodeCommands } from './commands';
 
 ## Notes
 
-- **Media loading**: Eager metadata, lazy data (by camera distance)
+- **Media loading**: Handled directly by `useContentTexture` hook (simplified in v0.14.0)
 - **Radicle failures**: Don't block node creation (graceful degradation)
 - **Legacy `git-operations.ts`**: Deprecated, use `gitUtils` namespace
 - **⚠️ Creator Mode**: DEPRECATED - The `creatorMode` state in the store slice is leftover from an early UX experiment and will be removed in a future update. Do not build new features on this pattern.

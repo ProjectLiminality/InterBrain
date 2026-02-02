@@ -8,6 +8,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type InterBrainPlugin from '../../main';
 import { SettingsStatusService, type SystemStatus, type FeatureStatus } from './settings-status-service';
+import { CONSTELLATION_DEFAULTS } from '../constellation-layout/constants';
 
 // Feature-owned settings sections
 import { createSemanticSearchSettingsSection } from '../semantic-search/settings-section';
@@ -60,8 +61,8 @@ export const DEFAULT_SETTINGS: InterBrainSettings = {
 	webLinkAnalyzerEnabled: false,  // Requires manual setup (needs API key)
 	webLinkAnalyzerSetupComplete: false,
 	// Constellation view defaults
-	constellationMaxNodes: 150,  // Good balance of performance and visibility
-	constellationPrioritizeClusters: true  // Keep constellations intact
+	constellationMaxNodes: CONSTELLATION_DEFAULTS.MAX_NODES,
+	constellationPrioritizeClusters: CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS
 };
 
 export class InterBrainSettingTab extends PluginSettingTab {

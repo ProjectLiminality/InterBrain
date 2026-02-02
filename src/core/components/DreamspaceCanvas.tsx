@@ -41,10 +41,13 @@ import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
 
 export default function DreamspaceCanvas() {
+  // NOTE: Lifecycle gate is now handled by DreamspaceView with lazy loading
+  // This component is only mounted AFTER lifecycleReady is true
+
   // Get services inside component so they're available after plugin initialization
   const [vaultService, setVaultService] = useState<VaultService | undefined>(undefined);
   const [canvasParserService, setCanvasParserService] = useState<CanvasParserService | undefined>(undefined);
-  
+
   // Load services on component mount (after plugin has initialized)
   useEffect(() => {
     try {
@@ -56,7 +59,7 @@ export default function DreamspaceCanvas() {
       console.log('Services not available, flip functionality will be disabled');
     }
   }, []); // Run once on mount
-  
+
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
   const constellationFilter = useInterBrainStore(state => state.constellationFilter);
   const ephemeralNodesMap = useInterBrainStore(state => state.ephemeralNodes);
@@ -66,6 +69,9 @@ export default function DreamspaceCanvas() {
   // SpatialOrchestrator reference for controlling all spatial interactions
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
 
+  // Track when orchestrator is ready so layout effects can re-run
+  const [orchestratorReady, setOrchestratorReady] = useState(false);
+
   // Unified escape key handler - extracted to core hook
   useEscapeKeyHandler(spatialOrchestratorRef);
 
@@ -73,16 +79,17 @@ export default function DreamspaceCanvas() {
   const [dragMousePosition, setDragMousePosition] = useState<{ x: number; y: number } | null>(null);
 
   // Get nodes from store - filter based on constellation filter and ephemeral nodes
-  // If filter has mounted nodes, use it; otherwise show all (pre-filter state)
+  // CRITICAL: If filter is empty, show NOTHING to prevent 167-node crash
   const prevMountedCountRef = React.useRef(0);
   const dreamNodes: DreamNode[] = React.useMemo(() => {
     const allNodes = Array.from(dreamNodesMap.values());
 
-    // If constellation filter is not initialized (empty mountedNodes), show all nodes
+    // If constellation filter is not initialized (empty mountedNodes), show NO nodes
+    // This prevents WebGL crash from mounting all 167 nodes at once
+    // The filter will be computed in the lifecycle READY phase, then nodes will appear
     if (constellationFilter.mountedNodes.size === 0) {
-      const result = allNodes.map(data => data.node);
-      prevMountedCountRef.current = result.length;
-      return result;
+      prevMountedCountRef.current = 0;
+      return [];
     }
 
     // Filter to only mounted nodes (constellation) + ephemeral nodes
@@ -96,7 +103,6 @@ export default function DreamspaceCanvas() {
     // Diagnostic: detect significant changes in mounted node count
     const currentLayout = useInterBrainStore.getState().spatialLayout;
     if (prevMountedCountRef.current > 0 && result.length !== prevMountedCountRef.current) {
-      console.log(`[CANVAS] dreamNodes recomputed: ${prevMountedCountRef.current} → ${result.length} (mounted=${constellationFilter.mountedNodes.size}, ephemeral=${ephemeralNodesMap.size}, layout=${currentLayout})`);
     }
     prevMountedCountRef.current = result.length;
 
@@ -310,11 +316,10 @@ export default function DreamspaceCanvas() {
         }
 
         // Return to constellation
-        console.log('DreamspaceCanvas: Returning to constellation mode');
         spatialOrchestratorRef.current.returnToConstellation();
         break;
     }
-  }, [spatialLayout, searchResults, selectedNode]); // Watch spatial layout, search results, and selected node
+  }, [spatialLayout, searchResults, selectedNode, orchestratorReady]); // Watch spatial layout, search results, selected node, and orchestrator readiness
 
   // React to navigation requests from features
   // This is the universal pattern for feature → core communication
@@ -574,19 +579,16 @@ export default function DreamspaceCanvas() {
 
           // Suppress empty space clicks during collaboration preview mode
           if (getCherryPickWorkflowService()?.isPreviewActive()) {
-            console.log('Empty space clicked during collaboration preview - ignoring');
             return;
           }
 
           // Suppress empty space clicks during edit mode
           if (store.editMode.isActive) {
-            console.log('Empty space clicked during edit mode - ignoring');
             return;
           }
 
           // Suppress empty space clicks during copilot mode to prevent accidental navigation
           if (store.copilotMode.isActive) {
-            console.log('Empty space clicked during copilot mode - ignoring to prevent accidental constellation return');
             return;
           }
 
@@ -598,11 +600,9 @@ export default function DreamspaceCanvas() {
           if (store.spatialLayout === 'search') {
             if (store.searchInterface.isActive) {
               // Dismiss search interface and return to constellation
-              console.log('Empty space clicked in search interface - dismissing search');
               store.setSearchActive(false);
             } else {
               // Clear search results
-              console.log('Empty space clicked in search results mode - clearing search');
               store.setSearchResults([]);
             }
             // Use orchestrator to animate back to constellation (handles ephemeral exit)
@@ -613,7 +613,6 @@ export default function DreamspaceCanvas() {
             }
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
-            console.log('Empty space clicked in liminal web - deselecting node');
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
@@ -623,9 +622,6 @@ export default function DreamspaceCanvas() {
             } else {
               store.setSpatialLayout('constellation');
             }
-          } else {
-            // Already in constellation mode, just log
-            console.log('Empty space clicked in constellation mode');
           }
         }}
       >
@@ -680,11 +676,8 @@ export default function DreamspaceCanvas() {
           {(() => {
             const shouldEnableDynamicScaling = spatialLayout === 'constellation';
 
-            // DIAGNOSTIC: Only log when node count changes significantly
-            if (Math.abs(dreamNodes.length - prevRenderCountRef.current) > 2) {
-              console.log(`[DreamNodeRendering] 🎨 Rendering ${dreamNodes.length} nodes`);
-              prevRenderCountRef.current = dreamNodes.length;
-            }
+            // Track render count (without logging)
+            prevRenderCountRef.current = dreamNodes.length;
 
             const renderedNodes = dreamNodes.map((node) => {
               const isEphemeral = ephemeralNodeIds.has(node.id);
@@ -741,7 +734,7 @@ export default function DreamspaceCanvas() {
             // Node focused by orchestrator
           }}
           onConstellationReturn={() => {
-            console.log('DreamspaceCanvas: Returned to constellation by orchestrator');
+            // Constellation return complete
           }}
           onOrchestratorReady={() => {
             // Register all existing refs when orchestrator is ready
@@ -750,6 +743,8 @@ export default function DreamspaceCanvas() {
                 spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
               }
             });
+            // Mark orchestrator as ready so layout effects can re-run
+            setOrchestratorReady(true);
           }}
           transitionDuration={1000}
         />

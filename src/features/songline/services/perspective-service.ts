@@ -195,7 +195,6 @@ let _perspectiveServiceInstance: PerspectiveServiceImpl | null = null;
 
 export function initializePerspectiveService(plugin: InterBrainPlugin): void {
 	_perspectiveServiceInstance = new PerspectiveServiceImpl(plugin);
-	console.log('[Perspective] Service initialized');
 }
 
 export function getPerspectiveService(): PerspectiveServiceImpl {

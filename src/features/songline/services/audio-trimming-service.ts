@@ -197,7 +197,6 @@ let _audioTrimmingServiceInstance: AudioTrimmingService | null = null;
 
 export function initializeAudioTrimmingService(): void {
   _audioTrimmingServiceInstance = new AudioTrimmingService();
-  console.log('[AudioTrim] Service initialized');
 }
 
 export function getAudioTrimmingService(): AudioTrimmingService {

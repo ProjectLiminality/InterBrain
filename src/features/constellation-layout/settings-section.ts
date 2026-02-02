@@ -9,6 +9,7 @@
 import { Setting } from 'obsidian';
 import type InterBrainPlugin from '../../main';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { CONSTELLATION_DEFAULTS } from './constants';
 
 /**
  * Create the constellation layout settings section
@@ -26,8 +27,8 @@ export function createConstellationSettingsSection(
 	});
 
 	// Get current values from plugin settings (persisted)
-	const maxNodes = plugin.settings.constellationMaxNodes ?? 150;
-	const prioritizeClusters = plugin.settings.constellationPrioritizeClusters ?? true;
+	const maxNodes = plugin.settings.constellationMaxNodes ?? CONSTELLATION_DEFAULTS.MAX_NODES;
+	const prioritizeClusters = plugin.settings.constellationPrioritizeClusters ?? CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS;
 
 	// Max Nodes setting - integer input field
 	new Setting(containerEl)
@@ -39,7 +40,7 @@ export function createConstellationSettingsSection(
 			text.inputEl.max = '500';
 			text.inputEl.style.width = '80px';
 			text.setValue(maxNodes.toString());
-			text.setPlaceholder('150');
+			text.setPlaceholder(CONSTELLATION_DEFAULTS.MAX_NODES.toString());
 			text.onChange(async (value) => {
 				const numValue = parseInt(value, 10);
 				if (!isNaN(numValue)) {
@@ -55,17 +56,17 @@ export function createConstellationSettingsSection(
 		})
 		.addExtraButton(button => button
 			.setIcon('reset')
-			.setTooltip('Reset to default (150)')
+			.setTooltip(`Reset to default (${CONSTELLATION_DEFAULTS.MAX_NODES})`)
 			.onClick(async () => {
 				// Persist to plugin settings
-				plugin.settings.constellationMaxNodes = 150;
+				plugin.settings.constellationMaxNodes = CONSTELLATION_DEFAULTS.MAX_NODES;
 				await plugin.saveSettings();
 				// Sync to Zustand store
-				useInterBrainStore.getState().setConstellationConfig({ maxNodes: 150 });
+				useInterBrainStore.getState().setConstellationConfig({ maxNodes: CONSTELLATION_DEFAULTS.MAX_NODES });
 				// Refresh the input field
 				const inputEl = containerEl.querySelector('input[type="number"]') as HTMLInputElement | null;
 				if (inputEl) {
-					inputEl.value = '150';
+					inputEl.value = CONSTELLATION_DEFAULTS.MAX_NODES.toString();
 				}
 			}));
 

@@ -14,7 +14,6 @@ import { VaultService } from '../../../core/services/vault-service';
 import { DreamTalkSide } from './DreamTalkSide';
 import { DreamSongSide } from './DreamSongSide';
 import { DreamTalkSprite } from './DreamTalkSprite';
-import { getMediaLoadingService } from '../services/media-loading-service';
 import '../styles/dreamNodeAnimations.css';
 
 // Feature flags for WebGL-native DreamTalk rendering
@@ -98,40 +97,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Back-side lazy loading optimization - only mount DreamSongSide when needed
   const [hasLoadedBackSide, setHasLoadedBackSide] = useState(false);
 
-  // PERFORMANCE FIX: Populate dreamNode media from cache without triggering store updates
-  // - Media loads in background via media-loading-service
-  // - Subscribe to load event and update dreamNode properties directly
-  // - Trigger re-render when media loads (without store update)
-  // - Avoids 72+ store updates that caused re-render storm
-  const [mediaLoadedTrigger, setMediaLoadedTrigger] = useState(0);
+  // Media is now loaded directly from dreamNode.dreamTalkMedia[].absolutePath
+  // via useContentTexture hook - no MediaLoadingService needed
 
-  useEffect(() => {
-    const mediaService = getMediaLoadingService();
-
-    // Check immediately if already cached
-    const media = mediaService.getCachedMedia(dreamNode.id);
-    if (media) {
-      // Update dreamNode properties directly (maintains compatibility with existing code)
-      dreamNode.dreamTalkMedia = media.dreamTalkMedia;
-      dreamNode.dreamSongContent = media.dreamSongContent;
-      setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
-      return; // Already loaded, no need to subscribe
-    }
-
-    // Subscribe to media load event - no timeout, waits indefinitely until media loads
-    const unsubscribe = mediaService.onMediaLoaded(dreamNode.id, () => {
-      const loadedMedia = mediaService.getCachedMedia(dreamNode.id);
-      if (loadedMedia) {
-        // Update dreamNode properties directly
-        dreamNode.dreamTalkMedia = loadedMedia.dreamTalkMedia;
-        dreamNode.dreamSongContent = loadedMedia.dreamSongContent;
-        setMediaLoadedTrigger(prev => prev + 1); // Trigger re-render
-      }
-    });
-
-    return unsubscribe;
-  }, [dreamNode.id]);
-  
   // Dual-mode position state
   const [positionMode, setPositionMode] = useState<'constellation' | 'active'>('constellation');
   const [targetPosition, setTargetPosition] = useState<[number, number, number]>(dreamNode.position);
@@ -214,7 +182,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
   // Determine if DreamTalk fullscreen button should be visible (stable version)
-  // Note: mediaLoadedTrigger in dependencies ensures re-evaluation after media loads
   const shouldShowDreamTalkFullscreen = useMemo(() => {
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&
@@ -224,7 +191,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                    !isDragging;
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging, mediaLoadedTrigger]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging]);
 
   // Determine if DreamSong fullscreen button should be visible (stable version)
   const shouldShowDreamSongFullscreen = useMemo(() => {
@@ -284,7 +251,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     if (ephemeral && ephemeralState && !hasTriggeredSpawnRef.current) {
       hasTriggeredSpawnRef.current = true;
 
-      console.log(`[SPAWN-ANIM] ${dreamNode.id.slice(0,8)}: effect fired at t=${globalThis.performance.now().toFixed(0)}, from=[${ephemeralState.spawnPosition.map(n=>n.toFixed(0))}] to=[${ephemeralState.targetPosition.map(n=>n.toFixed(0))}]`);
 
       // Start from spawn position
       setCurrentPosition(ephemeralState.spawnPosition);
@@ -404,7 +370,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       // Diagnostic log only for ephemeral nodes (constellation nodes move routinely)
       if (ephemeral) {
-        console.log(`[MOVE-TO-POS] ${dreamNode.id.slice(0,8)}: ephemeral, positionMode=${positionMode}, target=[${newTargetPosition.map(n=>n.toFixed(0))}]`);
       }
 
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
@@ -860,7 +825,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         } else if (transitionType === 'ephemeral-exit') {
           // Ephemeral node finished exit animation — queue for staggered despawn
           // so multiple nodes completing in the same frame don't all unmount at once.
-          console.log(`[LIFECYCLE] ${dreamNode.id.slice(0,8)}: ephemeral-exit animation complete, queuing despawn`);
           queueEphemeralDespawn(dreamNode.id);
         }
       }

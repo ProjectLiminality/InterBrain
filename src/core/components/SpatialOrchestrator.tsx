@@ -298,22 +298,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     if (!nodeRef?.current) {
       const store = useInterBrainStore.getState();
       if (store.ephemeralNodes.has(nodeId)) {
-        console.log(`[MOVE] ${nodeId.slice(0,8)}: ephemeral, ref not ready, queuing`);
         pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
         return;
       }
-      console.warn(`[MOVE] ${nodeId.slice(0,8)}: constellation node has NO REF, skipping move (isMounted=${isMounted}, isEphemeral=${isEphemeral})`);
       return;
     }
 
     if (setActive) {
       nodeRef.current.setActiveState(true);
-    }
-
-    // Log constellation node movements (ephemeral nodes log via [MOVE-TO-POS] in DreamNode3D)
-    if (isMounted && !isEphemeral) {
-      const resolvedPos = nodeRef.current.getCurrentPosition();
-      console.log(`[MOVE] ${nodeId.slice(0,8)}: constellation, resolvedPos=[${resolvedPos.map(n=>n.toFixed(0))}], target=[${position.map(n=>n.toFixed(0))}], isMoving=${nodeRef.current.isMoving()}`);
     }
 
     // Always use interrupt-capable movement for smooth transitions
@@ -390,14 +382,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Deduplicate rapid calls (e.g., direct call + useEffect reaction to same state change).
         const now = globalThis.performance.now();
         if (focusedNodeId.current === nodeId && (now - lastFocusTimestamp.current) < 100) {
-          console.log(`[FOCUS] focusOnNode SKIPPED for ${nodeId.slice(0,8)} (duplicate within 100ms)`);
           return;
         }
         lastFocusTimestamp.current = now;
 
         const currentLayout = useInterBrainStore.getState().spatialLayout;
         const isLiminalToLiminal = currentLayout === 'liminal-web';
-        console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}, isLiminalToLiminal=${isLiminalToLiminal}`);
 
         // ── Step 1: Snapshot previous state BEFORE mutating anything ──
         // This is critical for liminal→liminal transitions where we need to know
@@ -454,7 +444,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             }
           }
 
-          console.log(`[FOCUS] Ephemeral: ${keepIds.length} kept, ${exitIds.length} exiting, ${staleIds.length} stale`);
 
           // Animate exit for nodes that were active in the previous layout
           exitingEphemeralIds.push(...exitIds);
@@ -495,7 +484,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // ── Step 5: Categorize and log ──
         const ephemeralRingNodes = allRingNodes.filter(n => !mountedNodes.has(n.nodeId));
         const mountedRingNodes = allRingNodes.filter(n => mountedNodes.has(n.nodeId));
-        console.log(`[FOCUS] Ring nodes: ${allRingNodes.length} total, ${mountedRingNodes.length} mounted, ${ephemeralRingNodes.length} ephemeral, sphere=${positions.sphereNodes?.length || 0}`);
 
         // ── Step 6: Animate nodes ──
         // Easing logic: nodes already visible in the previous liminal web get easeInOutQuart
@@ -627,13 +615,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     returnToConstellation: () => {
       // Guard against double-calls during transition
       if (isTransitioning.current) {
-        console.log(`[LIFECYCLE] returnToConstellation: BLOCKED by isTransitioning guard`);
         return;
       }
-
-      const ephemeralCount = useInterBrainStore.getState().ephemeralNodes.size;
-      const totalRefs = nodeRefs.current.size;
-      console.log(`[LIFECYCLE] returnToConstellation: starting, ${totalRefs} refs, ${ephemeralCount} ephemeral nodes`);
 
       isTransitioning.current = true;
       focusedNodeId.current = null;
@@ -1107,7 +1090,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // movement starting from [0,0,0] (constellation positionMode), causing spawn-in-place.
         const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
         if (isEphemeral) {
-          console.log(`[REGISTER] ${nodeId.slice(0,8)}: ephemeral, skipping pending movement`);
           // Still set active state so the node participates in the layout
           if (pendingMovement.setActive && nodeRef.current) {
             nodeRef.current.setActiveState(true);
@@ -1158,6 +1140,21 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.warn('[LAYOUT] No relationship graph available');
         return;
       }
+
+      // Check position cache validity - skip recomputation if positions are still valid
+      const persistedPositions = store.constellationData.positions;
+      const persistedGraphHash = store.constellationData.graphHashWhenPositionsComputed;
+      const currentGraphHash = store.dreamSongRelationships.submoduleStructureHash;
+
+      if (persistedPositions && persistedPositions.size > 0 &&
+          persistedGraphHash === currentGraphHash && currentGraphHash !== null) {
+        console.log(`[LAYOUT] Positions still valid for current graph (hash: ${currentGraphHash}), skipping recomputation`);
+        // Still need to apply existing positions to node objects
+        store.batchUpdateNodePositions(persistedPositions);
+        return;
+      }
+
+      console.log(`[LAYOUT] Position recomputation needed (persistedHash=${persistedGraphHash}, currentHash=${currentGraphHash})`);
 
       try {
         const { maxNodes, prioritizeClusters } = store.constellationConfig;
@@ -1236,6 +1233,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // setConstellationPositions replaces the entire positions map (only 50 entries),
         // so future plugin loads won't have stale ephemeral positions.
         store.setConstellationPositions(mountedPositions);
+        // Track which graph these positions were computed for
+        if (currentGraphHash) {
+          store.setGraphHashWhenPositionsComputed(currentGraphHash);
+        }
 
         // Diagnostic: warn if batchUpdateNodePositions will overwrite active ring node positions
         if (activeRingNodeIds.length > 0) {

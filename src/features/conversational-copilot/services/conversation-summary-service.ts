@@ -284,7 +284,6 @@ let _conversationSummaryService: ConversationSummaryService | null = null;
 
 export function initializeConversationSummaryService(app: App): void {
 	_conversationSummaryService = new ConversationSummaryService(app);
-	console.log(`📝 [ConversationSummary] Service initialized`);
 }
 
 export function getConversationSummaryService(): ConversationSummaryService {

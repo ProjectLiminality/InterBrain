@@ -26,7 +26,9 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { CONSTELLATION_DEFAULTS } from '../../features/constellation-layout/constants';
+import { indexedDBStorage } from './indexeddb-storage';
 // Feature slice imports
 import {
   DreamweavingSlice,
@@ -133,7 +135,7 @@ export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'limin
  * Configuration for constellation filtering - controls how many nodes load at startup
  */
 export interface ConstellationConfig {
-  /** Maximum nodes to mount in constellation view (e.g., 150) */
+  /** Maximum nodes to mount in constellation view */
   maxNodes: number;
   /** Whether to prioritize larger clusters when selecting nodes */
   prioritizeClusters: boolean;
@@ -255,6 +257,11 @@ export interface CoreSlice {
   spawnEphemeralNodesBatch: (nodes: Array<{ nodeId: string; targetPosition: [number, number, number]; spawnPosition: [number, number, number] }>) => void;
   despawnEphemeralNode: (nodeId: string) => void;
   clearEphemeralNodes: () => void;
+
+  // Lifecycle gate - prevents UI rendering until lifecycle is complete
+  // This is critical for large vaults to prevent all nodes mounting at once
+  lifecycleReady: boolean;
+  setLifecycleReady: (ready: boolean) => void;
 }
 
 // ============================================================================
@@ -308,8 +315,8 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
 
   // Constellation filtering defaults
   constellationConfig: {
-    maxNodes: 150,
-    prioritizeClusters: true,
+    maxNodes: CONSTELLATION_DEFAULTS.MAX_NODES,
+    prioritizeClusters: CONSTELLATION_DEFAULTS.PRIORITIZE_CLUSTERS,
   },
 
   constellationFilter: {
@@ -421,13 +428,16 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   }),
 
   despawnEphemeralNode: (nodeId) => set((state: InterBrainState) => {
-    console.log(`[LIFECYCLE] ${nodeId.slice(0,8)}: despawnEphemeralNode, remaining=${state.ephemeralNodes.size - 1}`);
     const newMap = new Map(state.ephemeralNodes);
     newMap.delete(nodeId);
     return { ephemeralNodes: newMap };
   }),
 
   clearEphemeralNodes: () => set({ ephemeralNodes: new Map<string, EphemeralNodeState>() }),
+
+  // Lifecycle gate - prevents UI rendering until lifecycle phases complete
+  lifecycleReady: false,
+  setLifecycleReady: (ready) => set({ lifecycleReady: ready }),
 });
 
 // ============================================================================
@@ -455,6 +465,7 @@ export const useInterBrainStore = create<InterBrainState>()(
     }),
     {
       name: 'interbrain-storage',
+      storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
         ...extractDreamNodePersistenceData(state),
         ...extractSearchPersistenceData(state),
@@ -464,49 +475,74 @@ export const useInterBrainStore = create<InterBrainState>()(
         ...extractTutorialPersistenceData(state),
       }),
       merge: (persisted: unknown, current) => {
-        const persistedData = persisted as {
-          dreamNodes?: [string, DreamNodeData][];
-          // Legacy field - will be migrated to dreamNodes
-          realNodes?: [string, DreamNodeData][];
-          constellationData?: {
-            relationshipGraph: SerializableDreamSongGraph | null;
-            lastScanTimestamp: number | null;
-            isScanning: boolean;
-            positions: [string, [number, number, number]][] | null;
-            lastLayoutTimestamp: number | null;
-            nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
-          } | null;
-          // DreamSong relationships (from dreamweaving slice)
-          dreamSongRelationships?: {
-            graph: DreamweavingSerializableGraph | null;
-            lastScanTimestamp: number | null;
-            isScanning: boolean;
-          } | null;
-          vectorData?: [string, VectorData][];
-          ollamaConfig?: OllamaConfig;
-          feedbackPreferences?: {
-            autoReportPreference?: AutoReportPreference;
-            includeLogs?: boolean;
-            includeState?: boolean;
+        // Handle null/undefined persisted state (fresh vault, new storage key, etc.)
+        if (!persisted) {
+          return current;
+        }
+
+        // Wrap entire merge in try-catch to prevent crashes from corrupted persisted data
+        try {
+          const persistedData = persisted as {
+            dreamNodes?: [string, DreamNodeData][];
+            // Legacy field - will be migrated to dreamNodes
+            realNodes?: [string, DreamNodeData][];
+            constellationData?: {
+              relationshipGraph: SerializableDreamSongGraph | null;
+              lastScanTimestamp: number | null;
+              isScanning: boolean;
+              positions: [string, [number, number, number]][] | null;
+              lastLayoutTimestamp: number | null;
+              nodeMetadata: [string, { name: string; type: string; uuid: string }][] | null;
+            } | null;
+            // DreamSong relationships (from dreamweaving slice)
+            dreamSongRelationships?: {
+              graph: DreamweavingSerializableGraph | null;
+              lastScanTimestamp: number | null;
+              isScanning: boolean;
+            } | null;
+            vectorData?: [string, VectorData][];
+            ollamaConfig?: OllamaConfig;
+            feedbackPreferences?: {
+              autoReportPreference?: AutoReportPreference;
+              includeLogs?: boolean;
+              includeState?: boolean;
+            };
+            // Tutorial completion state
+            hasCompleted?: boolean;
           };
-          // Tutorial completion state
-          hasCompleted?: boolean;
-        };
 
-        // Support migration from legacy realNodes to dreamNodes
-        const dreamNodesData = persistedData.dreamNodes || persistedData.realNodes;
-        const restoredDreamNodes = restoreDreamNodePersistenceData({ dreamNodes: dreamNodesData });
+          // Support migration from legacy realNodes to dreamNodes
+          const dreamNodesData = persistedData.dreamNodes || persistedData.realNodes;
+          const restoredDreamNodes = restoreDreamNodePersistenceData({ dreamNodes: dreamNodesData });
 
-        return {
-          ...current,
-          ...restoredDreamNodes,
-          // Keep realNodes in sync with dreamNodes for backward compatibility
-          realNodes: restoredDreamNodes.dreamNodes,
-          ...restoreSearchPersistenceData(persistedData),
-          ...restoreConstellationPersistenceData(persistedData),
-          ...restoreDreamweavingPersistenceData(persistedData),
-          ...restoreFeedbackPersistenceData(persistedData),
-          ...restoreTutorialPersistenceData(current as TutorialSlice, persistedData),
+          return {
+            ...current,
+            ...restoredDreamNodes,
+            // Keep realNodes in sync with dreamNodes for backward compatibility
+            realNodes: restoredDreamNodes.dreamNodes,
+            ...restoreSearchPersistenceData(persistedData),
+            ...restoreConstellationPersistenceData(persistedData),
+            ...restoreDreamweavingPersistenceData(persistedData),
+            ...restoreFeedbackPersistenceData(persistedData),
+            ...restoreTutorialPersistenceData(current as TutorialSlice, persistedData),
+          };
+        } catch (error) {
+          console.error('[Store] Failed to restore persisted state, starting fresh:', error);
+          // Return current state unchanged - app will start fresh
+          return current;
+        }
+      },
+      // Skip automatic hydration - we'll trigger it manually after setVaultId()
+      // This prevents the race condition where hydration happens before we know
+      // which vault we're in, causing cross-vault data contamination
+      skipHydration: true,
+
+      // Hydration lifecycle callbacks for debugging persistence issues
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[Store] Hydration failed:', error);
+          }
         };
       },
     }
