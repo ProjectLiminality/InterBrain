@@ -63,9 +63,9 @@ Features → Core → Obsidian/React
 
 ```
 core/
-├── store/          → Zustand store + slice composition
+├── store/          → Zustand store + slice composition + IndexedDB adapter
 ├── components/     → DreamspaceCanvas, SpatialOrchestrator, EphemeralNodeManager, DreamspaceView
-├── services/       → VaultService, LeafManagerService, UIService, ServiceManager, ephemeral-despawn-queue
+├── services/       → ServiceLifecycleManager, VaultStateService, VaultService, LeafManagerService, UIService, ServiceManager, ephemeral-despawn-queue
 ├── hooks/          → useEscapeKeyHandler, useOptionKeyHandlers
 ├── context/        → OrchestratorContext (spatial orchestrator ref)
 ├── commands/       → camera-commands
@@ -86,6 +86,21 @@ core/
 - `useEphemeralGarbageCollector()` — cleans up stale ephemeral nodes after layout transitions
 
 ## Services
+
+**ServiceLifecycleManager** (`services/service-lifecycle-manager.ts`) - Coordinates async service initialization through 5 phases:
+1. **BOOTSTRAP**: Set vault context, load settings
+2. **HYDRATE**: Read IndexedDB, validate persisted data
+3. **SCAN**: Scan vault (only if needed based on vault state)
+4. **READY**: UI can interact, services available
+5. **BACKGROUND**: Heavy operations (indexing, sync)
+
+Each phase must complete before the next begins. Features subscribe to phase completion events to coordinate initialization. Includes graceful shutdown with pending operation tracking.
+
+**VaultStateService** (`services/vault-state-service.ts`) - Tracks vault state for incremental scanning:
+- Persists `vault-state.json` in plugin directory
+- Stores last scan timestamp, node count, vault ID
+- Enables skipping full vault scans when data is fresh
+- Uses `.obsidian` mtime for quick change detection
 
 **ServiceManager** (`services/service-manager.ts`) - Central registry. Initialize with plugin, then access all services.
 
@@ -112,3 +127,7 @@ When working in features:
 When working in core:
 1. Keep it minimal - resist feature-specific code
 2. Layout algorithms live in feature slices (e.g., `liminal-web-layout`, `constellation-layout`)
+
+## Lifecycle Architecture
+
+For detailed analysis of async operations, race conditions, and the lifecycle coordination solution, see **[LIFECYCLE-AUDIT.md](./services/LIFECYCLE-AUDIT.md)**.

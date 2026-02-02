@@ -74,7 +74,7 @@ export class DreamSongRelationshipService {
         if (submodules.length > 0) {
           submoduleLists.push(`${node.id}:${submodules.sort().join(',')}`);
         }
-      } catch (error) {
+      } catch {
         // Node folder might not exist, skip
         continue;
       }
@@ -116,7 +116,7 @@ export class DreamSongRelationshipService {
           submodules.add(entry.name);
         }
       }
-    } catch (error) {
+    } catch {
       // Folder might not exist
     }
 
@@ -167,7 +167,7 @@ export class DreamSongRelationshipService {
       return entries
         .filter(e => e.isFile() && e.name.endsWith('.canvas'))
         .map(e => `${dreamNodePath}/${e.name}`);
-    } catch (error) {
+    } catch {
       return [];
     }
   }
@@ -187,7 +187,7 @@ export class DreamSongRelationshipService {
     try {
       // Phase 1: Discover all DreamNodes and build UUID mapping
       console.log('[DreamSong] Phase 1: Discovering DreamNodes...');
-      const { dreamNodes, uuidToPathMap, pathToUuidMap } = await this.discoverAllDreamNodes();
+      const { dreamNodes, pathToUuidMap } = await this.discoverAllDreamNodes();
       console.log(`[DreamSong] Phase 1 complete: ${dreamNodes.length} nodes`);
 
       // Phase 2: Scan ALL canvas files (not just DreamSong.canvas) and extract submodule-based relationships
@@ -494,7 +494,8 @@ export class DreamSongRelationshipService {
         target,
         dreamSongId: parentNode.id,
         dreamSongPath: canvasPath,
-        sequenceIndex: i
+        sequenceIndex: i,
+        weight: 1
       });
     }
 
@@ -656,7 +657,8 @@ export class DreamSongRelationshipService {
         target,
         dreamSongId: sourceDreamNodeId,
         dreamSongPath: dreamSongPath,
-        sequenceIndex: i
+        sequenceIndex: i,
+        weight: 1
       });
     }
 

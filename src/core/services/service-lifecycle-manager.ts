@@ -197,7 +197,8 @@ class ServiceLifecycleManagerImpl {
 
     // Otherwise wait for completion event
     return new Promise((resolve) => {
-      const handler = (result: PhaseResult) => {
+      const handler = (...args: unknown[]) => {
+        const result = args[0] as PhaseResult;
         if (result.phase === phase) {
           this.emitter.off('phase:complete', handler);
           resolve(result);
@@ -364,7 +365,7 @@ class ServiceLifecycleManagerImpl {
     this.pendingOperations = [];
 
     // Reset phase handlers to empty
-    for (const [phase, registered] of this.phases) {
+    for (const registered of this.phases.values()) {
       registered.handler = async () => {};
     }
   }

@@ -1123,7 +1123,7 @@ export class GitDreamNodeService {
 
       // Regular git-tracked file - use blob hash
       return `git:${blobHash}`;
-    } catch (error) {
+    } catch {
       // Git command failed - file might be untracked or repo issue
       // Fall back to mtime
       try {

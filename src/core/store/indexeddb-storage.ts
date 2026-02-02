@@ -127,14 +127,14 @@ function openDB(): Promise<IDBDatabase> {
 
     request.onerror = () => {
       console.error('[IndexedDB] Open error:', request.error);
-      clearTimeout(timeout);
+      globalThis.clearTimeout(timeout);
       dbOpenPromise = null;
       reject(request.error);
     };
 
     request.onsuccess = () => {
       console.log('[IndexedDB] Connection opened successfully');
-      clearTimeout(timeout);
+      globalThis.clearTimeout(timeout);
       cachedDB = request.result;
 
       // Clear cache on connection close/error
@@ -206,7 +206,7 @@ export const indexedDBStorage: StateStorage = {
       if (result) {
         try {
           JSON.parse(result);
-        } catch (parseError) {
+        } catch {
           console.error('IndexedDB: Corrupted data detected, clearing storage');
           await indexedDBStorage.removeItem(name);
           return null;

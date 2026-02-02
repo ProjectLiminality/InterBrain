@@ -5,6 +5,79 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-02-02 - Performance & Scalability Refactor
+
+### Overview
+
+Architectural refactor eliminating race conditions and enabling true scalability for large vaults (167+ nodes). Introduces coordinated service lifecycle, vault state tracking, and graceful shutdown to make InterBrain work reliably regardless of vault size.
+
+### Added
+
+**ServiceLifecycleManager** (`src/core/services/service-lifecycle-manager.ts`)
+- 5-phase lifecycle coordination: BOOTSTRAP -> HYDRATE -> SCAN -> READY -> BACKGROUND
+- Event-driven architecture with phase completion subscriptions
+- Graceful shutdown with pending operation tracking
+- Timeout handling per phase with configurable limits
+- Eliminates race conditions between async systems
+
+**VaultStateService** (`src/core/services/vault-state-service.ts`)
+- Persists `vault-state.json` in plugin directory
+- Tracks last scan timestamp, node count, vault ID hash
+- Enables skipping full vault scans when data is fresh
+- Uses `.obsidian` mtime for quick change detection
+- Schema versioning for future migrations
+
+**IndexedDB Improvements** (`src/core/store/indexeddb-storage.ts`)
+- Graceful shutdown: waits for pending writes before plugin unload
+- Hydration gate: prevents empty state from overwriting persisted data
+- Vault-specific storage keys prevent cross-vault contamination
+- Connection pooling with automatic reconnection
+
+**Separated Refresh Commands**
+- `interbrain:refresh-plugin` (Cmd+R) - Fast plugin reload only
+- `interbrain:refresh-full` - Cleanup + indexing + reload
+- `interbrain:sync-network` - Radicle sync (opt-in)
+- `interbrain:force-reindex` - Full vector reindex (opt-in)
+
+### Changed
+
+**Radicle Peer Sync** - Moved to BACKGROUND phase
+- Non-blocking, fire-and-forget initialization
+- Checks for passphrase in settings before attempting
+- User-friendly notice if not configured
+
+**Edge3D Optimization**
+- Reduced from 3 Line components to 1 per edge
+- Significant reduction in Three.js object count for large graphs
+
+**MediaLoadingService** - Deleted
+- Simplified media loading pipeline
+- Direct file:// streaming without intermediate service
+
+### Technical
+
+- All 419 tests passing
+- Zero lint warnings, zero TypeScript errors
+- Documentation updates: core README now documents lifecycle services
+- LIFECYCLE-AUDIT.md documents race condition analysis and solutions
+
+### Performance Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Cold Start (18 nodes) | ~17s | 7ms |
+| Warm Start Cmd+R (18 nodes) | ~18s | 4-5ms |
+| Cold Start (167 nodes) | Crash/timeout | ~240ms |
+| Warm Start Cmd+R (167 nodes) | Full rescan | Scan skipped |
+
+### Fixed
+
+- IndexedDB "open timeout" errors during plugin reload
+- Race conditions between hydration and vault scan
+- Stale data visible during startup window
+- Plugin unload interrupting in-flight IndexedDB writes
+- Cross-vault data contamination when switching vaults
+
 ## [0.13.0] - 2026-01-27 - InterBrain Scalability
 
 ### Overview

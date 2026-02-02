@@ -6,6 +6,7 @@ import { WorkspaceLeaf } from 'obsidian';
 vi.mock('react', () => ({
   StrictMode: vi.fn(({ children }) => children),
   createElement: vi.fn((type, props, ...children) => ({ type, props, children })),
+  lazy: vi.fn((importFn) => importFn),
 }));
 
 vi.mock('react-dom/client', () => ({

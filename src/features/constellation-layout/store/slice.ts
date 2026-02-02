@@ -165,7 +165,7 @@ export function extractConstellationPersistenceData(state: ConstellationSlice) {
     const entries = Array.from(state.constellationData.positions.entries()).slice(0, 3);
     console.log(`[ConstellationSlice] First 3 positions being extracted: ${JSON.stringify(entries)}`);
     // Check if any values are undefined
-    const hasUndefined = entries.some(([k, v]) => v === undefined || v === null);
+    const hasUndefined = entries.some(([_k, v]) => v === undefined || v === null);
     if (hasUndefined) {
       console.error(`[ConstellationSlice] EXTRACTION BUG: Positions have undefined values!`);
     }

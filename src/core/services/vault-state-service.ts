@@ -89,7 +89,7 @@ class VaultStateServiceImpl {
       this.cachedState = state;
       console.log(`[VaultState] Loaded state: ${state.nodeCount} nodes, last scan ${new Date(state.lastScanTimestamp).toISOString()}`);
       return state;
-    } catch (error) {
+    } catch {
       // File doesn't exist or is corrupted - this is normal on first run
       console.log('[VaultState] No existing state found (fresh vault or first run)');
       return null;
