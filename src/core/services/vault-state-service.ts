@@ -31,6 +31,8 @@ export interface VaultState {
   schemaVersion: number;
   /** Quick-check: modification time of .obsidian folder */
   obsidianMtime: number;
+  /** Quick-check: modification time of vault root (detects new DreamNodes) */
+  vaultRootMtime?: number;
 }
 
 /**
@@ -99,6 +101,7 @@ class VaultStateServiceImpl {
   async saveState(nodeCount: number): Promise<void> {
     try {
       const obsidianMtime = await this.getObsidianMtime();
+      const vaultRootMtime = await this.getVaultRootMtime();
 
       const state: VaultState = {
         vaultId: this.currentVaultId,
@@ -106,6 +109,7 @@ class VaultStateServiceImpl {
         nodeCount,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         obsidianMtime,
+        vaultRootMtime,
       };
 
       const statePath = this.getStatePath();
@@ -144,8 +148,14 @@ class VaultStateServiceImpl {
     }
 
     // Quick check: .obsidian folder mtime
-    const currentMtime = await this.getObsidianMtime();
-    if (currentMtime !== state.obsidianMtime) {
+    const currentObsidianMtime = await this.getObsidianMtime();
+    if (currentObsidianMtime !== state.obsidianMtime) {
+      return { hasChanges: true, reason: 'mtime_changed', cachedState: state };
+    }
+
+    // Quick check: vault root mtime (detects new DreamNode folders)
+    const currentVaultRootMtime = await this.getVaultRootMtime();
+    if (state.vaultRootMtime !== undefined && currentVaultRootMtime !== state.vaultRootMtime) {
       return { hasChanges: true, reason: 'mtime_changed', cachedState: state };
     }
 
@@ -207,6 +217,19 @@ class VaultStateServiceImpl {
     try {
       const obsidianPath = path.join(this.vaultPath, '.obsidian');
       const stats = await fsPromises.stat(obsidianPath);
+      return Math.floor(stats.mtimeMs);
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Get vault root folder modification time
+   * This changes when folders are added/removed at the vault root level
+   */
+  private async getVaultRootMtime(): Promise<number> {
+    try {
+      const stats = await fsPromises.stat(this.vaultPath);
       return Math.floor(stats.mtimeMs);
     } catch {
       return 0;
