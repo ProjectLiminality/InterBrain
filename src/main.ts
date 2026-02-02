@@ -1597,6 +1597,10 @@ export default class InterBrainPlugin extends Plugin {
     // Shutdown lifecycle manager
     await serviceLifecycleManager.shutdown();
 
+    // Clear vault state so next plugin load rescans (Cmd+R should get fresh data)
+    // Cold startup (Obsidian restart) still uses cache since state file persists
+    await vaultStateService.clearState();
+
     // Close IndexedDB connection to allow clean re-initialization on reload
     closeIndexedDBConnection();
 

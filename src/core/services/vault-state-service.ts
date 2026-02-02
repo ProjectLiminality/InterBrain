@@ -51,7 +51,7 @@ export interface VaultChangeResult {
 // CONSTANTS
 // ============================================================================
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2; // Bumped: v2 adds vaultRootMtime for new folder detection
 const STATE_FILENAME = 'vault-state.json';
 
 // ============================================================================
@@ -155,7 +155,11 @@ class VaultStateServiceImpl {
 
     // Quick check: vault root mtime (detects new DreamNode folders)
     const currentVaultRootMtime = await this.getVaultRootMtime();
-    if (state.vaultRootMtime !== undefined && currentVaultRootMtime !== state.vaultRootMtime) {
+    if (state.vaultRootMtime === undefined) {
+      // Old state file without vaultRootMtime - force rescan to populate it
+      return { hasChanges: true, reason: 'schema_upgrade', cachedState: state };
+    }
+    if (currentVaultRootMtime !== state.vaultRootMtime) {
       return { hasChanges: true, reason: 'mtime_changed', cachedState: state };
     }
 
