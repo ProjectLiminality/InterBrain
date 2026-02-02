@@ -26,8 +26,6 @@ interface SubmoduleCircleProps {
   position: { x: number; y: number };
   radius: number;
   onSubmoduleClick: (node: DreamNode) => void;
-  isZooming: boolean;
-  isZoomTarget: boolean;
 }
 
 /**
@@ -38,9 +36,7 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
   submoduleNode,
   position,
   radius,
-  onSubmoduleClick,
-  isZooming,
-  isZoomTarget
+  onSubmoduleClick
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const nodeColors = getNodeColors(submoduleNode.type);
@@ -61,27 +57,6 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
     onSubmoduleClick(submoduleNode);
   }, [submoduleNode, onSubmoduleClick]);
 
-  // Calculate styles for zoom animation
-  const getTransformStyle = (): React.CSSProperties => {
-    if (isZooming && isZoomTarget) {
-      return {
-        transform: `translate(${position.x}px, ${position.y}px) scale(4)`,
-        zIndex: 999,
-        opacity: 1
-      };
-    }
-    if (isZooming && !isZoomTarget) {
-      return {
-        transform: `translate(${position.x}px, ${position.y}px) scale(1)`,
-        opacity: 0
-      };
-    }
-    return {
-      transform: `translate(${position.x}px, ${position.y}px) scale(1)`,
-      opacity: 1
-    };
-  };
-
   return (
     <div
       style={{
@@ -97,10 +72,10 @@ const SubmoduleCircle: React.FC<SubmoduleCircleProps> = ({
         background: nodeColors.fill,
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: isZooming ? 'all 0.8s ease-in-out' : dreamNodeStyles.transitions.default,
+        transition: dreamNodeStyles.transitions.default,
         contain: 'layout style paint',
         contentVisibility: 'auto',
-        ...getTransformStyle()
+        transform: `translate(${position.x}px, ${position.y}px)`
       }}
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
@@ -181,7 +156,6 @@ export const HolonView: React.FC<HolonViewProps> = ({
   const [submoduleIds, setSubmoduleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [zoomingSubmoduleId, setZoomingSubmoduleId] = useState<string | null>(null);
 
   // Get all DreamNodes from store to resolve submodule IDs
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
@@ -246,19 +220,13 @@ export const HolonView: React.FC<HolonViewProps> = ({
     return packCirclesInParent(submoduleNodes.length, parentRadius, 0.15);
   }, [submoduleNodes.length, parentRadius]);
 
-  // Handle submodule click - initiate zoom animation then navigate
+  // Handle submodule click - immediately navigate to submodule
   // Stays in holarchy mode: selects the submodule AND flips it to show its holarchy
+  // Note: No zoom animation - immediate button-like behavior
   const handleSubmoduleClick = useCallback((submodule: DreamNode) => {
-    // Start zoom animation
-    setZoomingSubmoduleId(submodule.id);
-
-    // After animation, navigate to submodule and flip it to back side
-    setTimeout(() => {
-      setSelectedNode(submodule);
-      // Flip the newly selected node to back side to stay in holarchy navigation mode
-      startFlipAnimation(submodule.id, 'front-to-back');
-      setZoomingSubmoduleId(null);
-    }, 800); // Match animation duration
+    setSelectedNode(submodule);
+    // Flip the newly selected node to back side to stay in holarchy navigation mode
+    startFlipAnimation(submodule.id, 'front-to-back');
   }, [setSelectedNode, startFlipAnimation]);
 
   // Loading state
@@ -354,8 +322,6 @@ export const HolonView: React.FC<HolonViewProps> = ({
             position={{ x: position.x, y: position.y }}
             radius={position.radius}
             onSubmoduleClick={handleSubmoduleClick}
-            isZooming={zoomingSubmoduleId !== null}
-            isZoomTarget={zoomingSubmoduleId === submodule.id}
           />
         );
       })}

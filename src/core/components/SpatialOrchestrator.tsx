@@ -514,7 +514,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Move center node
         if (positions.centerNode) {
+          console.log(`[FOCUS] Moving center node ${positions.centerNode.nodeId.slice(0,8)} to position [${positions.centerNode.position.map(n=>n.toFixed(0))}]`);
           moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, getEasing(positions.centerNode.nodeId));
+        } else {
+          console.log(`[FOCUS] No center node in positions!`);
         }
 
         // ── Step 6b: Move ring nodes (SKIP in holarchy mode) ──
@@ -1529,6 +1532,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     let previousIsFlipped: boolean = false;
     // Guard against duplicate "flip to back" processing for the same node
     let lastProcessedFlipToBack: string | null = null;
+    // Track the node we're navigating AWAY from (for returning to constellation)
+    // This is captured when we first detect a switch to a different node
+    let nodeToReturnToConstellation: string | null = null;
 
     const unsubscribe = useInterBrainStore.subscribe((state) => {
       const currentFlippedNodeId = state.flipState.flippedNodeId;
@@ -1540,8 +1546,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       const currentIsFlipped = currentFlipStateObj?.isFlipped === true && !currentFlipStateObj?.isFlipping;
 
       // Reset the flip-to-back guard when switching to a different node
+      // Also capture the node we're switching AWAY from (for constellation return)
       if (currentFlippedNodeId !== previousFlippedNodeId) {
         lastProcessedFlipToBack = null;
+        // Capture the previous node BEFORE it gets overwritten
+        // This is the node that should return to constellation when the new node's flip completes
+        if (previousFlippedNodeId && previousIsFlipped) {
+          nodeToReturnToConstellation = previousFlippedNodeId;
+          console.log(`[SpatialOrchestrator] Captured node to return: ${nodeToReturnToConstellation.slice(0,8)}`);
+        }
       }
 
       // Detect transition to back side (flip animation completed to back)
@@ -1555,6 +1568,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Load supermodules from UDD and show them in rings
         // Capture the node ID for stale check
         const targetNodeId = currentFlippedNodeId;
+        // Use nodeToReturnToConstellation - this was captured when we first detected the switch
+        // to a different node, BEFORE previousFlippedNodeId was overwritten
+        const previousCenterForReturn = nodeToReturnToConstellation;
+        // Clear it after capturing so we don't accidentally reuse it
+        nodeToReturnToConstellation = null;
         const loadAndShowSupermodules = async () => {
           try {
             // Find the flipped node to get its repoPath
@@ -1626,10 +1644,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
               // Apply world rotation correction
               applyWorldRotationCorrection(positions);
 
-              // Capture the previous center BEFORE updating liminalWebRoles
-              const prevCenterId = liminalWebRoles.current.centerNodeId;
-
               // Update liminal web roles with supermodule IDs
+              // Note: previousCenterForReturn is captured at the top of the async function from previousFlippedNodeId
               liminalWebRoles.current = {
                 centerNodeId: targetNodeId,
                 ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
@@ -1653,9 +1669,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
               // Return the PREVIOUS center node to constellation if it's NOT a supermodule
               // This handles the case of clicking a supermodule (navigating UP)
-              if (prevCenterId && prevCenterId !== targetNodeId && !supermoduleNodeIds.has(prevCenterId)) {
-                console.log(`[SpatialOrchestrator] Previous center ${prevCenterId.slice(0,8)} is not a supermodule - returning to constellation`);
-                returnNodeToConstellation(prevCenterId, transitionDuration, 'easeInQuart');
+              // Use previousCenterForReturn because liminalWebRoles was already updated by focusOnNode
+              if (previousCenterForReturn && previousCenterForReturn !== targetNodeId && !supermoduleNodeIds.has(previousCenterForReturn)) {
+                console.log(`[SpatialOrchestrator] Previous flipped node ${previousCenterForReturn.slice(0,8)} is not a supermodule - returning to constellation`);
+                returnNodeToConstellation(previousCenterForReturn, transitionDuration, 'easeInQuart');
               }
 
               // Move all other nodes (except center) to constellation
@@ -1671,7 +1688,27 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
               console.log(`[SpatialOrchestrator] Supermodule layout complete - showing ${orderedNodes.length} supermodules`);
             } else {
-              console.log('[SpatialOrchestrator] No supermodules to display');
+              console.log(`[SpatialOrchestrator] No supermodules to display - previousCenterForReturn=${previousCenterForReturn?.slice(0,8) || 'null'}, targetNodeId=${targetNodeId.slice(0,8)}`);
+
+              // Even with no supermodules, we still need to return the previous center to constellation
+              // This handles navigating UP to a node at the top of the holarchy
+              // Use previousCenterForReturn (captured from previousFlippedNodeId) because
+              // liminalWebRoles.current.centerNodeId has already been updated by focusOnNode
+              if (previousCenterForReturn && previousCenterForReturn !== targetNodeId) {
+                console.log(`[SpatialOrchestrator] Returning previous flipped node ${previousCenterForReturn.slice(0,8)} to constellation (no supermodules case)`);
+                returnNodeToConstellation(previousCenterForReturn, transitionDuration, 'easeInQuart');
+              } else {
+                console.log(`[SpatialOrchestrator] NOT returning previous node: previousCenterForReturn=${previousCenterForReturn?.slice(0,8) || 'null'}, same as target=${previousCenterForReturn === targetNodeId}`);
+              }
+
+              // Update liminal web roles to reflect new center with empty rings
+              liminalWebRoles.current = {
+                centerNodeId: targetNodeId,
+                ring1NodeIds: new Set(),
+                ring2NodeIds: new Set(),
+                ring3NodeIds: new Set(),
+                sphereNodeIds: new Set()
+              };
             }
           } catch (error) {
             console.error('[SpatialOrchestrator] Error loading supermodules:', error);
