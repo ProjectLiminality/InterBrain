@@ -129,3 +129,4 @@ copilot-transcription-*.md
 # GitHub sharing viewer bundle (build artifacts)
 viewer-bundle/
 src/features/web-link-analyzer/scripts/venv/
+logs/
