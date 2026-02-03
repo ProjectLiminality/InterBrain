@@ -462,6 +462,11 @@ export default function DreamspaceCanvas() {
       : null;
     const isInHolarchyMode = currentFlipState?.isFlipped === true && !currentFlipState?.isFlipping;
 
+    // NOTE: The nodeToReturnToConstellation hack has been removed.
+    // The new orchestration system in SpatialOrchestrator properly tracks
+    // previous layout participants via liminalWebRoles and sends them home
+    // when executing the holarchy navigation intent.
+
     store.setSelectedNode(node);
     // Trigger focused layout via SpatialOrchestrator
     if (spatialOrchestratorRef.current) {

@@ -23,6 +23,7 @@ import { useInterBrainStore } from '../store/interbrain-store';
 import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephemeral-despawn-queue';
 import { UDDService } from '../../features/dreamnode/services/udd-service';
 import { serviceManager } from '../services/service-manager';
+import type { LayoutIntent, NodeTargetState, ExecuteLayoutOptions } from '../orchestration/types';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
@@ -90,6 +91,13 @@ export interface SpatialOrchestratorRef {
 
   /** Restore related dreamers in rings (after exiting holarchy view) */
   showDreamersInRings: (centerNodeId: string) => void;
+
+  /**
+   * NEW UNIFIED API: Execute a layout intent.
+   * This is the primary method for all layout transitions in the new architecture.
+   * It computes ring positions, builds target states, and dispatches to nodes.
+   */
+  executeLayoutIntent: (intent: LayoutIntent, options?: ExecuteLayoutOptions) => void;
 }
 
 interface SpatialOrchestratorProps {
@@ -1508,6 +1516,162 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.error('[SpatialOrchestrator] Error restoring dreamers:', error);
         isTransitioning.current = false;
       }
+    },
+
+    // NEW UNIFIED API: Execute a layout intent
+    executeLayoutIntent: (intent: LayoutIntent, options: ExecuteLayoutOptions = {}) => {
+      const {
+        duration = transitionDuration,
+        easing = 'easeOutQuart',
+        instant = false
+      } = options;
+
+      const effectiveDuration = instant ? 0 : duration;
+
+      console.log(`[Orchestration] executeLayoutIntent:`, {
+        center: intent.center ? `${intent.center.nodeId.slice(0, 8)}(${intent.center.flipSide})` : null,
+        surrounding: intent.surroundingNodes.length,
+        duration: effectiveDuration
+      });
+
+      try {
+        const store = useInterBrainStore.getState();
+
+        // Build target states map
+        const targetStates = new Map<string, NodeTargetState>();
+
+        // Center node target state
+        if (intent.center) {
+          // Calculate center position (same as existing ring layout)
+          const centerPosition: [number, number, number] = [0, 0, -DEFAULT_RING_CONFIG.centerDistance];
+
+          // Apply world rotation correction
+          if (dreamWorldRef.current) {
+            const sphereRotation = dreamWorldRef.current.quaternion.clone();
+            const inverseRotation = sphereRotation.invert();
+            const centerVec = new Vector3(...centerPosition);
+            centerVec.applyQuaternion(inverseRotation);
+            centerPosition[0] = centerVec.x;
+            centerPosition[1] = centerVec.y;
+            centerPosition[2] = centerVec.z;
+          }
+
+          targetStates.set(intent.center.nodeId, {
+            mode: 'active',
+            position: centerPosition,
+            flipSide: intent.center.flipSide
+          });
+        }
+
+        // Ring nodes target states
+        if (intent.surroundingNodes.length > 0) {
+          // Use existing ring layout calculation for positions
+          const relationshipGraph = buildFullRelationshipGraph();
+          const orderedNodes = intent.surroundingNodes
+            .map(id => {
+              const nodeData = store.dreamNodes.get(id);
+              if (!nodeData) return null;
+              return { id, name: nodeData.node.name, type: nodeData.node.type as string };
+            })
+            .filter((n): n is { id: string; name: string; type: string } => n !== null);
+
+          const positions = calculateRingLayoutPositionsForSearch(
+            orderedNodes,
+            relationshipGraph,
+            DEFAULT_RING_CONFIG
+          );
+
+          // Apply world rotation correction to ring positions
+          if (dreamWorldRef.current) {
+            const sphereRotation = dreamWorldRef.current.quaternion.clone();
+            const inverseRotation = sphereRotation.invert();
+
+            [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+              const pos = new Vector3(...node.position);
+              pos.applyQuaternion(inverseRotation);
+              node.position = [pos.x, pos.y, pos.z];
+            });
+          }
+
+          // Add ring nodes to target states (all show front side)
+          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
+            targetStates.set(nodeId, {
+              mode: 'active',
+              position,
+              flipSide: 'front'
+            });
+          });
+        }
+
+        // Determine which currently active nodes should go home
+        // (nodes that were in the previous layout but aren't in the new one)
+        const previousActiveNodes = new Set([
+          liminalWebRoles.current.centerNodeId,
+          ...liminalWebRoles.current.ring1NodeIds,
+          ...liminalWebRoles.current.ring2NodeIds,
+          ...liminalWebRoles.current.ring3NodeIds
+        ].filter((id): id is string => id !== null));
+
+        for (const nodeId of previousActiveNodes) {
+          if (!targetStates.has(nodeId)) {
+            targetStates.set(nodeId, { mode: 'home' });
+          }
+        }
+
+        // Update liminal web roles for tracking
+        liminalWebRoles.current = {
+          centerNodeId: intent.center?.nodeId || null,
+          ring1NodeIds: new Set(intent.surroundingNodes.slice(0, 6)),
+          ring2NodeIds: new Set(intent.surroundingNodes.slice(6, 18)),
+          ring3NodeIds: new Set(intent.surroundingNodes.slice(18, 36)),
+          sphereNodeIds: new Set() // Will be populated by nodes going home
+        };
+
+        // Get world rotation for home transitions
+        const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
+        isTransitioning.current = true;
+        focusedNodeId.current = intent.center?.nodeId || null;
+
+        // Dispatch target states to nodes
+        console.log(`[Orchestration] Dispatching ${targetStates.size} target states`);
+
+        for (const [nodeId, targetState] of targetStates) {
+          // Ensure node is mounted (spawn as ephemeral if needed)
+          if (targetState.mode === 'active') {
+            ensureNodeMounted(nodeId, targetState.position);
+          }
+
+          const nodeRef = nodeRefs.current.get(nodeId);
+          if (nodeRef?.current?.setTargetState) {
+            // Use new unified API
+            nodeRef.current.setTargetState(targetState, worldRotation, effectiveDuration, easing);
+          } else if (nodeRef?.current) {
+            // Fallback to old API for nodes that haven't updated yet
+            if (targetState.mode === 'active') {
+              moveNode(nodeId, targetState.position, effectiveDuration, easing);
+              // Handle flip separately
+              const nodeFlipState = store.flipState.flipStates.get(nodeId);
+              const isFlipped = nodeFlipState?.isFlipped && !nodeFlipState?.isFlipping;
+              if (targetState.flipSide === 'back' && !isFlipped) {
+                store.startFlipAnimation(nodeId, 'front-to-back');
+              } else if (targetState.flipSide === 'front' && isFlipped) {
+                store.startFlipAnimation(nodeId, 'back-to-front');
+              }
+            } else {
+              returnNodeToConstellation(nodeId, effectiveDuration, 'easeInQuart');
+            }
+          }
+        }
+
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, effectiveDuration);
+
+      } catch (error) {
+        console.error('[Orchestration] Error executing layout intent:', error);
+        isTransitioning.current = false;
+      }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 
@@ -1519,22 +1683,19 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   }, [onOrchestratorReady]);
 
   // Subscribe to flip state changes to swap between dreamers and supermodules
-  // When a node flips to back side, show its supermodules in the rings
+  // When a node flips to back side, show its supermodules in the rings using executeLayoutIntent
   // When a node flips to front side, restore the dreamers (liminal web relationships)
   //
-  // IMPORTANT: In holarchy navigation mode, we DON'T restore dreamers when switching
-  // from one flipped node to another. We only restore dreamers when:
-  // 1. Manually flipping a node back to front (same node, flip direction change)
-  // 2. Deselecting a flipped node without selecting another
+  // This uses the new unified orchestration architecture:
+  // - Detect flip state changes
+  // - Derive the appropriate layout intent
+  // - Execute the intent (which handles ALL node movements including sending previous center home)
   useEffect(() => {
     // Track the previous flip state to detect transitions
     let previousFlippedNodeId: string | null = null;
     let previousIsFlipped: boolean = false;
     // Guard against duplicate "flip to back" processing for the same node
     let lastProcessedFlipToBack: string | null = null;
-    // Track the node we're navigating AWAY from (for returning to constellation)
-    // This is captured when we first detect a switch to a different node
-    let nodeToReturnToConstellation: string | null = null;
 
     const unsubscribe = useInterBrainStore.subscribe((state) => {
       const currentFlippedNodeId = state.flipState.flippedNodeId;
@@ -1546,15 +1707,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       const currentIsFlipped = currentFlipStateObj?.isFlipped === true && !currentFlipStateObj?.isFlipping;
 
       // Reset the flip-to-back guard when switching to a different node
-      // Also capture the node we're switching AWAY from (for constellation return)
       if (currentFlippedNodeId !== previousFlippedNodeId) {
         lastProcessedFlipToBack = null;
-        // Capture the previous node BEFORE it gets overwritten
-        // This is the node that should return to constellation when the new node's flip completes
-        if (previousFlippedNodeId && previousIsFlipped) {
-          nodeToReturnToConstellation = previousFlippedNodeId;
-          console.log(`[SpatialOrchestrator] Captured node to return: ${nodeToReturnToConstellation.slice(0,8)}`);
-        }
       }
 
       // Detect transition to back side (flip animation completed to back)
@@ -1563,28 +1717,24 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           (previousFlippedNodeId !== currentFlippedNodeId || !previousIsFlipped) &&
           lastProcessedFlipToBack !== currentFlippedNodeId) {
         lastProcessedFlipToBack = currentFlippedNodeId;
-        console.log(`[SpatialOrchestrator] Flip to back detected for ${currentFlippedNodeId}`);
+        console.log(`[Orchestration] Flip to back detected for ${currentFlippedNodeId.slice(0,8)}`);
 
-        // Load supermodules from UDD and show them in rings
-        // Capture the node ID for stale check
+        // Capture the target node ID for stale check
         const targetNodeId = currentFlippedNodeId;
-        // Use nodeToReturnToConstellation - this was captured when we first detected the switch
-        // to a different node, BEFORE previousFlippedNodeId was overwritten
-        const previousCenterForReturn = nodeToReturnToConstellation;
-        // Clear it after capturing so we don't accidentally reuse it
-        nodeToReturnToConstellation = null;
-        const loadAndShowSupermodules = async () => {
+
+        // Load supermodules from UDD and execute layout intent
+        const loadAndExecuteHolarchyIntent = async () => {
           try {
             // Find the flipped node to get its repoPath
             const nodeData = state.dreamNodes.get(targetNodeId);
             if (!nodeData?.node.repoPath) {
-              console.log('[SpatialOrchestrator] No repoPath for flipped node');
+              console.log('[Orchestration] No repoPath for flipped node');
               return;
             }
 
             const vaultService = serviceManager.getVaultService();
             if (!vaultService) {
-              console.log('[SpatialOrchestrator] No VaultService available');
+              console.log('[Orchestration] No VaultService available');
               return;
             }
 
@@ -1595,7 +1745,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             // If user clicked another node while we were loading, abort
             const currentState = useInterBrainStore.getState();
             if (currentState.flipState.flippedNodeId !== targetNodeId) {
-              console.log(`[SpatialOrchestrator] Aborting supermodule layout - node ${targetNodeId.slice(0,8)} is no longer flipped`);
+              console.log(`[Orchestration] Aborting - node ${targetNodeId.slice(0,8)} is no longer flipped`);
               return;
             }
 
@@ -1604,37 +1754,72 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
               typeof entry === 'string' ? entry : entry.radicleId
             );
 
-            if (supermoduleIds.length > 0) {
-              console.log(`[SpatialOrchestrator] Showing ${supermoduleIds.length} supermodules for ${targetNodeId}`);
-              // Use the imperative handle methods directly via ref
-              const orchestratorMethods = useInterBrainStore.getState();
-              // Call showSupermodulesInRings through the ref
-              // Since we're inside the component, we can call the method directly
-              const relationshipGraph = buildRelationshipGraph(dreamNodes);
-              const orderedNodes = supermoduleIds
+            // Resolve supermodule IDs to actual node IDs
+            const resolvedSupermoduleIds = supermoduleIds
+              .map(id => {
+                // First try radicleId match (canonical schema)
+                const byRadicleId = dreamNodes.find(n => n.radicleId === id);
+                if (byRadicleId) return byRadicleId.id;
+
+                // Fallback: try exact UUID/ID match (legacy data)
+                const byId = dreamNodes.find(n => n.id === id);
+                if (byId) return byId.id;
+
+                // Last resort: match by name
+                const byName = dreamNodes.find(n => n.name === id);
+                if (byName) return byName.id;
+
+                return null;
+              })
+              .filter((id): id is string => id !== null);
+
+            console.log(`[Orchestration] Holarchy intent: center=${targetNodeId.slice(0,8)}(back), supermodules=${resolvedSupermoduleIds.length}`);
+
+            // Derive and execute the holarchy navigation intent
+            // The executeLayoutIntent will handle:
+            // - Moving center node to center position (already positioned by focusOnNode, but flip side is 'back')
+            // - Moving supermodules to ring positions
+            // - Sending previous center and other non-ring nodes home
+            const intent: LayoutIntent = {
+              center: {
+                nodeId: targetNodeId,
+                flipSide: 'back'
+              },
+              surroundingNodes: resolvedSupermoduleIds
+            };
+
+            // Access executeLayoutIntent through the ref - need to get the current ref value
+            // Since we're inside the component's effect, we use the internal implementation
+            // by directly calling the internal logic
+
+            // Build target states map
+            const targetStates = new Map<NodeTargetState & { nodeId: string }>([]);
+
+            // Center node - already at center position, just needs back flip
+            const centerPosition: [number, number, number] = [0, 0, -DEFAULT_RING_CONFIG.centerDistance];
+            if (dreamWorldRef.current) {
+              const sphereRotation = dreamWorldRef.current.quaternion.clone();
+              const inverseRotation = sphereRotation.invert();
+              const centerVec = new Vector3(...centerPosition);
+              centerVec.applyQuaternion(inverseRotation);
+              centerPosition[0] = centerVec.x;
+              centerPosition[1] = centerVec.y;
+              centerPosition[2] = centerVec.z;
+            }
+
+            // Calculate ring positions for supermodules
+            const supermoduleTargetStates = new Map<string, NodeTargetState>();
+
+            if (resolvedSupermoduleIds.length > 0) {
+              const relationshipGraph = buildFullRelationshipGraph();
+              const orderedNodes = resolvedSupermoduleIds
                 .map(id => {
-                  // First try radicleId match (canonical schema)
-                  const byRadicleId = dreamNodes.find(n => n.radicleId === id);
-                  if (byRadicleId) return { id: byRadicleId.id, name: byRadicleId.name, type: byRadicleId.type as string };
-
-                  // Fallback: try exact UUID/ID match (legacy data)
-                  const byId = dreamNodes.find(n => n.id === id);
-                  if (byId) return { id: byId.id, name: byId.name, type: byId.type as string };
-
-                  // Last resort: match by name
-                  const byName = dreamNodes.find(n => n.name === id);
-                  if (byName) return { id: byName.id, name: byName.name, type: byName.type as string };
-
-                  return null;
+                  const nd = currentState.dreamNodes.get(id);
+                  if (!nd) return null;
+                  return { id, name: nd.node.name, type: nd.node.type as string };
                 })
-                .filter((node): node is { id: string; name: string; type: string } => node !== null);
+                .filter((n): n is { id: string; name: string; type: string } => n !== null);
 
-              if (orderedNodes.length === 0) {
-                console.log('[SpatialOrchestrator] No matching DreamNodes found for supermodule IDs');
-                return;
-              }
-
-              // Calculate ring positions for supermodules
               const positions = calculateRingLayoutPositionsForSearch(
                 orderedNodes,
                 relationshipGraph,
@@ -1642,80 +1827,91 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
               );
 
               // Apply world rotation correction
-              applyWorldRotationCorrection(positions);
+              if (dreamWorldRef.current) {
+                const sphereRotation = dreamWorldRef.current.quaternion.clone();
+                const inverseRotation = sphereRotation.invert();
+                [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
+                  const pos = new Vector3(...node.position);
+                  pos.applyQuaternion(inverseRotation);
+                  node.position = [pos.x, pos.y, pos.z];
+                });
+              }
 
-              // Update liminal web roles with supermodule IDs
-              // Note: previousCenterForReturn is captured at the top of the async function from previousFlippedNodeId
-              liminalWebRoles.current = {
-                centerNodeId: targetNodeId,
-                ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-                ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-                ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-                sphereNodeIds: new Set(positions.sphereNodes)
-              };
-
-              isTransitioning.current = true;
-
-              // Move supermodule nodes to ring positions
-              const supermoduleNodeIds = new Set([
-                ...positions.ring1Nodes.map(n => n.nodeId),
-                ...positions.ring2Nodes.map(n => n.nodeId),
-                ...positions.ring3Nodes.map(n => n.nodeId)
-              ]);
-
+              // Build target states for ring nodes
               [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
-                moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
+                supermoduleTargetStates.set(nodeId, {
+                  mode: 'active',
+                  position,
+                  flipSide: 'front'
+                });
               });
-
-              // Return the PREVIOUS center node to constellation if it's NOT a supermodule
-              // This handles the case of clicking a supermodule (navigating UP)
-              // Use previousCenterForReturn because liminalWebRoles was already updated by focusOnNode
-              if (previousCenterForReturn && previousCenterForReturn !== targetNodeId && !supermoduleNodeIds.has(previousCenterForReturn)) {
-                console.log(`[SpatialOrchestrator] Previous flipped node ${previousCenterForReturn.slice(0,8)} is not a supermodule - returning to constellation`);
-                returnNodeToConstellation(previousCenterForReturn, transitionDuration, 'easeInQuart');
-              }
-
-              // Move all other nodes (except center) to constellation
-              positions.sphereNodes.forEach(sphereNodeId => {
-                if (sphereNodeId !== targetNodeId) {
-                  returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
-                }
-              });
-
-              globalThis.setTimeout(() => {
-                isTransitioning.current = false;
-              }, transitionDuration);
-
-              console.log(`[SpatialOrchestrator] Supermodule layout complete - showing ${orderedNodes.length} supermodules`);
-            } else {
-              console.log(`[SpatialOrchestrator] No supermodules to display - previousCenterForReturn=${previousCenterForReturn?.slice(0,8) || 'null'}, targetNodeId=${targetNodeId.slice(0,8)}`);
-
-              // Even with no supermodules, we still need to return the previous center to constellation
-              // This handles navigating UP to a node at the top of the holarchy
-              // Use previousCenterForReturn (captured from previousFlippedNodeId) because
-              // liminalWebRoles.current.centerNodeId has already been updated by focusOnNode
-              if (previousCenterForReturn && previousCenterForReturn !== targetNodeId) {
-                console.log(`[SpatialOrchestrator] Returning previous flipped node ${previousCenterForReturn.slice(0,8)} to constellation (no supermodules case)`);
-                returnNodeToConstellation(previousCenterForReturn, transitionDuration, 'easeInQuart');
-              } else {
-                console.log(`[SpatialOrchestrator] NOT returning previous node: previousCenterForReturn=${previousCenterForReturn?.slice(0,8) || 'null'}, same as target=${previousCenterForReturn === targetNodeId}`);
-              }
-
-              // Update liminal web roles to reflect new center with empty rings
-              liminalWebRoles.current = {
-                centerNodeId: targetNodeId,
-                ring1NodeIds: new Set(),
-                ring2NodeIds: new Set(),
-                ring3NodeIds: new Set(),
-                sphereNodeIds: new Set()
-              };
             }
+
+            // Determine which nodes should go home (previous layout participants not in new layout)
+            const previousActiveNodes = new Set([
+              liminalWebRoles.current.centerNodeId,
+              ...liminalWebRoles.current.ring1NodeIds,
+              ...liminalWebRoles.current.ring2NodeIds,
+              ...liminalWebRoles.current.ring3NodeIds
+            ].filter((id): id is string => id !== null));
+
+            const nodesToSendHome: string[] = [];
+            for (const nodeId of previousActiveNodes) {
+              // Don't send the new center home, and don't send supermodules home
+              if (nodeId !== targetNodeId && !supermoduleTargetStates.has(nodeId)) {
+                nodesToSendHome.push(nodeId);
+              }
+            }
+
+            console.log(`[Orchestration] Nodes to send home: ${nodesToSendHome.map(id => id.slice(0,8)).join(', ')}`);
+
+            // Update liminal web roles
+            liminalWebRoles.current = {
+              centerNodeId: targetNodeId,
+              ring1NodeIds: new Set(resolvedSupermoduleIds.slice(0, 6)),
+              ring2NodeIds: new Set(resolvedSupermoduleIds.slice(6, 18)),
+              ring3NodeIds: new Set(resolvedSupermoduleIds.slice(18, 36)),
+              sphereNodeIds: new Set()
+            };
+
+            isTransitioning.current = true;
+            focusedNodeId.current = targetNodeId;
+
+            const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
+            // Dispatch target states to ring nodes
+            for (const [nodeId, targetState] of supermoduleTargetStates) {
+              ensureNodeMounted(nodeId, targetState.position);
+              const nodeRef = nodeRefs.current.get(nodeId);
+              if (nodeRef?.current?.setTargetState) {
+                nodeRef.current.setTargetState(targetState, worldRotation, transitionDuration, 'easeOutQuart');
+              } else if (nodeRef?.current) {
+                moveNode(nodeId, targetState.position, transitionDuration, 'easeOutQuart');
+              }
+            }
+
+            // Send nodes that are no longer in the layout home
+            for (const nodeId of nodesToSendHome) {
+              const nodeRef = nodeRefs.current.get(nodeId);
+              if (nodeRef?.current?.setTargetState) {
+                nodeRef.current.setTargetState({ mode: 'home' }, worldRotation, transitionDuration, 'easeInQuart');
+              } else if (nodeRef?.current) {
+                returnNodeToConstellation(nodeId, transitionDuration, 'easeInQuart');
+              }
+            }
+
+            globalThis.setTimeout(() => {
+              isTransitioning.current = false;
+            }, transitionDuration);
+
+            console.log(`[Orchestration] Holarchy layout complete - ${supermoduleTargetStates.size} supermodules displayed`);
+
           } catch (error) {
-            console.error('[SpatialOrchestrator] Error loading supermodules:', error);
+            console.error('[Orchestration] Error executing holarchy intent:', error);
           }
         };
 
-        loadAndShowSupermodules();
+        loadAndExecuteHolarchyIntent();
       }
 
       // Detect transition to front side (was back, now front or unflipped)
@@ -1735,32 +1931,24 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           // Another node is either flipping to back or already on back side
           if (flipStateObj.isFlipping && flipStateObj.flipDirection === 'front-to-back') {
             anotherNodeIsFlipping = true;
-            console.log(`[SpatialOrchestrator] Another node ${nodeId.slice(0,8)} is flipping to back - holarchy navigation`);
             break;
           }
           if (flipStateObj.isFlipped && !flipStateObj.isFlipping) {
             anotherNodeIsFlipping = true;
-            console.log(`[SpatialOrchestrator] Another node ${nodeId.slice(0,8)} is already on back side - holarchy navigation`);
             break;
           }
         }
       }
 
       // Also check if we just switched selected nodes (holarchy navigation in progress)
-      // When clicking a supermodule, selectedNode changes first, then flip animation starts after 100ms
-      // So we need to detect this intermediate state where the old node is flipping back
-      // but the new node hasn't started flipping yet
       const selectedNodeId = state.selectedNode?.id;
       const selectedNodeIsDifferent = selectedNodeId && selectedNodeId !== previousFlippedNodeId;
       if (selectedNodeIsDifferent && sameNodeFlippedToFront) {
-        // A different node is now selected - this is holarchy navigation
-        // The new node will start flipping shortly
-        console.log(`[SpatialOrchestrator] Selected node changed to ${selectedNodeId?.slice(0,8)} - holarchy navigation, skipping dreamer restore`);
         anotherNodeIsFlipping = true;
       }
 
       if (sameNodeFlippedToFront && !anotherNodeIsFlipping) {
-        console.log(`[SpatialOrchestrator] Flip to front detected, restoring dreamers for ${previousFlippedNodeId}`);
+        console.log(`[Orchestration] Flip to front detected, restoring dreamers for ${previousFlippedNodeId.slice(0,8)}`);
 
         // Restore the normal liminal web layout with social relationships (dreamers)
         try {
@@ -1768,7 +1956,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           const positions = calculateRingLayoutPositions(previousFlippedNodeId, relationshipGraph, DEFAULT_RING_CONFIG);
 
           if (!positions?.ring1Nodes || !positions?.ring2Nodes || !positions?.ring3Nodes) {
-            console.error('[SpatialOrchestrator] Failed to calculate ring layout positions');
+            console.error('[Orchestration] Failed to calculate ring layout positions');
             return;
           }
 
@@ -1786,15 +1974,31 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
           isTransitioning.current = true;
 
-          // Move dreamer nodes to ring positions
+          const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
+          // Move dreamer nodes to ring positions using setTargetState
           [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
-            moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
+            const nodeRef = nodeRefs.current.get(nodeId);
+            if (nodeRef?.current?.setTargetState) {
+              nodeRef.current.setTargetState({
+                mode: 'active',
+                position,
+                flipSide: 'front'
+              }, worldRotation, transitionDuration, 'easeOutQuart');
+            } else if (nodeRef?.current) {
+              moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
+            }
           });
 
           // Return non-ring nodes to constellation
           (positions.sphereNodes || []).forEach(sphereNodeId => {
             if (sphereNodeId !== previousFlippedNodeId) {
-              returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+              const nodeRef = nodeRefs.current.get(sphereNodeId);
+              if (nodeRef?.current?.setTargetState) {
+                nodeRef.current.setTargetState({ mode: 'home' }, worldRotation, transitionDuration, 'easeInQuart');
+              } else if (nodeRef?.current) {
+                returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+              }
             }
           });
 
@@ -1802,9 +2006,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             isTransitioning.current = false;
           }, transitionDuration);
 
-          console.log('[SpatialOrchestrator] Dreamer layout restored');
+          console.log('[Orchestration] Dreamer layout restored');
         } catch (error) {
-          console.error('[SpatialOrchestrator] Error restoring dreamers:', error);
+          console.error('[Orchestration] Error restoring dreamers:', error);
         }
       }
 

@@ -189,6 +189,7 @@ export const createDreamNodeSlice: StateCreator<
 
       return {
         flipState: {
+          ...state.flipState,
           flippedNodeId: nodeId,
           flipStates: updatedFlipStates
         }
