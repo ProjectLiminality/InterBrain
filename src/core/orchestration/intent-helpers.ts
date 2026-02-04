@@ -194,3 +194,116 @@ export function isHolarchyNavigation(
     context.currentCenter !== targetNodeId
   );
 }
+
+/**
+ * Derive intent for entering COPILOT mode.
+ *
+ * This handles the case where:
+ * 1. User clicks "Initiate Digital Campfire" on a Dreamer
+ * 2. Dreamer becomes frozen center (front side)
+ * 3. Ring is empty until Option key is held
+ *
+ * @param conversationPartnerId - The Dreamer node to center
+ * @returns DerivedIntentResult with copilot entry intent
+ */
+export function deriveCopilotEnterIntent(
+  conversationPartnerId: string
+): DerivedIntentResult {
+  const intent: LayoutIntent = {
+    center: {
+      nodeId: conversationPartnerId,
+      flipSide: 'front' // Dreamers only show front
+    },
+    surroundingNodes: [] // Ring starts empty
+  };
+
+  return {
+    intent,
+    nodesToSendHome: [], // Previous ring nodes will be handled by executeLayoutIntent
+    isHolarchyNavigation: false
+  };
+}
+
+/**
+ * Derive intent for showing semantic search results in COPILOT mode.
+ *
+ * This handles the case where:
+ * 1. User presses Option key in COPILOT mode
+ * 2. Frozen snapshot of semantic search results appears in ring
+ *
+ * @param conversationPartnerId - The Dreamer node at center
+ * @param frozenSearchResults - Snapshot of semantic search results (Dream IDs)
+ * @returns DerivedIntentResult with copilot ring visible intent
+ */
+export function deriveCopilotShowRingIntent(
+  conversationPartnerId: string,
+  frozenSearchResults: string[]
+): DerivedIntentResult {
+  const intent: LayoutIntent = {
+    center: {
+      nodeId: conversationPartnerId,
+      flipSide: 'front'
+    },
+    surroundingNodes: frozenSearchResults
+  };
+
+  return {
+    intent,
+    nodesToSendHome: [],
+    isHolarchyNavigation: false
+  };
+}
+
+/**
+ * Derive intent for hiding the ring in COPILOT mode.
+ *
+ * This handles the case where:
+ * 1. User releases Option key in COPILOT mode
+ * 2. Ring nodes fly home (disappear)
+ * 3. Center stays frozen
+ *
+ * @param conversationPartnerId - The Dreamer node at center
+ * @returns DerivedIntentResult with copilot ring hidden intent
+ */
+export function deriveCopilotHideRingIntent(
+  conversationPartnerId: string
+): DerivedIntentResult {
+  const intent: LayoutIntent = {
+    center: {
+      nodeId: conversationPartnerId,
+      flipSide: 'front'
+    },
+    surroundingNodes: [] // Empty ring
+  };
+
+  return {
+    intent,
+    nodesToSendHome: [], // Ring nodes go home implicitly
+    isHolarchyNavigation: false
+  };
+}
+
+/**
+ * Derive intent for exiting COPILOT mode back to LIMINAL_WEB.
+ *
+ * This handles the case where:
+ * 1. User clicks "Extinguish Digital Campfire"
+ * 2. Transitions back to LIMINAL_WEB with same Dreamer centered
+ * 3. Related Dreams appear in ring (normal liminal web behavior)
+ *
+ * @param conversationPartnerId - The Dreamer node that was at center
+ * @param relatedNodeIds - Dreams related to this Dreamer (for liminal web ring)
+ * @returns DerivedIntentResult with liminal web intent
+ */
+export function deriveCopilotExitIntent(
+  conversationPartnerId: string,
+  relatedNodeIds: string[]
+): DerivedIntentResult {
+  // Exiting copilot is essentially entering liminal web
+  return deriveFocusIntent(conversationPartnerId, relatedNodeIds, {
+    currentCenter: conversationPartnerId,
+    currentCenterFlipSide: 'front',
+    layoutMode: 'copilot',
+    isHolarchyMode: false
+  });
+}

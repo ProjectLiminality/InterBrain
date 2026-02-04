@@ -143,6 +143,41 @@ Edit mode for managing liminal web relationships.
 
 ---
 
+### COPILOT
+
+Conversational AI mode with a Dreamer node as the "conversation partner". Real-time transcription feeds semantic search to surface relevant Dreams.
+
+**Defining data:**
+- `conversationPartnerId: string` (the Dreamer node at center)
+- `optionKeyHeld: boolean` (whether Option key is currently pressed)
+- `frozenSearchResults: string[]` (snapshot of semantic search results when Option was pressed)
+
+**Derived data (background, continuous):**
+- `liveSearchResults: string[]` - semantic search results based on sliding window of transcription buffer
+- Only Dreams (opposite type of centered Dreamer)
+- Ordered by semantic similarity to recent conversation
+- Has relevance cutoff threshold
+
+**Characteristics:**
+- Accessed via "Initiate Digital Campfire" action button on a Dreamer in LIMINAL_WEB
+- Center Dreamer stays frozen throughout (front side, stationary)
+- Ring is normally empty (no nodes visible)
+- When Option key pressed: `frozenSearchResults` captures current `liveSearchResults`, Dreams appear in ring
+- While Option held: ring stays frozen even if `liveSearchResults` updates in background
+- When Option released: ring nodes immediately fly home (disappear), `frozenSearchResults` cleared
+- Clicking a ring node: "invokes" it (opens DreamSong content), stays in COPILOT mode
+- Exit ONLY via "Extinguish Digital Campfire" button → returns to LIMINAL_WEB
+- Escape key: blocked (no effect)
+- Ctrl+F: blocked (no effect)
+- All other navigation: blocked
+
+**Search distinction:**
+- SEARCH mode: fuzzy + semantic combined
+- EDIT_RELATIONSHIP: fuzzy only (user knows the name)
+- COPILOT: semantic only (content relevance to conversation)
+
+---
+
 ## State Hierarchy
 
 ```
@@ -169,9 +204,16 @@ LIMINAL_WEB (primary navigation)
     ├── edit relationship cmd ──► EDIT_RELATIONSHIP
     │                                 └── escape/save/cancel ──► LIMINAL_WEB
     │
+    ├── initiate campfire (Dreamer) ──► COPILOT
+    │                                       │
+    │                                       ├── Option hold ──► show frozen results in ring
+    │                                       ├── Option release ──► hide ring
+    │                                       ├── click(ring node) ──► invoke node (stay in COPILOT)
+    │                                       └── extinguish campfire ──► LIMINAL_WEB
+    │
     └── escape ──► CONSTELLATION
 
-SEARCH (accessible from anywhere via Ctrl+F)
+SEARCH (accessible from CONSTELLATION, LIMINAL_WEB, HOLARCHY via Ctrl+F)
     └── escape ──► CONSTELLATION
 ```
 
@@ -190,6 +232,8 @@ SEARCH (accessible from anywhere via Ctrl+F)
 | LIMINAL_WEB | flip(center) | center is Dreamer | N/A (flip button disabled for Dreamers) |
 | LIMINAL_WEB | edit metadata cmd | - | EDIT_METADATA(target=center) |
 | LIMINAL_WEB | edit relationship cmd | - | EDIT_RELATIONSHIP(target=center) |
+| LIMINAL_WEB | initiate campfire | center is Dreamer | COPILOT(partner=center) |
+| LIMINAL_WEB | initiate campfire | center is Dream | N/A (campfire button only on Dreamers) |
 | LIMINAL_WEB | Ctrl+F | - | SEARCH |
 | LIMINAL_WEB | escape | - | CONSTELLATION (with sphere rotation to keep center visible) |
 | HOLARCHY | click(nodeId) | nodeId == center | no-op |
@@ -209,6 +253,13 @@ SEARCH (accessible from anywhere via Ctrl+F)
 | EDIT_RELATIONSHIP | save | - | LIMINAL_WEB |
 | EDIT_RELATIONSHIP | cancel | - | LIMINAL_WEB |
 | EDIT_RELATIONSHIP | escape | - | LIMINAL_WEB |
+| COPILOT | Option press | - | show frozenSearchResults in ring |
+| COPILOT | Option release | - | hide ring (nodes fly home) |
+| COPILOT | click(nodeId) | Option held, nodeId in ring | invoke node (stay in COPILOT) |
+| COPILOT | extinguish campfire | - | LIMINAL_WEB(center=partner, flip=front) |
+| COPILOT | escape | - | no-op (blocked) |
+| COPILOT | Ctrl+F | - | no-op (blocked) |
+| COPILOT | click(empty space) | - | no-op (blocked) |
 
 ---
 
@@ -281,6 +332,7 @@ The history system tracks intentional navigation actions for undo (Cmd+Z) suppor
 - EDIT_METADATA mode (ephemeral overlay)
 - EDIT_RELATIONSHIP mode (ephemeral overlay)
 - SEARCH mode (ephemeral, only the resulting node selection is tracked)
+- COPILOT mode (ephemeral, intentional exit only via campfire button)
 - Future EDIT_HOLARCHY mode
 
 **History entry structure:**
@@ -539,6 +591,46 @@ This is abstracted away - the orchestrator just says "go home" and each node han
   searchQuery: string
 }
 ```
+
+---
+
+### COPILOT
+
+**Input:** `{ conversationPartnerId: string, optionKeyHeld: boolean }`
+
+**Background process (continuous, independent of derivation):**
+- Real-time transcription feeds a sliding window buffer
+- Semantic search runs against this buffer (Dreams only)
+- Results stored in `liveSearchResults` with relevance cutoff applied
+- This runs continuously regardless of `optionKeyHeld` state
+
+**Derivation (triggered on Option key press):**
+1. When Option pressed: capture snapshot of `liveSearchResults` → `frozenSearchResults`
+2. Compute ring positions for `frozenSearchResults`
+3. When Option released: clear ring (all nodes go home)
+
+**Output (Option held):**
+```typescript
+{
+  center: { nodeId: string, position: [0, 0, -centerDistance], flipSide: 'front' },  // Dreamer, frozen
+  ringNodes: [
+    { nodeId: string, position: [x, y, z], flipSide: 'front' },  // Dreams from frozenSearchResults
+    // ... semantic search results (Dreams only)
+  ],
+  homeNodes: []  // nothing goes home while Option held
+}
+```
+
+**Output (Option released):**
+```typescript
+{
+  center: { nodeId: string, position: [0, 0, -centerDistance], flipSide: 'front' },  // Dreamer, frozen
+  ringNodes: [],  // empty ring
+  homeNodes: string[]  // all previous ring nodes fly home
+}
+```
+
+**Note:** The center Dreamer never moves or changes throughout COPILOT mode. Only the ring content toggles based on Option key.
 
 ---
 
