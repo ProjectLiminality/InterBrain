@@ -2,6 +2,12 @@ import React, { useEffect } from 'react';
 import { useInterBrainStore, SpatialLayoutMode } from '../store/interbrain-store';
 import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
 import { DreamNode } from '../../features/dreamnode';
+import {
+  deriveCopilotShowRingIntent,
+  deriveCopilotHideRingIntent,
+  deriveFocusIntent,
+  buildLayoutContext
+} from '../orchestration/intent-helpers';
 
 /**
  * useCopilotOptionKeyHandler - Option key handling for copilot mode search results
@@ -34,15 +40,19 @@ export function useCopilotOptionKeyHandler(
         store.freezeSearchResults(); // Capture latest search results
         store.setShowSearchResults(true);
 
-        // Trigger layout update to show frozen results
+        // Trigger layout update to show frozen results via unified orchestration
         if (orchestratorRef.current && store.copilotMode.conversationPartner) {
           const updatedStore = useInterBrainStore.getState();
           const frozenResults = updatedStore.copilotMode.frozenSearchResults;
           console.log('🔍 [Copilot] frozenSearchResults AFTER freeze:', frozenResults.length, frozenResults.map(n => n.name));
 
           if (frozenResults && frozenResults.length > 0) {
-            console.log(`🔍 [Copilot] Displaying ${frozenResults.length} frozen search results`);
-            orchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, frozenResults);
+            console.log(`🔍 [Copilot] Displaying ${frozenResults.length} frozen search results via unified orchestration`);
+            const { intent } = deriveCopilotShowRingIntent(
+              store.copilotMode.conversationPartner.id,
+              frozenResults.map(n => n.id)
+            );
+            orchestratorRef.current.executeLayoutIntent(intent);
           } else {
             console.log('🔍 [Copilot] No frozen results to display');
           }
@@ -57,10 +67,11 @@ export function useCopilotOptionKeyHandler(
         const store = useInterBrainStore.getState();
         store.setShowSearchResults(false);
 
-        // Trigger layout update to hide results by calling with empty array
+        // Trigger layout update to hide results via unified orchestration
         if (orchestratorRef.current && store.copilotMode.conversationPartner) {
-          console.log('🔍 [Copilot] Hiding search results - clearing layout');
-          orchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, []);
+          console.log('🔍 [Copilot] Hiding search results via unified orchestration');
+          const { intent } = deriveCopilotHideRingIntent(store.copilotMode.conversationPartner.id);
+          orchestratorRef.current.executeLayoutIntent(intent);
         }
       }
     };
@@ -112,9 +123,15 @@ export function useLiminalWebOptionKeyHandler(
         if (!store.radialButtonUI.isActive) {
           store.setRadialButtonUIActive(true);
 
-          // Hide related nodes by moving them to constellation
-          if (orchestratorRef.current) {
-            orchestratorRef.current.hideRelatedNodesInLiminalWeb();
+          // Hide related nodes via unified orchestration (center only, no ring)
+          if (orchestratorRef.current && store.selectedNode) {
+            console.log('[LiminalWeb-Option] Hiding related nodes via unified orchestration');
+            const { intent } = deriveFocusIntent(store.selectedNode.id, [], buildLayoutContext(
+              store.selectedNode.id,
+              store.flipState.flipStates,
+              store.spatialLayout
+            ));
+            orchestratorRef.current.executeLayoutIntent(intent, 500); // 500ms to match radial button animation
           }
         }
       }
@@ -137,9 +154,16 @@ export function useLiminalWebOptionKeyHandler(
         if (store.radialButtonUI.isActive) {
           store.setRadialButtonUIActive(false);
 
-          // Show related nodes by moving them back to ring positions
-          if (orchestratorRef.current) {
-            orchestratorRef.current.showRelatedNodesInLiminalWeb();
+          // Show related nodes via unified orchestration
+          if (orchestratorRef.current && store.selectedNode) {
+            console.log('[LiminalWeb-Option] Showing related nodes via unified orchestration');
+            const relatedIds = orchestratorRef.current.getRelatedNodeIds(store.selectedNode.id);
+            const { intent } = deriveFocusIntent(store.selectedNode.id, relatedIds, buildLayoutContext(
+              store.selectedNode.id,
+              store.flipState.flipStates,
+              store.spatialLayout
+            ));
+            orchestratorRef.current.executeLayoutIntent(intent, 500); // 500ms to match radial button animation
           }
         }
       }

@@ -34,6 +34,15 @@ export interface SpatialOrchestratorRef {
    */
   executeLayoutIntent: (intent: LayoutIntent, duration?: number) => void;
 
+  /**
+   * Get related node IDs for a given node (opposite type connections).
+   * Used by callers to derive LayoutIntent for LIMINAL_WEB mode.
+   *
+   * @param nodeId - The center node ID
+   * @returns Array of related node IDs (Dreams if center is Dreamer, vice versa)
+   */
+  getRelatedNodeIds: (nodeId: string) => string[];
+
   // === LEGACY API (to be refactored in Phase 5, removed in Phase 6) ===
   /** Focus on a specific node - trigger liminal web layout */
   focusOnNode: (nodeId: string) => void;
@@ -549,6 +558,17 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
       } catch (error) {
         console.error('[Orchestrator] executeLayoutIntent failed:', error);
+      }
+    },
+
+    getRelatedNodeIds: (nodeId: string): string[] => {
+      try {
+        const relationshipGraph = buildFullRelationshipGraph();
+        const relatedNodes = relationshipGraph.getOppositeTypeConnections(nodeId);
+        return relatedNodes.map(node => node.id);
+      } catch (error) {
+        console.error('[Orchestrator] getRelatedNodeIds failed:', error);
+        return [];
       }
     },
 

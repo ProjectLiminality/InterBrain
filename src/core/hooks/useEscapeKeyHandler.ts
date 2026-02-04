@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useInterBrainStore } from '../store/interbrain-store';
 import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
+import { deriveConstellationIntent } from '../orchestration/intent-helpers';
 
 /**
  * useEscapeKeyHandler - Unified escape key handling for spatial layout navigation
@@ -85,14 +86,14 @@ export function useEscapeKeyHandler(
             break;
 
           case 'search':
-            // Exit global search, go to constellation
+            // Exit global search, go to constellation via unified orchestration
             store.setSearchResults([]);
-            // Use orchestrator to animate nodes back (including ephemeral exit animations)
             if (orchestratorRef.current) {
-              orchestratorRef.current.returnToConstellation();
-            } else {
-              store.setSpatialLayout('constellation');
+              console.log('[Escape] SEARCH → CONSTELLATION via unified orchestration');
+              const { intent } = deriveConstellationIntent();
+              orchestratorRef.current.executeLayoutIntent(intent);
             }
+            store.setSpatialLayout('constellation');
             break;
 
           case 'copilot':
@@ -101,21 +102,16 @@ export function useEscapeKeyHandler(
             break;
 
           case 'liminal-web':
-            // Exit liminal-web, go to constellation
+            // Exit liminal-web, go to constellation via unified orchestration
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
-            // Use orchestrator to animate nodes back (including ephemeral exit animations)
-            // The orchestrator will set the layout to 'constellation'
-            console.log('[Escape] liminal-web: orchestratorRef.current =', !!orchestratorRef.current);
             if (orchestratorRef.current) {
-              console.log('[Escape] Calling orchestrator.returnToConstellation()');
-              orchestratorRef.current.returnToConstellation();
-            } else {
-              // Fallback if no orchestrator available
-              console.log('[Escape] No orchestrator, falling back to setSpatialLayout');
-              store.setSpatialLayout('constellation');
+              console.log('[Escape] LIMINAL_WEB → CONSTELLATION via unified orchestration');
+              const { intent } = deriveConstellationIntent();
+              orchestratorRef.current.executeLayoutIntent(intent);
             }
+            store.setSpatialLayout('constellation');
             break;
 
           case 'constellation':

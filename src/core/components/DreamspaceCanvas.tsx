@@ -41,6 +41,10 @@ import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
 import {
   deriveHolarchyNavigationIntent,
+  deriveFocusIntent,
+  deriveConstellationIntent,
+  deriveSearchIntent,
+  deriveCopilotEnterIntent,
   buildLayoutContext,
   isHolarchyNavigation
 } from '../orchestration/intent-helpers';
@@ -218,10 +222,12 @@ export default function DreamspaceCanvas() {
   // Features now use store.requestNavigation() and core reacts via useEffect above.
 
   // React to spatial layout changes and trigger appropriate orchestrator methods
+  // === UNIFIED ORCHESTRATION SYSTEM ===
   useEffect(() => {
     if (!spatialOrchestratorRef.current) return;
 
     const store = useInterBrainStore.getState();
+    const orchestrator = spatialOrchestratorRef.current;
 
     switch (spatialLayout) {
       case 'search': {
@@ -232,13 +238,13 @@ export default function DreamspaceCanvas() {
 
         // Search mode uses honeycomb layout for results
         if (searchResults && searchResults.length > 0) {
-          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
-          spatialOrchestratorRef.current.showSearchResults(searchResults);
+          console.log(`[Canvas-Layout] SEARCH: ${searchResults.length} results via unified orchestration`);
+          const { intent } = deriveSearchIntent(searchResults.map(n => n.id));
+          orchestrator.executeLayoutIntent(intent);
         } else if (store.searchInterface.isActive) {
-          console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
-          // Use liminal web architecture: move all constellation nodes to sphere surface
-          // SearchNode acts like the focused node at center position [0, 0, -50]
-          spatialOrchestratorRef.current.moveAllToSphereForSearch();
+          console.log('[Canvas-Layout] SEARCH: empty results, all nodes go home');
+          const { intent } = deriveConstellationIntent();
+          orchestrator.executeLayoutIntent(intent);
         }
         break;
       }
@@ -250,43 +256,63 @@ export default function DreamspaceCanvas() {
         }
 
         // Relationship edit mode - center node with related/search nodes in honeycomb
+        // NOTE: This mode has special behavior (fuzzy search only, toggle on click)
+        // that is handled in handleNodeClick. Here we just set up the initial layout.
         if (store.editMode.isActive && store.editMode.editingNode) {
-          console.log(`DreamspaceCanvas: Switching to relationship edit mode for ${store.editMode.editingNode.name}`);
-          spatialOrchestratorRef.current.focusOnNode(store.editMode.editingNode.id);
-
-          // Show existing relationships if any
-          if (searchResults && searchResults.length > 0) {
-            spatialOrchestratorRef.current.showEditModeSearchResults(store.editMode.editingNode.id, searchResults);
-          }
+          console.log(`[Canvas-Layout] RELATIONSHIP_EDIT: ${store.editMode.editingNode.name} via unified orchestration`);
+          const relatedIds = orchestrator.getRelatedNodeIds(store.editMode.editingNode.id);
+          const { intent } = deriveFocusIntent(store.editMode.editingNode.id, relatedIds, buildLayoutContext(
+            store.selectedNode?.id || null,
+            store.flipState.flipStates,
+            store.spatialLayout
+          ));
+          orchestrator.executeLayoutIntent(intent);
         } else {
           console.warn('[Canvas-Layout] relationship-edit mode triggered but no editingNode available');
         }
         break;
       }
 
-      case 'edit':
+      case 'edit': {
         // Hide radial buttons when entering edit mode (incompatible mode)
         if (store.radialButtonUI.isActive) {
           store.setRadialButtonUIActive(false);
         }
 
-        // Edit mode (metadata) - similar to liminal-web but in edit state
+        // Edit mode (metadata) - ring stays frozen, just overlay editor
+        // Layout should already be set from liminal-web, but ensure center is correct
         if (selectedNode) {
-          // Use the same focus logic as liminal-web for now
-          spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
+          console.log(`[Canvas-Layout] EDIT: ${selectedNode.name} via unified orchestration`);
+          const relatedIds = orchestrator.getRelatedNodeIds(selectedNode.id);
+          const { intent } = deriveFocusIntent(selectedNode.id, relatedIds, buildLayoutContext(
+            store.selectedNode?.id || null,
+            store.flipState.flipStates,
+            store.spatialLayout
+          ));
+          orchestrator.executeLayoutIntent(intent);
         } else {
           console.warn('[Canvas-Layout] Edit mode triggered but no selectedNode available');
         }
         break;
+      }
 
-      case 'liminal-web':
+      case 'liminal-web': {
         // Trigger liminal web when a node is selected
         if (selectedNode) {
-          spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
+          console.log(`[Canvas-Layout] LIMINAL_WEB: ${selectedNode.name} via unified orchestration`);
+          const relatedIds = orchestrator.getRelatedNodeIds(selectedNode.id);
+          const context = buildLayoutContext(
+            store.selectedNode?.id || null,
+            store.flipState.flipStates,
+            store.spatialLayout
+          );
+          const { intent } = deriveFocusIntent(selectedNode.id, relatedIds, context);
+          orchestrator.executeLayoutIntent(intent);
         } else {
           console.warn('[Canvas-Layout] liminal-web layout triggered but no selectedNode available');
         }
         break;
+      }
 
       case 'copilot': {
         // Hide radial buttons when entering copilot mode (incompatible mode)
@@ -294,32 +320,30 @@ export default function DreamspaceCanvas() {
           store.setRadialButtonUIActive(false);
         }
 
-        // Copilot mode - conversation partner at center with search results around them
+        // Copilot mode - conversation partner at center, ring controlled by Option key
         if (store.copilotMode.isActive && store.copilotMode.conversationPartner) {
-          // Position conversation partner at center (like edit mode)
-          spatialOrchestratorRef.current.focusOnNode(store.copilotMode.conversationPartner.id);
-
-          // Always call showEditModeSearchResults to trigger layout (even with empty array)
-          // Empty array = all nodes fly to sphere (Option key not held behavior)
-          // Non-empty array = relevant nodes in honeycomb, rest on sphere
-          if (searchResults) {
-            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, searchResults);
-          }
+          console.log(`[Canvas-Layout] COPILOT: ${store.copilotMode.conversationPartner.name} via unified orchestration`);
+          // Initial entry: ring is empty (Option key not held)
+          const { intent } = deriveCopilotEnterIntent(store.copilotMode.conversationPartner.id);
+          orchestrator.executeLayoutIntent(intent);
         } else {
           console.warn('[Canvas-Layout] Copilot mode triggered but no active conversation partner');
         }
         break;
       }
 
-      case 'constellation':
+      case 'constellation': {
         // Hide radial buttons when returning to constellation (no selected node)
         if (store.radialButtonUI.isActive) {
           store.setRadialButtonUIActive(false);
         }
 
-        // Return to constellation
-        spatialOrchestratorRef.current.returnToConstellation();
+        // Return to constellation via unified orchestration
+        console.log('[Canvas-Layout] CONSTELLATION via unified orchestration');
+        const { intent } = deriveConstellationIntent();
+        orchestrator.executeLayoutIntent(intent);
         break;
+      }
     }
   }, [spatialLayout, searchResults, selectedNode, orchestratorReady]); // Watch spatial layout, search results, selected node, and orchestrator readiness
 
@@ -332,25 +356,29 @@ export default function DreamspaceCanvas() {
     if (!navigationRequest || !spatialOrchestratorRef.current) return;
 
     const orchestrator = spatialOrchestratorRef.current;
+    const store = useInterBrainStore.getState();
 
     switch (navigationRequest.type) {
       case 'focus':
         if (navigationRequest.nodeId) {
-          if (navigationRequest.interrupt) {
-            orchestrator.interruptAndFocusOnNode(navigationRequest.nodeId);
-          } else {
-            orchestrator.focusOnNode(navigationRequest.nodeId);
-          }
+          console.log(`[Canvas-NavRequest] FOCUS: ${navigationRequest.nodeId} via unified orchestration`);
+          const relatedIds = orchestrator.getRelatedNodeIds(navigationRequest.nodeId);
+          const context = buildLayoutContext(
+            store.selectedNode?.id || null,
+            store.flipState.flipStates,
+            store.spatialLayout
+          );
+          const { intent } = deriveFocusIntent(navigationRequest.nodeId, relatedIds, context);
+          orchestrator.executeLayoutIntent(intent);
         }
         break;
 
-      case 'constellation':
-        if (navigationRequest.interrupt) {
-          orchestrator.interruptAndReturnToConstellation();
-        } else {
-          orchestrator.returnToConstellation();
-        }
+      case 'constellation': {
+        console.log('[Canvas-NavRequest] CONSTELLATION via unified orchestration');
+        const { intent: constellationIntent } = deriveConstellationIntent();
+        orchestrator.executeLayoutIntent(constellationIntent);
         break;
+      }
 
       case 'applyLayout':
         orchestrator.applyConstellationLayout();
@@ -509,10 +537,12 @@ export default function DreamspaceCanvas() {
     } else if (spatialOrchestratorRef.current) {
       // === LIMINAL WEB NAVIGATION ===
       // Normal click: focus on node with related nodes in ring
-      // For now, use the legacy focusOnNode which will be refactored later
-      // TODO: Switch to deriveFocusIntent + executeLayoutIntent once we have
-      // the relationship graph integration working
-      spatialOrchestratorRef.current.focusOnNode(node.id);
+      // Use the unified orchestration system
+      console.log(`[DreamSpace] Liminal web navigation: ${node.name} via unified orchestration`);
+      const orchestrator = spatialOrchestratorRef.current;
+      const relatedIds = orchestrator.getRelatedNodeIds(node.id);
+      const { intent } = deriveFocusIntent(node.id, relatedIds, context);
+      orchestrator.executeLayoutIntent(intent);
     }
   };
 
