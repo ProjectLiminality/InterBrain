@@ -6,6 +6,7 @@ import { Vector3, Group, Mesh, Quaternion } from 'three';
 import { DreamNode } from '../types/dreamnode';
 import { calculateDynamicScaling, DEFAULT_SCALING_CONFIG } from '../../constellation-layout/utils/DynamicViewScaling';
 import { calculateExitPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../constellation-layout/utils/EphemeralSpawning';
+import type { NodeTargetState } from '../../../core/orchestration/types';
 import { useInterBrainStore, EphemeralNodeState } from '../../../core/store/interbrain-store';
 import { queueEphemeralDespawn } from '../../../core/services/ephemeral-despawn-queue';
 import { dreamNodeStyles, getDistanceScaledGlowIntensity, getDistanceScaledHoverScale } from '../styles/dreamNodeStyles';
@@ -24,6 +25,21 @@ const USE_SPRITE_RENDERING = true;
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
+  // === NEW UNIFIED API ===
+  /**
+   * Set the target state for this node to animate toward.
+   * Unifies position + flip animation into a single command.
+   *
+   * - mode: 'active' → animate to position, animate flip to flipSide
+   * - mode: 'home' → persistent nodes return to constellation, ephemeral nodes exit + despawn
+   *
+   * @param target - The target state (active with position/flip, or home)
+   * @param duration - Animation duration in ms (default: 1000)
+   * @param worldRotation - Current world rotation for ephemeral exit calculation
+   */
+  setTargetState: (target: NodeTargetState, duration?: number, worldRotation?: Quaternion) => void;
+
+  // === LEGACY API (to be removed in Phase 6) ===
   moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
   returnToConstellation: (duration?: number, easing?: string, worldRotation?: Quaternion) => void;
   returnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void;
@@ -364,8 +380,107 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     }
   };
 
+  // Helper to start flip animation to a specific side
+  const startFlipToSide = (targetSide: 'front' | 'back', animDuration: number) => {
+    const currentFlipRotationVal = flipRotation;
+    const targetRotation = targetSide === 'back' ? Math.PI : 0;
+
+    // Only animate if we need to change
+    if (Math.abs(currentFlipRotationVal - targetRotation) > 0.01) {
+      setStartFlipRotation(currentFlipRotationVal);
+      setTargetFlipRotation(targetRotation);
+      setShouldAnimateFlip(true);
+      setFlipAnimationStartTime(globalThis.performance.now());
+      setFlipAnimationDuration(animDuration);
+    }
+  };
+
   // Universal Movement API implementation (keeping all the complex logic)
   useImperativeHandle(ref, () => ({
+    // === NEW UNIFIED API ===
+    setTargetState: (target: NodeTargetState, duration = 1000, worldRotation?) => {
+      const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
+        ? getConstellationPosition(dreamNode.position, radialOffset)
+        : [...currentPosition];
+
+      if (target.mode === 'active') {
+        // Active mode: animate to position + flip to target side
+        // Position animation
+        setStartPosition(actualCurrentPosition);
+        setCurrentPosition(actualCurrentPosition);
+        setTargetPosition(target.position);
+        setTransitionDuration(duration);
+        setTransitionStartTime(globalThis.performance.now());
+        setPositionMode('active');
+        setIsTransitioning(true);
+        setTransitionType('liminal');
+        setTransitionEasing('easeOutQuart');
+
+        // Flip animation (unified with position)
+        startFlipToSide(target.flipSide, duration);
+
+      } else {
+        // Home mode: ephemeral nodes exit, persistent nodes return to constellation
+        if (ephemeral) {
+          // Ephemeral: animate to exit ring, then despawn
+          let cameraSpacePosition = [...actualCurrentPosition] as [number, number, number];
+          if (worldRotation) {
+            const posVec = new Vector3(...actualCurrentPosition);
+            posVec.applyQuaternion(worldRotation);
+            cameraSpacePosition = [posVec.x, posVec.y, posVec.z];
+          }
+
+          const selectedNodeId = useInterBrainStore.getState().selectedNode?.id;
+          const isCenterNode = dreamNode.id === selectedNodeId;
+
+          const exitPosition = calculateExitPosition(
+            cameraSpacePosition,
+            DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor,
+            isCenterNode
+          );
+
+          let worldExitPosition = [...exitPosition] as [number, number, number];
+          if (worldRotation) {
+            const exitVec = new Vector3(...exitPosition);
+            const inverseRotation = worldRotation.clone().invert();
+            exitVec.applyQuaternion(inverseRotation);
+            worldExitPosition = [exitVec.x, exitVec.y, exitVec.z];
+          }
+
+          setStartPosition(actualCurrentPosition);
+          setCurrentPosition(actualCurrentPosition);
+          setTargetPosition(worldExitPosition);
+          setTransitionDuration(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration);
+          setTransitionStartTime(globalThis.performance.now());
+          setPositionMode('active');
+          setIsTransitioning(true);
+          setTransitionType('ephemeral-exit');
+          setTransitionEasing(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitEasing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
+
+          // Flip back to front during exit
+          startFlipToSide('front', DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration);
+
+        } else {
+          // Persistent: return to constellation anchor
+          const constellationPosition = dreamNode.position;
+
+          setStartPosition(actualCurrentPosition);
+          setCurrentPosition(actualCurrentPosition);
+          setTargetPosition(constellationPosition);
+          setTransitionDuration(duration);
+          setTransitionStartTime(globalThis.performance.now());
+          setPositionMode('active');
+          setIsTransitioning(true);
+          setTransitionType('constellation');
+          setTransitionEasing('easeInQuart');
+
+          // Flip back to front when returning home
+          startFlipToSide('front', duration);
+        }
+      }
+    },
+
+    // === LEGACY API (to be removed in Phase 6) ===
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
 
       // Diagnostic log only for ephemeral nodes (constellation nodes move routinely)
@@ -744,7 +859,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     },
     getCurrentPosition: () => currentPosition,
     isMoving: () => isTransitioning
-  }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing]);
+  }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing, flipRotation, ephemeral]);
   
   // Position calculation and animation frame logic
   useFrame((_state, delta) => {

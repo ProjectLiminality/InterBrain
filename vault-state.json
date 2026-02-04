@@ -1,7 +1,8 @@
 {
   "vaultId": "10788de0",
-  "lastScanTimestamp": 1770028340007,
-  "nodeCount": 191,
-  "schemaVersion": 1,
-  "obsidianMtime": 1769874391047
+  "lastScanTimestamp": 1770146397706,
+  "nodeCount": 485,
+  "schemaVersion": 2,
+  "obsidianMtime": 1769874391047,
+  "vaultRootMtime": 1770146386478
 }
