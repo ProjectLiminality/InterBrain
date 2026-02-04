@@ -43,59 +43,74 @@ export interface SpatialOrchestratorRef {
    */
   getRelatedNodeIds: (nodeId: string) => string[];
 
-  // === LEGACY API (to be refactored in Phase 5, removed in Phase 6) ===
-  /** Focus on a specific node - trigger liminal web layout */
+  // ════════════════════════════════════════════════════════════════════════════
+  // ⛔ LEGACY API - DO NOT USE ⛔
+  // ════════════════════════════════════════════════════════════════════════════
+  // These methods are part of the old orchestration system with ~50 scattered
+  // primitives. They are commented out in the implementation to prevent drift.
+  //
+  // THE NEW UNIFIED SYSTEM uses only:
+  //   1. executeLayoutIntent(intent: LayoutIntent, duration?)
+  //   2. getRelatedNodeIds(nodeId: string)
+  //
+  // The new system is based on the state machine defined in:
+  //   docs/architecture/layout-state-machine.md
+  //
+  // Flow: Event → deriveIntent() → executeLayoutIntent() → setTargetState()
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /** @deprecated Use executeLayoutIntent with deriveFocusIntent instead */
   focusOnNode: (nodeId: string) => void;
 
-  /** Focus on a specific node with smooth fly-in animation for newly created node */
+  /** @deprecated Use executeLayoutIntent with deriveFocusIntent instead */
   focusOnNodeWithFlyIn: (nodeId: string, newNodeId: string) => void;
 
-  /** Return all nodes to constellation layout */
+  /** @deprecated Use executeLayoutIntent with deriveConstellationIntent instead */
   returnToConstellation: () => void;
 
-  /** Focus on a specific node with mid-flight interruption support */
+  /** @deprecated Use executeLayoutIntent - interruption is handled automatically */
   interruptAndFocusOnNode: (nodeId: string) => void;
 
-  /** Return all nodes to constellation with mid-flight interruption support */
+  /** @deprecated Use executeLayoutIntent - interruption is handled automatically */
   interruptAndReturnToConstellation: () => void;
 
-  /** Get current focused node ID */
+  /** Get current focused node ID - still valid */
   getFocusedNodeId: () => string | null;
 
-  /** Check if currently in focused mode (any node is focused) */
+  /** Check if currently in focused mode - still valid */
   isFocusedMode: () => boolean;
 
-  /** Show search results in honeycomb layout */
+  /** @deprecated Use executeLayoutIntent with deriveSearchIntent instead */
   showSearchResults: (searchResults: DreamNode[]) => void;
 
-  /** Move all nodes to sphere surface for search interface mode (like liminal web) */
+  /** @deprecated Use executeLayoutIntent instead */
   moveAllToSphereForSearch: () => void;
 
-  /** Special transition for edit mode save - center node doesn't move */
+  /** @deprecated Use executeLayoutIntent instead */
   animateToLiminalWebFromEdit: (nodeId: string) => void;
 
-  /** Show search results for edit mode - keep center node in place */
+  /** @deprecated Use executeLayoutIntent instead */
   showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => void;
 
-  /** Reorder edit mode search results based on current pending relationships */
+  /** Reorder edit mode search results - still valid for edit mode */
   reorderEditModeSearchResults: () => void;
 
-  /** Clear stale edit mode data when exiting edit mode */
+  /** Clear stale edit mode data - still valid for edit mode */
   clearEditModeData: () => void;
 
-  /** Register a DreamNode3D ref for orchestration */
+  /** Register a DreamNode3D ref for orchestration - still valid */
   registerNodeRef: (nodeId: string, ref: React.RefObject<DreamNode3DRef>) => void;
 
-  /** Unregister a DreamNode3D ref */
+  /** Unregister a DreamNode3D ref - still valid */
   unregisterNodeRef: (nodeId: string) => void;
 
-  /** Apply constellation layout based on relationship graph */
+  /** Apply constellation layout based on relationship graph - still valid */
   applyConstellationLayout: () => Promise<void>;
 
-  /** Hide related nodes in liminal-web mode (move to constellation) */
+  /** @deprecated Use executeLayoutIntent with deriveFocusIntent(center, []) instead */
   hideRelatedNodesInLiminalWeb: () => void;
 
-  /** Show related nodes in liminal-web mode (move back to ring positions) */
+  /** @deprecated Use executeLayoutIntent with deriveFocusIntent(center, relatedIds) instead */
   showRelatedNodesInLiminalWeb: () => void;
 
   /** Calculate forward position on sphere accounting for current rotation */
@@ -588,8 +603,28 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
     },
 
-    // === LEGACY API (to be refactored in Phase 5, removed in Phase 6) ===
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⛔ LEGACY API - DO NOT USE ⛔
+    // ════════════════════════════════════════════════════════════════════════════
+    // These methods are part of the old orchestration system with ~50 scattered
+    // primitives. They should NOT be called - use the new unified system instead.
+    //
+    // THE NEW UNIFIED SYSTEM uses only:
+    //   1. executeLayoutIntent(intent: LayoutIntent, duration?)
+    //   2. getRelatedNodeIds(nodeId: string)
+    //
+    // The new system is based on the state machine defined in:
+    //   docs/architecture/layout-state-machine.md
+    //
+    // Flow: Event → deriveIntent() → executeLayoutIntent() → setTargetState()
+    //
+    // These legacy methods are kept temporarily for backwards compatibility
+    // during the migration. They will be fully removed in Phase 6.
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveFocusIntent instead
     focusOnNode: (nodeId: string) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: focusOnNode called - should use executeLayoutIntent instead');
       try {
         // Deduplicate rapid calls (e.g., direct call + useEffect reaction to same state change).
         const now = globalThis.performance.now();
@@ -764,8 +799,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = false;
       }
     },
-    
+
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveFocusIntent instead
     focusOnNodeWithFlyIn: (nodeId: string, newNodeId: string) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: focusOnNodeWithFlyIn called - should use executeLayoutIntent instead');
       try {
         const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
@@ -819,8 +856,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = false;
       }
     },
-    
+
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveConstellationIntent instead
     returnToConstellation: () => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: returnToConstellation called - should use executeLayoutIntent instead');
       // Guard against double-calls during transition
       if (isTransitioning.current) {
         return;
@@ -876,15 +915,16 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       onConstellationReturn?.();
     },
 
-    // Legacy aliases - these now just call the base methods which handle interruption
+    // LEGACY - DO NOT USE - Interruption is handled automatically in new system
     interruptAndFocusOnNode: (nodeId: string) => {
-      // All movement now handles interruption automatically
+      console.warn('[Orchestrator] ⚠️ LEGACY: interruptAndFocusOnNode called - should use executeLayoutIntent instead');
       const self = ref as React.MutableRefObject<SpatialOrchestratorRef>;
       self.current?.focusOnNode(nodeId);
     },
 
+    // LEGACY - DO NOT USE - Interruption is handled automatically in new system
     interruptAndReturnToConstellation: () => {
-      // All movement now handles interruption automatically
+      console.warn('[Orchestrator] ⚠️ LEGACY: interruptAndReturnToConstellation called - should use executeLayoutIntent instead');
       const self = ref as React.MutableRefObject<SpatialOrchestratorRef>;
       self.current?.returnToConstellation();
     },
@@ -892,8 +932,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     getFocusedNodeId: () => focusedNodeId.current,
     
     isFocusedMode: () => focusedNodeId.current !== null,
-    
+
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveSearchIntent instead
     showSearchResults: (searchResults: DreamNode[]) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: showSearchResults called - should use executeLayoutIntent instead');
       try {
         const relationshipGraph = buildFullRelationshipGraph();
         const orderedNodes = searchResults.map(node => ({ id: node.id, name: node.name, type: node.type }));
@@ -963,7 +1005,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
     },
 
+    // LEGACY - DO NOT USE - Use executeLayoutIntent instead
     moveAllToSphereForSearch: () => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: moveAllToSphereForSearch called - should use executeLayoutIntent instead');
       try {
         isTransitioning.current = true;
 
@@ -982,8 +1026,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         isTransitioning.current = false;
       }
     },
-    
+
+    // LEGACY - DO NOT USE - Use executeLayoutIntent instead
     showEditModeSearchResults: (centerNodeId: string, searchResults: DreamNode[]) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: showEditModeSearchResults called - should use executeLayoutIntent instead');
       try {
         // Store current search results for dynamic reordering
         const previousCenterNodeId = currentEditModeCenterNodeId.current;
@@ -1237,8 +1283,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.error('SpatialOrchestrator: Error during edit mode reordering:', error);
       }
     },
-    
+
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveFocusIntent instead
     animateToLiminalWebFromEdit: (nodeId: string) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: animateToLiminalWebFromEdit called - should use executeLayoutIntent instead');
       try {
         const relationshipGraph = buildFullRelationshipGraph();
         const positions = calculateRingLayoutPositions(nodeId, relationshipGraph, DEFAULT_RING_CONFIG);
@@ -1469,7 +1517,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
     },
 
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveFocusIntent(center, []) instead
     hideRelatedNodesInLiminalWeb: () => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: hideRelatedNodesInLiminalWeb called - should use executeLayoutIntent instead');
       try {
         const allRingNodeIds = [
           ...liminalWebRoles.current.ring1NodeIds,
@@ -1488,7 +1538,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
     },
 
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveFocusIntent(center, relatedIds) instead
     showRelatedNodesInLiminalWeb: () => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: showRelatedNodesInLiminalWeb called - should use executeLayoutIntent instead');
       try {
         if (!liminalWebRoles.current.centerNodeId) return;
 
@@ -1537,7 +1589,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       return nodeRef.current.getCurrentPosition();
     },
 
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveHolarchyNavigationIntent instead
     showSupermodulesInRings: (centerNodeId: string, supermoduleIds: string[]) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: showSupermodulesInRings called - should use executeLayoutIntent instead');
       try {
         console.log(`[SpatialOrchestrator] Showing supermodules in rings for ${centerNodeId}`, supermoduleIds);
 
@@ -1626,7 +1680,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       }
     },
 
+    // LEGACY - DO NOT USE - Use executeLayoutIntent with deriveFocusIntent instead
     showDreamersInRings: (centerNodeId: string) => {
+      console.warn('[Orchestrator] ⚠️ LEGACY: showDreamersInRings called - should use executeLayoutIntent instead');
       try {
         console.log(`[SpatialOrchestrator] Restoring dreamers in rings for ${centerNodeId}`);
 

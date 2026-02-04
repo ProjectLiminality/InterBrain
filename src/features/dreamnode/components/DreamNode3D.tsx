@@ -482,7 +482,26 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       }
     },
 
-    // === LEGACY API (to be removed in Phase 6) ===
+    // ════════════════════════════════════════════════════════════════════════════
+    // ⛔ LEGACY API - DO NOT USE ⛔
+    // ════════════════════════════════════════════════════════════════════════════
+    // These methods are part of the old orchestration system with ~50 scattered
+    // primitives. They are commented out to prevent drift back to the old system.
+    //
+    // THE NEW UNIFIED SYSTEM uses only:
+    //   1. setTargetState(target: NodeTargetState, duration?, worldRotation?)
+    //
+    // The new system is based on the state machine defined in:
+    //   docs/architecture/layout-state-machine.md
+    //
+    // Flow: Event → deriveIntent() → executeLayoutIntent() → setTargetState()
+    //
+    // If you need to move a node, use setTargetState with either:
+    //   - { mode: 'active', position: [...], flipSide: 'front' | 'back' }
+    //   - { mode: 'home' }  // Returns to constellation (persistent) or exits (ephemeral)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /* LEGACY - DO NOT USE - Use setTargetState instead
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
@@ -490,7 +509,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
       // Start flip-back animation alongside position movement
       startFlipBackAnimation();
-      
+
       setStartPosition(actualCurrentPosition);
       setCurrentPosition(actualCurrentPosition);
       setTargetPosition(newTargetPosition);
@@ -501,6 +520,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('liminal');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
+    */
+
+    /* LEGACY - DO NOT USE - Use setTargetState({ mode: 'home' }) instead
     returnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
@@ -566,6 +588,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('constellation');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
+    */
+
+    /* LEGACY - DO NOT USE - Use setTargetState({ mode: 'home' }) instead
     returnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
@@ -665,9 +690,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setRadialOffset(targetRadialOffset);
       }, duration - 100);
     },
+    */
+
+    /* LEGACY - DO NOT USE - Use setTargetState instead
     interruptAndMoveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
       let actualCurrentPosition: [number, number, number];
-      
+
       if (positionMode === 'constellation') {
         actualCurrentPosition = getConstellationPosition(dreamNode.position, radialOffset);
       } else {
@@ -684,6 +712,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('liminal');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
+    */
+
+    /* LEGACY - DO NOT USE - Use setTargetState({ mode: 'home' }) instead
     interruptAndReturnToConstellation: (duration = 1000, easing = 'easeInQuart', worldRotation?) => {
       let actualCurrentPosition: [number, number, number];
 
@@ -750,6 +781,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       setTransitionType('constellation');
       setTransitionEasing(easing as 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart');
     },
+    */
+
+    /* LEGACY - DO NOT USE - Use setTargetState({ mode: 'home' }) instead
     interruptAndReturnToScaledPosition: (duration = 1000, worldRotation, easing = 'easeOutCubic') => {
       // For ephemeral nodes, animate to exit position with world rotation correction
       if (ephemeral) {
@@ -839,6 +873,9 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setRadialOffset(targetRadialOffset);
       }, duration - 100);
     },
+    */
+
+    /* LEGACY - DO NOT USE - setTargetState handles mode transitions automatically
     setActiveState: (active: boolean) => {
       if (active) {
         // When switching from constellation to active mode, compute the actual
@@ -854,6 +891,13 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setCurrentPosition(dreamNode.position);
       }
     },
+    */
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // END OF LEGACY API
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // These utility methods are still valid and used by the new system
     getCurrentPosition: () => currentPosition,
     isMoving: () => isTransitioning
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing, flipRotation, ephemeral]);
