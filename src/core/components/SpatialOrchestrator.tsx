@@ -301,9 +301,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     easing: string,
     setActive = true
   ) => {
-    const isMounted = useInterBrainStore.getState().constellationFilter.mountedNodes.has(nodeId);
-    const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
-
     // Ensure node is mounted (spawn as ephemeral if needed)
     if (!ensureNodeMounted(nodeId, position)) {
       return; // Node doesn't exist
@@ -660,11 +657,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           setSpatialLayout('liminal-web');
         }
 
-        // ── Step 5: Categorize and log ──
-        const ephemeralRingNodes = allRingNodes.filter(n => !mountedNodes.has(n.nodeId));
-        const mountedRingNodes = allRingNodes.filter(n => mountedNodes.has(n.nodeId));
-
-        // ── Step 6: Animate nodes ──
+        // ── Step 5: Animate nodes ──
         // Easing logic: nodes already visible in the previous liminal web get easeInOutQuart
         // (smooth acceleration + deceleration). New nodes flying in get easeOutQuart.
         const getEasing = (id: string) => {

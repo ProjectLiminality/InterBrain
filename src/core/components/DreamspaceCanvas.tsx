@@ -41,11 +41,9 @@ import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
 import {
   deriveHolarchyNavigationIntent,
-  deriveFocusIntent,
   buildLayoutContext,
   isHolarchyNavigation
 } from '../orchestration/intent-helpers';
-import { buildRelationshipGraph } from '../../features/liminal-web-layout';
 import { UDDService } from '../../features/dreamnode/services/udd-service';
 
 export default function DreamspaceCanvas() {
@@ -108,10 +106,6 @@ export default function DreamspaceCanvas() {
       )
       .map(data => data.node);
 
-    // Diagnostic: detect significant changes in mounted node count
-    const currentLayout = useInterBrainStore.getState().spatialLayout;
-    if (prevMountedCountRef.current > 0 && result.length !== prevMountedCountRef.current) {
-    }
     prevMountedCountRef.current = result.length;
 
     return result;

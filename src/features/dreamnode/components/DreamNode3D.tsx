@@ -484,11 +484,6 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
     // === LEGACY API (to be removed in Phase 6) ===
     moveToPosition: (newTargetPosition, duration = 1000, easing = 'easeOutCubic') => {
-
-      // Diagnostic log only for ephemeral nodes (constellation nodes move routinely)
-      if (ephemeral) {
-      }
-
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
         : [...currentPosition];
