@@ -39,6 +39,14 @@ import { getCherryPickWorkflowService } from '../../features/dreamnode-updater/s
 // import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
 import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
+import {
+  deriveHolarchyNavigationIntent,
+  deriveFocusIntent,
+  buildLayoutContext,
+  isHolarchyNavigation
+} from '../orchestration/intent-helpers';
+import { buildRelationshipGraph } from '../../features/liminal-web-layout';
+import { UDDService } from '../../features/dreamnode/services/udd-service';
 
 export default function DreamspaceCanvas() {
   // NOTE: Lifecycle gate is now handled by DreamspaceView with lazy loading
@@ -454,32 +462,63 @@ export default function DreamspaceCanvas() {
       store.setSearchActive(false); // This clears search query and results
     }
 
-    // Check if we're in holarchy navigation mode (current node is flipped to back)
-    // If so, clicking another node should also flip it to maintain holarchy view
-    const currentFlippedNodeId = store.flipState.flippedNodeId;
-    const currentFlipState = currentFlippedNodeId
-      ? store.flipState.flipStates.get(currentFlippedNodeId)
-      : null;
-    const isInHolarchyMode = currentFlipState?.isFlipped === true && !currentFlipState?.isFlipping;
+    // Build context for intent derivation
+    const context = buildLayoutContext(
+      store.selectedNode?.id || null,
+      store.flipState.flipStates,
+      store.spatialLayout
+    );
 
-    // NOTE: The nodeToReturnToConstellation hack has been removed.
-    // The new orchestration system in SpatialOrchestrator properly tracks
-    // previous layout participants via liminalWebRoles and sends them home
-    // when executing the holarchy navigation intent.
+    // Check if this is holarchy navigation (clicking in holarchy mode)
+    const isHolarchyNav = isHolarchyNavigation(context, node.id);
 
     store.setSelectedNode(node);
-    // Trigger focused layout via SpatialOrchestrator
-    if (spatialOrchestratorRef.current) {
-      spatialOrchestratorRef.current.focusOnNode(node.id);
-    }
 
-    // If we were in holarchy mode, flip the newly selected node to stay in holarchy view
-    if (isInHolarchyMode && node.id !== currentFlippedNodeId) {
-      console.log('[DreamSpace] Holarchy mode: flipping newly selected node to back');
-      // Small delay to let the selection and focus animation start first
-      setTimeout(() => {
-        store.startFlipAnimation(node.id, 'front-to-back');
-      }, 100);
+    if (isHolarchyNav && spatialOrchestratorRef.current) {
+      // === HOLARCHY NAVIGATION ===
+      // Clicking a supermodule while in holarchy mode
+      // Use the new unified orchestration system
+      console.log('[DreamSpace] Holarchy navigation: using unified orchestration');
+
+      // Load supermodules from UDD file (async)
+      const orchestrator = spatialOrchestratorRef.current;
+      (async () => {
+        try {
+          // Read supermodules from node's UDD file
+          let supermoduleIds: string[] = [];
+          if (vaultService) {
+            const fullPath = vaultService.getFullPath(node.repoPath);
+            const udd = await UDDService.readUDD(fullPath);
+            // Normalize supermodules (can be string[] or SupermoduleEntry[])
+            supermoduleIds = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
+              typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
+            ).filter(Boolean);
+          }
+
+          // Derive the holarchy intent
+          const { intent } = deriveHolarchyNavigationIntent(
+            node.id,
+            supermoduleIds,
+            context
+          );
+
+          // Execute the layout intent (handles position + flip together)
+          orchestrator.executeLayoutIntent(intent);
+        } catch (error) {
+          console.error('[DreamSpace] Failed to load supermodules:', error);
+          // Fallback: just navigate without supermodules
+          const { intent } = deriveHolarchyNavigationIntent(node.id, [], context);
+          orchestrator.executeLayoutIntent(intent);
+        }
+      })();
+
+    } else if (spatialOrchestratorRef.current) {
+      // === LIMINAL WEB NAVIGATION ===
+      // Normal click: focus on node with related nodes in ring
+      // For now, use the legacy focusOnNode which will be refactored later
+      // TODO: Switch to deriveFocusIntent + executeLayoutIntent once we have
+      // the relationship graph integration working
+      spatialOrchestratorRef.current.focusOnNode(node.id);
     }
   };
 
