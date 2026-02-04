@@ -21,8 +21,20 @@ import { computeConstellationFilter } from '../../features/constellation-layout/
 import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephemeral-despawn-queue';
+import type { LayoutIntent, NodeTargetState } from '../orchestration/types';
 
 export interface SpatialOrchestratorRef {
+  // === NEW UNIFIED API ===
+  /**
+   * Execute a layout intent, dispatching target states to all affected nodes.
+   * This is the single entry point for all layout transitions in the new architecture.
+   *
+   * @param intent - The layout intent specifying center and surrounding nodes
+   * @param duration - Animation duration in ms (default: 1000)
+   */
+  executeLayoutIntent: (intent: LayoutIntent, duration?: number) => void;
+
+  // === LEGACY API (to be refactored in Phase 5, removed in Phase 6) ===
   /** Focus on a specific node - trigger liminal web layout */
   focusOnNode: (nodeId: string) => void;
 
@@ -383,6 +395,167 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   };
 
   useImperativeHandle(ref, () => ({
+    // === NEW UNIFIED API ===
+    executeLayoutIntent: (intent: LayoutIntent, duration = 1000) => {
+      try {
+        const store = useInterBrainStore.getState();
+        const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
+        // Build target state map for all nodes
+        const targetStates = new Map<string, NodeTargetState>();
+
+        // 1. Center node (if any)
+        if (intent.center) {
+          // Calculate center position (fixed forward position)
+          const centerPos: [number, number, number] = [0, 0, -50];
+
+          // Apply world rotation correction
+          let correctedCenterPos = centerPos;
+          if (worldRotation) {
+            const inverseRotation = worldRotation.clone().invert();
+            const centerVec = new Vector3(...centerPos);
+            centerVec.applyQuaternion(inverseRotation);
+            correctedCenterPos = [centerVec.x, centerVec.y, centerVec.z];
+          }
+
+          targetStates.set(intent.center.nodeId, {
+            mode: 'active',
+            position: correctedCenterPos,
+            flipSide: intent.center.flipSide
+          });
+
+          // Update focused node tracking
+          focusedNodeId.current = intent.center.nodeId;
+        } else {
+          focusedNodeId.current = null;
+        }
+
+        // 2. Ring nodes (all show front side)
+        if (intent.surroundingNodes.length > 0) {
+          // Use existing ring layout calculation
+          const relationshipGraph = buildFullRelationshipGraph();
+          const orderedNodes = intent.surroundingNodes.map(id => {
+            const nodeData = store.dreamNodes.get(id);
+            return {
+              id,
+              name: nodeData?.node?.name || id,
+              type: nodeData?.node?.type || 'Dream'
+            };
+          });
+
+          const positions = calculateRingLayoutPositionsForSearch(
+            orderedNodes,
+            relationshipGraph,
+            DEFAULT_RING_CONFIG
+          );
+
+          // Apply world rotation correction to ring positions
+          const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+          if (worldRotation) {
+            const inverseRotation = worldRotation.clone().invert();
+            allRingNodes.forEach(node => {
+              const pos = new Vector3(...node.position);
+              pos.applyQuaternion(inverseRotation);
+              node.position = [pos.x, pos.y, pos.z];
+            });
+          }
+
+          // Add ring nodes to target states
+          allRingNodes.forEach(({ nodeId, position }) => {
+            targetStates.set(nodeId, {
+              mode: 'active',
+              position,
+              flipSide: 'front' // Ring nodes always show front
+            });
+          });
+
+          // Update role tracking
+          liminalWebRoles.current = {
+            centerNodeId: intent.center?.nodeId || null,
+            ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
+            ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
+            ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
+            sphereNodeIds: new Set(positions.sphereNodes)
+          };
+        } else {
+          // Clear roles if no surrounding nodes
+          clearLiminalWebRoles();
+        }
+
+        // 3. All other currently-active nodes go home
+        // This includes nodes that were in the previous layout but aren't in this one
+        const previousActiveNodes = new Set([
+          liminalWebRoles.current.centerNodeId,
+          ...liminalWebRoles.current.ring1NodeIds,
+          ...liminalWebRoles.current.ring2NodeIds,
+          ...liminalWebRoles.current.ring3NodeIds
+        ].filter(Boolean) as string[]);
+
+        previousActiveNodes.forEach(nodeId => {
+          if (!targetStates.has(nodeId)) {
+            targetStates.set(nodeId, { mode: 'home' });
+          }
+        });
+
+        // 4. Ensure ephemeral nodes are mounted if needed
+        const EPHEMERAL_SPAWN_INTERVAL_MS = 40;
+        const nodesToSpawn: Array<{ nodeId: string; targetPos: [number, number, number] }> = [];
+
+        targetStates.forEach((target, nodeId) => {
+          if (target.mode === 'active') {
+            // Check if node needs to be spawned as ephemeral
+            if (!store.constellationFilter.mountedNodes.has(nodeId)) {
+              if (!store.ephemeralNodes.has(nodeId)) {
+                nodesToSpawn.push({ nodeId, targetPos: target.position });
+              } else {
+                // Cancel any pending despawn
+                cancelEphemeralDespawn(nodeId);
+              }
+            }
+          }
+        });
+
+        // Stagger ephemeral spawns
+        nodesToSpawn.forEach(({ nodeId, targetPos }, index) => {
+          globalThis.setTimeout(() => {
+            const spawnPos = calculateWorldCorrectedSpawnPosition(targetPos);
+            useInterBrainStore.getState().spawnEphemeralNode(nodeId, targetPos, spawnPos);
+          }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
+        });
+
+        // 5. Dispatch target states to all nodes
+        targetStates.forEach((target, nodeId) => {
+          const nodeRef = nodeRefs.current.get(nodeId);
+
+          // If ref not available yet (ephemeral being spawned), queue the movement
+          if (!nodeRef?.current) {
+            if (store.ephemeralNodes.has(nodeId) || nodesToSpawn.some(n => n.nodeId === nodeId)) {
+              pendingMovements.current.set(nodeId, {
+                position: target.mode === 'active' ? target.position : [0, 0, 0],
+                duration,
+                easing: 'easeOutQuart',
+                setActive: true
+              });
+            }
+            return;
+          }
+
+          // Use the new setTargetState API
+          nodeRef.current.setTargetState(target, duration, worldRotation);
+        });
+
+        // Update transition state
+        isTransitioning.current = true;
+        globalThis.setTimeout(() => {
+          isTransitioning.current = false;
+        }, duration);
+
+      } catch (error) {
+        console.error('[Orchestrator] executeLayoutIntent failed:', error);
+      }
+    },
+
+    // === LEGACY API (to be refactored in Phase 5, removed in Phase 6) ===
     focusOnNode: (nodeId: string) => {
       try {
         // Deduplicate rapid calls (e.g., direct call + useEffect reaction to same state change).
