@@ -21,9 +21,6 @@ import { computeConstellationFilter } from '../../features/constellation-layout/
 import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephemeral-despawn-queue';
-import { UDDService } from '../../features/dreamnode/services/udd-service';
-import { serviceManager } from '../services/service-manager';
-import type { LayoutIntent, NodeTargetState, ExecuteLayoutOptions } from '../orchestration/types';
 
 export interface SpatialOrchestratorRef {
   /** Focus on a specific node - trigger liminal web layout */
@@ -91,13 +88,6 @@ export interface SpatialOrchestratorRef {
 
   /** Restore related dreamers in rings (after exiting holarchy view) */
   showDreamersInRings: (centerNodeId: string) => void;
-
-  /**
-   * NEW UNIFIED API: Execute a layout intent.
-   * This is the primary method for all layout transitions in the new architecture.
-   * It computes ring positions, builds target states, and dispatches to nodes.
-   */
-  executeLayoutIntent: (intent: LayoutIntent, options?: ExecuteLayoutOptions) => void;
 }
 
 interface SpatialOrchestratorProps {
@@ -402,20 +392,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
         lastFocusTimestamp.current = now;
 
-        const store = useInterBrainStore.getState();
-        const currentLayout = store.spatialLayout;
+        const currentLayout = useInterBrainStore.getState().spatialLayout;
         const isLiminalToLiminal = currentLayout === 'liminal-web';
-
-        // Check if we're in holarchy mode - this node or another is flipping/flipped
-        // In holarchy mode, we only move the center node; ring layout is handled by flip state subscription
-        const nodeFlipState = store.flipState.flipStates.get(nodeId);
-        const isNodeFlipping = nodeFlipState?.isFlipping || false;
-        const isNodeFlipped = nodeFlipState?.isFlipped || false;
-        const isInHolarchyMode = isNodeFlipping || isNodeFlipped ||
-                                  (store.flipState.flippedNodeId !== null &&
-                                   store.flipState.flipStates.get(store.flipState.flippedNodeId)?.isFlipped);
-
-        console.log(`[FOCUS] focusOnNode called for ${nodeId.slice(0,8)}, currentLayout=${currentLayout}, isLiminalToLiminal=${isLiminalToLiminal}, isInHolarchyMode=${isInHolarchyMode}`);
 
         // ── Step 1: Snapshot previous state BEFORE mutating anything ──
         // This is critical for liminal→liminal transitions where we need to know
@@ -447,6 +425,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // liminal web layout (wasInLiminalWeb), NOT just whether the layout mode is liminal-web.
         // This handles edge cases like interrupted returnToConstellation leaving stale ephemeral
         // nodes that technically exist but weren't in the previous rings.
+        const store = useInterBrainStore.getState();
         const mountedNodes = store.constellationFilter.mountedNodes;
         const exitingEphemeralIds: string[] = [];
 
@@ -522,77 +501,55 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // Move center node
         if (positions.centerNode) {
-          console.log(`[FOCUS] Moving center node ${positions.centerNode.nodeId.slice(0,8)} to position [${positions.centerNode.position.map(n=>n.toFixed(0))}]`);
           moveNode(positions.centerNode.nodeId, positions.centerNode.position, transitionDuration, getEasing(positions.centerNode.nodeId));
-        } else {
-          console.log(`[FOCUS] No center node in positions!`);
         }
 
-        // ── Step 6b: Move ring nodes (SKIP in holarchy mode) ──
-        // In holarchy mode, ring layout is handled by flip state subscription
-        // which shows supermodules instead of dreamers
-        if (!isInHolarchyMode) {
-          // Stagger ephemeral node spawning for smooth cascading.
-          // Strategy: Constellation-mounted nodes (already have refs) move immediately.
-          // Ephemeral nodes (need React mount) spawn one-by-one with delays, inner ring first.
-          // This spreads component mount cost across frames for jank-free animation.
-          const EPHEMERAL_SPAWN_INTERVAL_MS = 40; // Gap between individual ephemeral spawns
+        // ── Step 6b: Stagger ephemeral node spawning for smooth cascading ──
+        // Strategy: Constellation-mounted nodes (already have refs) move immediately.
+        // Ephemeral nodes (need React mount) spawn one-by-one with delays, inner ring first.
+        // This spreads component mount cost across frames for jank-free animation.
+        const EPHEMERAL_SPAWN_INTERVAL_MS = 40; // Gap between individual ephemeral spawns
 
-          // Separate mounted (instant) from ephemeral (staggered)
-          const mountedRingMoves: typeof allRingNodes = [];
-          const ephemeralRingQueue: typeof allRingNodes = [];
+        // Separate mounted (instant) from ephemeral (staggered)
+        const mountedRingMoves: typeof allRingNodes = [];
+        const ephemeralRingQueue: typeof allRingNodes = [];
 
-          // Ordered: ring1 → ring2 → ring3 (inner first)
-          for (const node of allRingNodes) {
-            if (mountedNodes.has(node.nodeId)) {
-              mountedRingMoves.push(node);
-            } else {
-              ephemeralRingQueue.push(node);
-            }
+        // Ordered: ring1 → ring2 → ring3 (inner first)
+        for (const node of allRingNodes) {
+          if (mountedNodes.has(node.nodeId)) {
+            mountedRingMoves.push(node);
+          } else {
+            ephemeralRingQueue.push(node);
           }
-
-          // Move all constellation-mounted ring nodes immediately (no spawn cost)
-          for (const { nodeId: ringNodeId, position } of mountedRingMoves) {
-            moveNode(ringNodeId, position, transitionDuration, getEasing(ringNodeId));
-          }
-
-          // Stagger ephemeral node spawns: one node per interval, inner ring first.
-          // Each spawn is a single store update (1 node) → 1 React mount per frame window.
-          ephemeralRingQueue.forEach(({ nodeId: ephNodeId, position }, index) => {
-            globalThis.setTimeout(() => {
-              // Spawn single ephemeral node
-              ensureNodeMounted(ephNodeId, position);
-              // Issue move command (will queue if ref not ready yet)
-              moveNode(ephNodeId, position, transitionDuration, getEasing(ephNodeId));
-            }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
-          });
-
-          // Move unrelated nodes to constellation
-          positions.sphereNodes.forEach(sphereNodeId => {
-            returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
-          });
-
-          // Animate exiting ephemeral nodes out to spawn ring (liminal→liminal only).
-          // These nodes have refs and are still mounted — returnNodeToConstellation triggers
-          // the ephemeral exit animation, which calls despawnEphemeralNode on completion.
-          exitingEphemeralIds.forEach(ephNodeId => {
-            returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
-          });
-        } else {
-          console.log(`[FOCUS] Holarchy mode - skipping ring node layout, will be handled by flip state`);
-
-          // In holarchy mode, DON'T return the previous center to constellation here.
-          // The flip state subscription will handle it:
-          // - If old node is a supermodule of the new node → positioned in rings
-          // - If old node is NOT a supermodule → sent to constellation via sphereNodes
-          // This prevents the "detour" animation where the old node first flies to
-          // constellation, then gets redirected to ring position.
-
-          // In holarchy mode, still clean up exiting ephemeral nodes
-          exitingEphemeralIds.forEach(ephNodeId => {
-            returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
-          });
         }
+
+        // Move all constellation-mounted ring nodes immediately (no spawn cost)
+        for (const { nodeId: ringNodeId, position } of mountedRingMoves) {
+          moveNode(ringNodeId, position, transitionDuration, getEasing(ringNodeId));
+        }
+
+        // Stagger ephemeral node spawns: one node per interval, inner ring first.
+        // Each spawn is a single store update (1 node) → 1 React mount per frame window.
+        ephemeralRingQueue.forEach(({ nodeId: ephNodeId, position }, index) => {
+          globalThis.setTimeout(() => {
+            // Spawn single ephemeral node
+            ensureNodeMounted(ephNodeId, position);
+            // Issue move command (will queue if ref not ready yet)
+            moveNode(ephNodeId, position, transitionDuration, getEasing(ephNodeId));
+          }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
+        });
+
+        // Move unrelated nodes to constellation
+        positions.sphereNodes.forEach(sphereNodeId => {
+          returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
+        });
+
+        // Animate exiting ephemeral nodes out to spawn ring (liminal→liminal only).
+        // These nodes have refs and are still mounted — returnNodeToConstellation triggers
+        // the ephemeral exit animation, which calls despawnEphemeralNode on completion.
+        exitingEphemeralIds.forEach(ephNodeId => {
+          returnNodeToConstellation(ephNodeId, transitionDuration, 'easeInQuart');
+        });
 
         globalThis.setTimeout(() => {
           isTransitioning.current = false;
@@ -1388,18 +1345,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
 
         // Find DreamNodes matching supermodule IDs
-        // Priority: radicleId (canonical) > UUID (legacy) > name (last resort)
         const supermoduleNodes = supermoduleIds
           .map(id => {
-            // First try radicleId match (canonical schema)
-            const byRadicleId = dreamNodes.find(n => n.radicleId === id);
-            if (byRadicleId) return byRadicleId;
-
-            // Fallback: try exact UUID/ID match (legacy data)
+            // First try exact ID match
             const byId = dreamNodes.find(n => n.id === id);
             if (byId) return byId;
 
-            // Last resort: match by name
+            // Try radicleId match (from UDD)
+            // For now, just match by name as fallback
             return dreamNodes.find(n => n.name === id);
           })
           .filter((node): node is DreamNode => node !== undefined);
@@ -1516,162 +1469,6 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.error('[SpatialOrchestrator] Error restoring dreamers:', error);
         isTransitioning.current = false;
       }
-    },
-
-    // NEW UNIFIED API: Execute a layout intent
-    executeLayoutIntent: (intent: LayoutIntent, options: ExecuteLayoutOptions = {}) => {
-      const {
-        duration = transitionDuration,
-        easing = 'easeOutQuart',
-        instant = false
-      } = options;
-
-      const effectiveDuration = instant ? 0 : duration;
-
-      console.log(`[Orchestration] executeLayoutIntent:`, {
-        center: intent.center ? `${intent.center.nodeId.slice(0, 8)}(${intent.center.flipSide})` : null,
-        surrounding: intent.surroundingNodes.length,
-        duration: effectiveDuration
-      });
-
-      try {
-        const store = useInterBrainStore.getState();
-
-        // Build target states map
-        const targetStates = new Map<string, NodeTargetState>();
-
-        // Center node target state
-        if (intent.center) {
-          // Calculate center position (same as existing ring layout)
-          const centerPosition: [number, number, number] = [0, 0, -DEFAULT_RING_CONFIG.centerDistance];
-
-          // Apply world rotation correction
-          if (dreamWorldRef.current) {
-            const sphereRotation = dreamWorldRef.current.quaternion.clone();
-            const inverseRotation = sphereRotation.invert();
-            const centerVec = new Vector3(...centerPosition);
-            centerVec.applyQuaternion(inverseRotation);
-            centerPosition[0] = centerVec.x;
-            centerPosition[1] = centerVec.y;
-            centerPosition[2] = centerVec.z;
-          }
-
-          targetStates.set(intent.center.nodeId, {
-            mode: 'active',
-            position: centerPosition,
-            flipSide: intent.center.flipSide
-          });
-        }
-
-        // Ring nodes target states
-        if (intent.surroundingNodes.length > 0) {
-          // Use existing ring layout calculation for positions
-          const relationshipGraph = buildFullRelationshipGraph();
-          const orderedNodes = intent.surroundingNodes
-            .map(id => {
-              const nodeData = store.dreamNodes.get(id);
-              if (!nodeData) return null;
-              return { id, name: nodeData.node.name, type: nodeData.node.type as string };
-            })
-            .filter((n): n is { id: string; name: string; type: string } => n !== null);
-
-          const positions = calculateRingLayoutPositionsForSearch(
-            orderedNodes,
-            relationshipGraph,
-            DEFAULT_RING_CONFIG
-          );
-
-          // Apply world rotation correction to ring positions
-          if (dreamWorldRef.current) {
-            const sphereRotation = dreamWorldRef.current.quaternion.clone();
-            const inverseRotation = sphereRotation.invert();
-
-            [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
-              const pos = new Vector3(...node.position);
-              pos.applyQuaternion(inverseRotation);
-              node.position = [pos.x, pos.y, pos.z];
-            });
-          }
-
-          // Add ring nodes to target states (all show front side)
-          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
-            targetStates.set(nodeId, {
-              mode: 'active',
-              position,
-              flipSide: 'front'
-            });
-          });
-        }
-
-        // Determine which currently active nodes should go home
-        // (nodes that were in the previous layout but aren't in the new one)
-        const previousActiveNodes = new Set([
-          liminalWebRoles.current.centerNodeId,
-          ...liminalWebRoles.current.ring1NodeIds,
-          ...liminalWebRoles.current.ring2NodeIds,
-          ...liminalWebRoles.current.ring3NodeIds
-        ].filter((id): id is string => id !== null));
-
-        for (const nodeId of previousActiveNodes) {
-          if (!targetStates.has(nodeId)) {
-            targetStates.set(nodeId, { mode: 'home' });
-          }
-        }
-
-        // Update liminal web roles for tracking
-        liminalWebRoles.current = {
-          centerNodeId: intent.center?.nodeId || null,
-          ring1NodeIds: new Set(intent.surroundingNodes.slice(0, 6)),
-          ring2NodeIds: new Set(intent.surroundingNodes.slice(6, 18)),
-          ring3NodeIds: new Set(intent.surroundingNodes.slice(18, 36)),
-          sphereNodeIds: new Set() // Will be populated by nodes going home
-        };
-
-        // Get world rotation for home transitions
-        const worldRotation = dreamWorldRef.current?.quaternion.clone();
-
-        isTransitioning.current = true;
-        focusedNodeId.current = intent.center?.nodeId || null;
-
-        // Dispatch target states to nodes
-        console.log(`[Orchestration] Dispatching ${targetStates.size} target states`);
-
-        for (const [nodeId, targetState] of targetStates) {
-          // Ensure node is mounted (spawn as ephemeral if needed)
-          if (targetState.mode === 'active') {
-            ensureNodeMounted(nodeId, targetState.position);
-          }
-
-          const nodeRef = nodeRefs.current.get(nodeId);
-          if (nodeRef?.current?.setTargetState) {
-            // Use new unified API
-            nodeRef.current.setTargetState(targetState, worldRotation, effectiveDuration, easing);
-          } else if (nodeRef?.current) {
-            // Fallback to old API for nodes that haven't updated yet
-            if (targetState.mode === 'active') {
-              moveNode(nodeId, targetState.position, effectiveDuration, easing);
-              // Handle flip separately
-              const nodeFlipState = store.flipState.flipStates.get(nodeId);
-              const isFlipped = nodeFlipState?.isFlipped && !nodeFlipState?.isFlipping;
-              if (targetState.flipSide === 'back' && !isFlipped) {
-                store.startFlipAnimation(nodeId, 'front-to-back');
-              } else if (targetState.flipSide === 'front' && isFlipped) {
-                store.startFlipAnimation(nodeId, 'back-to-front');
-              }
-            } else {
-              returnNodeToConstellation(nodeId, effectiveDuration, 'easeInQuart');
-            }
-          }
-        }
-
-        globalThis.setTimeout(() => {
-          isTransitioning.current = false;
-        }, effectiveDuration);
-
-      } catch (error) {
-        console.error('[Orchestration] Error executing layout intent:', error);
-        isTransitioning.current = false;
-      }
     }
   }), [dreamNodes, onNodeFocused, onConstellationReturn, transitionDuration]);
 
@@ -1681,345 +1478,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   useEffect(() => {
     onOrchestratorReady?.();
   }, [onOrchestratorReady]);
-
-  // Subscribe to flip state changes to swap between dreamers and supermodules
-  // When a node flips to back side, show its supermodules in the rings using executeLayoutIntent
-  // When a node flips to front side, restore the dreamers (liminal web relationships)
-  //
-  // This uses the new unified orchestration architecture:
-  // - Detect flip state changes
-  // - Derive the appropriate layout intent
-  // - Execute the intent (which handles ALL node movements including sending previous center home)
-  useEffect(() => {
-    // Track the previous flip state to detect transitions
-    let previousFlippedNodeId: string | null = null;
-    let previousIsFlipped: boolean = false;
-    // Guard against duplicate "flip to back" processing for the same node
-    let lastProcessedFlipToBack: string | null = null;
-
-    const unsubscribe = useInterBrainStore.subscribe((state) => {
-      const currentFlippedNodeId = state.flipState.flippedNodeId;
-      const currentFlipStateObj = currentFlippedNodeId
-        ? state.flipState.flipStates.get(currentFlippedNodeId)
-        : null;
-
-      // Check if currently flipped to back (isFlipped = true means showing back side)
-      const currentIsFlipped = currentFlipStateObj?.isFlipped === true && !currentFlipStateObj?.isFlipping;
-
-      // Reset the flip-to-back guard when switching to a different node
-      if (currentFlippedNodeId !== previousFlippedNodeId) {
-        lastProcessedFlipToBack = null;
-      }
-
-      // Detect transition to back side (flip animation completed to back)
-      // Guard against duplicate processing for the same node
-      if (currentFlippedNodeId && currentIsFlipped &&
-          (previousFlippedNodeId !== currentFlippedNodeId || !previousIsFlipped) &&
-          lastProcessedFlipToBack !== currentFlippedNodeId) {
-        lastProcessedFlipToBack = currentFlippedNodeId;
-        console.log(`[Orchestration] Flip to back detected for ${currentFlippedNodeId.slice(0,8)}`);
-
-        // Capture the target node ID for stale check
-        const targetNodeId = currentFlippedNodeId;
-
-        // Load supermodules from UDD and execute layout intent
-        const loadAndExecuteHolarchyIntent = async () => {
-          try {
-            // Find the flipped node to get its repoPath
-            const nodeData = state.dreamNodes.get(targetNodeId);
-            if (!nodeData?.node.repoPath) {
-              console.log('[Orchestration] No repoPath for flipped node');
-              return;
-            }
-
-            const vaultService = serviceManager.getVaultService();
-            if (!vaultService) {
-              console.log('[Orchestration] No VaultService available');
-              return;
-            }
-
-            const fullPath = vaultService.getFullPath(nodeData.node.repoPath);
-            const udd = await UDDService.readUDD(fullPath);
-
-            // STALE CHECK: Verify this node is still the currently flipped node
-            // If user clicked another node while we were loading, abort
-            const currentState = useInterBrainStore.getState();
-            if (currentState.flipState.flippedNodeId !== targetNodeId) {
-              console.log(`[Orchestration] Aborting - node ${targetNodeId.slice(0,8)} is no longer flipped`);
-              return;
-            }
-
-            // Extract supermodule IDs (handle both string and SupermoduleEntry formats)
-            const supermoduleIds = (udd.supermodules || []).map(entry =>
-              typeof entry === 'string' ? entry : entry.radicleId
-            );
-
-            // Resolve supermodule IDs to actual node IDs
-            const resolvedSupermoduleIds = supermoduleIds
-              .map(id => {
-                // First try radicleId match (canonical schema)
-                const byRadicleId = dreamNodes.find(n => n.radicleId === id);
-                if (byRadicleId) return byRadicleId.id;
-
-                // Fallback: try exact UUID/ID match (legacy data)
-                const byId = dreamNodes.find(n => n.id === id);
-                if (byId) return byId.id;
-
-                // Last resort: match by name
-                const byName = dreamNodes.find(n => n.name === id);
-                if (byName) return byName.id;
-
-                return null;
-              })
-              .filter((id): id is string => id !== null);
-
-            console.log(`[Orchestration] Holarchy intent: center=${targetNodeId.slice(0,8)}(back), supermodules=${resolvedSupermoduleIds.length}`);
-
-            // Derive and execute the holarchy navigation intent
-            // The executeLayoutIntent will handle:
-            // - Moving center node to center position (already positioned by focusOnNode, but flip side is 'back')
-            // - Moving supermodules to ring positions
-            // - Sending previous center and other non-ring nodes home
-            const intent: LayoutIntent = {
-              center: {
-                nodeId: targetNodeId,
-                flipSide: 'back'
-              },
-              surroundingNodes: resolvedSupermoduleIds
-            };
-
-            // Access executeLayoutIntent through the ref - need to get the current ref value
-            // Since we're inside the component's effect, we use the internal implementation
-            // by directly calling the internal logic
-
-            // Build target states map
-            const targetStates = new Map<NodeTargetState & { nodeId: string }>([]);
-
-            // Center node - already at center position, just needs back flip
-            const centerPosition: [number, number, number] = [0, 0, -DEFAULT_RING_CONFIG.centerDistance];
-            if (dreamWorldRef.current) {
-              const sphereRotation = dreamWorldRef.current.quaternion.clone();
-              const inverseRotation = sphereRotation.invert();
-              const centerVec = new Vector3(...centerPosition);
-              centerVec.applyQuaternion(inverseRotation);
-              centerPosition[0] = centerVec.x;
-              centerPosition[1] = centerVec.y;
-              centerPosition[2] = centerVec.z;
-            }
-
-            // Calculate ring positions for supermodules
-            const supermoduleTargetStates = new Map<string, NodeTargetState>();
-
-            if (resolvedSupermoduleIds.length > 0) {
-              const relationshipGraph = buildFullRelationshipGraph();
-              const orderedNodes = resolvedSupermoduleIds
-                .map(id => {
-                  const nd = currentState.dreamNodes.get(id);
-                  if (!nd) return null;
-                  return { id, name: nd.node.name, type: nd.node.type as string };
-                })
-                .filter((n): n is { id: string; name: string; type: string } => n !== null);
-
-              const positions = calculateRingLayoutPositionsForSearch(
-                orderedNodes,
-                relationshipGraph,
-                DEFAULT_RING_CONFIG
-              );
-
-              // Apply world rotation correction
-              if (dreamWorldRef.current) {
-                const sphereRotation = dreamWorldRef.current.quaternion.clone();
-                const inverseRotation = sphereRotation.invert();
-                [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(node => {
-                  const pos = new Vector3(...node.position);
-                  pos.applyQuaternion(inverseRotation);
-                  node.position = [pos.x, pos.y, pos.z];
-                });
-              }
-
-              // Build target states for ring nodes
-              [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
-                supermoduleTargetStates.set(nodeId, {
-                  mode: 'active',
-                  position,
-                  flipSide: 'front'
-                });
-              });
-            }
-
-            // Determine which nodes should go home (previous layout participants not in new layout)
-            const previousActiveNodes = new Set([
-              liminalWebRoles.current.centerNodeId,
-              ...liminalWebRoles.current.ring1NodeIds,
-              ...liminalWebRoles.current.ring2NodeIds,
-              ...liminalWebRoles.current.ring3NodeIds
-            ].filter((id): id is string => id !== null));
-
-            const nodesToSendHome: string[] = [];
-            for (const nodeId of previousActiveNodes) {
-              // Don't send the new center home, and don't send supermodules home
-              if (nodeId !== targetNodeId && !supermoduleTargetStates.has(nodeId)) {
-                nodesToSendHome.push(nodeId);
-              }
-            }
-
-            console.log(`[Orchestration] Nodes to send home: ${nodesToSendHome.map(id => id.slice(0,8)).join(', ')}`);
-
-            // Update liminal web roles
-            liminalWebRoles.current = {
-              centerNodeId: targetNodeId,
-              ring1NodeIds: new Set(resolvedSupermoduleIds.slice(0, 6)),
-              ring2NodeIds: new Set(resolvedSupermoduleIds.slice(6, 18)),
-              ring3NodeIds: new Set(resolvedSupermoduleIds.slice(18, 36)),
-              sphereNodeIds: new Set()
-            };
-
-            isTransitioning.current = true;
-            focusedNodeId.current = targetNodeId;
-
-            const worldRotation = dreamWorldRef.current?.quaternion.clone();
-
-            // Dispatch target states to ring nodes
-            for (const [nodeId, targetState] of supermoduleTargetStates) {
-              ensureNodeMounted(nodeId, targetState.position);
-              const nodeRef = nodeRefs.current.get(nodeId);
-              if (nodeRef?.current?.setTargetState) {
-                nodeRef.current.setTargetState(targetState, worldRotation, transitionDuration, 'easeOutQuart');
-              } else if (nodeRef?.current) {
-                moveNode(nodeId, targetState.position, transitionDuration, 'easeOutQuart');
-              }
-            }
-
-            // Send nodes that are no longer in the layout home
-            for (const nodeId of nodesToSendHome) {
-              const nodeRef = nodeRefs.current.get(nodeId);
-              if (nodeRef?.current?.setTargetState) {
-                nodeRef.current.setTargetState({ mode: 'home' }, worldRotation, transitionDuration, 'easeInQuart');
-              } else if (nodeRef?.current) {
-                returnNodeToConstellation(nodeId, transitionDuration, 'easeInQuart');
-              }
-            }
-
-            globalThis.setTimeout(() => {
-              isTransitioning.current = false;
-            }, transitionDuration);
-
-            console.log(`[Orchestration] Holarchy layout complete - ${supermoduleTargetStates.size} supermodules displayed`);
-
-          } catch (error) {
-            console.error('[Orchestration] Error executing holarchy intent:', error);
-          }
-        };
-
-        loadAndExecuteHolarchyIntent();
-      }
-
-      // Detect transition to front side (was back, now front or unflipped)
-      // ONLY restore dreamers when the SAME node flips from back to front AND no other node
-      // is being flipped to back (holarchy navigation). If another node is flipping to back,
-      // we're switching nodes in holarchy mode - don't restore dreamers.
-      const sameNodeFlippedToFront = previousFlippedNodeId &&
-                                       previousIsFlipped &&
-                                       currentFlippedNodeId === previousFlippedNodeId &&
-                                       !currentIsFlipped;
-
-      // Check if any OTHER node is currently flipping to back or already flipped
-      // This indicates holarchy navigation - user clicked a supermodule/submodule
-      let anotherNodeIsFlipping = false;
-      for (const [nodeId, flipStateObj] of state.flipState.flipStates.entries()) {
-        if (nodeId !== previousFlippedNodeId) {
-          // Another node is either flipping to back or already on back side
-          if (flipStateObj.isFlipping && flipStateObj.flipDirection === 'front-to-back') {
-            anotherNodeIsFlipping = true;
-            break;
-          }
-          if (flipStateObj.isFlipped && !flipStateObj.isFlipping) {
-            anotherNodeIsFlipping = true;
-            break;
-          }
-        }
-      }
-
-      // Also check if we just switched selected nodes (holarchy navigation in progress)
-      const selectedNodeId = state.selectedNode?.id;
-      const selectedNodeIsDifferent = selectedNodeId && selectedNodeId !== previousFlippedNodeId;
-      if (selectedNodeIsDifferent && sameNodeFlippedToFront) {
-        anotherNodeIsFlipping = true;
-      }
-
-      if (sameNodeFlippedToFront && !anotherNodeIsFlipping) {
-        console.log(`[Orchestration] Flip to front detected, restoring dreamers for ${previousFlippedNodeId.slice(0,8)}`);
-
-        // Restore the normal liminal web layout with social relationships (dreamers)
-        try {
-          const relationshipGraph = buildRelationshipGraph(dreamNodes);
-          const positions = calculateRingLayoutPositions(previousFlippedNodeId, relationshipGraph, DEFAULT_RING_CONFIG);
-
-          if (!positions?.ring1Nodes || !positions?.ring2Nodes || !positions?.ring3Nodes) {
-            console.error('[Orchestration] Failed to calculate ring layout positions');
-            return;
-          }
-
-          // Apply world rotation correction
-          applyWorldRotationCorrection(positions);
-
-          // Update liminal web roles
-          liminalWebRoles.current = {
-            centerNodeId: positions.centerNode?.nodeId || null,
-            ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-            ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-            ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-            sphereNodeIds: new Set(positions.sphereNodes || [])
-          };
-
-          isTransitioning.current = true;
-
-          const worldRotation = dreamWorldRef.current?.quaternion.clone();
-
-          // Move dreamer nodes to ring positions using setTargetState
-          [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].forEach(({ nodeId, position }) => {
-            const nodeRef = nodeRefs.current.get(nodeId);
-            if (nodeRef?.current?.setTargetState) {
-              nodeRef.current.setTargetState({
-                mode: 'active',
-                position,
-                flipSide: 'front'
-              }, worldRotation, transitionDuration, 'easeOutQuart');
-            } else if (nodeRef?.current) {
-              moveNode(nodeId, position, transitionDuration, 'easeOutQuart');
-            }
-          });
-
-          // Return non-ring nodes to constellation
-          (positions.sphereNodes || []).forEach(sphereNodeId => {
-            if (sphereNodeId !== previousFlippedNodeId) {
-              const nodeRef = nodeRefs.current.get(sphereNodeId);
-              if (nodeRef?.current?.setTargetState) {
-                nodeRef.current.setTargetState({ mode: 'home' }, worldRotation, transitionDuration, 'easeInQuart');
-              } else if (nodeRef?.current) {
-                returnNodeToConstellation(sphereNodeId, transitionDuration, 'easeInQuart');
-              }
-            }
-          });
-
-          globalThis.setTimeout(() => {
-            isTransitioning.current = false;
-          }, transitionDuration);
-
-          console.log('[Orchestration] Dreamer layout restored');
-        } catch (error) {
-          console.error('[Orchestration] Error restoring dreamers:', error);
-        }
-      }
-
-      // Update tracking
-      previousFlippedNodeId = currentFlippedNodeId;
-      previousIsFlipped = currentIsFlipped;
-    });
-
-    return () => unsubscribe();
-  }, [dreamNodes, transitionDuration]);
-
+  
   // This component renders nothing - it's purely for orchestration
   return null;
 });
