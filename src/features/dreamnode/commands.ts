@@ -35,10 +35,12 @@ export function registerDreamNodeCommands(
       const store = useInterBrainStore.getState();
       const { selectedNode, spatialLayout, flipState } = store;
 
-      // Only available in liminal web mode with a selected node
+      // Only available in liminal web mode with a selected Dream node
+      // Dreamers cannot flip - they don't participate in holarchy
       const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
       const canFlip = spatialLayout === 'liminal-web' &&
                      selectedNode !== null &&
+                     selectedNode.type !== 'dreamer' && // Dreamers cannot flip
                      !currentFlipState?.isFlipping;
 
       if (checking) {
@@ -65,10 +67,12 @@ export function registerDreamNodeCommands(
       const store = useInterBrainStore.getState();
       const { selectedNode, spatialLayout, flipState } = store;
 
-      // Only available if there's a selected node that's currently flipped
+      // Only available if there's a selected Dream node that's currently flipped
+      // Dreamers cannot flip - they don't participate in holarchy
       const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
       const canFlipToFront = spatialLayout === 'liminal-web' &&
                             selectedNode !== null &&
+                            selectedNode.type !== 'dreamer' && // Dreamers cannot flip
                             currentFlipState?.isFlipped === true &&
                             !currentFlipState?.isFlipping;
 
@@ -92,10 +96,12 @@ export function registerDreamNodeCommands(
       const store = useInterBrainStore.getState();
       const { selectedNode, spatialLayout, flipState } = store;
 
-      // Only available if there's a selected node that's not currently flipped
+      // Only available if there's a selected Dream node that's not currently flipped
+      // Dreamers cannot flip - they don't participate in holarchy
       const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
       const canFlipToBack = spatialLayout === 'liminal-web' &&
                            selectedNode !== null &&
+                           selectedNode.type !== 'dreamer' && // Dreamers cannot flip
                            (currentFlipState?.isFlipped !== true) &&
                            !currentFlipState?.isFlipping;
 

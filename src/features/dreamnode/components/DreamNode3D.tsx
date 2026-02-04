@@ -188,14 +188,16 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // No longer need tracking - using live store state in imperative handles
   
   // Determine if flip button should be visible
+  // Dreamers cannot flip - they don't participate in holarchy (no sub/supermodules)
   const shouldShowFlipButton = useMemo(() => {
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&
                    isHovered &&
-                   !isDragging;
+                   !isDragging &&
+                   dreamNode.type !== 'dreamer'; // Dreamers cannot flip
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging, dreamNode.type]);
 
   // Determine if DreamTalk fullscreen button should be visible (stable version)
   const shouldShowDreamTalkFullscreen = useMemo(() => {
