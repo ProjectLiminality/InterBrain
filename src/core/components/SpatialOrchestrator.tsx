@@ -407,6 +407,19 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const store = useInterBrainStore.getState();
         const worldRotation = dreamWorldRef.current?.quaternion.clone();
 
+        // ══════════════════════════════════════════════════════════════════════
+        // STEP 0: SNAPSHOT PREVIOUS STATE BEFORE ANY MUTATIONS
+        // This is critical for determining which nodes need to go home.
+        // ══════════════════════════════════════════════════════════════════════
+        const previousActiveNodes = new Set([
+          liminalWebRoles.current.centerNodeId,
+          ...liminalWebRoles.current.ring1NodeIds,
+          ...liminalWebRoles.current.ring2NodeIds,
+          ...liminalWebRoles.current.ring3NodeIds
+        ].filter(Boolean) as string[]);
+
+        console.log(`[Orchestrator] Previous active nodes: ${previousActiveNodes.size}`, [...previousActiveNodes]);
+
         // Build target state map for all nodes
         const targetStates = new Map<string, NodeTargetState>();
 
@@ -488,20 +501,23 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           clearLiminalWebRoles();
         }
 
-        // 3. All other currently-active nodes go home
-        // This includes nodes that were in the previous layout but aren't in this one
-        const previousActiveNodes = new Set([
-          liminalWebRoles.current.centerNodeId,
-          ...liminalWebRoles.current.ring1NodeIds,
-          ...liminalWebRoles.current.ring2NodeIds,
-          ...liminalWebRoles.current.ring3NodeIds
-        ].filter(Boolean) as string[]);
-
+        // 3. All other previously-active nodes go home
+        // ══════════════════════════════════════════════════════════════════════
+        // KEY INSIGHT: We use the snapshot taken at STEP 0, NOT liminalWebRoles.current
+        // (which has now been updated to the NEW layout). This ensures we identify
+        // nodes that were in the OLD layout but aren't in the NEW layout.
+        // ══════════════════════════════════════════════════════════════════════
+        const nodesToSendHome: string[] = [];
         previousActiveNodes.forEach(nodeId => {
           if (!targetStates.has(nodeId)) {
             targetStates.set(nodeId, { mode: 'home' });
+            nodesToSendHome.push(nodeId);
           }
         });
+
+        if (nodesToSendHome.length > 0) {
+          console.log(`[Orchestrator] Sending ${nodesToSendHome.length} nodes home:`, nodesToSendHome);
+        }
 
         // 4. Ensure ephemeral nodes are mounted if needed
         const EPHEMERAL_SPAWN_INTERVAL_MS = 40;
