@@ -87,13 +87,15 @@ export function useEscapeKeyHandler(
 
           case 'search':
             // Exit global search, go to constellation via unified orchestration
+            // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to scaled positions
             store.setSearchResults([]);
+            store.setSearchActive(false);
+            store.setSpatialLayout('constellation');
             if (orchestratorRef.current) {
               console.log('[Escape] SEARCH → CONSTELLATION via unified orchestration');
               const { intent } = deriveConstellationIntent();
               orchestratorRef.current.executeLayoutIntent(intent);
             }
-            store.setSpatialLayout('constellation');
             break;
 
           case 'copilot':

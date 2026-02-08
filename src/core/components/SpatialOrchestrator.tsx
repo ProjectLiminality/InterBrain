@@ -46,6 +46,13 @@ export interface SpatialOrchestratorRef {
   getRelatedNodeIds: (nodeId: string) => string[];
 
   /**
+   * Send all background constellation nodes home (to anchor or scaled position).
+   * Used when entering a non-constellation mode (search, etc.) that needs
+   * background nodes to animate away without a full layout intent.
+   */
+  sendConstellationNodesHome: (duration?: number) => void;
+
+  /**
    * Restore layout state from a saved snapshot.
    * Called on app mount to instantly restore the previous layout without animation.
    *
@@ -573,7 +580,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           saveLayoutSnapshot(snapshot);
 
           // Update store state as side effect
-          store.setSpatialLayout('liminal-web');
+          // Preserve 'search' layout if already set (search mode manages its own spatialLayout)
+          const currentLayout = store.spatialLayout;
+          if (currentLayout !== 'search') {
+            store.setSpatialLayout('liminal-web');
+          }
           if (intent.center) {
             const centerNode = store.dreamNodes.get(intent.center.nodeId)?.node;
             if (centerNode) {
@@ -601,26 +612,33 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
 
         // 3b. Background constellation nodes: send home too
-        // When entering a focused layout (liminal-web), background persistent nodes
-        // need to animate from their scaled positions to raw anchors.
-        // When returning to constellation, they need to animate to scaled positions.
+        // When entering any non-constellation layout (liminal-web, search, etc.),
+        // background persistent nodes need to animate from their scaled positions
+        // to raw anchors. When returning to constellation, they animate to scaled positions.
         // The node's setTargetState({ mode: 'home' }) reads the fresh spatialLayout
         // from the store to decide which target to use.
         if (duration > 0) {
           const backgroundNodesSent: string[] = [];
+          const skippedNodes: { nodeId: string; reason: string }[] = [];
           store.constellationFilter.mountedNodes.forEach(nodeId => {
-            if (!targetStates.has(nodeId)) {
-              // Only send home if node has a ref (already mounted and initialized)
-              const nodeRef = nodeRefs.current.get(nodeId);
-              if (nodeRef?.current && nodeRef.current.getPositionMode() === 'constellation') {
-                targetStates.set(nodeId, { mode: 'home' });
-                backgroundNodesSent.push(nodeId);
-              }
+            if (targetStates.has(nodeId)) {
+              skippedNodes.push({ nodeId, reason: 'already in targetStates' });
+              return;
             }
+            const nodeRef = nodeRefs.current.get(nodeId);
+            if (!nodeRef?.current) {
+              skippedNodes.push({ nodeId, reason: 'no ref' });
+              return;
+            }
+            const posMode = nodeRef.current.getPositionMode();
+            if (posMode !== 'constellation') {
+              skippedNodes.push({ nodeId, reason: `positionMode=${posMode}` });
+              return;
+            }
+            targetStates.set(nodeId, { mode: 'home' });
+            backgroundNodesSent.push(nodeId);
           });
-          if (backgroundNodesSent.length > 0) {
-            console.log(`[Orchestrator] Sending ${backgroundNodesSent.length} background constellation nodes home`);
-          }
+          console.log(`[Orchestrator] Background nodes: ${store.constellationFilter.mountedNodes.size} mounted, ${backgroundNodesSent.length} sent home, ${skippedNodes.length} skipped`, skippedNodes);
         }
 
         // 4. Ensure ephemeral nodes are mounted if needed
@@ -694,6 +712,20 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       } catch (error) {
         console.error('[Orchestrator] executeLayoutIntent failed:', error);
       }
+    },
+
+    sendConstellationNodesHome: (duration = 1000) => {
+      const store = useInterBrainStore.getState();
+      const worldRotation = dreamWorldRef.current?.quaternion.clone();
+      let count = 0;
+      store.constellationFilter.mountedNodes.forEach(nodeId => {
+        const nodeRef = nodeRefs.current.get(nodeId);
+        if (nodeRef?.current && nodeRef.current.getPositionMode() === 'constellation') {
+          nodeRef.current.setTargetState({ mode: 'home' }, duration, worldRotation);
+          count++;
+        }
+      });
+      console.log(`[Orchestrator] sendConstellationNodesHome: sent ${count} nodes home`);
     },
 
     getRelatedNodeIds: (nodeId: string): string[] => {

@@ -583,20 +583,15 @@ export default function DreamspaceCanvas() {
           }
 
           if (store.spatialLayout === 'search') {
-            if (store.searchInterface.isActive) {
-              // Dismiss search interface and return to constellation
-              store.setSearchActive(false);
-            } else {
-              // Clear search results
-              store.setSearchResults([]);
-            }
-            // Use unified orchestration system to animate back to constellation
+            // Dismiss search and return to constellation
+            // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to scaled positions
+            store.setSearchActive(false);
+            store.setSearchResults([]);
+            store.setSpatialLayout('constellation');
             if (spatialOrchestratorRef.current) {
               console.log('[DreamSpace] Search dismiss: returning to constellation via unified orchestration');
               const { intent } = deriveConstellationIntent();
               spatialOrchestratorRef.current.executeLayoutIntent(intent);
-            } else {
-              store.setSpatialLayout('constellation');
             }
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
