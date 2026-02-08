@@ -124,6 +124,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [transitionDuration, setTransitionDuration] = useState(1000);
   const [transitionType, setTransitionType] = useState<'liminal' | 'constellation' | 'scaled' | 'ephemeral-exit'>('liminal');
   const [transitionEasing, setTransitionEasing] = useState<'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart'>('easeOutCubic');
+  const [targetRadialOffset, setTargetRadialOffset] = useState(0); // For 'scaled' transitions: the radialOffset to apply on completion
   
   // Add flip rotation to transition system for unified animations
   const [targetFlipRotation, setTargetFlipRotation] = useState(0);
@@ -473,18 +474,52 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           startFlipToSide('front', DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration);
 
         } else {
-          // Persistent: return to constellation anchor
-          const constellationPosition = dreamNode.position;
+          // Persistent: return to constellation position
+          // Check fresh store state to decide: scaled position (constellation mode)
+          // or raw anchor (liminal-web mode where dynamic scaling is off)
+          const currentLayout = useInterBrainStore.getState().spatialLayout;
+          const goingToConstellation = currentLayout === 'constellation';
 
-          setStartPosition(actualCurrentPosition);
-          setCurrentPosition(actualCurrentPosition);
-          setTargetPosition(constellationPosition);
-          setTransitionDuration(duration);
-          setTransitionStartTime(globalThis.performance.now());
-          setPositionMode('active');
-          setIsTransitioning(true);
-          setTransitionType('constellation');
-          setTransitionEasing('easeInQuart');
+          const anchorPos = dreamNode.position;
+
+          if (goingToConstellation) {
+            // Returning to constellation: animate to dynamically-scaled position
+            // so node arrives where dynamic scaling will place it
+            const worldAnchorPosition = new Vector3(anchorPos[0], anchorPos[1], anchorPos[2]);
+            if (worldRotation) {
+              worldAnchorPosition.applyQuaternion(worldRotation);
+            }
+
+            const { radialOffset: computedRadialOffset } = calculateDynamicScaling(
+              worldAnchorPosition,
+              DEFAULT_SCALING_CONFIG
+            );
+
+            const scaledPosition = getConstellationPosition(anchorPos, computedRadialOffset);
+
+            setStartPosition(actualCurrentPosition);
+            setCurrentPosition(actualCurrentPosition);
+            setTargetPosition(scaledPosition);
+            setTransitionDuration(duration);
+            setTransitionStartTime(globalThis.performance.now());
+            setPositionMode('active');
+            setIsTransitioning(true);
+            setTransitionType('scaled');
+            setTransitionEasing('easeInOutQuart');
+            setTargetRadialOffset(computedRadialOffset);
+          } else {
+            // Entering liminal-web: animate to raw anchor position
+            // (dynamic scaling will be off, so anchor is where node should be)
+            setStartPosition(actualCurrentPosition);
+            setCurrentPosition(actualCurrentPosition);
+            setTargetPosition(anchorPos);
+            setTransitionDuration(duration);
+            setTransitionStartTime(globalThis.performance.now());
+            setPositionMode('active');
+            setIsTransitioning(true);
+            setTransitionType('constellation');
+            setTransitionEasing('easeInQuart');
+          }
 
           // Flip back to front when returning home
           startFlipToSide('front', duration);
@@ -989,6 +1024,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           setRadialOffset(0);
         } else if (transitionType === 'scaled') {
           setPositionMode('constellation');
+          setRadialOffset(targetRadialOffset);
         } else if (transitionType === 'ephemeral-exit') {
           // Ephemeral node finished exit animation — queue for staggered despawn
           // so multiple nodes completing in the same frame don't all unmount at once.

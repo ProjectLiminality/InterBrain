@@ -600,6 +600,29 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           console.log(`[Orchestrator] Sending ${nodesToSendHome.length} nodes home:`, nodesToSendHome);
         }
 
+        // 3b. Background constellation nodes: send home too
+        // When entering a focused layout (liminal-web), background persistent nodes
+        // need to animate from their scaled positions to raw anchors.
+        // When returning to constellation, they need to animate to scaled positions.
+        // The node's setTargetState({ mode: 'home' }) reads the fresh spatialLayout
+        // from the store to decide which target to use.
+        if (duration > 0) {
+          const backgroundNodesSent: string[] = [];
+          store.constellationFilter.mountedNodes.forEach(nodeId => {
+            if (!targetStates.has(nodeId)) {
+              // Only send home if node has a ref (already mounted and initialized)
+              const nodeRef = nodeRefs.current.get(nodeId);
+              if (nodeRef?.current && nodeRef.current.getPositionMode() === 'constellation') {
+                targetStates.set(nodeId, { mode: 'home' });
+                backgroundNodesSent.push(nodeId);
+              }
+            }
+          });
+          if (backgroundNodesSent.length > 0) {
+            console.log(`[Orchestrator] Sending ${backgroundNodesSent.length} background constellation nodes home`);
+          }
+        }
+
         // 4. Ensure ephemeral nodes are mounted if needed
         const EPHEMERAL_SPAWN_INTERVAL_MS = 40;
         const nodesToSpawn: Array<{ nodeId: string; targetPos: [number, number, number] }> = [];
