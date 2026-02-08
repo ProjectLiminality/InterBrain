@@ -44,6 +44,9 @@ export interface DreamNode3DRef {
 
   /** Check if this node is currently animating */
   isMoving: () => boolean;
+
+  /** Get the current position mode (ground truth for whether this node is active or at home) */
+  getPositionMode: () => 'constellation' | 'active';
 }
 
 interface DreamNode3DProps {
@@ -906,7 +909,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
     // These utility methods are still valid and used by the new system
     getCurrentPosition: () => currentPosition,
-    isMoving: () => isTransitioning
+    isMoving: () => isTransitioning,
+    getPositionMode: () => positionMode
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing, flipRotation, ephemeral]);
   
   // Position calculation and animation frame logic

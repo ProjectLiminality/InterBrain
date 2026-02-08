@@ -128,12 +128,8 @@ export interface LayoutSnapshot {
   /** Center node ID (for liminal-web, holarchy, copilot) */
   centerId: string | null;
 
-  /** Ring node assignments for quick lookup */
-  ringAssignments: {
-    ring1NodeIds: string[];
-    ring2NodeIds: string[];
-    ring3NodeIds: string[];
-  };
+  /** Ordered ring node IDs (layout-internal ring assignment is not the orchestrator's concern) */
+  ringNodeIds: string[];
 
   /** Timestamp for cache invalidation and debugging */
   timestamp: number;
@@ -143,7 +139,7 @@ export interface LayoutSnapshot {
 }
 
 /** Current snapshot version - increment when structure changes */
-export const LAYOUT_SNAPSHOT_VERSION = 1;
+export const LAYOUT_SNAPSHOT_VERSION = 2;
 
 /**
  * Creates an empty/default snapshot representing constellation mode.
@@ -154,11 +150,7 @@ export function createDefaultSnapshot(): LayoutSnapshot {
     activeNodes: {},
     sphereRotation: { x: 0, y: 0, z: 0, w: 1 }, // Identity quaternion
     centerId: null,
-    ringAssignments: {
-      ring1NodeIds: [],
-      ring2NodeIds: [],
-      ring3NodeIds: [],
-    },
+    ringNodeIds: [],
     timestamp: Date.now(),
     version: LAYOUT_SNAPSHOT_VERSION,
   };

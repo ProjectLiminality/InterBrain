@@ -179,19 +179,18 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   const isTransitioning = useRef<boolean>(false);
   const lastFocusTimestamp = useRef<number>(0);
   
-  // Track node roles during liminal-web mode for proper constellation return
+  // Track node roles during liminal-web mode for snapshot persistence.
+  // Simplified to just center + ordered ring nodes. The ring1/2/3 distinction
+  // is layout-internal detail — the orchestrator only needs to know which nodes
+  // are participating in the layout, not which ring they're in.
+  // NOTE: "Previous active nodes" for transitions is derived from ground truth
+  // (querying each node's positionMode), NOT from this cache.
   const liminalWebRoles = useRef<{
     centerNodeId: string | null;
-    ring1NodeIds: Set<string>;
-    ring2NodeIds: Set<string>;
-    ring3NodeIds: Set<string>;
-    sphereNodeIds: Set<string>;
+    ringNodeIds: Set<string>;
   }>({
     centerNodeId: null,
-    ring1NodeIds: new Set(),
-    ring2NodeIds: new Set(),
-    ring3NodeIds: new Set(),
-    sphereNodeIds: new Set()
+    ringNodeIds: new Set()
   });
   
   // Store integration
@@ -214,7 +213,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     setActive: boolean;
     flipSide?: 'front' | 'back'; // Optional - only set for snapshot restoration
     isSnapshotRestore?: boolean; // If true, this is from snapshot restore and should override spawn animation
+    generation: number; // Invalidation token — stale callbacks check this
   }>>(new Map());
+
+  // Generation counter for invalidating stale requestAnimationFrame callbacks.
+  // Incremented at the start of each executeLayoutIntent. Any pending rAF callback
+  // from a previous generation is stale and should be ignored.
+  const layoutGeneration = useRef(0);
 
   /**
    * Apply inverse world rotation to positions so they appear correct regardless of sphere rotation.
@@ -404,10 +409,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   const clearLiminalWebRoles = () => {
     liminalWebRoles.current = {
       centerNodeId: null,
-      ring1NodeIds: new Set(),
-      ring2NodeIds: new Set(),
-      ring3NodeIds: new Set(),
-      sphereNodeIds: new Set()
+      ringNodeIds: new Set()
     };
   };
 
@@ -429,17 +431,24 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const worldRotation = dreamWorldRef.current?.quaternion.clone();
 
         // ══════════════════════════════════════════════════════════════════════
-        // STEP 0: SNAPSHOT PREVIOUS STATE BEFORE ANY MUTATIONS
-        // This is critical for determining which nodes need to go home.
+        // STEP 0: INVALIDATE STALE PENDING MOVEMENTS
+        // Increment the generation counter so any requestAnimationFrame callbacks
+        // from a previous executeLayoutIntent (e.g., startup) will see they're
+        // stale and skip execution. Also clear the pending movements map.
         // ══════════════════════════════════════════════════════════════════════
-        const previousActiveNodes = new Set([
-          liminalWebRoles.current.centerNodeId,
-          ...liminalWebRoles.current.ring1NodeIds,
-          ...liminalWebRoles.current.ring2NodeIds,
-          ...liminalWebRoles.current.ring3NodeIds
-        ].filter(Boolean) as string[]);
+        layoutGeneration.current++;
+        pendingMovements.current.clear();
 
-        console.log(`[Orchestrator] Previous active nodes: ${previousActiveNodes.size}`, [...previousActiveNodes]);
+        // Derive previous active nodes from ground truth — ask each mounted
+        // node directly: "are you currently active?"
+        const previousActiveNodes = new Set<string>();
+        nodeRefs.current.forEach((nodeRef, nodeId) => {
+          if (nodeRef.current?.getPositionMode() === 'active') {
+            previousActiveNodes.add(nodeId);
+          }
+        });
+
+        console.log(`[Orchestrator] Previous active nodes (from ground truth): ${previousActiveNodes.size}`, [...previousActiveNodes]);
 
         // Build target state map for all nodes
         const targetStates = new Map<string, NodeTargetState>();
@@ -471,10 +480,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
 
         // 2. Ring nodes (all show front side)
-        let ring1Ids = new Set<string>();
-        let ring2Ids = new Set<string>();
-        let ring3Ids = new Set<string>();
-        let sphereIds = new Set<string>();
+        const ringNodeIds = new Set<string>();
 
         if (intent.surroundingNodes.length > 0) {
           // Use existing ring layout calculation
@@ -512,25 +518,16 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
               position,
               flipSide: 'front' // Ring nodes always show front
             });
+            ringNodeIds.add(nodeId);
           });
-
-          // Capture ring IDs for role tracking
-          ring1Ids = new Set(positions.ring1Nodes.map(n => n.nodeId));
-          ring2Ids = new Set(positions.ring2Nodes.map(n => n.nodeId));
-          ring3Ids = new Set(positions.ring3Nodes.map(n => n.nodeId));
-          sphereIds = new Set(positions.sphereNodes);
         }
 
-        // Update role tracking - ALWAYS track center node, even with no ring nodes
-        // This is critical for sending the center node home when returning to constellation
+        // Update role tracking for snapshot persistence
         liminalWebRoles.current = {
           centerNodeId: intent.center?.nodeId || null,
-          ring1NodeIds: ring1Ids,
-          ring2NodeIds: ring2Ids,
-          ring3NodeIds: ring3Ids,
-          sphereNodeIds: sphereIds
+          ringNodeIds
         };
-        console.log(`[Orchestrator] Updated liminalWebRoles: center=${liminalWebRoles.current.centerNodeId}, rings=${ring1Ids.size + ring2Ids.size + ring3Ids.size}`);
+        console.log(`[Orchestrator] Updated liminalWebRoles: center=${liminalWebRoles.current.centerNodeId}, ring=${ringNodeIds.size}`);
 
         // ══════════════════════════════════════════════════════════════════════
         // SNAPSHOT: Save layout state for instant restoration on reload
@@ -567,11 +564,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             activeNodes,
             sphereRotation,
             centerId: intent.center?.nodeId || null,
-            ringAssignments: {
-              ring1NodeIds: [...ring1Ids],
-              ring2NodeIds: [...ring2Ids],
-              ring3NodeIds: [...ring3Ids],
-            },
+            ringNodeIds: [...ringNodeIds],
             timestamp: Date.now(),
             version: LAYOUT_SNAPSHOT_VERSION,
           };
@@ -647,19 +640,20 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           console.log(`[Orchestrator]   - ${nodeId}: mode=${target.mode}, position=${target.mode === 'active' ? JSON.stringify(target.position) : 'N/A'}`);
           const nodeRef = nodeRefs.current.get(nodeId);
 
-          // If ref not available yet (ephemeral being spawned), queue the movement
+          // If ref not available yet, queue the movement.
+          // This happens for both ephemeral nodes being spawned AND constellation-mounted
+          // nodes whose useImperativeHandle hasn't populated the ref yet (e.g., at startup).
           if (!nodeRef?.current) {
             console.log(`[Orchestrator]   -> NO REF for ${nodeId}, queuing movement`);
-            if (store.ephemeralNodes.has(nodeId) || nodesToSpawn.some(n => n.nodeId === nodeId)) {
-              pendingMovements.current.set(nodeId, {
-                position: target.mode === 'active' ? target.position : [0, 0, 0],
-                duration,
-                easing: 'easeOutQuart',
-                setActive: true,
-                flipSide: target.mode === 'active' ? target.flipSide : 'front',
-                isSnapshotRestore: duration === 0 // Instant mount overrides spawn animation
-              });
-            }
+            pendingMovements.current.set(nodeId, {
+              position: target.mode === 'active' ? target.position : [0, 0, 0],
+              duration,
+              easing: 'easeOutQuart',
+              setActive: true,
+              flipSide: target.mode === 'active' ? target.flipSide : 'front',
+              isSnapshotRestore: duration === 0, // Instant mount overrides spawn animation
+              generation: layoutGeneration.current
+            });
             return;
           }
 
@@ -697,10 +691,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // 1. Restore liminalWebRoles from snapshot
         liminalWebRoles.current = {
           centerNodeId: snapshot.centerId,
-          ring1NodeIds: new Set(snapshot.ringAssignments.ring1NodeIds),
-          ring2NodeIds: new Set(snapshot.ringAssignments.ring2NodeIds),
-          ring3NodeIds: new Set(snapshot.ringAssignments.ring3NodeIds),
-          sphereNodeIds: new Set()
+          ringNodeIds: new Set(snapshot.ringNodeIds)
         };
 
         // 2. Restore focusedNodeId
@@ -801,11 +792,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // This is critical for liminal→liminal transitions where we need to know
         // which nodes were already on screen (move smoothly) vs new (fly in from ring).
         const previousCenterId = focusedNodeId.current;
-        const previousRingNodeIds = new Set([
-          ...(liminalWebRoles.current?.ring1NodeIds || []),
-          ...(liminalWebRoles.current?.ring2NodeIds || []),
-          ...(liminalWebRoles.current?.ring3NodeIds || []),
-        ]);
+        const previousRingNodeIds = new Set(liminalWebRoles.current?.ringNodeIds || []);
         const wasInLiminalWeb = (id: string) => id === previousCenterId || previousRingNodeIds.has(id);
 
         // ── Step 2: Compute new layout ──
@@ -872,10 +859,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // ── Step 4: Update roles and state ──
         liminalWebRoles.current = {
           centerNodeId: positions.centerNode?.nodeId || null,
-          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes || [])
+          ringNodeIds: new Set([...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].map(n => n.nodeId))
         };
 
         applyWorldRotationCorrection(positions);
@@ -970,10 +954,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         liminalWebRoles.current = {
           centerNodeId: positions.centerNode?.nodeId || null,
-          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes)
+          ringNodeIds: new Set([...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].map(n => n.nodeId))
         };
 
         applyWorldRotationCorrection(positions);
@@ -1035,21 +1016,14 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       // Capture roles BEFORE clearing them so we can use correct easing
       const rolesSnapshot = {
         centerNodeId: liminalWebRoles.current.centerNodeId,
-        ring1NodeIds: new Set(liminalWebRoles.current.ring1NodeIds),
-        ring2NodeIds: new Set(liminalWebRoles.current.ring2NodeIds),
-        ring3NodeIds: new Set(liminalWebRoles.current.ring3NodeIds),
-        sphereNodeIds: new Set(liminalWebRoles.current.sphereNodeIds),
+        ringNodeIds: new Set(liminalWebRoles.current.ringNodeIds),
       };
 
       // Get easing from snapshot instead of live roles
       const getEasingFromSnapshot = (nodeId: string): string => {
         if (nodeId === rolesSnapshot.centerNodeId ||
-            rolesSnapshot.ring1NodeIds.has(nodeId) ||
-            rolesSnapshot.ring2NodeIds.has(nodeId) ||
-            rolesSnapshot.ring3NodeIds.has(nodeId)) {
+            rolesSnapshot.ringNodeIds.has(nodeId)) {
           return 'easeInQuart';
-        } else if (rolesSnapshot.sphereNodeIds.has(nodeId)) {
-          return 'easeOutQuart';
         }
         return 'easeOutCubic';
       };
@@ -1128,10 +1102,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         liminalWebRoles.current = {
           centerNodeId: null,
-          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes)
+          ringNodeIds: new Set([...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].map(n => n.nodeId))
         };
 
         applyWorldRotationCorrection(positions);
@@ -1450,10 +1421,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         liminalWebRoles.current = {
           centerNodeId: positions.centerNode?.nodeId || null,
-          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes)
+          ringNodeIds: new Set([...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].map(n => n.nodeId))
         };
 
         applyWorldRotationCorrection(positions);
@@ -1499,9 +1467,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // For snapshot restoration, we MUST apply setTargetState to override spawn animation
         if (pendingMovement.isSnapshotRestore) {
-          console.log(`[Orchestrator] Snapshot restore: setting instant position for ${nodeId}`);
+          const capturedGeneration = pendingMovement.generation;
+          console.log(`[Orchestrator] Snapshot restore: setting instant position for ${nodeId} (gen=${capturedGeneration})`);
           // Use requestAnimationFrame to ensure DOM is ready
           requestAnimationFrame(() => {
+            // Check if a new executeLayoutIntent has invalidated this callback
+            if (capturedGeneration !== layoutGeneration.current) {
+              console.log(`[Orchestrator] Skipping stale snapshot restore for ${nodeId} (gen=${capturedGeneration}, current=${layoutGeneration.current})`);
+              return;
+            }
             if (nodeRef.current) {
               nodeRef.current.setTargetState(
                 {
@@ -1530,7 +1504,13 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // For non-ephemeral nodes (shouldn't happen often), use setTargetState
         // Use a short delay to ensure the node is fully initialized
+        const capturedGen = pendingMovement.generation;
         globalThis.setTimeout(() => {
+          // Check if a new executeLayoutIntent has invalidated this callback
+          if (capturedGen !== layoutGeneration.current) {
+            console.log(`[Orchestrator] Skipping stale pending movement for ${nodeId} (gen=${capturedGen}, current=${layoutGeneration.current})`);
+            return;
+          }
           if (nodeRef.current) {
             console.log(`[Orchestrator] Executing pending movement for ${nodeId} via setTargetState`);
             nodeRef.current.setTargetState(
@@ -1601,11 +1581,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           prioritizeClusters
         );
         // Diagnostic: check if any currently active ring nodes will be affected
-        const activeRingNodeIds = [
-          ...liminalWebRoles.current.ring1NodeIds,
-          ...liminalWebRoles.current.ring2NodeIds,
-          ...liminalWebRoles.current.ring3NodeIds,
-        ];
+        const activeRingNodeIds = [...liminalWebRoles.current.ringNodeIds];
         if (activeRingNodeIds.length > 0) {
           const ringNodesDropped = activeRingNodeIds.filter(id => !constellationFilter.mountedNodes.has(id));
           const ringNodesKept = activeRingNodeIds.filter(id => constellationFilter.mountedNodes.has(id));
@@ -1698,11 +1674,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     hideRelatedNodesInLiminalWeb: () => {
       console.warn('[Orchestrator] ⚠️ LEGACY: hideRelatedNodesInLiminalWeb called - should use executeLayoutIntent instead');
       try {
-        const allRingNodeIds = [
-          ...liminalWebRoles.current.ring1NodeIds,
-          ...liminalWebRoles.current.ring2NodeIds,
-          ...liminalWebRoles.current.ring3NodeIds
-        ];
+        const allRingNodeIds = [...liminalWebRoles.current.ringNodeIds];
 
         const buttonAnimationDuration = 500; // Match radial button animation
 
@@ -1825,10 +1797,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Update liminal web roles with supermodule IDs
         liminalWebRoles.current = {
           centerNodeId: centerNodeId,
-          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes)
+          ringNodeIds: new Set([...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].map(n => n.nodeId))
         };
 
         isTransitioning.current = true;
@@ -1874,10 +1843,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         // Update liminal web roles
         liminalWebRoles.current = {
           centerNodeId: positions.centerNode?.nodeId || null,
-          ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-          ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-          ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-          sphereNodeIds: new Set(positions.sphereNodes || [])
+          ringNodeIds: new Set([...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes].map(n => n.nodeId))
         };
 
         applyWorldRotationCorrection(positions);
