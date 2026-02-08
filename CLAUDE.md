@@ -73,7 +73,24 @@ Each feature README contains: Purpose, Directory Structure, Main Exports, Comman
 
 ## Architecture Principles
 
-**Vertical Slice Architecture**: Features are self-contained folders with everything they need.
+### Layout State Machine (Critical)
+
+The spatial layout system uses an **explicit state machine**, NOT React's reactive system.
+
+**Key Principle:** Event handlers call the orchestrator directly. `useEffect` is NEVER used to trigger layout transitions.
+
+```
+Event → deriveIntent() → executeLayoutIntent() → [store updated as side effect]
+```
+
+- **DO**: Call `orchestrator.executeLayoutIntent(intent)` directly in event handlers
+- **DON'T**: Watch `spatialLayout` in `useEffect` to trigger orchestration
+
+See `docs/architecture/layout-state-machine.md` for the complete state machine specification.
+
+### Vertical Slice Architecture
+
+Features are self-contained folders with everything they need.
 
 ```
 src/
