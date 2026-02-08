@@ -12,7 +12,7 @@
  */
 
 import React, { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
-import { Vector3, Group } from 'three';
+import { Vector3, Group, Quaternion } from 'three';
 import { DreamNode } from '../../features/dreamnode';
 import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNode3D';
 import { buildRelationshipGraph, calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../../features/liminal-web-layout';
@@ -21,7 +21,9 @@ import { computeConstellationFilter } from '../../features/constellation-layout/
 import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephemeral-despawn-queue';
-import type { LayoutIntent, NodeTargetState } from '../orchestration/types';
+import type { LayoutIntent, NodeTargetState, LayoutSnapshot } from '../orchestration/types';
+import { LAYOUT_SNAPSHOT_VERSION } from '../orchestration/types';
+import { saveLayoutSnapshot, clearLayoutSnapshot } from '../orchestration/snapshot-storage';
 
 export interface SpatialOrchestratorRef {
   // === NEW UNIFIED API ===
@@ -42,6 +44,14 @@ export interface SpatialOrchestratorRef {
    * @returns Array of related node IDs (Dreams if center is Dreamer, vice versa)
    */
   getRelatedNodeIds: (nodeId: string) => string[];
+
+  /**
+   * Restore layout state from a saved snapshot.
+   * Called on app mount to instantly restore the previous layout without animation.
+   *
+   * @param snapshot - The saved layout snapshot
+   */
+  restoreFromSnapshot: (snapshot: LayoutSnapshot) => void;
 
   // ════════════════════════════════════════════════════════════════════════════
   // ⛔ LEGACY API - DO NOT USE ⛔
@@ -202,6 +212,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     duration: number;
     easing: string;
     setActive: boolean;
+    flipSide?: 'front' | 'back'; // Optional - only set for snapshot restoration
+    isSnapshotRestore?: boolean; // If true, this is from snapshot restore and should override spawn animation
   }>>(new Map());
 
   /**
@@ -343,53 +355,47 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       return;
     }
 
-    if (setActive) {
-      nodeRef.current.setActiveState(true);
-    }
-
-    // Always use interrupt-capable movement for smooth transitions
-    if (nodeRef.current.isMoving()) {
-      nodeRef.current.interruptAndMoveToPosition(position, duration, easing);
-    } else {
-      nodeRef.current.moveToPosition(position, duration, easing);
-    }
+    // Use the new unified API - setTargetState handles interruption automatically
+    nodeRef.current.setTargetState(
+      {
+        mode: 'active',
+        position,
+        flipSide: 'front' // Legacy helper always uses front
+      },
+      duration
+    );
   };
 
   /**
    * Return a node to constellation position, interrupting any current animation.
    * For ephemeral nodes, this triggers an exit animation with world rotation correction.
    */
-  const returnNodeToConstellation = (nodeId: string, duration: number, easing: string) => {
+  const returnNodeToConstellation = (nodeId: string, duration: number, _easing: string) => {
     const nodeRef = nodeRefs.current.get(nodeId);
     if (!nodeRef?.current) return;
 
     // Get world rotation for ephemeral exit animation correction
     const worldRotation = dreamWorldRef.current?.quaternion.clone();
 
-    if (nodeRef.current.isMoving()) {
-      nodeRef.current.interruptAndReturnToConstellation(duration, easing, worldRotation);
-    } else {
-      nodeRef.current.returnToConstellation(duration, easing, worldRotation);
-    }
+    // Use the new unified API - setTargetState handles interruption automatically
+    nodeRef.current.setTargetState({ mode: 'home' }, duration, worldRotation);
   };
 
   /**
    * Return a node to its scaled constellation position, interrupting any current animation.
+   * Note: "scaled position" refers to dynamic view scaling - use setTargetState({ mode: 'home' })
    */
   const returnNodeToScaledPosition = (
     nodeId: string,
     duration: number,
-    worldRotation: any,
-    easing: string
+    worldRotation: Quaternion | undefined,
+    _easing: string
   ) => {
     const nodeRef = nodeRefs.current.get(nodeId);
     if (!nodeRef?.current) return;
 
-    if (nodeRef.current.isMoving()) {
-      nodeRef.current.interruptAndReturnToScaledPosition(duration, worldRotation, easing);
-    } else {
-      nodeRef.current.returnToScaledPosition(duration, worldRotation, easing);
-    }
+    // Use the new unified API - setTargetState({ mode: 'home' }) handles everything
+    nodeRef.current.setTargetState({ mode: 'home' }, duration, worldRotation);
   };
 
   /**
@@ -465,6 +471,11 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
 
         // 2. Ring nodes (all show front side)
+        let ring1Ids = new Set<string>();
+        let ring2Ids = new Set<string>();
+        let ring3Ids = new Set<string>();
+        let sphereIds = new Set<string>();
+
         if (intent.surroundingNodes.length > 0) {
           // Use existing ring layout calculation
           const relationshipGraph = buildFullRelationshipGraph();
@@ -503,17 +514,79 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             });
           });
 
-          // Update role tracking
-          liminalWebRoles.current = {
-            centerNodeId: intent.center?.nodeId || null,
-            ring1NodeIds: new Set(positions.ring1Nodes.map(n => n.nodeId)),
-            ring2NodeIds: new Set(positions.ring2Nodes.map(n => n.nodeId)),
-            ring3NodeIds: new Set(positions.ring3Nodes.map(n => n.nodeId)),
-            sphereNodeIds: new Set(positions.sphereNodes)
-          };
+          // Capture ring IDs for role tracking
+          ring1Ids = new Set(positions.ring1Nodes.map(n => n.nodeId));
+          ring2Ids = new Set(positions.ring2Nodes.map(n => n.nodeId));
+          ring3Ids = new Set(positions.ring3Nodes.map(n => n.nodeId));
+          sphereIds = new Set(positions.sphereNodes);
+        }
+
+        // Update role tracking - ALWAYS track center node, even with no ring nodes
+        // This is critical for sending the center node home when returning to constellation
+        liminalWebRoles.current = {
+          centerNodeId: intent.center?.nodeId || null,
+          ring1NodeIds: ring1Ids,
+          ring2NodeIds: ring2Ids,
+          ring3NodeIds: ring3Ids,
+          sphereNodeIds: sphereIds
+        };
+        console.log(`[Orchestrator] Updated liminalWebRoles: center=${liminalWebRoles.current.centerNodeId}, rings=${ring1Ids.size + ring2Ids.size + ring3Ids.size}`);
+
+        // ══════════════════════════════════════════════════════════════════════
+        // SNAPSHOT: Save layout state for instant restoration on reload
+        // ══════════════════════════════════════════════════════════════════════
+        const isConstellationMode = !intent.center && intent.surroundingNodes.length === 0;
+
+        if (isConstellationMode) {
+          // Returning to constellation - clear the snapshot
+          // Constellation is the default state, no snapshot needed
+          clearLayoutSnapshot();
+          store.setSpatialLayout('constellation');
+          store.setSelectedNode(null);
         } else {
-          // Clear roles if no surrounding nodes
-          clearLiminalWebRoles();
+          // Active layout - save snapshot for restoration
+          const sphereRotation = worldRotation
+            ? { x: worldRotation.x, y: worldRotation.y, z: worldRotation.z, w: worldRotation.w }
+            : { x: 0, y: 0, z: 0, w: 1 };
+
+          // Build activeNodes from targetStates (only active mode nodes)
+          const activeNodes: LayoutSnapshot['activeNodes'] = {};
+          targetStates.forEach((target, nodeId) => {
+            if (target.mode === 'active') {
+              activeNodes[nodeId] = {
+                position: target.position,
+                flipSide: target.flipSide
+              };
+            }
+          });
+
+          const snapshot: LayoutSnapshot = {
+            // Note: holarchy is visually a sub-state of liminal-web (center is flipped to back)
+            // The flipSide in activeNodes[centerId].flipSide captures this distinction
+            layoutState: 'liminal-web',
+            activeNodes,
+            sphereRotation,
+            centerId: intent.center?.nodeId || null,
+            ringAssignments: {
+              ring1NodeIds: [...ring1Ids],
+              ring2NodeIds: [...ring2Ids],
+              ring3NodeIds: [...ring3Ids],
+            },
+            timestamp: Date.now(),
+            version: LAYOUT_SNAPSHOT_VERSION,
+          };
+
+          // Save snapshot (fire-and-forget)
+          saveLayoutSnapshot(snapshot);
+
+          // Update store state as side effect
+          store.setSpatialLayout('liminal-web');
+          if (intent.center) {
+            const centerNode = store.dreamNodes.get(intent.center.nodeId)?.node;
+            if (centerNode) {
+              store.setSelectedNode(centerNode);
+            }
+          }
         }
 
         // 3. All other previously-active nodes go home
@@ -552,32 +625,46 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           }
         });
 
-        // Stagger ephemeral spawns
-        nodesToSpawn.forEach(({ nodeId, targetPos }, index) => {
-          globalThis.setTimeout(() => {
-            const spawnPos = calculateWorldCorrectedSpawnPosition(targetPos);
-            useInterBrainStore.getState().spawnEphemeralNode(nodeId, targetPos, spawnPos);
-          }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
-        });
+        // Spawn ephemeral nodes - stagger for animated transitions, instant for duration=0
+        if (duration === 0) {
+          // Instant mount: spawn all ephemeral nodes immediately, at target position (no fly-in)
+          nodesToSpawn.forEach(({ nodeId, targetPos }) => {
+            store.spawnEphemeralNode(nodeId, targetPos, targetPos);
+          });
+        } else {
+          // Animated: stagger ephemeral spawns for smooth cascading
+          nodesToSpawn.forEach(({ nodeId, targetPos }, index) => {
+            globalThis.setTimeout(() => {
+              const spawnPos = calculateWorldCorrectedSpawnPosition(targetPos);
+              useInterBrainStore.getState().spawnEphemeralNode(nodeId, targetPos, spawnPos);
+            }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
+          });
+        }
 
         // 5. Dispatch target states to all nodes
+        console.log(`[Orchestrator] Dispatching ${targetStates.size} target states:`);
         targetStates.forEach((target, nodeId) => {
+          console.log(`[Orchestrator]   - ${nodeId}: mode=${target.mode}, position=${target.mode === 'active' ? JSON.stringify(target.position) : 'N/A'}`);
           const nodeRef = nodeRefs.current.get(nodeId);
 
           // If ref not available yet (ephemeral being spawned), queue the movement
           if (!nodeRef?.current) {
+            console.log(`[Orchestrator]   -> NO REF for ${nodeId}, queuing movement`);
             if (store.ephemeralNodes.has(nodeId) || nodesToSpawn.some(n => n.nodeId === nodeId)) {
               pendingMovements.current.set(nodeId, {
                 position: target.mode === 'active' ? target.position : [0, 0, 0],
                 duration,
                 easing: 'easeOutQuart',
-                setActive: true
+                setActive: true,
+                flipSide: target.mode === 'active' ? target.flipSide : 'front',
+                isSnapshotRestore: duration === 0 // Instant mount overrides spawn animation
               });
             }
             return;
           }
 
           // Use the new setTargetState API
+          console.log(`[Orchestrator]   -> Calling setTargetState for ${nodeId}`);
           nodeRef.current.setTargetState(target, duration, worldRotation);
         });
 
@@ -600,6 +687,80 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       } catch (error) {
         console.error('[Orchestrator] getRelatedNodeIds failed:', error);
         return [];
+      }
+    },
+
+    restoreFromSnapshot: (snapshot: LayoutSnapshot) => {
+      try {
+        console.log(`[Orchestrator] Restoring from snapshot: ${snapshot.layoutState}`);
+
+        // 1. Restore liminalWebRoles from snapshot
+        liminalWebRoles.current = {
+          centerNodeId: snapshot.centerId,
+          ring1NodeIds: new Set(snapshot.ringAssignments.ring1NodeIds),
+          ring2NodeIds: new Set(snapshot.ringAssignments.ring2NodeIds),
+          ring3NodeIds: new Set(snapshot.ringAssignments.ring3NodeIds),
+          sphereNodeIds: new Set()
+        };
+
+        // 2. Restore focusedNodeId
+        focusedNodeId.current = snapshot.centerId;
+
+        // 3. Spawn ephemeral nodes and set their initial positions (instant, no animation)
+        const store = useInterBrainStore.getState();
+        const EPHEMERAL_SPAWN_INTERVAL_MS = 40;
+        const nodesToSpawn: Array<{ nodeId: string; position: [number, number, number] }> = [];
+
+        Object.entries(snapshot.activeNodes).forEach(([nodeId, nodeState]) => {
+          // Check if node needs to be spawned as ephemeral
+          if (!store.constellationFilter.mountedNodes.has(nodeId)) {
+            if (!store.ephemeralNodes.has(nodeId)) {
+              nodesToSpawn.push({ nodeId, position: nodeState.position });
+            }
+          }
+        });
+
+        // Stagger ephemeral spawns
+        nodesToSpawn.forEach(({ nodeId, position }, index) => {
+          globalThis.setTimeout(() => {
+            // Spawn at target position directly (no animation from ring)
+            useInterBrainStore.getState().spawnEphemeralNode(nodeId, position, position);
+          }, index * EPHEMERAL_SPAWN_INTERVAL_MS);
+        });
+
+        // 4. Set target states for all active nodes (instant, duration=0)
+        Object.entries(snapshot.activeNodes).forEach(([nodeId, nodeState]) => {
+          const nodeRef = nodeRefs.current.get(nodeId);
+
+          if (!nodeRef?.current) {
+            // Queue for when ref becomes available
+            if (store.ephemeralNodes.has(nodeId) || nodesToSpawn.some(n => n.nodeId === nodeId)) {
+              pendingMovements.current.set(nodeId, {
+                position: nodeState.position,
+                duration: 0, // Instant
+                easing: 'easeOutQuart',
+                setActive: true,
+                flipSide: nodeState.flipSide,
+                isSnapshotRestore: true // Override spawn animation
+              });
+            }
+            return;
+          }
+
+          // Set target state with instant transition (duration=0)
+          nodeRef.current.setTargetState(
+            {
+              mode: 'active',
+              position: nodeState.position,
+              flipSide: nodeState.flipSide
+            },
+            0 // Instant - no animation
+          );
+        });
+
+        console.log(`[Orchestrator] Snapshot restored: ${Object.keys(snapshot.activeNodes).length} active nodes`);
+      } catch (error) {
+        console.error('[Orchestrator] restoreFromSnapshot failed:', error);
       }
     },
 
@@ -901,14 +1062,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       clearLiminalWebRoles();
 
       globalThis.setTimeout(() => {
-        // Only deactivate nodes if we're still in constellation mode.
-        // If a new layout transition started (e.g., search), don't override it.
-        const currentLayout = useInterBrainStore.getState().spatialLayout;
-        if (currentLayout === 'constellation') {
-          nodeRefs.current.forEach((nodeRef) => {
-            nodeRef.current?.setActiveState(false);
-          });
-        }
+        // In the new unified system, nodes in 'home' mode handle their own state via setTargetState
+        // No need to explicitly call setActiveState - the position mode change handles everything
         isTransitioning.current = false;
       }, transitionDuration);
 
@@ -1128,12 +1283,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         const centerNodeRef = nodeRefs.current.get(centerNodeId);
         if (centerNodeRef?.current) {
           console.log(`[SpatialOrchestrator] Center node ${centerNodeId} found - keeping at current position (already correctly centered)`);
-          
+
           // Log current position for verification
           const currentPosition = centerNodeRef.current.getCurrentPosition?.();
           console.log(`[SpatialOrchestrator] Center node staying at position:`, currentPosition);
-          
-          centerNodeRef.current.setActiveState(true);
+
+          // In the new unified system, the center node maintains its state via setTargetState
           // DO NOT move center node - it's already correctly positioned with sphere rotation counteracted
         } else {
           console.error(`[SpatialOrchestrator] Center node ${centerNodeId} not found in nodeRefs! Available nodes:`, Array.from(nodeRefs.current.keys()));
@@ -1161,8 +1316,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           
           const nodeRef = nodeRefs.current.get(sphereNodeId);
           if (nodeRef?.current) {
-            // Move to sphere surface
-            nodeRef.current.returnToConstellation(transitionDuration, 'easeInQuart');
+            // Move to sphere surface - use the new unified API
+            const worldRotation = dreamWorldRef.current?.quaternion.clone();
+            nodeRef.current.setTargetState({ mode: 'home' }, transitionDuration, worldRotation);
           }
         });
         
@@ -1272,11 +1428,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           
           const nodeRef = nodeRefs.current.get(sphereNodeId);
           if (nodeRef?.current) {
-            // Move to sphere surface
-            nodeRef.current.returnToConstellation(fastTransitionDuration, 'easeInQuart');
+            // Move to sphere surface - use the new unified API
+            const worldRotation = dreamWorldRef.current?.quaternion.clone();
+            nodeRef.current.setTargetState({ mode: 'home' }, fastTransitionDuration, worldRotation);
           }
         });
-        
+
         console.log('SpatialOrchestrator: Edit mode reordering complete');
         
       } catch (error) {
@@ -1340,29 +1497,49 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
       if (pendingMovement && nodeRef.current) {
         pendingMovements.current.delete(nodeId);
 
-        // For ephemeral nodes, the spawn animation effect in DreamNode3D already handles
-        // the ring→target animation using ephemeralState.spawnPosition → ephemeralState.targetPosition.
-        // Executing the pending moveToPosition would override the spawn animation with a
-        // movement starting from [0,0,0] (constellation positionMode), causing spawn-in-place.
-        const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
-        if (isEphemeral) {
-          // Still set active state so the node participates in the layout
-          if (pendingMovement.setActive && nodeRef.current) {
-            nodeRef.current.setActiveState(true);
-          }
+        // For snapshot restoration, we MUST apply setTargetState to override spawn animation
+        if (pendingMovement.isSnapshotRestore) {
+          console.log(`[Orchestrator] Snapshot restore: setting instant position for ${nodeId}`);
+          // Use requestAnimationFrame to ensure DOM is ready
+          requestAnimationFrame(() => {
+            if (nodeRef.current) {
+              nodeRef.current.setTargetState(
+                {
+                  mode: 'active',
+                  position: pendingMovement.position,
+                  flipSide: pendingMovement.flipSide || 'front'
+                },
+                0 // Instant
+              );
+            }
+          });
           return;
         }
 
+        // For normal ephemeral nodes, the spawn animation effect in DreamNode3D already handles
+        // the ring→target animation using ephemeralState.spawnPosition → ephemeralState.targetPosition.
+        // We don't need to issue a separate move command.
+        const isEphemeral = useInterBrainStore.getState().ephemeralNodes.has(nodeId);
+        if (isEphemeral) {
+          // Ephemeral nodes handle their own spawn animation - no action needed here.
+          // The setTargetState will be called when the node's ref becomes available
+          // through the normal executeLayoutIntent flow.
+          console.log(`[Orchestrator] Ephemeral node ${nodeId} registered - spawn animation handles movement`);
+          return;
+        }
+
+        // For non-ephemeral nodes (shouldn't happen often), use setTargetState
         // Use a short delay to ensure the node is fully initialized
         globalThis.setTimeout(() => {
           if (nodeRef.current) {
-            if (pendingMovement.setActive) {
-              nodeRef.current.setActiveState(true);
-            }
-            nodeRef.current.moveToPosition(
-              pendingMovement.position,
-              pendingMovement.duration,
-              pendingMovement.easing
+            console.log(`[Orchestrator] Executing pending movement for ${nodeId} via setTargetState`);
+            nodeRef.current.setTargetState(
+              {
+                mode: 'active',
+                position: pendingMovement.position,
+                flipSide: pendingMovement.flipSide || 'front'
+              },
+              pendingMovement.duration
             );
           }
         }, 50); // Small delay for React to stabilize

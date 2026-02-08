@@ -25,7 +25,7 @@ const USE_SPRITE_RENDERING = true;
 
 // Universal Movement API interface
 export interface DreamNode3DRef {
-  // === NEW UNIFIED API ===
+  // === UNIFIED API ===
   /**
    * Set the target state for this node to animate toward.
    * Unifies position + flip animation into a single command.
@@ -34,20 +34,15 @@ export interface DreamNode3DRef {
    * - mode: 'home' → persistent nodes return to constellation, ephemeral nodes exit + despawn
    *
    * @param target - The target state (active with position/flip, or home)
-   * @param duration - Animation duration in ms (default: 1000)
+   * @param duration - Animation duration in ms (default: 1000, use 0 for instant)
    * @param worldRotation - Current world rotation for ephemeral exit calculation
    */
   setTargetState: (target: NodeTargetState, duration?: number, worldRotation?: Quaternion) => void;
 
-  // === LEGACY API (to be removed in Phase 6) ===
-  moveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
-  returnToConstellation: (duration?: number, easing?: string, worldRotation?: Quaternion) => void;
-  returnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void;
-  interruptAndMoveToPosition: (targetPosition: [number, number, number], duration?: number, easing?: string) => void;
-  interruptAndReturnToConstellation: (duration?: number, easing?: string, worldRotation?: Quaternion) => void;
-  interruptAndReturnToScaledPosition: (duration?: number, worldRotation?: Quaternion, easing?: string) => void;
-  setActiveState: (active: boolean) => void;
+  /** Get the current visual position of this node */
   getCurrentPosition: () => [number, number, number];
+
+  /** Check if this node is currently animating */
   isMoving: () => boolean;
 }
 
@@ -401,9 +396,19 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   useImperativeHandle(ref, () => ({
     // === NEW UNIFIED API ===
     setTargetState: (target: NodeTargetState, duration = 1000, worldRotation?) => {
+      console.log(`[DreamNode3D:${dreamNode.name}] setTargetState called:`, {
+        mode: target.mode,
+        position: target.mode === 'active' ? target.position : 'N/A',
+        flipSide: target.mode === 'active' ? target.flipSide : 'N/A',
+        currentPositionMode: positionMode,
+        duration
+      });
+
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
         : [...currentPosition];
+
+      console.log(`[DreamNode3D:${dreamNode.name}] Starting from position:`, actualCurrentPosition);
 
       if (target.mode === 'active') {
         // Active mode: animate to position + flip to target side
@@ -417,6 +422,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setIsTransitioning(true);
         setTransitionType('liminal');
         setTransitionEasing('easeOutQuart');
+
+        console.log(`[DreamNode3D:${dreamNode.name}] Set to ACTIVE mode, transitioning to:`, target.position);
 
         // Flip animation (unified with position)
         startFlipToSide(target.flipSide, duration);
