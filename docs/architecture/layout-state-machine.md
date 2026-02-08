@@ -12,6 +12,165 @@ This document defines the canonical state machine for spatial layout orchestrati
 
 4. **Path to constellation**: All roads lead back to constellation mode, which is the foundational/bedrock layout.
 
+5. **Explicit orchestration over reactive effects**: The state machine is the **single source of truth** for layout transitions. Event handlers call the orchestrator directly; React's `useEffect` is NOT used to drive transitions.
+
+---
+
+## Execution Architecture
+
+### The Single Source of Truth
+
+Layout transitions are driven by **explicit orchestration**, not by React's reactive system.
+
+**The Correct Flow:**
+```
+Event (click, escape, keypress)
+    ↓
+Event Handler (handleNodeClick, onPointerMissed, etc.)
+    ↓
+deriveIntent() → computes LayoutIntent from event + context
+    ↓
+executeLayoutIntent(intent) → dispatches setTargetState to all affected nodes
+    ↓
+Store state updated as SIDE EFFECT (spatialLayout, selectedNode, etc.)
+```
+
+**What This Means:**
+- Event handlers OWN the transition logic
+- `executeLayoutIntent()` updates the store as a side effect, not as a trigger
+- React components may read `spatialLayout` for rendering decisions, but never to trigger orchestration
+
+### Why NOT useEffect?
+
+Using `useEffect` to watch `spatialLayout` and trigger orchestration creates:
+
+1. **Circular dependencies**: Event → store update → useEffect → orchestration → store update → useEffect...
+2. **Race conditions**: Multiple state changes can trigger the effect multiple times
+3. **Unclear ownership**: It's ambiguous whether the event handler or the effect "owns" the transition
+4. **Fighting systems**: Two sources trying to control the same thing
+
+**Anti-pattern (DO NOT DO):**
+```typescript
+// ❌ WRONG: useEffect watching store state to trigger orchestration
+useEffect(() => {
+  if (spatialLayout === 'liminal-web' && selectedNode) {
+    orchestrator.executeLayoutIntent(...);  // This fights with event handlers!
+  }
+}, [spatialLayout, selectedNode]);
+```
+
+**Correct pattern:**
+```typescript
+// ✅ RIGHT: Event handler directly calls orchestrator
+const handleNodeClick = (node) => {
+  const { intent } = deriveFocusIntent(node.id, relatedIds, context);
+  orchestrator.executeLayoutIntent(intent);  // This IS the transition
+};
+```
+
+### Store State as Derived Output
+
+The Zustand store's `spatialLayout` field is a **derived output** of orchestration, not an input:
+
+- `executeLayoutIntent()` calls `setSpatialLayout()` as the LAST step
+- Other components can read `spatialLayout` for UI decisions (show/hide elements, etc.)
+- But NO component should trigger orchestration based on `spatialLayout` changes
+
+### Allowed useEffect Usage
+
+`useEffect` IS allowed for:
+- **Initial mount**: Restoring layout from snapshot (see Layout Snapshot System below)
+- **External events**: Responding to events outside React (Obsidian commands, etc.)
+- **Cleanup**: Teardown when component unmounts
+
+`useEffect` is NOT allowed for:
+- Watching `spatialLayout` to trigger orchestration
+- Watching `selectedNode` to trigger orchestration
+- Any "if state changed, do orchestration" pattern
+
+---
+
+## Layout Snapshot System
+
+### Purpose
+
+Enable instant layout restoration on app reload without animation or derivation. Instead of remembering minimal state and reconstructing the layout, we snapshot the **final computed positions** and mount everything in place.
+
+### Snapshot Structure
+
+```typescript
+interface LayoutSnapshot {
+  // The quantized layout state
+  layoutState: 'constellation' | 'liminal-web' | 'holarchy' | 'search' | 'copilot' | 'edit' | 'relationship-edit';
+
+  // For active layouts: node positions after layout computation
+  activeNodes: {
+    [nodeId: string]: {
+      position: [number, number, number];
+      flipSide: 'front' | 'back';
+    };
+  };
+
+  // Sphere rotation at transition time (NOT per-frame updates)
+  sphereRotation: { x: number; y: number; z: number; w: number };
+
+  // Center node ID (for liminal-web, holarchy, copilot)
+  centerId: string | null;
+
+  // Timestamp for cache invalidation
+  timestamp: number;
+}
+```
+
+### When to Snapshot
+
+Snapshots are taken at **quantized transition boundaries** — when `executeLayoutIntent` completes:
+
+| Transition | Action |
+|------------|--------|
+| → LIMINAL_WEB | Save snapshot (center, ring positions, sphere rotation) |
+| → HOLARCHY | Save snapshot (center, supermodule positions, sphere rotation) |
+| → SEARCH | Save snapshot (search results positions) |
+| → COPILOT | Save snapshot (partner position, sphere rotation) |
+| → CONSTELLATION | Clear snapshot (constellation is default, no snapshot needed) |
+| → EDIT_* | No new snapshot (overlay on existing layout) |
+
+### What is NOT Snapshotted
+
+These are derived per-frame and should NOT be persisted:
+
+- Dynamic view scaling offsets (computed every frame based on sphere rotation)
+- Sphere rotation during drag interaction in constellation mode
+- In-flight animation state (partially completed transitions)
+- Hover states, selection highlights, etc.
+
+### Restoration Flow
+
+On app mount:
+
+```
+1. Check for saved snapshot in storage
+2. If snapshot exists AND is valid (not stale):
+   a. Set spatialLayout from snapshot.layoutState
+   b. Set sphereRotation from snapshot.sphereRotation
+   c. For each node in snapshot.activeNodes:
+      - Mount DreamNode3D with initial position (no animation)
+      - Set initial flipSide
+   d. Set centerId, populate liminalWebRoles
+   e. Skip any "animate into place" logic
+3. If no snapshot OR snapshot is stale:
+   a. Start in CONSTELLATION mode (default)
+   b. All nodes at anchor positions with dynamic view scaling
+```
+
+### Storage
+
+Snapshots are stored in IndexedDB (same database as other InterBrain state). Key: `layout-snapshot`.
+
+### Key Insight
+
+The snapshot IS the output of `executeLayoutIntent`. We're already computing all final positions in the `targetStates` map — we just need to persist it at the end of each transition.
+
 ---
 
 ## Layout States (Definition Layer)

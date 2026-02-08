@@ -100,3 +100,76 @@ export interface ExecuteLayoutOptions {
   /** Whether to skip animation (instant transition) */
   instant?: boolean;
 }
+
+/**
+ * Snapshot of a layout state for instant restoration on reload.
+ *
+ * Key principles:
+ * - Captures the OUTCOME of layout transitions (final positions), not minimal state
+ * - Only taken at quantized transition boundaries (not per-frame updates)
+ * - Enables instant mount without animation or re-derivation
+ * - Does NOT include: dynamic view scaling offsets, in-flight animation state
+ */
+export interface LayoutSnapshot {
+  /** The quantized layout state */
+  layoutState: SpatialLayoutMode;
+
+  /** Final computed positions for all active nodes */
+  activeNodes: {
+    [nodeId: string]: {
+      position: [number, number, number];
+      flipSide: 'front' | 'back';
+    };
+  };
+
+  /** Sphere rotation at transition time (quaternion as array for serialization) */
+  sphereRotation: { x: number; y: number; z: number; w: number };
+
+  /** Center node ID (for liminal-web, holarchy, copilot) */
+  centerId: string | null;
+
+  /** Ring node assignments for quick lookup */
+  ringAssignments: {
+    ring1NodeIds: string[];
+    ring2NodeIds: string[];
+    ring3NodeIds: string[];
+  };
+
+  /** Timestamp for cache invalidation and debugging */
+  timestamp: number;
+
+  /** Version for migration if snapshot structure changes */
+  version: number;
+}
+
+/** Current snapshot version - increment when structure changes */
+export const LAYOUT_SNAPSHOT_VERSION = 1;
+
+/**
+ * Creates an empty/default snapshot representing constellation mode.
+ */
+export function createDefaultSnapshot(): LayoutSnapshot {
+  return {
+    layoutState: 'constellation',
+    activeNodes: {},
+    sphereRotation: { x: 0, y: 0, z: 0, w: 1 }, // Identity quaternion
+    centerId: null,
+    ringAssignments: {
+      ring1NodeIds: [],
+      ring2NodeIds: [],
+      ring3NodeIds: [],
+    },
+    timestamp: Date.now(),
+    version: LAYOUT_SNAPSHOT_VERSION,
+  };
+}
+
+/**
+ * Validates a snapshot is usable (correct version, not too old, etc.)
+ */
+export function isValidSnapshot(snapshot: LayoutSnapshot | null): snapshot is LayoutSnapshot {
+  if (!snapshot) return false;
+  if (snapshot.version !== LAYOUT_SNAPSHOT_VERSION) return false;
+  // Could add age check here if needed (e.g., expire after 24 hours)
+  return true;
+}
