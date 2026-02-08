@@ -82,6 +82,8 @@ export default function DreamspaceCanvas() {
 
   // Track when orchestrator is ready so layout effects can re-run
   const [orchestratorReady, setOrchestratorReady] = useState(false);
+  // Guard to ensure onOrchestratorReady logic runs exactly once
+  const hasInitializedLayout = useRef(false);
 
   // Unified escape key handler - extracted to core hook
   useEscapeKeyHandler(spatialOrchestratorRef);
@@ -724,6 +726,13 @@ export default function DreamspaceCanvas() {
             // Constellation return complete
           }}
           onOrchestratorReady={() => {
+            // Guard: this must only run once. The callback is an inline arrow
+            // so its identity changes every render, but the useEffect in
+            // SpatialOrchestrator uses [] deps to only fire on mount.
+            // This ref guard is belt-and-suspenders safety.
+            if (hasInitializedLayout.current) return;
+            hasInitializedLayout.current = true;
+
             // Register all existing refs when orchestrator is ready
             dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
               if (nodeRef && spatialOrchestratorRef.current) {

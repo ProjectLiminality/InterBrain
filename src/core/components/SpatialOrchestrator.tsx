@@ -1909,10 +1909,15 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
   // Removed excessive node count logging
 
-  // Call ready callback on mount
+  // Call ready callback once on mount.
+  // IMPORTANT: Empty dependency array — onOrchestratorReady is an inline arrow
+  // in DreamspaceCanvas, so it changes identity every render. Depending on it
+  // would re-fire initialization on every parent re-render, overwriting
+  // in-progress animated transitions with instant teleports.
   useEffect(() => {
     onOrchestratorReady?.();
-  }, [onOrchestratorReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // This component renders nothing - it's purely for orchestration
   return null;
