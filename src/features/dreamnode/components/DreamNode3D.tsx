@@ -233,12 +233,11 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     return result;
   }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
 
-  // Determine when to load back-side component (after animation completes)
+  // Determine when to load back-side component (when node is centered)
   const shouldLoadBackSide = useMemo(() => {
     return spatialLayout === 'liminal-web' &&
-           selectedNode?.id === dreamNode.id &&
-           !isTransitioning; // Wait for animation to complete
-  }, [spatialLayout, selectedNode?.id, dreamNode.id, isTransitioning]);
+           selectedNode?.id === dreamNode.id;
+  }, [spatialLayout, selectedNode?.id, dreamNode.id]);
 
   // Register hit sphere reference
   useEffect(() => {
@@ -247,19 +246,16 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     }
   }, [dreamNode.id, onHitSphereRef]);
 
-  // Trigger back-side loading when animation completes
+  // Trigger back-side loading when node becomes centered
   // Also reset when node is no longer selected (prevents heavy DreamSong rendering for ring nodes)
   useEffect(() => {
     if (shouldLoadBackSide && !hasLoadedBackSide) {
-      // Small delay to ensure animation is fully complete and avoid any frame drops
-      globalThis.setTimeout(() => {
-        setHasLoadedBackSide(true);
-      }, 100);
+      setHasLoadedBackSide(true);
     } else if (!shouldLoadBackSide && hasLoadedBackSide) {
       // Reset when no longer selected - unmounts DreamSongSide for performance
       setHasLoadedBackSide(false);
     }
-  }, [shouldLoadBackSide, hasLoadedBackSide, dreamNode.name, spatialLayout, selectedNode?.id, isTransitioning]);
+  }, [shouldLoadBackSide, hasLoadedBackSide]);
   
   // DreamSong logic now handled by DreamSongSide component via hook
 
