@@ -48,11 +48,7 @@ export function registerDreamNodeCommands(
       }
 
       if (canFlip && selectedNode) {
-        // Determine flip direction based on current state
-        const isCurrentlyFlipped = currentFlipState?.isFlipped || false;
-        const direction = isCurrentlyFlipped ? 'back-to-front' : 'front-to-back';
-
-        store.startFlipAnimation(selectedNode.id, direction);
+        store.requestNavigation({ type: 'flip', nodeId: selectedNode.id });
       }
 
       return true;
@@ -81,7 +77,7 @@ export function registerDreamNodeCommands(
       }
 
       if (canFlipToFront && selectedNode) {
-        store.startFlipAnimation(selectedNode.id, 'back-to-front');
+        store.requestNavigation({ type: 'flip', nodeId: selectedNode.id });
       }
 
       return true;
@@ -110,7 +106,7 @@ export function registerDreamNodeCommands(
       }
 
       if (canFlipToBack && selectedNode) {
-        store.startFlipAnimation(selectedNode.id, 'front-to-back');
+        store.requestNavigation({ type: 'flip', nodeId: selectedNode.id });
       }
 
       return true;

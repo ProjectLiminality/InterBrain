@@ -46,6 +46,8 @@ import {
   deriveConstellationIntent,
   deriveSearchIntent,
   deriveCopilotEnterIntent,
+  deriveFlipToBackIntent,
+  deriveFlipToFrontIntent,
   buildLayoutContext,
   isHolarchyNavigation
 } from '../orchestration/intent-helpers';
@@ -284,6 +286,47 @@ export default function DreamspaceCanvas() {
       case 'applyLayout':
         orchestrator.applyConstellationLayout();
         break;
+
+      case 'flip': {
+        if (navigationRequest.nodeId) {
+          const flipContext = buildLayoutContext(
+            navigationRequest.nodeId,
+            store.flipState.flipStates,
+            store.spatialLayout
+          );
+          const isCurrentlyFlipped = flipContext.currentCenterFlipSide === 'back';
+
+          if (isCurrentlyFlipped) {
+            // Back → Front: show related nodes (synchronous)
+            const relatedIds = orchestrator.getRelatedNodeIds(navigationRequest.nodeId);
+            const { intent } = deriveFlipToFrontIntent(navigationRequest.nodeId, relatedIds);
+            orchestrator.executeLayoutIntent(intent);
+          } else {
+            // Front → Back: load supermodules async (same pattern as holarchy click)
+            const nodeId = navigationRequest.nodeId;
+            (async () => {
+              try {
+                let supermoduleIds: string[] = [];
+                const node = store.dreamNodes.get(nodeId)?.node;
+                if (vaultService && node) {
+                  const fullPath = vaultService.getFullPath(node.repoPath);
+                  const udd = await UDDService.readUDD(fullPath);
+                  supermoduleIds = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
+                    typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
+                  ).filter(Boolean);
+                }
+                const { intent } = deriveFlipToBackIntent(nodeId, supermoduleIds);
+                orchestrator.executeLayoutIntent(intent);
+              } catch (error) {
+                console.error('[Canvas-NavRequest] Failed to load supermodules for flip:', error);
+                const { intent } = deriveFlipToBackIntent(nodeId, []);
+                orchestrator.executeLayoutIntent(intent);
+              }
+            })();
+          }
+        }
+        break;
+      }
     }
 
     // Clear the request after processing
@@ -391,6 +434,12 @@ export default function DreamspaceCanvas() {
       store.flipState.flipStates,
       store.spatialLayout
     );
+
+    // Don't re-navigate to the already-centered node when flipped
+    // Flip state is controlled explicitly via flip button
+    if (node.id === store.selectedNode?.id && context.isHolarchyMode) {
+      return;
+    }
 
     // Check if this is holarchy navigation (clicking in holarchy mode)
     const isHolarchyNav = isHolarchyNavigation(context, node.id);

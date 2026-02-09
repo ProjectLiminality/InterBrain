@@ -73,6 +73,7 @@ export interface DreamNodeSlice {
   completeFlipAnimation: (nodeId: string) => void;
   resetAllFlips: () => void;
   getNodeFlipState: (nodeId: string) => FlipState | null;
+  syncFlipState: (nodeId: string, isFlipped: boolean) => void;
 
   // Carousel state for DreamSong side (holarchy view + multiple .canvas files)
   carouselState: CarouselState;
@@ -271,6 +272,24 @@ export const createDreamNodeSlice: StateCreator<
   getNodeFlipState: (nodeId) => {
     return get().flipState.flipStates.get(nodeId) || null;
   },
+
+  syncFlipState: (nodeId, isFlipped) => set((state) => {
+    const updatedFlipStates = new Map(state.flipState.flipStates);
+    updatedFlipStates.set(nodeId, {
+      isFlipped,
+      isFlipping: false,
+      flipDirection: isFlipped ? 'front-to-back' : 'back-to-front',
+      animationStartTime: 0
+    });
+
+    return {
+      flipState: {
+        ...state.flipState,
+        flipStates: updatedFlipStates,
+        flippedNodeId: isFlipped ? nodeId : null
+      }
+    };
+  }),
 
   // Carousel state for DreamSong side (holarchy view + .canvas files)
   carouselState: {

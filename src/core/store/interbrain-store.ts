@@ -194,7 +194,7 @@ export type RealNodeData = DreamNodeData;
  * reacts to them. This is the universal pattern for feature → core communication.
  */
 export interface NavigationRequest {
-  type: 'focus' | 'constellation' | 'applyLayout';
+  type: 'focus' | 'constellation' | 'applyLayout' | 'flip';
   nodeId?: string;
   interrupt?: boolean; // Use interrupt variants for mid-flight changes
 }

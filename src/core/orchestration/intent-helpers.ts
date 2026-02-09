@@ -196,6 +196,58 @@ export function isHolarchyNavigation(
 }
 
 /**
+ * Derive intent for flipping a node to back (entering holarchy view).
+ *
+ * This handles the case where:
+ * 1. User presses flip button on a front-facing node
+ * 2. Node stays centered, flips to back
+ * 3. Supermodules replace related nodes in the ring
+ *
+ * @param nodeId - The node being flipped
+ * @param supermoduleIds - The supermodules to show in ring
+ * @returns DerivedIntentResult with flip-to-back intent
+ */
+export function deriveFlipToBackIntent(
+  nodeId: string,
+  supermoduleIds: string[]
+): DerivedIntentResult {
+  return {
+    intent: {
+      center: { nodeId, flipSide: 'back' },
+      surroundingNodes: supermoduleIds
+    },
+    nodesToSendHome: [],
+    isHolarchyNavigation: true
+  };
+}
+
+/**
+ * Derive intent for flipping a node to front (exiting holarchy view).
+ *
+ * This handles the case where:
+ * 1. User presses flip button on a back-facing node
+ * 2. Node stays centered, flips to front
+ * 3. Related nodes (dreamers) replace supermodules in the ring
+ *
+ * @param nodeId - The node being flipped
+ * @param relatedNodeIds - The related nodes to show in ring
+ * @returns DerivedIntentResult with flip-to-front intent
+ */
+export function deriveFlipToFrontIntent(
+  nodeId: string,
+  relatedNodeIds: string[]
+): DerivedIntentResult {
+  return {
+    intent: {
+      center: { nodeId, flipSide: 'front' },
+      surroundingNodes: relatedNodeIds
+    },
+    nodesToSendHome: [],
+    isHolarchyNavigation: false
+  };
+}
+
+/**
  * Derive intent for entering COPILOT mode.
  *
  * This handles the case where:

@@ -1092,6 +1092,17 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
       if (progress >= 1) {
         setFlipRotation(targetFlipRotation);
         setShouldAnimateFlip(false);
+
+        // Sync store flipState to match orchestration-driven flip result
+        const targetSide = targetFlipRotation > Math.PI / 2 ? 'back' : 'front';
+        const storeState = useInterBrainStore.getState();
+        const currentStoreFlip = storeState.flipState.flipStates.get(dreamNode.id);
+        const storeThinks = currentStoreFlip?.isFlipped || false;
+        const actuallyFlipped = targetSide === 'back';
+
+        if (storeThinks !== actuallyFlipped) {
+          storeState.syncFlipState(dreamNode.id, actuallyFlipped);
+        }
       }
     }
   });
