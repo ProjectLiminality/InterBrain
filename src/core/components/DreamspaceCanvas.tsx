@@ -53,6 +53,48 @@ import {
 } from '../orchestration/intent-helpers';
 import { loadLayoutSnapshot } from '../orchestration/snapshot-storage';
 import { UDDService } from '../../features/dreamnode/services/udd-service';
+import type { DreamNodeData } from '../store/interbrain-store';
+
+/**
+ * Load supermodule IDs from a node's UDD file and resolve them to store UUIDs.
+ *
+ * UDD files store supermodules in mixed formats (radicleId strings, UUID strings,
+ * or SupermoduleEntry objects with radicleId/uuid fields). The store is keyed by UUID.
+ * This function normalizes all formats to the UUID the store actually knows about.
+ */
+async function loadResolvedSupermoduleIds(
+  nodeRepoPath: string,
+  vaultService: VaultService,
+  dreamNodes: Map<string, DreamNodeData>
+): Promise<string[]> {
+  const fullPath = vaultService.getFullPath(nodeRepoPath);
+  const udd = await UDDService.readUDD(fullPath);
+
+  // Extract raw IDs from mixed UDD formats
+  const rawIds: string[] = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
+    typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
+  ).filter(Boolean);
+
+  // Resolve each raw ID to the store's UUID key
+  return rawIds
+    .map(rawId => {
+      // Direct UUID match (already a store key)
+      if (dreamNodes.has(rawId)) return rawId;
+
+      // radicleId match — scan store for a node whose radicleId matches
+      for (const [uuid, data] of dreamNodes) {
+        if (data.node.radicleId === rawId) return uuid;
+      }
+
+      // Name match (last resort)
+      for (const [uuid, data] of dreamNodes) {
+        if (data.node.name === rawId) return uuid;
+      }
+
+      return null;
+    })
+    .filter((id): id is string => id !== null);
+}
 
 export default function DreamspaceCanvas() {
   // NOTE: Lifecycle gate is now handled by DreamspaceView with lazy loading
@@ -309,11 +351,7 @@ export default function DreamspaceCanvas() {
                 let supermoduleIds: string[] = [];
                 const node = store.dreamNodes.get(nodeId)?.node;
                 if (vaultService && node) {
-                  const fullPath = vaultService.getFullPath(node.repoPath);
-                  const udd = await UDDService.readUDD(fullPath);
-                  supermoduleIds = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
-                    typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
-                  ).filter(Boolean);
+                  supermoduleIds = await loadResolvedSupermoduleIds(node.repoPath, vaultService, store.dreamNodes);
                 }
                 const { intent } = deriveFlipToBackIntent(nodeId, supermoduleIds);
                 orchestrator.executeLayoutIntent(intent);
@@ -347,11 +385,7 @@ export default function DreamspaceCanvas() {
               let supermoduleIds: string[] = [];
               const nodeData = store.dreamNodes.get(nodeId)?.node;
               if (vaultService && nodeData) {
-                const fullPath = vaultService.getFullPath(nodeData.repoPath);
-                const udd = await UDDService.readUDD(fullPath);
-                supermoduleIds = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
-                  typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
-                ).filter(Boolean);
+                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, store.dreamNodes);
               }
               const { intent } = deriveHolarchyNavigationIntent(nodeId, supermoduleIds, context);
               orchestrator.executeLayoutIntent(intent);
@@ -493,29 +527,20 @@ export default function DreamspaceCanvas() {
       const orchestrator = spatialOrchestratorRef.current;
       (async () => {
         try {
-          // Read supermodules from node's UDD file
           let supermoduleIds: string[] = [];
           if (vaultService) {
-            const fullPath = vaultService.getFullPath(node.repoPath);
-            const udd = await UDDService.readUDD(fullPath);
-            // Normalize supermodules (can be string[] or SupermoduleEntry[])
-            supermoduleIds = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
-              typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
-            ).filter(Boolean);
+            supermoduleIds = await loadResolvedSupermoduleIds(node.repoPath, vaultService, store.dreamNodes);
           }
 
-          // Derive the holarchy intent
           const { intent } = deriveHolarchyNavigationIntent(
             node.id,
             supermoduleIds,
             context
           );
 
-          // Execute the layout intent (handles position + flip together)
           orchestrator.executeLayoutIntent(intent);
         } catch (error) {
           console.error('[DreamSpace] Failed to load supermodules:', error);
-          // Fallback: just navigate without supermodules
           const { intent } = deriveHolarchyNavigationIntent(node.id, [], context);
           orchestrator.executeLayoutIntent(intent);
         }
