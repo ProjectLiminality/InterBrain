@@ -338,6 +338,9 @@ export default function DreamspaceCanvas() {
           );
           const isCurrentlyFlipped = flipContext.currentCenterFlipSide === 'back';
 
+          // Record history for this flip transition (liminal-web ↔ holarchy)
+          store.addHistoryEntry(navigationRequest.nodeId, 'liminal-web');
+
           if (isCurrentlyFlipped) {
             // Back → Front: show related nodes (synchronous)
             const relatedIds = orchestrator.getRelatedNodeIds(navigationRequest.nodeId);
@@ -368,24 +371,26 @@ export default function DreamspaceCanvas() {
 
       case 'holarchy-focus': {
         // Navigate to a node in holarchy mode (flipped to back, supermodules in ring)
-        // Used by submodule clicks in HolonView
+        // Used by submodule clicks in HolonView and undo/redo
         if (navigationRequest.nodeId) {
           const nodeId = navigationRequest.nodeId;
           const node = store.dreamNodes.get(nodeId)?.node;
           if (node) {
             store.setSelectedNode(node);
           }
+          // Re-read store after setSelectedNode to get fresh state
+          const freshStore = useInterBrainStore.getState();
           const context = buildLayoutContext(
-            store.selectedNode?.id || null,
-            store.flipState.flipStates,
-            store.spatialLayout
+            freshStore.selectedNode?.id || null,
+            freshStore.flipState.flipStates,
+            freshStore.spatialLayout
           );
           (async () => {
             try {
               let supermoduleIds: string[] = [];
-              const nodeData = store.dreamNodes.get(nodeId)?.node;
+              const nodeData = freshStore.dreamNodes.get(nodeId)?.node;
               if (vaultService && nodeData) {
-                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, store.dreamNodes);
+                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, freshStore.dreamNodes);
               }
               const { intent } = deriveHolarchyNavigationIntent(nodeId, supermoduleIds, context);
               orchestrator.executeLayoutIntent(intent);

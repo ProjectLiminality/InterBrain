@@ -43,8 +43,7 @@ export default function DreamSongThread3D({
   const [isThreadHovered, setIsThreadHovered] = useState(false);
 
   // Store access for selecting DreamNode
-  const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
-  const setSpatialLayout = useInterBrainStore(state => state.setSpatialLayout);
+  const requestNavigation = useInterBrainStore(state => state.requestNavigation);
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
 
   // Find the DreamNode that owns this DreamSong
@@ -90,16 +89,10 @@ export default function DreamSongThread3D({
     return edgesWithPositions;
   }, [edges, getNodePosition]);
 
-  // Handle thread selection
+  // Handle thread selection — route through unified orchestration
   const handleThreadClick = () => {
     if (ownerNode) {
-      console.log(`🎯 DreamSongThread clicked: Selecting owner DreamNode "${ownerNode.name}"`);
-
-      // Select the owner DreamNode and switch to liminal-web layout
-      setSelectedNode(ownerNode);
-      setSpatialLayout('liminal-web');
-    } else {
-      console.warn(`⚠️ Could not find owner DreamNode for DreamSong: ${dreamSongPath}`);
+      requestNavigation({ type: 'liminal-web-focus', nodeId: ownerNode.id });
     }
   };
 

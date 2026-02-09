@@ -1393,19 +1393,24 @@ export default class InterBrainPlugin extends Plugin {
               const targetNode = allNodes.find(node => node.id === previousEntry.nodeId);
 
               if (targetNode) {
-                // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
                 store.setSpatialLayout('liminal-web');
-                store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
+
+                // Restore flip state BEFORE requesting navigation so orchestrator sees correct state
+                store.restoreVisualState(previousEntry);
+
+                // Use holarchy-focus if the entry was flipped, otherwise liminal-web-focus
+                if (previousEntry.flipState?.isFlipped) {
+                  store.requestNavigation({ type: 'holarchy-focus', nodeId: targetNode.id, interrupt: true });
+                } else {
+                  store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
+                }
               } else {
                 // Handle deleted node case - skip to next valid entry
                 console.warn(`Node ${previousEntry.nodeId} no longer exists, skipping undo step`);
                 this.uiService.showError('Target node no longer exists - skipped to previous state');
               }
             }
-
-            // Restore visual state (flip state and scroll position) after layout restoration
-            store.restoreVisualState(previousEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);
@@ -1464,19 +1469,24 @@ export default class InterBrainPlugin extends Plugin {
               const targetNode = allNodes.find(node => node.id === nextEntry.nodeId);
 
               if (targetNode) {
-                // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
                 store.setSpatialLayout('liminal-web');
-                store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
+
+                // Restore flip state BEFORE requesting navigation so orchestrator sees correct state
+                store.restoreVisualState(nextEntry);
+
+                // Use holarchy-focus if the entry was flipped, otherwise liminal-web-focus
+                if (nextEntry.flipState?.isFlipped) {
+                  store.requestNavigation({ type: 'holarchy-focus', nodeId: targetNode.id, interrupt: true });
+                } else {
+                  store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
+                }
               } else {
                 // Handle deleted node case
                 console.warn(`Node ${nextEntry.nodeId} no longer exists, skipping redo step`);
                 this.uiService.showError('Target node no longer exists - skipped to next state');
               }
             }
-            
-            // Restore visual state (flip state and scroll position) after layout restoration
-            store.restoreVisualState(nextEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);

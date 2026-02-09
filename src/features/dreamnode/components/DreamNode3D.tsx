@@ -1098,6 +1098,15 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
         if (storeThinks !== actuallyFlipped) {
           storeState.syncFlipState(dreamNode.id, actuallyFlipped);
+
+          // Update the current history entry's flipState so undo/redo
+          // restores the correct holarchy vs liminal-web view
+          useInterBrainStore.getState().updateCurrentHistoryFlipState(dreamNode.id, {
+            isFlipped: actuallyFlipped,
+            isFlipping: false,
+            flipDirection: actuallyFlipped ? 'front-to-back' : 'back-to-front',
+            animationStartTime: 0
+          });
         }
       }
     }

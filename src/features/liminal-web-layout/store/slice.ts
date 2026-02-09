@@ -51,6 +51,7 @@ export interface LiminalWebSlice {
   performRedo: () => boolean;
   clearNavigationHistory: () => void;
   restoreVisualState: (entry: NavigationHistoryEntry) => void;
+  updateCurrentHistoryFlipState: (nodeId: string, flipState: FlipState) => void;
 }
 
 // Type for accessing flipState from dreamnode slice
@@ -246,5 +247,23 @@ export const createLiminalWebSlice: StateCreator<
     }
 
     return newState;
+  }),
+
+  updateCurrentHistoryFlipState: (nodeId, flipState) => set((state) => {
+    const { history, currentIndex } = state.navigationHistory;
+    const currentEntry = history[currentIndex];
+
+    // Only update if the current entry matches this node
+    if (!currentEntry || currentEntry.nodeId !== nodeId) return state;
+
+    const updatedHistory = [...history];
+    updatedHistory[currentIndex] = { ...currentEntry, flipState };
+
+    return {
+      navigationHistory: {
+        ...state.navigationHistory,
+        history: updatedHistory
+      }
+    };
   }),
 });
