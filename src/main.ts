@@ -1396,7 +1396,7 @@ export default class InterBrainPlugin extends Plugin {
                 // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
                 store.setSpatialLayout('liminal-web');
-                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
+                store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case - skip to next valid entry
                 console.warn(`Node ${previousEntry.nodeId} no longer exists, skipping undo step`);
@@ -1467,7 +1467,7 @@ export default class InterBrainPlugin extends Plugin {
                 // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
                 store.setSpatialLayout('liminal-web');
-                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
+                store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
               } else {
                 // Handle deleted node case
                 console.warn(`Node ${nextEntry.nodeId} no longer exists, skipping redo step`);

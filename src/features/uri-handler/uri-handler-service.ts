@@ -378,7 +378,7 @@ export class URIHandlerService {
 
 		const store = useInterBrainStore.getState();
 		store.setSelectedNode(targetNode);
-		store.requestNavigation({ type: 'focus', nodeId: targetNode.id });
+		store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
 
 		if (!silent) {
 			new Notice(`Node focused in DreamSpace!`);

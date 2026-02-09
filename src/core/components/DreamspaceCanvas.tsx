@@ -262,7 +262,7 @@ export default function DreamspaceCanvas() {
     const store = useInterBrainStore.getState();
 
     switch (navigationRequest.type) {
-      case 'focus':
+      case 'liminal-web-focus':
         if (navigationRequest.nodeId) {
           console.log(`[Canvas-NavRequest] FOCUS: ${navigationRequest.nodeId} via unified orchestration`);
           const relatedIds = orchestrator.getRelatedNodeIds(navigationRequest.nodeId);
@@ -324,6 +324,43 @@ export default function DreamspaceCanvas() {
               }
             })();
           }
+        }
+        break;
+      }
+
+      case 'holarchy-focus': {
+        // Navigate to a node in holarchy mode (flipped to back, supermodules in ring)
+        // Used by submodule clicks in HolonView
+        if (navigationRequest.nodeId) {
+          const nodeId = navigationRequest.nodeId;
+          const node = store.dreamNodes.get(nodeId)?.node;
+          if (node) {
+            store.setSelectedNode(node);
+          }
+          const context = buildLayoutContext(
+            store.selectedNode?.id || null,
+            store.flipState.flipStates,
+            store.spatialLayout
+          );
+          (async () => {
+            try {
+              let supermoduleIds: string[] = [];
+              const nodeData = store.dreamNodes.get(nodeId)?.node;
+              if (vaultService && nodeData) {
+                const fullPath = vaultService.getFullPath(nodeData.repoPath);
+                const udd = await UDDService.readUDD(fullPath);
+                supermoduleIds = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
+                  typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
+                ).filter(Boolean);
+              }
+              const { intent } = deriveHolarchyNavigationIntent(nodeId, supermoduleIds, context);
+              orchestrator.executeLayoutIntent(intent);
+            } catch (error) {
+              console.error('[Canvas-NavRequest] Failed to load supermodules for holarchy-focus:', error);
+              const { intent } = deriveHolarchyNavigationIntent(nodeId, [], context);
+              orchestrator.executeLayoutIntent(intent);
+            }
+          })();
         }
         break;
       }

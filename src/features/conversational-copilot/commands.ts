@@ -162,7 +162,7 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
         // Request navigation to partner via unified orchestration
         // This is processed by DreamspaceCanvas's navigationRequest handler
         if (partnerToFocus) {
-          store.requestNavigation({ type: 'focus', nodeId: partnerToFocus.id });
+          store.requestNavigation({ type: 'liminal-web-focus', nodeId: partnerToFocus.id });
         }
 
         // Exit copilot mode (processes relationships, clears copilot state)

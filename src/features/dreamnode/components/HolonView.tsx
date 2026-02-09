@@ -159,8 +159,7 @@ export const HolonView: React.FC<HolonViewProps> = ({
 
   // Get all DreamNodes from store to resolve submodule IDs
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
-  const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
-  const startFlipAnimation = useInterBrainStore(state => state.startFlipAnimation);
+  const requestNavigation = useInterBrainStore(state => state.requestNavigation);
 
   // Load submodule IDs from UDD file
   // Note: Supermodule spatial layout is handled by SpatialOrchestrator subscribing to flip state
@@ -220,14 +219,11 @@ export const HolonView: React.FC<HolonViewProps> = ({
     return packCirclesInParent(submoduleNodes.length, parentRadius, 0.15);
   }, [submoduleNodes.length, parentRadius]);
 
-  // Handle submodule click - immediately navigate to submodule
-  // Stays in holarchy mode: selects the submodule AND flips it to show its holarchy
-  // Note: No zoom animation - immediate button-like behavior
+  // Handle submodule click - navigate to submodule via unified orchestration
+  // Stays in holarchy mode: orchestrator centers the submodule flipped to back
   const handleSubmoduleClick = useCallback((submodule: DreamNode) => {
-    setSelectedNode(submodule);
-    // Flip the newly selected node to back side to stay in holarchy navigation mode
-    startFlipAnimation(submodule.id, 'front-to-back');
-  }, [setSelectedNode, startFlipAnimation]);
+    requestNavigation({ type: 'holarchy-focus', nodeId: submodule.id });
+  }, [requestNavigation]);
 
   // Loading state
   if (isLoading) {

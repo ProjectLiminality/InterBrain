@@ -194,7 +194,9 @@ export type RealNodeData = DreamNodeData;
  * reacts to them. This is the universal pattern for feature → core communication.
  */
 export interface NavigationRequest {
-  type: 'focus' | 'constellation' | 'applyLayout' | 'flip';
+  // TODO: 'applyLayout' is a position recalculation, not a navigation transition.
+  // It should be moved to a separate mechanism (e.g. a dedicated store action).
+  type: 'liminal-web-focus' | 'constellation' | 'applyLayout' | 'flip' | 'holarchy-focus';
   nodeId?: string;
   interrupt?: boolean; // Use interrupt variants for mid-flight changes
 }
