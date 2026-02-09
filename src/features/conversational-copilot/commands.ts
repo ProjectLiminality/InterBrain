@@ -156,10 +156,19 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
         const sharedNodeIds = [...store.copilotMode.sharedNodeIds]; // Copy before clearing
         console.log(`🎯 [Copilot-Exit] Will focus person after exit: "${partnerToFocus?.name}" (${partnerToFocus?.id})`);
 
-        // Exit copilot mode IMMEDIATELY for responsive UI
-        // This switches layout back to liminal-web and focuses the person
+        // Set spatialLayout BEFORE exitCopilotMode so orchestration animates correctly
+        store.setSpatialLayout('liminal-web');
+
+        // Request navigation to partner via unified orchestration
+        // This is processed by DreamspaceCanvas's navigationRequest handler
+        if (partnerToFocus) {
+          store.requestNavigation({ type: 'focus', nodeId: partnerToFocus.id });
+        }
+
+        // Exit copilot mode (processes relationships, clears copilot state)
+        // spatialLayout already set above, so its setSpatialLayout('liminal-web') is idempotent
         store.exitCopilotMode();
-        console.log(`🌐 [Copilot-Exit] Exited copilot mode - layout switched to liminal-web`);
+        console.log(`🌐 [Copilot-Exit] Exited copilot mode - layout switched to liminal-web via unified orchestration`);
 
         // Capture conversation metadata before stopping services
         const recordingService = getConversationRecordingService();

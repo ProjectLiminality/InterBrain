@@ -36,8 +36,9 @@ export interface DreamNode3DRef {
    * @param target - The target state (active with position/flip, or home)
    * @param duration - Animation duration in ms (default: 1000, use 0 for instant)
    * @param worldRotation - Current world rotation for ephemeral exit calculation
+   * @param easing - Optional easing override for active mode (default: easeOutQuart)
    */
-  setTargetState: (target: NodeTargetState, duration?: number, worldRotation?: Quaternion) => void;
+  setTargetState: (target: NodeTargetState, duration?: number, worldRotation?: Quaternion, easing?: 'easeOutCubic' | 'easeInQuart' | 'easeOutQuart' | 'easeInOutQuart') => void;
 
   /** Get the current visual position of this node */
   getCurrentPosition: () => [number, number, number];
@@ -119,6 +120,18 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   const [targetPosition, setTargetPosition] = useState<[number, number, number]>(dreamNode.position);
   const [currentPosition, setCurrentPosition] = useState<[number, number, number]>(dreamNode.position);
   const [startPosition, setStartPosition] = useState<[number, number, number]>(dreamNode.position);
+  // Ref mirror of currentPosition — updated every frame in useFrame, read by setTargetState
+  // and getCurrentPosition to avoid stale React state when interrupting mid-animation.
+  //
+  // Part of option key race condition mitigation (partial fix).
+  // React state (currentPosition) lags by 1-2 frames during animation because setState
+  // is batched. When showRingNodes interrupts hideRingNodes mid-flight, reading from
+  // React state could return a stale position, causing startPosition ≈ targetPosition
+  // and zero apparent movement (node appears stuck).
+  //
+  // This ref is the other half of the fix — see useOptionKeyHandlers.ts for the full
+  // race condition analysis and notes on what a complete fix would require.
+  const currentPositionRef = useRef<[number, number, number]>(dreamNode.position);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionStartTime, setTransitionStartTime] = useState(0);
   const [transitionDuration, setTransitionDuration] = useState(1000);
@@ -270,6 +283,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
 
 
       // Start from spawn position
+      currentPositionRef.current = ephemeralState.spawnPosition;
       setCurrentPosition(ephemeralState.spawnPosition);
       setStartPosition(ephemeralState.spawnPosition);
 
@@ -399,7 +413,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Universal Movement API implementation (keeping all the complex logic)
   useImperativeHandle(ref, () => ({
     // === NEW UNIFIED API ===
-    setTargetState: (target: NodeTargetState, duration = 1000, worldRotation?) => {
+    setTargetState: (target: NodeTargetState, duration = 1000, worldRotation?, easing?) => {
       console.log(`[DreamNode3D:${dreamNode.name}] setTargetState called:`, {
         mode: target.mode,
         position: target.mode === 'active' ? target.position : 'N/A',
@@ -408,9 +422,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         duration
       });
 
+      // Read from ref (updated every frame in useFrame) to avoid stale React state
+      // when interrupting mid-animation. This is critical for option key toggle
+      // where hideRingNodes → showRingNodes can fire in quick succession.
       const actualCurrentPosition: [number, number, number] = positionMode === 'constellation'
         ? getConstellationPosition(dreamNode.position, radialOffset)
-        : [...currentPosition];
+        : [...currentPositionRef.current];
 
       console.log(`[DreamNode3D:${dreamNode.name}] Starting from position:`, actualCurrentPosition);
 
@@ -418,6 +435,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         // Active mode: animate to position + flip to target side
         // Position animation
         setStartPosition(actualCurrentPosition);
+        currentPositionRef.current = actualCurrentPosition;
         setCurrentPosition(actualCurrentPosition);
         setTargetPosition(target.position);
         setTransitionDuration(duration);
@@ -425,7 +443,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         setPositionMode('active');
         setIsTransitioning(true);
         setTransitionType('liminal');
-        setTransitionEasing('easeOutQuart');
+        setTransitionEasing(easing || 'easeOutQuart');
 
         console.log(`[DreamNode3D:${dreamNode.name}] Set to ACTIVE mode, transitioning to:`, target.position);
 
@@ -461,6 +479,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
           }
 
           setStartPosition(actualCurrentPosition);
+          currentPositionRef.current = actualCurrentPosition;
           setCurrentPosition(actualCurrentPosition);
           setTargetPosition(worldExitPosition);
           setTransitionDuration(DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitAnimationDuration);
@@ -498,6 +517,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             const scaledPosition = getConstellationPosition(anchorPos, computedRadialOffset);
 
             setStartPosition(actualCurrentPosition);
+            currentPositionRef.current = actualCurrentPosition;
             setCurrentPosition(actualCurrentPosition);
             setTargetPosition(scaledPosition);
             setTransitionDuration(duration);
@@ -511,6 +531,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
             // Entering liminal-web: animate to raw anchor position
             // (dynamic scaling will be off, so anchor is where node should be)
             setStartPosition(actualCurrentPosition);
+            currentPositionRef.current = actualCurrentPosition;
             setCurrentPosition(actualCurrentPosition);
             setTargetPosition(anchorPos);
             setTransitionDuration(duration);
@@ -943,7 +964,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
     // ════════════════════════════════════════════════════════════════════════════
 
     // These utility methods are still valid and used by the new system
-    getCurrentPosition: () => currentPosition,
+    getCurrentPosition: () => currentPositionRef.current,
     isMoving: () => isTransitioning,
     getPositionMode: () => positionMode
   }), [currentPosition, isTransitioning, dreamNode.position, positionMode, radialOffset, transitionEasing, flipRotation, ephemeral]);
@@ -1011,10 +1032,12 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         startPosition[2] + (targetPosition[2] - startPosition[2]) * easedProgress
       ];
 
+      currentPositionRef.current = newPosition;
       setCurrentPosition(newPosition);
 
       if (progress >= 1) {
         setIsTransitioning(false);
+        currentPositionRef.current = targetPosition;
         setCurrentPosition(targetPosition);
 
         if (transitionType === 'liminal') {

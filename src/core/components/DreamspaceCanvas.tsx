@@ -13,6 +13,7 @@ const USE_WEBGL_STARS = true;
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
+import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
 import { DreamNodeEditor3D, RelationshipEditor3D } from '../../features/dreamnode-editor';
 import { RadialButtonRing3D } from '../../features/action-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/action-buttons/ActiveVideoCallButton';
@@ -788,6 +789,9 @@ export default function DreamspaceCanvas() {
 
           {/* Search mode overlay - self-contained search functionality */}
           <SearchModeOverlay />
+
+          {/* Copilot mode overlay - self-contained copilot orchestration */}
+          <CopilotModeOverlay />
 
           {/* DreamNode editor - render when in 'edit' layout (metadata editing) */}
           <DreamNodeEditor3D />

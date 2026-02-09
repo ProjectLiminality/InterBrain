@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useInterBrainStore } from '../store/interbrain-store';
 import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
-import { deriveConstellationIntent } from '../orchestration/intent-helpers';
+import { deriveConstellationIntent, deriveCopilotExitIntent, deriveFocusIntent, buildLayoutContext } from '../orchestration/intent-helpers';
 
 /**
  * useEscapeKeyHandler - Unified escape key handling for spatial layout navigation
@@ -62,28 +62,43 @@ export function useEscapeKeyHandler(
             break;
 
           case 'edit':
-          case 'relationship-edit':
+          case 'relationship-edit': {
             // Both edit modes are peer-level - both exit to liminal-web
+            // Capture editing node BEFORE exitEditMode clears it
+            const editingNodeId = store.editMode.editingNode?.id;
+
             // Clear stale edit mode data from orchestrator before exiting
             if (orchestratorRef.current) {
               orchestratorRef.current.clearEditModeData();
             }
 
-            // Exit edit mode, go to liminal-web
-            store.exitEditMode();
+            // Set spatialLayout BEFORE executeLayoutIntent so nodes animate correctly
             store.setSpatialLayout('liminal-web');
+
+            // Animate back to liminal-web via unified orchestration
+            if (editingNodeId && orchestratorRef.current) {
+              console.log(`[Escape] ${layout.toUpperCase()} → LIMINAL_WEB via unified orchestration`);
+              const relatedIds = orchestratorRef.current.getRelatedNodeIds(editingNodeId);
+              const context = buildLayoutContext(editingNodeId, store.flipState.flipStates, 'liminal-web');
+              const { intent } = deriveFocusIntent(editingNodeId, relatedIds, context);
+              orchestratorRef.current.executeLayoutIntent(intent);
+            }
+
+            // Exit edit mode
+            store.exitEditMode();
 
             // Only show radial buttons if option key is ACTUALLY pressed
             // This prevents buttons from appearing when exiting edit mode with escape
             if (store.radialButtonUI.optionKeyPressed) {
               store.setRadialButtonUIActive(true);
               if (orchestratorRef.current) {
-                orchestratorRef.current.hideRelatedNodesInLiminalWeb();
+                orchestratorRef.current.hideRingNodes(500);
               }
             } else {
               store.setRadialButtonUIActive(false);
             }
             break;
+          }
 
           case 'search':
             // Exit global search, go to constellation via unified orchestration
@@ -98,10 +113,26 @@ export function useEscapeKeyHandler(
             }
             break;
 
-          case 'copilot':
-            // Exit copilot mode, go to liminal-web
+          case 'copilot': {
+            // Exit copilot mode, go to liminal-web via unified orchestration
+            // Capture partner + related nodes BEFORE exitCopilotMode clears them
+            const partnerId = store.copilotMode.conversationPartner?.id;
+
+            // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to correct targets
+            store.setSpatialLayout('liminal-web');
+
+            if (partnerId && orchestratorRef.current) {
+              console.log('[Escape] COPILOT → LIMINAL_WEB via unified orchestration');
+              const relatedIds = orchestratorRef.current.getRelatedNodeIds(partnerId);
+              const { intent } = deriveCopilotExitIntent(partnerId, relatedIds);
+              orchestratorRef.current.executeLayoutIntent(intent);
+            }
+
+            // exitCopilotMode processes relationships and clears copilot state
+            // spatialLayout was already set above, so its setSpatialLayout('liminal-web') is idempotent
             store.exitCopilotMode();
             break;
+          }
 
           case 'liminal-web':
             // Exit liminal-web, go to constellation via unified orchestration

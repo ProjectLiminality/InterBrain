@@ -6,6 +6,7 @@ import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { hybridSearchService } from '../search/services/hybrid-search-service';
 import { saveEditModeChanges, cancelEditMode } from './services/editor-service';
 import { UIService } from '../../core/services/ui-service';
+import { deriveFocusIntent, buildLayoutContext } from '../../core/orchestration/intent-helpers';
 
 const uiService = new UIService();
 
@@ -82,8 +83,38 @@ export default function RelationshipEditor3D() {
     };
   }, []);
 
+  const shouldRender = spatialLayout === 'relationship-edit' && editMode.isActive && !!editingNode;
+
+  // On mount: send background constellation nodes home and display initial relationships
+  const hasInitialized = useRef(false);
+  useEffect(() => {
+    if (shouldRender && orchestrator && !hasInitialized.current) {
+      hasInitialized.current = true;
+
+      // Send background constellation nodes to their anchor positions
+      orchestrator.sendConstellationNodesHome();
+
+      // Display editing node centered with existing relationships in ring
+      if (editingNode) {
+        const store = useInterBrainStore.getState();
+        const pendingIds = store.editMode.pendingRelationships || [];
+        const context = buildLayoutContext(
+          editingNode.id,
+          store.flipState.flipStates,
+          store.spatialLayout
+        );
+        const { intent } = deriveFocusIntent(editingNode.id, pendingIds, context);
+        orchestrator.executeLayoutIntent(intent);
+        console.log(`[RelationshipEditor] Entered: centered on "${editingNode.name}" with ${pendingIds.length} existing relationships via unified orchestration`);
+      }
+    }
+    if (!shouldRender) {
+      hasInitialized.current = false;
+    }
+  }, [shouldRender, orchestrator]);
+
   // Only render in 'relationship-edit' layout mode
-  if (spatialLayout !== 'relationship-edit' || !editMode.isActive || !editingNode) {
+  if (!shouldRender) {
     return null;
   }
 
@@ -100,6 +131,18 @@ export default function RelationshipEditor3D() {
     const trimmed = newQuery.trim();
     if (trimmed.length < 2) {
       setEditModeSearchResults([]);
+      // When query is cleared, show only pending relationships in ring
+      if (editingNode && orchestrator) {
+        const store = useInterBrainStore.getState();
+        const pendingIds = store.editMode.pendingRelationships || [];
+        const context = buildLayoutContext(
+          editingNode.id,
+          store.flipState.flipStates,
+          store.spatialLayout
+        );
+        const { intent } = deriveFocusIntent(editingNode.id, pendingIds, context);
+        orchestrator.executeLayoutIntent(intent);
+      }
       return;
     }
 
@@ -125,6 +168,24 @@ export default function RelationshipEditor3D() {
       const resultNodes = searchResults.map(result => result.node);
       setEditModeSearchResults(resultNodes);
       setSearchResults(resultNodes);
+
+      // Display search results spatially via unified orchestration
+      if (resultNodes.length > 0 && orchestrator) {
+        // Combine pending relationships (existing) with new search results (deduped)
+        const store = useInterBrainStore.getState();
+        const pendingIds = store.editMode.pendingRelationships || [];
+        const searchIds = resultNodes.map(n => n.id).filter(id => !pendingIds.includes(id));
+        const surroundingNodeIds = [...pendingIds, ...searchIds];
+
+        const context = buildLayoutContext(
+          editingNode.id,
+          store.flipState.flipStates,
+          store.spatialLayout
+        );
+        const { intent } = deriveFocusIntent(editingNode.id, surroundingNodeIds, context);
+        orchestrator.executeLayoutIntent(intent);
+        console.log(`[RelationshipEditor] Displaying ${surroundingNodeIds.length} nodes (${pendingIds.length} related + ${searchIds.length} search results) via unified orchestration`);
+      }
 
     } catch (error) {
       console.error('RelationshipEditor3D: Search failed:', error);
@@ -161,7 +222,18 @@ export default function RelationshipEditor3D() {
       orchestrator.clearEditModeData();
     }
 
-    useInterBrainStore.getState().setSpatialLayout('liminal-web');
+    // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to correct targets
+    const store = useInterBrainStore.getState();
+    store.setSpatialLayout('liminal-web');
+
+    // Animate back to liminal-web with editing node centered and updated relationships
+    if (editingNode && orchestrator) {
+      const relatedIds = orchestrator.getRelatedNodeIds(editingNode.id);
+      const context = buildLayoutContext(editingNode.id, store.flipState.flipStates, 'liminal-web');
+      const { intent } = deriveFocusIntent(editingNode.id, relatedIds, context);
+      orchestrator.executeLayoutIntent(intent);
+    }
+
     exitEditMode();
     setIsSaving(false);
 
@@ -173,6 +245,19 @@ export default function RelationshipEditor3D() {
     if (orchestrator) {
       orchestrator.clearEditModeData();
     }
+
+    // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to correct targets
+    const store = useInterBrainStore.getState();
+    store.setSpatialLayout('liminal-web');
+
+    // Animate back to liminal-web with editing node centered and original relationships
+    if (editingNode && orchestrator) {
+      const relatedIds = orchestrator.getRelatedNodeIds(editingNode.id);
+      const context = buildLayoutContext(editingNode.id, store.flipState.flipStates, 'liminal-web');
+      const { intent } = deriveFocusIntent(editingNode.id, relatedIds, context);
+      orchestrator.executeLayoutIntent(intent);
+    }
+
     cancelEditMode();
   };
 

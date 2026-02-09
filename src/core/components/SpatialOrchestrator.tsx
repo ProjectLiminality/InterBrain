@@ -18,7 +18,7 @@ import type { DreamNode3DRef } from '../../features/dreamnode/components/DreamNo
 import { buildRelationshipGraph, calculateRingLayoutPositions, calculateRingLayoutPositionsForSearch, DEFAULT_RING_CONFIG } from '../../features/liminal-web-layout';
 import { computeConstellationLayout, createFallbackLayout } from '../../features/constellation-layout/ConstellationLayout';
 import { computeConstellationFilter } from '../../features/constellation-layout/services/constellation-filter-service';
-import { calculateSpawnPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
+import { calculateSpawnPosition, calculateExitPosition, DEFAULT_EPHEMERAL_SPAWN_CONFIG } from '../../features/constellation-layout/utils/EphemeralSpawning';
 import { useInterBrainStore } from '../store/interbrain-store';
 import { queueEphemeralDespawn, cancelEphemeralDespawn } from '../services/ephemeral-despawn-queue';
 import type { LayoutIntent, NodeTargetState, LayoutSnapshot } from '../orchestration/types';
@@ -51,6 +51,21 @@ export interface SpatialOrchestratorRef {
    * background nodes to animate away without a full layout intent.
    */
   sendConstellationNodesHome: (duration?: number) => void;
+
+  /**
+   * Temporarily hide ring nodes (for option key radial button toggle).
+   * Unlike executeLayoutIntent, this does NOT despawn ephemeral nodes —
+   * they animate to exit positions but stay mounted for immediate recall.
+   * Persistent nodes animate to anchor with easeInQuart.
+   */
+  hideRingNodes: (duration?: number) => void;
+
+  /**
+   * Show ring nodes back after hideRingNodes (for option key release).
+   * Recalculates ring positions from current center and relationship graph,
+   * then animates all ring nodes (including preserved ephemerals) back.
+   */
+  showRingNodes: (duration?: number) => void;
 
   /**
    * Restore layout state from a saved snapshot.
@@ -580,9 +595,10 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
           saveLayoutSnapshot(snapshot);
 
           // Update store state as side effect
-          // Preserve 'search' layout if already set (search mode manages its own spatialLayout)
+          // Preserve layouts that manage their own spatialLayout (search, copilot, edit modes)
           const currentLayout = store.spatialLayout;
-          if (currentLayout !== 'search') {
+          if (currentLayout !== 'search' && currentLayout !== 'copilot' &&
+              currentLayout !== 'edit' && currentLayout !== 'relationship-edit') {
             store.setSpatialLayout('liminal-web');
           }
           if (intent.center) {
@@ -726,6 +742,89 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         }
       });
       console.log(`[Orchestrator] sendConstellationNodesHome: sent ${count} nodes home`);
+    },
+
+    hideRingNodes: (duration = 500) => {
+      const ringNodeIds = [...liminalWebRoles.current.ringNodeIds];
+      if (ringNodeIds.length === 0) return;
+
+      const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
+      ringNodeIds.forEach(nodeId => {
+        const nodeRef = nodeRefs.current.get(nodeId);
+        if (!nodeRef?.current) return;
+
+        // Get current position in camera space for exit direction calculation
+        const currentPos = nodeRef.current.getCurrentPosition();
+        let cameraSpacePos = [...currentPos] as [number, number, number];
+        if (worldRotation) {
+          const posVec = new Vector3(...currentPos);
+          posVec.applyQuaternion(worldRotation);
+          cameraSpacePos = [posVec.x, posVec.y, posVec.z];
+        }
+
+        // Calculate exit position (same direction, at spawn ring radius)
+        const exitPos = calculateExitPosition(
+          cameraSpacePos,
+          DEFAULT_EPHEMERAL_SPAWN_CONFIG.exitRadiusFactor,
+          false // ring nodes are never center
+        );
+
+        // Convert back to world space
+        let worldExitPos = [...exitPos] as [number, number, number];
+        if (worldRotation) {
+          const exitVec = new Vector3(...exitPos);
+          const inverseRotation = worldRotation.clone().invert();
+          exitVec.applyQuaternion(inverseRotation);
+          worldExitPos = [exitVec.x, exitVec.y, exitVec.z];
+        }
+
+        // Animate to exit position — using 'active' mode so no despawn/home logic triggers
+        // easeInQuart: slow start, fast end (nodes accelerate away)
+        nodeRef.current.setTargetState(
+          { mode: 'active', position: worldExitPos, flipSide: 'front' },
+          duration,
+          worldRotation,
+          'easeInQuart'
+        );
+      });
+
+      console.log(`[Orchestrator] hideRingNodes: animated ${ringNodeIds.length} nodes to exit positions`);
+    },
+
+    showRingNodes: (duration = 500) => {
+      const centerId = liminalWebRoles.current.centerNodeId;
+      if (!centerId) return;
+
+      const worldRotation = dreamWorldRef.current?.quaternion.clone();
+
+      // Recalculate ring positions from current relationship graph
+      const relationshipGraph = buildFullRelationshipGraph();
+      const positions = calculateRingLayoutPositions(
+        centerId,
+        relationshipGraph,
+        DEFAULT_RING_CONFIG
+      );
+
+      // Apply world rotation correction
+      if (worldRotation) {
+        applyWorldRotationCorrection(positions);
+      }
+
+      // Animate ring nodes back to their positions
+      const allRingNodes = [...positions.ring1Nodes, ...positions.ring2Nodes, ...positions.ring3Nodes];
+      allRingNodes.forEach(({ nodeId, position }) => {
+        const nodeRef = nodeRefs.current.get(nodeId);
+        if (!nodeRef?.current) return;
+
+        nodeRef.current.setTargetState(
+          { mode: 'active', position, flipSide: 'front' },
+          duration,
+          worldRotation
+        );
+      });
+
+      console.log(`[Orchestrator] showRingNodes: animated ${allRingNodes.length} nodes back to ring positions`);
     },
 
     getRelatedNodeIds: (nodeId: string): string[] => {
