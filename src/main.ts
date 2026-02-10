@@ -843,6 +843,7 @@ export default class InterBrainPlugin extends Plugin {
           const dreamSongFile = this.app.vault.getAbstractFileByPath(dreamSongPath);
           const hasDreamSong = dreamSongFile !== null;
 
+          let syncDidWork = false;
           if (hasDreamSong) {
             loadingNotice.hide();
             const syncNotice = this.uiService.showLoading('Syncing canvas submodules...');
@@ -859,6 +860,10 @@ export default class InterBrainPlugin extends Plugin {
                 throw new Error(`Canvas sync failed: ${syncResult.error}`);
               }
 
+              // Track whether sync made meaningful changes
+              const newImports = syncResult.submodulesImported.filter(r => r.success && !r.alreadyExisted);
+              syncDidWork = newImports.length > 0 || syncResult.submodulesRemoved.length > 0;
+
               syncNotice.hide();
             } catch (syncError) {
               syncNotice.hide();
@@ -874,7 +879,11 @@ export default class InterBrainPlugin extends Plugin {
           const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullRepoPath });
 
           if (!statusOutput.trim()) {
-            this.uiService.showSuccess('No changes to commit - all changes already saved');
+            // No remaining changes — but sync may have already committed
+            const message = syncDidWork
+              ? 'DreamSong synced and all changes committed'
+              : 'Everything up to date';
+            this.uiService.showSuccess(message);
 
             // Exit creator mode even if no changes
             const { creatorMode } = store;
@@ -1400,7 +1409,7 @@ export default class InterBrainPlugin extends Plugin {
                 store.restoreVisualState(previousEntry);
 
                 // Use holarchy-focus if the entry was flipped, otherwise liminal-web-focus
-                if (previousEntry.flipState?.isFlipped) {
+                if (previousEntry.flipState?.flipSide === 'back') {
                   store.requestNavigation({ type: 'holarchy-focus', nodeId: targetNode.id, interrupt: true });
                 } else {
                   store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
@@ -1476,7 +1485,7 @@ export default class InterBrainPlugin extends Plugin {
                 store.restoreVisualState(nextEntry);
 
                 // Use holarchy-focus if the entry was flipped, otherwise liminal-web-focus
-                if (nextEntry.flipState?.isFlipped) {
+                if (nextEntry.flipState?.flipSide === 'back') {
                   store.requestNavigation({ type: 'holarchy-focus', nodeId: targetNode.id, interrupt: true });
                 } else {
                   store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
