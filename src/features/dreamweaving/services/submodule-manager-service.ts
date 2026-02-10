@@ -151,7 +151,12 @@ export class SubmoduleManagerService {
       // This keeps the local universe self-contained — no network dependency for
       // submodule operations. If a peer receives this DreamNode and needs to
       // hydrate missing submodules, they resolve the Radicle ID from the network.
-      const submoduleUrl = `../${actualSubmoduleName}`;
+      //
+      // IMPORTANT: Use absolute path, not relative (../).
+      // Git resolves relative submodule URLs against the branch's remote URL,
+      // which is a rad:// URL — so ../Name becomes rad://Name (broken).
+      // Absolute filesystem paths are resolved literally.
+      const submoduleUrl = sourceFullPath;
       console.log(`SubmoduleManagerService: Using local sovereign path for submodule: ${submoduleUrl}`);
       console.log(`SubmoduleManagerService: Radicle ID tracked in .udd for network resolution: ${radicleId}`);
 
