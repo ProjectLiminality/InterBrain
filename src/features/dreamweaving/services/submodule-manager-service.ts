@@ -310,10 +310,25 @@ export class SubmoduleManagerService {
         { skipRadicle }
       );
 
-      // Early exit: If all submodules already existed AND none removed, no git commit needed
+      // Early exit: If all submodules already existed AND none removed, no canvas rewrite needed.
+      // But relationship tracking may have updated submodule pointers or .udd — commit those.
       const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
       if (newImports.length === 0 && removedSubmodules.length === 0) {
-        console.log(`SubmoduleManagerService: All submodules already synced - no git changes needed`);
+        console.log(`SubmoduleManagerService: No new imports or removals — checking for relationship tracking changes`);
+
+        // Commit any submodule pointer updates or .udd changes from relationship tracking
+        try {
+          const fullPath = this.getFullPath(analysis.dreamNodeBoundary);
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+          if (statusOutput.trim()) {
+            console.log(`SubmoduleManagerService: Committing relationship tracking updates`);
+            await execAsync('git add -A', { cwd: fullPath });
+            await execAsync('git commit -m "Sync submodule pointers to sovereign HEAD"', { cwd: fullPath });
+          }
+        } catch (error) {
+          console.warn(`SubmoduleManagerService: Could not commit tracking updates (non-fatal):`, error instanceof Error ? error.message : 'Unknown error');
+        }
+
         return {
           canvasPath,
           dreamNodePath: analysis.dreamNodeBoundary,
