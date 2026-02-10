@@ -145,41 +145,21 @@ export class SubmoduleManagerService {
         throw new Error(`Cannot add submodule: ${actualSubmoduleName} does not have a Radicle ID. Initialize with Radicle first.`);
       }
 
-      // Determine submodule URL based on platform
-      // Windows: Use relative filesystem path (git-remote-rad not available yet)
-      // macOS/Linux: Use Radicle URL for network portability
-      let submoduleUrl: string;
-      const nodeProcess = (globalThis as any).process;
-      let execEnv = { ...nodeProcess?.env };
-
-      if (isWindows()) {
-        // Windows: Use relative path from parent to source
-        // Both repos are assumed to be in the vault root, so ../SubmoduleName works
-        submoduleUrl = `../${actualSubmoduleName}`;
-        console.log(`SubmoduleManagerService: [Windows] Using local path for submodule: ${submoduleUrl}`);
-        console.log(`SubmoduleManagerService: [Windows] Radicle ID stored in .udd for future migration: ${radicleId}`);
-      } else {
-        // macOS/Linux: Use Radicle URL for network portability
-        // Convert rad:zABC... to rad://zABC... format for git submodule
-        submoduleUrl = radicleId.replace(/^rad:/, 'rad://');
-        console.log(`SubmoduleManagerService: Using Radicle URL for submodule: ${submoduleUrl}`);
-
-        // CRITICAL: Add Radicle bin to PATH so git can find git-remote-rad helper
-        const homeDir = os.homedir();
-        const radicleGitHelperPaths = [
-          `${homeDir}/.radicle/bin`,
-          '/usr/local/bin',
-          '/opt/homebrew/bin'
-        ];
-        const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
-        execEnv = { ...nodeProcess?.env, PATH: enhancedPath };
-      }
+      // Submodule remote always points to the local sovereign repo (all platforms).
+      // Radicle ID is tracked in .udd for identification and network resolution,
+      // but the git submodule itself clones from the local filesystem.
+      // This keeps the local universe self-contained — no network dependency for
+      // submodule operations. If a peer receives this DreamNode and needs to
+      // hydrate missing submodules, they resolve the Radicle ID from the network.
+      const submoduleUrl = `../${actualSubmoduleName}`;
+      console.log(`SubmoduleManagerService: Using local sovereign path for submodule: ${submoduleUrl}`);
+      console.log(`SubmoduleManagerService: Radicle ID tracked in .udd for network resolution: ${radicleId}`);
 
       // Import the submodule (use --force to handle previously-removed submodules)
       const submoduleCommand = `git submodule add --force "${submoduleUrl}" "${actualSubmoduleName}"`;
-      await execAsync(submoduleCommand, { cwd: parentFullPath, env: execEnv });
+      await execAsync(submoduleCommand, { cwd: parentFullPath });
 
-      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName}${isWindows() ? ' (local path)' : ' (Radicle URL)'}`);
+      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName} (local sovereign)`);
       
       return {
         success: true,
