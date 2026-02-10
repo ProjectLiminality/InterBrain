@@ -739,16 +739,16 @@ export class SubmoduleManagerService {
             console.log(`SubmoduleManagerService: Supermodule relationship already exists in sovereign ${result.submoduleName}`);
           }
 
-          // STEP 2: Update submodule to point to latest sovereign commit with all metadata
+          // STEP 2: Update submodule to point to latest sovereign commit
+          // We fetch directly from the sovereign repo's local path (not Radicle origin,
+          // which may be stale). This ensures the submodule always reflects the sovereign's
+          // actual HEAD, including any local-only commits not yet pushed to Radicle.
           console.log(`SubmoduleManagerService: Updating submodule to latest sovereign state...`);
 
           try {
-            // Initialize submodule first (if not already)
             const nodeProcess = (globalThis as any).process;
             let execEnv = { ...nodeProcess?.env };
 
-            // On macOS/Linux, add Radicle bin to PATH for git-remote-rad helper
-            // On Windows, submodules use local paths so this isn't needed
             if (!isWindows()) {
               const homeDir = os.homedir();
               const radicleGitHelperPaths = [
@@ -760,23 +760,28 @@ export class SubmoduleManagerService {
               execEnv = { ...nodeProcess?.env, PATH: enhancedPath };
             }
 
-            await execAsync(`git submodule update --init "${result.submoduleName}"`, {
-              cwd: fullParentPath,
-              env: execEnv
-            });
-
-            // Update submodule to point to latest commit from sovereign (remote origin/main)
+            // Initialize submodule if not already initialized
             const submodulePath = path.join(fullParentPath, result.submoduleName);
-            await execAsync(`git fetch origin`, {
+            const submoduleGitExists = require('fs').existsSync(path.join(submodulePath, '.git'));
+            if (!submoduleGitExists) {
+              await execAsync(`git submodule update --init "${result.submoduleName}"`, {
+                cwd: fullParentPath,
+                env: execEnv
+              });
+            }
+
+            // Fetch from sovereign's local path and checkout its main HEAD
+            // This avoids stale Radicle remotes — the sovereign repo is the source of truth
+            await execAsync(`git fetch "${sovereignPath}" main`, {
               cwd: submodulePath,
               env: execEnv
             });
-            await execAsync(`git checkout origin/main`, {
+            await execAsync(`git checkout FETCH_HEAD`, {
               cwd: submodulePath,
               env: execEnv
             });
 
-            console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest with complete metadata`);
+            console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest sovereign commit`);
           } catch (error) {
             console.warn(`SubmoduleManagerService: Could not update submodule ${result.submoduleName} (non-fatal):`, error instanceof Error ? error.message : 'Unknown error');
             console.warn(`SubmoduleManagerService: Continuing with relationship tracking...`);
