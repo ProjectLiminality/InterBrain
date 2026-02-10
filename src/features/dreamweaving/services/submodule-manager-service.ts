@@ -713,14 +713,31 @@ export class SubmoduleManagerService {
 
           console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
 
-          // NOTE: We no longer modify the sovereign's .udd file here at all.
-          // Both the .udd supermodules update AND the beacon commit are now created
-          // when the user explicitly "Shares Changes" via igniteBeacons().
-          // This prevents:
-          // 1. Modifying sovereign repos during editing (weave freely!)
-          // 2. Noisy beacon commits during editing
-          // 3. Force-pushing unpublished work in sovereign repos
-          // See: src/features/coherence-beacon/service.ts - igniteBeacons()
+          // Update sovereign's .udd with supermodule entry (local commit only)
+          // Sharing this commit to the Radicle network is deferred to igniteBeacons()
+          console.log(`SubmoduleManagerService: Adding supermodule relationship to sovereign ${result.submoduleName}`);
+
+          const supermoduleEntry = {
+            radicleId: parentRadicleId,
+            title: parentTitle,
+            atCommit: '', // Populated by CoherenceBeacon when shared
+            addedAt: Date.now()
+          };
+
+          if (await UDDService.addSupermoduleEntry(sovereignPath, supermoduleEntry)) {
+            console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentRadicleId}) to sovereign ${result.submoduleName}'s supermodules`);
+
+            // Commit the change in the sovereign repository (local only)
+            try {
+              await execAsync('git add .udd', { cwd: sovereignPath });
+              await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
+              console.log(`SubmoduleManagerService: Committed supermodule addition in sovereign ${result.submoduleName}`);
+            } catch (error) {
+              console.error(`SubmoduleManagerService: Failed to commit sovereign .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          } else {
+            console.log(`SubmoduleManagerService: Supermodule relationship already exists in sovereign ${result.submoduleName}`);
+          }
 
           // STEP 2: Update submodule to point to latest sovereign commit with all metadata
           console.log(`SubmoduleManagerService: Updating submodule to latest sovereign state...`);
