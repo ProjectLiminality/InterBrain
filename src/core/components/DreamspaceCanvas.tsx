@@ -505,10 +505,13 @@ export default function DreamspaceCanvas() {
     
     // Normal click handling (not in edit mode)
     
-    // If we're in search mode, properly exit search interface when clicking a result
-    if (store.spatialLayout === 'search' && store.searchInterface.isActive) {
-      console.log('Clicking search result - exiting search mode cleanly');
-      store.setSearchActive(false); // This clears search query and results
+    // If we're in search mode, transition to liminal-web when clicking a result
+    // Must set spatialLayout BEFORE building context so intent derivation sees 'liminal-web'
+    const wasInSearch = store.spatialLayout === 'search' && store.searchInterface.isActive;
+    if (wasInSearch) {
+      console.log('[DreamSpace] Search result clicked — transitioning to liminal-web');
+      store.setSearchActive(false);
+      store.setSpatialLayout('liminal-web');
     }
 
     // Build context for intent derivation
