@@ -1093,18 +1093,17 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
         const targetSide = targetFlipRotation > Math.PI / 2 ? 'back' : 'front';
         const storeState = useInterBrainStore.getState();
         const currentStoreFlip = storeState.flipState.flipStates.get(dreamNode.id);
-        const storeThinks = currentStoreFlip?.isFlipped || false;
-        const actuallyFlipped = targetSide === 'back';
+        const storeThinksSide = currentStoreFlip?.flipSide || 'front';
 
-        if (storeThinks !== actuallyFlipped) {
-          storeState.syncFlipState(dreamNode.id, actuallyFlipped);
+        if (storeThinksSide !== targetSide) {
+          storeState.syncFlipState(dreamNode.id, targetSide as 'front' | 'back');
 
           // Update the current history entry's flipState so undo/redo
           // restores the correct holarchy vs liminal-web view
           useInterBrainStore.getState().updateCurrentHistoryFlipState(dreamNode.id, {
-            isFlipped: actuallyFlipped,
+            flipSide: targetSide as 'front' | 'back',
             isFlipping: false,
-            flipDirection: actuallyFlipped ? 'front-to-back' : 'back-to-front',
+            flipDirection: targetSide === 'back' ? 'front-to-back' : 'back-to-front',
             animationStartTime: 0
           });
         }

@@ -14,6 +14,7 @@ import { serviceManager, type IDreamNodeService } from '../../core/services/serv
 import { UIService } from '../../core/services/ui-service';
 import { processDroppedUrlData } from './url-utils';
 import type { SpatialOrchestratorRef } from '../../core/components/SpatialOrchestrator';
+import { deriveFocusIntent, buildLayoutContext } from '../../core/orchestration/intent-helpers';
 
 /**
  * UIService instance for drop operation feedback
@@ -241,7 +242,13 @@ async function autoRelateInLiminalWeb(
       // Trigger a liminal-web layout refresh with smooth fly-in for the new node
       globalThis.setTimeout(() => {
         if (spatialOrchestratorRef.current) {
-          spatialOrchestratorRef.current.focusOnNodeWithFlyIn(focusedNodeId, newNode.id);
+          const orch = spatialOrchestratorRef.current;
+          const relatedIds = orch.getRelatedNodeIds(focusedNodeId);
+          const currentStore = useInterBrainStore.getState();
+          const context = buildLayoutContext(focusedNodeId, currentStore.flipState.flipStates, 'liminal-web');
+          const { intent } = deriveFocusIntent(focusedNodeId, relatedIds, context);
+          intent.emphasisNodeId = newNode.id;
+          orch.executeLayoutIntent(intent);
         }
       }, 100);
     }
@@ -307,6 +314,11 @@ export async function handleNormalDrop(
       position,
       additionalFiles
     );
+
+    if (newNode) {
+      // Add to constellation filter so the node persists as a star after leaving liminal-web
+      useInterBrainStore.getState().addNodeToConstellationFilter(newNode.id);
+    }
 
     // Auto-create relationship if in liminal-web mode
     if (shouldAutoRelate && focusedNodeId && newNode) {
@@ -406,6 +418,11 @@ export async function handleNormalUrlDrop(
         urlMetadata,
         position
       );
+    }
+
+    if (newNode) {
+      // Add to constellation filter so the node persists as a star after leaving liminal-web
+      useInterBrainStore.getState().addNodeToConstellationFilter(newNode.id);
     }
 
     // Auto-create relationship if in liminal-web mode

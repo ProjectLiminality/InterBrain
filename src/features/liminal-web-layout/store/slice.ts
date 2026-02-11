@@ -242,7 +242,7 @@ export const createLiminalWebSlice: StateCreator<
       newState.flipState = {
         ...state.flipState,
         flipStates: updatedFlipStates,
-        flippedNodeId: entry.flipState.isFlipped ? entry.nodeId : state.flipState.flippedNodeId
+        flippedNodeId: entry.flipState.flipSide === 'back' ? entry.nodeId : state.flipState.flippedNodeId
       };
     }
 

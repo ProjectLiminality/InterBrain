@@ -51,6 +51,9 @@ export interface LayoutIntent {
 
   /** Ordered list of node IDs for ring placement (order determines ring position) */
   surroundingNodes: string[];
+
+  /** Node that gets 1.2x duration + easeOutCubic for dramatic entrance (e.g., newly created node fly-in) */
+  emphasisNodeId?: string;
 }
 
 /**

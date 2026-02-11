@@ -252,6 +252,7 @@ export interface CoreSlice {
   setConstellationConfig: (config: Partial<ConstellationConfig>) => void;
   constellationFilter: ConstellationFilterResult;
   setConstellationFilter: (filter: ConstellationFilterResult) => void;
+  addNodeToConstellationFilter: (nodeId: string) => void;
 
   // Ephemeral nodes - dynamically spawned nodes not in the constellation
   ephemeralNodes: Map<string, EphemeralNodeState>;
@@ -403,6 +404,24 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
   })),
 
   setConstellationFilter: (filter) => set({ constellationFilter: filter }),
+
+  addNodeToConstellationFilter: (nodeId) => set((state: InterBrainState) => {
+    const filter = state.constellationFilter;
+    const newVipNodes = new Set(filter.vipNodes);
+    newVipNodes.add(nodeId);
+    const newMountedNodes = new Set(filter.mountedNodes);
+    newMountedNodes.add(nodeId);
+    const newEphemeralNodes = new Set(filter.ephemeralNodes);
+    newEphemeralNodes.delete(nodeId);
+    return {
+      constellationFilter: {
+        ...filter,
+        vipNodes: newVipNodes,
+        mountedNodes: newMountedNodes,
+        ephemeralNodes: newEphemeralNodes
+      }
+    };
+  }),
 
   // Ephemeral node actions
   spawnEphemeralNode: (nodeId, targetPosition, spawnPosition) => set((state: InterBrainState) => {

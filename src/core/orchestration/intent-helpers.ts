@@ -149,7 +149,7 @@ export function deriveSearchIntent(searchResultIds: string[]): DerivedIntentResu
  */
 export function buildLayoutContext(
   currentCenterId: string | null,
-  flipStates: Map<string, { isFlipped: boolean; isFlipping: boolean }>,
+  flipStates: Map<string, { flipSide: 'front' | 'back'; isFlipping: boolean }>,
   layoutMode: 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'relationship-edit' | 'copilot'
 ): LayoutContext {
   let currentCenterFlipSide: 'front' | 'back' | null = null;
@@ -157,7 +157,7 @@ export function buildLayoutContext(
 
   if (currentCenterId) {
     const flipState = flipStates.get(currentCenterId);
-    if (flipState?.isFlipped && !flipState?.isFlipping) {
+    if (flipState?.flipSide === 'back' && !flipState?.isFlipping) {
       currentCenterFlipSide = 'back';
       isHolarchyMode = true;
     } else if (!flipState?.isFlipping) {

@@ -69,7 +69,7 @@ export function registerDreamNodeCommands(
       const canFlipToFront = spatialLayout === 'liminal-web' &&
                             selectedNode !== null &&
                             selectedNode.type !== 'dreamer' && // Dreamers cannot flip
-                            currentFlipState?.isFlipped === true &&
+                            currentFlipState?.flipSide === 'back' &&
                             !currentFlipState?.isFlipping;
 
       if (checking) {
@@ -98,7 +98,7 @@ export function registerDreamNodeCommands(
       const canFlipToBack = spatialLayout === 'liminal-web' &&
                            selectedNode !== null &&
                            selectedNode.type !== 'dreamer' && // Dreamers cannot flip
-                           (currentFlipState?.isFlipped !== true) &&
+                           (currentFlipState?.flipSide !== 'back') &&
                            !currentFlipState?.isFlipping;
 
       if (checking) {
@@ -130,7 +130,7 @@ export function registerDreamNodeCommands(
       const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
       const canCycle = spatialLayout === 'liminal-web' &&
                       selectedNode !== null &&
-                      currentFlipState?.isFlipped === true &&
+                      currentFlipState?.flipSide === 'back' &&
                       !currentFlipState?.isFlipping;
 
       if (checking) {
@@ -161,7 +161,7 @@ export function registerDreamNodeCommands(
       const currentFlipState = selectedNode ? flipState.flipStates.get(selectedNode.id) : null;
       const canCycle = spatialLayout === 'liminal-web' &&
                       selectedNode !== null &&
-                      currentFlipState?.isFlipped === true &&
+                      currentFlipState?.flipSide === 'back' &&
                       !currentFlipState?.isFlipping;
 
       if (checking) {

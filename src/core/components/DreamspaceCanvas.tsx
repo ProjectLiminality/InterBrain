@@ -378,24 +378,31 @@ export default function DreamspaceCanvas() {
           if (node) {
             store.setSelectedNode(node);
           }
-          // Re-read store after setSelectedNode to get fresh state
-          const freshStore = useInterBrainStore.getState();
-          const context = buildLayoutContext(
-            freshStore.selectedNode?.id || null,
-            freshStore.flipState.flipStates,
-            freshStore.spatialLayout
-          );
           (async () => {
             try {
               let supermoduleIds: string[] = [];
-              const nodeData = freshStore.dreamNodes.get(nodeId)?.node;
+              const nodeData = store.dreamNodes.get(nodeId)?.node;
               if (vaultService && nodeData) {
-                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, freshStore.dreamNodes);
+                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, store.dreamNodes);
               }
+              // Build context AFTER async work so we read the fully-propagated store state
+              // (restoreVisualState may not have propagated when the useEffect first fires)
+              const freshStore = useInterBrainStore.getState();
+              const context = buildLayoutContext(
+                freshStore.selectedNode?.id || null,
+                freshStore.flipState.flipStates,
+                freshStore.spatialLayout
+              );
               const { intent } = deriveHolarchyNavigationIntent(nodeId, supermoduleIds, context);
               orchestrator.executeLayoutIntent(intent);
             } catch (error) {
               console.error('[Canvas-NavRequest] Failed to load supermodules for holarchy-focus:', error);
+              const freshStore = useInterBrainStore.getState();
+              const context = buildLayoutContext(
+                freshStore.selectedNode?.id || null,
+                freshStore.flipState.flipStates,
+                freshStore.spatialLayout
+              );
               const { intent } = deriveHolarchyNavigationIntent(nodeId, [], context);
               orchestrator.executeLayoutIntent(intent);
             }

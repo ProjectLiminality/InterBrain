@@ -73,7 +73,7 @@ export interface DreamNodeSlice {
   completeFlipAnimation: (nodeId: string) => void;
   resetAllFlips: () => void;
   getNodeFlipState: (nodeId: string) => FlipState | null;
-  syncFlipState: (nodeId: string, isFlipped: boolean) => void;
+  syncFlipState: (nodeId: string, flipSide: 'front' | 'back') => void;
 
   // Carousel state for DreamSong side (holarchy view + multiple .canvas files)
   carouselState: CarouselState;
@@ -209,7 +209,7 @@ export const createDreamNodeSlice: StateCreator<
     const updatedFlipStates = new Map(state.flipState.flipStates);
 
     const currentFlipState = updatedFlipStates.get(nodeId) || {
-      isFlipped: false,
+      flipSide: 'front' as const,
       isFlipping: false,
       flipDirection: 'front-to-back' as const,
       animationStartTime: 0
@@ -243,10 +243,10 @@ export const createDreamNodeSlice: StateCreator<
     const currentFlipState = updatedFlipStates.get(nodeId);
 
     if (currentFlipState) {
-      const finalFlippedState = currentFlipState.flipDirection === 'front-to-back';
+      const finalFlipSide = currentFlipState.flipDirection === 'front-to-back' ? 'back' : 'front';
       const completedFlipState = {
         ...currentFlipState,
-        isFlipped: finalFlippedState,
+        flipSide: finalFlipSide as 'front' | 'back',
         isFlipping: false,
         animationStartTime: 0
       };
@@ -273,12 +273,12 @@ export const createDreamNodeSlice: StateCreator<
     return get().flipState.flipStates.get(nodeId) || null;
   },
 
-  syncFlipState: (nodeId, isFlipped) => set((state) => {
+  syncFlipState: (nodeId, flipSide) => set((state) => {
     const updatedFlipStates = new Map(state.flipState.flipStates);
     updatedFlipStates.set(nodeId, {
-      isFlipped,
+      flipSide,
       isFlipping: false,
-      flipDirection: isFlipped ? 'front-to-back' : 'back-to-front',
+      flipDirection: flipSide === 'back' ? 'front-to-back' : 'back-to-front',
       animationStartTime: 0
     });
 
@@ -286,7 +286,7 @@ export const createDreamNodeSlice: StateCreator<
       flipState: {
         ...state.flipState,
         flipStates: updatedFlipStates,
-        flippedNodeId: isFlipped ? nodeId : null
+        flippedNodeId: flipSide === 'back' ? nodeId : null
       }
     };
   }),

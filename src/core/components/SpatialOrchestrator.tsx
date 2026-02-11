@@ -695,6 +695,12 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
         console.log(`[Orchestrator] Dispatching ${targetStates.size} target states:`);
         targetStates.forEach((target, nodeId) => {
           console.log(`[Orchestrator]   - ${nodeId}: mode=${target.mode}, position=${target.mode === 'active' ? JSON.stringify(target.position) : 'N/A'}`);
+
+          // Emphasis node gets 1.2x duration + easeOutCubic for dramatic entrance
+          const isEmphasis = intent.emphasisNodeId === nodeId;
+          const nodeDuration = isEmphasis ? Math.round(duration * 1.2) : duration;
+          const nodeEasing = isEmphasis ? 'easeOutCubic' as const : undefined;
+
           const nodeRef = nodeRefs.current.get(nodeId);
 
           // If ref not available yet, queue the movement.
@@ -704,8 +710,8 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
             console.log(`[Orchestrator]   -> NO REF for ${nodeId}, queuing movement`);
             pendingMovements.current.set(nodeId, {
               position: target.mode === 'active' ? target.position : [0, 0, 0],
-              duration,
-              easing: 'easeOutQuart',
+              duration: nodeDuration,
+              easing: nodeEasing || 'easeOutQuart',
               setActive: true,
               flipSide: target.mode === 'active' ? target.flipSide : 'front',
               isSnapshotRestore: duration === 0, // Instant mount overrides spawn animation
@@ -716,7 +722,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
           // Use the new setTargetState API
           console.log(`[Orchestrator]   -> Calling setTargetState for ${nodeId}`);
-          nodeRef.current.setTargetState(target, duration, worldRotation);
+          nodeRef.current.setTargetState(target, nodeDuration, worldRotation, nodeEasing);
         });
 
         // Update transition state
