@@ -208,20 +208,25 @@ export class DreamSongFullScreenView extends ItemView {
     console.log(`DreamSongFullScreenView: handleMediaClick called with sourceDreamNodeId="${sourceDreamNodeId}"`);
 
     const store = useInterBrainStore.getState();
-    const { dreamNodes: dreamNodesMap, setSelectedNode } = store;
+    const { dreamNodes: dreamNodesMap } = store;
 
     // Convert dreamNodes Map to array (same pattern as DreamspaceCanvas)
     const dreamNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
     console.log(`DreamSongFullScreenView: Available dreamNodes:`, dreamNodes.map(n => ({ id: n.id, name: n.name })));
 
-    // Find the DreamNode by ID or name
+    // sourceDreamNodeId is a folder name extracted from the canvas file path
+    // Match against repoPath (folder name), id (UUID), radicleId, and name (display title)
     const targetNode = dreamNodes.find(node =>
-      node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
+      node.repoPath === sourceDreamNodeId ||
+      node.id === sourceDreamNodeId ||
+      node.radicleId === sourceDreamNodeId ||
+      node.name === sourceDreamNodeId
     );
 
     if (targetNode) {
       console.log(`DreamSongFullScreenView: Found target node:`, { id: targetNode.id, name: targetNode.name });
-      setSelectedNode(targetNode);
+      // Route through unified orchestration (same as constellation edge clicks)
+      store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
     } else {
       console.warn(`DreamSongFullScreenView: No matching DreamNode found for "${sourceDreamNodeId}"`);
     }

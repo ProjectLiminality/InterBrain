@@ -114,23 +114,28 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
-  const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
+  const requestNavigation = useInterBrainStore(state => state.requestNavigation);
 
   // Convert dreamNodes Map to array
   const dreamNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
 
-  // Handler for media click navigation
+  // Handler for media click navigation — routes through unified orchestration
+  // sourceDreamNodeId is a folder name extracted from the canvas file path (e.g., "OtherDreamNode")
+  // We match against repoPath (folder name), id (UUID), radicleId, and name (display title)
   const handleMediaClick = useCallback((sourceDreamNodeId: string) => {
     const targetNode = dreamNodes?.find(node =>
-      node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
+      node.repoPath === sourceDreamNodeId ||
+      node.id === sourceDreamNodeId ||
+      node.radicleId === sourceDreamNodeId ||
+      node.name === sourceDreamNodeId
     );
 
     if (targetNode) {
-      setSelectedNode(targetNode);
+      requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
     } else {
       console.warn(`DreamSongSide: No matching DreamNode found for "${sourceDreamNodeId}"`);
     }
-  }, [dreamNodes, setSelectedNode]);
+  }, [dreamNodes, requestNavigation]);
 
   // Carousel navigation handlers
   const handleCarouselLeft = useCallback((e: React.MouseEvent) => {
