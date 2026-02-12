@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DreamNode } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { DreamSong } from '../../dreamweaving/components/DreamSong';
@@ -7,8 +7,9 @@ import { useDreamSongData } from '../../dreamweaving/hooks/useDreamSongData';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { NodeActionButton } from './NodeActionButton';
-import { useCanvasFiles } from '../hooks/useCanvasFiles';
+import { useCanvasFiles, BacksideContentItem } from '../hooks/useCanvasFiles';
 import { HolonView } from './HolonView';
+import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../utils/html-loader';
 
 interface DreamSongSideProps {
   dreamNode: DreamNode;
@@ -73,31 +74,56 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     return service;
   }, []);
 
-  // Scan for all canvas files in the DreamNode
-  const { canvasFiles, isLoading: isLoadingCanvasFiles } = useCanvasFiles(
+  // Scan for all backside content (index.html + .canvas files)
+  const { backsideItems, isLoading: isLoadingCanvasFiles } = useCanvasFiles(
     dreamNode.repoPath,
     vaultService
   );
 
-  // Total carousel items: 1 (holarchy view) + canvas files count
-  const totalItems = 1 + canvasFiles.length;
+  // Total carousel items: 1 (holarchy view) + backside items (html + canvas)
+  const totalItems = 1 + backsideItems.length;
 
   // Get carousel state from store
   const carouselIndex = useInterBrainStore(state => state.getCarouselIndex(dreamNode.id));
   const cycleCarousel = useInterBrainStore(state => state.cycleCarousel);
 
-  // Determine if currently showing holarchy view or a canvas
+  // Determine if currently showing holarchy view or a content item
   const isHolarchyView = carouselIndex === HOLARCHY_VIEW_INDEX;
 
-  // Get current canvas file if showing a DreamSong
-  const currentCanvasFile = !isHolarchyView && canvasFiles.length > 0
-    ? canvasFiles[carouselIndex - 1] // -1 because index 0 is holarchy
+  // Get current backside item (could be canvas or html)
+  const currentItem: BacksideContentItem | null = !isHolarchyView && backsideItems.length > 0
+    ? backsideItems[carouselIndex - 1] // -1 because index 0 is holarchy
     : null;
 
-  // Determine canvas path for the hook
-  const canvasPath = currentCanvasFile
-    ? currentCanvasFile.path
-    : `${dreamNode.repoPath}/DreamSong.canvas`; // Fallback for hook, won't be used if holarchy view
+  // Convenience booleans for current view type
+  const isCustomUIView = currentItem?.type === 'html';
+  const isCanvasView = currentItem?.type === 'canvas';
+
+  // Load HTML content as blob URL for custom UI views (file:// blocked by Chromium)
+  const [customUIBlobUrl, setCustomUIBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isCustomUIView || !currentItem) {
+      setCustomUIBlobUrl(null);
+      return;
+    }
+    let revoked = false;
+    const app = serviceManager.getApp();
+    if (!app) return;
+
+    createHtmlBlobUrl(app, currentItem.path).then(url => {
+      if (!revoked) setCustomUIBlobUrl(url);
+    });
+
+    return () => {
+      revoked = true;
+      setCustomUIBlobUrl(prev => { revokeHtmlBlobUrl(prev); return null; });
+    };
+  }, [isCustomUIView, currentItem?.path]);
+
+  // Determine canvas path for the hook (only used when showing a canvas)
+  const canvasPath = isCanvasView && currentItem
+    ? currentItem.path
+    : `${dreamNode.repoPath}/DreamSong.canvas`; // Fallback for hook, won't be used if not canvas view
 
   // Use DreamSong data hook (only used when showing a canvas)
   const { blocks, isLoading: isLoadingDreamSong, error } = useDreamSongData(
@@ -151,6 +177,30 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   // Should show carousel buttons (only if there are multiple items)
   const shouldShowCarouselButtons = totalItems > 1;
 
+  // Carousel-aware fullscreen handler
+  // For custom UI (html), open CustomUIFullScreenView directly
+  // For canvas, delegate to the existing prop handler (open-dreamsong-fullscreen command)
+  const handleFullScreenClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isCustomUIView && currentItem) {
+      // Open custom UI in fullscreen leaf
+      try {
+        const leafManager = serviceManager.getLeafManagerService();
+        if (leafManager) {
+          await leafManager.openCustomUIFullScreen(dreamNode, currentItem.path);
+        }
+      } catch (err) {
+        console.error('Failed to open custom UI fullscreen:', err);
+      }
+    } else if (onFullScreenClick) {
+      // Delegate to existing DreamSong fullscreen handler
+      onFullScreenClick(e);
+    }
+  }, [isCustomUIView, currentItem, dreamNode, onFullScreenClick]);
+
+  // Only show fullscreen button when not on holarchy view
+  const shouldShowFullscreen = shouldShowFullscreenButton && !isHolarchyView;
+
   return (
     <div
       style={{
@@ -198,6 +248,20 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
               dreamNode={dreamNode}
               nodeSize={nodeSize}
               vaultService={vaultService}
+            />
+          ) : isCustomUIView && customUIBlobUrl ? (
+            // Custom UI view - iframe with blob URL (file:// blocked by Chromium)
+            <iframe
+              src={customUIBlobUrl}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                borderRadius: '50%',
+                background: '#000'
+              }}
+
+              title={`${dreamNode.name} Custom UI`}
             />
           ) : isLoadingDreamSong || isLoadingCanvasFiles ? (
             <div
@@ -276,12 +340,12 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         </>
       )}
 
-      {/* Full-screen button (top-center) */}
-      {shouldShowFullscreenButton && onFullScreenClick && (
+      {/* Full-screen button (top-center) — carousel-aware */}
+      {shouldShowFullscreen && (
         <NodeActionButton
           icon="lucide-maximize"
           position="top"
-          onClick={onFullScreenClick}
+          onClick={handleFullScreenClick}
         />
       )}
 
