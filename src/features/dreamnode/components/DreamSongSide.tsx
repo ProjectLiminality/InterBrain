@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DreamNode } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
 import { DreamSong } from '../../dreamweaving/components/DreamSong';
@@ -119,6 +119,79 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
       setCustomUIBlobUrl(prev => { revokeHtmlBlobUrl(prev); return null; });
     };
   }, [isCustomUIView, currentItem?.path]);
+
+  // PRISM Bridge — start hybrid WebTorrent when a DreamNode has bridge.js
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const bridgeRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!isCustomUIView || !dreamNode.repoPath) return;
+
+    // Check if this DreamNode has a bridge.js (PRISM pattern)
+    const fs = require('fs');
+    const path = require('path');
+    const adapter = serviceManager.getApp()?.vault.adapter as any;
+    if (!adapter?.basePath) return;
+
+    const bridgePath = path.join(adapter.basePath, dreamNode.repoPath, 'bridge.js');
+    if (!fs.existsSync(bridgePath)) return;
+
+    // Check if node_modules/webtorrent exists
+    const wtPath = path.join(adapter.basePath, dreamNode.repoPath, 'node_modules', 'webtorrent');
+    if (!fs.existsSync(wtPath)) {
+      console.warn('[PRISM Bridge] webtorrent not installed in', dreamNode.repoPath, '— run npm install');
+      return;
+    }
+
+    let destroyed = false;
+
+    // Start the bridge
+    try {
+      const { PRISMBridge } = require(bridgePath);
+      const bridge = new PRISMBridge();
+      bridgeRef.current = bridge;
+
+      bridge.start().then((port: number) => {
+        if (destroyed) { bridge.destroy(); return; }
+        console.log(`[PRISM Bridge] started for ${dreamNode.name} on port ${port}`);
+
+        // Listen for probe messages from the iframe and respond with port
+        const handleMessage = (e: MessageEvent) => {
+          if (e.data?.type === 'prism-bridge-probe' && iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({ type: 'prism-bridge', port }, '*');
+          }
+        };
+        window.addEventListener('message', handleMessage);
+
+        // Also send immediately in case iframe already loaded
+        const sendPort = () => {
+          if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({ type: 'prism-bridge', port }, '*');
+          }
+        };
+        // Small delay to let iframe initialize
+        setTimeout(sendPort, 200);
+        setTimeout(sendPort, 600);
+
+        // Store cleanup
+        (bridge as any)._messageHandler = handleMessage;
+      }).catch((err: Error) => {
+        console.error('[PRISM Bridge] failed to start:', err);
+      });
+    } catch (err) {
+      console.error('[PRISM Bridge] failed to load:', err);
+    }
+
+    return () => {
+      destroyed = true;
+      if (bridgeRef.current) {
+        const handler = (bridgeRef.current as any)._messageHandler;
+        if (handler) window.removeEventListener('message', handler);
+        bridgeRef.current.destroy();
+        bridgeRef.current = null;
+      }
+    };
+  }, [isCustomUIView, dreamNode.repoPath, dreamNode.name]);
 
   // Determine canvas path for the hook (only used when showing a canvas)
   const canvasPath = isCanvasView && currentItem
@@ -252,6 +325,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           ) : isCustomUIView && customUIBlobUrl ? (
             // Custom UI view - iframe with blob URL (file:// blocked by Chromium)
             <iframe
+              ref={iframeRef}
               src={customUIBlobUrl}
               style={{
                 width: '100%',
@@ -260,7 +334,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 borderRadius: '50%',
                 background: '#000'
               }}
-
               title={`${dreamNode.name} Custom UI`}
             />
           ) : isLoadingDreamSong || isLoadingCanvasFiles ? (

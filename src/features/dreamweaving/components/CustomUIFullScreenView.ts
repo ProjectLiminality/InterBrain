@@ -15,6 +15,8 @@ export class CustomUIFullScreenView extends ItemView {
   private htmlPath: string = '';
   private iframeEl: HTMLIFrameElement | null = null;
   private blobUrl: string | null = null;
+  private bridge: any = null;
+  private bridgeMessageHandler: ((e: MessageEvent) => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -112,9 +114,67 @@ export class CustomUIFullScreenView extends ItemView {
     this.iframeEl.style.height = '100%';
     this.iframeEl.style.border = 'none';
     this.iframeEl.style.background = '#000';
+
+    // Start PRISM bridge if bridge.js exists in the DreamNode
+    this.startBridge();
+  }
+
+  private startBridge(): void {
+    if (!this.dreamNode?.repoPath || !this.iframeEl) return;
+
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const adapter = serviceManager.getApp()?.vault.adapter as any;
+      if (!adapter?.basePath) return;
+
+      const bridgePath = path.join(adapter.basePath, this.dreamNode.repoPath, 'bridge.js');
+      if (!fs.existsSync(bridgePath)) return;
+
+      const wtPath = path.join(adapter.basePath, this.dreamNode.repoPath, 'node_modules', 'webtorrent');
+      if (!fs.existsSync(wtPath)) return;
+
+      const { PRISMBridge } = require(bridgePath);
+      this.bridge = new PRISMBridge();
+
+      this.bridge.start().then((port: number) => {
+        console.log(`[PRISM Bridge] fullscreen started on port ${port}`);
+
+        this.bridgeMessageHandler = (e: MessageEvent) => {
+          if (e.data?.type === 'prism-bridge-probe' && this.iframeEl?.contentWindow) {
+            this.iframeEl.contentWindow.postMessage({ type: 'prism-bridge', port }, '*');
+          }
+        };
+        window.addEventListener('message', this.bridgeMessageHandler);
+
+        const sendPort = () => {
+          if (this.iframeEl?.contentWindow) {
+            this.iframeEl.contentWindow.postMessage({ type: 'prism-bridge', port }, '*');
+          }
+        };
+        setTimeout(sendPort, 200);
+        setTimeout(sendPort, 600);
+      }).catch((err: Error) => {
+        console.error('[PRISM Bridge] fullscreen failed to start:', err);
+      });
+    } catch (err) {
+      console.error('[PRISM Bridge] fullscreen failed to load:', err);
+    }
+  }
+
+  private destroyBridge(): void {
+    if (this.bridgeMessageHandler) {
+      window.removeEventListener('message', this.bridgeMessageHandler);
+      this.bridgeMessageHandler = null;
+    }
+    if (this.bridge) {
+      this.bridge.destroy();
+      this.bridge = null;
+    }
   }
 
   async onClose(): Promise<void> {
+    this.destroyBridge();
     revokeHtmlBlobUrl(this.blobUrl);
     this.blobUrl = null;
     this.iframeEl = null;
