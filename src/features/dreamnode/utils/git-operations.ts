@@ -20,6 +20,7 @@ import {
   commitAllChanges as commitAllChangesUtil,
   openInFinder as openInFinderUtil,
   openInTerminal as openInTerminalUtil,
+  openInTerminalWithPrompt as openInTerminalWithPromptUtil,
   runNpmBuild as runNpmBuildUtil
 } from './git-utils';
 
@@ -132,6 +133,16 @@ export class GitOperationsService {
   async openInTerminal(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
     return openInTerminalUtil(fullPath, 'claude --continue || claude');
+  }
+
+  /**
+   * Open Claude Code in AURYN's directory with a DreamNode's README loaded as context
+   */
+  async openInAuryn(repoPath: string, nodeName: string): Promise<void> {
+    const aurynPath = path.join(this.vaultPath, 'AURYN');
+    const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
+    const prompt = `I'm working on ${nodeName}. Read ${readmePath} to load its context.`;
+    return openInTerminalWithPromptUtil(aurynPath, prompt);
   }
 
   /**

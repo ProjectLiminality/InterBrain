@@ -293,6 +293,50 @@ export async function openInTerminal(repoPath: string, command?: string): Promis
   }
 }
 
+/**
+ * Open a new Terminal tab at repoPath and run claude with a prompt.
+ * Uses double-quote shell escaping + stdin piping to osascript to avoid
+ * triple-nested escaping issues (shell prompt → AppleScript string → osascript -e).
+ */
+export async function openInTerminalWithPrompt(repoPath: string, prompt: string): Promise<void> {
+  try {
+    // Escape prompt for shell double-quoting (handle \, ", $, `)
+    const shellPrompt = prompt
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/`/g, '\\`');
+
+    // Build the full bash command
+    const bashCommand = `cd '${repoPath}' && claude --dangerously-skip-permissions "${shellPrompt}"`;
+
+    // Escape for AppleScript double-quoted string (handle \ and ")
+    const asCommand = bashCommand.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    const script = `tell application "Terminal"
+  activate
+  tell application "System Events" to keystroke "t" using command down
+  delay 0.3
+  do script "${asCommand}" in front window
+end tell`;
+
+    // Pass script via stdin to osascript — avoids a third layer of shell escaping
+    const { spawn } = require('child_process');
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn('osascript', []);
+      child.stdin.write(script);
+      child.stdin.end();
+      child.on('close', (code: number) => {
+        if (code === 0) resolve();
+        else reject(new Error(`osascript exited with code ${code}`));
+      });
+      child.on('error', reject);
+    });
+  } catch (error) {
+    throw new Error(`Failed to open in Terminal with prompt: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
 // ============================================================================
 // BUILD OPERATIONS
 // ============================================================================

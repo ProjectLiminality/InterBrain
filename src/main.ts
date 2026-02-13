@@ -6,6 +6,7 @@ import { PassphraseManager } from './features/social-resonance-filter/services/p
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
+import { CustomUIFullScreenView, CUSTOM_UI_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/CustomUIFullScreenView';
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/components/LinkFileView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
@@ -388,6 +389,7 @@ export default class InterBrainPlugin extends Plugin {
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
+    this.registerView(CUSTOM_UI_FULLSCREEN_VIEW_TYPE, (leaf) => new CustomUIFullScreenView(leaf));
     this.registerView(LINK_FILE_VIEW_TYPE, (leaf) => new LinkFileView(leaf));
 
     // Register .link file extension with custom view
@@ -1009,10 +1011,10 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Open DreamNode in Terminal and run claude command
+    // Open DreamNode in AURYN (Claude Code in AURYN directory with DreamNode context)
     this.addCommand({
-      id: 'open-dreamnode-in-terminal',
-      name: 'Open DreamNode in Terminal (run claude)',
+      id: 'open-in-auryn',
+      name: 'Open in AURYN',
       hotkeys: [{ modifiers: ['Ctrl'], key: 'c' }],
       callback: async () => {
         const store = useInterBrainStore.getState();
@@ -1023,12 +1025,11 @@ export default class InterBrainPlugin extends Plugin {
         }
 
         try {
-          // Use git service to open terminal at the repository folder and run claude --continue
-          await this.gitOpsService.openInTerminal(currentNode.repoPath);
-          this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude --continue`);
+          await this.gitOpsService.openInAuryn(currentNode.repoPath, currentNode.name);
+          this.uiService.showSuccess(`Opening ${currentNode.name} in AURYN`);
         } catch (error) {
-          console.error('Failed to open in Terminal:', error);
-          this.uiService.showError('Failed to open DreamNode in Terminal');
+          console.error('Failed to open in AURYN:', error);
+          this.uiService.showError('Failed to open DreamNode in AURYN');
         }
       }
     });
