@@ -21,6 +21,7 @@ import {
   openInFinder as openInFinderUtil,
   openInTerminal as openInTerminalUtil,
   openInTerminalWithPrompt as openInTerminalWithPromptUtil,
+  runBashInNewTerminalTab as runBashInNewTerminalTabUtil,
   runNpmBuild as runNpmBuildUtil
 } from './git-utils';
 
@@ -136,13 +137,37 @@ export class GitOperationsService {
   }
 
   /**
-   * Open Claude Code in AURYN's directory with a DreamNode's README loaded as context
+   * Open Claude Code in AURYN's directory with a DreamNode's context injected.
+   *
+   * Uses --append-system-prompt with $(cat ...) to inject the README directly
+   * into context at zero inference cost (no tool call needed to read it).
+   * If a DreamSong.canvas exists, AURYN's sort-canvas script parses it into
+   * clean AI-readable text (topologically sorted, media-text pairs grouped)
+   * and injects that too.
    */
   async openInAuryn(repoPath: string, nodeName: string): Promise<void> {
     const aurynPath = path.join(this.vaultPath, 'AURYN');
-    const readmePath = path.join(this.vaultPath, repoPath, 'README.md');
-    const prompt = `I'm working on ${nodeName}. Read ${readmePath} to load its context.`;
-    return openInTerminalWithPromptUtil(aurynPath, prompt);
+    const dreamNodePath = path.join(this.vaultPath, repoPath);
+    const readmePath = path.join(dreamNodePath, 'README.md');
+    const canvasPath = path.join(dreamNodePath, 'DreamSong.canvas');
+    const sortScript = path.join(aurynPath, 'scripts', 'sort-canvas.cjs');
+
+    // Escape node name for shell (handle single quotes)
+    const safeNodeName = nodeName.replace(/'/g, "'\\''");
+
+    // Build the bash command:
+    // - README is always injected via $(cat ...)
+    // - If DreamSong.canvas exists, sort-canvas.cjs parses it into readable text
+    // Both are loaded at zero inference cost — no tool calls needed.
+    const bashCommand =
+      `cd '${aurynPath}'; ` +
+      `CONTEXT="# ${safeNodeName} README\n$(cat '${readmePath}' 2>/dev/null || echo 'README not found')"; ` +
+      `if [ -f '${canvasPath}' ]; then ` +
+        `CONTEXT="$CONTEXT\n\n# ${safeNodeName} DreamSong\n$(node '${sortScript}' '${canvasPath}' 2>/dev/null)"; ` +
+      `fi; ` +
+      `claude --dangerously-skip-permissions --append-system-prompt "$CONTEXT" "I'm working on ${safeNodeName}. Its README and DreamSong (if present) are already loaded in the system prompt."`;
+
+    return runBashInNewTerminalTabUtil(bashCommand);
   }
 
   /**
