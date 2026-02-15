@@ -102,6 +102,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   const hasMedia = useMedia && mediaFile;
 
   // Set Lucide icon via Obsidian's setIcon — large backdrop style
+  // SVG uses 70% of container via CSS so it scales smoothly with CSS transitions
   useEffect(() => {
     if (hasMedia || !iconRef.current) return;
     const el = iconRef.current;
@@ -110,14 +111,12 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
     setIcon(el, iconName);
     const svg = el.querySelector('svg');
     if (svg) {
-      // Icon fills ~60% of the circle diameter
-      const iconSize = Math.max(20, r * 0.7);
-      svg.style.width = `${iconSize}px`;
-      svg.style.height = `${iconSize}px`;
+      svg.style.width = '70%';
+      svg.style.height = '70%';
       svg.style.color = getBorderColor(item.type);
       svg.style.opacity = '0.15';
     }
-  }, [item, r, hasMedia]);
+  }, [item, hasMedia]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -143,7 +142,6 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
     : Math.max(1.5, Math.sqrt(r) * 0.3);
   const showGlow = isSelected || isHovered;
   const diameter = r * 2;
-  const nameFontSize = Math.max(8, r * 0.15);
 
   return (
     <div
@@ -158,7 +156,8 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         background: '#000000',
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
+        transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, font-size 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
+        fontSize: `${Math.max(8, r * 0.15)}px`,
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
         transform: isHovered ? 'scale(1.05)' : 'scale(1)',
         userSelect: 'none',
@@ -197,7 +196,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
                 style={{
                   color: dreamNodeStyles.colors.text.primary,
                   fontFamily: dreamNodeStyles.typography.fontFamily,
-                  fontSize: nameFontSize,
+                  fontSize: 'inherit',
                   textAlign: 'center',
                   padding: '8px',
                 }}
@@ -247,7 +246,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
               style={{
                 maxWidth: `${diameter * 0.75}px`,
                 textAlign: 'center',
-                fontSize: `${nameFontSize}px`,
+                fontSize: 'inherit',
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 color: dreamNodeStyles.colors.text.primary,
                 overflow: 'hidden',
