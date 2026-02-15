@@ -46,9 +46,13 @@ function classifyEntry(
   dreamNodesMap: Map<string, DreamNodeData>
 ): { type: ExplorerItemType; dreamNodeId?: string } {
   if (entry.isDirectory()) {
-    // Check if this directory is a submodule (matches a DreamNode repoPath)
+    // Check if this directory is a submodule (matches a DreamNode)
+    // repoPath is vault-root-relative (e.g. "TheMovingCastle") but the entry
+    // may be nested (e.g. "Financial Agreement Anna/TheMovingCastle").
+    // Match by: exact repoPath, OR directory name equals a DreamNode's repoPath basename.
     for (const [uuid, data] of dreamNodesMap) {
-      if (data.node.repoPath === entryPath) {
+      const repoPath = data.node.repoPath;
+      if (repoPath === entryPath || repoPath === entry.name) {
         return {
           type: data.node.type === 'dreamer' ? 'dreamer-submodule' : 'dream-submodule',
           dreamNodeId: uuid,

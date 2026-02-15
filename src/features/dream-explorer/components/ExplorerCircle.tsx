@@ -132,10 +132,13 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   );
 
   const borderColor = getBorderColor(item.type);
-  const borderWidth = Math.max(1.5, Math.sqrt(r) * 0.3);
+  const isSubmodule = item.type === 'dream-submodule' || item.type === 'dreamer-submodule';
+  // Submodules get HolonView-style thick borders to stand out among files
+  const borderWidth = isSubmodule
+    ? Math.max(2, Math.min(8, Math.round(r * 0.08)))
+    : Math.max(1.5, Math.sqrt(r) * 0.3);
   const showGlow = isSelected || isHovered;
   const diameter = r * 2;
-  const isSubmodule = item.type === 'dream-submodule' || item.type === 'dreamer-submodule';
 
   // Font size scales with circle radius
   const nameFontSize = Math.max(8, Math.min(14, r * 0.22));

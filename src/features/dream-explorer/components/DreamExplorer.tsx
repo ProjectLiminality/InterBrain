@@ -37,7 +37,7 @@ export const DreamExplorer: React.FC = () => {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [zoomState, setZoomState] = useState<ZoomState>('idle');
   const [zoomTarget, setZoomTarget] = useState<PositionedItem | null>(null);
-  const [contentOpacity, setContentOpacity] = useState(1);
+  const [contentOpacity, setContentOpacity] = useState(1); // Used for zoom-in animation only
 
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CircleLayoutEngine | null>(null);
@@ -209,16 +209,38 @@ export const DreamExplorer: React.FC = () => {
     }
   }, []);
 
-  // Handle back
+  // Handle back — just navigate, CSS transitions handle the animation
   const handleGoBack = useCallback(() => {
-    setContentOpacity(0);
+    if (currentPath === rootPath) return; // Already at root
     explorerGoBack();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setContentOpacity(1);
-      });
-    });
-  }, [explorerGoBack]);
+  }, [explorerGoBack, currentPath, rootPath]);
+
+  // Click on empty space — inside enclosing circle = deselect, outside = navigate up
+  // ExplorerCircle already calls stopPropagation, so any click reaching here is on empty space
+  const handleBackgroundClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!containerRef.current || containerRadius <= 0) return;
+
+      // Hit-test: is the click inside the enclosing circle?
+      const rect = containerRef.current.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist <= containerRadius) {
+        // Inside enclosing circle → deselect
+        explorerSelectItem(null);
+      } else {
+        // Outside enclosing circle → navigate up
+        if (currentPath !== rootPath) {
+          explorerGoBack();
+        }
+      }
+    },
+    [containerRadius, currentPath, rootPath, explorerSelectItem, explorerGoBack]
+  );
 
   // Calculate zoom transform for animation
   const getZoomTransform = (): React.CSSProperties => {
@@ -239,6 +261,7 @@ export const DreamExplorer: React.FC = () => {
   return (
     <div
       ref={containerRef}
+      onClick={handleBackgroundClick}
       style={{
         width: '100%',
         height: '100%',
@@ -309,7 +332,7 @@ export const DreamExplorer: React.FC = () => {
             width: '100%',
             height: '100%',
             opacity: contentOpacity,
-            transition: 'opacity 0.2s ease',
+            transition: zoomState !== 'idle' ? 'opacity 0.2s ease' : undefined,
             ...getZoomTransform(),
           }}
         >
