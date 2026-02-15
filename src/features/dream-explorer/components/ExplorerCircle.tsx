@@ -153,7 +153,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         background: '#000000',
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+        transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
         transform: isHovered ? 'scale(1.05)' : 'scale(1)',
         display: 'flex',

@@ -2,15 +2,15 @@
  * Dream Explorer
  *
  * Main React component for the full-screen holarchy file navigator.
- * Reads state from the Zustand slice, scans directories, packs circles,
- * and renders ExplorerCircle components with zoom animations.
+ * Reads state from the Zustand slice, scans directories, drives the
+ * CircleLayoutEngine for physics-based packing with animated transitions.
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { serviceManager } from '../../../core/services/service-manager';
 import { scanDirectory } from '../services/file-scanner-service';
-import { packExplorerItems } from '../utils/circle-layout';
+import { CircleLayoutEngine } from '../utils/circle-layout';
 import { ExplorerCircle } from './ExplorerCircle';
 import { ExplorerBreadcrumb } from './ExplorerBreadcrumb';
 import type { ExplorerItem, PositionedItem } from '../types/explorer';
@@ -40,6 +40,7 @@ export const DreamExplorer: React.FC = () => {
   const [contentOpacity, setContentOpacity] = useState(1);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<CircleLayoutEngine | null>(null);
 
   // Observe container size
   useEffect(() => {
@@ -87,16 +88,48 @@ export const DreamExplorer: React.FC = () => {
     return () => { cancelled = true; };
   }, [currentPath, dreamNodesMap]);
 
-  // Pack items when items or container size change
+  // Create/recreate engine when items or container size change
   useEffect(() => {
+    // Destroy previous engine
+    if (engineRef.current) {
+      engineRef.current.destroy();
+      engineRef.current = null;
+    }
+
     if (containerRadius <= 0 || items.length === 0) {
       setPositioned([]);
       return;
     }
 
-    const packed = packExplorerItems(items, containerRadius, sizeWeighted);
-    setPositioned(packed);
-  }, [items, containerRadius, sizeWeighted]);
+    const engine = new CircleLayoutEngine(
+      items,
+      containerRadius,
+      sizeWeighted ? 'weighted' : 'equal'
+    );
+    engine.onUpdate = (positions) => setPositioned(positions);
+    engineRef.current = engine;
+
+    return () => {
+      engine.destroy();
+      if (engineRef.current === engine) {
+        engineRef.current = null;
+      }
+    };
+  }, [items, containerRadius]);
+
+  // When sizeWeighted toggles, tell the engine (animated transition)
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setMode(sizeWeighted ? 'weighted' : 'equal');
+    }
+  }, [sizeWeighted]);
+
+  // Update engine container radius on resize (no re-create needed)
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setContainerRadius(containerRadius);
+    }
+  }, [containerRadius]);
 
   // Handle single click: select (with Cmd+click for additive)
   const handleClick = useCallback(
@@ -113,17 +146,14 @@ export const DreamExplorer: React.FC = () => {
         // Find the positioned item for zoom animation
         const target = positioned.find(p => p.item.path === item.path);
         if (target && containerRadius > 0) {
-          // Start zoom animation
           setZoomTarget(target);
           setZoomState('zooming-in');
 
-          // After animation completes, navigate
           setTimeout(() => {
             explorerNavigateTo(item.path);
             setZoomState('idle');
             setZoomTarget(null);
             setContentOpacity(0);
-            // Fade in new contents
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 setContentOpacity(1);
@@ -134,7 +164,6 @@ export const DreamExplorer: React.FC = () => {
           explorerNavigateTo(item.path);
         }
       } else if (item.type === 'dream-submodule' || item.type === 'dreamer-submodule') {
-        // Navigate into submodule
         const target = positioned.find(p => p.item.path === item.path);
         if (target && containerRadius > 0) {
           setZoomTarget(target);
@@ -154,7 +183,6 @@ export const DreamExplorer: React.FC = () => {
           explorerNavigateTo(item.path);
         }
       } else {
-        // File: open in Obsidian or system default
         openFile(item);
       }
     },
@@ -169,7 +197,6 @@ export const DreamExplorer: React.FC = () => {
       if (opened) return;
     }
 
-    // Fallback: open with system default if we have an absolute path
     if (item.absolutePath) {
       try {
         const { shell } = require('electron');
@@ -197,9 +224,7 @@ export const DreamExplorer: React.FC = () => {
       return {};
     }
 
-    // Scale so the target circle fills the container
     const scale = containerRadius / zoomTarget.r;
-    // Translate to center the target
     const tx = -zoomTarget.x * scale;
     const ty = -zoomTarget.y * scale;
 
