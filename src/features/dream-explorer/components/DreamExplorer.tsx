@@ -316,7 +316,7 @@ export const DreamExplorer: React.FC = () => {
             height: `${containerRadius * 2}px`,
             transform: 'translate(-50%, -50%)',
             borderRadius: '50%',
-            border: '6px solid #479FF8',
+            border: '8px solid #479FF8',
             pointerEvents: 'none',
           }}
         />

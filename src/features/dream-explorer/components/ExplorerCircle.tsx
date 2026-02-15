@@ -4,6 +4,10 @@
  * A single circle in the Dream Explorer representing a file, folder, or submodule.
  * Reuses styling patterns from DreamNode components (border colors, golden glow).
  * Uses Obsidian's setIcon for Lucide icons, MediaRenderer for images/submodules.
+ *
+ * Visual pattern mirrors DreamTalkSide:
+ * - Media items: image fills circle, hover shows dark overlay with centered name
+ * - Icon items: large icon fills circle as backdrop, name centered on top
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -97,21 +101,21 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   const mediaFile = useMedia ? buildMediaFile(item) : null;
   const hasMedia = useMedia && mediaFile;
 
-  // Set Lucide icon via Obsidian's setIcon
+  // Set Lucide icon via Obsidian's setIcon — large backdrop style
   useEffect(() => {
     if (hasMedia || !iconRef.current) return;
     const el = iconRef.current;
     el.innerHTML = '';
     const iconName = getLucideIcon(item);
     setIcon(el, iconName);
-    // Style the SVG
     const svg = el.querySelector('svg');
     if (svg) {
-      const iconSize = Math.max(16, Math.min(32, r * 0.4));
+      // Icon fills ~60% of the circle diameter
+      const iconSize = Math.max(20, r * 0.7);
       svg.style.width = `${iconSize}px`;
       svg.style.height = `${iconSize}px`;
       svg.style.color = getBorderColor(item.type);
-      svg.style.opacity = '0.7';
+      svg.style.opacity = '0.15';
     }
   }, [item, r, hasMedia]);
 
@@ -139,9 +143,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
     : Math.max(1.5, Math.sqrt(r) * 0.3);
   const showGlow = isSelected || isHovered;
   const diameter = r * 2;
-
-  // Font size scales with circle radius
-  const nameFontSize = Math.max(8, Math.min(14, r * 0.22));
+  const nameFontSize = Math.max(8, r * 0.15);
 
   return (
     <div
@@ -159,10 +161,6 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
         transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         userSelect: 'none',
       }}
       onClick={handleClick}
@@ -171,14 +169,14 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       onMouseLeave={() => setIsHovered(false)}
       title={item.name}
     >
-      {/* Media preview (submodules + images via MediaRenderer) */}
+      {/* ── Media items: image fills circle, hover shows name overlay ── */}
       {hasMedia && mediaFile && (
         <div style={getMediaContainerStyle()}>
           <MediaRenderer media={mediaFile} />
           <div style={getMediaOverlayStyle()} />
 
-          {/* Hover overlay with name (submodules only — same pattern as SubmoduleCircle) */}
-          {isSubmodule && isHovered && (
+          {/* Hover overlay with centered name — DreamTalkSide pattern */}
+          {isHovered && (
             <div
               style={{
                 position: 'absolute',
@@ -199,7 +197,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
                 style={{
                   color: dreamNodeStyles.colors.text.primary,
                   fontFamily: dreamNodeStyles.typography.fontFamily,
-                  fontSize: Math.max(8, r * 0.15),
+                  fontSize: nameFontSize,
                   textAlign: 'center',
                   padding: '8px',
                 }}
@@ -211,63 +209,57 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         </div>
       )}
 
-      {/* Lucide icon for non-previewable items */}
+      {/* ── Icon items: large icon backdrop + centered name ── */}
       {!hasMedia && (
-        <div
-          ref={iconRef}
-          style={{
-            lineHeight: 1,
-            marginBottom: '4px',
-            pointerEvents: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        />
-      )}
+        <>
+          {/* Large icon as backdrop — fills the circle, low opacity */}
+          <div
+            ref={iconRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}
+          />
 
-      {/* Name label — always shown for non-media items, positioned at bottom for media */}
-      {!hasMedia && (
-        <span
-          style={{
-            maxWidth: `${diameter * 0.85}px`,
-            textAlign: 'center',
-            fontSize: `${nameFontSize}px`,
-            fontFamily: dreamNodeStyles.typography.fontFamily,
-            color: dreamNodeStyles.colors.text.primary,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-            lineHeight: 1.2,
-          }}
-        >
-          {item.name}
-        </span>
-      )}
-
-      {/* Name label for media items (non-submodule) — bottom positioned */}
-      {hasMedia && !isSubmodule && (
-        <span
-          style={{
-            position: 'absolute',
-            bottom: `${Math.max(4, r * 0.12)}px`,
-            maxWidth: `${diameter * 0.85}px`,
-            textAlign: 'center',
-            fontSize: `${nameFontSize}px`,
-            fontFamily: dreamNodeStyles.typography.fontFamily,
-            color: dreamNodeStyles.colors.text.primary,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            textShadow: '0 1px 4px rgba(0,0,0,0.9)',
-            pointerEvents: 'none',
-            lineHeight: 1.2,
-            zIndex: 5,
-          }}
-        >
-          {item.name}
-        </span>
+          {/* Centered name on top of icon backdrop */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          >
+            <span
+              style={{
+                maxWidth: `${diameter * 0.75}px`,
+                textAlign: 'center',
+                fontSize: `${nameFontSize}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                color: dreamNodeStyles.colors.text.primary,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: 1.2,
+              }}
+            >
+              {item.name}
+            </span>
+          </div>
+        </>
       )}
     </div>
   );
