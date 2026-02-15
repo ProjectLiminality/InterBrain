@@ -85,6 +85,18 @@ function buildMediaFile(item: ExplorerItem): MediaFile | null {
   };
 }
 
+/**
+ * Finder-style middle truncation: show beginning and end of filename
+ * with ellipsis in the middle. The tail portion is ~40% of the name.
+ */
+function middleTruncate(name: string): { head: string; tail: string } {
+  const tailLen = Math.max(4, Math.ceil(name.length * 0.3));
+  return {
+    head: name.slice(0, name.length - tailLen),
+    tail: name.slice(name.length - tailLen),
+  };
+}
+
 export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   item,
   x,
@@ -141,14 +153,17 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
     ? Math.max(2, Math.min(8, Math.round(r * 0.08)))
     : Math.max(1.5, Math.sqrt(r) * 0.3);
   const showGlow = isSelected || isHovered;
-  const diameter = r * 2;
+  // Visual radius is 95% of packed radius — creates uniform gaps between circles
+  // (same pattern as HolonView's SubmoduleCircle)
+  const vr = r * 0.95;
+  const diameter = vr * 2;
 
   return (
     <div
       style={{
         position: 'absolute',
-        left: `calc(50% + ${x}px - ${r}px)`,
-        top: `calc(50% + ${y}px - ${r}px)`,
+        left: `calc(50% + ${x}px - ${vr}px)`,
+        top: `calc(50% + ${y}px - ${vr}px)`,
         width: `${diameter}px`,
         height: `${diameter}px`,
         borderRadius: '50%',
@@ -157,7 +172,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         overflow: 'hidden',
         cursor: 'pointer',
         transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, font-size 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
-        fontSize: `${Math.max(8, r * 0.15)}px`,
+        fontSize: `${Math.max(8, vr * 0.15)}px`,
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
         transform: isHovered ? 'scale(1.05)' : 'scale(1)',
         userSelect: 'none',
@@ -174,8 +189,8 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
           <MediaRenderer media={mediaFile} />
           <div style={getMediaOverlayStyle()} />
 
-          {/* Hover overlay with centered name — DreamTalkSide pattern */}
-          {isHovered && (
+          {/* Name overlay — always visible for submodules, hover-only for others */}
+          {(isSubmodule || isHovered) && (
             <div
               style={{
                 position: 'absolute',
@@ -192,17 +207,35 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
                 zIndex: 10,
               }}
             >
-              <div
+              <span
                 style={{
+                  maxWidth: `${diameter * 0.75}px`,
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'center',
                   color: dreamNodeStyles.colors.text.primary,
                   fontFamily: dreamNodeStyles.typography.fontFamily,
                   fontSize: 'inherit',
-                  textAlign: 'center',
+                  lineHeight: 1.2,
                   padding: '8px',
                 }}
               >
-                {item.name}
-              </div>
+                <span style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                  flexShrink: 1,
+                }}>
+                  {middleTruncate(item.name).head}
+                </span>
+                <span style={{
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {middleTruncate(item.name).tail}
+                </span>
+              </span>
             </div>
           )}
         </div>
@@ -227,7 +260,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
             }}
           />
 
-          {/* Centered name on top of icon backdrop */}
+          {/* Centered name on top of icon backdrop — Finder-style middle truncation */}
           <div
             style={{
               position: 'absolute',
@@ -245,17 +278,30 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
             <span
               style={{
                 maxWidth: `${diameter * 0.75}px`,
-                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'center',
                 fontSize: 'inherit',
                 fontFamily: dreamNodeStyles.typography.fontFamily,
                 color: dreamNodeStyles.colors.text.primary,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
                 lineHeight: 1.2,
               }}
             >
-              {item.name}
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                flexShrink: 1,
+              }}>
+                {middleTruncate(item.name).head}
+              </span>
+              <span style={{
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}>
+                {middleTruncate(item.name).tail}
+              </span>
             </span>
           </div>
         </>
