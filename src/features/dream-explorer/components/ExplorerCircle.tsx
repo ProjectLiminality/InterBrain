@@ -92,8 +92,8 @@ function buildMediaFile(item: ExplorerItem): MediaFile | null {
 function middleTruncate(name: string): { head: string; tail: string } {
   const tailLen = Math.max(4, Math.ceil(name.length * 0.3));
   return {
-    head: name.slice(0, name.length - tailLen),
-    tail: name.slice(name.length - tailLen),
+    head: name.slice(0, name.length - tailLen).trimEnd(),
+    tail: name.slice(name.length - tailLen).trimStart(),
   };
 }
 
@@ -209,7 +209,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
             >
               <span
                 style={{
-                  maxWidth: `${diameter * 0.75}px`,
+                  maxWidth: '75%',
                   display: 'flex',
                   alignItems: 'baseline',
                   justifyContent: 'center',
@@ -277,7 +277,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
           >
             <span
               style={{
-                maxWidth: `${diameter * 0.75}px`,
+                maxWidth: '75%',
                 display: 'flex',
                 alignItems: 'baseline',
                 justifyContent: 'center',
