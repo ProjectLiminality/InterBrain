@@ -8,6 +8,7 @@ import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/Dreamspa
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
 import { CustomUIFullScreenView, CUSTOM_UI_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/CustomUIFullScreenView';
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/components/LinkFileView';
+import { DreamExplorerView, DREAM_EXPLORER_VIEW_TYPE } from './features/dream-explorer/components/DreamExplorerView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
 import { CONSTELLATION_DEFAULTS } from './features/constellation-layout/constants';
@@ -391,6 +392,7 @@ export default class InterBrainPlugin extends Plugin {
     this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
     this.registerView(CUSTOM_UI_FULLSCREEN_VIEW_TYPE, (leaf) => new CustomUIFullScreenView(leaf));
     this.registerView(LINK_FILE_VIEW_TYPE, (leaf) => new LinkFileView(leaf));
+    this.registerView(DREAM_EXPLORER_VIEW_TYPE, (leaf) => new DreamExplorerView(leaf));
 
     // Register .link file extension with custom view
     this.registerExtensions(['link'], LINK_FILE_VIEW_TYPE);
@@ -1505,6 +1507,24 @@ export default class InterBrainPlugin extends Plugin {
         } catch (error) {
           console.error('Redo failed:', error);
           this.uiService.showError('Failed to redo layout change');
+        }
+      }
+    });
+
+    // Open Dream Explorer (full-screen holarchy file navigator)
+    this.addCommand({
+      id: 'open-dream-explorer',
+      name: 'Open Dream Explorer',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode?.repoPath) {
+          console.warn('[DreamExplorer] No DreamNode selected — cannot open explorer');
+          return;
+        }
+        const leafManager = serviceManager.getLeafManagerService();
+        if (leafManager) {
+          await leafManager.openDreamExplorer(currentNode.repoPath, currentNode.name);
         }
       }
     });

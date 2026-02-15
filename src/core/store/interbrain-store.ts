@@ -123,6 +123,11 @@ import {
   restoreTutorialPersistenceData,
 } from '../../features/tutorial/store/slice';
 
+import {
+  DreamExplorerSlice,
+  createDreamExplorerSlice,
+} from '../../features/dream-explorer/store/slice';
+
 // Type alias for spatial layout modes (the active view mode)
 // Note: 'edit' is for metadata editing, 'relationship-edit' is for relationship editing (peer-level modes)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'relationship-edit' | 'copilot';
@@ -285,7 +290,8 @@ export interface InterBrainState extends
   DragAndDropSlice,
   LiminalWebSlice,
   FeedbackSlice,
-  TutorialSlice {}
+  TutorialSlice,
+  DreamExplorerSlice {}
 
 // ============================================================================
 // CORE SLICE CREATOR
@@ -483,6 +489,7 @@ export const useInterBrainStore = create<InterBrainState>()(
       ...createLiminalWebSlice(set, get, api),
       ...createFeedbackSlice(set, get, api),
       ...createTutorialSlice(set, get),
+      ...createDreamExplorerSlice(set, get),
     }),
     {
       name: 'interbrain-storage',

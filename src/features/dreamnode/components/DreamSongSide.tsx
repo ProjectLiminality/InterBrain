@@ -413,12 +413,27 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         </>
       )}
 
-      {/* Full-screen button (top-center) — carousel-aware */}
+      {/* Full-screen button (top-center) — carousel-aware, only on content views */}
       {shouldShowFullscreen && (
         <NodeActionButton
           icon="lucide-maximize"
           position="top"
           onClick={handleFullScreenClick}
+        />
+      )}
+
+      {/* Dream Explorer button (top-center) — only on holarchy view */}
+      {shouldShowFullscreenButton && isHolarchyView && (
+        <NodeActionButton
+          icon="lucide-compass"
+          position="top"
+          onClick={(e) => {
+            e.stopPropagation();
+            const obsidianApp = serviceManager.getApp();
+            if (obsidianApp) {
+              (obsidianApp as any).commands.executeCommandById('interbrain:open-dream-explorer');
+            }
+          }}
         />
       )}
 

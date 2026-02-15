@@ -3,6 +3,7 @@ import { DreamNode, MediaFile } from '../../features/dreamnode/types/dreamnode';
 import { DreamSongBlock } from '../../features/dreamweaving/types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../../features/dreamweaving/components/DreamSongFullScreenView';
 import { CustomUIFullScreenView, CUSTOM_UI_FULLSCREEN_VIEW_TYPE } from '../../features/dreamweaving/components/CustomUIFullScreenView';
+import { DreamExplorerView, DREAM_EXPLORER_VIEW_TYPE } from '../../features/dream-explorer/components/DreamExplorerView';
 import { generateYouTubeIframe, extractYouTubeVideoId } from '../../features/drag-and-drop';
 import { parseLinkFileContent, isLinkFile } from '../../features/drag-and-drop';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -25,6 +26,7 @@ export class LeafManagerService {
   private dreamTalkLeaves: Map<string, WorkspaceLeaf> = new Map();
   private canvasLeaves: Map<string, WorkspaceLeaf> = new Map();
   private customUILeaves: Map<string, WorkspaceLeaf> = new Map();
+  private dreamExplorerLeaf: WorkspaceLeaf | null = null;
   private rightPaneLeaf: WorkspaceLeaf | null = null;
 
   constructor(app: App) {
@@ -87,7 +89,7 @@ export class LeafManagerService {
    * Check if any DreamNode leaves are still open
    */
   private hasOpenLeaves(): boolean {
-    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0 || this.canvasLeaves.size > 0 || this.customUILeaves.size > 0;
+    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0 || this.canvasLeaves.size > 0 || this.customUILeaves.size > 0 || this.dreamExplorerLeaf !== null;
   }
 
   /**
@@ -95,8 +97,9 @@ export class LeafManagerService {
    */
   private async collapseRightPaneIfEmpty(): Promise<void> {
     if (!this.hasOpenLeaves() && this.rightPaneLeaf) {
-      await this.rightPaneLeaf.detach();
-      this.rightPaneLeaf = null;
+      const leaf = this.rightPaneLeaf;
+      this.rightPaneLeaf = null; // Null out BEFORE detach to prevent recursive loop
+      await leaf.detach();
       console.log('Collapsed right pane - no leaves remaining');
     }
   }
@@ -734,12 +737,82 @@ export class LeafManagerService {
   }
 
   /**
+   * Open Dream Explorer in a single-instance leaf.
+   * Reuses existing leaf if already open, otherwise creates a new one.
+   */
+  async openDreamExplorer(initialPath: string, rootName?: string): Promise<void> {
+    try {
+      if (!initialPath) {
+        console.warn('[LeafManager] Cannot open Dream Explorer without a path');
+        return;
+      }
+
+      const displayName = rootName || initialPath.split('/').pop() || 'Explorer';
+
+      // If already open, update path and reveal
+      if (this.dreamExplorerLeaf) {
+        const view = this.dreamExplorerLeaf.view as DreamExplorerView;
+        if (view && view.updatePath) {
+          view.updatePath(initialPath, displayName);
+        }
+        this.app.workspace.revealLeaf(this.dreamExplorerLeaf);
+        return;
+      }
+
+      // Create new leaf
+      const leaf = this.getRightLeaf();
+
+      await leaf.setViewState({
+        type: DREAM_EXPLORER_VIEW_TYPE,
+        state: {},
+      });
+
+      // Update path after view is created
+      const view = leaf.view as DreamExplorerView;
+      if (view && view.updatePath) {
+        view.updatePath(initialPath, displayName);
+      }
+
+      this.dreamExplorerLeaf = leaf;
+
+      // Set up cleanup when leaf is closed
+      const originalDetach = leaf.detach.bind(leaf);
+      leaf.detach = async () => {
+        this.dreamExplorerLeaf = null;
+        console.log('Auto-cleaned up Dream Explorer leaf');
+        await this.collapseRightPaneIfEmpty();
+        return originalDetach();
+      };
+
+      this.app.workspace.revealLeaf(leaf);
+      console.log(`Opened Dream Explorer at: ${initialPath}`);
+
+    } catch (error) {
+      console.error('Failed to open Dream Explorer:', error);
+    }
+  }
+
+  /**
+   * Close the Dream Explorer leaf
+   */
+  async closeDreamExplorer(): Promise<void> {
+    if (this.dreamExplorerLeaf) {
+      const leaf = this.dreamExplorerLeaf;
+      this.dreamExplorerLeaf = null;
+      await leaf.detach();
+      await this.collapseRightPaneIfEmpty();
+      console.log('Closed Dream Explorer');
+    }
+  }
+
+  /**
    * Clean up service resources
    */
   async destroy(): Promise<void> {
     await this.closeAllDreamSongFullScreen();
     await this.closeAllDreamTalkFullScreen();
     await this.closeAllCanvasLeaves();
+    await this.closeDreamExplorer();
     // Close all custom UI leaves
     const customUIPromises = Array.from(this.customUILeaves.keys()).map(nodeId =>
       this.closeCustomUIFullScreen(nodeId)
