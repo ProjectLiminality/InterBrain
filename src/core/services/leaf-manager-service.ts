@@ -2,6 +2,7 @@ import { App, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import { DreamNode, MediaFile } from '../../features/dreamnode/types/dreamnode';
 import { DreamSongBlock } from '../../features/dreamweaving/types/dreamsong';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from '../../features/dreamweaving/components/DreamSongFullScreenView';
+import { CustomUIFullScreenView, CUSTOM_UI_FULLSCREEN_VIEW_TYPE } from '../../features/dreamweaving/components/CustomUIFullScreenView';
 import { generateYouTubeIframe, extractYouTubeVideoId } from '../../features/drag-and-drop';
 import { parseLinkFileContent, isLinkFile } from '../../features/drag-and-drop';
 import { useInterBrainStore } from '../store/interbrain-store';
@@ -23,6 +24,7 @@ export class LeafManagerService {
   private dreamSongLeaves: Map<string, WorkspaceLeaf> = new Map();
   private dreamTalkLeaves: Map<string, WorkspaceLeaf> = new Map();
   private canvasLeaves: Map<string, WorkspaceLeaf> = new Map();
+  private customUILeaves: Map<string, WorkspaceLeaf> = new Map();
   private rightPaneLeaf: WorkspaceLeaf | null = null;
 
   constructor(app: App) {
@@ -85,7 +87,7 @@ export class LeafManagerService {
    * Check if any DreamNode leaves are still open
    */
   private hasOpenLeaves(): boolean {
-    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0 || this.canvasLeaves.size > 0;
+    return this.dreamSongLeaves.size > 0 || this.dreamTalkLeaves.size > 0 || this.canvasLeaves.size > 0 || this.customUILeaves.size > 0;
   }
 
   /**
@@ -502,6 +504,73 @@ export class LeafManagerService {
   }
 
   /**
+   * Open Custom UI (index.html) in fullscreen view
+   * Same pattern as openDreamSongFullScreen: one-leaf-per-node, right pane with tabs.
+   */
+  async openCustomUIFullScreen(dreamNode: DreamNode, htmlPath: string): Promise<void> {
+    try {
+      // Check if we already have a leaf for this DreamNode's custom UI
+      const existingLeaf = this.customUILeaves.get(dreamNode.id);
+
+      if (existingLeaf) {
+        // Update existing leaf
+        const view = existingLeaf.view as CustomUIFullScreenView;
+        if (view && view.updateContent) {
+          view.updateContent(dreamNode, htmlPath);
+          this.app.workspace.revealLeaf(existingLeaf);
+          return;
+        } else {
+          // Invalid view, close and recreate
+          await this.closeCustomUIFullScreen(dreamNode.id);
+        }
+      }
+
+      // Create new leaf in right split group
+      const leaf = this.getRightLeaf();
+
+      // Set the view type
+      await leaf.setViewState({
+        type: CUSTOM_UI_FULLSCREEN_VIEW_TYPE,
+        state: {}
+      });
+
+      // Get the view instance and update it
+      const view = leaf.view as CustomUIFullScreenView;
+      if (view && view.updateContent) {
+        view.updateContent(dreamNode, htmlPath);
+      }
+
+      // Track this leaf
+      this.customUILeaves.set(dreamNode.id, leaf);
+
+      // Set up cleanup when leaf is closed
+      this.setupGenericLeafCleanup(this.customUILeaves, dreamNode.id, leaf, 'CustomUI');
+
+      // Reveal the leaf
+      this.app.workspace.revealLeaf(leaf);
+
+      console.log(`Opened Custom UI full-screen for: ${dreamNode.name}`);
+
+    } catch (error) {
+      console.error('Failed to open Custom UI full-screen:', error);
+      new Notice('Failed to open Custom UI in full-screen', 3000);
+    }
+  }
+
+  /**
+   * Close Custom UI full-screen leaf for a specific DreamNode
+   */
+  async closeCustomUIFullScreen(dreamNodeId: string): Promise<void> {
+    const leaf = this.customUILeaves.get(dreamNodeId);
+    if (leaf) {
+      this.customUILeaves.delete(dreamNodeId);
+      await leaf.detach();
+      await this.collapseRightPaneIfEmpty();
+      console.log(`Closed Custom UI full-screen for node: ${dreamNodeId}`);
+    }
+  }
+
+  /**
    * Close DreamSong full-screen leaf for a specific DreamNode
    */
   async closeDreamSongFullScreen(dreamNodeId: string): Promise<void> {
@@ -671,9 +740,15 @@ export class LeafManagerService {
     await this.closeAllDreamSongFullScreen();
     await this.closeAllDreamTalkFullScreen();
     await this.closeAllCanvasLeaves();
+    // Close all custom UI leaves
+    const customUIPromises = Array.from(this.customUILeaves.keys()).map(nodeId =>
+      this.closeCustomUIFullScreen(nodeId)
+    );
+    await Promise.all(customUIPromises);
     this.dreamSongLeaves.clear();
     this.dreamTalkLeaves.clear();
     this.canvasLeaves.clear();
+    this.customUILeaves.clear();
 
     // Clean up right pane
     if (this.rightPaneLeaf) {
