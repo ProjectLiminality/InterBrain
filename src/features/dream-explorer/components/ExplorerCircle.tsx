@@ -132,7 +132,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   );
 
   const borderColor = getBorderColor(item.type);
-  const borderWidth = Math.max(2, r * 0.06);
+  const borderWidth = Math.max(1.5, Math.sqrt(r) * 0.3);
   const showGlow = isSelected || isHovered;
   const diameter = r * 2;
   const isSubmodule = item.type === 'dream-submodule' || item.type === 'dreamer-submodule';

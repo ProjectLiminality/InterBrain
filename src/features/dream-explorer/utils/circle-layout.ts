@@ -47,7 +47,7 @@ function getEnclosingRadius(nodes: ForceNode[]): number {
 
 function scaleToContainer(nodes: ForceNode[], containerRadius: number): PositionedItem[] {
   const encR = getEnclosingRadius(nodes);
-  const scale = containerRadius / encR;
+  const scale = (containerRadius * 0.95) / encR;
   return nodes.map(n => ({
     item: n.item,
     x: (n.x || 0) * scale,
