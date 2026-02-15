@@ -162,8 +162,8 @@ export class CircleLayoutEngine {
   }
 
   /** Switch between equal and weighted modes — emits cached layout */
-  setMode(mode: LayoutMode): void {
-    if (mode === this.mode) return;
+  setMode(mode: LayoutMode, force = false): void {
+    if (mode === this.mode && !force) return;
     this.mode = mode;
     this.emit();
   }

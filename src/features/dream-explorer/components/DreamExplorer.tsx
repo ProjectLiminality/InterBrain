@@ -106,8 +106,10 @@ export const DreamExplorer: React.FC = () => {
       containerRadius,
       sizeWeighted ? 'weighted' : 'equal'
     );
-    engine.onUpdate = (positions) => setPositioned(positions);
     engineRef.current = engine;
+    engine.onUpdate = (positions) => setPositioned(positions);
+    // Emit initial layout now that onUpdate is wired
+    engine.setMode(sizeWeighted ? 'weighted' : 'equal', true);
 
     return () => {
       engine.destroy();
