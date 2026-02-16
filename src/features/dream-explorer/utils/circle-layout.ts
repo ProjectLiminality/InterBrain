@@ -41,7 +41,6 @@ interface ForceNode extends SimulationNodeDatum {
 const EQUAL_RADIUS = 40;
 
 function computeWeightedRadius(item: ExplorerItem, maxSize: number): number {
-  if (item.type === 'readme') return 50;
   const size = Math.max(item.size, 1);
   const normalized = Math.sqrt(size / maxSize);
   return 20 + normalized * 60; // 20–80

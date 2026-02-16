@@ -407,8 +407,8 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         </>
       )}
 
-      {/* ── Size label at bottom — hover/select only, non-submodule items ── */}
-      {showGlow && !isSubmodule && !hasChildren && item.size > 0 && (
+      {/* ── Size label at bottom — hover/select only ── */}
+      {showGlow && !hasChildren && item.size > 0 && (
         <div
           style={{
             position: 'absolute',
