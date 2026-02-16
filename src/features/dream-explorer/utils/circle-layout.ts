@@ -218,9 +218,8 @@ export class CircleLayoutEngine {
     this.weightedLayout = solveLayout(sorted, weightedRadii, containerRadius, equalPositions);
 
     // 3. Reduced layout: start from equal positions, non-reduced items at r=0.
-    //    Stronger centering (0.3) forces surviving nodes to repack tightly
-    //    rather than staying in their spread-out equal positions.
-    this.reducedLayout = solveLayout(sorted, reducedRadii, containerRadius, equalPositions, 0.3);
+    //    Same centering as weighted so transitions from equal are smooth.
+    this.reducedLayout = solveLayout(sorted, reducedRadii, containerRadius, equalPositions);
 
     this.emit();
   }
