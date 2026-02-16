@@ -6,7 +6,7 @@
  * packCirclesInParent (deterministic, submodules only)
  *     │
  *     ▼
- * ReducedLayout (packed submodules + readme, everything else r=0 at origin)
+ * ReducedLayout (packed submodules only, everything else r=0 at origin)
  *     │ solveLayout (force sim: all items grow to EQUAL_RADIUS)
  *     ▼
  * EqualLayout
@@ -49,8 +49,7 @@ function computeWeightedRadius(item: ExplorerItem, maxSize: number): number {
 
 function isReducedItem(item: ExplorerItem): boolean {
   return item.type === 'dream-submodule' ||
-    item.type === 'dreamer-submodule' ||
-    item.type === 'readme';
+    item.type === 'dreamer-submodule';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -176,10 +175,40 @@ export class CircleLayoutEngine {
       return { item, x: 0, y: 0, r: 0 };
     });
 
-    // 4. Derive equalLayout: start from reduced positions, all items grow to EQUAL_RADIUS
-    const reducedPositions = this.reducedLayout.map(p => ({ x: p.x, y: p.y }));
+    // 4. Derive equalLayout: start from reduced positions for submodules,
+    //    place non-reduced items equidistantly on an outer ring so the
+    //    force sim pushes them outward smoothly instead of exploding from origin.
+    const nonReducedIndices = sorted.map((_, i) => i).filter(i => !reducedFlags[i]);
+    const nonReducedCount = nonReducedIndices.length;
+
+    // Outer ring sits just beyond the submodule arrangement
+    const maxSubR = this.reducedLayout.reduce((max, p) => {
+      const edge = Math.sqrt(p.x * p.x + p.y * p.y) + p.r;
+      return edge > max ? edge : max;
+    }, 0);
+    const outerRingR = maxSubR + EQUAL_RADIUS * 1.5;
+
+    const equalStartPositions = this.reducedLayout.map(p => ({ x: p.x, y: p.y }));
+    for (let i = 0; i < nonReducedCount; i++) {
+      const angle = (2 * Math.PI * i) / nonReducedCount - Math.PI / 2;
+      equalStartPositions[nonReducedIndices[i]] = {
+        x: Math.cos(angle) * outerRingR,
+        y: Math.sin(angle) * outerRingR,
+      };
+    }
+
     const equalRadii = sorted.map(() => EQUAL_RADIUS);
-    this.equalLayout = solveLayout(sorted, equalRadii, containerRadius, reducedPositions);
+    this.equalLayout = solveLayout(sorted, equalRadii, containerRadius, equalStartPositions);
+
+    // 4b. Back-fill reduced layout: non-reduced items get their equal-layout
+    //     position with r=0, so the reduced↔equal transition only animates radius.
+    for (const idx of nonReducedIndices) {
+      this.reducedLayout[idx] = {
+        ...this.reducedLayout[idx],
+        x: this.equalLayout[idx].x,
+        y: this.equalLayout[idx].y,
+      };
+    }
 
     // 5. Derive weightedLayout from equal positions
     const equalPositions = this.equalLayout.map(p => ({ x: p.x, y: p.y }));
