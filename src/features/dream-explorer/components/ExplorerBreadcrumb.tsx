@@ -1,7 +1,7 @@
 /**
  * Explorer Breadcrumb
  *
- * Back arrow + clickable path segments + layout mode toggle button.
+ * Back arrow + clickable path segments + layout mode buttons.
  * Positioned at the top of the Dream Explorer.
  * Root = DreamNode name, prevents navigation above rootPath.
  */
@@ -9,6 +9,8 @@
 import React from 'react';
 import { dreamNodeStyles } from '../../dreamnode/styles/dreamNodeStyles';
 import type { ExplorerLayoutMode } from '../types/explorer';
+
+const MODES: ExplorerLayoutMode[] = ['reduced', 'equal', 'weighted'];
 
 interface ExplorerBreadcrumbProps {
   currentPath: string;
@@ -18,7 +20,7 @@ interface ExplorerBreadcrumbProps {
   layoutMode: ExplorerLayoutMode;
   onGoBack: () => void;
   onNavigateTo: (path: string) => void;
-  onCycleLayoutMode: () => void;
+  onSetLayoutMode: (mode: ExplorerLayoutMode) => void;
 }
 
 export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
@@ -29,15 +31,13 @@ export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
   layoutMode,
   onGoBack,
   onNavigateTo,
-  onCycleLayoutMode,
+  onSetLayoutMode,
 }) => {
   // Get the relative path from root
   const relativePath = currentPath.startsWith(rootPath)
     ? currentPath.slice(rootPath.length).replace(/^\//, '')
     : '';
   const segments = relativePath ? relativePath.split('/') : [];
-
-  const isActive = layoutMode !== 'reduced';
 
   return (
     <div
@@ -122,24 +122,31 @@ export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Layout mode toggle — cycles: reduced → equal → weighted */}
-      <button
-        onClick={onCycleLayoutMode}
-        style={{
-          background: isActive ? 'rgba(79, 195, 247, 0.2)' : 'none',
-          border: `1px solid ${isActive ? dreamNodeStyles.colors.dream.border : 'rgba(255,255,255,0.2)'}`,
-          color: isActive ? dreamNodeStyles.colors.dream.border : dreamNodeStyles.colors.text.secondary,
-          cursor: 'pointer',
-          padding: '2px 8px',
-          fontSize: `${dreamNodeStyles.typography.fontSize.small}px`,
-          fontFamily: dreamNodeStyles.typography.fontFamily,
-          borderRadius: '4px',
-          transition: 'all 0.15s',
-        }}
-        title={`Layout: ${layoutMode} (click to cycle)`}
-      >
-        {layoutMode}
-      </button>
+      {/* Layout mode buttons — direct switch to any mode */}
+      <div style={{ display: 'flex', gap: '2px' }}>
+        {MODES.map(mode => {
+          const isActive = mode === layoutMode;
+          return (
+            <button
+              key={mode}
+              onClick={() => onSetLayoutMode(mode)}
+              style={{
+                background: isActive ? 'rgba(79, 195, 247, 0.2)' : 'none',
+                border: `1px solid ${isActive ? dreamNodeStyles.colors.dream.border : 'rgba(255,255,255,0.2)'}`,
+                color: isActive ? dreamNodeStyles.colors.dream.border : dreamNodeStyles.colors.text.secondary,
+                cursor: isActive ? 'default' : 'pointer',
+                padding: '2px 8px',
+                fontSize: `${dreamNodeStyles.typography.fontSize.small}px`,
+                fontFamily: dreamNodeStyles.typography.fontFamily,
+                borderRadius: '4px',
+                transition: 'all 0.15s',
+              }}
+            >
+              {mode}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };

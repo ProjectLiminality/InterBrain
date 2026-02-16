@@ -30,6 +30,7 @@ export interface DreamExplorerSlice {
   explorerGoBack: () => void;
   explorerSelectItem: (path: string | null, additive?: boolean) => void;
   explorerCycleLayoutMode: () => void;
+  explorerSetLayoutMode: (mode: ExplorerLayoutMode) => void;
   explorerOpen: (initialPath: string, rootName?: string) => void;
   explorerClose: () => void;
 }
@@ -138,6 +139,14 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         },
       };
     }),
+
+  explorerSetLayoutMode: (mode: ExplorerLayoutMode) =>
+    set((state: any) => ({
+      dreamExplorer: {
+        ...state.dreamExplorer,
+        layoutMode: mode,
+      },
+    })),
 
   explorerOpen: (initialPath: string, rootName?: string) =>
     set(() => ({

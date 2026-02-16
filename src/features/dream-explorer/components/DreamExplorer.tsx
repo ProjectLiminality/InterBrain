@@ -58,7 +58,7 @@ export const DreamExplorer: React.FC = () => {
   const explorerNavigateTo = useInterBrainStore(s => s.explorerNavigateTo);
   const explorerGoBack = useInterBrainStore(s => s.explorerGoBack);
   const explorerSelectItem = useInterBrainStore(s => s.explorerSelectItem);
-  const explorerCycleLayoutMode = useInterBrainStore(s => s.explorerCycleLayoutMode);
+  const explorerSetLayoutMode = useInterBrainStore(s => s.explorerSetLayoutMode);
 
   const [items, setItems] = useState<ExplorerItem[]>([]);
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
@@ -427,7 +427,7 @@ export const DreamExplorer: React.FC = () => {
               explorerNavigateTo(path);
             }
           }}
-          onCycleLayoutMode={explorerCycleLayoutMode}
+          onSetLayoutMode={explorerSetLayoutMode}
         />
         </div>
       )}

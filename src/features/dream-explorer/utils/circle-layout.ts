@@ -50,6 +50,59 @@ function isReducedItem(item: ExplorerItem): boolean {
     item.type === 'readme';
 }
 
+// ── Proto positions: concentric rings ────────────────────────────────
+
+type RingTier = 'center' | 'submodule' | 'folder' | 'file';
+
+function getRingTier(item: ExplorerItem): RingTier {
+  if (item.type === 'readme') return 'center';
+  if (item.type === 'dream-submodule' || item.type === 'dreamer-submodule') return 'submodule';
+  if (item.type === 'folder') return 'folder';
+  return 'file';
+}
+
+/**
+ * Concentric ring starting positions for the equal layout sim.
+ * README at center, submodules ring 1, folders ring 2, files ring 3.
+ * Items are equidistant on their ring. Ring spacing is uniform so the
+ * explorer circle border reads as the outermost concentric ring.
+ */
+function assignProtoPositions(items: ExplorerItem[]): { x: number; y: number }[] {
+  const tiers: { tier: RingTier; idx: number }[] = items.map((item, idx) => ({
+    tier: getRingTier(item),
+    idx,
+  }));
+
+  const center = tiers.filter(t => t.tier === 'center');
+  const submodules = tiers.filter(t => t.tier === 'submodule');
+  const folders = tiers.filter(t => t.tier === 'folder');
+  const files = tiers.filter(t => t.tier === 'file');
+
+  const rings = [submodules, folders, files].filter(r => r.length > 0);
+  const positions: { x: number; y: number }[] = new Array(items.length);
+
+  // Center items at origin
+  for (const c of center) {
+    positions[c.idx] = { x: 0, y: 0 };
+  }
+
+  // Evenly space rings. With N non-empty rings, ring k sits at
+  // (k+1)/(N+1) of refRadius — leaves equal gap at center and edge.
+  const refRadius = EQUAL_RADIUS * (rings.length + 1) * 2.5;
+  rings.forEach((ring, ringIdx) => {
+    const ringR = refRadius * (ringIdx + 1) / (rings.length + 1);
+    for (let i = 0; i < ring.length; i++) {
+      const angle = (2 * Math.PI * i) / ring.length - Math.PI / 2;
+      positions[ring[i].idx] = {
+        x: Math.cos(angle) * ringR,
+        y: Math.sin(angle) * ringR,
+      };
+    }
+  });
+
+  return positions;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function getEnclosingRadius(nodes: ForceNode[]): number {
@@ -77,12 +130,18 @@ function scaleToContainer(nodes: ForceNode[], containerRadius: number): Position
 /**
  * Run force simulation: collision + centering. Radii are fixed (no
  * interpolation). Scale result to fit container.
+ *
+ * centerStrength controls how aggressively nodes pull toward origin.
+ * Default 0.05 is gentle (preserves proto structure). Higher values
+ * (e.g. 0.3) force a tighter repack — useful when many nodes have
+ * r=0 and surviving nodes need to consolidate.
  */
 function solveLayout(
   items: ExplorerItem[],
   radii: number[],
   containerRadius: number,
   startPositions?: { x: number; y: number }[],
+  centerStrength = 0.05,
 ): PositionedItem[] {
   const nodes: ForceNode[] = items.map((item, i) => ({
     r: radii[i],
@@ -93,8 +152,8 @@ function solveLayout(
 
   const sim: Simulation<ForceNode, undefined> = forceSimulation<ForceNode>(nodes)
     .force('collide', forceCollide<ForceNode>(d => d.r + 1).strength(1).iterations(3))
-    .force('x', forceX<ForceNode>(0).strength(0.05))
-    .force('y', forceY<ForceNode>(0).strength(0.05))
+    .force('x', forceX<ForceNode>(0).strength(centerStrength))
+    .force('y', forceY<ForceNode>(0).strength(centerStrength))
     .stop();
 
   for (let i = 0; i < 300; i++) {
@@ -150,15 +209,18 @@ export class CircleLayoutEngine {
     const weightedRadii = sorted.map(item => computeWeightedRadius(item, maxSize));
     const reducedRadii = sorted.map(item => isReducedItem(item) ? EQUAL_RADIUS : 0);
 
-    // 1. Equal layout: uniform radii, collision + centering
-    this.equalLayout = solveLayout(sorted, equalRadii, containerRadius);
+    // 1. Equal layout: start from concentric ring positions, uniform radii
+    const protoPositions = assignProtoPositions(sorted);
+    this.equalLayout = solveLayout(sorted, equalRadii, containerRadius, protoPositions);
 
     // 2. Weighted layout: start from equal positions, size-based radii
     const equalPositions = this.equalLayout.map(p => ({ x: p.x, y: p.y }));
     this.weightedLayout = solveLayout(sorted, weightedRadii, containerRadius, equalPositions);
 
-    // 3. Reduced layout: start from equal positions, non-reduced items at r=0
-    this.reducedLayout = solveLayout(sorted, reducedRadii, containerRadius, equalPositions);
+    // 3. Reduced layout: start from equal positions, non-reduced items at r=0.
+    //    Stronger centering (0.3) forces surviving nodes to repack tightly
+    //    rather than staying in their spread-out equal positions.
+    this.reducedLayout = solveLayout(sorted, reducedRadii, containerRadius, equalPositions, 0.3);
 
     this.emit();
   }
