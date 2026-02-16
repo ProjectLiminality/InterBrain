@@ -4,6 +4,18 @@
  * Main React component for the full-screen holarchy file navigator.
  * Reads state from the Zustand slice, scans directories, drives the
  * CircleLayoutEngine for physics-based packing with animated transitions.
+ *
+ * 3-level scene zoom: One scene div inside an enclosing circle mask
+ * contains ALL circles from 3 levels (parent, current, children).
+ * Navigation is a CSS transform on that scene — zoom-in scales the
+ * target folder to fill the viewport, zoom-out shrinks current content
+ * into its parent position. After the animation, the real navigation
+ * fires and the scene resets to identity.
+ *
+ * Layout modes:
+ * - reduced: submodules + readme only, equal radii (holon view)
+ * - equal: all items, equal radii
+ * - weighted: all items, size-weighted radii
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -11,12 +23,28 @@ import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { serviceManager } from '../../../core/services/service-manager';
 import { scanDirectory } from '../services/file-scanner-service';
 import { CircleLayoutEngine } from '../utils/circle-layout';
+import { DirectoryCache } from '../services/directory-cache';
 import { ExplorerCircle } from './ExplorerCircle';
 import { ExplorerBreadcrumb } from './ExplorerBreadcrumb';
 import type { ExplorerItem, PositionedItem } from '../types/explorer';
 
-/** Zoom animation states */
-type ZoomState = 'idle' | 'zooming-in' | 'zooming-out';
+const ZOOM_DURATION = 1000; // ms — matches ExplorerCircle's CSS transition duration
+
+/** Parent circle projected into scene coordinates */
+interface ParentSceneCircle extends PositionedItem {
+  sceneX: number;
+  sceneY: number;
+  sceneR: number;
+}
+
+/** Compute parent path, respecting root boundary */
+function computeParentPath(currentPath: string, rootPath: string): string | null {
+  if (currentPath === rootPath) return null;
+  const lastSlash = currentPath.lastIndexOf('/');
+  if (lastSlash === -1) return rootPath;
+  const parent = currentPath.slice(0, lastSlash);
+  return parent.length < rootPath.length ? rootPath : parent;
+}
 
 export const DreamExplorer: React.FC = () => {
   const currentPath = useInterBrainStore(s => s.dreamExplorer.currentPath);
@@ -24,23 +52,31 @@ export const DreamExplorer: React.FC = () => {
   const rootName = useInterBrainStore(s => s.dreamExplorer.rootName);
   const history = useInterBrainStore(s => s.dreamExplorer.history);
   const selectedItems = useInterBrainStore(s => s.dreamExplorer.selectedItems);
-  const sizeWeighted = useInterBrainStore(s => s.dreamExplorer.sizeWeighted);
+  const layoutMode = useInterBrainStore(s => s.dreamExplorer.layoutMode);
   const dreamNodesMap = useInterBrainStore(s => s.dreamNodes);
 
   const explorerNavigateTo = useInterBrainStore(s => s.explorerNavigateTo);
   const explorerGoBack = useInterBrainStore(s => s.explorerGoBack);
   const explorerSelectItem = useInterBrainStore(s => s.explorerSelectItem);
-  const explorerToggleSizeWeighted = useInterBrainStore(s => s.explorerToggleSizeWeighted);
+  const explorerCycleLayoutMode = useInterBrainStore(s => s.explorerCycleLayoutMode);
 
   const [items, setItems] = useState<ExplorerItem[]>([]);
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [zoomState, setZoomState] = useState<ZoomState>('idle');
-  const [zoomTarget, setZoomTarget] = useState<PositionedItem | null>(null);
-  const [contentOpacity, setContentOpacity] = useState(1); // Used for zoom-in animation only
+
+  // Scene transform state (replaces zoom overrides)
+  const [sceneTransform, setSceneTransform] = useState('');
+  const [sceneTransition, setSceneTransition] = useState('none');
+  const [isZooming, setIsZooming] = useState(false);
+
+  // Parent level circles in scene coordinates
+  const [parentSceneCircles, setParentSceneCircles] = useState<ParentSceneCircle[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CircleLayoutEngine | null>(null);
+  const cacheRef = useRef(new DirectoryCache());
+  const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingClearRef = useRef<string | null>(null);
 
   // Observe container size
   useEffect(() => {
@@ -64,6 +100,11 @@ export const DreamExplorer: React.FC = () => {
     [containerSize.width, containerSize.height]
   );
 
+  // Clear cache when root changes
+  useEffect(() => {
+    cacheRef.current.clear();
+  }, [rootPath]);
+
   // Scan directory when path changes
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +117,6 @@ export const DreamExplorer: React.FC = () => {
         const scanned = await scanDirectory(currentPath, vaultService, dreamNodesMap);
         if (!cancelled) {
           setItems(scanned);
-          setContentOpacity(1);
         }
       } catch (err) {
         console.error('[DreamExplorer] Scan failed:', err);
@@ -90,7 +130,6 @@ export const DreamExplorer: React.FC = () => {
 
   // Create/recreate engine when items or container size change
   useEffect(() => {
-    // Destroy previous engine
     if (engineRef.current) {
       engineRef.current.destroy();
       engineRef.current = null;
@@ -104,12 +143,11 @@ export const DreamExplorer: React.FC = () => {
     const engine = new CircleLayoutEngine(
       items,
       containerRadius,
-      sizeWeighted ? 'weighted' : 'equal'
+      layoutMode
     );
     engineRef.current = engine;
     engine.onUpdate = (positions) => setPositioned(positions);
-    // Emit initial layout now that onUpdate is wired
-    engine.setMode(sizeWeighted ? 'weighted' : 'equal', true);
+    engine.setMode(layoutMode, true);
 
     return () => {
       engine.destroy();
@@ -119,19 +157,88 @@ export const DreamExplorer: React.FC = () => {
     };
   }, [items, containerRadius]);
 
-  // When sizeWeighted toggles, tell the engine (animated transition)
+  // When layoutMode changes, tell the engine — CSS transitions handle animation
   useEffect(() => {
     if (engineRef.current) {
-      engineRef.current.setMode(sizeWeighted ? 'weighted' : 'equal');
+      engineRef.current.setMode(layoutMode);
     }
-  }, [sizeWeighted]);
+  }, [layoutMode]);
 
-  // Update engine container radius on resize (no re-create needed)
+  // Update engine container radius on resize
   useEffect(() => {
     if (engineRef.current) {
       engineRef.current.setContainerRadius(containerRadius);
     }
   }, [containerRadius]);
+
+  // Eagerly scan adjacent levels after navigation settles
+  useEffect(() => {
+    if (!rootPath || containerRadius <= 0 || items.length === 0) return;
+
+    const vaultService = serviceManager.getVaultService();
+    if (!vaultService) return;
+
+    cacheRef.current.scanAdjacent(
+      currentPath,
+      rootPath,
+      items,
+      containerRadius,
+      vaultService,
+      dreamNodesMap,
+      layoutMode
+    );
+  }, [items, currentPath, rootPath, containerRadius, dreamNodesMap, layoutMode]);
+
+  // Compute parent scene circles when positioned data or path changes
+  useEffect(() => {
+    if (!rootPath || containerRadius <= 0) {
+      setParentSceneCircles([]);
+      return;
+    }
+
+    const parentPath = computeParentPath(currentPath, rootPath);
+    if (!parentPath) {
+      setParentSceneCircles([]);
+      return;
+    }
+
+    const parentCache = cacheRef.current.get(parentPath, layoutMode);
+    if (!parentCache || parentCache.positioned.length === 0) {
+      setParentSceneCircles([]);
+      return;
+    }
+
+    const me = parentCache.positioned.find(p => p.item.path === currentPath);
+    if (!me) {
+      setParentSceneCircles([]);
+      return;
+    }
+
+    const pScale = containerRadius / me.r;
+    setParentSceneCircles(parentCache.positioned.map(p => ({
+      ...p,
+      sceneX: (p.x - me.x) * pScale,
+      sceneY: (p.y - me.y) * pScale,
+      sceneR: p.r * pScale,
+    })));
+  }, [positioned, currentPath, rootPath, containerRadius, layoutMode]);
+
+  // When new positioned data arrives after a zoom navigation, clear zoom state
+  useEffect(() => {
+    if (pendingClearRef.current && positioned.length > 0) {
+      pendingClearRef.current = null;
+      setSceneTransition('none');
+      setSceneTransform('');
+      setIsZooming(false);
+    }
+  }, [positioned]);
+
+  // Get child data for a directory circle from cache
+  const getChildData = useCallback((itemPath: string) => {
+    const cached = cacheRef.current.get(itemPath, layoutMode);
+    if (!cached?.positioned.length) return undefined;
+    return { positioned: cached.positioned, containerRadius };
+  }, [layoutMode, containerRadius]);
 
   // Handle single click: select (with Cmd+click for additive)
   const handleClick = useCallback(
@@ -144,51 +251,49 @@ export const DreamExplorer: React.FC = () => {
   // Handle double-click: navigate into directories/submodules, open files
   const handleDoubleClick = useCallback(
     (item: ExplorerItem) => {
-      if (item.isDirectory) {
-        // Find the positioned item for zoom animation
-        const target = positioned.find(p => p.item.path === item.path);
-        if (target && containerRadius > 0) {
-          setZoomTarget(target);
-          setZoomState('zooming-in');
+      if (isZooming) return;
 
-          setTimeout(() => {
-            explorerNavigateTo(item.path);
-            setZoomState('idle');
-            setZoomTarget(null);
-            setContentOpacity(0);
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setContentOpacity(1);
-              });
-            });
-          }, 350);
-        } else {
+      if (item.isDirectory || item.type === 'dream-submodule' || item.type === 'dreamer-submodule') {
+        if (containerRadius <= 0) {
           explorerNavigateTo(item.path);
+          return;
         }
-      } else if (item.type === 'dream-submodule' || item.type === 'dreamer-submodule') {
+
+        // Find the target circle in positioned data
         const target = positioned.find(p => p.item.path === item.path);
-        if (target && containerRadius > 0) {
-          setZoomTarget(target);
-          setZoomState('zooming-in');
-          setTimeout(() => {
+        if (!target) {
+          explorerNavigateTo(item.path);
+          return;
+        }
+
+        // Check cache for child content (for skeleton preview)
+        const cached = cacheRef.current.get(item.path, layoutMode);
+        if (cached && cached.positioned.length > 0) {
+          // Zoom-in: transform scene to center target at full size
+          const scale = containerRadius / target.r;
+          const tx = -target.x * scale;
+          const ty = -target.y * scale;
+
+          setIsZooming(true);
+          setSceneTransition('transform 1s ease-in-out');
+          requestAnimationFrame(() => {
+            setSceneTransform(`translate(${tx}px, ${ty}px) scale(${scale})`);
+          });
+
+          zoomTimerRef.current = setTimeout(() => {
+            pendingClearRef.current = item.path;
             explorerNavigateTo(item.path);
-            setZoomState('idle');
-            setZoomTarget(null);
-            setContentOpacity(0);
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setContentOpacity(1);
-              });
-            });
-          }, 350);
+            zoomTimerRef.current = null;
+          }, ZOOM_DURATION);
         } else {
+          // No cache — instant navigate
           explorerNavigateTo(item.path);
         }
       } else {
         openFile(item);
       }
     },
-    [positioned, containerRadius, explorerNavigateTo]
+    [positioned, containerRadius, explorerNavigateTo, isZooming, layoutMode]
   );
 
   // Open a file in Obsidian right pane, or fallback to system default
@@ -209,19 +314,48 @@ export const DreamExplorer: React.FC = () => {
     }
   }, []);
 
-  // Handle back — just navigate, CSS transitions handle the animation
+  // Handle back navigation with zoom-out animation
   const handleGoBack = useCallback(() => {
-    if (currentPath === rootPath) return; // Already at root
+    if (currentPath === rootPath || isZooming) return;
+
+    const parentPath = computeParentPath(currentPath, rootPath);
+    if (!parentPath) {
+      explorerGoBack();
+      return;
+    }
+
+    // Check cache for parent content
+    const parentCache = cacheRef.current.get(parentPath, layoutMode);
+    if (parentCache && parentCache.positioned.length > 0) {
+      const meRaw = parentCache.positioned.find(p => p.item.path === currentPath);
+      if (meRaw) {
+        // Zoom-out: shrink scene into the position currentPath occupies in parent
+        const scale = meRaw.r / containerRadius;
+
+        setIsZooming(true);
+        setSceneTransition('transform 1s ease-in-out');
+        requestAnimationFrame(() => {
+          setSceneTransform(`translate(${meRaw.x}px, ${meRaw.y}px) scale(${scale})`);
+        });
+
+        zoomTimerRef.current = setTimeout(() => {
+          pendingClearRef.current = parentPath;
+          explorerGoBack();
+          zoomTimerRef.current = null;
+        }, ZOOM_DURATION);
+        return;
+      }
+    }
+
+    // No cache — instant back
     explorerGoBack();
-  }, [explorerGoBack, currentPath, rootPath]);
+  }, [currentPath, rootPath, explorerGoBack, isZooming, layoutMode, containerRadius]);
 
   // Click on empty space — inside enclosing circle = deselect, outside = navigate up
-  // ExplorerCircle already calls stopPropagation, so any click reaching here is on empty space
   const handleBackgroundClick = useCallback(
     (e: React.MouseEvent) => {
       if (!containerRef.current || containerRadius <= 0) return;
 
-      // Hit-test: is the click inside the enclosing circle?
       const rect = containerRef.current.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
@@ -230,33 +364,24 @@ export const DreamExplorer: React.FC = () => {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist <= containerRadius) {
-        // Inside enclosing circle → deselect
         explorerSelectItem(null);
       } else {
-        // Outside enclosing circle → navigate up
         if (currentPath !== rootPath) {
-          explorerGoBack();
+          handleGoBack();
         }
       }
     },
-    [containerRadius, currentPath, rootPath, explorerSelectItem, explorerGoBack]
+    [containerRadius, currentPath, rootPath, explorerSelectItem, handleGoBack]
   );
 
-  // Calculate zoom transform for animation
-  const getZoomTransform = (): React.CSSProperties => {
-    if (zoomState !== 'zooming-in' || !zoomTarget || containerRadius <= 0) {
-      return {};
-    }
-
-    const scale = containerRadius / zoomTarget.r;
-    const tx = -zoomTarget.x * scale;
-    const ty = -zoomTarget.y * scale;
-
-    return {
-      transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
-      transition: 'transform 0.35s ease-in-out',
+  // Cleanup zoom timer on unmount
+  useEffect(() => {
+    return () => {
+      if (zoomTimerRef.current) {
+        clearTimeout(zoomTimerRef.current);
+      }
     };
-  };
+  }, []);
 
   return (
     <div
@@ -289,23 +414,92 @@ export const DreamExplorer: React.FC = () => {
 
       {/* Breadcrumb navigation */}
       {rootPath && (
+        <div onClick={e => e.stopPropagation()} style={{ position: 'relative', zIndex: 20 }}>
         <ExplorerBreadcrumb
           currentPath={currentPath}
           rootPath={rootPath}
           rootName={rootName}
           canGoBack={history.length > 0}
-          sizeWeighted={sizeWeighted}
+          layoutMode={layoutMode}
           onGoBack={handleGoBack}
           onNavigateTo={(path) => {
             if (path !== currentPath) {
               explorerNavigateTo(path);
             }
           }}
-          onToggleSizeWeighted={explorerToggleSizeWeighted}
+          onCycleLayoutMode={explorerCycleLayoutMode}
         />
+        </div>
       )}
 
-      {/* Circular boundary indicator */}
+      {/* Enclosing circle mask — clips everything via overflow:hidden + borderRadius:50% */}
+      {rootPath && containerRadius > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: `${containerRadius * 2}px`,
+            height: `${containerRadius * 2}px`,
+            transform: 'translate(-50%, -50%)',
+            borderRadius: '50%',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Scene div — transform target for zoom animations.
+              overflow:visible is critical: parent circles live at huge coordinates
+              outside the scene div's own bounds, and must not be clipped by the
+              scene div itself — only by the enclosing circle mask above. */}
+          <div
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              overflow: 'visible',
+              transform: sceneTransform || 'none',
+              transition: sceneTransition,
+              transformOrigin: 'center center',
+            }}
+          >
+            {/* Parent skeleton circles (large coords, clipped by mask) */}
+            {parentSceneCircles.map(p => (
+              <ExplorerCircle
+                key={`parent-${p.item.path}`}
+                item={p.item}
+                x={p.sceneX}
+                y={p.sceneY}
+                r={p.sceneR}
+                isSelected={false}
+                skeleton
+              />
+            ))}
+
+            {/* Current circles with child skeletons inside directories */}
+            {positioned.map(pos => {
+              const childData = (pos.item.isDirectory || pos.item.type === 'dream-submodule' || pos.item.type === 'dreamer-submodule')
+                ? getChildData(pos.item.path)
+                : undefined;
+
+              return (
+                <ExplorerCircle
+                  key={pos.item.path}
+                  item={pos.item}
+                  x={pos.x}
+                  y={pos.y}
+                  r={pos.r}
+                  isSelected={!isZooming && selectedItems.includes(pos.item.path)}
+                  childPositioned={childData?.positioned}
+                  childContainerRadius={childData?.containerRadius}
+                  onClick={isZooming ? undefined : handleClick}
+                  onDoubleClick={isZooming ? undefined : handleDoubleClick}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Border overlay — separate from mask so it's not affected by scene transform */}
       {rootPath && containerRadius > 0 && (
         <div
           style={{
@@ -318,41 +512,13 @@ export const DreamExplorer: React.FC = () => {
             borderRadius: '50%',
             border: '10px solid #479FF8',
             pointerEvents: 'none',
+            zIndex: 10,
           }}
         />
       )}
 
-      {/* Circle container */}
-      {rootPath && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            opacity: contentOpacity,
-            transition: zoomState !== 'idle' ? 'opacity 0.2s ease' : undefined,
-            ...getZoomTransform(),
-          }}
-        >
-          {positioned.map(pos => (
-            <ExplorerCircle
-              key={pos.item.path}
-              item={pos.item}
-              x={pos.x}
-              y={pos.y}
-              r={pos.r}
-              isSelected={selectedItems.includes(pos.item.path)}
-              onClick={handleClick}
-              onDoubleClick={handleDoubleClick}
-            />
-          ))}
-        </div>
-      )}
-
       {/* Empty state */}
-      {rootPath && items.length === 0 && containerSize.width > 0 && (
+      {rootPath && items.length === 0 && containerSize.width > 0 && !isZooming && (
         <div
           style={{
             position: 'absolute',

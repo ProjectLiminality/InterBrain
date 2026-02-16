@@ -8,6 +8,12 @@
  * Visual pattern mirrors DreamTalkSide:
  * - Media items: image fills circle, hover shows dark overlay with centered name
  * - Icon items: large icon fills circle as backdrop, name centered on top
+ *
+ * When childPositioned is provided, renders skeleton child circles inside this
+ * circle. They use the same coordinate system (offsets from center) but scaled
+ * to fit inside this circle's diameter. Since the circle has overflow:hidden
+ * and borderRadius:50%, children are naturally clipped. When the circle's
+ * position/size animate via CSS transitions, children scale with it seamlessly.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -16,6 +22,7 @@ import { dreamNodeStyles, getGoldenGlow, getMediaContainerStyle, getMediaOverlay
 import { MediaRenderer } from '../../dreamnode/components/MediaRenderer';
 import type { MediaFile } from '../../dreamnode/types/dreamnode';
 import type { ExplorerItem } from '../types/explorer';
+import type { PositionedItem } from '../types/explorer';
 
 interface ExplorerCircleProps {
   item: ExplorerItem;
@@ -23,8 +30,14 @@ interface ExplorerCircleProps {
   y: number;
   r: number;
   isSelected: boolean;
-  onClick: (item: ExplorerItem, e: React.MouseEvent) => void;
-  onDoubleClick: (item: ExplorerItem) => void;
+  /** When true, render icon-based fallback for ALL items (skip MediaRenderer) */
+  skeleton?: boolean;
+  /** Child circle positions to render inside this circle (skeleton mode, for zoom preview) */
+  childPositioned?: PositionedItem[];
+  /** The container radius used to compute childPositioned — needed to scale children to fit inside this circle */
+  childContainerRadius?: number;
+  onClick?: (item: ExplorerItem, e: React.MouseEvent) => void;
+  onDoubleClick?: (item: ExplorerItem) => void;
 }
 
 /** Get border color based on item type */
@@ -103,20 +116,24 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   y,
   r,
   isSelected,
+  skeleton = false,
+  childPositioned,
+  childContainerRadius,
   onClick,
   onDoubleClick,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const iconRef = useRef<HTMLDivElement>(null);
 
-  const useMedia = shouldUseMediaRenderer(item);
+  const useMedia = !skeleton && shouldUseMediaRenderer(item);
   const mediaFile = useMedia ? buildMediaFile(item) : null;
   const hasMedia = useMedia && mediaFile;
+  const hasChildren = childPositioned && childPositioned.length > 0 && childContainerRadius && childContainerRadius > 0;
 
   // Set Lucide icon via Obsidian's setIcon — large backdrop style
   // SVG uses 70% of container via CSS so it scales smoothly with CSS transitions
   useEffect(() => {
-    if (hasMedia || !iconRef.current) return;
+    if (hasMedia || hasChildren || !iconRef.current) return;
     const el = iconRef.current;
     el.innerHTML = '';
     const iconName = getLucideIcon(item);
@@ -128,12 +145,12 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       svg.style.color = getBorderColor(item.type);
       svg.style.opacity = '0.15';
     }
-  }, [item, hasMedia]);
+  }, [item, hasMedia, hasChildren]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onClick(item, e);
+      onClick?.(item, e);
     },
     [item, onClick]
   );
@@ -141,7 +158,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onDoubleClick(item);
+      onDoubleClick?.(item);
     },
     [item, onDoubleClick]
   );
@@ -149,7 +166,8 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   const borderColor = getBorderColor(item.type);
   const isSubmodule = item.type === 'dream-submodule' || item.type === 'dreamer-submodule';
   // Submodules get HolonView-style thick borders to stand out among files
-  const borderWidth = isSubmodule
+  // r=0 circles (collapsed in reduced mode) get 0 border so they're fully invisible
+  const borderWidth = r <= 0 ? 0 : isSubmodule
     ? Math.max(2, Math.min(8, Math.round(r * 0.08)))
     : Math.max(1.5, Math.sqrt(r) * 0.3);
   const showGlow = isSelected || isHovered;
@@ -170,11 +188,12 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         border: `${borderWidth}px solid ${borderColor}`,
         background: '#000000',
         overflow: 'hidden',
-        cursor: 'pointer',
+        cursor: r > 0 ? 'pointer' : 'default',
+        pointerEvents: r > 0 ? 'auto' : 'none',
         transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, font-size 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
         fontSize: `${Math.max(8, vr * 0.15)}px`,
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
-        transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+        transform: isHovered && !hasChildren ? 'scale(1.05)' : 'scale(1)',
         userSelect: 'none',
       }}
       onClick={handleClick}
@@ -183,8 +202,76 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       onMouseLeave={() => setIsHovered(false)}
       title={item.name}
     >
+      {/* ── Child circles (zoom preview) ── */}
+      {hasChildren && childContainerRadius && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+          }}
+        >
+          {childPositioned!.map(child => {
+            // Scale child positions from containerRadius coordinate space
+            // to this circle's visual diameter. Children are positioned as
+            // offsets from center, so we scale the offset and the radius.
+            const scale = vr / childContainerRadius;
+            const cx = child.x * scale;
+            const cy = child.y * scale;
+            const cr = child.r * scale;
+            const cvr = cr * 0.95;
+            const cd = cvr * 2;
+            const childBorderColor = getBorderColor(child.item.type);
+            const childIsSubmodule = child.item.type === 'dream-submodule' || child.item.type === 'dreamer-submodule';
+            const childBorderWidth = childIsSubmodule
+              ? Math.max(1, Math.min(4, Math.round(cr * 0.08)))
+              : Math.max(0.5, Math.sqrt(cr) * 0.3);
+            const childFontSize = Math.max(4, cvr * 0.15);
+
+            return (
+              <div
+                key={`child-${child.item.path}`}
+                style={{
+                  position: 'absolute',
+                  left: `calc(50% + ${cx}px - ${cvr}px)`,
+                  top: `calc(50% + ${cy}px - ${cvr}px)`,
+                  width: `${cd}px`,
+                  height: `${cd}px`,
+                  borderRadius: '50%',
+                  border: `${childBorderWidth}px solid ${childBorderColor}`,
+                  background: '#000000',
+                  overflow: 'hidden',
+                  fontSize: `${childFontSize}px`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                }}
+              >
+                <span
+                  style={{
+                    maxWidth: '75%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontFamily: dreamNodeStyles.typography.fontFamily,
+                    color: dreamNodeStyles.colors.text.primary,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {child.item.name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── Media items: image fills circle, hover shows name overlay ── */}
-      {hasMedia && mediaFile && (
+      {hasMedia && mediaFile && !hasChildren && (
         <div style={getMediaContainerStyle()}>
           <MediaRenderer media={mediaFile} />
           <div style={getMediaOverlayStyle()} />
@@ -242,7 +329,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       )}
 
       {/* ── Icon items: large icon backdrop + centered name ── */}
-      {!hasMedia && (
+      {!hasMedia && !hasChildren && (
         <>
           {/* Large icon as backdrop — fills the circle, low opacity */}
           <div

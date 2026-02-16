@@ -1,23 +1,24 @@
 /**
  * Explorer Breadcrumb
  *
- * Back arrow + clickable path segments + size toggle button.
+ * Back arrow + clickable path segments + layout mode toggle button.
  * Positioned at the top of the Dream Explorer.
  * Root = DreamNode name, prevents navigation above rootPath.
  */
 
 import React from 'react';
 import { dreamNodeStyles } from '../../dreamnode/styles/dreamNodeStyles';
+import type { ExplorerLayoutMode } from '../types/explorer';
 
 interface ExplorerBreadcrumbProps {
   currentPath: string;
   rootPath: string;
   rootName: string;
   canGoBack: boolean;
-  sizeWeighted: boolean;
+  layoutMode: ExplorerLayoutMode;
   onGoBack: () => void;
   onNavigateTo: (path: string) => void;
-  onToggleSizeWeighted: () => void;
+  onCycleLayoutMode: () => void;
 }
 
 export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
@@ -25,16 +26,18 @@ export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
   rootPath,
   rootName,
   canGoBack,
-  sizeWeighted,
+  layoutMode,
   onGoBack,
   onNavigateTo,
-  onToggleSizeWeighted,
+  onCycleLayoutMode,
 }) => {
   // Get the relative path from root
   const relativePath = currentPath.startsWith(rootPath)
     ? currentPath.slice(rootPath.length).replace(/^\//, '')
     : '';
   const segments = relativePath ? relativePath.split('/') : [];
+
+  const isActive = layoutMode !== 'reduced';
 
   return (
     <div
@@ -119,13 +122,13 @@ export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Size toggle */}
+      {/* Layout mode toggle — cycles: reduced → equal → weighted */}
       <button
-        onClick={onToggleSizeWeighted}
+        onClick={onCycleLayoutMode}
         style={{
-          background: sizeWeighted ? 'rgba(79, 195, 247, 0.2)' : 'none',
-          border: `1px solid ${sizeWeighted ? dreamNodeStyles.colors.dream.border : 'rgba(255,255,255,0.2)'}`,
-          color: sizeWeighted ? dreamNodeStyles.colors.dream.border : dreamNodeStyles.colors.text.secondary,
+          background: isActive ? 'rgba(79, 195, 247, 0.2)' : 'none',
+          border: `1px solid ${isActive ? dreamNodeStyles.colors.dream.border : 'rgba(255,255,255,0.2)'}`,
+          color: isActive ? dreamNodeStyles.colors.dream.border : dreamNodeStyles.colors.text.secondary,
           cursor: 'pointer',
           padding: '2px 8px',
           fontSize: `${dreamNodeStyles.typography.fontSize.small}px`,
@@ -133,9 +136,9 @@ export const ExplorerBreadcrumb: React.FC<ExplorerBreadcrumbProps> = ({
           borderRadius: '4px',
           transition: 'all 0.15s',
         }}
-        title={sizeWeighted ? 'Switch to equal sizes' : 'Switch to size-weighted'}
+        title={`Layout: ${layoutMode} (click to cycle)`}
       >
-        {sizeWeighted ? 'weighted' : 'equal'}
+        {layoutMode}
       </button>
     </div>
   );

@@ -40,3 +40,6 @@ export interface PositionedItem {
   y: number;
   r: number;
 }
+
+/** Layout mode for circle sizing and filtering */
+export type ExplorerLayoutMode = 'equal' | 'weighted' | 'reduced';

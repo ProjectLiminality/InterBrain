@@ -3,19 +3,29 @@
  *
  * Force-simulation-based circle packing using d3-force.
  *
- * Two modes: equal radii and size-weighted radii.
- * Both layouts are precomputed headlessly at construction time.
- * Mode switches emit the cached layout instantly — CSS transitions
- * on ExplorerCircle handle the smooth visual interpolation.
+ * Three modes precomputed at construction time:
  *
- * Usage:
- *   const engine = new CircleLayoutEngine(items, containerRadius);
- *   engine.onUpdate = (positions) => setPositioned(positions);
- *   engine.setMode('weighted');  // emits cached weighted layout
- *   engine.destroy();            // cleanup
+ * 1. Equal layout: all items at uniform radius, collision + centering.
+ *
+ * 2. Weighted layout: derived from equal positions, size-based radii,
+ *    same force sim repacks them.
+ *
+ * 3. Reduced layout: derived from equal positions, submodules/readme
+ *    keep equal radius, everything else at r=0. Same force sim repacks.
+ *
+ * All three use the same solveLayout function. Mode switches emit the
+ * cached layout instantly — CSS transitions on ExplorerCircle handle
+ * the smooth visual interpolation.
  */
 
-import { forceSimulation, forceCollide, forceX, forceY, type Simulation, type SimulationNodeDatum } from 'd3-force';
+import {
+  forceSimulation,
+  forceCollide,
+  forceX,
+  forceY,
+  type Simulation,
+  type SimulationNodeDatum,
+} from 'd3-force';
 import type { ExplorerItem, PositionedItem } from '../types/explorer';
 
 interface ForceNode extends SimulationNodeDatum {
@@ -32,6 +42,12 @@ function computeWeightedRadius(item: ExplorerItem, maxSize: number): number {
   const size = Math.max(item.size, 1);
   const normalized = Math.sqrt(size / maxSize);
   return 20 + normalized * 60; // 20–80
+}
+
+function isReducedItem(item: ExplorerItem): boolean {
+  return item.type === 'dream-submodule' ||
+    item.type === 'dreamer-submodule' ||
+    item.type === 'readme';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -56,12 +72,17 @@ function scaleToContainer(nodes: ForceNode[], containerRadius: number): Position
   }));
 }
 
-/** Run a fresh simulation to convergence and return scaled positions */
+// ── Universal force sim ──────────────────────────────────────────────
+
+/**
+ * Run force simulation: collision + centering. Radii are fixed (no
+ * interpolation). Scale result to fit container.
+ */
 function solveLayout(
   items: ExplorerItem[],
   radii: number[],
   containerRadius: number,
-  startPositions?: { x: number; y: number }[]
+  startPositions?: { x: number; y: number }[],
 ): PositionedItem[] {
   const nodes: ForceNode[] = items.map((item, i) => ({
     r: radii[i],
@@ -70,18 +91,6 @@ function solveLayout(
     y: startPositions ? startPositions[i].y : 0,
   }));
 
-  // Deterministic initial positions on a circle (only if no start positions)
-  if (!startPositions && nodes.length > 1) {
-    const totalArea = nodes.reduce((s, d) => s + d.r * d.r, 0);
-    const initR = Math.sqrt(totalArea) * 1.2;
-    for (let i = 0; i < nodes.length; i++) {
-      const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-      nodes[i].x = Math.cos(angle) * initR;
-      nodes[i].y = Math.sin(angle) * initR;
-    }
-  }
-
-  // Run simulation headlessly to convergence
   const sim: Simulation<ForceNode, undefined> = forceSimulation<ForceNode>(nodes)
     .force('collide', forceCollide<ForceNode>(d => d.r + 1).strength(1).iterations(3))
     .force('x', forceX<ForceNode>(0).strength(0.05))
@@ -98,14 +107,14 @@ function solveLayout(
 
 // ── Engine ────────────────────────────────────────────────────────────
 
-export type LayoutMode = 'equal' | 'weighted';
+export type LayoutMode = 'equal' | 'weighted' | 'reduced';
 
 export class CircleLayoutEngine {
   private equalLayout: PositionedItem[] = [];
   private weightedLayout: PositionedItem[] = [];
+  private reducedLayout: PositionedItem[] = [];
   private containerRadius: number;
   private mode: LayoutMode = 'equal';
-  private items: ExplorerItem[] = [];
 
   /** Called with new positions whenever layout changes */
   onUpdate: ((positions: PositionedItem[]) => void) | null = null;
@@ -128,40 +137,33 @@ export class CircleLayoutEngine {
       };
       this.equalLayout = [single];
       this.weightedLayout = [single];
-      this.items = items;
+      this.reducedLayout = [isReducedItem(items[0]) ? single : { ...single, r: 0 }];
       this.emit();
       return;
     }
 
     // Sort for deterministic identity
     const sorted = [...items].sort((a, b) => a.path.localeCompare(b.path));
-    this.items = sorted;
     const maxSize = Math.max(...sorted.map(i => Math.max(i.size, 1)));
 
     const equalRadii = sorted.map(() => EQUAL_RADIUS);
     const weightedRadii = sorted.map(item => computeWeightedRadius(item, maxSize));
+    const reducedRadii = sorted.map(item => isReducedItem(item) ? EQUAL_RADIUS : 0);
 
-    // 1. Solve equal layout from scratch
+    // 1. Equal layout: uniform radii, collision + centering
     this.equalLayout = solveLayout(sorted, equalRadii, containerRadius);
 
-    // 2. Solve weighted layout starting from equal's converged positions
-    //    This ensures continuity — the weighted layout is "where things end up
-    //    if you grow/shrink radii from the equal arrangement"
-    const equalRawPositions = this.equalLayout.map(p => {
-      // Reverse the container scaling to get raw simulation coordinates
-      const encR = getEnclosingRadius(
-        this.equalLayout.map(ep => ({ r: ep.r, x: ep.x, y: ep.y, item: ep.item })) as ForceNode[]
-      );
-      // Actually, we need unscaled positions. Simpler: just solve with equal positions as starting hint.
-      // The scale factor is containerRadius / enclosingRadius, so raw = scaled / scale = scaled * encR / containerRadius
-      return { x: p.x, y: p.y };
-    });
-    this.weightedLayout = solveLayout(sorted, weightedRadii, containerRadius, equalRawPositions);
+    // 2. Weighted layout: start from equal positions, size-based radii
+    const equalPositions = this.equalLayout.map(p => ({ x: p.x, y: p.y }));
+    this.weightedLayout = solveLayout(sorted, weightedRadii, containerRadius, equalPositions);
+
+    // 3. Reduced layout: start from equal positions, non-reduced items at r=0
+    this.reducedLayout = solveLayout(sorted, reducedRadii, containerRadius, equalPositions);
 
     this.emit();
   }
 
-  /** Switch between equal and weighted modes — emits cached layout */
+  /** Switch between layout modes — emits cached layout */
   setMode(mode: LayoutMode, force = false): void {
     if (mode === this.mode && !force) return;
     this.mode = mode;
@@ -174,19 +176,16 @@ export class CircleLayoutEngine {
     const scale = radius / this.containerRadius;
     this.containerRadius = radius;
 
-    // Rescale both cached layouts
-    this.equalLayout = this.equalLayout.map(p => ({
+    const rescale = (layout: PositionedItem[]) => layout.map(p => ({
       ...p,
       x: p.x * scale,
       y: p.y * scale,
       r: p.r * scale,
     }));
-    this.weightedLayout = this.weightedLayout.map(p => ({
-      ...p,
-      x: p.x * scale,
-      y: p.y * scale,
-      r: p.r * scale,
-    }));
+
+    this.equalLayout = rescale(this.equalLayout);
+    this.weightedLayout = rescale(this.weightedLayout);
+    this.reducedLayout = rescale(this.reducedLayout);
 
     this.emit();
   }
@@ -200,6 +199,10 @@ export class CircleLayoutEngine {
 
   private emit(): void {
     if (!this.onUpdate) return;
-    this.onUpdate(this.mode === 'equal' ? this.equalLayout : this.weightedLayout);
+    switch (this.mode) {
+      case 'equal': this.onUpdate(this.equalLayout); break;
+      case 'weighted': this.onUpdate(this.weightedLayout); break;
+      case 'reduced': this.onUpdate(this.reducedLayout); break;
+    }
   }
 }

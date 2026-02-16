@@ -5,6 +5,8 @@
  * Not persisted — resets when the view closes.
  */
 
+import type { ExplorerLayoutMode } from '../types/explorer';
+
 export interface DreamExplorerSlice {
   dreamExplorer: {
     /** Current directory path (vault-relative) */
@@ -17,8 +19,8 @@ export interface DreamExplorerSlice {
     history: string[];
     /** Currently selected item paths (supports multi-select) */
     selectedItems: string[];
-    /** Whether to use size-weighted circle radii */
-    sizeWeighted: boolean;
+    /** Layout mode: equal (all same size), weighted (size-based), reduced (submodules + readme only) */
+    layoutMode: ExplorerLayoutMode;
     /** Whether the explorer is open */
     isOpen: boolean;
   };
@@ -27,10 +29,12 @@ export interface DreamExplorerSlice {
   explorerNavigateTo: (path: string) => void;
   explorerGoBack: () => void;
   explorerSelectItem: (path: string | null, additive?: boolean) => void;
-  explorerToggleSizeWeighted: () => void;
+  explorerCycleLayoutMode: () => void;
   explorerOpen: (initialPath: string, rootName?: string) => void;
   explorerClose: () => void;
 }
+
+const LAYOUT_CYCLE: ExplorerLayoutMode[] = ['reduced', 'equal', 'weighted'];
 
 export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlice => ({
   dreamExplorer: {
@@ -39,7 +43,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
     rootName: '',
     history: [],
     selectedItems: [],
-    sizeWeighted: false,
+    layoutMode: 'reduced',
     isOpen: false,
   },
 
@@ -122,13 +126,18 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
       };
     }),
 
-  explorerToggleSizeWeighted: () =>
-    set((state: any) => ({
-      dreamExplorer: {
-        ...state.dreamExplorer,
-        sizeWeighted: !state.dreamExplorer.sizeWeighted,
-      },
-    })),
+  explorerCycleLayoutMode: () =>
+    set((state: any) => {
+      const current = state.dreamExplorer.layoutMode as ExplorerLayoutMode;
+      const idx = LAYOUT_CYCLE.indexOf(current);
+      const next = LAYOUT_CYCLE[(idx + 1) % LAYOUT_CYCLE.length];
+      return {
+        dreamExplorer: {
+          ...state.dreamExplorer,
+          layoutMode: next,
+        },
+      };
+    }),
 
   explorerOpen: (initialPath: string, rootName?: string) =>
     set(() => ({
@@ -138,7 +147,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         rootName: rootName || initialPath.split('/').pop() || 'Explorer',
         history: [],
         selectedItems: [],
-        sizeWeighted: false,
+        layoutMode: 'reduced' as ExplorerLayoutMode,
         isOpen: true,
       },
     })),
@@ -151,7 +160,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         rootName: '',
         history: [],
         selectedItems: [],
-        sizeWeighted: false,
+        layoutMode: 'reduced' as ExplorerLayoutMode,
         isOpen: false,
       },
     })),
