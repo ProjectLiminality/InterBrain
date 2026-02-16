@@ -522,12 +522,12 @@ export const DreamExplorer: React.FC = () => {
                 ? getChildData(pos.item.path)
                 : undefined;
 
-              // Zoom opacity: non-target circles fade out during zoom-in,
-              // all circles fade out during zoom-out (parent fades in instead)
+              // Zoom opacity: non-target circles fade out entirely via wrapper.
+              // Target circle uses fadeChrome to dissolve border/bg/glow/media
+              // while keeping child preview circles visible for seamless transition.
               const isZoomTarget = zoomTargetPath === pos.item.path;
               let circleOpacity = 1;
-              if (zoomDirection === 'in' && !isZoomTarget) circleOpacity = 0;
-              if (zoomDirection === 'out') circleOpacity = 0;
+              if (zoomDirection && !isZoomTarget) circleOpacity = 0;
 
               return (
                 <div
@@ -545,6 +545,7 @@ export const DreamExplorer: React.FC = () => {
                     isSelected={!isZooming && selectedItems.includes(pos.item.path)}
                     childPositioned={childData?.positioned}
                     childContainerRadius={childData?.containerRadius}
+                    fadeChrome={isZoomTarget && !!zoomDirection}
                     onClick={isZooming ? undefined : handleClick}
                     onDoubleClick={isZooming ? undefined : handleDoubleClick}
                   />

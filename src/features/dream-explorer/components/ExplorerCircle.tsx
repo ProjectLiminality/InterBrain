@@ -36,6 +36,8 @@ interface ExplorerCircleProps {
   childPositioned?: PositionedItem[];
   /** The container radius used to compute childPositioned — needed to scale children to fit inside this circle */
   childContainerRadius?: number;
+  /** Fade border, background, glow, and media to transparent while keeping children visible */
+  fadeChrome?: boolean;
   onClick?: (item: ExplorerItem, e: React.MouseEvent) => void;
   onDoubleClick?: (item: ExplorerItem) => void;
 }
@@ -128,6 +130,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   skeleton = false,
   childPositioned,
   childContainerRadius,
+  fadeChrome = false,
   onClick,
   onDoubleClick,
 }) => {
@@ -194,14 +197,14 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         width: `${diameter}px`,
         height: `${diameter}px`,
         borderRadius: '50%',
-        border: `${borderWidth}px solid ${borderColor}`,
-        background: '#000000',
+        border: `${borderWidth}px solid ${fadeChrome ? 'transparent' : borderColor}`,
+        background: fadeChrome ? 'transparent' : '#000000',
         overflow: 'hidden',
         cursor: r > 0 ? 'pointer' : 'default',
         pointerEvents: r > 0 ? 'auto' : 'none',
-        transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, font-size 1s ease-in-out, box-shadow 0.2s ease, transform 0.2s ease',
+        transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, border-color 1s ease-in-out, background 1s ease-in-out, font-size 1s ease-in-out, box-shadow 1s ease-in-out, transform 0.2s ease',
         fontSize: `${Math.max(8, vr * 0.15)}px`,
-        boxShadow: showGlow ? getGoldenGlow(20) : 'none',
+        boxShadow: fadeChrome ? 'none' : (showGlow ? getGoldenGlow(20) : 'none'),
         transform: isHovered && !hasChildren ? 'scale(1.05)' : 'scale(1)',
         userSelect: 'none',
       }}
@@ -283,7 +286,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       {hasMedia && mediaFile && (
         <div style={{
           ...getMediaContainerStyle(),
-          opacity: hasChildren ? 0 : 1,
+          opacity: (hasChildren || fadeChrome) ? 0 : 1,
           transition: 'opacity 1s ease-in-out',
         }}>
           <MediaRenderer media={mediaFile} />
