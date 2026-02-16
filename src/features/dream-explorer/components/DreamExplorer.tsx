@@ -64,6 +64,10 @@ export const DreamExplorer: React.FC = () => {
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
+  // Debug mode: replace real items with N placeholder submodules
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugCount, setDebugCount] = useState(6);
+
   // Scene transform state (replaces zoom overrides)
   const [sceneTransform, setSceneTransform] = useState('');
   const [sceneTransition, setSceneTransition] = useState('none');
@@ -128,6 +132,31 @@ export const DreamExplorer: React.FC = () => {
     return () => { cancelled = true; };
   }, [currentPath, dreamNodesMap]);
 
+  // Generate placeholder items for debug mode
+  const effectiveItems = useMemo(() => {
+    if (!debugMode) return items;
+    const placeholders: ExplorerItem[] = [];
+    // Always include a readme
+    placeholders.push({
+      name: 'README.md',
+      path: `${currentPath}/README.md`,
+      type: 'readme',
+      size: 1000,
+      isDirectory: false,
+    });
+    // Add N submodule placeholders
+    for (let i = 0; i < debugCount; i++) {
+      placeholders.push({
+        name: `Sub${i + 1}`,
+        path: `${currentPath}/Sub${i + 1}`,
+        type: 'dream-submodule',
+        size: 0,
+        isDirectory: true,
+      });
+    }
+    return placeholders;
+  }, [debugMode, debugCount, items, currentPath]);
+
   // Create/recreate engine when items or container size change
   useEffect(() => {
     if (engineRef.current) {
@@ -135,13 +164,13 @@ export const DreamExplorer: React.FC = () => {
       engineRef.current = null;
     }
 
-    if (containerRadius <= 0 || items.length === 0) {
+    if (containerRadius <= 0 || effectiveItems.length === 0) {
       setPositioned([]);
       return;
     }
 
     const engine = new CircleLayoutEngine(
-      items,
+      effectiveItems,
       containerRadius,
       layoutMode
     );
@@ -155,7 +184,7 @@ export const DreamExplorer: React.FC = () => {
         engineRef.current = null;
       }
     };
-  }, [items, containerRadius]);
+  }, [effectiveItems, containerRadius]);
 
   // When layoutMode changes, tell the engine — CSS transitions handle animation
   useEffect(() => {
@@ -518,7 +547,7 @@ export const DreamExplorer: React.FC = () => {
       )}
 
       {/* Empty state */}
-      {rootPath && items.length === 0 && containerSize.width > 0 && !isZooming && (
+      {rootPath && items.length === 0 && containerSize.width > 0 && !isZooming && !debugMode && (
         <div
           style={{
             position: 'absolute',
@@ -531,6 +560,64 @@ export const DreamExplorer: React.FC = () => {
           }}
         >
           Empty directory
+        </div>
+      )}
+
+      {/* Debug mode controls */}
+      {rootPath && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            right: 12,
+            zIndex: 30,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'rgba(0,0,0,0.7)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 6,
+            padding: '4px 10px',
+            fontFamily: 'monospace',
+            fontSize: 12,
+            color: 'rgba(255,255,255,0.6)',
+            userSelect: 'none',
+          }}
+        >
+          <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input
+              type="checkbox"
+              checked={debugMode}
+              onChange={() => setDebugMode(d => !d)}
+              style={{ cursor: 'pointer' }}
+            />
+            debug
+          </label>
+          {debugMode && (
+            <>
+              <button
+                onClick={() => setDebugCount(c => Math.max(0, c - 1))}
+                style={{
+                  background: 'none', border: '1px solid rgba(255,255,255,0.3)',
+                  color: '#fff', borderRadius: 3, width: 22, height: 22,
+                  cursor: 'pointer', fontSize: 14, lineHeight: '20px', padding: 0,
+                }}
+              >-</button>
+              <span style={{ minWidth: 20, textAlign: 'center' }}>{debugCount}</span>
+              <button
+                onClick={() => setDebugCount(c => c + 1)}
+                style={{
+                  background: 'none', border: '1px solid rgba(255,255,255,0.3)',
+                  color: '#fff', borderRadius: 3, width: 22, height: 22,
+                  cursor: 'pointer', fontSize: 14, lineHeight: '20px', padding: 0,
+                }}
+              >+</button>
+              <span style={{ color: 'rgba(255,255,255,0.35)' }}>
+                ({debugCount + 1} total)
+              </span>
+            </>
+          )}
         </div>
       )}
     </div>

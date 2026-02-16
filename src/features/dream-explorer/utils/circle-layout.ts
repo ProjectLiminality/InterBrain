@@ -1,19 +1,21 @@
 /**
  * Circle Layout Engine
  *
- * Force-simulation-based circle packing using d3-force.
+ * Derivation chain:
  *
- * Three modes precomputed at construction time:
+ * packCirclesInParent (deterministic, submodules only)
+ *     │
+ *     ▼
+ * ReducedLayout (packed submodules + readme, everything else r=0 at origin)
+ *     │ solveLayout (force sim: all items grow to EQUAL_RADIUS)
+ *     ▼
+ * EqualLayout
+ *     │ solveLayout (force sim: items resize by file weight)
+ *     ▼
+ * WeightedLayout
  *
- * 1. Equal layout: all items at uniform radius, collision + centering.
- *
- * 2. Weighted layout: derived from equal positions, size-based radii,
- *    same force sim repacks them.
- *
- * 3. Reduced layout: derived from equal positions, submodules/readme
- *    keep equal radius, everything else at r=0. Same force sim repacks.
- *
- * All three use the same solveLayout function. Mode switches emit the
+ * Reduced is the deterministic base layout (no sim). Equal and weighted
+ * are derived from it via force simulation. Mode switches emit the
  * cached layout instantly — CSS transitions on ExplorerCircle handle
  * the smooth visual interpolation.
  */
@@ -27,6 +29,7 @@ import {
   type SimulationNodeDatum,
 } from 'd3-force';
 import type { ExplorerItem, PositionedItem } from '../types/explorer';
+import { packCirclesInParent } from '../../dreamnode/utils/circle-packing';
 
 interface ForceNode extends SimulationNodeDatum {
   r: number;
@@ -48,59 +51,6 @@ function isReducedItem(item: ExplorerItem): boolean {
   return item.type === 'dream-submodule' ||
     item.type === 'dreamer-submodule' ||
     item.type === 'readme';
-}
-
-// ── Proto positions: concentric rings ────────────────────────────────
-
-type RingTier = 'center' | 'submodule' | 'folder' | 'file';
-
-function getRingTier(item: ExplorerItem): RingTier {
-  if (item.type === 'readme') return 'center';
-  if (item.type === 'dream-submodule' || item.type === 'dreamer-submodule') return 'submodule';
-  if (item.type === 'folder') return 'folder';
-  return 'file';
-}
-
-/**
- * Concentric ring starting positions for the equal layout sim.
- * README at center, submodules ring 1, folders ring 2, files ring 3.
- * Items are equidistant on their ring. Ring spacing is uniform so the
- * explorer circle border reads as the outermost concentric ring.
- */
-function assignProtoPositions(items: ExplorerItem[]): { x: number; y: number }[] {
-  const tiers: { tier: RingTier; idx: number }[] = items.map((item, idx) => ({
-    tier: getRingTier(item),
-    idx,
-  }));
-
-  const center = tiers.filter(t => t.tier === 'center');
-  const submodules = tiers.filter(t => t.tier === 'submodule');
-  const folders = tiers.filter(t => t.tier === 'folder');
-  const files = tiers.filter(t => t.tier === 'file');
-
-  const rings = [submodules, folders, files].filter(r => r.length > 0);
-  const positions: { x: number; y: number }[] = new Array(items.length);
-
-  // Center items at origin
-  for (const c of center) {
-    positions[c.idx] = { x: 0, y: 0 };
-  }
-
-  // Evenly space rings. With N non-empty rings, ring k sits at
-  // (k+1)/(N+1) of refRadius — leaves equal gap at center and edge.
-  const refRadius = EQUAL_RADIUS * (rings.length + 1) * 2.5;
-  rings.forEach((ring, ringIdx) => {
-    const ringR = refRadius * (ringIdx + 1) / (rings.length + 1);
-    for (let i = 0; i < ring.length; i++) {
-      const angle = (2 * Math.PI * i) / ring.length - Math.PI / 2;
-      positions[ring[i].idx] = {
-        x: Math.cos(angle) * ringR,
-        y: Math.sin(angle) * ringR,
-      };
-    }
-  });
-
-  return positions;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -205,21 +155,36 @@ export class CircleLayoutEngine {
     const sorted = [...items].sort((a, b) => a.path.localeCompare(b.path));
     const maxSize = Math.max(...sorted.map(i => Math.max(i.size, 1)));
 
+    // 1. Identify reduced items and their indices in the sorted array
+    const reducedFlags = sorted.map(item => isReducedItem(item));
+    const reducedCount = reducedFlags.filter(Boolean).length;
+
+    // 2. Pack reduced items using HolonView's deterministic algorithm
+    //    containerRadius * 0.95 matches HolonView's parentRadius computation
+    const packed = packCirclesInParent(reducedCount, containerRadius * 0.95, 0.15);
+
+    // 3. Build reducedLayout directly (no sim needed)
+    //    Packed positions are already in container-relative pixel coords.
+    //    Non-reduced items get r=0 at origin.
+    let packedIdx = 0;
+    this.reducedLayout = sorted.map((item, i) => {
+      if (reducedFlags[i]) {
+        const p = packed[packedIdx++];
+        if (!p) return { item, x: 0, y: 0, r: 0 };  // safety: shouldn't happen
+        return { item, x: p.x, y: p.y, r: p.radius * 0.95 };  // 0.95 visual gap
+      }
+      return { item, x: 0, y: 0, r: 0 };
+    });
+
+    // 4. Derive equalLayout: start from reduced positions, all items grow to EQUAL_RADIUS
+    const reducedPositions = this.reducedLayout.map(p => ({ x: p.x, y: p.y }));
     const equalRadii = sorted.map(() => EQUAL_RADIUS);
-    const weightedRadii = sorted.map(item => computeWeightedRadius(item, maxSize));
-    const reducedRadii = sorted.map(item => isReducedItem(item) ? EQUAL_RADIUS : 0);
+    this.equalLayout = solveLayout(sorted, equalRadii, containerRadius, reducedPositions);
 
-    // 1. Equal layout: start from concentric ring positions, uniform radii
-    const protoPositions = assignProtoPositions(sorted);
-    this.equalLayout = solveLayout(sorted, equalRadii, containerRadius, protoPositions);
-
-    // 2. Weighted layout: start from equal positions, size-based radii
+    // 5. Derive weightedLayout from equal positions
     const equalPositions = this.equalLayout.map(p => ({ x: p.x, y: p.y }));
+    const weightedRadii = sorted.map(item => computeWeightedRadius(item, maxSize));
     this.weightedLayout = solveLayout(sorted, weightedRadii, containerRadius, equalPositions);
-
-    // 3. Reduced layout: start from equal positions, non-reduced items at r=0.
-    //    Same centering as weighted so transitions from equal are smooth.
-    this.reducedLayout = solveLayout(sorted, reducedRadii, containerRadius, equalPositions);
 
     this.emit();
   }
