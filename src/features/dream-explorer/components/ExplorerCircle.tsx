@@ -9,11 +9,8 @@
  * - Media items: image fills circle, hover shows dark overlay with centered name
  * - Icon items: large icon fills circle as backdrop, name centered on top
  *
- * When childPositioned is provided, renders skeleton child circles inside this
- * circle. They use the same coordinate system (offsets from center) but scaled
- * to fit inside this circle's diameter. Since the circle has overflow:hidden
- * and borderRadius:50%, children are naturally clipped. When the circle's
- * position/size animate via CSS transitions, children scale with it seamlessly.
+ * Child circle rendering during zoom is handled at the scene level in
+ * DreamExplorer.tsx — this component only renders itself.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -22,7 +19,6 @@ import { dreamNodeStyles, getGoldenGlow, getMediaContainerStyle, getMediaOverlay
 import { MediaRenderer } from '../../dreamnode/components/MediaRenderer';
 import type { MediaFile } from '../../dreamnode/types/dreamnode';
 import type { ExplorerItem } from '../types/explorer';
-import type { PositionedItem } from '../types/explorer';
 
 interface ExplorerCircleProps {
   item: ExplorerItem;
@@ -32,12 +28,6 @@ interface ExplorerCircleProps {
   isSelected: boolean;
   /** When true, render icon-based fallback for ALL items (skip MediaRenderer) */
   skeleton?: boolean;
-  /** Child circle positions to render inside this circle (skeleton mode, for zoom preview) */
-  childPositioned?: PositionedItem[];
-  /** The container radius used to compute childPositioned — needed to scale children to fit inside this circle */
-  childContainerRadius?: number;
-  /** Fade border, background, glow, and media to transparent while keeping children visible */
-  fadeChrome?: boolean;
   onClick?: (item: ExplorerItem, e: React.MouseEvent) => void;
   onDoubleClick?: (item: ExplorerItem) => void;
 }
@@ -128,9 +118,6 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   r,
   isSelected,
   skeleton = false,
-  childPositioned,
-  childContainerRadius,
-  fadeChrome = false,
   onClick,
   onDoubleClick,
 }) => {
@@ -140,12 +127,11 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   const useMedia = !skeleton && shouldUseMediaRenderer(item);
   const mediaFile = useMedia ? buildMediaFile(item) : null;
   const hasMedia = useMedia && mediaFile;
-  const hasChildren = childPositioned && childPositioned.length > 0 && childContainerRadius && childContainerRadius > 0;
 
   // Set Lucide icon via Obsidian's setIcon — large backdrop style
   // SVG uses 70% of container via CSS so it scales smoothly with CSS transitions
   useEffect(() => {
-    if (hasMedia || hasChildren || !iconRef.current) return;
+    if (hasMedia || !iconRef.current) return;
     const el = iconRef.current;
     el.innerHTML = '';
     const iconName = getLucideIcon(item);
@@ -157,7 +143,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       svg.style.color = getBorderColor(item.type);
       svg.style.opacity = '0.15';
     }
-  }, [item, hasMedia, hasChildren]);
+  }, [item, hasMedia]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -197,15 +183,15 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         width: `${diameter}px`,
         height: `${diameter}px`,
         borderRadius: '50%',
-        border: `${borderWidth}px solid ${fadeChrome ? 'transparent' : borderColor}`,
-        background: fadeChrome ? 'transparent' : '#000000',
+        border: `${borderWidth}px solid ${borderColor}`,
+        background: '#000000',
         overflow: 'hidden',
         cursor: r > 0 ? 'pointer' : 'default',
         pointerEvents: r > 0 ? 'auto' : 'none',
         transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, border-color 1s ease-in-out, background 1s ease-in-out, font-size 1s ease-in-out, box-shadow 1s ease-in-out, transform 0.2s ease',
         fontSize: `${Math.max(8, vr * 0.15)}px`,
-        boxShadow: fadeChrome ? 'none' : (showGlow ? getGoldenGlow(20) : 'none'),
-        transform: isHovered && !hasChildren ? 'scale(1.05)' : 'scale(1)',
+        boxShadow: showGlow ? getGoldenGlow(20) : 'none',
+        transform: isHovered ? 'scale(1.05)' : 'scale(1)',
         userSelect: 'none',
       }}
       onClick={handleClick}
@@ -214,81 +200,9 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       onMouseLeave={() => setIsHovered(false)}
       title={item.name}
     >
-      {/* ── Child circles (zoom preview) ── */}
-      {hasChildren && childContainerRadius && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-          }}
-        >
-          {childPositioned!.map(child => {
-            // Scale child positions from containerRadius coordinate space
-            // to this circle's visual diameter. Children are positioned as
-            // offsets from center, so we scale the offset and the radius.
-            const scale = vr / childContainerRadius;
-            const cx = child.x * scale;
-            const cy = child.y * scale;
-            const cr = child.r * scale;
-            const cvr = cr * 0.95;
-            const cd = cvr * 2;
-            const childBorderColor = getBorderColor(child.item.type);
-            const childIsSubmodule = child.item.type === 'dream-submodule' || child.item.type === 'dreamer-submodule';
-            const childBorderWidth = childIsSubmodule
-              ? Math.max(1, Math.min(4, Math.round(cr * 0.08)))
-              : Math.max(0.5, Math.sqrt(cr) * 0.3);
-            const childFontSize = Math.max(4, cvr * 0.15);
-
-            return (
-              <div
-                key={`child-${child.item.path}`}
-                style={{
-                  position: 'absolute',
-                  left: `calc(50% + ${cx}px - ${cvr}px)`,
-                  top: `calc(50% + ${cy}px - ${cvr}px)`,
-                  width: `${cd}px`,
-                  height: `${cd}px`,
-                  borderRadius: '50%',
-                  border: `${childBorderWidth}px solid ${childBorderColor}`,
-                  background: '#000000',
-                  overflow: 'hidden',
-                  fontSize: `${childFontSize}px`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  pointerEvents: 'none',
-                }}
-              >
-                <span
-                  style={{
-                    maxWidth: '75%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontFamily: dreamNodeStyles.typography.fontFamily,
-                    color: dreamNodeStyles.colors.text.primary,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {child.item.name}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* ── Media items: image fills circle, hover shows name overlay ── */}
       {hasMedia && mediaFile && (
-        <div style={{
-          ...getMediaContainerStyle(),
-          opacity: (hasChildren || fadeChrome) ? 0 : 1,
-          transition: 'opacity 1s ease-in-out',
-        }}>
+        <div style={getMediaContainerStyle()}>
           <MediaRenderer media={mediaFile} />
           <div style={getMediaOverlayStyle()} />
 
@@ -345,7 +259,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       )}
 
       {/* ── Icon items: large icon backdrop + centered name ── */}
-      {!hasMedia && !hasChildren && (
+      {!hasMedia && (
         <>
           {/* Large icon as backdrop — fills the circle, low opacity */}
           <div
@@ -411,7 +325,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       )}
 
       {/* ── Size label at bottom — hover/select only ── */}
-      {showGlow && !hasChildren && item.size > 0 && (
+      {showGlow && item.size > 0 && (
         <div
           style={{
             position: 'absolute',

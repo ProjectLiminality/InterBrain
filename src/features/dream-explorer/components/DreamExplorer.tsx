@@ -30,8 +30,8 @@ import type { ExplorerItem, PositionedItem } from '../types/explorer';
 
 const ZOOM_DURATION = 1000; // ms — matches ExplorerCircle's CSS transition duration
 
-/** Parent circle projected into scene coordinates */
-interface ParentSceneCircle extends PositionedItem {
+/** Circle projected into scene coordinates (used for parent and child levels) */
+interface SceneCircle extends PositionedItem {
   sceneX: number;
   sceneY: number;
   sceneR: number;
@@ -76,7 +76,10 @@ export const DreamExplorer: React.FC = () => {
   const [zoomDirection, setZoomDirection] = useState<'in' | 'out' | null>(null);
 
   // Parent level circles in scene coordinates
-  const [parentSceneCircles, setParentSceneCircles] = useState<ParentSceneCircle[]>([]);
+  const [parentSceneCircles, setParentSceneCircles] = useState<SceneCircle[]>([]);
+
+  // Child level circles in scene coordinates (zoom target's children)
+  const [childSceneCircles, setChildSceneCircles] = useState<SceneCircle[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CircleLayoutEngine | null>(null);
@@ -260,25 +263,25 @@ export const DreamExplorer: React.FC = () => {
       pendingClearRef.current = null;
       setSceneTransition('none');
       setSceneTransform('');
+      setChildSceneCircles([]);
       setIsZooming(false);
       setZoomTargetPath(null);
       setZoomDirection(null);
     }
   }, [positioned]);
 
-  // Get child data for a directory circle from cache
-  const getChildData = useCallback((itemPath: string) => {
-    const cached = cacheRef.current.get(itemPath, layoutMode);
-    if (!cached?.positioned.length) return undefined;
-    return { positioned: cached.positioned, containerRadius };
-  }, [layoutMode, containerRadius]);
-
   // Handle single click: select (with Cmd+click for additive)
+  // Also eagerly scan directory children so cache is warm by double-click time
   const handleClick = useCallback(
     (item: ExplorerItem, e: React.MouseEvent) => {
       explorerSelectItem(item.path, e.metaKey);
+
+      if (item.isDirectory && !cacheRef.current.get(item.path, layoutMode)) {
+        const vs = serviceManager.getVaultService();
+        if (vs) cacheRef.current.scan(item.path, containerRadius, vs, dreamNodesMap, layoutMode);
+      }
     },
-    [explorerSelectItem]
+    [explorerSelectItem, layoutMode, containerRadius, dreamNodesMap]
   );
 
   // Handle double-click: navigate into directories/submodules, open files
@@ -306,6 +309,17 @@ export const DreamExplorer: React.FC = () => {
           const scale = containerRadius / target.r;
           const tx = -target.x * scale;
           const ty = -target.y * scale;
+
+          // Compute child scene coordinates — children are placed in scene space
+          // so the CSS transform naturally scales them to their final positions
+          const childScale = target.r / containerRadius;
+          const sceneChildren = cached.positioned.map(child => ({
+            ...child,
+            sceneX: target.x + child.x * childScale,
+            sceneY: target.y + child.y * childScale,
+            sceneR: child.r * childScale,
+          }));
+          setChildSceneCircles(sceneChildren);
 
           setIsZooming(true);
           setZoomTargetPath(item.path);
@@ -516,18 +530,11 @@ export const DreamExplorer: React.FC = () => {
               ))}
             </div>
 
-            {/* Current circles — child skeletons only for the zoom target */}
+            {/* Current circles — all fade out during zoom */}
             {positioned.map(pos => {
-              const childData = zoomTargetPath === pos.item.path
-                ? getChildData(pos.item.path)
-                : undefined;
-
-              // Zoom opacity: non-target circles fade out entirely via wrapper.
-              // Target circle uses fadeChrome to dissolve border/bg/glow/media
-              // while keeping child preview circles visible for seamless transition.
-              const isZoomTarget = zoomTargetPath === pos.item.path;
               let circleOpacity = 1;
-              if (zoomDirection && !isZoomTarget) circleOpacity = 0;
+              if (zoomDirection === 'in') circleOpacity = 0;
+              if (zoomDirection === 'out') circleOpacity = 0;
 
               return (
                 <div
@@ -543,15 +550,36 @@ export const DreamExplorer: React.FC = () => {
                     y={pos.y}
                     r={pos.r}
                     isSelected={!isZooming && selectedItems.includes(pos.item.path)}
-                    childPositioned={childData?.positioned}
-                    childContainerRadius={childData?.containerRadius}
-                    fadeChrome={isZoomTarget && !!zoomDirection}
                     onClick={isZooming ? undefined : handleClick}
                     onDoubleClick={isZooming ? undefined : handleDoubleClick}
                   />
                 </div>
               );
             })}
+
+            {/* Child circles at scene coordinates — zoom target's children.
+                These are pre-scaled so the CSS transform naturally grows them
+                to fill the viewport. After navigation, they're at identity
+                positions and seamlessly replaced by the new level's circles. */}
+            {childSceneCircles.length > 0 && (
+              <div style={{
+                opacity: zoomDirection === 'in' ? 1 : 0,
+                transition: zoomDirection ? 'opacity 0.3s ease-in-out' : 'none',
+                pointerEvents: 'none',
+              }}>
+                {childSceneCircles.map(child => (
+                  <ExplorerCircle
+                    key={`child-scene-${child.item.path}`}
+                    item={child.item}
+                    x={child.sceneX}
+                    y={child.sceneY}
+                    r={child.sceneR}
+                    isSelected={false}
+                    skeleton
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
