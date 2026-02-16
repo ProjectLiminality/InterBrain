@@ -106,8 +106,12 @@ export async function scanDirectory(
     const absolutePath = vaultService.getFullPath(entryPath);
 
     try {
-      const stats = await vaultService.stat(entryPath);
-      size = stats.size;
+      if (entry.isDirectory()) {
+        size = await getDirectorySize(entryPath, vaultService);
+      } else {
+        const stats = await vaultService.stat(entryPath);
+        size = stats.size;
+      }
     } catch {
       // stat may fail for some entries; use 0
     }
@@ -154,4 +158,30 @@ export async function scanDirectory(
   });
 
   return items;
+}
+
+/**
+ * Recursively compute total file size of a directory (shallow: 1 level deep).
+ * Only sums immediate children to keep it fast — not fully recursive.
+ */
+async function getDirectorySize(dirPath: string, vaultService: VaultService): Promise<number> {
+  try {
+    const entries = await vaultService.readdir(dirPath);
+    let total = 0;
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const childPath = dirPath ? `${dirPath}/${entry.name}` : entry.name;
+      try {
+        if (!entry.isDirectory()) {
+          const stats = await vaultService.stat(childPath);
+          total += stats.size;
+        }
+      } catch {
+        // skip entries we can't stat
+      }
+    }
+    return total;
+  } catch {
+    return 0;
+  }
 }

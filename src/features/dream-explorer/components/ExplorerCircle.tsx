@@ -110,6 +110,15 @@ function middleTruncate(name: string): { head: string; tail: string } {
   };
 }
 
+/** Format bytes into human-readable size */
+function formatSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   item,
   x,
@@ -392,6 +401,33 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
             </span>
           </div>
         </>
+      )}
+
+      {/* ── Size label at bottom — hover/select only, non-submodule items ── */}
+      {showGlow && !isSubmodule && !hasChildren && item.size > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '8%',
+            left: 0,
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 11,
+          }}
+        >
+          <span
+            style={{
+              fontSize: `${Math.max(7, vr * 0.11)}px`,
+              fontFamily: 'monospace',
+              color: 'rgba(255, 255, 255, 0.4)',
+              lineHeight: 1,
+            }}
+          >
+            {formatSize(item.size)}
+          </span>
+        </div>
       )}
     </div>
   );
