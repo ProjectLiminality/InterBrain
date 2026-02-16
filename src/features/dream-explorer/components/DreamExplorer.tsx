@@ -72,6 +72,7 @@ export const DreamExplorer: React.FC = () => {
   const [sceneTransform, setSceneTransform] = useState('');
   const [sceneTransition, setSceneTransition] = useState('none');
   const [isZooming, setIsZooming] = useState(false);
+  const [zoomTargetPath, setZoomTargetPath] = useState<string | null>(null);
 
   // Parent level circles in scene coordinates
   const [parentSceneCircles, setParentSceneCircles] = useState<ParentSceneCircle[]>([]);
@@ -259,6 +260,7 @@ export const DreamExplorer: React.FC = () => {
       setSceneTransition('none');
       setSceneTransform('');
       setIsZooming(false);
+      setZoomTargetPath(null);
     }
   }, [positioned]);
 
@@ -304,6 +306,7 @@ export const DreamExplorer: React.FC = () => {
           const ty = -target.y * scale;
 
           setIsZooming(true);
+          setZoomTargetPath(item.path);
           setSceneTransition('transform 1s ease-in-out');
           requestAnimationFrame(() => {
             setSceneTransform(`translate(${tx}px, ${ty}px) scale(${scale})`);
@@ -503,9 +506,9 @@ export const DreamExplorer: React.FC = () => {
               />
             ))}
 
-            {/* Current circles — child skeletons only during zoom animation */}
+            {/* Current circles — child skeletons only for the zoom target */}
             {positioned.map(pos => {
-              const childData = isZooming && (pos.item.isDirectory || pos.item.type === 'dream-submodule' || pos.item.type === 'dreamer-submodule')
+              const childData = zoomTargetPath === pos.item.path
                 ? getChildData(pos.item.path)
                 : undefined;
 

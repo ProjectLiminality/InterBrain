@@ -280,8 +280,12 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
       )}
 
       {/* ── Media items: image fills circle, hover shows name overlay ── */}
-      {hasMedia && mediaFile && !hasChildren && (
-        <div style={getMediaContainerStyle()}>
+      {hasMedia && mediaFile && (
+        <div style={{
+          ...getMediaContainerStyle(),
+          opacity: hasChildren ? 0 : 1,
+          transition: 'opacity 1s ease-in-out',
+        }}>
           <MediaRenderer media={mediaFile} />
           <div style={getMediaOverlayStyle()} />
 
