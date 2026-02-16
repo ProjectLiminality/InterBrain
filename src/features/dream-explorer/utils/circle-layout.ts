@@ -160,7 +160,7 @@ export class CircleLayoutEngine {
 
     // 2. Pack reduced items using HolonView's deterministic algorithm
     //    containerRadius * 0.95 matches HolonView's parentRadius computation
-    const packed = packCirclesInParent(reducedCount, containerRadius * 0.95, 0.15);
+    const packed = packCirclesInParent(reducedCount, containerRadius * 0.95, 0);
 
     // 3. Build reducedLayout directly (no sim needed)
     //    Packed positions are already in container-relative pixel coords.
