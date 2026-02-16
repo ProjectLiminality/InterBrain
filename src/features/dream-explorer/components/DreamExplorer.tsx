@@ -73,6 +73,7 @@ export const DreamExplorer: React.FC = () => {
   const [sceneTransition, setSceneTransition] = useState('none');
   const [isZooming, setIsZooming] = useState(false);
   const [zoomTargetPath, setZoomTargetPath] = useState<string | null>(null);
+  const [zoomDirection, setZoomDirection] = useState<'in' | 'out' | null>(null);
 
   // Parent level circles in scene coordinates
   const [parentSceneCircles, setParentSceneCircles] = useState<ParentSceneCircle[]>([]);
@@ -261,6 +262,7 @@ export const DreamExplorer: React.FC = () => {
       setSceneTransform('');
       setIsZooming(false);
       setZoomTargetPath(null);
+      setZoomDirection(null);
     }
   }, [positioned]);
 
@@ -307,6 +309,7 @@ export const DreamExplorer: React.FC = () => {
 
           setIsZooming(true);
           setZoomTargetPath(item.path);
+          setZoomDirection('in');
           setSceneTransition('transform 1s ease-in-out');
           requestAnimationFrame(() => {
             setSceneTransform(`translate(${tx}px, ${ty}px) scale(${scale})`);
@@ -365,6 +368,7 @@ export const DreamExplorer: React.FC = () => {
         const scale = meRaw.r / containerRadius;
 
         setIsZooming(true);
+        setZoomDirection('out');
         setSceneTransition('transform 1s ease-in-out');
         requestAnimationFrame(() => {
           setSceneTransform(`translate(${meRaw.x}px, ${meRaw.y}px) scale(${scale})`);
@@ -493,18 +497,24 @@ export const DreamExplorer: React.FC = () => {
               transformOrigin: 'center center',
             }}
           >
-            {/* Parent skeleton circles (large coords, clipped by mask) */}
-            {parentSceneCircles.map(p => (
-              <ExplorerCircle
-                key={`parent-${p.item.path}`}
-                item={p.item}
-                x={p.sceneX}
-                y={p.sceneY}
-                r={p.sceneR}
-                isSelected={false}
-                skeleton
-              />
-            ))}
+            {/* Parent skeleton circles (large coords, clipped by mask).
+                Fade in during zoom-out, hidden otherwise. */}
+            <div style={{
+              opacity: zoomDirection === 'out' ? 1 : 0,
+              transition: zoomDirection ? 'opacity 1s ease-in-out' : 'none',
+            }}>
+              {parentSceneCircles.map(p => (
+                <ExplorerCircle
+                  key={`parent-${p.item.path}`}
+                  item={p.item}
+                  x={p.sceneX}
+                  y={p.sceneY}
+                  r={p.sceneR}
+                  isSelected={false}
+                  skeleton
+                />
+              ))}
+            </div>
 
             {/* Current circles — child skeletons only for the zoom target */}
             {positioned.map(pos => {
@@ -512,19 +522,33 @@ export const DreamExplorer: React.FC = () => {
                 ? getChildData(pos.item.path)
                 : undefined;
 
+              // Zoom opacity: non-target circles fade out during zoom-in,
+              // all circles fade out during zoom-out (parent fades in instead)
+              const isZoomTarget = zoomTargetPath === pos.item.path;
+              let circleOpacity = 1;
+              if (zoomDirection === 'in' && !isZoomTarget) circleOpacity = 0;
+              if (zoomDirection === 'out') circleOpacity = 0;
+
               return (
-                <ExplorerCircle
+                <div
                   key={pos.item.path}
-                  item={pos.item}
-                  x={pos.x}
-                  y={pos.y}
-                  r={pos.r}
-                  isSelected={!isZooming && selectedItems.includes(pos.item.path)}
-                  childPositioned={childData?.positioned}
-                  childContainerRadius={childData?.containerRadius}
-                  onClick={isZooming ? undefined : handleClick}
-                  onDoubleClick={isZooming ? undefined : handleDoubleClick}
-                />
+                  style={{
+                    opacity: circleOpacity,
+                    transition: zoomDirection ? 'opacity 1s ease-in-out' : 'none',
+                  }}
+                >
+                  <ExplorerCircle
+                    item={pos.item}
+                    x={pos.x}
+                    y={pos.y}
+                    r={pos.r}
+                    isSelected={!isZooming && selectedItems.includes(pos.item.path)}
+                    childPositioned={childData?.positioned}
+                    childContainerRadius={childData?.containerRadius}
+                    onClick={isZooming ? undefined : handleClick}
+                    onDoubleClick={isZooming ? undefined : handleDoubleClick}
+                  />
+                </div>
               );
             })}
           </div>
