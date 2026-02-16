@@ -503,9 +503,9 @@ export const DreamExplorer: React.FC = () => {
               />
             ))}
 
-            {/* Current circles with child skeletons inside directories */}
+            {/* Current circles — child skeletons only during zoom animation */}
             {positioned.map(pos => {
-              const childData = (pos.item.isDirectory || pos.item.type === 'dream-submodule' || pos.item.type === 'dreamer-submodule')
+              const childData = isZooming && (pos.item.isDirectory || pos.item.type === 'dream-submodule' || pos.item.type === 'dreamer-submodule')
                 ? getChildData(pos.item.path)
                 : undefined;
 
