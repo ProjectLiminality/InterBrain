@@ -5,12 +5,10 @@
  * Reads state from the Zustand slice, scans directories, drives the
  * CircleLayoutEngine for physics-based packing with animated transitions.
  *
- * 3-level scene zoom: One scene div inside an enclosing circle mask
- * contains ALL circles from 3 levels (parent, current, children).
- * Navigation is a CSS transform on that scene — zoom-in scales the
- * target folder to fill the viewport, zoom-out shrinks current content
- * into its parent position. After the animation, the real navigation
- * fires and the scene resets to identity.
+ * Persistent circle map: A single Map<string, SceneCircleEntry> holds ALL
+ * circles across three levels (parent, current, child). Circles move between
+ * levels during zoom but are never unmounted — React preserves DOM via stable
+ * keys, so media stays loaded across transitions.
  *
  * Layout modes:
  * - reduced: submodules + readme only, equal radii (holon view)
@@ -30,11 +28,14 @@ import type { ExplorerItem, PositionedItem } from '../types/explorer';
 
 const ZOOM_DURATION = 1000; // ms — matches ExplorerCircle's CSS transition duration
 
-/** Circle projected into scene coordinates (used for parent and child levels) */
-interface SceneCircle extends PositionedItem {
+type CircleLevel = 'parent' | 'current' | 'child';
+
+interface SceneCircleEntry {
+  item: ExplorerItem;
   sceneX: number;
   sceneY: number;
   sceneR: number;
+  level: CircleLevel;
 }
 
 /** Compute parent path, respecting root boundary */
@@ -68,18 +69,28 @@ export const DreamExplorer: React.FC = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [debugCount, setDebugCount] = useState(6);
 
-  // Scene transform state (replaces zoom overrides)
+  // Scene transform state
   const [sceneTransform, setSceneTransform] = useState('');
   const [sceneTransition, setSceneTransition] = useState('none');
   const [isZooming, setIsZooming] = useState(false);
   const [zoomTargetPath, setZoomTargetPath] = useState<string | null>(null);
   const [zoomDirection, setZoomDirection] = useState<'in' | 'out' | null>(null);
 
-  // Parent level circles in scene coordinates
-  const [parentSceneCircles, setParentSceneCircles] = useState<SceneCircle[]>([]);
-
-  // Child level circles in scene coordinates (zoom target's children)
-  const [childSceneCircles, setChildSceneCircles] = useState<SceneCircle[]>([]);
+  // Persistent circle map — single source of truth for all rendered circles
+  const [sceneCircles, setSceneCircles] = useState<Map<string, SceneCircleEntry>>(new Map());
+  const settlementModeRef = useRef<'zoom-in' | 'zoom-out' | null>(null);
+  // Skip the next non-zoom positioned update after settlement — the settlement
+  // handlers already built the correct map, so the engine's follow-up emission
+  // (same data, new array ref) would cause a redundant rebuildMapFromScratch.
+  const skipNextRebuildRef = useRef(false);
+  // Suppress ExplorerCircle CSS transitions during settlement so coord updates
+  // from child/parent scene coords → identity coords don't animate (the scene
+  // transform already handled the visual animation).
+  const [suppressTransitions, setSuppressTransitions] = useState(false);
+  // Child circles need to mount at opacity 0 first, then fade in on the next
+  // frame. This is decoupled from zoomDirection so parent/current opacity
+  // transitions aren't delayed.
+  const [childFadeIn, setChildFadeIn] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CircleLayoutEngine | null>(null);
@@ -109,9 +120,10 @@ export const DreamExplorer: React.FC = () => {
     [containerSize.width, containerSize.height]
   );
 
-  // Clear cache when root changes
+  // Clear cache and map when root changes
   useEffect(() => {
     cacheRef.current.clear();
+    setSceneCircles(new Map());
   }, [rootPath]);
 
   // Scan directory when path changes
@@ -141,7 +153,6 @@ export const DreamExplorer: React.FC = () => {
   const effectiveItems = useMemo(() => {
     if (!debugMode) return items;
     const placeholders: ExplorerItem[] = [];
-    // Always include a readme
     placeholders.push({
       name: 'README.md',
       path: `${currentPath}/README.md`,
@@ -149,7 +160,6 @@ export const DreamExplorer: React.FC = () => {
       size: 1000,
       isDirectory: false,
     });
-    // Add N submodule placeholders
     for (let i = 0; i < debugCount; i++) {
       placeholders.push({
         name: `Sub${i + 1}`,
@@ -170,17 +180,22 @@ export const DreamExplorer: React.FC = () => {
     }
 
     if (containerRadius <= 0 || effectiveItems.length === 0) {
+      console.log('[DreamExplorer] engine effect: setPositioned([]) (empty items or no radius)');
       setPositioned([]);
       return;
     }
 
+    console.log('[DreamExplorer] engine effect: creating new engine, items=%d, radius=%d', effectiveItems.length, containerRadius);
     const engine = new CircleLayoutEngine(
       effectiveItems,
       containerRadius,
       layoutMode
     );
     engineRef.current = engine;
-    engine.onUpdate = (positions) => setPositioned(positions);
+    engine.onUpdate = (positions) => {
+      console.log('[DreamExplorer] engine.onUpdate: %d positions, isZooming=%s, pending=%s, settlement=%s', positions.length, isZooming, pendingClearRef.current, settlementModeRef.current);
+      setPositioned(positions);
+    };
     engine.setMode(layoutMode, true);
 
     return () => {
@@ -191,7 +206,7 @@ export const DreamExplorer: React.FC = () => {
     };
   }, [effectiveItems, containerRadius]);
 
-  // When layoutMode changes, tell the engine — CSS transitions handle animation
+  // When layoutMode changes, tell the engine
   useEffect(() => {
     if (engineRef.current) {
       engineRef.current.setMode(layoutMode);
@@ -223,55 +238,247 @@ export const DreamExplorer: React.FC = () => {
     );
   }, [items, currentPath, rootPath, containerRadius, dreamNodesMap, layoutMode]);
 
-  // Compute parent scene circles when positioned data or path changes
+  // Log render-time state for CSS animation debugging
+  console.log('[DreamExplorer] RENDER: transform=%s, transition=%s, zoomDir=%s, mapSize=%d',
+    sceneTransform || 'none', sceneTransition, zoomDirection, sceneCircles.size);
+
+  // --- Map management helpers ---
+
+  /** Normal navigation, initial load, layout mode change: rebuild from scratch */
+  const rebuildMapFromScratch = useCallback((newPositioned: PositionedItem[]) => {
+    const map = new Map<string, SceneCircleEntry>();
+
+    // Current level at identity coords
+    for (const p of newPositioned) {
+      map.set(p.item.path, {
+        item: p.item,
+        sceneX: p.x,
+        sceneY: p.y,
+        sceneR: p.r,
+        level: 'current',
+      });
+    }
+
+    // Populate parent level from cache for zoom-out readiness
+    if (rootPath && containerRadius > 0) {
+      const parentPath = computeParentPath(currentPath, rootPath);
+      if (parentPath) {
+        const parentCached = cacheRef.current.get(parentPath, layoutMode);
+        if (parentCached && parentCached.positioned.length > 0) {
+          const me = parentCached.positioned.find(p => p.item.path === currentPath);
+          if (me) {
+            const pScale = containerRadius / me.r;
+            for (const p of parentCached.positioned) {
+              // Don't overwrite current-level entries
+              if (!map.has(p.item.path)) {
+                map.set(p.item.path, {
+                  item: p.item,
+                  sceneX: (p.x - me.x) * pScale,
+                  sceneY: (p.y - me.y) * pScale,
+                  sceneR: p.r * pScale,
+                  level: 'parent',
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    setSceneCircles(map);
+  }, [currentPath, rootPath, containerRadius, layoutMode]);
+
+  /** After zoom-in animation settles: promote child→current, keep parent */
+  const handleZoomInSettlement = useCallback((newPositioned: PositionedItem[]) => {
+    const oldMap = sceneCircles;
+    const map = new Map<string, SceneCircleEntry>();
+
+    // Build a set of paths that were child-level for promotion
+    const childPaths = new Set<string>();
+    for (const [path, entry] of oldMap) {
+      if (entry.level === 'child') childPaths.add(path);
+    }
+
+    // Promote child entries → current using new positioned coords
+    for (const p of newPositioned) {
+      if (childPaths.has(p.item.path)) {
+        // Promote: same DOM node, new coords
+        map.set(p.item.path, {
+          item: p.item,
+          sceneX: p.x,
+          sceneY: p.y,
+          sceneR: p.r,
+          level: 'current',
+        });
+      } else {
+        // Fallback: stale cache edge case, create fresh
+        map.set(p.item.path, {
+          item: p.item,
+          sceneX: p.x,
+          sceneY: p.y,
+          sceneR: p.r,
+          level: 'current',
+        });
+      }
+    }
+
+    // Keep parent entries (one level up, media loaded)
+    for (const [path, entry] of oldMap) {
+      if (entry.level === 'parent' && !map.has(path)) {
+        map.set(path, entry);
+      }
+    }
+
+    // Recompute parent coords — the old parent is now grandparent, we need
+    // the old current (now parent) at correct parent scene coords
+    if (rootPath && containerRadius > 0) {
+      const parentPath = computeParentPath(currentPath, rootPath);
+      if (parentPath) {
+        const parentCached = cacheRef.current.get(parentPath, layoutMode);
+        if (parentCached && parentCached.positioned.length > 0) {
+          const me = parentCached.positioned.find(p => p.item.path === currentPath);
+          if (me) {
+            const pScale = containerRadius / me.r;
+            // Remove old parent entries and replace with correctly positioned ones
+            for (const [path, entry] of Array.from(map.entries())) {
+              if (entry.level === 'parent') map.delete(path);
+            }
+            for (const p of parentCached.positioned) {
+              if (!map.has(p.item.path)) {
+                map.set(p.item.path, {
+                  item: p.item,
+                  sceneX: (p.x - me.x) * pScale,
+                  sceneY: (p.y - me.y) * pScale,
+                  sceneR: p.r * pScale,
+                  level: 'parent',
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    setSceneCircles(map);
+  }, [sceneCircles, currentPath, rootPath, containerRadius, layoutMode]);
+
+  /** After zoom-out animation settles: promote parent→current, drop child */
+  const handleZoomOutSettlement = useCallback((newPositioned: PositionedItem[]) => {
+    const oldMap = sceneCircles;
+    const map = new Map<string, SceneCircleEntry>();
+
+    // Build a set of paths that were parent-level for promotion
+    const parentPaths = new Set<string>();
+    for (const [path, entry] of oldMap) {
+      if (entry.level === 'parent') parentPaths.add(path);
+    }
+
+    // Promote parent entries → current using new positioned coords
+    for (const p of newPositioned) {
+      if (parentPaths.has(p.item.path)) {
+        map.set(p.item.path, {
+          item: p.item,
+          sceneX: p.x,
+          sceneY: p.y,
+          sceneR: p.r,
+          level: 'current',
+        });
+      } else {
+        // Fallback: create fresh
+        map.set(p.item.path, {
+          item: p.item,
+          sceneX: p.x,
+          sceneY: p.y,
+          sceneR: p.r,
+          level: 'current',
+        });
+      }
+    }
+
+    // Populate new parent from cache (grandparent level)
+    if (rootPath && containerRadius > 0) {
+      const parentPath = computeParentPath(currentPath, rootPath);
+      if (parentPath) {
+        const parentCached = cacheRef.current.get(parentPath, layoutMode);
+        if (parentCached && parentCached.positioned.length > 0) {
+          const me = parentCached.positioned.find(p => p.item.path === currentPath);
+          if (me) {
+            const pScale = containerRadius / me.r;
+            for (const p of parentCached.positioned) {
+              if (!map.has(p.item.path)) {
+                map.set(p.item.path, {
+                  item: p.item,
+                  sceneX: (p.x - me.x) * pScale,
+                  sceneY: (p.y - me.y) * pScale,
+                  sceneR: p.r * pScale,
+                  level: 'parent',
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Child entries (old current) are dropped — not added to new map
+
+    setSceneCircles(map);
+  }, [sceneCircles, currentPath, rootPath, containerRadius, layoutMode]);
+
+  // --- Unified positioned effect ---
   useEffect(() => {
-    if (!rootPath || containerRadius <= 0) {
-      setParentSceneCircles([]);
+    console.log('[DreamExplorer] positioned effect: len=%d, pending=%s, settlement=%s, isZooming=%s, zoomDir=%s, skip=%s',
+      positioned.length, pendingClearRef.current, settlementModeRef.current, isZooming, zoomDirection, skipNextRebuildRef.current);
+
+    if (positioned.length === 0 && !pendingClearRef.current) {
+      console.log('[DreamExplorer] positioned effect: SKIP (empty + no pending)');
       return;
     }
 
-    const parentPath = computeParentPath(currentPath, rootPath);
-    if (!parentPath) {
-      setParentSceneCircles([]);
-      return;
-    }
+    const mode = settlementModeRef.current;
 
-    const parentCache = cacheRef.current.get(parentPath, layoutMode);
-    if (!parentCache || parentCache.positioned.length === 0) {
-      setParentSceneCircles([]);
-      return;
-    }
-
-    const me = parentCache.positioned.find(p => p.item.path === currentPath);
-    if (!me) {
-      setParentSceneCircles([]);
-      return;
-    }
-
-    const pScale = containerRadius / me.r;
-    setParentSceneCircles(parentCache.positioned.map(p => ({
-      ...p,
-      sceneX: (p.x - me.x) * pScale,
-      sceneY: (p.y - me.y) * pScale,
-      sceneR: p.r * pScale,
-    })));
-  }, [positioned, currentPath, rootPath, containerRadius, layoutMode]);
-
-  // When new positioned data arrives after a zoom navigation, clear zoom state
-  useEffect(() => {
     if (pendingClearRef.current && positioned.length > 0) {
+      console.log('[DreamExplorer] positioned effect: SETTLEMENT mode=%s', mode);
+      // Suppress ExplorerCircle CSS transitions so the coord jump from
+      // scene coords → identity coords doesn't animate (scene transform
+      // already handled the visual zoom).
+      setSuppressTransitions(true);
+      // POST-ZOOM SETTLEMENT
+      if (mode === 'zoom-in') {
+        handleZoomInSettlement(positioned);
+      } else if (mode === 'zoom-out') {
+        handleZoomOutSettlement(positioned);
+      }
       pendingClearRef.current = null;
+      settlementModeRef.current = null;
       setSceneTransition('none');
       setSceneTransform('');
-      setChildSceneCircles([]);
       setIsZooming(false);
       setZoomTargetPath(null);
       setZoomDirection(null);
+      setChildFadeIn(false);
+      // Re-enable transitions after the browser paints the settled coords.
+      // Double-rAF ensures the no-transition frame is committed first.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setSuppressTransitions(false);
+        });
+      });
+      skipNextRebuildRef.current = true;
+    } else if (!isZooming) {
+      if (skipNextRebuildRef.current) {
+        skipNextRebuildRef.current = false;
+        console.log('[DreamExplorer] positioned effect: SKIPPED (post-settlement)');
+        return;
+      }
+      console.log('[DreamExplorer] positioned effect: REBUILD from scratch');
+      rebuildMapFromScratch(positioned);
+    } else {
+      console.log('[DreamExplorer] positioned effect: IGNORED (isZooming=true, no pending)');
     }
   }, [positioned]);
 
-  // Handle single click: select (with Cmd+click for additive)
-  // Also eagerly scan directory children so cache is warm by double-click time
+  // Handle single click
   const handleClick = useCallback(
     (item: ExplorerItem, e: React.MouseEvent) => {
       explorerSelectItem(item.path, e.metaKey);
@@ -302,7 +509,7 @@ export const DreamExplorer: React.FC = () => {
           return;
         }
 
-        // Check cache for child content (for skeleton preview)
+        // Check cache for child content
         const cached = cacheRef.current.get(item.path, layoutMode);
         if (cached && cached.positioned.length > 0) {
           // Zoom-in: transform scene to center target at full size
@@ -310,26 +517,47 @@ export const DreamExplorer: React.FC = () => {
           const tx = -target.x * scale;
           const ty = -target.y * scale;
 
-          // Compute child scene coordinates — children are placed in scene space
-          // so the CSS transform naturally scales them to their final positions
-          const childScale = target.r / containerRadius;
-          const sceneChildren = cached.positioned.map(child => ({
-            ...child,
-            sceneX: target.x + child.x * childScale,
-            sceneY: target.y + child.y * childScale,
-            sceneR: child.r * childScale,
-          }));
-          setChildSceneCircles(sceneChildren);
+          // Mutate the map: current→parent, drop old parent, add children
+          setSceneCircles(prev => {
+            const map = new Map<string, SceneCircleEntry>();
 
+            // Current entries → relabel to parent (keep scene coords at identity)
+            for (const [path, entry] of prev) {
+              if (entry.level === 'current') {
+                map.set(path, { ...entry, level: 'parent' });
+              }
+              // Drop existing parent entries (grandparent — now 2 levels away)
+            }
+
+            // Add child entries from cache at child scene coords
+            const childScale = target.r / containerRadius;
+            for (const child of cached.positioned) {
+              map.set(child.item.path, {
+                item: child.item,
+                sceneX: target.x + child.x * childScale,
+                sceneY: target.y + child.y * childScale,
+                sceneR: child.r * childScale,
+                level: 'child',
+              });
+            }
+
+            return map;
+          });
+
+          console.log('[DreamExplorer] ZOOM-IN initiated: target=%s, scale=%f', item.path, scale);
+          settlementModeRef.current = 'zoom-in';
           setIsZooming(true);
           setZoomTargetPath(item.path);
           setZoomDirection('in');
+          setChildFadeIn(false); // children mount at opacity 0 this frame
           setSceneTransition('transform 1s ease-in-out');
           requestAnimationFrame(() => {
+            setChildFadeIn(true); // next frame: trigger child opacity 0→1 transition
             setSceneTransform(`translate(${tx}px, ${ty}px) scale(${scale})`);
           });
 
           zoomTimerRef.current = setTimeout(() => {
+            console.log('[DreamExplorer] ZOOM-IN timer fired: navigating to %s', item.path);
             pendingClearRef.current = item.path;
             explorerNavigateTo(item.path);
             zoomTimerRef.current = null;
@@ -342,7 +570,7 @@ export const DreamExplorer: React.FC = () => {
         openFile(item);
       }
     },
-    [positioned, containerRadius, explorerNavigateTo, isZooming, layoutMode]
+    [positioned, containerRadius, explorerNavigateTo, isZooming, layoutMode, currentPath]
   );
 
   // Open a file in Obsidian right pane, or fallback to system default
@@ -381,6 +609,25 @@ export const DreamExplorer: React.FC = () => {
         // Zoom-out: shrink scene into the position currentPath occupies in parent
         const scale = meRaw.r / containerRadius;
 
+        // Mutate the map: current→child, parent stays as-is
+        setSceneCircles(prev => {
+          const map = new Map<string, SceneCircleEntry>();
+
+          for (const [path, entry] of prev) {
+            if (entry.level === 'current') {
+              // Current entries → relabel to child (keep scene coords at identity)
+              map.set(path, { ...entry, level: 'child' });
+            } else if (entry.level === 'parent') {
+              // Parent entries stay as-is (already at parent scene coords, media loaded)
+              map.set(path, entry);
+            }
+          }
+
+          return map;
+        });
+
+        console.log('[DreamExplorer] ZOOM-OUT initiated: parent=%s, scale=%f', parentPath, scale);
+        settlementModeRef.current = 'zoom-out';
         setIsZooming(true);
         setZoomDirection('out');
         setSceneTransition('transform 1s ease-in-out');
@@ -389,6 +636,7 @@ export const DreamExplorer: React.FC = () => {
         });
 
         zoomTimerRef.current = setTimeout(() => {
+          console.log('[DreamExplorer] ZOOM-OUT timer fired: going back to %s', parentPath);
           pendingClearRef.current = parentPath;
           explorerGoBack();
           zoomTimerRef.current = null;
@@ -511,75 +759,46 @@ export const DreamExplorer: React.FC = () => {
               transformOrigin: 'center center',
             }}
           >
-            {/* Parent skeleton circles (large coords, clipped by mask).
-                Fade in during zoom-out, hidden otherwise. */}
-            <div style={{
-              opacity: zoomDirection === 'out' ? 1 : 0,
-              transition: zoomDirection ? 'opacity 1s ease-in-out' : 'none',
-            }}>
-              {parentSceneCircles.map(p => (
-                <ExplorerCircle
-                  key={`parent-${p.item.path}`}
-                  item={p.item}
-                  x={p.sceneX}
-                  y={p.sceneY}
-                  r={p.sceneR}
-                  isSelected={false}
-                  skeleton
-                />
-              ))}
-            </div>
+            {/* All circles from persistent map — flat list, stable keys */}
+            {Array.from(sceneCircles.values()).map(entry => {
+              let opacity = 0;
+              let transition = 'none';
 
-            {/* Current circles — all fade out during zoom */}
-            {positioned.map(pos => {
-              let circleOpacity = 1;
-              if (zoomDirection === 'in') circleOpacity = 0;
-              if (zoomDirection === 'out') circleOpacity = 0;
+              if (entry.level === 'current') {
+                opacity = zoomDirection ? 0 : 1;
+                transition = zoomDirection ? 'opacity 1s ease-in-out' : 'none';
+              } else if (entry.level === 'parent') {
+                opacity = zoomDirection === 'out' ? 1 : 0;
+                transition = zoomDirection ? 'opacity 1s ease-in-out' : 'none';
+              } else if (entry.level === 'child') {
+                opacity = childFadeIn ? 1 : 0;
+                transition = zoomDirection === 'in' ? 'opacity 1s ease-in-out' : 'none';
+              }
+
+              const interactive = entry.level === 'current' && !isZooming;
 
               return (
                 <div
-                  key={pos.item.path}
+                  key={entry.item.path}
                   style={{
-                    opacity: circleOpacity,
-                    transition: zoomDirection ? 'opacity 1s ease-in-out' : 'none',
+                    opacity,
+                    transition,
+                    pointerEvents: interactive ? 'auto' : 'none',
                   }}
                 >
                   <ExplorerCircle
-                    item={pos.item}
-                    x={pos.x}
-                    y={pos.y}
-                    r={pos.r}
-                    isSelected={!isZooming && selectedItems.includes(pos.item.path)}
-                    onClick={isZooming ? undefined : handleClick}
-                    onDoubleClick={isZooming ? undefined : handleDoubleClick}
+                    item={entry.item}
+                    x={entry.sceneX}
+                    y={entry.sceneY}
+                    r={entry.sceneR}
+                    isSelected={interactive && selectedItems.includes(entry.item.path)}
+                    noTransition={suppressTransitions}
+                    onClick={interactive ? handleClick : undefined}
+                    onDoubleClick={interactive ? handleDoubleClick : undefined}
                   />
                 </div>
               );
             })}
-
-            {/* Child circles at scene coordinates — zoom target's children.
-                These are pre-scaled so the CSS transform naturally grows them
-                to fill the viewport. After navigation, they're at identity
-                positions and seamlessly replaced by the new level's circles. */}
-            {childSceneCircles.length > 0 && (
-              <div style={{
-                opacity: zoomDirection === 'in' ? 1 : 0,
-                transition: zoomDirection ? 'opacity 0.3s ease-in-out' : 'none',
-                pointerEvents: 'none',
-              }}>
-                {childSceneCircles.map(child => (
-                  <ExplorerCircle
-                    key={`child-scene-${child.item.path}`}
-                    item={child.item}
-                    x={child.sceneX}
-                    y={child.sceneY}
-                    r={child.sceneR}
-                    isSelected={false}
-                    skeleton
-                  />
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}

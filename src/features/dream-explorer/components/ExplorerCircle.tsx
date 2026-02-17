@@ -28,6 +28,8 @@ interface ExplorerCircleProps {
   isSelected: boolean;
   /** When true, render icon-based fallback for ALL items (skip MediaRenderer) */
   skeleton?: boolean;
+  /** When true, disable CSS transitions on position/size (used during zoom settlement) */
+  noTransition?: boolean;
   onClick?: (item: ExplorerItem, e: React.MouseEvent) => void;
   onDoubleClick?: (item: ExplorerItem) => void;
 }
@@ -118,6 +120,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   r,
   isSelected,
   skeleton = false,
+  noTransition = false,
   onClick,
   onDoubleClick,
 }) => {
@@ -188,7 +191,9 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         overflow: 'hidden',
         cursor: r > 0 ? 'pointer' : 'default',
         pointerEvents: r > 0 ? 'auto' : 'none',
-        transition: 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, border-color 1s ease-in-out, background 1s ease-in-out, font-size 1s ease-in-out, box-shadow 1s ease-in-out, transform 0.2s ease',
+        transition: noTransition
+          ? 'box-shadow 1s ease-in-out, transform 0.2s ease'
+          : 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, border-color 1s ease-in-out, background 1s ease-in-out, font-size 1s ease-in-out, box-shadow 1s ease-in-out, transform 0.2s ease',
         fontSize: `${Math.max(8, vr * 0.15)}px`,
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
         transform: isHovered ? 'scale(1.05)' : 'scale(1)',
