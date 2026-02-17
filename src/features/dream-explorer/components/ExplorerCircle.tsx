@@ -166,11 +166,10 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
 
   const borderColor = getBorderColor(item.type);
   const isSubmodule = item.type === 'dream-submodule' || item.type === 'dreamer-submodule';
-  // Submodules get HolonView-style thick borders to stand out among files
-  // r=0 circles (collapsed in reduced mode) get 0 border so they're fully invisible
-  const borderWidth = r <= 0 ? 0 : isSubmodule
-    ? Math.max(2, Math.min(8, Math.round(r * 0.08)))
-    : Math.max(1.5, Math.sqrt(r) * 0.3);
+  // All size-dependent values must be purely linear (proportional to r) so that
+  // CSS transform scaling during zoom produces identical visuals to the settled
+  // state. Non-linear formulas (sqrt, clamps) cause a snap at settlement.
+  const borderWidth = r <= 0 ? 0 : isSubmodule ? r * 0.04 : r * 0.02;
   const showGlow = isSelected || isHovered;
   // Visual radius is 95% of packed radius — creates uniform gaps between circles
   // (same pattern as HolonView's SubmoduleCircle)
@@ -194,7 +193,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         transition: noTransition
           ? 'box-shadow 1s ease-in-out, transform 0.2s ease'
           : 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, border-color 1s ease-in-out, background 1s ease-in-out, font-size 1s ease-in-out, box-shadow 1s ease-in-out, transform 0.2s ease',
-        fontSize: `${Math.max(8, vr * 0.15)}px`,
+        fontSize: `${vr * 0.15}px`,
         boxShadow: showGlow ? getGoldenGlow(20) : 'none',
         transform: isHovered ? 'scale(1.05)' : 'scale(1)',
         userSelect: 'none',
@@ -345,7 +344,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         >
           <span
             style={{
-              fontSize: `${Math.max(7, vr * 0.11)}px`,
+              fontSize: `${vr * 0.11}px`,
               fontFamily: 'monospace',
               color: 'rgba(255, 255, 255, 0.4)',
               lineHeight: 1,
