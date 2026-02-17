@@ -180,22 +180,17 @@ export const DreamExplorer: React.FC = () => {
     }
 
     if (containerRadius <= 0 || effectiveItems.length === 0) {
-      console.log('[DreamExplorer] engine effect: setPositioned([]) (empty items or no radius)');
       setPositioned([]);
       return;
     }
 
-    console.log('[DreamExplorer] engine effect: creating new engine, items=%d, radius=%d', effectiveItems.length, containerRadius);
     const engine = new CircleLayoutEngine(
       effectiveItems,
       containerRadius,
       layoutMode
     );
     engineRef.current = engine;
-    engine.onUpdate = (positions) => {
-      console.log('[DreamExplorer] engine.onUpdate: %d positions, isZooming=%s, pending=%s, settlement=%s', positions.length, isZooming, pendingClearRef.current, settlementModeRef.current);
-      setPositioned(positions);
-    };
+    engine.onUpdate = (positions) => setPositioned(positions);
     engine.setMode(layoutMode, true);
 
     return () => {
@@ -237,10 +232,6 @@ export const DreamExplorer: React.FC = () => {
       layoutMode
     );
   }, [items, currentPath, rootPath, containerRadius, dreamNodesMap, layoutMode]);
-
-  // Log render-time state for CSS animation debugging
-  console.log('[DreamExplorer] RENDER: transform=%s, transition=%s, zoomDir=%s, mapSize=%d',
-    sceneTransform || 'none', sceneTransition, zoomDirection, sceneCircles.size);
 
   // --- Map management helpers ---
 
@@ -427,18 +418,11 @@ export const DreamExplorer: React.FC = () => {
 
   // --- Unified positioned effect ---
   useEffect(() => {
-    console.log('[DreamExplorer] positioned effect: len=%d, pending=%s, settlement=%s, isZooming=%s, zoomDir=%s, skip=%s',
-      positioned.length, pendingClearRef.current, settlementModeRef.current, isZooming, zoomDirection, skipNextRebuildRef.current);
-
-    if (positioned.length === 0 && !pendingClearRef.current) {
-      console.log('[DreamExplorer] positioned effect: SKIP (empty + no pending)');
-      return;
-    }
+    if (positioned.length === 0 && !pendingClearRef.current) return;
 
     const mode = settlementModeRef.current;
 
     if (pendingClearRef.current && positioned.length > 0) {
-      console.log('[DreamExplorer] positioned effect: SETTLEMENT mode=%s', mode);
       // Suppress ExplorerCircle CSS transitions so the coord jump from
       // scene coords → identity coords doesn't animate (scene transform
       // already handled the visual zoom).
@@ -468,13 +452,9 @@ export const DreamExplorer: React.FC = () => {
     } else if (!isZooming) {
       if (skipNextRebuildRef.current) {
         skipNextRebuildRef.current = false;
-        console.log('[DreamExplorer] positioned effect: SKIPPED (post-settlement)');
         return;
       }
-      console.log('[DreamExplorer] positioned effect: REBUILD from scratch');
       rebuildMapFromScratch(positioned);
-    } else {
-      console.log('[DreamExplorer] positioned effect: IGNORED (isZooming=true, no pending)');
     }
   }, [positioned]);
 
@@ -544,7 +524,6 @@ export const DreamExplorer: React.FC = () => {
             return map;
           });
 
-          console.log('[DreamExplorer] ZOOM-IN initiated: target=%s, scale=%f', item.path, scale);
           settlementModeRef.current = 'zoom-in';
           setIsZooming(true);
           setZoomTargetPath(item.path);
@@ -557,7 +536,6 @@ export const DreamExplorer: React.FC = () => {
           });
 
           zoomTimerRef.current = setTimeout(() => {
-            console.log('[DreamExplorer] ZOOM-IN timer fired: navigating to %s', item.path);
             pendingClearRef.current = item.path;
             explorerNavigateTo(item.path);
             zoomTimerRef.current = null;
@@ -626,7 +604,6 @@ export const DreamExplorer: React.FC = () => {
           return map;
         });
 
-        console.log('[DreamExplorer] ZOOM-OUT initiated: parent=%s, scale=%f', parentPath, scale);
         settlementModeRef.current = 'zoom-out';
         setIsZooming(true);
         setZoomDirection('out');
@@ -636,7 +613,6 @@ export const DreamExplorer: React.FC = () => {
         });
 
         zoomTimerRef.current = setTimeout(() => {
-          console.log('[DreamExplorer] ZOOM-OUT timer fired: going back to %s', parentPath);
           pendingClearRef.current = parentPath;
           explorerGoBack();
           zoomTimerRef.current = null;
