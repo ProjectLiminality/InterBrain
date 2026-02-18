@@ -2,6 +2,8 @@ import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { DreamNode } from '../../dreamnode/types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
 import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../../dreamnode/utils/html-loader';
+import { generateAI, generateStreamAI } from '../../ai-magic/services/inference-service';
+import type { TaskComplexity } from '../../ai-magic/types';
 
 export const CUSTOM_UI_FULLSCREEN_VIEW_TYPE = 'custom-ui-fullscreen-view';
 
@@ -17,6 +19,8 @@ export class CustomUIFullScreenView extends ItemView {
   private blobUrl: string | null = null;
   private bridge: any = null;
   private bridgeMessageHandler: ((e: MessageEvent) => void) | null = null;
+  private aiMessageHandler: ((e: MessageEvent) => void) | null = null;
+  private activeStreams: Map<string, AbortController> = new Map();
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -117,6 +121,9 @@ export class CustomUIFullScreenView extends ItemView {
 
     // Start PRISM bridge if bridge.js exists in the DreamNode
     this.startBridge();
+
+    // Start AI inference bridge (available to all custom UIs)
+    this.startAIBridge();
   }
 
   private startBridge(): void {
@@ -162,6 +169,116 @@ export class CustomUIFullScreenView extends ItemView {
     }
   }
 
+  private startAIBridge(): void {
+    if (!this.iframeEl) return;
+
+    this.aiMessageHandler = async (e: MessageEvent) => {
+      if (!this.iframeEl?.contentWindow) return;
+      const { data } = e;
+
+      if (data?.type === 'ai-bridge-probe') {
+        this.iframeEl.contentWindow.postMessage({ type: 'ai-bridge-ready', version: '2' }, '*');
+        return;
+      }
+
+      // Non-streaming request (v1 backward compat)
+      if (data?.type === 'ai-inference-request') {
+        const { requestId, messages, complexity } = data;
+        try {
+          const result = await generateAI(messages, (complexity as TaskComplexity) || 'trivial');
+          this.iframeEl?.contentWindow?.postMessage({
+            type: 'ai-inference-response',
+            requestId,
+            content: result.content,
+            provider: result.provider,
+            model: result.model,
+          }, '*');
+        } catch (err: any) {
+          this.iframeEl?.contentWindow?.postMessage({
+            type: 'ai-inference-error',
+            requestId,
+            error: err?.message || String(err),
+          }, '*');
+        }
+        return;
+      }
+
+      // Streaming request
+      if (data?.type === 'ai-inference-stream-request') {
+        const { requestId, messages, complexity, options } = data;
+        const abortController = new AbortController();
+        this.activeStreams.set(requestId, abortController);
+
+        let partialContent = '';
+
+        try {
+          const result = await generateStreamAI(
+            messages,
+            (chunk: string) => {
+              partialContent += chunk;
+              this.iframeEl?.contentWindow?.postMessage({
+                type: 'ai-inference-stream-chunk',
+                requestId,
+                chunk,
+              }, '*');
+            },
+            (complexity as TaskComplexity) || 'trivial',
+            {
+              ...options,
+              signal: abortController.signal,
+            }
+          );
+
+          this.iframeEl?.contentWindow?.postMessage({
+            type: 'ai-inference-stream-done',
+            requestId,
+            provider: result.provider,
+            model: result.model,
+            usage: result.usage,
+          }, '*');
+        } catch (err: any) {
+          // Don't send error for intentional aborts
+          if (err?.name !== 'AbortError') {
+            this.iframeEl?.contentWindow?.postMessage({
+              type: 'ai-inference-stream-error',
+              requestId,
+              error: err?.message || String(err),
+              partialContent: partialContent || undefined,
+            }, '*');
+          }
+        } finally {
+          this.activeStreams.delete(requestId);
+        }
+        return;
+      }
+
+      // Stream cancellation
+      if (data?.type === 'ai-inference-stream-cancel') {
+        const { requestId } = data;
+        const controller = this.activeStreams.get(requestId);
+        if (controller) {
+          controller.abort();
+          this.activeStreams.delete(requestId);
+        }
+        return;
+      }
+    };
+    window.addEventListener('message', this.aiMessageHandler);
+  }
+
+  private destroyAIBridge(): void {
+    // Abort all active streams
+    for (const controller of this.activeStreams.values()) {
+      controller.abort();
+    }
+    this.activeStreams.clear();
+
+    if (this.aiMessageHandler) {
+      window.removeEventListener('message', this.aiMessageHandler);
+      this.aiMessageHandler = null;
+    }
+  }
+
   private destroyBridge(): void {
     if (this.bridgeMessageHandler) {
       window.removeEventListener('message', this.bridgeMessageHandler);
@@ -174,6 +291,7 @@ export class CustomUIFullScreenView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.destroyAIBridge();
     this.destroyBridge();
     revokeHtmlBlobUrl(this.blobUrl);
     this.blobUrl = null;

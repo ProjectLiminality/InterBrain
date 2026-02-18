@@ -10,6 +10,9 @@ import {
 	AIMessage,
 	AIResponse,
 	CompletionOptions,
+	StreamChunkCallback,
+	StreamingCompletionOptions,
+	StreamCompletionMeta,
 	ProviderStatus,
 	TaskComplexity,
 	HardwareTier,
@@ -300,6 +303,102 @@ export class OllamaInferenceProvider implements AIProvider {
 			};
 		} catch (error) {
 			console.error('Ollama inference failed:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Generate streaming completion using Ollama NDJSON
+	 */
+	async generateStreamingCompletion(
+		messages: AIMessage[],
+		onChunk: StreamChunkCallback,
+		options?: StreamingCompletionOptions
+	): Promise<StreamCompletionMeta> {
+		const model = options?.model || this.models.trivial;
+
+		const ollamaMessages = messages.map(m => ({
+			role: m.role,
+			content: m.content
+		}));
+
+		const requestBody = {
+			model,
+			messages: ollamaMessages,
+			stream: true,
+			options: {
+				...(options?.temperature !== undefined && { temperature: options.temperature }),
+				...(options?.maxTokens && { num_predict: options.maxTokens })
+			}
+		};
+
+		try {
+			const response = await globalThis.fetch(`${this.baseUrl}/api/chat`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(requestBody),
+				signal: options?.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.text();
+				throw new Error(`Ollama API error: ${response.status} - ${error}`);
+			}
+
+			const reader = response.body?.getReader();
+			if (!reader) {
+				throw new Error('Response body not readable');
+			}
+
+			const decoder = new TextDecoder();
+			let buffer = '';
+			let promptEvalCount = 0;
+			let evalCount = 0;
+
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split('\n');
+					buffer = lines.pop() || '';
+
+					for (const line of lines) {
+						const trimmed = line.trim();
+						if (!trimmed) continue;
+
+						try {
+							const event: OllamaChatResponse = JSON.parse(trimmed);
+							if (event.message?.content) {
+								onChunk(event.message.content);
+							}
+							if (event.done) {
+								promptEvalCount = event.prompt_eval_count || 0;
+								evalCount = event.eval_count || 0;
+							}
+						} catch {
+							// Skip malformed JSON lines
+						}
+					}
+				}
+			} finally {
+				reader.releaseLock();
+			}
+
+			return {
+				provider: this.name,
+				model,
+				usage: {
+					inputTokens: promptEvalCount,
+					outputTokens: evalCount
+				}
+			};
+		} catch (error) {
+			if (options?.signal?.aborted) {
+				throw new DOMException('Stream aborted', 'AbortError');
+			}
+			console.error('Ollama streaming failed:', error);
 			throw error;
 		}
 	}

@@ -13,6 +13,9 @@ import {
 	AIMessage,
 	AIResponse,
 	CompletionOptions,
+	StreamChunkCallback,
+	StreamingCompletionOptions,
+	StreamCompletionMeta,
 	ProviderStatus,
 	TaskComplexity
 } from '../types';
@@ -257,6 +260,114 @@ export class OpenAICompatibleProvider implements AIProvider {
 			};
 		} catch (error) {
 			console.error(`${this.name} API request failed:`, error);
+			throw error;
+		}
+	}
+	/**
+	 * Generate streaming completion using OpenAI SSE format
+	 */
+	async generateStreamingCompletion(
+		messages: AIMessage[],
+		onChunk: StreamChunkCallback,
+		options?: StreamingCompletionOptions
+	): Promise<StreamCompletionMeta> {
+		if (!this.apiKey) {
+			throw new Error(`${this.name} API key not configured`);
+		}
+
+		const model = options?.model || this.models.trivial;
+
+		const requestBody = {
+			model,
+			stream: true,
+			messages: messages.map(m => ({
+				role: m.role,
+				content: m.content
+			})),
+			...(options?.maxTokens && { max_tokens: options.maxTokens }),
+			...(options?.temperature !== undefined && { temperature: options.temperature })
+		};
+
+		const authValue = this.useBearerPrefix
+			? `Bearer ${this.apiKey}`
+			: this.apiKey;
+
+		const url = this.baseUrl.endsWith('/v1')
+			? `${this.baseUrl}/chat/completions`
+			: `${this.baseUrl}/v1/chat/completions`;
+
+		try {
+			const response = await globalThis.fetch(url, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					[this.authHeader]: authValue
+				},
+				body: JSON.stringify(requestBody),
+				signal: options?.signal
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`${this.name} API error: ${response.status} - ${errorText}`);
+			}
+
+			const reader = response.body?.getReader();
+			if (!reader) {
+				throw new Error('Response body not readable');
+			}
+
+			const decoder = new TextDecoder();
+			let buffer = '';
+			let promptTokens = 0;
+			let completionTokens = 0;
+
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split('\n');
+					buffer = lines.pop() || '';
+
+					for (const line of lines) {
+						const trimmed = line.trim();
+						if (!trimmed.startsWith('data: ')) continue;
+						const payload = trimmed.slice(6);
+						if (payload === '[DONE]') continue;
+
+						try {
+							const event = JSON.parse(payload);
+							const delta = event.choices?.[0]?.delta;
+							if (delta?.content) {
+								onChunk(delta.content);
+							}
+							if (event.usage) {
+								promptTokens = event.usage.prompt_tokens || 0;
+								completionTokens = event.usage.completion_tokens || 0;
+							}
+						} catch {
+							// Skip malformed JSON lines
+						}
+					}
+				}
+			} finally {
+				reader.releaseLock();
+			}
+
+			return {
+				provider: this.name,
+				model,
+				usage: promptTokens || completionTokens
+					? { inputTokens: promptTokens, outputTokens: completionTokens }
+					: undefined
+			};
+		} catch (error) {
+			if (options?.signal?.aborted) {
+				throw new DOMException('Stream aborted', 'AbortError');
+			}
+			console.error(`${this.name} streaming request failed:`, error);
 			throw error;
 		}
 	}

@@ -17,8 +17,11 @@ export {
 	initializeInferenceService,
 	getInferenceService,
 	generateAI,
+	generateStreamAI,
 	type InferenceOptions,
-	type InferenceResult
+	type InferenceResult,
+	type StreamInferenceOptions,
+	type StreamInferenceResult
 } from './services/inference-service';
 
 export {

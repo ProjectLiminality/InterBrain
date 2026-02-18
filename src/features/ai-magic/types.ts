@@ -67,6 +67,30 @@ export interface ProviderStatus {
 }
 
 /**
+ * Callback for receiving streaming chunks
+ */
+export type StreamChunkCallback = (chunk: string) => void;
+
+/**
+ * Metadata returned on stream completion (lighter than AIResponse since content was delivered incrementally)
+ */
+export interface StreamCompletionMeta {
+	provider: string;
+	model: string;
+	usage?: {
+		inputTokens: number;
+		outputTokens: number;
+	};
+}
+
+/**
+ * Options for streaming completion requests
+ */
+export interface StreamingCompletionOptions extends CompletionOptions {
+	signal?: AbortSignal;
+}
+
+/**
  * Base interface for AI providers
  */
 export interface AIProvider {
@@ -90,6 +114,15 @@ export interface AIProvider {
 		messages: AIMessage[],
 		options?: CompletionOptions
 	): Promise<AIResponse>;
+
+	/**
+	 * Generate streaming completion (optional — falls back to non-streaming if not implemented)
+	 */
+	generateStreamingCompletion?(
+		messages: AIMessage[],
+		onChunk: StreamChunkCallback,
+		options?: StreamingCompletionOptions
+	): Promise<StreamCompletionMeta>;
 
 	/**
 	 * Get available models for this provider
