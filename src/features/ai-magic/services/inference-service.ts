@@ -421,6 +421,16 @@ export class InferenceService {
 
 		let lastError: Error | null = null;
 		let originalProvider: string | undefined;
+		let chunksDelivered = false;
+
+		// Wrap onChunk to track whether any content was already streamed to the client.
+		// If a provider delivers chunks but then errors, we must NOT fallback —
+		// the partial content is already in the user's UI and a second provider
+		// would produce interleaved/duplicate output.
+		const trackingOnChunk: StreamChunkCallback = (chunk: string) => {
+			chunksDelivered = true;
+			wrappedOnChunk(chunk);
+		};
 
 		for (let i = 0; i < providers.length; i++) {
 			const { provider, model } = providers[i];
@@ -431,7 +441,7 @@ export class InferenceService {
 
 			try {
 				console.log(`[AI Magic] Streaming via provider: ${provider.name}`);
-				const result = await this.executeStream(provider, messages, wrappedOnChunk, {
+				const result = await this.executeStream(provider, messages, trackingOnChunk, {
 					...options,
 					model: options?.model || model
 				});
@@ -452,6 +462,13 @@ export class InferenceService {
 				}
 				lastError = error instanceof Error ? error : new Error(String(error));
 				console.warn(`Streaming provider ${provider.name} failed:`, lastError.message);
+
+				// If chunks were already delivered to the client, do NOT fallback.
+				// A second provider would produce interleaved/duplicate content.
+				if (chunksDelivered) {
+					console.warn(`[AI Magic] Provider ${provider.name} failed after delivering chunks — not falling back to avoid duplicate output`);
+					throw lastError;
+				}
 
 				if (noFallback) {
 					throw lastError;

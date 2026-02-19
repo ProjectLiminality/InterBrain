@@ -72,6 +72,10 @@ export class CustomUIFullScreenView extends ItemView {
     const container = this.containerEl.children[1] as HTMLElement;
     if (!container) return;
 
+    // Clean up previous bridges and iframe before re-rendering
+    this.destroyAIBridge();
+    this.destroyBridge();
+
     // Clear previous content and revoke old blob URL
     container.empty();
     revokeHtmlBlobUrl(this.blobUrl);
@@ -177,7 +181,11 @@ export class CustomUIFullScreenView extends ItemView {
       const { data } = e;
 
       if (data?.type === 'ai-bridge-probe') {
-        this.iframeEl.contentWindow.postMessage({ type: 'ai-bridge-ready', version: '2' }, '*');
+        this.iframeEl.contentWindow.postMessage({
+          type: 'ai-bridge-ready',
+          version: '2',
+          instanceId: data.instanceId || undefined
+        }, '*');
         return;
       }
 

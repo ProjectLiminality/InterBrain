@@ -168,6 +168,7 @@ export class ClaudeProvider implements AIProvider {
 	}
 	/**
 	 * Generate streaming completion using Anthropic SSE
+	 * Uses Node.js https module to bypass CORS (Obsidian runs in Electron)
 	 */
 	async generateStreamingCompletion(
 		messages: AIMessage[],
@@ -197,39 +198,46 @@ export class ClaudeProvider implements AIProvider {
 			...(systemMessage && { system: systemMessage.content })
 		};
 
-		try {
-			const response = await globalThis.fetch(this.apiEndpoint, {
+		const bodyStr = JSON.stringify(requestBody);
+
+		// Use Node.js https to bypass CORS (globalThis.fetch is blocked
+		// by browser CORS policy for api.anthropic.com from app://obsidian.md)
+		const https = require('https') as typeof import('https');
+		const url = new URL(this.apiEndpoint);
+
+		return new Promise<StreamCompletionMeta>((resolve, reject) => {
+			let aborted = false;
+
+			const req = https.request({
+				hostname: url.hostname,
+				port: 443,
+				path: url.pathname,
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'x-api-key': this.apiKey,
-					'anthropic-version': '2023-06-01'
-				},
-				body: JSON.stringify(requestBody),
-				signal: options?.signal
-			});
+					'anthropic-version': '2023-06-01',
+					'Content-Length': Buffer.byteLength(bodyStr)
+				}
+			}, (res) => {
+				if (res.statusCode !== 200) {
+					let errorBody = '';
+					res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+					res.on('end', () => {
+						reject(new Error(`Claude API error: ${res.statusCode} - ${errorBody}`));
+					});
+					return;
+				}
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(`Claude API error: ${response.status} - ${errorText}`);
-			}
+				let buffer = '';
+				let inputTokens = 0;
+				let outputTokens = 0;
 
-			const reader = response.body?.getReader();
-			if (!reader) {
-				throw new Error('Response body not readable');
-			}
+				res.setEncoding('utf8');
+				res.on('data', (chunk: string) => {
+					if (aborted) return;
 
-			const decoder = new TextDecoder();
-			let buffer = '';
-			let inputTokens = 0;
-			let outputTokens = 0;
-
-			try {
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-
-					buffer += decoder.decode(value, { stream: true });
+					buffer += chunk;
 					const lines = buffer.split('\n');
 					buffer = lines.pop() || '';
 
@@ -252,23 +260,44 @@ export class ClaudeProvider implements AIProvider {
 							// Skip malformed JSON lines
 						}
 					}
+				});
+
+				res.on('end', () => {
+					if (!aborted) {
+						resolve({
+							provider: this.name,
+							model,
+							usage: { inputTokens, outputTokens }
+						});
+					}
+				});
+
+				res.on('error', (err: Error) => {
+					if (!aborted) reject(err);
+				});
+			});
+
+			req.on('error', (err: Error) => {
+				if (!aborted) reject(err);
+			});
+
+			// Handle abort signal
+			if (options?.signal) {
+				if (options.signal.aborted) {
+					req.destroy();
+					reject(new DOMException('Stream aborted', 'AbortError'));
+					return;
 				}
-			} finally {
-				reader.releaseLock();
+				options.signal.addEventListener('abort', () => {
+					aborted = true;
+					req.destroy();
+					reject(new DOMException('Stream aborted', 'AbortError'));
+				}, { once: true });
 			}
 
-			return {
-				provider: this.name,
-				model,
-				usage: { inputTokens, outputTokens }
-			};
-		} catch (error) {
-			if (options?.signal?.aborted) {
-				throw new DOMException('Stream aborted', 'AbortError');
-			}
-			console.error('Claude streaming request failed:', error);
-			throw error;
-		}
+			req.write(bodyStr);
+			req.end();
+		});
 	}
 }
 
