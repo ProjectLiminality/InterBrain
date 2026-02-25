@@ -98,6 +98,13 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
+    // Suppress benign ResizeObserver loop warnings from flooding the console
+    const resizeObserverErr = window.onerror;
+    window.onerror = (msg, ...args) => {
+      if (typeof msg === 'string' && msg.includes('ResizeObserver loop')) return true;
+      return resizeObserverErr ? (resizeObserverErr as any)(msg, ...args) : false;
+    };
+
     const loadStartTime = Date.now();
 
     // Get vault path for all services

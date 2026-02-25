@@ -83,8 +83,8 @@ export const PROVIDER_DEFAULTS: Record<string, Omit<OpenAICompatibleConfig, 'api
 		baseUrl: 'https://api.groq.com/openai',
 		models: {
 			trivial: 'llama-3.1-8b-instant',
-			standard: 'llama-3.1-70b-versatile',
-			complex: 'llama-3.1-70b-versatile'
+			standard: 'llama-3.3-70b-versatile',
+			complex: 'llama-3.3-70b-versatile'
 		}
 	},
 	xai: {

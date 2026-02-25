@@ -270,6 +270,40 @@ export class CustomUIFullScreenView extends ItemView {
         }
         return;
       }
+
+      // CLI bridge probe
+      if (data?.type === 'cli-bridge-probe') {
+        this.iframeEl?.contentWindow?.postMessage({ type: 'cli-bridge-ready' }, '*');
+        return;
+      }
+
+      // CLI execution bridge
+      if (data?.type === 'cli-exec') {
+        const { id, cmd } = data;
+        if (!this.dreamNode?.repoPath || !cmd) return;
+
+        const path = require('path');
+        const { exec } = require('child_process');
+        const adapter = serviceManager.getApp()?.vault.adapter as any;
+        if (!adapter?.basePath) return;
+
+        const cwd = path.resolve(adapter.basePath, this.dreamNode.repoPath);
+
+        exec(cmd, {
+          cwd,
+          timeout: 30_000,
+          maxBuffer: 10 * 1024 * 1024,
+        }, (error: any, stdout: string, stderr: string) => {
+          this.iframeEl?.contentWindow?.postMessage({
+            type: 'cli-result',
+            id,
+            out: stdout || '',
+            err: stderr || '',
+            code: error ? (error.code ?? 1) : 0,
+          }, '*');
+        });
+        return;
+      }
     };
     window.addEventListener('message', this.aiMessageHandler);
   }
