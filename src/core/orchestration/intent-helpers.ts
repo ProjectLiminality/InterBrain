@@ -248,6 +248,42 @@ export function deriveFlipToFrontIntent(
 }
 
 /**
+ * Z position for explorer-focus mode (closer to camera for deep-dive exploration).
+ */
+const CENTER_Z_FOCUS = -18;
+
+/**
+ * Derive intent for explorer-focus mode (DreamNode zoomed closer for deep-dive exploration).
+ *
+ * When focus is active, the node moves to z=-25 (doubling apparent size) and stays
+ * flipped to back with supermodules in the ring.
+ * When focus is deactivated, the node returns to z=-50 (default).
+ *
+ * @param nodeId - The node to focus
+ * @param supermoduleIds - The supermodules to show in ring
+ * @param focusActive - Whether explorer focus is being activated or deactivated
+ * @returns DerivedIntentResult with the computed intent
+ */
+export function deriveExplorerFocusIntent(
+  nodeId: string,
+  supermoduleIds: string[],
+  focusActive: boolean
+): DerivedIntentResult {
+  return {
+    intent: {
+      center: {
+        nodeId,
+        flipSide: 'back',
+        zOverride: focusActive ? CENTER_Z_FOCUS : undefined,
+      },
+      surroundingNodes: supermoduleIds,
+    },
+    nodesToSendHome: [],
+    isHolarchyNavigation: true,
+  };
+}
+
+/**
  * Derive intent for entering COPILOT mode.
  *
  * This handles the case where:

@@ -48,6 +48,7 @@ import {
   deriveCopilotEnterIntent,
   deriveFlipToBackIntent,
   deriveFlipToFrontIntent,
+  deriveExplorerFocusIntent,
   buildLayoutContext,
   isHolarchyNavigation
 } from '../orchestration/intent-helpers';
@@ -410,6 +411,40 @@ export default function DreamspaceCanvas() {
         }
         break;
       }
+
+      case 'explorer-focus': {
+        // Toggle explorer-focus: zoom DreamNode closer and switch layout mode
+        if (navigationRequest.nodeId) {
+          const nodeId = navigationRequest.nodeId;
+          const focusActive = navigationRequest.explorerFocusActive ?? false;
+
+          // Update explorer store focus state
+          const explorerStore = useInterBrainStore.getState();
+          explorerStore.explorerSetFocus(focusActive);
+
+          // If activating, also switch explorer layout to equal
+          if (focusActive) {
+            explorerStore.explorerSetLayoutMode('equal');
+          }
+
+          (async () => {
+            try {
+              let supermoduleIds: string[] = [];
+              const nodeData = store.dreamNodes.get(nodeId)?.node;
+              if (vaultService && nodeData) {
+                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, store.dreamNodes);
+              }
+              const { intent } = deriveExplorerFocusIntent(nodeId, supermoduleIds, focusActive);
+              orchestrator.executeLayoutIntent(intent);
+            } catch (error) {
+              console.error('[Canvas-NavRequest] Failed to load supermodules for explorer-focus:', error);
+              const { intent } = deriveExplorerFocusIntent(nodeId, [], focusActive);
+              orchestrator.executeLayoutIntent(intent);
+            }
+          })();
+        }
+        break;
+      }
     }
 
     // Clear the request after processing
@@ -706,6 +741,29 @@ export default function DreamspaceCanvas() {
 
           // Suppress empty space clicks when option key is held (radial button mode)
           if (store.radialButtonUI.optionKeyPressed) {
+            return;
+          }
+
+          // Explorer-focus mode: empty space click navigates up the folder hierarchy
+          // At root level, exits explorer-focus entirely
+          if (store.dreamExplorer.explorerFocus) {
+            const { currentPath, rootPath } = store.dreamExplorer;
+            if (currentPath && currentPath !== rootPath) {
+              console.log('[DreamSpace] Explorer-focus: navigating up folder hierarchy');
+              store.explorerGoBack();
+            } else {
+              // At root — exit explorer-focus back to normal holarchy view
+              console.log('[DreamSpace] Explorer-focus: at root, exiting focus');
+              const centerId = store.selectedNode?.id;
+              if (centerId) {
+                store.requestNavigation({
+                  type: 'explorer-focus',
+                  nodeId: centerId,
+                  explorerFocusActive: false,
+                });
+              }
+            }
+            // Don't fall through to constellation/liminal-web handling
             return;
           }
 

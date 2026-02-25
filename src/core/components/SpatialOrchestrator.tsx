@@ -477,8 +477,9 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
 
         // 1. Center node (if any)
         if (intent.center) {
-          // Calculate center position (fixed forward position)
-          const centerPos: [number, number, number] = [0, 0, -50];
+          // Calculate center position (fixed forward position, with optional z override)
+          const centerZ = intent.center.zOverride ?? -50;
+          const centerPos: [number, number, number] = [0, 0, centerZ];
 
           // Apply world rotation correction
           let correctedCenterPos = centerPos;

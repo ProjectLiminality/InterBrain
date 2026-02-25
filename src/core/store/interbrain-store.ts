@@ -201,7 +201,9 @@ export type RealNodeData = DreamNodeData;
 export interface NavigationRequest {
   // TODO: 'applyLayout' is a position recalculation, not a navigation transition.
   // It should be moved to a separate mechanism (e.g. a dedicated store action).
-  type: 'liminal-web-focus' | 'constellation' | 'applyLayout' | 'flip' | 'holarchy-focus';
+  type: 'liminal-web-focus' | 'constellation' | 'applyLayout' | 'flip' | 'holarchy-focus' | 'explorer-focus';
+  /** Whether explorer focus is being activated (true) or deactivated (false) */
+  explorerFocusActive?: boolean;
   nodeId?: string;
   interrupt?: boolean; // Use interrupt variants for mid-flight changes
 }

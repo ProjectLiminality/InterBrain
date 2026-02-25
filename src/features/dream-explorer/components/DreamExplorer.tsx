@@ -47,19 +47,66 @@ function computeParentPath(currentPath: string, rootPath: string): string | null
   return parent.length < rootPath.length ? rootPath : parent;
 }
 
-export const DreamExplorer: React.FC = () => {
-  const currentPath = useInterBrainStore(s => s.dreamExplorer.currentPath);
-  const rootPath = useInterBrainStore(s => s.dreamExplorer.rootPath);
-  const rootName = useInterBrainStore(s => s.dreamExplorer.rootName);
+interface DreamExplorerProps {
+  /** Root path to initialize the explorer (overrides store rootPath when embedded) */
+  rootPath?: string;
+  /** Display name for the root */
+  rootName?: string;
+  /** When true, uses parent container size, hides breadcrumb, starts in reduced mode */
+  embedded?: boolean;
+}
+
+export const DreamExplorer: React.FC<DreamExplorerProps> = ({
+  rootPath: propRootPath,
+  rootName: propRootName,
+  embedded = false,
+}) => {
+  const storeCurrentPath = useInterBrainStore(s => s.dreamExplorer.currentPath);
+  const storeRootPath = useInterBrainStore(s => s.dreamExplorer.rootPath);
+  const storeRootName = useInterBrainStore(s => s.dreamExplorer.rootName);
   const history = useInterBrainStore(s => s.dreamExplorer.history);
   const selectedItems = useInterBrainStore(s => s.dreamExplorer.selectedItems);
   const layoutMode = useInterBrainStore(s => s.dreamExplorer.layoutMode);
+  const explorerFocus = useInterBrainStore(s => s.dreamExplorer.explorerFocus);
   const dreamNodesMap = useInterBrainStore(s => s.dreamNodes);
 
   const explorerNavigateTo = useInterBrainStore(s => s.explorerNavigateTo);
   const explorerGoBack = useInterBrainStore(s => s.explorerGoBack);
   const explorerSelectItem = useInterBrainStore(s => s.explorerSelectItem);
   const explorerSetLayoutMode = useInterBrainStore(s => s.explorerSetLayoutMode);
+  const explorerOpen = useInterBrainStore(s => s.explorerOpen);
+  const requestNavigation = useInterBrainStore(s => s.requestNavigation);
+
+  // In embedded mode, initialize the store with the prop path if not already set
+  const isInitializedRef = useRef(false);
+  useEffect(() => {
+    if (embedded && propRootPath && !isInitializedRef.current) {
+      explorerOpen(propRootPath, propRootName);
+      // Set initial layout to reduced for embedded mode
+      explorerSetLayoutMode('reduced');
+      isInitializedRef.current = true;
+    }
+    return () => {
+      if (embedded) {
+        isInitializedRef.current = false;
+      }
+    };
+  }, [embedded, propRootPath, propRootName]);
+
+  // Re-initialize when propRootPath changes (different DreamNode selected)
+  const prevRootPathRef = useRef(propRootPath);
+  useEffect(() => {
+    if (embedded && propRootPath && propRootPath !== prevRootPathRef.current) {
+      explorerOpen(propRootPath, propRootName);
+      explorerSetLayoutMode('reduced');
+      prevRootPathRef.current = propRootPath;
+    }
+  }, [embedded, propRootPath, propRootName]);
+
+  // Use store values (which embedded mode initializes via explorerOpen)
+  const currentPath = storeCurrentPath;
+  const rootPath = storeRootPath;
+  const rootName = storeRootName;
 
   const [items, setItems] = useState<ExplorerItem[]>([]);
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
@@ -461,6 +508,14 @@ export const DreamExplorer: React.FC = () => {
   // Handle single click
   const handleClick = useCallback(
     (item: ExplorerItem, e: React.MouseEvent) => {
+      // In embedded reduced mode, submodule clicks act as holarchy navigation buttons
+      if (embedded && layoutMode === 'reduced' && item.dreamNodeId &&
+          (item.type === 'dream-submodule' || item.type === 'dreamer-submodule')) {
+        e.stopPropagation();
+        requestNavigation({ type: 'holarchy-focus', nodeId: item.dreamNodeId });
+        return;
+      }
+
       explorerSelectItem(item.path, e.metaKey);
 
       if (item.isDirectory && !cacheRef.current.get(item.path, layoutMode)) {
@@ -468,7 +523,7 @@ export const DreamExplorer: React.FC = () => {
         if (vs) cacheRef.current.scan(item.path, containerRadius, vs, dreamNodesMap, layoutMode);
       }
     },
-    [explorerSelectItem, layoutMode, containerRadius, dreamNodesMap]
+    [explorerSelectItem, layoutMode, containerRadius, dreamNodesMap, embedded, requestNavigation]
   );
 
   // Handle double-click: navigate into directories/submodules, open files
@@ -477,6 +532,11 @@ export const DreamExplorer: React.FC = () => {
       if (isZooming) return;
 
       if (item.isDirectory || item.type === 'dream-submodule' || item.type === 'dreamer-submodule') {
+        // Zoom into folder switches to equal layout mode in embedded mode
+        if (embedded) {
+          explorerSetLayoutMode('equal');
+        }
+
         if (containerRadius <= 0) {
           explorerNavigateTo(item.path);
           return;
@@ -625,11 +685,23 @@ export const DreamExplorer: React.FC = () => {
     explorerGoBack();
   }, [currentPath, rootPath, explorerGoBack, isZooming, layoutMode, containerRadius]);
 
-  // Click on empty space — inside enclosing circle = deselect, outside = navigate up
+  // Click on empty space — behavior depends on mode:
+  // Embedded: any empty space inside the DreamNode toggles layout (equal↔weighted) or deselects
+  // Standalone: inside enclosing circle = deselect, outside = navigate up
   const handleBackgroundClick = useCallback(
     (e: React.MouseEvent) => {
       if (!containerRef.current || containerRadius <= 0) return;
 
+      if (embedded) {
+        // In embedded mode, all background clicks are "inside" — the DreamNode border is the boundary
+        explorerSelectItem(null);
+        if (layoutMode !== 'reduced') {
+          explorerSetLayoutMode(layoutMode === 'equal' ? 'weighted' : 'equal');
+        }
+        return;
+      }
+
+      // Standalone mode: check if click is inside the enclosing circle
       const rect = containerRef.current.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
@@ -645,7 +717,7 @@ export const DreamExplorer: React.FC = () => {
         }
       }
     },
-    [containerRadius, currentPath, rootPath, explorerSelectItem, handleGoBack]
+    [containerRadius, currentPath, rootPath, explorerSelectItem, handleGoBack, embedded, layoutMode, explorerSetLayoutMode]
   );
 
   // Cleanup zoom timer on unmount
@@ -660,13 +732,17 @@ export const DreamExplorer: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      onClick={handleBackgroundClick}
+      onClick={embedded ? undefined : handleBackgroundClick}
       style={{
         width: '100%',
         height: '100%',
         position: 'relative',
         background: '#000000',
         overflow: 'hidden',
+        // In embedded mode, don't capture pointer events on the square bounding box —
+        // only the enclosing circle mask below should be interactive.
+        // This prevents the "leaking" invisible ring outside the DreamNode circle.
+        pointerEvents: embedded ? 'none' : 'auto',
       }}
     >
       {/* No root path = no DreamNode selected */}
@@ -686,8 +762,8 @@ export const DreamExplorer: React.FC = () => {
         </div>
       )}
 
-      {/* Breadcrumb navigation */}
-      {rootPath && (
+      {/* Breadcrumb navigation — hidden in embedded mode (DreamNode border is the frame) */}
+      {rootPath && !embedded && (
         <div onClick={e => e.stopPropagation()} style={{ position: 'relative', zIndex: 20 }}>
         <ExplorerBreadcrumb
           currentPath={currentPath}
@@ -709,6 +785,7 @@ export const DreamExplorer: React.FC = () => {
       {/* Enclosing circle mask — clips everything via overflow:hidden + borderRadius:50% */}
       {rootPath && containerRadius > 0 && (
         <div
+          onClick={embedded ? handleBackgroundClick : undefined}
           style={{
             position: 'absolute',
             left: '50%',
@@ -718,6 +795,8 @@ export const DreamExplorer: React.FC = () => {
             transform: 'translate(-50%, -50%)',
             borderRadius: '50%',
             overflow: 'hidden',
+            // In embedded mode, this circle is the event boundary
+            pointerEvents: embedded ? 'auto' : undefined,
           }}
         >
           {/* Scene div — transform target for zoom animations.
@@ -769,6 +848,7 @@ export const DreamExplorer: React.FC = () => {
                     r={entry.sceneR}
                     isSelected={interactive && selectedItems.includes(entry.item.path)}
                     noTransition={suppressTransitions}
+                    reducedMode={embedded && layoutMode === 'reduced'}
                     onClick={interactive ? handleClick : undefined}
                     onDoubleClick={interactive ? handleDoubleClick : undefined}
                   />
@@ -779,8 +859,8 @@ export const DreamExplorer: React.FC = () => {
         </div>
       )}
 
-      {/* Border overlay — separate from mask so it's not affected by scene transform */}
-      {rootPath && containerRadius > 0 && (
+      {/* Border overlay — separate from mask so it's not affected by scene transform. Hidden in embedded mode. */}
+      {rootPath && containerRadius > 0 && !embedded && (
         <div
           style={{
             position: 'absolute',
@@ -814,8 +894,8 @@ export const DreamExplorer: React.FC = () => {
         </div>
       )}
 
-      {/* Debug mode controls */}
-      {rootPath && (
+      {/* Debug mode controls — hidden in embedded mode */}
+      {rootPath && !embedded && (
         <div
           onClick={e => e.stopPropagation()}
           style={{

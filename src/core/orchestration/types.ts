@@ -47,6 +47,8 @@ export interface LayoutIntent {
   center: {
     nodeId: string;
     flipSide: 'front' | 'back';
+    /** Override the default z=-50 center position (e.g., z=-25 for explorer focus) */
+    zOverride?: number;
   } | null;
 
   /** Ordered list of node IDs for ring placement (order determines ring position) */

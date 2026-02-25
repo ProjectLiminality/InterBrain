@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useInterBrainStore } from '../store/interbrain-store';
 import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
-import { deriveConstellationIntent, deriveCopilotExitIntent, deriveFocusIntent, deriveFlipToFrontIntent, buildLayoutContext } from '../orchestration/intent-helpers';
+import { deriveConstellationIntent, deriveCopilotExitIntent, deriveFocusIntent, deriveFlipToFrontIntent, deriveExplorerFocusIntent, buildLayoutContext } from '../orchestration/intent-helpers';
 
 /**
  * useEscapeKeyHandler - Unified escape key handling for spatial layout navigation
@@ -141,7 +141,19 @@ export function useEscapeKeyHandler(
             const centerNode = store.selectedNode;
             const centerFlip = centerNode ? store.flipState.flipStates.get(centerNode.id) : null;
 
-            if (centerNode && centerFlip?.flipSide === 'back' && !centerFlip?.isFlipping && orchestratorRef.current) {
+            // If explorer-focus is active, first exit explorer-focus (zoom back to normal z, reset layout to reduced)
+            if (store.dreamExplorer.explorerFocus && centerNode && orchestratorRef.current) {
+              console.log('[Escape] EXPLORER_FOCUS → HOLARCHY (deactivate focus) via unified orchestration');
+              store.explorerSetFocus(false);
+              // Use deriveExplorerFocusIntent(false) which sets zOverride=undefined (normal z=-50)
+              // Pass empty supermoduleIds — the ring nodes are already displayed and won't change
+              // since executeLayoutIntent handles the ring from the intent's surroundingNodes
+              store.requestNavigation({
+                type: 'explorer-focus',
+                nodeId: centerNode.id,
+                explorerFocusActive: false,
+              });
+            } else if (centerNode && centerFlip?.flipSide === 'back' && !centerFlip?.isFlipping && orchestratorRef.current) {
               console.log('[Escape] HOLARCHY → LIMINAL_WEB (flip to front) via unified orchestration');
               const relatedIds = orchestratorRef.current.getRelatedNodeIds(centerNode.id);
               const { intent } = deriveFlipToFrontIntent(centerNode.id, relatedIds);

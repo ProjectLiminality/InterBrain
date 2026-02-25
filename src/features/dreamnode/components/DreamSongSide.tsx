@@ -9,6 +9,7 @@ import { serviceManager } from '../../../core/services/service-manager';
 import { NodeActionButton } from './NodeActionButton';
 import { useCanvasFiles, BacksideContentItem } from '../hooks/useCanvasFiles';
 import { HolonView } from './HolonView';
+import { DreamExplorer } from '../../dream-explorer/components/DreamExplorer';
 import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../utils/html-loader';
 
 interface DreamSongSideProps {
@@ -271,6 +272,9 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     }
   }, [isCustomUIView, currentItem, dreamNode, onFullScreenClick]);
 
+  // Read explorer focus state to suppress buttons during deep-dive
+  const explorerFocusActive = useInterBrainStore(state => state.dreamExplorer.explorerFocus);
+
   // Only show fullscreen button when not on holarchy view
   const shouldShowFullscreen = shouldShowFullscreenButton && !isHolarchyView;
 
@@ -316,11 +320,11 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           }}
         >
           {isHolarchyView ? (
-            // Holarchy view - submodule circles
-            <HolonView
-              dreamNode={dreamNode}
-              nodeSize={nodeSize}
-              vaultService={vaultService}
+            // Embedded DreamExplorer - holarchy file navigator
+            <DreamExplorer
+              rootPath={dreamNode.repoPath}
+              rootName={dreamNode.name}
+              embedded={true}
             />
           ) : isCustomUIView && customUIBlobUrl ? (
             // Custom UI view - iframe with blob URL (file:// blocked by Chromium)
@@ -389,12 +393,12 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           )}
         </div>
 
-        {/* Fade-to-black overlay - always show for visual consistency */}
-        <div style={getMediaOverlayStyle()} />
+        {/* Fade-to-black overlay - skip for embedded DreamExplorer (it manages its own visuals) */}
+        {!isHolarchyView && <div style={getMediaOverlayStyle()} />}
       </div>
 
-      {/* Carousel navigation buttons (left/right) */}
-      {shouldShowCarouselButtons && (
+      {/* Carousel navigation buttons (left/right) — hidden during explorer focus */}
+      {shouldShowCarouselButtons && !explorerFocusActive && (
         <>
           <NodeActionButton
             icon="lucide-chevron-left"
@@ -422,23 +426,25 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         />
       )}
 
-      {/* Dream Explorer button (top-center) — only on holarchy view */}
+      {/* Explorer Focus button (top-center) — only on holarchy view */}
       {shouldShowFullscreenButton && isHolarchyView && (
         <NodeActionButton
           icon="lucide-compass"
           position="top"
           onClick={(e) => {
             e.stopPropagation();
-            const obsidianApp = serviceManager.getApp();
-            if (obsidianApp) {
-              (obsidianApp as any).commands.executeCommandById('interbrain:open-dream-explorer');
-            }
+            const explorerFocus = useInterBrainStore.getState().dreamExplorer.explorerFocus;
+            requestNavigation({
+              type: 'explorer-focus',
+              nodeId: dreamNode.id,
+              explorerFocusActive: !explorerFocus,
+            });
           }}
         />
       )}
 
-      {/* Flip button (bottom-center) */}
-      {shouldShowFlipButton && (
+      {/* Flip button (bottom-center) — hidden during explorer focus */}
+      {shouldShowFlipButton && !explorerFocusActive && (
         <NodeActionButton
           icon="lucide-rotate-3d"
           position="bottom"

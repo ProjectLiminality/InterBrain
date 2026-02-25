@@ -23,6 +23,8 @@ export interface DreamExplorerSlice {
     layoutMode: ExplorerLayoutMode;
     /** Whether the explorer is open */
     isOpen: boolean;
+    /** Whether explorer-focus is active (DreamNode zoomed closer, equal layout) */
+    explorerFocus: boolean;
   };
 
   // Actions
@@ -33,6 +35,8 @@ export interface DreamExplorerSlice {
   explorerSetLayoutMode: (mode: ExplorerLayoutMode) => void;
   explorerOpen: (initialPath: string, rootName?: string) => void;
   explorerClose: () => void;
+  explorerSetFocus: (active: boolean) => void;
+  explorerToggleFocus: () => void;
 }
 
 const LAYOUT_CYCLE: ExplorerLayoutMode[] = ['reduced', 'equal', 'weighted'];
@@ -46,6 +50,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
     selectedItems: [],
     layoutMode: 'reduced',
     isOpen: false,
+    explorerFocus: false,
   },
 
   explorerNavigateTo: (path: string) =>
@@ -158,6 +163,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         selectedItems: [],
         layoutMode: 'reduced' as ExplorerLayoutMode,
         isOpen: true,
+        explorerFocus: false,
       },
     })),
 
@@ -171,6 +177,30 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         selectedItems: [],
         layoutMode: 'reduced' as ExplorerLayoutMode,
         isOpen: false,
+        explorerFocus: false,
       },
     })),
+
+  explorerSetFocus: (active: boolean) =>
+    set((state: any) => ({
+      dreamExplorer: {
+        ...state.dreamExplorer,
+        explorerFocus: active,
+        // Deactivating focus resets layout to reduced
+        ...(active ? {} : { layoutMode: 'reduced' as ExplorerLayoutMode }),
+      },
+    })),
+
+  explorerToggleFocus: () =>
+    set((state: any) => {
+      const newFocus = !state.dreamExplorer.explorerFocus;
+      return {
+        dreamExplorer: {
+          ...state.dreamExplorer,
+          explorerFocus: newFocus,
+          // Deactivating focus resets layout to reduced
+          ...(!newFocus ? { layoutMode: 'reduced' as ExplorerLayoutMode } : {}),
+        },
+      };
+    }),
 });

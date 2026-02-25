@@ -30,6 +30,8 @@ interface ExplorerCircleProps {
   skeleton?: boolean;
   /** When true, disable CSS transitions on position/size (used during zoom settlement) */
   noTransition?: boolean;
+  /** When true, submodule title overlays are hover-only (not always visible) */
+  reducedMode?: boolean;
   onClick?: (item: ExplorerItem, e: React.MouseEvent) => void;
   onDoubleClick?: (item: ExplorerItem) => void;
 }
@@ -121,6 +123,7 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
   isSelected,
   skeleton = false,
   noTransition = false,
+  reducedMode = false,
   onClick,
   onDoubleClick,
 }) => {
@@ -210,8 +213,8 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
           <MediaRenderer media={mediaFile} />
           <div style={getMediaOverlayStyle()} />
 
-          {/* Name overlay — always visible for submodules, hover-only for others */}
-          {(isSubmodule || isHovered) && (
+          {/* Name overlay — always visible for submodules (except reduced mode), hover-only for others */}
+          {((isSubmodule && !reducedMode) || isHovered) && (
             <div
               style={{
                 position: 'absolute',

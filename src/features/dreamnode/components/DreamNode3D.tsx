@@ -165,6 +165,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // Subscribe to edit mode state
   const isEditModeActive = useInterBrainStore(state => state.editMode.isActive);
+  const explorerFocus = useInterBrainStore(state => state.dreamExplorer.explorerFocus);
   const isPendingRelationship: boolean = useInterBrainStore(state => {
     const nodeId = dreamNode.id;
 
@@ -199,39 +200,43 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   
   // No longer need tracking - using live store state in imperative handles
   
+  // In explorer-focus mode, treat the centered node as permanently hovered
+  // so action buttons (flip, fullscreen, compass) stay visible
+  const effectiveHovered = isHovered || (explorerFocus && selectedNode?.id === dreamNode.id);
+
   // Determine if flip button should be visible
   // Dreamers cannot flip - they don't participate in holarchy (no sub/supermodules)
   const shouldShowFlipButton = useMemo(() => {
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&
-                   isHovered &&
+                   effectiveHovered &&
                    !isDragging &&
                    dreamNode.type !== 'dreamer'; // Dreamers cannot flip
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging, dreamNode.type]);
+  }, [spatialLayout, selectedNode, dreamNode.id, effectiveHovered, isDragging, dreamNode.type]);
 
   // Determine if DreamTalk fullscreen button should be visible (stable version)
   const shouldShowDreamTalkFullscreen = useMemo(() => {
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&
-                   isHovered &&
+                   effectiveHovered &&
                    dreamNode.dreamTalkMedia &&
                    dreamNode.dreamTalkMedia[0] &&
                    !isDragging;
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, dreamNode.dreamTalkMedia, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, effectiveHovered, dreamNode.dreamTalkMedia, isDragging]);
 
   // Determine if DreamSong fullscreen button should be visible (stable version)
   const shouldShowDreamSongFullscreen = useMemo(() => {
     const result = spatialLayout === 'liminal-web' &&
                    selectedNode?.id === dreamNode.id &&
-                   isHovered &&
+                   effectiveHovered &&
                    !isDragging;
 
     return result;
-  }, [spatialLayout, selectedNode, dreamNode.id, isHovered, isDragging]);
+  }, [spatialLayout, selectedNode, dreamNode.id, effectiveHovered, isDragging]);
 
   // Determine when to load back-side component (when node is centered)
   const shouldLoadBackSide = useMemo(() => {
@@ -1245,7 +1250,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
                 {/* DreamSong side - lazy loaded after animation completes */}
                 <DreamSongSide
                   dreamNode={dreamNode}
-                  isHovered={isHovered}
+                  isHovered={effectiveHovered}
                   isEditModeActive={isEditModeActive}
                   isPendingRelationship={isPendingRelationship}
                   isRelationshipEditMode={spatialLayout === 'relationship-edit'}
