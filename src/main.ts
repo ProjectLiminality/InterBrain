@@ -1020,10 +1020,10 @@ export default class InterBrainPlugin extends Plugin {
       }
     });
 
-    // Open DreamNode in AURYN (Claude Code in AURYN directory with DreamNode context)
+    // Open DreamNode in Terminal and run claude command
     this.addCommand({
-      id: 'open-in-auryn',
-      name: 'Open in AURYN',
+      id: 'open-dreamnode-in-terminal',
+      name: 'Open DreamNode in Terminal (run claude)',
       hotkeys: [{ modifiers: ['Ctrl'], key: 'c' }],
       callback: async () => {
         const store = useInterBrainStore.getState();
@@ -1034,11 +1034,12 @@ export default class InterBrainPlugin extends Plugin {
         }
 
         try {
-          await this.gitOpsService.openInAuryn(currentNode.repoPath, currentNode.name);
-          this.uiService.showSuccess(`Opening ${currentNode.name} in AURYN`);
+          // Use git service to open terminal at the repository folder and run claude --continue
+          await this.gitOpsService.openInTerminal(currentNode.repoPath);
+          this.uiService.showSuccess(`Opened terminal for ${currentNode.name} and running claude --continue`);
         } catch (error) {
-          console.error('Failed to open in AURYN:', error);
-          this.uiService.showError('Failed to open DreamNode in AURYN');
+          console.error('Failed to open in Terminal:', error);
+          this.uiService.showError('Failed to open DreamNode in Terminal');
         }
       }
     });

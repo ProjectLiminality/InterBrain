@@ -354,8 +354,8 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
   {
     id: 'coding-agent',
     iconName: 'lucide-terminal',
-    commandId: 'interbrain:open-in-auryn',
-    label: 'Open in AURYN'
+    commandId: 'interbrain:open-dreamnode-in-terminal',
+    label: 'Open Coding Agent'
   },
   {
     id: 'delete-node',
