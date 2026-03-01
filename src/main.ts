@@ -81,6 +81,7 @@ import {
   registerAIMagicCommands,
   initializeInferenceService
 } from './features/ai-magic';
+import { startAIBridgeServer, stopAIBridgeServer } from './features/ai-magic/services/ai-bridge-server';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
@@ -136,6 +137,13 @@ export default class InterBrainPlugin extends Plugin {
         openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
         groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
         xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
+      });
+
+      // Start AI Bridge WebSocket server for external UIs (AURYN mobile, etc.)
+      startAIBridgeServer().then(port => {
+        console.log(`[InterBrain] AI Bridge available on port ${port}`);
+      }).catch(err => {
+        console.warn('[InterBrain] AI Bridge failed to start:', err.message);
       });
 
       return { vaultPath };
@@ -1637,6 +1645,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Clean up transcription service
     cleanupTranscriptionService();
+
+    // Stop AI Bridge WebSocket server
+    await stopAIBridgeServer();
 
     // GRACEFUL SHUTDOWN: Wait for pending IndexedDB writes before closing
     // This prevents the "open timeout" error caused by interrupted transactions
