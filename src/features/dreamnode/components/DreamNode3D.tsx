@@ -377,7 +377,7 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   };
 
   // Helper to start flip-back animation alongside movement
-  const startFlipBackAnimation = () => {
+  const _startFlipBackAnimation = () => {
     // Get LIVE store state (not stale component state)
     const liveStoreState = useInterBrainStore.getState();
     const currentFlipRotation = flipRotation;

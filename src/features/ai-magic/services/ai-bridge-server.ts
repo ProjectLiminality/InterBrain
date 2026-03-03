@@ -279,7 +279,7 @@ export function startAIBridgeServer(): Promise<number> {
 			res.end(JSON.stringify({ status: 'ok', service: 'ai-bridge' }));
 		});
 
-		server.on('upgrade', (req: any, socket: any, head: any) => {
+		server.on('upgrade', (req: any, socket: any, _head: any) => {
 			acceptWebSocket(req, socket);
 		});
 
@@ -322,7 +322,7 @@ export function stopAIBridgeServer(): Promise<void> {
 
 		// Close all connected sockets
 		for (const socket of connectedSockets) {
-			try { socket.destroy(); } catch {}
+			try { socket.destroy(); } catch (_e) { /* ignore cleanup errors */ }
 		}
 		connectedSockets.clear();
 

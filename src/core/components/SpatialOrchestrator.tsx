@@ -376,7 +376,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
     if (!nodeRef?.current) {
       const store = useInterBrainStore.getState();
       if (store.ephemeralNodes.has(nodeId)) {
-        pendingMovements.current.set(nodeId, { position, duration, easing, setActive });
+        pendingMovements.current.set(nodeId, { position, duration, easing, setActive, generation: layoutGeneration.current });
         return;
       }
       return;
@@ -893,6 +893,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
                 easing: 'easeOutQuart',
                 setActive: true,
                 flipSide: nodeState.flipSide,
+                generation: layoutGeneration.current,
                 isSnapshotRestore: true // Override spawn animation
               });
             }
@@ -2043,7 +2044,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   // in-progress animated transitions with instant teleports.
   useEffect(() => {
     onOrchestratorReady?.();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   }, []);
   
   // This component renders nothing - it's purely for orchestration

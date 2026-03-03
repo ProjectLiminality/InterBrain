@@ -884,3 +884,45 @@ Shared by all layouts that have ring nodes.
 1. **EDIT_HOLARCHY mode:** Same pattern as EDIT_RELATIONSHIP but for managing sub/supermodule connections. Triggered from HOLARCHY mode.
 
 2. **Re-enable Dreamer flip:** If we find a meaningful use for Dreamer back side, re-enable flip button and DreamSong side for Dreamers.
+
+---
+
+## Animation Configuration Reference
+
+Concrete timing values used by `executeLayoutIntent` and `setTargetState`:
+
+### Durations
+
+| Animation | Duration | Location |
+|-----------|----------|----------|
+| Node movement (default) | 1000ms | `setTargetState` default in `DreamNode3D` |
+| Flip animation | 600ms | `DreamNode3D` useFrame flip logic |
+| Ring node stagger | 40ms between nodes | `SpatialOrchestrator` ring dispatch |
+| Reorder animation | 300ms | `SpatialOrchestrator` edit mode reorder |
+| Hide/show ring nodes | 500ms | `SpatialOrchestrator` ring visibility |
+| Snapshot restore | 0ms (instant) | `SpatialOrchestrator` restore path |
+
+### Easing Functions
+
+| Easing | Use Case |
+|--------|----------|
+| `easeOutCubic` | Default node movement |
+| `easeInQuart` | Return to constellation |
+| `easeOutQuart` | New/ephemeral nodes flying in, snapshot restore |
+| `easeInOutQuart` | Smooth layout transitions |
+| `easeInOutQuad` | Flip animation |
+
+### Ephemeral Node Lifecycle
+
+Ephemeral nodes (nodes not persisted in constellation) follow this lifecycle:
+
+1. **Spawned** — created in store, DreamNode3D mounts
+2. **Active** — in ring, responding to `setTargetState`
+3. **Sent home** — `setTargetState({ mode: 'home' })` triggers exit animation
+4. **Queued for despawn** — after exit animation completes, enters despawn queue (40ms staggered unmount)
+5. **Unmounted** — removed from store and React tree
+
+Protection mechanisms:
+- `pendingMovements` queue: buffers movements for nodes whose refs aren't registered yet
+- `queueEphemeralDespawn`: staggered unmount to prevent main thread blocking
+- `cancelEphemeralDespawn`: reuse a node that was queued for removal

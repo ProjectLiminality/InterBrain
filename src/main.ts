@@ -453,7 +453,7 @@ export default class InterBrainPlugin extends Plugin {
     // Wait for Obsidian's workspace layout to be ready (event-driven, not time-based)
     this.app.workspace.onLayoutReady(() => {
       // Detect fresh Obsidian launch vs plugin reload
-      const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
+      const _existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
 
       const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
       const store = useInterBrainStore.getState();
@@ -884,7 +884,7 @@ export default class InterBrainPlugin extends Plugin {
               syncDidWork = newImports.length > 0 || syncResult.submodulesRemoved.length > 0;
 
               syncNotice.hide();
-            } catch (syncError) {
+            } catch (_syncError) {
               syncNotice.hide();
               // Non-fatal - continue with regular commit
               this.uiService.showWarning('Canvas sync had issues - continuing with commit');

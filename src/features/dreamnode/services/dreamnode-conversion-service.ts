@@ -13,6 +13,7 @@ import { TFolder, TAbstractFile, App, PluginManifest } from 'obsidian';
 import { UDDService } from './udd-service';
 import { UDDFile } from '../types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
+import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
 
 const path = require('path');
 const fs = require('fs');
@@ -34,6 +35,7 @@ export interface ConversionOptions {
   radiclePassphrase?: string;
   skipRadicle?: boolean;
   skipLfs?: boolean;
+  dryRun?: boolean;
 }
 
 // File size threshold for LFS (10MB)
@@ -73,7 +75,9 @@ export class DreamNodeConversionService {
     const folderPath = path.join(this.vaultPath, folder.path);
     const folderName = path.basename(folder.path);
 
-    console.log('[ConvertToDreamNode] Starting conversion for:', folderPath);
+    const dryRun = options.dryRun;
+    const logPrefix = dryRun ? '[DRY RUN] ' : '';
+    console.log(`[ConvertToDreamNode] ${logPrefix}Starting conversion for:`, folderPath);
 
     const changes: string[] = [];
 
@@ -84,7 +88,7 @@ export class DreamNodeConversionService {
       const hasReadme = fs.existsSync(path.join(folderPath, 'README.md'));
       const hasLicense = fs.existsSync(path.join(folderPath, 'LICENSE'));
 
-      console.log('[ConvertToDreamNode] Current state:', { hasGit, hasUdd, hasReadme, hasLicense });
+      console.log(`[ConvertToDreamNode] ${logPrefix}Current state:`, { hasGit, hasUdd, hasReadme, hasLicense });
 
       // Generate or read UUID
       let uuid: string;
@@ -92,88 +96,100 @@ export class DreamNodeConversionService {
       let type: 'dream' | 'dreamer' = 'dream';
 
       if (hasUdd) {
-        // Read existing .udd file using UDDService
         const udd = await UDDService.readUDD(folderPath);
         uuid = udd.uuid;
         title = udd.title || folderName;
         type = udd.type || 'dream';
-        console.log('[ConvertToDreamNode] Using existing UUID from .udd:', uuid);
       } else {
-        // Generate new UUID
         uuid = crypto.randomUUID();
-        console.log('[ConvertToDreamNode] Generated new UUID:', uuid);
       }
 
-      // Initialize git if not present
-      if (!hasGit) {
-        await this.initializeGitRepository(folderPath);
-        changes.push('Initialized git repository');
-      }
+      // In dry-run mode, skip all mutating steps except repair/migration (which are dry-run aware)
+      if (!dryRun) {
+        // Initialize git if not present
+        if (!hasGit) {
+          await this.initializeGitRepository(folderPath);
+          changes.push('Initialized git repository');
+        }
 
-      // Setup Git LFS if needed (before staging files)
-      if (!options.skipLfs) {
-        await this.setupLfsIfNeeded(folderPath);
-      }
+        // Setup Git LFS if needed (before staging files)
+        if (!options.skipLfs) {
+          await this.setupLfsIfNeeded(folderPath);
+        }
 
-      // Create/update .udd file using UDDService
-      if (!hasUdd) {
-        console.log('[ConvertToDreamNode] Creating .udd file...');
-        await UDDService.createUDD(folderPath, { uuid, title, type });
-        changes.push('Created .udd file');
+        // Create/update .udd file using UDDService
+        if (!hasUdd) {
+          console.log('[ConvertToDreamNode] Creating .udd file...');
+          await UDDService.createUDD(folderPath, { uuid, title, type });
+          changes.push('Created .udd file');
+        } else {
+          const updated = await UDDService.ensureRequiredFields(folderPath);
+          if (updated) {
+            console.log('[ConvertToDreamNode] Updated .udd with missing fields');
+            changes.push('Added missing .udd fields');
+          }
+        }
+
+        // Create README if not present
+        if (!hasReadme) {
+          await this.createReadme(folderPath, title);
+          changes.push('Created README.md');
+        }
+
+        // Create LICENSE if not present
+        if (!hasLicense) {
+          await this.createLicense(folderPath);
+          changes.push('Created LICENSE');
+        }
+
+        // Commit changes if there are any uncommitted files
+        await this.commitIfNeeded(folderPath, title);
+
+        // Initialize Radicle if not already initialized
+        if (!options.skipRadicle) {
+          const hasRadicle = fs.existsSync(path.join(folderPath, '.rad'));
+          const udd = await UDDService.readUDD(folderPath);
+          const hasRadicleId = !!udd.radicleId;
+
+          if (!hasRadicle && !hasRadicleId) {
+            await this.initializeRadicle(folderPath, folderName, type, options.radiclePassphrase);
+            changes.push('Initialized Radicle');
+          } else if (hasRadicleId) {
+            console.log('[ConvertToDreamNode] Already has Radicle ID:', udd.radicleId);
+          }
+        }
       } else {
-        // Validate existing .udd has all required fields
-        const updated = await UDDService.ensureRequiredFields(folderPath);
-        if (updated) {
-          console.log('[ConvertToDreamNode] Updated .udd with missing fields');
-          changes.push('Added missing .udd fields');
+        // Dry-run: report what would be created
+        if (!hasGit) changes.push('[DRY RUN] Would initialize git repository');
+        if (!hasUdd) changes.push('[DRY RUN] Would create .udd file');
+        if (!hasReadme) changes.push('[DRY RUN] Would create README.md');
+        if (!hasLicense) changes.push('[DRY RUN] Would create LICENSE');
+      }
+
+      // Repair submodule paths that contain spaces (dry-run aware)
+      const spaceRepairs = await this.repairSpaceSubmodulePaths(folderPath, dryRun);
+      if (spaceRepairs.length > 0) {
+        for (const repair of spaceRepairs) {
+          changes.push(`${dryRun ? '[DRY RUN] Would rename' : 'Renamed'} submodule path: "${repair.from}" → "${repair.to}"`);
         }
       }
 
-      // Create README if not present
-      if (!hasReadme) {
-        await this.createReadme(folderPath, title);
-        changes.push('Created README.md');
-      }
-
-      // Create LICENSE if not present
-      if (!hasLicense) {
-        await this.createLicense(folderPath);
-        changes.push('Created LICENSE');
-      }
-
-      // Commit changes if there are any uncommitted files
-      await this.commitIfNeeded(folderPath, title);
-
-      // Initialize Radicle if not already initialized
-      // Check both .rad directory AND if UDD already has a radicleId
-      if (!options.skipRadicle) {
-        const hasRadicle = fs.existsSync(path.join(folderPath, '.rad'));
-        const udd = await UDDService.readUDD(folderPath);
-        const hasRadicleId = !!udd.radicleId;
-
-        if (!hasRadicle && !hasRadicleId) {
-          await this.initializeRadicle(folderPath, folderName, type, options.radiclePassphrase);
-          changes.push('Initialized Radicle');
-        } else if (hasRadicleId) {
-          console.log('[ConvertToDreamNode] Already has Radicle ID:', udd.radicleId);
-        }
-      }
-
-      // Migrate .gitmodules URLs from absolute to relative paths
-      const migratedCount = await this.migrateGitmodulesUrls(folderPath);
+      // Migrate .gitmodules URLs from absolute to relative paths (dry-run aware)
+      const migratedCount = await this.migrateGitmodulesUrls(folderPath, dryRun);
       if (migratedCount > 0) {
-        changes.push(`Migrated ${migratedCount} .gitmodules URL(s) to relative paths`);
+        changes.push(`${dryRun ? '[DRY RUN] Would migrate' : 'Migrated'} ${migratedCount} .gitmodules URL(s) to relative paths`);
       }
 
-      // Sync holarchy relationships (submodules <-> supermodules)
-      // This handles existing git submodules and populates .udd arrays with radicleIds
-      await this.syncHolarchyRelationships(folderPath, options);
+      if (!dryRun) {
+        // Sync holarchy relationships (submodules <-> supermodules)
+        await this.syncHolarchyRelationships(folderPath, options);
 
-      // Refresh the vault to pick up the new DreamNode
-      console.log('[ConvertToDreamNode] Rescanning vault...');
-      await serviceManager.scanVault();
+        // Refresh the vault to pick up the new DreamNode
+        console.log('[ConvertToDreamNode] Rescanning vault...');
+        await serviceManager.scanVault();
+      }
 
-      console.log('[ConvertToDreamNode] Conversion complete!');
+      console.log(`[ConvertToDreamNode] ${logPrefix}Conversion complete!`);
       return { success: true, title, uuid, changes: changes.length > 0 ? changes : undefined };
 
     } catch (error) {
@@ -517,7 +533,241 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
    *
    * Returns the number of URLs migrated.
    */
-  private async migrateGitmodulesUrls(folderPath: string): Promise<number> {
+  /**
+   * Repair submodule paths that contain spaces.
+   *
+   * Spaces in submodule paths break git config parsing, producing garbled
+   * [submodule] sections. For each submodule with a space in its path:
+   * 1. Compute PascalCase name
+   * 2. git mv the directory
+   * 3. Rewrite .gitmodules (name, path, url)
+   * 4. git submodule sync
+   * 5. Rename .git/modules/old → .git/modules/new
+   * 6. Fix .git file inside submodule dir (gitdir path)
+   * 7. Fix worktree in .git/modules/new/config
+   * 8. Update canvas file references
+   */
+  private async repairSpaceSubmodulePaths(
+    folderPath: string,
+    dryRun?: boolean
+  ): Promise<Array<{ from: string; to: string }>> {
+    const gitmodulesPath = path.join(folderPath, '.gitmodules');
+    if (!fs.existsSync(gitmodulesPath)) return [];
+
+    const content = fs.readFileSync(gitmodulesPath, 'utf-8');
+    const submodules = this.parseGitmodules(content);
+    const repairs: Array<{ from: string; to: string }> = [];
+    const prefix = dryRun ? '[DRY RUN] ' : '';
+
+    for (const sub of submodules) {
+      if (!sub.path.includes(' ') && !sub.name.includes(' ')) continue;
+
+      const pascalName = sanitizeTitleToPascalCase(sub.name);
+      if (sub.path === pascalName && sub.name === pascalName) continue;
+
+      const oldPath = sub.path;
+      const oldName = sub.name;
+      const newName = pascalName;
+      const oldFullPath = path.join(folderPath, oldPath);
+      const newFullPath = path.join(folderPath, newName);
+
+      console.log(`[ConvertToDreamNode] ${prefix}Repairing space-path submodule: "${oldPath}" → "${newName}"`);
+
+      if (dryRun) {
+        // Log what would happen without doing it
+        const dirExists = fs.existsSync(oldFullPath);
+        const alreadyRenamed = fs.existsSync(newFullPath);
+        console.log(`[ConvertToDreamNode] ${prefix}  git mv "${oldPath}" "${newName}" (dir exists: ${dirExists}, already renamed: ${alreadyRenamed})`);
+        console.log(`[ConvertToDreamNode] ${prefix}  Rewrite .gitmodules: [submodule "${oldName}"] → [submodule "${newName}"]`);
+        console.log(`[ConvertToDreamNode] ${prefix}  Rewrite .gitmodules: path = ${oldPath} → path = ${newName}`);
+
+        const gitDir = path.join(folderPath, '.git');
+        let gitModulesDir: string;
+        try {
+          const gitStat = fs.statSync(gitDir);
+          if (gitStat.isFile()) {
+            const gitFileContent = fs.readFileSync(gitDir, 'utf-8').trim();
+            const gitdirMatch = gitFileContent.match(/^gitdir:\s*(.+)$/);
+            gitModulesDir = gitdirMatch
+              ? path.join(path.resolve(folderPath, gitdirMatch[1]), 'modules')
+              : path.join(gitDir, 'modules');
+          } else {
+            gitModulesDir = path.join(gitDir, 'modules');
+          }
+          const oldModulePath = path.join(gitModulesDir, oldName);
+          const newModulePath = path.join(gitModulesDir, newName);
+          console.log(`[ConvertToDreamNode] ${prefix}  Rename .git/modules/${oldName} → ${newName} (exists: ${fs.existsSync(oldModulePath)}, target exists: ${fs.existsSync(newModulePath)})`);
+        } catch {
+          console.log(`[ConvertToDreamNode] ${prefix}  Could not inspect .git/modules`);
+        }
+
+        // Check canvas files
+        const canvasFiles = fs.readdirSync(folderPath, { withFileTypes: true })
+          .filter((e: any) => e.isFile() && e.name.endsWith('.canvas'))
+          .map((e: any) => e.name);
+        if (canvasFiles.length > 0) {
+          console.log(`[ConvertToDreamNode] ${prefix}  Would update canvas references in: ${canvasFiles.join(', ')}`);
+        }
+
+        repairs.push({ from: oldPath, to: newName });
+        continue;
+      }
+
+      try {
+        // Step 1: Move the directory using git mv
+        if (fs.existsSync(oldFullPath)) {
+          await execAsync(`git mv "${oldPath}" "${newName}"`, { cwd: folderPath });
+        } else if (fs.existsSync(newFullPath)) {
+          console.log(`[ConvertToDreamNode] Directory already at ${newName}, updating .gitmodules only`);
+        } else {
+          console.warn(`[ConvertToDreamNode] Neither "${oldPath}" nor "${newName}" exists - skipping`);
+          continue;
+        }
+
+        // Step 2: Rewrite .gitmodules — update name, path, and url
+        let gitmodulesContent = fs.readFileSync(gitmodulesPath, 'utf-8');
+        // Replace section header: [submodule "Old Name"] → [submodule "NewName"]
+        gitmodulesContent = gitmodulesContent.replace(
+          `[submodule "${oldName}"]`,
+          `[submodule "${newName}"]`
+        );
+        // Replace path = Old Name → path = NewName
+        gitmodulesContent = gitmodulesContent.replace(
+          new RegExp(`(path\\s*=\\s*)${oldPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+          `$1${newName}`
+        );
+        // Update url if it references the old space-name
+        const oldUrlBasename = path.basename(oldPath);
+        gitmodulesContent = gitmodulesContent.replace(
+          new RegExp(`(url\\s*=\\s*\\.\\./)${oldUrlBasename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+          `$1${newName}`
+        );
+        fs.writeFileSync(gitmodulesPath, gitmodulesContent);
+
+        // Step 3: Sync git config
+        try {
+          await execAsync('git submodule sync', { cwd: folderPath });
+        } catch (syncErr) {
+          console.warn('[ConvertToDreamNode] git submodule sync after path repair failed (non-fatal):', syncErr);
+        }
+
+        // Step 4: Rename .git/modules/old → .git/modules/new
+        const gitDir = path.join(folderPath, '.git');
+        let gitModulesDir: string;
+        const gitStat = fs.statSync(gitDir);
+        if (gitStat.isFile()) {
+          const gitFileContent = fs.readFileSync(gitDir, 'utf-8').trim();
+          const gitdirMatch = gitFileContent.match(/^gitdir:\s*(.+)$/);
+          if (gitdirMatch) {
+            const resolvedGitDir = path.resolve(folderPath, gitdirMatch[1]);
+            gitModulesDir = path.join(resolvedGitDir, 'modules');
+          } else {
+            gitModulesDir = path.join(gitDir, 'modules');
+          }
+        } else {
+          gitModulesDir = path.join(gitDir, 'modules');
+        }
+
+        const oldModulePath = path.join(gitModulesDir, oldName);
+        const newModulePath = path.join(gitModulesDir, newName);
+
+        if (fs.existsSync(oldModulePath) && !fs.existsSync(newModulePath)) {
+          fs.renameSync(oldModulePath, newModulePath);
+          console.log(`[ConvertToDreamNode] Renamed .git/modules/${oldName} → ${newName}`);
+
+          // Step 5: Fix .git file inside the submodule dir (gitdir path)
+          const subGitFile = path.join(newFullPath, '.git');
+          if (fs.existsSync(subGitFile) && fs.statSync(subGitFile).isFile()) {
+            let gitFileContent = fs.readFileSync(subGitFile, 'utf-8');
+            gitFileContent = gitFileContent.replace(
+              new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              newName
+            );
+            fs.writeFileSync(subGitFile, gitFileContent);
+            console.log(`[ConvertToDreamNode] Fixed gitdir in ${newName}/.git`);
+          }
+
+          // Step 6: Fix worktree in .git/modules/NewName/config
+          const moduleConfigPath = path.join(newModulePath, 'config');
+          if (fs.existsSync(moduleConfigPath)) {
+            let configContent = fs.readFileSync(moduleConfigPath, 'utf-8');
+            configContent = configContent.replace(
+              new RegExp(oldPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              newName
+            );
+            fs.writeFileSync(moduleConfigPath, configContent);
+            console.log(`[ConvertToDreamNode] Fixed worktree in .git/modules/${newName}/config`);
+          }
+        }
+
+        // Step 7: Update canvas file references
+        await this.updateCanvasReferences(folderPath, oldPath, newName);
+
+        // Commit the repair
+        try {
+          await execAsync('git add -A', { cwd: folderPath });
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: folderPath });
+          if (statusOutput.trim()) {
+            await execAsync(
+              `git commit -m "Rename submodule path: ${oldPath} → ${newName}"`,
+              { cwd: folderPath }
+            );
+          }
+        } catch (commitErr) {
+          console.warn('[ConvertToDreamNode] Could not commit submodule path repair:', commitErr);
+        }
+
+        repairs.push({ from: oldPath, to: newName });
+      } catch (error) {
+        console.error(`[ConvertToDreamNode] Failed to repair submodule "${oldPath}":`, error);
+      }
+    }
+
+    return repairs;
+  }
+
+  /**
+   * Update canvas files (DreamSong.canvas, etc.) to reflect renamed submodule paths.
+   */
+  private async updateCanvasReferences(
+    folderPath: string,
+    oldSubPath: string,
+    newSubPath: string
+  ): Promise<void> {
+    const folderName = path.basename(folderPath);
+
+    // Find all .canvas files in this DreamNode
+    const canvasFiles: string[] = [];
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.canvas')) {
+        canvasFiles.push(path.join(folderPath, entry.name));
+      }
+    }
+
+    for (const canvasFile of canvasFiles) {
+      try {
+        let content = fs.readFileSync(canvasFile, 'utf-8');
+        // Replace references like "ParentName/Old Path/" with "ParentName/NewPath/"
+        const oldRef = `${folderName}/${oldSubPath}`;
+        const newRef = `${folderName}/${newSubPath}`;
+        if (content.includes(oldRef)) {
+          content = content.split(oldRef).join(newRef);
+          fs.writeFileSync(canvasFile, content);
+          console.log(`[ConvertToDreamNode] Updated canvas references in ${path.basename(canvasFile)}: ${oldRef} → ${newRef}`);
+        }
+        // Also replace bare old path references
+        if (content.includes(oldSubPath)) {
+          content = content.split(oldSubPath).join(newSubPath);
+          fs.writeFileSync(canvasFile, content);
+        }
+      } catch (canvasErr) {
+        console.warn(`[ConvertToDreamNode] Could not update canvas ${path.basename(canvasFile)}:`, canvasErr);
+      }
+    }
+  }
+
+  private async migrateGitmodulesUrls(folderPath: string, dryRun?: boolean): Promise<number> {
     const gitmodulesPath = path.join(folderPath, '.gitmodules');
 
     if (!fs.existsSync(gitmodulesPath)) {
@@ -525,35 +775,57 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
     }
 
     const content = fs.readFileSync(gitmodulesPath, 'utf-8');
-    let modified = content;
     let migratedCount = 0;
+    const expectedVaultRoot = path.dirname(folderPath);
+    const prefix = dryRun ? '[DRY RUN] ' : '';
 
-    // Match url = /absolute/path lines where the path points to a vault-root repo
-    // We detect absolute paths: they start with / and contain at least one path segment
-    const urlRegex = /(url\s*=\s*)(\/.+)/g;
-    let match;
+    // Line-by-line replacement to avoid prefix collision bug.
+    // e.g. replacing "/Users/.../InterBrain" must not match inside "/Users/.../InterBrain Mobile"
+    const lines = content.split('\n');
+    const modifiedLines = lines.map((line: string) => {
+      const urlMatch = line.match(/^(\s*url\s*=\s*)(\/.+)$/);
+      if (!urlMatch) return line;
 
-    while ((match = urlRegex.exec(content)) !== null) {
-      const absolutePath = match[2].trim();
-      const repoName = path.basename(absolutePath);
-      const relativePath = `../${repoName}`;
-
-      // Verify this absolute path is a sibling at the same level (vault root)
-      const expectedVaultRoot = path.dirname(folderPath);
+      const linePrefix = urlMatch[1];
+      const absolutePath = urlMatch[2].trim();
       const actualParentDir = path.dirname(absolutePath);
 
-      if (actualParentDir === expectedVaultRoot) {
-        console.log(`[ConvertToDreamNode] Migrating .gitmodules URL: ${absolutePath} → ${relativePath}`);
-        modified = modified.replace(absolutePath, relativePath);
-        migratedCount++;
-      } else {
-        console.log(`[ConvertToDreamNode] Skipping non-sibling absolute path: ${absolutePath}`);
+      if (actualParentDir !== expectedVaultRoot) {
+        console.log(`[ConvertToDreamNode] ${prefix}Skipping non-sibling absolute path: ${absolutePath}`);
+        return line;
       }
+
+      const repoName = path.basename(absolutePath);
+      const relativePath = `../${repoName}`;
+      console.log(`[ConvertToDreamNode] ${prefix}Migrating .gitmodules URL: ${absolutePath} → ${relativePath}`);
+      migratedCount++;
+      return `${linePrefix}${relativePath}`;
+    });
+
+    let modified = modifiedLines.join('\n');
+
+    // Clean corrupted [submodule] sections — artifacts of spaces in submodule paths
+    // breaking git config parsing. These have [submodule] without a quoted name.
+    const cleaned = this.cleanCorruptedGitmodulesSections(modified);
+    if (cleaned !== modified) {
+      console.log(`[ConvertToDreamNode] ${prefix}Cleaned corrupted .gitmodules sections`);
+      modified = cleaned;
     }
 
-    if (migratedCount > 0) {
+    const changed = modified !== content;
+
+    if (dryRun) {
+      if (changed) {
+        console.log(`[ConvertToDreamNode] [DRY RUN] Would write updated .gitmodules (${migratedCount} URL(s) + cleanup)`);
+        console.log(`[ConvertToDreamNode] [DRY RUN] Would run: git submodule sync`);
+        console.log(`[ConvertToDreamNode] [DRY RUN] Would commit .gitmodules changes`);
+      }
+      return migratedCount;
+    }
+
+    if (changed) {
       fs.writeFileSync(gitmodulesPath, modified);
-      console.log(`[ConvertToDreamNode] Migrated ${migratedCount} .gitmodules URL(s) to relative paths`);
+      console.log(`[ConvertToDreamNode] Updated .gitmodules (${migratedCount} URL(s) migrated)`);
 
       // Sync git's internal URL tracking to match the updated .gitmodules
       try {
@@ -577,6 +849,54 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
     }
 
     return migratedCount;
+  }
+
+  /**
+   * Remove corrupted [submodule] blocks that lack a quoted name.
+   * These are artifacts of spaces in submodule paths breaking git config parsing,
+   * producing garbled sections like:
+   *   [submodule]
+   *       AI = Token
+   *       Installation = Wizard.url
+   */
+  private cleanCorruptedGitmodulesSections(content: string): string {
+    // Split into sections by [submodule markers
+    const lines = content.split('\n');
+    const cleanedLines: string[] = [];
+    let skipSection = false;
+
+    for (const line of lines) {
+      // Check for submodule section header
+      if (/^\[submodule\b/.test(line.trim())) {
+        // Valid section has [submodule "name"]
+        if (/^\[submodule "[^"]+"\]/.test(line.trim())) {
+          skipSection = false;
+          cleanedLines.push(line);
+        } else {
+          // Corrupted section — no quoted name
+          console.log(`[ConvertToDreamNode] Removing corrupted .gitmodules section: ${line.trim()}`);
+          skipSection = true;
+        }
+      } else if (skipSection) {
+        // Skip lines belonging to corrupted section (indented key=value or blank lines)
+        // Stop skipping when we hit a new section header
+        if (line.trim().startsWith('[')) {
+          // New section — re-evaluate
+          skipSection = false;
+          if (/^\[submodule\b/.test(line.trim()) && !/^\[submodule "[^"]+"\]/.test(line.trim())) {
+            console.log(`[ConvertToDreamNode] Removing corrupted .gitmodules section: ${line.trim()}`);
+            skipSection = true;
+          } else {
+            cleanedLines.push(line);
+          }
+        }
+        // else: skip this line (part of corrupted section)
+      } else {
+        cleanedLines.push(line);
+      }
+    }
+
+    return cleanedLines.join('\n');
   }
 
   /**
@@ -643,7 +963,7 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
         // Verify submodule is a functional git repo (handles broken .git references)
         try {
           await execAsync('git rev-parse --git-dir', { cwd: submodulePath });
-        } catch (gitCheckError) {
+        } catch (_gitCheckError) {
           console.warn(`[ConvertToDreamNode] Submodule ${submodule.name} has broken git reference - attempting repair...`);
           try {
             // Try to repair by re-initializing the submodule

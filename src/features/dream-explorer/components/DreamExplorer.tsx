@@ -67,7 +67,7 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
   const history = useInterBrainStore(s => s.dreamExplorer.history);
   const selectedItems = useInterBrainStore(s => s.dreamExplorer.selectedItems);
   const layoutMode = useInterBrainStore(s => s.dreamExplorer.layoutMode);
-  const explorerFocus = useInterBrainStore(s => s.dreamExplorer.explorerFocus);
+  const _explorerFocus = useInterBrainStore(s => s.dreamExplorer.explorerFocus);
   const goBackRequestId = useInterBrainStore(s => s.dreamExplorer.goBackRequestId);
   const dreamNodesMap = useInterBrainStore(s => s.dreamNodes);
 
@@ -121,7 +121,7 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
   const [sceneTransform, setSceneTransform] = useState('');
   const [sceneTransition, setSceneTransition] = useState('none');
   const [isZooming, setIsZooming] = useState(false);
-  const [zoomTargetPath, setZoomTargetPath] = useState<string | null>(null);
+  const [_zoomTargetPath, setZoomTargetPath] = useState<string | null>(null);
   const [zoomDirection, setZoomDirection] = useState<'in' | 'out' | null>(null);
 
   // Persistent circle map — single source of truth for all rendered circles

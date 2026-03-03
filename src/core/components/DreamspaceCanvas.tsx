@@ -44,8 +44,6 @@ import {
   deriveHolarchyNavigationIntent,
   deriveFocusIntent,
   deriveConstellationIntent,
-  deriveSearchIntent,
-  deriveCopilotEnterIntent,
   deriveFlipToBackIntent,
   deriveFlipToFrontIntent,
   deriveExplorerFocusIntent,
@@ -127,7 +125,7 @@ export default function DreamspaceCanvas() {
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
 
   // Track when orchestrator is ready so layout effects can re-run
-  const [orchestratorReady, setOrchestratorReady] = useState(false);
+  const [_orchestratorReady, setOrchestratorReady] = useState(false);
   // Guard to ensure onOrchestratorReady logic runs exactly once
   const hasInitializedLayout = useRef(false);
 
@@ -201,7 +199,7 @@ export default function DreamspaceCanvas() {
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   
   // Search results for search mode display
-  const searchResults = useInterBrainStore(state => state.searchResults);
+  const _searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
 
   // Tutorial state (tutorial system disabled for current version)

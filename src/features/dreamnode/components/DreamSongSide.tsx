@@ -8,7 +8,7 @@ import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-s
 import { serviceManager } from '../../../core/services/service-manager';
 import { NodeActionButton } from './NodeActionButton';
 import { useCanvasFiles, BacksideContentItem } from '../hooks/useCanvasFiles';
-import { HolonView } from './HolonView';
+import { HolonView as _HolonView } from './HolonView';
 import { DreamExplorer } from '../../dream-explorer/components/DreamExplorer';
 import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../utils/html-loader';
 
@@ -48,7 +48,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   isTutorialHighlighted = false,
   shouldShowFlipButton,
   shouldShowFullscreenButton,
-  nodeSize,
+  nodeSize: _nodeSize,
   borderWidth,
   glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
   onMouseEnter,

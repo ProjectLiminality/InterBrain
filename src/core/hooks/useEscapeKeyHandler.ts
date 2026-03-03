@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useInterBrainStore } from '../store/interbrain-store';
 import type { SpatialOrchestratorRef } from '../components/SpatialOrchestrator';
-import { deriveConstellationIntent, deriveCopilotExitIntent, deriveFocusIntent, deriveFlipToFrontIntent, deriveExplorerFocusIntent, buildLayoutContext } from '../orchestration/intent-helpers';
+import { deriveConstellationIntent, deriveCopilotExitIntent, deriveFocusIntent, deriveFlipToFrontIntent, buildLayoutContext } from '../orchestration/intent-helpers';
 
 /**
  * useEscapeKeyHandler - Unified escape key handling for spatial layout navigation

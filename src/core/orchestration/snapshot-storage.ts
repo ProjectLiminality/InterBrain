@@ -10,7 +10,7 @@
  * - Loads are synchronous-feeling via cached promise
  */
 
-import { LayoutSnapshot, LAYOUT_SNAPSHOT_VERSION, createDefaultSnapshot, isValidSnapshot } from './types';
+import { LayoutSnapshot, isValidSnapshot } from './types';
 import { getVaultId } from '../store/indexeddb-storage';
 
 const DB_NAME = 'interbrain-db';

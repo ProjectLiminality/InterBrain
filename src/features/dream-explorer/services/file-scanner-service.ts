@@ -16,7 +16,7 @@ const IMAGE_EXTENSIONS = new Set([
 ]);
 
 /** Extensions to detect file types for icon selection */
-const CODE_EXTENSIONS = new Set([
+const _CODE_EXTENSIONS = new Set([
   'ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h',
   'css', 'scss', 'html', 'json', 'yaml', 'yml', 'toml', 'xml',
 ]);

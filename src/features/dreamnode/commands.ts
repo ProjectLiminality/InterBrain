@@ -15,6 +15,7 @@ import { serviceManager } from '../../core/services/service-manager';
 import { getConversationRecordingService } from '../conversational-copilot/services/conversation-recording-service';
 import { DreamNodeConversionService } from './services/dreamnode-conversion-service';
 import { UDDService } from './services/udd-service';
+import { sanitizeTitleToPascalCase } from './utils/title-sanitization';
 import { DREAMSPACE_VIEW_TYPE } from '../../core/components/DreamspaceView';
 
 export function registerDreamNodeCommands(
@@ -341,6 +342,15 @@ export function registerDreamNodeCommands(
       await runVaultHealthCheck(plugin, uiService);
     }
   });
+
+  // Vault Health Check (Dry Run) - Preview all changes without executing them
+  plugin.addCommand({
+    id: 'vault-health-check-dry-run',
+    name: 'Vault Health Check (Dry Run)',
+    callback: async () => {
+      await runVaultHealthCheck(plugin, uiService, { dryRun: true });
+    }
+  });
 }
 
 // ========================================
@@ -492,14 +502,17 @@ export async function openDreamSongForFile(
  */
 export async function runVaultHealthCheck(
   plugin: Plugin,
-  uiService: UIService
+  uiService: UIService,
+  options: { dryRun?: boolean } = {}
 ): Promise<void> {
   const fs = require('fs');
   const path = require('path');
   const vaultPath = (plugin.app.vault.adapter as any).basePath;
+  const dryRun = options.dryRun;
+  const logPrefix = dryRun ? '[DRY RUN] ' : '';
 
-  uiService.showInfo('Vault Health Check: scanning DreamNodes...');
-  console.log('[VaultHealthCheck] Starting vault-wide health check...');
+  uiService.showInfo(`Vault Health Check${dryRun ? ' (Dry Run)' : ''}: scanning DreamNodes...`);
+  console.log(`[VaultHealthCheck] ${logPrefix}Starting vault-wide health check...`);
 
   // List all root-level folders with .git (sovereign DreamNodes)
   const entries = fs.readdirSync(vaultPath, { withFileTypes: true });
@@ -526,12 +539,92 @@ export async function runVaultHealthCheck(
     return;
   }
 
+  // ========================================
+  // Phase 1: Rename sovereign folders with spaces at vault root
+  // Must happen BEFORE conversions so that submodule URLs like ../InterBrainMobile resolve
+  // ========================================
+  const renamedSovereigns: Array<{ from: string; to: string }> = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue;
+    if (!entry.name.includes(' ')) continue;
+
+    const fullPath = path.join(vaultPath, entry.name);
+    if (!fs.existsSync(path.join(fullPath, '.git'))) continue;
+
+    const newName = sanitizeTitleToPascalCase(entry.name);
+    if (newName === entry.name) continue;
+
+    // Check if target name already exists at vault root
+    const targetPath = path.join(vaultPath, newName);
+    if (fs.existsSync(targetPath)) {
+      console.log(`[VaultHealthCheck] ${logPrefix}Phase 1: "${newName}" already exists — skipping rename of "${entry.name}"`);
+      // The old space-named folder is a duplicate; the PascalCase sovereign is canonical.
+      // Don't rename, but do note it so submodule URL migration uses the right name.
+      continue;
+    }
+
+    console.log(`[VaultHealthCheck] ${logPrefix}Phase 1: Renaming sovereign "${entry.name}" → "${newName}"`);
+
+    if (dryRun) {
+      renamedSovereigns.push({ from: entry.name, to: newName });
+      continue;
+    }
+
+    try {
+      const folder = plugin.app.vault.getAbstractFileByPath(entry.name);
+      if (folder) {
+        // Use Obsidian's API to rename — it handles vault indexing and link updates
+        await (plugin.app as any).fileManager.renameFile(folder, newName);
+        renamedSovereigns.push({ from: entry.name, to: newName });
+        console.log(`[VaultHealthCheck] Renamed: "${entry.name}" → "${newName}"`);
+      }
+    } catch (renameError) {
+      console.error(`[VaultHealthCheck] Failed to rename "${entry.name}":`, renameError);
+      // Fall back to fs.renameSync if Obsidian API fails
+      try {
+        fs.renameSync(fullPath, targetPath);
+        renamedSovereigns.push({ from: entry.name, to: newName });
+        console.log(`[VaultHealthCheck] Renamed via fs: "${entry.name}" → "${newName}"`);
+      } catch (fsError) {
+        console.error(`[VaultHealthCheck] fs rename also failed for "${entry.name}":`, fsError);
+      }
+    }
+  }
+
+  if (renamedSovereigns.length > 0) {
+    console.log(`[VaultHealthCheck] ${logPrefix}Phase 1 complete: ${dryRun ? 'would rename' : 'renamed'} ${renamedSovereigns.length} sovereign(s)`);
+  }
+
+  // Re-scan after renames so Obsidian picks up the new paths (skip in dry run)
+  let updatedDreamNodeFolders: TFolder[] = [];
+  if (!dryRun) {
+    const updatedEntries = fs.readdirSync(vaultPath, { withFileTypes: true });
+    for (const entry of updatedEntries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith('.')) continue;
+      const fullPath = path.join(vaultPath, entry.name);
+      if (fs.existsSync(path.join(fullPath, '.git'))) {
+        const folder = plugin.app.vault.getAbstractFileByPath(entry.name);
+        if (folder instanceof TFolder) {
+          updatedDreamNodeFolders.push(folder);
+        }
+      }
+    }
+  }
+
+  // ========================================
+  // Phase 2: Run conversions on all sovereign DreamNodes
+  // ========================================
+
   const conversionService = new DreamNodeConversionService(plugin.app, plugin.manifest);
 
   // Run conversion on all DreamNodes in parallel
+  const foldersToConvert = updatedDreamNodeFolders.length > 0 ? updatedDreamNodeFolders : dreamNodeFolders;
   const results = await Promise.allSettled(
-    dreamNodeFolders.map(folder =>
-      conversionService.convertToDreamNode(folder, { skipRadicle: true })
+    foldersToConvert.map(folder =>
+      conversionService.convertToDreamNode(folder, { skipRadicle: true, dryRun })
     )
   );
 
@@ -541,9 +634,14 @@ export async function runVaultHealthCheck(
   let failedCount = 0;
   const allChanges: string[] = [];
 
+  // Include sovereign renames in changes
+  for (const rename of renamedSovereigns) {
+    allChanges.push(`${logPrefix}${dryRun ? 'Would rename' : 'Renamed'} sovereign: "${rename.from}" → "${rename.to}"`);
+  }
+
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
-    const folderName = dreamNodeFolders[i].name;
+    const folderName = foldersToConvert[i].name;
 
     if (result.status === 'fulfilled') {
       if (result.value.success) {
@@ -568,17 +666,22 @@ export async function runVaultHealthCheck(
   }
 
   const healthyCount = successCount - updatedCount;
-  let summary = `Vault Health Check: ${dreamNodeFolders.length} DreamNodes checked.`;
+  let summary = `Vault Health Check${dryRun ? ' (Dry Run)' : ''}: ${foldersToConvert.length} DreamNodes checked.`;
+  if (renamedSovereigns.length > 0) summary += ` ${renamedSovereigns.length} ${dryRun ? 'would be renamed' : 'renamed'}.`;
   if (updatedCount > 0) summary += ` ${updatedCount} updated.`;
   if (healthyCount > 0) summary += ` ${healthyCount} already healthy.`;
   if (failedCount > 0) summary += ` ${failedCount} failed.`;
 
   if (allChanges.length > 0) {
-    console.log('[VaultHealthCheck] Changes made:', allChanges);
+    console.log(`[VaultHealthCheck] ${logPrefix}Changes${dryRun ? ' that would be made' : ' made'}:`, allChanges);
   }
 
   console.log(`[VaultHealthCheck] ${summary}`);
-  uiService.showSuccess(summary);
+  if (dryRun) {
+    uiService.showInfo(summary);
+  } else {
+    uiService.showSuccess(summary);
+  }
 }
 
 /**
