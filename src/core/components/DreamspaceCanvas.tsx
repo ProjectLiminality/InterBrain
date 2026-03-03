@@ -749,8 +749,8 @@ export default function DreamspaceCanvas() {
           if (store.dreamExplorer.explorerFocus) {
             const { currentPath, rootPath } = store.dreamExplorer;
             if (currentPath && currentPath !== rootPath) {
-              console.log('[DreamSpace] Explorer-focus: navigating up folder hierarchy');
-              store.explorerGoBack();
+              console.log('[DreamSpace] Explorer-focus: requesting animated go-back');
+              store.explorerRequestGoBack();
             } else {
               // At root — exit explorer-focus back to normal holarchy view
               console.log('[DreamSpace] Explorer-focus: at root, exiting focus');

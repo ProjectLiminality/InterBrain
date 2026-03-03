@@ -68,6 +68,7 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
   const selectedItems = useInterBrainStore(s => s.dreamExplorer.selectedItems);
   const layoutMode = useInterBrainStore(s => s.dreamExplorer.layoutMode);
   const explorerFocus = useInterBrainStore(s => s.dreamExplorer.explorerFocus);
+  const goBackRequestId = useInterBrainStore(s => s.dreamExplorer.goBackRequestId);
   const dreamNodesMap = useInterBrainStore(s => s.dreamNodes);
 
   const explorerNavigateTo = useInterBrainStore(s => s.explorerNavigateTo);
@@ -126,10 +127,9 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
   // Persistent circle map — single source of truth for all rendered circles
   const [sceneCircles, setSceneCircles] = useState<Map<string, SceneCircleEntry>>(new Map());
   const settlementModeRef = useRef<'zoom-in' | 'zoom-out' | null>(null);
-  // Skip the next non-zoom positioned update after settlement — the settlement
-  // handlers already built the correct map, so the engine's follow-up emission
-  // (same data, new array ref) would cause a redundant rebuildMapFromScratch.
-  const skipNextRebuildRef = useRef(false);
+  // After settlement, suppress transitions are re-enabled via double-rAF.
+  // We no longer skip the next rebuild — the redundant rebuild (same data)
+  // is harmless and avoids swallowing layout-mode changes from user clicks.
   // Suppress ExplorerCircle CSS transitions during settlement so coord updates
   // from child/parent scene coords → identity coords don't animate (the scene
   // transform already handled the visual animation).
@@ -495,12 +495,7 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
           setSuppressTransitions(false);
         });
       });
-      skipNextRebuildRef.current = true;
     } else if (!isZooming) {
-      if (skipNextRebuildRef.current) {
-        skipNextRebuildRef.current = false;
-        return;
-      }
       rebuildMapFromScratch(positioned);
     }
   }, [positioned]);
@@ -532,11 +527,6 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
       if (isZooming) return;
 
       if (item.isDirectory || item.type === 'dream-submodule' || item.type === 'dreamer-submodule') {
-        // Zoom into folder switches to equal layout mode in embedded mode
-        if (embedded) {
-          explorerSetLayoutMode('equal');
-        }
-
         if (containerRadius <= 0) {
           explorerNavigateTo(item.path);
           return;
@@ -647,9 +637,10 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
         // Zoom-out: shrink scene into the position currentPath occupies in parent
         const scale = meRaw.r / containerRadius;
 
-        // Mutate the map: current→child, parent stays as-is
+        // Mutate the map: current→child, parent stays or is populated from cache
         setSceneCircles(prev => {
           const map = new Map<string, SceneCircleEntry>();
+          let hasParent = false;
 
           for (const [path, entry] of prev) {
             if (entry.level === 'current') {
@@ -658,6 +649,24 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
             } else if (entry.level === 'parent') {
               // Parent entries stay as-is (already at parent scene coords, media loaded)
               map.set(path, entry);
+              hasParent = true;
+            }
+          }
+
+          // If no parent entries exist (e.g., layout mode changed since last rebuild),
+          // populate them from cache so they're visible during the zoom-out animation.
+          if (!hasParent && parentCache) {
+            const pScale = containerRadius / meRaw.r;
+            for (const p of parentCache.positioned) {
+              if (!map.has(p.item.path)) {
+                map.set(p.item.path, {
+                  item: p.item,
+                  sceneX: (p.x - meRaw.x) * pScale,
+                  sceneY: (p.y - meRaw.y) * pScale,
+                  sceneR: p.r * pScale,
+                  level: 'parent',
+                });
+              }
             }
           }
 
@@ -728,6 +737,16 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
       }
     };
   }, []);
+
+  // Respond to external go-back requests (e.g., click outside DreamNode in 3D space)
+  // by triggering the animated handleGoBack instead of instant store mutation.
+  const goBackRequestIdRef = useRef(goBackRequestId);
+  useEffect(() => {
+    if (goBackRequestId > goBackRequestIdRef.current) {
+      goBackRequestIdRef.current = goBackRequestId;
+      handleGoBack();
+    }
+  }, [goBackRequestId, handleGoBack]);
 
   return (
     <div
@@ -820,13 +839,17 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
               let transition = 'none';
 
               if (entry.level === 'current') {
+                // Current circles: visible at rest, hidden during zoom (already relabeled)
                 opacity = zoomDirection ? 0 : 1;
                 transition = zoomDirection ? 'opacity 1s ease-in-out' : 'none';
               } else if (entry.level === 'parent') {
+                // Parent circles: visible during zoom-out (becoming the new view)
                 opacity = zoomDirection === 'out' ? 1 : 0;
                 transition = zoomDirection ? 'opacity 1s ease-in-out' : 'none';
               } else if (entry.level === 'child') {
-                opacity = childFadeIn ? 1 : 0;
+                // Child circles during zoom-in: fade in via childFadeIn (false→true after rAF)
+                // Child circles during zoom-out: stay visible (they're the old current shrinking away)
+                opacity = zoomDirection === 'out' ? 1 : (childFadeIn ? 1 : 0);
                 transition = zoomDirection === 'in' ? 'opacity 1s ease-in-out' : 'none';
               }
 

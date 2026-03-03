@@ -25,11 +25,15 @@ export interface DreamExplorerSlice {
     isOpen: boolean;
     /** Whether explorer-focus is active (DreamNode zoomed closer, equal layout) */
     explorerFocus: boolean;
+    /** Incremented to request an animated go-back from DreamExplorer */
+    goBackRequestId: number;
   };
 
   // Actions
   explorerNavigateTo: (path: string) => void;
   explorerGoBack: () => void;
+  /** Request an animated go-back — DreamExplorer watches this and triggers handleGoBack */
+  explorerRequestGoBack: () => void;
   explorerSelectItem: (path: string | null, additive?: boolean) => void;
   explorerCycleLayoutMode: () => void;
   explorerSetLayoutMode: (mode: ExplorerLayoutMode) => void;
@@ -51,6 +55,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
     layoutMode: 'reduced',
     isOpen: false,
     explorerFocus: false,
+    goBackRequestId: 0,
   },
 
   explorerNavigateTo: (path: string) =>
@@ -89,6 +94,14 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         },
       };
     }),
+
+  explorerRequestGoBack: () =>
+    set((state: any) => ({
+      dreamExplorer: {
+        ...state.dreamExplorer,
+        goBackRequestId: state.dreamExplorer.goBackRequestId + 1,
+      },
+    })),
 
   explorerSelectItem: (path: string | null, additive?: boolean) =>
     set((state: any) => {
@@ -164,6 +177,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         layoutMode: 'reduced' as ExplorerLayoutMode,
         isOpen: true,
         explorerFocus: false,
+        goBackRequestId: 0,
       },
     })),
 
@@ -178,6 +192,7 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         layoutMode: 'reduced' as ExplorerLayoutMode,
         isOpen: false,
         explorerFocus: false,
+        goBackRequestId: 0,
       },
     })),
 
@@ -186,8 +201,13 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
       dreamExplorer: {
         ...state.dreamExplorer,
         explorerFocus: active,
-        // Deactivating focus resets layout to reduced
-        ...(active ? {} : { layoutMode: 'reduced' as ExplorerLayoutMode }),
+        // Deactivating focus resets to reduced mode at root level
+        ...(active ? {} : {
+          layoutMode: 'reduced' as ExplorerLayoutMode,
+          currentPath: state.dreamExplorer.rootPath,
+          history: [],
+          selectedItems: [],
+        }),
       },
     })),
 
@@ -198,8 +218,13 @@ export const createDreamExplorerSlice = (set: any, _get: any): DreamExplorerSlic
         dreamExplorer: {
           ...state.dreamExplorer,
           explorerFocus: newFocus,
-          // Deactivating focus resets layout to reduced
-          ...(!newFocus ? { layoutMode: 'reduced' as ExplorerLayoutMode } : {}),
+          // Deactivating focus resets to reduced mode at root level
+          ...(!newFocus ? {
+            layoutMode: 'reduced' as ExplorerLayoutMode,
+            currentPath: state.dreamExplorer.rootPath,
+            history: [],
+            selectedItems: [],
+          } : {}),
         },
       };
     }),

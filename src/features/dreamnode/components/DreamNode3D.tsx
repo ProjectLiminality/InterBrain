@@ -973,7 +973,8 @@ const DreamNode3D = forwardRef<DreamNode3DRef, DreamNode3DProps>(({
   // Position calculation and animation frame logic
   useFrame((_state, delta) => {
     // Hover scale animation
-    const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted;
+    const effectiveHover = isHovered || isPendingRelationship || isTutorialHighlighted
+      || (explorerFocus && selectedNode?.id === dreamNode.id);
     if (hoverGroupRef.current) {
       const currentZ = positionMode === 'constellation'
         ? anchorPosition[2] - normalizedDirection[2] * radialOffset

@@ -192,7 +192,6 @@ export const ExplorerCircle: React.FC<ExplorerCircleProps> = ({
         background: '#000000',
         overflow: 'hidden',
         cursor: r > 0 ? 'pointer' : 'default',
-        pointerEvents: r > 0 ? 'auto' : 'none',
         transition: noTransition
           ? 'box-shadow 1s ease-in-out, transform 0.2s ease'
           : 'left 1s ease-in-out, top 1s ease-in-out, width 1s ease-in-out, height 1s ease-in-out, border-width 1s ease-in-out, border-color 1s ease-in-out, background 1s ease-in-out, font-size 1s ease-in-out, box-shadow 1s ease-in-out, transform 0.2s ease',
