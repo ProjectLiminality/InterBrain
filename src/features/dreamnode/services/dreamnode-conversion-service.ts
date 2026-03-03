@@ -27,6 +27,7 @@ export interface ConversionResult {
   title: string;
   uuid: string;
   error?: string;
+  changes?: string[];
 }
 
 export interface ConversionOptions {
@@ -74,6 +75,8 @@ export class DreamNodeConversionService {
 
     console.log('[ConvertToDreamNode] Starting conversion for:', folderPath);
 
+    const changes: string[] = [];
+
     try {
       // Check what's already present
       const hasGit = fs.existsSync(path.join(folderPath, '.git'));
@@ -104,6 +107,7 @@ export class DreamNodeConversionService {
       // Initialize git if not present
       if (!hasGit) {
         await this.initializeGitRepository(folderPath);
+        changes.push('Initialized git repository');
       }
 
       // Setup Git LFS if needed (before staging files)
@@ -115,22 +119,26 @@ export class DreamNodeConversionService {
       if (!hasUdd) {
         console.log('[ConvertToDreamNode] Creating .udd file...');
         await UDDService.createUDD(folderPath, { uuid, title, type });
+        changes.push('Created .udd file');
       } else {
         // Validate existing .udd has all required fields
         const updated = await UDDService.ensureRequiredFields(folderPath);
         if (updated) {
           console.log('[ConvertToDreamNode] Updated .udd with missing fields');
+          changes.push('Added missing .udd fields');
         }
       }
 
       // Create README if not present
       if (!hasReadme) {
         await this.createReadme(folderPath, title);
+        changes.push('Created README.md');
       }
 
       // Create LICENSE if not present
       if (!hasLicense) {
         await this.createLicense(folderPath);
+        changes.push('Created LICENSE');
       }
 
       // Commit changes if there are any uncommitted files
@@ -145,9 +153,16 @@ export class DreamNodeConversionService {
 
         if (!hasRadicle && !hasRadicleId) {
           await this.initializeRadicle(folderPath, folderName, type, options.radiclePassphrase);
+          changes.push('Initialized Radicle');
         } else if (hasRadicleId) {
           console.log('[ConvertToDreamNode] Already has Radicle ID:', udd.radicleId);
         }
+      }
+
+      // Migrate .gitmodules URLs from absolute to relative paths
+      const migratedCount = await this.migrateGitmodulesUrls(folderPath);
+      if (migratedCount > 0) {
+        changes.push(`Migrated ${migratedCount} .gitmodules URL(s) to relative paths`);
       }
 
       // Sync holarchy relationships (submodules <-> supermodules)
@@ -159,12 +174,12 @@ export class DreamNodeConversionService {
       await serviceManager.scanVault();
 
       console.log('[ConvertToDreamNode] Conversion complete!');
-      return { success: true, title, uuid };
+      return { success: true, title, uuid, changes: changes.length > 0 ? changes : undefined };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('[ConvertToDreamNode] Conversion failed:', error);
-      return { success: false, title: folderName, uuid: '', error: errorMessage };
+      return { success: false, title: folderName, uuid: '', error: errorMessage, changes: changes.length > 0 ? changes : undefined };
     }
   }
 
@@ -489,6 +504,79 @@ See https://www.gnu.org/licenses/agpl-3.0.html for full license text.
     } catch (radError) {
       console.warn('[ConvertToDreamNode] Radicle init failed (continuing anyway):', radError);
     }
+  }
+
+  /**
+   * Migrate .gitmodules URLs from absolute filesystem paths to relative paths.
+   *
+   * Absolute paths (e.g., /Users/davidrug/RealDealVault/DreamTalk) break portability.
+   * Relative paths (e.g., ../DreamTalk) work because git resolves them against the
+   * remote named "origin". Since our remote is named "rad" (not "origin"), git falls
+   * back to filesystem resolution — so ../Name correctly points to the sibling
+   * sovereign repo at vault root.
+   *
+   * Returns the number of URLs migrated.
+   */
+  private async migrateGitmodulesUrls(folderPath: string): Promise<number> {
+    const gitmodulesPath = path.join(folderPath, '.gitmodules');
+
+    if (!fs.existsSync(gitmodulesPath)) {
+      return 0;
+    }
+
+    const content = fs.readFileSync(gitmodulesPath, 'utf-8');
+    let modified = content;
+    let migratedCount = 0;
+
+    // Match url = /absolute/path lines where the path points to a vault-root repo
+    // We detect absolute paths: they start with / and contain at least one path segment
+    const urlRegex = /(url\s*=\s*)(\/.+)/g;
+    let match;
+
+    while ((match = urlRegex.exec(content)) !== null) {
+      const absolutePath = match[2].trim();
+      const repoName = path.basename(absolutePath);
+      const relativePath = `../${repoName}`;
+
+      // Verify this absolute path is a sibling at the same level (vault root)
+      const expectedVaultRoot = path.dirname(folderPath);
+      const actualParentDir = path.dirname(absolutePath);
+
+      if (actualParentDir === expectedVaultRoot) {
+        console.log(`[ConvertToDreamNode] Migrating .gitmodules URL: ${absolutePath} → ${relativePath}`);
+        modified = modified.replace(absolutePath, relativePath);
+        migratedCount++;
+      } else {
+        console.log(`[ConvertToDreamNode] Skipping non-sibling absolute path: ${absolutePath}`);
+      }
+    }
+
+    if (migratedCount > 0) {
+      fs.writeFileSync(gitmodulesPath, modified);
+      console.log(`[ConvertToDreamNode] Migrated ${migratedCount} .gitmodules URL(s) to relative paths`);
+
+      // Sync git's internal URL tracking to match the updated .gitmodules
+      try {
+        await execAsync('git submodule sync', { cwd: folderPath });
+        console.log('[ConvertToDreamNode] Ran git submodule sync after URL migration');
+      } catch (syncError) {
+        console.warn('[ConvertToDreamNode] git submodule sync failed (non-fatal):', syncError);
+      }
+
+      // Commit the migration
+      try {
+        await execAsync('git add .gitmodules', { cwd: folderPath });
+        const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: folderPath });
+        if (statusOutput.trim()) {
+          await execAsync('git commit -m "Migrate .gitmodules URLs to relative paths"', { cwd: folderPath });
+          console.log('[ConvertToDreamNode] Committed .gitmodules URL migration');
+        }
+      } catch (commitError) {
+        console.warn('[ConvertToDreamNode] Could not commit .gitmodules migration (non-fatal):', commitError);
+      }
+    }
+
+    return migratedCount;
   }
 
   /**

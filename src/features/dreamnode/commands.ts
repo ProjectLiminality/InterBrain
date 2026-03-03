@@ -332,6 +332,15 @@ export function registerDreamNodeCommands(
       uiService.showInfo('Right-click a folder in the file explorer to convert it to a DreamNode');
     }
   });
+
+  // Vault Health Check - Run Convert to DreamNode on all sovereign DreamNodes
+  plugin.addCommand({
+    id: 'vault-health-check',
+    name: 'Vault Health Check',
+    callback: async () => {
+      await runVaultHealthCheck(plugin, uiService);
+    }
+  });
 }
 
 // ========================================
@@ -475,6 +484,101 @@ export async function openDreamSongForFile(
   // Select the node and execute DreamSong fullscreen command
   store.setSelectedNode(nodeData.node);
   (plugin.app as any).commands.executeCommandById('interbrain:open-dreamsong-fullscreen');
+}
+
+/**
+ * Run vault-wide health check: converts all sovereign DreamNodes (idempotent)
+ * Reports what was updated across the vault.
+ */
+export async function runVaultHealthCheck(
+  plugin: Plugin,
+  uiService: UIService
+): Promise<void> {
+  const fs = require('fs');
+  const path = require('path');
+  const vaultPath = (plugin.app.vault.adapter as any).basePath;
+
+  uiService.showInfo('Vault Health Check: scanning DreamNodes...');
+  console.log('[VaultHealthCheck] Starting vault-wide health check...');
+
+  // List all root-level folders with .git (sovereign DreamNodes)
+  const entries = fs.readdirSync(vaultPath, { withFileTypes: true });
+  const dreamNodeFolders: TFolder[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue; // Skip hidden dirs (.obsidian, .git, etc.)
+
+    const fullPath = path.join(vaultPath, entry.name);
+    if (fs.existsSync(path.join(fullPath, '.git'))) {
+      // Find the matching TFolder in Obsidian's vault
+      const folder = plugin.app.vault.getAbstractFileByPath(entry.name);
+      if (folder instanceof TFolder) {
+        dreamNodeFolders.push(folder);
+      }
+    }
+  }
+
+  console.log(`[VaultHealthCheck] Found ${dreamNodeFolders.length} sovereign DreamNodes`);
+
+  if (dreamNodeFolders.length === 0) {
+    uiService.showInfo('Vault Health Check: no DreamNodes found');
+    return;
+  }
+
+  const conversionService = new DreamNodeConversionService(plugin.app, plugin.manifest);
+
+  // Run conversion on all DreamNodes in parallel
+  const results = await Promise.allSettled(
+    dreamNodeFolders.map(folder =>
+      conversionService.convertToDreamNode(folder, { skipRadicle: true })
+    )
+  );
+
+  // Aggregate results
+  let successCount = 0;
+  let updatedCount = 0;
+  let failedCount = 0;
+  const allChanges: string[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const folderName = dreamNodeFolders[i].name;
+
+    if (result.status === 'fulfilled') {
+      if (result.value.success) {
+        successCount++;
+        if (result.value.changes && result.value.changes.length > 0) {
+          updatedCount++;
+          for (const change of result.value.changes) {
+            allChanges.push(`${folderName}: ${change}`);
+          }
+          console.log(`[VaultHealthCheck] ${folderName}: updated -`, result.value.changes.join(', '));
+        } else {
+          console.log(`[VaultHealthCheck] ${folderName}: healthy`);
+        }
+      } else {
+        failedCount++;
+        console.error(`[VaultHealthCheck] ${folderName}: FAILED -`, result.value.error);
+      }
+    } else {
+      failedCount++;
+      console.error(`[VaultHealthCheck] ${folderName}: REJECTED -`, result.reason);
+    }
+  }
+
+  const healthyCount = successCount - updatedCount;
+  let summary = `Vault Health Check: ${dreamNodeFolders.length} DreamNodes checked.`;
+  if (updatedCount > 0) summary += ` ${updatedCount} updated.`;
+  if (healthyCount > 0) summary += ` ${healthyCount} already healthy.`;
+  if (failedCount > 0) summary += ` ${failedCount} failed.`;
+
+  if (allChanges.length > 0) {
+    console.log('[VaultHealthCheck] Changes made:', allChanges);
+  }
+
+  console.log(`[VaultHealthCheck] ${summary}`);
+  uiService.showSuccess(summary);
 }
 
 /**
