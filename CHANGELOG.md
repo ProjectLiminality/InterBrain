@@ -5,6 +5,92 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-03-03 - Holarchy Navigation & Vault Health
+
+### Overview
+
+Introduces holarchy navigation — the ability to explore the nested structure of DreamNodes as living, zoomable spaces. Adds vault-wide health checks that automatically repair submodule paths, migrate URLs, and enforce PascalCase naming. AI inference now supports Claude and OpenAI-compatible providers alongside Ollama.
+
+### Added
+
+**DreamExplorer** (`src/features/dream-explorer/`)
+- Zoomable circle-packing visualization of DreamNode file hierarchies
+- Breadcrumb navigation for drilling into nested directories
+- Directory caching for responsive exploration of large nodes
+- File scanning service with type detection (markdown, canvas, media, code)
+
+**HolonView** (`src/features/dreamnode/components/HolonView.tsx`)
+- Renders DreamNode contents as an explorable holon (nested whole/part)
+- Circle-packing layout algorithm for spatial arrangement of child nodes
+- Canvas file discovery via `useCanvasFiles` hook
+
+**MediaRenderer** (`src/features/dreamnode/components/MediaRenderer.tsx`)
+- Unified media rendering: images, audio, video, PDFs, HTML, iframes
+- Replaces the deleted `MediaLoadingService` with direct component rendering
+- HTML content sandbox loading via `html-loader.ts`
+
+**Vault Health Check** (`src/features/dreamnode/commands.ts`)
+- `interbrain:vault-health-check` command for vault-wide integrity repair
+- Renames space-containing sovereign folders to PascalCase
+- Converts plain git repos to DreamNodes (adds .udd, DreamTalk, DreamSong)
+- Repairs submodule paths containing spaces (`git mv` + gitmodules + canvas refs)
+- Migrates absolute submodule URLs to relative paths
+- Cleans corrupted `.gitmodules` sections
+- Syncs holarchy relationships from `.gitmodules` into `.udd`
+- Dry-run mode for safe previewing
+
+**AI Bridge Server** (`src/features/ai-magic/services/ai-bridge-server.ts`)
+- HTTP bridge for AI inference requests
+- Claude provider with streaming support
+- OpenAI-compatible provider for local/remote endpoints
+- Provider selection and model configuration
+
+**Orchestration Intent System** (`src/core/orchestration/`)
+- `intent-helpers.ts`: Declarative layout intent derivation (explorer focus, search, copilot, etc.)
+- `snapshot-storage.ts`: Persist and restore layout snapshots across sessions
+- `types.ts`: LayoutIntent, LayoutSnapshot, NodePlacement type definitions
+
+**Copilot Mode Overlay** (`src/features/conversational-copilot/CopilotModeOverlay.tsx`)
+- Visual overlay for conversational copilot interaction mode
+
+**Custom UI Full Screen View** (`src/features/dreamweaving/components/CustomUIFullScreenView.ts`)
+- Full-screen rendering for custom DreamSong UI canvases
+
+### Changed
+
+**SpatialOrchestrator** — Major expansion
+- Intent-driven layout execution via `executeLayoutIntent()`
+- Target state management with `setTargetState()` / `deriveIntent()`
+- Layout snapshot save/restore for session persistence
+- Generation-tracked pending movements prevent stale animations
+
+**DreamNode3D** — Enhanced interactivity
+- Holarchy-aware node rendering (shows child count, nesting depth)
+- Improved flip animation and face management
+- DreamSong side now renders media content directly
+
+**DreamSong Relationship Service** — Holarchy support
+- Reads and writes holarchy relationships from `.udd` files
+- Submodule-to-relationship mapping for automatic graph construction
+- Batch relationship sync across vault
+
+**Title Sanitization** — Casing-preserving
+- `sanitizeTitleToPascalCase()` now preserves existing casing (e.g., `InterBrain` stays `InterBrain`, not `Interbrain`)
+- Capitalizes first letter of each word without lowercasing the rest
+
+**DreamNode Conversion Service** — Vault migration engine
+- Line-by-line URL migration prevents prefix collision bugs
+- Space-path submodule repair with full git plumbing (index, modules dir, gitdir, worktree)
+- Canvas reference updates when submodule paths change
+- Corrupted gitmodules section detection and removal
+
+### Technical
+
+- 419 tests passing
+- Zero lint errors, zero TypeScript errors
+
+---
+
 ## [0.14.0] - 2026-02-02 - Performance & Scalability Refactor
 
 ### Overview

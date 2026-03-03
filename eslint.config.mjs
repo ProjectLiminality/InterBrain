@@ -40,14 +40,25 @@ export default [
         require: 'readonly',
         indexedDB: 'readonly',
         IDBDatabase: 'readonly',
-        IDBOpenDBRequest: 'readonly'
+        IDBOpenDBRequest: 'readonly',
+        TextDecoder: 'readonly',
+        DOMException: 'readonly',
+        AbortSignal: 'readonly',
+        AbortController: 'readonly',
+        ResizeObserver: 'readonly',
+        clearTimeout: 'readonly',
+        HTMLIFrameElement: 'readonly',
+        MessageEvent: 'readonly',
+        Blob: 'readonly',
+        URL: 'readonly',
+        Buffer: 'readonly'
       }
     },
     plugins: {
       '@typescript-eslint': tseslint
     },
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }],
+      '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_', 'caughtErrorsIgnorePattern': '^_' }],
       // Disabled: Epic 7 requires `any` for undocumented Obsidian internal APIs
       // (commands.executeCommandById, vault.adapter.basePath, workspace internals, etc.)
       '@typescript-eslint/no-explicit-any': 'off',

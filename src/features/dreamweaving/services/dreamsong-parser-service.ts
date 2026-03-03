@@ -241,11 +241,10 @@ export class DreamSongParserService {
     
     // Perform topological sort on directed edges only
     const sortResult = this.topologicalSort(canvasData.nodes, processedEdges.directed);
-    
+
     if (sortResult.hasCycle) {
       throw new Error(`Canvas contains circular dependencies: ${sortResult.nodesInCycle?.join(', ')}`);
     }
-
 
     // Create content blocks from sorted nodes
     const blocks = await this.createContentBlocks(

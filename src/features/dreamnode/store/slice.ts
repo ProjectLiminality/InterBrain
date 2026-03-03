@@ -35,6 +35,15 @@ export interface FlipAnimationState {
   flipStates: Map<string, FlipState>;
 }
 
+/**
+ * Carousel state for DreamSong side (multiple .canvas files + holarchy view)
+ * Index 0: Holarchy view (submodules)
+ * Index 1+: Actual .canvas files
+ */
+export interface CarouselState {
+  carouselIndices: Map<string, number>; // nodeId -> current carousel index
+}
+
 // ============================================================================
 // DREAMNODE SLICE INTERFACE
 // ============================================================================
@@ -64,6 +73,13 @@ export interface DreamNodeSlice {
   completeFlipAnimation: (nodeId: string) => void;
   resetAllFlips: () => void;
   getNodeFlipState: (nodeId: string) => FlipState | null;
+  syncFlipState: (nodeId: string, flipSide: 'front' | 'back') => void;
+
+  // Carousel state for DreamSong side (holarchy view + multiple .canvas files)
+  carouselState: CarouselState;
+  getCarouselIndex: (nodeId: string) => number;
+  setCarouselIndex: (nodeId: string, index: number) => void;
+  cycleCarousel: (nodeId: string, direction: 'left' | 'right', totalItems: number) => void;
 }
 
 // ============================================================================
@@ -174,6 +190,7 @@ export const createDreamNodeSlice: StateCreator<
 
       return {
         flipState: {
+          ...state.flipState,
           flippedNodeId: nodeId,
           flipStates: updatedFlipStates
         }
@@ -192,7 +209,7 @@ export const createDreamNodeSlice: StateCreator<
     const updatedFlipStates = new Map(state.flipState.flipStates);
 
     const currentFlipState = updatedFlipStates.get(nodeId) || {
-      isFlipped: false,
+      flipSide: 'front' as const,
       isFlipping: false,
       flipDirection: 'front-to-back' as const,
       animationStartTime: 0
@@ -207,11 +224,16 @@ export const createDreamNodeSlice: StateCreator<
 
     updatedFlipStates.set(nodeId, newFlipState);
 
+    // Only update flippedNodeId for front-to-back flips (new node becoming center of attention)
+    // For back-to-front flips (node leaving center), keep the current flippedNodeId
+    // This prevents race conditions when switching nodes in holarchy navigation
+    const newFlippedNodeId = direction === 'front-to-back' ? nodeId : state.flipState.flippedNodeId;
+
     return {
       flipState: {
         ...state.flipState,
         flipStates: updatedFlipStates,
-        flippedNodeId: nodeId
+        flippedNodeId: newFlippedNodeId
       }
     };
   }),
@@ -221,10 +243,10 @@ export const createDreamNodeSlice: StateCreator<
     const currentFlipState = updatedFlipStates.get(nodeId);
 
     if (currentFlipState) {
-      const finalFlippedState = currentFlipState.flipDirection === 'front-to-back';
+      const finalFlipSide = currentFlipState.flipDirection === 'front-to-back' ? 'back' : 'front';
       const completedFlipState = {
         ...currentFlipState,
-        isFlipped: finalFlippedState,
+        flipSide: finalFlipSide as 'front' | 'back',
         isFlipping: false,
         animationStartTime: 0
       };
@@ -250,4 +272,63 @@ export const createDreamNodeSlice: StateCreator<
   getNodeFlipState: (nodeId) => {
     return get().flipState.flipStates.get(nodeId) || null;
   },
+
+  syncFlipState: (nodeId, flipSide) => set((state) => {
+    const updatedFlipStates = new Map(state.flipState.flipStates);
+    updatedFlipStates.set(nodeId, {
+      flipSide,
+      isFlipping: false,
+      flipDirection: flipSide === 'back' ? 'front-to-back' : 'back-to-front',
+      animationStartTime: 0
+    });
+
+    return {
+      flipState: {
+        ...state.flipState,
+        flipStates: updatedFlipStates,
+        flippedNodeId: flipSide === 'back' ? nodeId : null
+      }
+    };
+  }),
+
+  // Carousel state for DreamSong side (holarchy view + .canvas files)
+  carouselState: {
+    carouselIndices: new Map<string, number>()
+  },
+
+  getCarouselIndex: (nodeId) => {
+    return get().carouselState.carouselIndices.get(nodeId) || 0;
+  },
+
+  setCarouselIndex: (nodeId, index) => set((state) => {
+    const newIndices = new Map(state.carouselState.carouselIndices);
+    newIndices.set(nodeId, index);
+    return {
+      carouselState: {
+        carouselIndices: newIndices
+      }
+    };
+  }),
+
+  cycleCarousel: (nodeId, direction, totalItems) => set((state) => {
+    if (totalItems <= 0) return state;
+
+    const currentIndex = state.carouselState.carouselIndices.get(nodeId) || 0;
+    let newIndex: number;
+
+    if (direction === 'right') {
+      newIndex = (currentIndex + 1) % totalItems;
+    } else {
+      newIndex = (currentIndex - 1 + totalItems) % totalItems;
+    }
+
+    const newIndices = new Map(state.carouselState.carouselIndices);
+    newIndices.set(nodeId, newIndex);
+
+    return {
+      carouselState: {
+        carouselIndices: newIndices
+      }
+    };
+  }),
 });

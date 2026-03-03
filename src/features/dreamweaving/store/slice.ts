@@ -230,7 +230,7 @@ export function restoreDreamweavingPersistenceData(persistedData: {
         submoduleStructureHash: hash
       }
     };
-  } catch (error) {
+  } catch (_error) {
     return { dreamSongRelationships: INITIAL_DREAMSONG_RELATIONSHIP_STATE };
   }
 }

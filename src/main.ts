@@ -6,7 +6,9 @@ import { PassphraseManager } from './features/social-resonance-filter/services/p
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
 import { DreamSongFullScreenView, DREAMSONG_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/DreamSongFullScreenView';
+import { CustomUIFullScreenView, CUSTOM_UI_FULLSCREEN_VIEW_TYPE } from './features/dreamweaving/components/CustomUIFullScreenView';
 import { LinkFileView, LINK_FILE_VIEW_TYPE } from './features/dreamweaving/components/LinkFileView';
+import { DreamExplorerView, DREAM_EXPLORER_VIEW_TYPE } from './features/dream-explorer/components/DreamExplorerView';
 import { LeafManagerService } from './core/services/leaf-manager-service';
 import { useInterBrainStore } from './core/store/interbrain-store';
 import { CONSTELLATION_DEFAULTS } from './features/constellation-layout/constants';
@@ -79,6 +81,7 @@ import {
   registerAIMagicCommands,
   initializeInferenceService
 } from './features/ai-magic';
+import { startAIBridgeServer, stopAIBridgeServer } from './features/ai-magic/services/ai-bridge-server';
 
 export default class InterBrainPlugin extends Plugin {
   settings!: InterBrainSettings;
@@ -96,6 +99,13 @@ export default class InterBrainPlugin extends Plugin {
   private canvasObserverService!: CanvasObserverService;
 
   async onload() {
+    // Suppress benign ResizeObserver loop warnings from flooding the console
+    const resizeObserverErr = window.onerror;
+    window.onerror = (msg, ...args) => {
+      if (typeof msg === 'string' && msg.includes('ResizeObserver loop')) return true;
+      return resizeObserverErr ? (resizeObserverErr as any)(msg, ...args) : false;
+    };
+
     const loadStartTime = Date.now();
 
     // Get vault path for all services
@@ -127,6 +137,13 @@ export default class InterBrainPlugin extends Plugin {
         openai: this.settings.openaiApiKey ? { apiKey: this.settings.openaiApiKey } : undefined,
         groq: this.settings.groqApiKey ? { apiKey: this.settings.groqApiKey } : undefined,
         xai: this.settings.xaiApiKey ? { apiKey: this.settings.xaiApiKey } : undefined
+      });
+
+      // Start AI Bridge WebSocket server for external UIs (AURYN mobile, etc.)
+      startAIBridgeServer().then(port => {
+        console.log(`[InterBrain] AI Bridge available on port ${port}`);
+      }).catch(err => {
+        console.warn('[InterBrain] AI Bridge failed to start:', err.message);
       });
 
       return { vaultPath };
@@ -388,7 +405,9 @@ export default class InterBrainPlugin extends Plugin {
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
     this.registerView(DREAMSONG_FULLSCREEN_VIEW_TYPE, (leaf) => new DreamSongFullScreenView(leaf));
+    this.registerView(CUSTOM_UI_FULLSCREEN_VIEW_TYPE, (leaf) => new CustomUIFullScreenView(leaf));
     this.registerView(LINK_FILE_VIEW_TYPE, (leaf) => new LinkFileView(leaf));
+    this.registerView(DREAM_EXPLORER_VIEW_TYPE, (leaf) => new DreamExplorerView(leaf));
 
     // Register .link file extension with custom view
     this.registerExtensions(['link'], LINK_FILE_VIEW_TYPE);
@@ -434,7 +453,7 @@ export default class InterBrainPlugin extends Plugin {
     // Wait for Obsidian's workspace layout to be ready (event-driven, not time-based)
     this.app.workspace.onLayoutReady(() => {
       // Detect fresh Obsidian launch vs plugin reload
-      const existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
+      const _existingDreamspaceLeaf = this.app.workspace.getLeavesOfType(DREAMSPACE_VIEW_TYPE);
 
       const uuidToSelect = targetUUID || '550e8400-e29b-41d4-a716-446655440000';
       const store = useInterBrainStore.getState();
@@ -843,6 +862,7 @@ export default class InterBrainPlugin extends Plugin {
           const dreamSongFile = this.app.vault.getAbstractFileByPath(dreamSongPath);
           const hasDreamSong = dreamSongFile !== null;
 
+          let syncDidWork = false;
           if (hasDreamSong) {
             loadingNotice.hide();
             const syncNotice = this.uiService.showLoading('Syncing canvas submodules...');
@@ -859,8 +879,12 @@ export default class InterBrainPlugin extends Plugin {
                 throw new Error(`Canvas sync failed: ${syncResult.error}`);
               }
 
+              // Track whether sync made meaningful changes
+              const newImports = syncResult.submodulesImported.filter(r => r.success && !r.alreadyExisted);
+              syncDidWork = newImports.length > 0 || syncResult.submodulesRemoved.length > 0;
+
               syncNotice.hide();
-            } catch (syncError) {
+            } catch (_syncError) {
               syncNotice.hide();
               // Non-fatal - continue with regular commit
               this.uiService.showWarning('Canvas sync had issues - continuing with commit');
@@ -874,7 +898,11 @@ export default class InterBrainPlugin extends Plugin {
           const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullRepoPath });
 
           if (!statusOutput.trim()) {
-            this.uiService.showSuccess('No changes to commit - all changes already saved');
+            // No remaining changes — but sync may have already committed
+            const message = syncDidWork
+              ? 'DreamSong synced and all changes committed'
+              : 'Everything up to date';
+            this.uiService.showSuccess(message);
 
             // Exit creator mode even if no changes
             const { creatorMode } = store;
@@ -1393,19 +1421,24 @@ export default class InterBrainPlugin extends Plugin {
               const targetNode = allNodes.find(node => node.id === previousEntry.nodeId);
 
               if (targetNode) {
-                // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
                 store.setSpatialLayout('liminal-web');
-                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
+
+                // Restore flip state BEFORE requesting navigation so orchestrator sees correct state
+                store.restoreVisualState(previousEntry);
+
+                // Use holarchy-focus if the entry was flipped, otherwise liminal-web-focus
+                if (previousEntry.flipState?.flipSide === 'back') {
+                  store.requestNavigation({ type: 'holarchy-focus', nodeId: targetNode.id, interrupt: true });
+                } else {
+                  store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
+                }
               } else {
                 // Handle deleted node case - skip to next valid entry
                 console.warn(`Node ${previousEntry.nodeId} no longer exists, skipping undo step`);
                 this.uiService.showError('Target node no longer exists - skipped to previous state');
               }
             }
-
-            // Restore visual state (flip state and scroll position) after layout restoration
-            store.restoreVisualState(previousEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);
@@ -1464,19 +1497,24 @@ export default class InterBrainPlugin extends Plugin {
               const targetNode = allNodes.find(node => node.id === nextEntry.nodeId);
 
               if (targetNode) {
-                // Update store, set layout, and request navigation
                 store.setSelectedNode(targetNode);
                 store.setSpatialLayout('liminal-web');
-                store.requestNavigation({ type: 'focus', nodeId: targetNode.id, interrupt: true });
+
+                // Restore flip state BEFORE requesting navigation so orchestrator sees correct state
+                store.restoreVisualState(nextEntry);
+
+                // Use holarchy-focus if the entry was flipped, otherwise liminal-web-focus
+                if (nextEntry.flipState?.flipSide === 'back') {
+                  store.requestNavigation({ type: 'holarchy-focus', nodeId: targetNode.id, interrupt: true });
+                } else {
+                  store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id, interrupt: true });
+                }
               } else {
                 // Handle deleted node case
                 console.warn(`Node ${nextEntry.nodeId} no longer exists, skipping redo step`);
                 this.uiService.showError('Target node no longer exists - skipped to next state');
               }
             }
-            
-            // Restore visual state (flip state and scroll position) after layout restoration
-            store.restoreVisualState(nextEntry);
           } finally {
             // Always clear the flag
             store.setRestoringFromHistory(false);
@@ -1485,6 +1523,24 @@ export default class InterBrainPlugin extends Plugin {
         } catch (error) {
           console.error('Redo failed:', error);
           this.uiService.showError('Failed to redo layout change');
+        }
+      }
+    });
+
+    // Open Dream Explorer (full-screen holarchy file navigator)
+    this.addCommand({
+      id: 'open-dream-explorer',
+      name: 'Open Dream Explorer',
+      callback: async () => {
+        const store = useInterBrainStore.getState();
+        const currentNode = store.selectedNode;
+        if (!currentNode?.repoPath) {
+          console.warn('[DreamExplorer] No DreamNode selected — cannot open explorer');
+          return;
+        }
+        const leafManager = serviceManager.getLeafManagerService();
+        if (leafManager) {
+          await leafManager.openDreamExplorer(currentNode.repoPath, currentNode.name);
         }
       }
     });
@@ -1589,6 +1645,9 @@ export default class InterBrainPlugin extends Plugin {
 
     // Clean up transcription service
     cleanupTranscriptionService();
+
+    // Stop AI Bridge WebSocket server
+    await stopAIBridgeServer();
 
     // GRACEFUL SHUTDOWN: Wait for pending IndexedDB writes before closing
     // This prevents the "open timeout" error caused by interrupted transactions

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { serviceManager } from '../../core/services/service-manager';
 import { UIService } from '../../core/services/ui-service';
 import { DreamNode } from '../dreamnode';
+import { deriveSearchIntent, deriveConstellationIntent } from '../../core/orchestration/intent-helpers';
 import SearchNode3D from './SearchNode3D';
 import SearchOrchestrator from './SearchOrchestrator';
 
@@ -36,6 +37,18 @@ export default function SearchModeOverlay() {
   const shouldRender =
     (searchInterface.isActive && spatialLayout === 'search') ||
     searchInterface.isSaving;
+
+  // On mount: send background constellation nodes home (same as entering liminal-web)
+  const hasInitialized = useRef(false);
+  useEffect(() => {
+    if (shouldRender && orchestrator && !hasInitialized.current) {
+      hasInitialized.current = true;
+      orchestrator.sendConstellationNodesHome();
+    }
+    if (!shouldRender) {
+      hasInitialized.current = false;
+    }
+  }, [shouldRender, orchestrator]);
 
   if (!shouldRender) {
     return null;
@@ -85,8 +98,13 @@ export default function SearchModeOverlay() {
    * Handle search cancel - dismiss search interface
    */
   const handleSearchCancel = () => {
+    // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to scaled positions
     setSearchActive(false);
     setSpatialLayout('constellation');
+    if (orchestrator) {
+      const { intent } = deriveConstellationIntent();
+      orchestrator.executeLayoutIntent(intent);
+    }
   };
 
   /**
@@ -98,11 +116,10 @@ export default function SearchModeOverlay() {
     // Update store with search results
     setSearchResults(searchResultNodes);
 
-    // If we have results and no search interface active, trigger search results display
-    if (searchResultNodes.length > 0 && !searchInterface.isActive) {
-      if (orchestrator) {
-        orchestrator.showSearchResults(searchResultNodes);
-      }
+    // Trigger search results display via unified orchestration
+    if (searchResultNodes.length > 0 && orchestrator) {
+      const { intent } = deriveSearchIntent(searchResultNodes.map(n => n.id));
+      orchestrator.executeLayoutIntent(intent);
     }
 
     console.log(`SearchModeOverlay: Updated with ${searchResultNodes.length} search results`);

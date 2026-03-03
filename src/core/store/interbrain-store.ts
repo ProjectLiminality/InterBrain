@@ -123,6 +123,11 @@ import {
   restoreTutorialPersistenceData,
 } from '../../features/tutorial/store/slice';
 
+import {
+  DreamExplorerSlice,
+  createDreamExplorerSlice,
+} from '../../features/dream-explorer/store/slice';
+
 // Type alias for spatial layout modes (the active view mode)
 // Note: 'edit' is for metadata editing, 'relationship-edit' is for relationship editing (peer-level modes)
 export type SpatialLayoutMode = 'constellation' | 'creation' | 'search' | 'liminal-web' | 'edit' | 'relationship-edit' | 'copilot';
@@ -194,7 +199,11 @@ export type RealNodeData = DreamNodeData;
  * reacts to them. This is the universal pattern for feature → core communication.
  */
 export interface NavigationRequest {
-  type: 'focus' | 'constellation' | 'applyLayout';
+  // TODO: 'applyLayout' is a position recalculation, not a navigation transition.
+  // It should be moved to a separate mechanism (e.g. a dedicated store action).
+  type: 'liminal-web-focus' | 'constellation' | 'applyLayout' | 'flip' | 'holarchy-focus' | 'explorer-focus';
+  /** Whether explorer focus is being activated (true) or deactivated (false) */
+  explorerFocusActive?: boolean;
   nodeId?: string;
   interrupt?: boolean; // Use interrupt variants for mid-flight changes
 }
@@ -250,6 +259,7 @@ export interface CoreSlice {
   setConstellationConfig: (config: Partial<ConstellationConfig>) => void;
   constellationFilter: ConstellationFilterResult;
   setConstellationFilter: (filter: ConstellationFilterResult) => void;
+  addNodeToConstellationFilter: (nodeId: string) => void;
 
   // Ephemeral nodes - dynamically spawned nodes not in the constellation
   ephemeralNodes: Map<string, EphemeralNodeState>;
@@ -282,7 +292,8 @@ export interface InterBrainState extends
   DragAndDropSlice,
   LiminalWebSlice,
   FeedbackSlice,
-  TutorialSlice {}
+  TutorialSlice,
+  DreamExplorerSlice {}
 
 // ============================================================================
 // CORE SLICE CREATOR
@@ -402,6 +413,24 @@ const createCoreSlice = (set: any, _get: any): CoreSlice => ({
 
   setConstellationFilter: (filter) => set({ constellationFilter: filter }),
 
+  addNodeToConstellationFilter: (nodeId) => set((state: InterBrainState) => {
+    const filter = state.constellationFilter;
+    const newVipNodes = new Set(filter.vipNodes);
+    newVipNodes.add(nodeId);
+    const newMountedNodes = new Set(filter.mountedNodes);
+    newMountedNodes.add(nodeId);
+    const newEphemeralNodes = new Set(filter.ephemeralNodes);
+    newEphemeralNodes.delete(nodeId);
+    return {
+      constellationFilter: {
+        ...filter,
+        vipNodes: newVipNodes,
+        mountedNodes: newMountedNodes,
+        ephemeralNodes: newEphemeralNodes
+      }
+    };
+  }),
+
   // Ephemeral node actions
   spawnEphemeralNode: (nodeId, targetPosition, spawnPosition) => set((state: InterBrainState) => {
     const newMap = new Map(state.ephemeralNodes);
@@ -462,6 +491,7 @@ export const useInterBrainStore = create<InterBrainState>()(
       ...createLiminalWebSlice(set, get, api),
       ...createFeedbackSlice(set, get, api),
       ...createTutorialSlice(set, get),
+      ...createDreamExplorerSlice(set, get),
     }),
     {
       name: 'interbrain-storage',

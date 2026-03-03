@@ -130,3 +130,6 @@ copilot-transcription-*.md
 viewer-bundle/
 src/features/web-link-analyzer/scripts/venv/
 logs/
+
+# Runtime vault state
+vault-state.json

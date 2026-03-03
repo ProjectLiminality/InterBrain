@@ -41,8 +41,55 @@ export class URIHandlerService {
 				'interbrain-update-contact',
 				this.handleUpdateContact.bind(this)
 			);
+		// Universal command handler: obsidian://interbrain?command=<command>&uuid=<uuid>
+			this.plugin.registerObsidianProtocolHandler(
+				'interbrain',
+				this.handleCommand.bind(this)
+			);
 		} catch (error) {
 			console.error('[URIHandler] Failed to register handlers:', error);
+		}
+	}
+
+	/**
+	 * Universal command handler for external tools (e.g. Alfred)
+	 * Format: obsidian://interbrain?command=<command>&uuid=<uuid>
+	 *
+	 * If uuid is provided, selects the DreamNode before executing the command.
+	 */
+	private async handleCommand(params: Record<string, string>): Promise<void> {
+		try {
+			const command = params.command;
+			if (!command) {
+				new Notice('Invalid InterBrain URI: missing command parameter');
+				return;
+			}
+
+			const uuid = params.uuid;
+
+			// If a UUID is provided, select the node first
+			if (uuid) {
+				const store = useInterBrainStore.getState();
+				const nodeData = store.dreamNodes.get(uuid);
+				if (nodeData) {
+					store.setSelectedNode(nodeData.node);
+					store.requestNavigation({ type: 'liminal-web-focus', nodeId: nodeData.node.id });
+				} else {
+					console.warn(`[URIHandler] DreamNode not found for UUID: ${uuid}`);
+					new Notice(`DreamNode not found: ${uuid.slice(0, 8)}...`);
+					return;
+				}
+			}
+
+			// Execute the command via Obsidian's command palette
+			const commandId = `interbrain:${command}`;
+			const executed = (this.app as any).commands.executeCommandById(commandId);
+			if (!executed) {
+				new Notice(`Unknown InterBrain command: ${command}`);
+			}
+		} catch (error) {
+			console.error('[URIHandler] Failed to handle command:', error);
+			new Notice(`Failed to execute command: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 
@@ -378,7 +425,7 @@ export class URIHandlerService {
 
 		const store = useInterBrainStore.getState();
 		store.setSelectedNode(targetNode);
-		store.requestNavigation({ type: 'focus', nodeId: targetNode.id });
+		store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
 
 		if (!silent) {
 			new Notice(`Node focused in DreamSpace!`);

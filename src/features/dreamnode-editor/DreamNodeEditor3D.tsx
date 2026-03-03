@@ -6,6 +6,7 @@ import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { UIService } from '../../core/services/ui-service';
 import { saveEditModeChanges, getFreshNodeData, cancelEditMode } from './services/editor-service';
+import { deriveFocusIntent, buildLayoutContext } from '../../core/orchestration/intent-helpers';
 
 const uiService = new UIService();
 
@@ -263,12 +264,15 @@ export default function DreamNodeEditor3D() {
     const freshNode = await getFreshNodeData(editingNode.id);
     if (freshNode) {
       useInterBrainStore.getState().setSelectedNode(freshNode);
-      useInterBrainStore.getState().setSpatialLayout('liminal-web');
 
       if (orchestrator) {
-        // Clear stale edit mode data before transitioning
         orchestrator.clearEditModeData();
-        orchestrator.animateToLiminalWebFromEdit(freshNode.id);
+        const store = useInterBrainStore.getState();
+        store.setSpatialLayout('liminal-web');
+        const relatedIds = orchestrator.getRelatedNodeIds(freshNode.id);
+        const context = buildLayoutContext(freshNode.id, store.flipState.flipStates, 'liminal-web');
+        const { intent } = deriveFocusIntent(freshNode.id, relatedIds, context);
+        orchestrator.executeLayoutIntent(intent);
       }
 
       globalThis.setTimeout(() => {

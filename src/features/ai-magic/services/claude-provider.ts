@@ -11,6 +11,9 @@ import {
 	AIMessage,
 	AIResponse,
 	CompletionOptions,
+	StreamChunkCallback,
+	StreamingCompletionOptions,
+	StreamCompletionMeta,
 	ProviderStatus,
 	TaskComplexity,
 	ClaudeConfig,
@@ -162,6 +165,139 @@ export class ClaudeProvider implements AIProvider {
 			console.error('Claude API request failed:', error);
 			throw error;
 		}
+	}
+	/**
+	 * Generate streaming completion using Anthropic SSE
+	 * Uses Node.js https module to bypass CORS (Obsidian runs in Electron)
+	 */
+	async generateStreamingCompletion(
+		messages: AIMessage[],
+		onChunk: StreamChunkCallback,
+		options?: StreamingCompletionOptions
+	): Promise<StreamCompletionMeta> {
+		if (!this.apiKey) {
+			throw new Error('Claude API key not configured');
+		}
+
+		const model = options?.model || this.models.trivial;
+		const maxTokens = options?.maxTokens || 4096;
+		const temperature = options?.temperature ?? 1.0;
+
+		const systemMessage = messages.find(m => m.role === 'system');
+		const conversationMessages = messages.filter(m => m.role !== 'system');
+
+		const requestBody = {
+			model,
+			max_tokens: maxTokens,
+			temperature,
+			stream: true,
+			messages: conversationMessages.map(m => ({
+				role: m.role,
+				content: m.content
+			})),
+			...(systemMessage && { system: systemMessage.content })
+		};
+
+		const bodyStr = JSON.stringify(requestBody);
+
+		// Use Node.js https to bypass CORS (globalThis.fetch is blocked
+		// by browser CORS policy for api.anthropic.com from app://obsidian.md)
+		const https = require('https') as typeof import('https');
+		const url = new URL(this.apiEndpoint);
+
+		return new Promise<StreamCompletionMeta>((resolve, reject) => {
+			let aborted = false;
+
+			const req = https.request({
+				hostname: url.hostname,
+				port: 443,
+				path: url.pathname,
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-api-key': this.apiKey,
+					'anthropic-version': '2023-06-01',
+					'Content-Length': Buffer.byteLength(bodyStr)
+				}
+			}, (res) => {
+				if (res.statusCode !== 200) {
+					let errorBody = '';
+					res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+					res.on('end', () => {
+						reject(new Error(`Claude API error: ${res.statusCode} - ${errorBody}`));
+					});
+					return;
+				}
+
+				let buffer = '';
+				let inputTokens = 0;
+				let outputTokens = 0;
+
+				res.setEncoding('utf8');
+				res.on('data', (chunk: string) => {
+					if (aborted) return;
+
+					buffer += chunk;
+					const lines = buffer.split('\n');
+					buffer = lines.pop() || '';
+
+					for (const line of lines) {
+						if (!line.startsWith('data: ')) continue;
+						const json = line.slice(6).trim();
+						if (!json) continue;
+
+						try {
+							const event = JSON.parse(json);
+
+							if (event.type === 'message_start' && event.message?.usage) {
+								inputTokens = event.message.usage.input_tokens || 0;
+							} else if (event.type === 'content_block_delta' && event.delta?.text) {
+								onChunk(event.delta.text);
+							} else if (event.type === 'message_delta' && event.usage) {
+								outputTokens = event.usage.output_tokens || 0;
+							}
+						} catch {
+							// Skip malformed JSON lines
+						}
+					}
+				});
+
+				res.on('end', () => {
+					if (!aborted) {
+						resolve({
+							provider: this.name,
+							model,
+							usage: { inputTokens, outputTokens }
+						});
+					}
+				});
+
+				res.on('error', (err: Error) => {
+					if (!aborted) reject(err);
+				});
+			});
+
+			req.on('error', (err: Error) => {
+				if (!aborted) reject(err);
+			});
+
+			// Handle abort signal
+			if (options?.signal) {
+				if (options.signal.aborted) {
+					req.destroy();
+					reject(new DOMException('Stream aborted', 'AbortError'));
+					return;
+				}
+				options.signal.addEventListener('abort', () => {
+					aborted = true;
+					req.destroy();
+					reject(new DOMException('Stream aborted', 'AbortError'));
+				}, { once: true });
+			}
+
+			req.write(bodyStr);
+			req.end();
+		});
 	}
 }
 

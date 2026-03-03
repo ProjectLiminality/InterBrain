@@ -29,6 +29,14 @@ export class UDDService {
         throw new Error(`Invalid .udd file: missing required fields in ${uddPath}`);
       }
 
+      // Initialize missing arrays — older .udd files may lack these fields
+      if (!Array.isArray(udd.submodules)) {
+        udd.submodules = [];
+      }
+      if (!Array.isArray(udd.supermodules)) {
+        udd.supermodules = [];
+      }
+
       return udd;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

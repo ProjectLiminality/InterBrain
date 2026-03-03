@@ -13,6 +13,7 @@ const USE_WEBGL_STARS = true;
 import SpatialOrchestrator, { SpatialOrchestratorRef } from './SpatialOrchestrator';
 import { DreamNodeCreator3D } from '../../features/dreamnode-creator';
 import { SearchModeOverlay } from '../../features/search';
+import CopilotModeOverlay from '../../features/conversational-copilot/CopilotModeOverlay';
 import { DreamNodeEditor3D, RelationshipEditor3D } from '../../features/dreamnode-editor';
 import { RadialButtonRing3D } from '../../features/action-buttons/RadialButtonRing3D';
 import { ActiveVideoCallButton } from '../../features/action-buttons/ActiveVideoCallButton';
@@ -39,6 +40,60 @@ import { getCherryPickWorkflowService } from '../../features/dreamnode-updater/s
 // import { TutorialOverlay, TutorialRunner, TutorialPortalOverlay } from '../../features/tutorial';
 import { TutorialPortalOverlay } from '../../features/tutorial';
 import { EphemeralNodeManager } from './EphemeralNodeManager';
+import {
+  deriveHolarchyNavigationIntent,
+  deriveFocusIntent,
+  deriveConstellationIntent,
+  deriveFlipToBackIntent,
+  deriveFlipToFrontIntent,
+  deriveExplorerFocusIntent,
+  buildLayoutContext,
+  isHolarchyNavigation
+} from '../orchestration/intent-helpers';
+import { loadLayoutSnapshot } from '../orchestration/snapshot-storage';
+import { UDDService } from '../../features/dreamnode/services/udd-service';
+import type { DreamNodeData } from '../store/interbrain-store';
+
+/**
+ * Load supermodule IDs from a node's UDD file and resolve them to store UUIDs.
+ *
+ * UDD files store supermodules in mixed formats (radicleId strings, UUID strings,
+ * or SupermoduleEntry objects with radicleId/uuid fields). The store is keyed by UUID.
+ * This function normalizes all formats to the UUID the store actually knows about.
+ */
+async function loadResolvedSupermoduleIds(
+  nodeRepoPath: string,
+  vaultService: VaultService,
+  dreamNodes: Map<string, DreamNodeData>
+): Promise<string[]> {
+  const fullPath = vaultService.getFullPath(nodeRepoPath);
+  const udd = await UDDService.readUDD(fullPath);
+
+  // Extract raw IDs from mixed UDD formats
+  const rawIds: string[] = (udd.supermodules || []).map((s: string | { radicleId?: string; uuid?: string }) =>
+    typeof s === 'string' ? s : (s.radicleId || s.uuid || '')
+  ).filter(Boolean);
+
+  // Resolve each raw ID to the store's UUID key
+  return rawIds
+    .map(rawId => {
+      // Direct UUID match (already a store key)
+      if (dreamNodes.has(rawId)) return rawId;
+
+      // radicleId match — scan store for a node whose radicleId matches
+      for (const [uuid, data] of dreamNodes) {
+        if (data.node.radicleId === rawId) return uuid;
+      }
+
+      // Name match (last resort)
+      for (const [uuid, data] of dreamNodes) {
+        if (data.node.name === rawId) return uuid;
+      }
+
+      return null;
+    })
+    .filter((id): id is string => id !== null);
+}
 
 export default function DreamspaceCanvas() {
   // NOTE: Lifecycle gate is now handled by DreamspaceView with lazy loading
@@ -70,7 +125,9 @@ export default function DreamspaceCanvas() {
   const spatialOrchestratorRef = useRef<SpatialOrchestratorRef>(null);
 
   // Track when orchestrator is ready so layout effects can re-run
-  const [orchestratorReady, setOrchestratorReady] = useState(false);
+  const [_orchestratorReady, setOrchestratorReady] = useState(false);
+  // Guard to ensure onOrchestratorReady logic runs exactly once
+  const hasInitializedLayout = useRef(false);
 
   // Unified escape key handler - extracted to core hook
   useEscapeKeyHandler(spatialOrchestratorRef);
@@ -100,10 +157,6 @@ export default function DreamspaceCanvas() {
       )
       .map(data => data.node);
 
-    // Diagnostic: detect significant changes in mounted node count
-    const currentLayout = useInterBrainStore.getState().spatialLayout;
-    if (prevMountedCountRef.current > 0 && result.length !== prevMountedCountRef.current) {
-    }
     prevMountedCountRef.current = result.length;
 
     return result;
@@ -146,7 +199,7 @@ export default function DreamspaceCanvas() {
   const spatialLayout = useInterBrainStore(state => state.spatialLayout);
   
   // Search results for search mode display
-  const searchResults = useInterBrainStore(state => state.searchResults);
+  const _searchResults = useInterBrainStore(state => state.searchResults);
   const selectedNode = useInterBrainStore(state => state.selectedNode);
 
   // Tutorial state (tutorial system disabled for current version)
@@ -212,114 +265,31 @@ export default function DreamspaceCanvas() {
     };
   }, [dreamNodes.length, spatialOrchestratorRef.current]); // Re-register when nodes change OR orchestrator becomes ready
   
-  // Note: Global __interbrainCanvas API has been replaced with store-based navigation.
-  // Features now use store.requestNavigation() and core reacts via useEffect above.
-
-  // React to spatial layout changes and trigger appropriate orchestrator methods
-  useEffect(() => {
-    if (!spatialOrchestratorRef.current) return;
-
-    const store = useInterBrainStore.getState();
-
-    switch (spatialLayout) {
-      case 'search': {
-        // Hide radial buttons when entering search mode (incompatible mode)
-        if (store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(false);
-        }
-
-        // Search mode uses honeycomb layout for results
-        if (searchResults && searchResults.length > 0) {
-          console.log(`DreamspaceCanvas: Switching to search results mode with ${searchResults.length} results`);
-          spatialOrchestratorRef.current.showSearchResults(searchResults);
-        } else if (store.searchInterface.isActive) {
-          console.log('DreamspaceCanvas: Switching to search interface mode - moving all nodes to sphere surface');
-          // Use liminal web architecture: move all constellation nodes to sphere surface
-          // SearchNode acts like the focused node at center position [0, 0, -50]
-          spatialOrchestratorRef.current.moveAllToSphereForSearch();
-        }
-        break;
-      }
-
-      case 'relationship-edit': {
-        // Hide radial buttons when entering relationship edit mode (incompatible mode)
-        if (store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(false);
-        }
-
-        // Relationship edit mode - center node with related/search nodes in honeycomb
-        if (store.editMode.isActive && store.editMode.editingNode) {
-          console.log(`DreamspaceCanvas: Switching to relationship edit mode for ${store.editMode.editingNode.name}`);
-          spatialOrchestratorRef.current.focusOnNode(store.editMode.editingNode.id);
-
-          // Show existing relationships if any
-          if (searchResults && searchResults.length > 0) {
-            spatialOrchestratorRef.current.showEditModeSearchResults(store.editMode.editingNode.id, searchResults);
-          }
-        } else {
-          console.warn('[Canvas-Layout] relationship-edit mode triggered but no editingNode available');
-        }
-        break;
-      }
-
-      case 'edit':
-        // Hide radial buttons when entering edit mode (incompatible mode)
-        if (store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(false);
-        }
-
-        // Edit mode (metadata) - similar to liminal-web but in edit state
-        if (selectedNode) {
-          // Use the same focus logic as liminal-web for now
-          spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
-        } else {
-          console.warn('[Canvas-Layout] Edit mode triggered but no selectedNode available');
-        }
-        break;
-
-      case 'liminal-web':
-        // Trigger liminal web when a node is selected
-        if (selectedNode) {
-          spatialOrchestratorRef.current.focusOnNode(selectedNode.id);
-        } else {
-          console.warn('[Canvas-Layout] liminal-web layout triggered but no selectedNode available');
-        }
-        break;
-
-      case 'copilot': {
-        // Hide radial buttons when entering copilot mode (incompatible mode)
-        if (store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(false);
-        }
-
-        // Copilot mode - conversation partner at center with search results around them
-        if (store.copilotMode.isActive && store.copilotMode.conversationPartner) {
-          // Position conversation partner at center (like edit mode)
-          spatialOrchestratorRef.current.focusOnNode(store.copilotMode.conversationPartner.id);
-
-          // Always call showEditModeSearchResults to trigger layout (even with empty array)
-          // Empty array = all nodes fly to sphere (Option key not held behavior)
-          // Non-empty array = relevant nodes in honeycomb, rest on sphere
-          if (searchResults) {
-            spatialOrchestratorRef.current.showEditModeSearchResults(store.copilotMode.conversationPartner.id, searchResults);
-          }
-        } else {
-          console.warn('[Canvas-Layout] Copilot mode triggered but no active conversation partner');
-        }
-        break;
-      }
-
-      case 'constellation':
-        // Hide radial buttons when returning to constellation (no selected node)
-        if (store.radialButtonUI.isActive) {
-          store.setRadialButtonUIActive(false);
-        }
-
-        // Return to constellation
-        spatialOrchestratorRef.current.returnToConstellation();
-        break;
-    }
-  }, [spatialLayout, searchResults, selectedNode, orchestratorReady]); // Watch spatial layout, search results, selected node, and orchestrator readiness
+  // ════════════════════════════════════════════════════════════════════════════
+  // ARCHITECTURAL NOTE: State Machine as Single Source of Truth
+  // ════════════════════════════════════════════════════════════════════════════
+  //
+  // Layout transitions are driven by EXPLICIT ORCHESTRATION, not React's useEffect.
+  //
+  // The correct flow is:
+  //   Event (click, escape, etc.)
+  //     → Event handler calls deriveIntent() + executeLayoutIntent()
+  //     → Store state (spatialLayout, selectedNode) updated as SIDE EFFECT
+  //
+  // We REMOVED the useEffect that watched spatialLayout because it created:
+  //   1. Circular dependencies (event → store → effect → orchestration → store → effect...)
+  //   2. Race conditions between event handlers and effects
+  //   3. Ambiguous ownership of transitions
+  //
+  // All layout orchestration now happens in:
+  //   - handleNodeClick (constellation → liminal-web, liminal-web → liminal-web)
+  //   - onPointerMissed (liminal-web → constellation)
+  //   - useEscapeKeyHandler (any → constellation)
+  //   - useOptionKeyHandlers (copilot ring show/hide)
+  //   - navigationRequest useEffect (feature → core communication)
+  //
+  // See docs/architecture/layout-state-machine.md for the complete specification.
+  // ════════════════════════════════════════════════════════════════════════════
 
   // React to navigation requests from features
   // This is the universal pattern for feature → core communication
@@ -330,29 +300,149 @@ export default function DreamspaceCanvas() {
     if (!navigationRequest || !spatialOrchestratorRef.current) return;
 
     const orchestrator = spatialOrchestratorRef.current;
+    const store = useInterBrainStore.getState();
 
     switch (navigationRequest.type) {
-      case 'focus':
+      case 'liminal-web-focus':
         if (navigationRequest.nodeId) {
-          if (navigationRequest.interrupt) {
-            orchestrator.interruptAndFocusOnNode(navigationRequest.nodeId);
-          } else {
-            orchestrator.focusOnNode(navigationRequest.nodeId);
-          }
+          console.log(`[Canvas-NavRequest] FOCUS: ${navigationRequest.nodeId} via unified orchestration`);
+          const relatedIds = orchestrator.getRelatedNodeIds(navigationRequest.nodeId);
+          const context = buildLayoutContext(
+            store.selectedNode?.id || null,
+            store.flipState.flipStates,
+            store.spatialLayout
+          );
+          const { intent } = deriveFocusIntent(navigationRequest.nodeId, relatedIds, context);
+          orchestrator.executeLayoutIntent(intent);
         }
         break;
 
-      case 'constellation':
-        if (navigationRequest.interrupt) {
-          orchestrator.interruptAndReturnToConstellation();
-        } else {
-          orchestrator.returnToConstellation();
-        }
+      case 'constellation': {
+        console.log('[Canvas-NavRequest] CONSTELLATION via unified orchestration');
+        const { intent: constellationIntent } = deriveConstellationIntent();
+        orchestrator.executeLayoutIntent(constellationIntent);
         break;
+      }
 
       case 'applyLayout':
         orchestrator.applyConstellationLayout();
         break;
+
+      case 'flip': {
+        if (navigationRequest.nodeId) {
+          const flipContext = buildLayoutContext(
+            navigationRequest.nodeId,
+            store.flipState.flipStates,
+            store.spatialLayout
+          );
+          const isCurrentlyFlipped = flipContext.currentCenterFlipSide === 'back';
+
+          // Record history for this flip transition (liminal-web ↔ holarchy)
+          store.addHistoryEntry(navigationRequest.nodeId, 'liminal-web');
+
+          if (isCurrentlyFlipped) {
+            // Back → Front: show related nodes (synchronous)
+            const relatedIds = orchestrator.getRelatedNodeIds(navigationRequest.nodeId);
+            const { intent } = deriveFlipToFrontIntent(navigationRequest.nodeId, relatedIds);
+            orchestrator.executeLayoutIntent(intent);
+          } else {
+            // Front → Back: load supermodules async (same pattern as holarchy click)
+            const nodeId = navigationRequest.nodeId;
+            (async () => {
+              try {
+                let supermoduleIds: string[] = [];
+                const node = store.dreamNodes.get(nodeId)?.node;
+                if (vaultService && node) {
+                  supermoduleIds = await loadResolvedSupermoduleIds(node.repoPath, vaultService, store.dreamNodes);
+                }
+                const { intent } = deriveFlipToBackIntent(nodeId, supermoduleIds);
+                orchestrator.executeLayoutIntent(intent);
+              } catch (error) {
+                console.error('[Canvas-NavRequest] Failed to load supermodules for flip:', error);
+                const { intent } = deriveFlipToBackIntent(nodeId, []);
+                orchestrator.executeLayoutIntent(intent);
+              }
+            })();
+          }
+        }
+        break;
+      }
+
+      case 'holarchy-focus': {
+        // Navigate to a node in holarchy mode (flipped to back, supermodules in ring)
+        // Used by submodule clicks in HolonView and undo/redo
+        if (navigationRequest.nodeId) {
+          const nodeId = navigationRequest.nodeId;
+          const node = store.dreamNodes.get(nodeId)?.node;
+          if (node) {
+            store.setSelectedNode(node);
+          }
+          (async () => {
+            try {
+              let supermoduleIds: string[] = [];
+              const nodeData = store.dreamNodes.get(nodeId)?.node;
+              if (vaultService && nodeData) {
+                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, store.dreamNodes);
+              }
+              // Build context AFTER async work so we read the fully-propagated store state
+              // (restoreVisualState may not have propagated when the useEffect first fires)
+              const freshStore = useInterBrainStore.getState();
+              const context = buildLayoutContext(
+                freshStore.selectedNode?.id || null,
+                freshStore.flipState.flipStates,
+                freshStore.spatialLayout
+              );
+              const { intent } = deriveHolarchyNavigationIntent(nodeId, supermoduleIds, context);
+              orchestrator.executeLayoutIntent(intent);
+            } catch (error) {
+              console.error('[Canvas-NavRequest] Failed to load supermodules for holarchy-focus:', error);
+              const freshStore = useInterBrainStore.getState();
+              const context = buildLayoutContext(
+                freshStore.selectedNode?.id || null,
+                freshStore.flipState.flipStates,
+                freshStore.spatialLayout
+              );
+              const { intent } = deriveHolarchyNavigationIntent(nodeId, [], context);
+              orchestrator.executeLayoutIntent(intent);
+            }
+          })();
+        }
+        break;
+      }
+
+      case 'explorer-focus': {
+        // Toggle explorer-focus: zoom DreamNode closer and switch layout mode
+        if (navigationRequest.nodeId) {
+          const nodeId = navigationRequest.nodeId;
+          const focusActive = navigationRequest.explorerFocusActive ?? false;
+
+          // Update explorer store focus state
+          const explorerStore = useInterBrainStore.getState();
+          explorerStore.explorerSetFocus(focusActive);
+
+          // If activating, also switch explorer layout to equal
+          if (focusActive) {
+            explorerStore.explorerSetLayoutMode('equal');
+          }
+
+          (async () => {
+            try {
+              let supermoduleIds: string[] = [];
+              const nodeData = store.dreamNodes.get(nodeId)?.node;
+              if (vaultService && nodeData) {
+                supermoduleIds = await loadResolvedSupermoduleIds(nodeData.repoPath, vaultService, store.dreamNodes);
+              }
+              const { intent } = deriveExplorerFocusIntent(nodeId, supermoduleIds, focusActive);
+              orchestrator.executeLayoutIntent(intent);
+            } catch (error) {
+              console.error('[Canvas-NavRequest] Failed to load supermodules for explorer-focus:', error);
+              const { intent } = deriveExplorerFocusIntent(nodeId, [], focusActive);
+              orchestrator.executeLayoutIntent(intent);
+            }
+          })();
+        }
+        break;
+      }
     }
 
     // Clear the request after processing
@@ -448,16 +538,71 @@ export default function DreamspaceCanvas() {
     
     // Normal click handling (not in edit mode)
     
-    // If we're in search mode, properly exit search interface when clicking a result
-    if (store.spatialLayout === 'search' && store.searchInterface.isActive) {
-      console.log('Clicking search result - exiting search mode cleanly');
-      store.setSearchActive(false); // This clears search query and results
+    // If we're in search mode, transition to liminal-web when clicking a result
+    // Must set spatialLayout BEFORE building context so intent derivation sees 'liminal-web'
+    const wasInSearch = store.spatialLayout === 'search' && store.searchInterface.isActive;
+    if (wasInSearch) {
+      console.log('[DreamSpace] Search result clicked — transitioning to liminal-web');
+      store.setSearchActive(false);
+      store.setSpatialLayout('liminal-web');
     }
-    
+
+    // Build context for intent derivation
+    const context = buildLayoutContext(
+      store.selectedNode?.id || null,
+      store.flipState.flipStates,
+      store.spatialLayout
+    );
+
+    // Don't re-navigate to the already-centered node when flipped
+    // Flip state is controlled explicitly via flip button
+    if (node.id === store.selectedNode?.id && context.isHolarchyMode) {
+      return;
+    }
+
+    // Check if this is holarchy navigation (clicking in holarchy mode)
+    const isHolarchyNav = isHolarchyNavigation(context, node.id);
+
     store.setSelectedNode(node);
-    // Trigger focused layout via SpatialOrchestrator
-    if (spatialOrchestratorRef.current) {
-      spatialOrchestratorRef.current.focusOnNode(node.id);
+
+    if (isHolarchyNav && spatialOrchestratorRef.current) {
+      // === HOLARCHY NAVIGATION ===
+      // Clicking a supermodule while in holarchy mode
+      // Use the new unified orchestration system
+      console.log('[DreamSpace] Holarchy navigation: using unified orchestration');
+
+      // Load supermodules from UDD file (async)
+      const orchestrator = spatialOrchestratorRef.current;
+      (async () => {
+        try {
+          let supermoduleIds: string[] = [];
+          if (vaultService) {
+            supermoduleIds = await loadResolvedSupermoduleIds(node.repoPath, vaultService, store.dreamNodes);
+          }
+
+          const { intent } = deriveHolarchyNavigationIntent(
+            node.id,
+            supermoduleIds,
+            context
+          );
+
+          orchestrator.executeLayoutIntent(intent);
+        } catch (error) {
+          console.error('[DreamSpace] Failed to load supermodules:', error);
+          const { intent } = deriveHolarchyNavigationIntent(node.id, [], context);
+          orchestrator.executeLayoutIntent(intent);
+        }
+      })();
+
+    } else if (spatialOrchestratorRef.current) {
+      // === LIMINAL WEB NAVIGATION ===
+      // Normal click: focus on node with related nodes in ring
+      // Use the unified orchestration system
+      console.log(`[DreamSpace] Liminal web navigation: ${node.name} via unified orchestration`);
+      const orchestrator = spatialOrchestratorRef.current;
+      const relatedIds = orchestrator.getRelatedNodeIds(node.id);
+      const { intent } = deriveFocusIntent(node.id, relatedIds, context);
+      orchestrator.executeLayoutIntent(intent);
     }
   };
 
@@ -597,28 +742,50 @@ export default function DreamspaceCanvas() {
             return;
           }
 
-          if (store.spatialLayout === 'search') {
-            if (store.searchInterface.isActive) {
-              // Dismiss search interface and return to constellation
-              store.setSearchActive(false);
+          // Explorer-focus mode: empty space click navigates up the folder hierarchy
+          // At root level, exits explorer-focus entirely
+          if (store.dreamExplorer.explorerFocus) {
+            const { currentPath, rootPath } = store.dreamExplorer;
+            if (currentPath && currentPath !== rootPath) {
+              console.log('[DreamSpace] Explorer-focus: requesting animated go-back');
+              store.explorerRequestGoBack();
             } else {
-              // Clear search results
-              store.setSearchResults([]);
+              // At root — exit explorer-focus back to normal holarchy view
+              console.log('[DreamSpace] Explorer-focus: at root, exiting focus');
+              const centerId = store.selectedNode?.id;
+              if (centerId) {
+                store.requestNavigation({
+                  type: 'explorer-focus',
+                  nodeId: centerId,
+                  explorerFocusActive: false,
+                });
+              }
             }
-            // Use orchestrator to animate back to constellation (handles ephemeral exit)
+            // Don't fall through to constellation/liminal-web handling
+            return;
+          }
+
+          if (store.spatialLayout === 'search') {
+            // Dismiss search and return to constellation
+            // Set spatialLayout BEFORE executeLayoutIntent so nodes animate to scaled positions
+            store.setSearchActive(false);
+            store.setSearchResults([]);
+            store.setSpatialLayout('constellation');
             if (spatialOrchestratorRef.current) {
-              spatialOrchestratorRef.current.returnToConstellation();
-            } else {
-              store.setSpatialLayout('constellation');
+              console.log('[DreamSpace] Search dismiss: returning to constellation via unified orchestration');
+              const { intent } = deriveConstellationIntent();
+              spatialOrchestratorRef.current.executeLayoutIntent(intent);
             }
           } else if (store.spatialLayout === 'liminal-web') {
             // Deselect and return to constellation
             // Record this transition in history so Cmd+Z can return to the previous liminal-web state
             store.addHistoryEntry(null, 'constellation');
             store.setSelectedNode(null);
-            // Use orchestrator to animate back to constellation (handles ephemeral exit)
+            // Use unified orchestration system to animate back to constellation
             if (spatialOrchestratorRef.current) {
-              spatialOrchestratorRef.current.returnToConstellation();
+              console.log('[DreamSpace] Liminal-web dismiss: returning to constellation via unified orchestration');
+              const { intent } = deriveConstellationIntent();
+              spatialOrchestratorRef.current.executeLayoutIntent(intent);
             } else {
               store.setSpatialLayout('constellation');
             }
@@ -737,12 +904,60 @@ export default function DreamspaceCanvas() {
             // Constellation return complete
           }}
           onOrchestratorReady={() => {
+            // Guard: this must only run once. The callback is an inline arrow
+            // so its identity changes every render, but the useEffect in
+            // SpatialOrchestrator uses [] deps to only fire on mount.
+            // This ref guard is belt-and-suspenders safety.
+            if (hasInitializedLayout.current) return;
+            hasInitializedLayout.current = true;
+
             // Register all existing refs when orchestrator is ready
             dreamNodeRefs.current.forEach((nodeRef, nodeId) => {
               if (nodeRef && spatialOrchestratorRef.current) {
                 spatialOrchestratorRef.current.registerNodeRef(nodeId, nodeRef as React.RefObject<DreamNode3DRef>);
               }
             });
+
+            // Compute and apply initial layout (instant mount, no animation)
+            // Instead of restoring stale cached positions, we derive fresh positions
+            // from the intent seed (centerId). This ensures the layout is always
+            // consistent with the current relationship graph.
+            (async () => {
+              const orchestrator = spatialOrchestratorRef.current;
+              if (!orchestrator) return;
+
+              const store = useInterBrainStore.getState();
+
+              // Determine which node to center on startup:
+              // 1. Check saved snapshot for last-selected centerId
+              // 2. Fall back to InterBrain UUID as the default home view
+              const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
+              let centerId: string | null = null;
+
+              const snapshot = await loadLayoutSnapshot();
+              if (snapshot?.centerId && store.dreamNodes.has(snapshot.centerId)) {
+                centerId = snapshot.centerId;
+                console.log(`[DreamSpace] Restoring last-selected node: ${centerId}`);
+              } else if (store.dreamNodes.has(INTERBRAIN_UUID)) {
+                centerId = INTERBRAIN_UUID;
+                console.log(`[DreamSpace] No saved state, defaulting to InterBrain node`);
+              }
+
+              if (centerId) {
+                // Derive fresh layout intent from current relationship graph
+                const relatedIds = orchestrator.getRelatedNodeIds(centerId);
+                const context = buildLayoutContext(null, store.flipState.flipStates, 'constellation');
+                const { intent } = deriveFocusIntent(centerId, relatedIds, context);
+
+                // Execute with duration=0 for instant mount (no animation)
+                orchestrator.executeLayoutIntent(intent, 0);
+
+                console.log(`[DreamSpace] Computed initial layout: center=${centerId}, ring=${relatedIds.length} nodes`);
+              } else {
+                console.log('[DreamSpace] No center node available, starting in constellation mode');
+              }
+            })();
+
             // Mark orchestrator as ready so layout effects can re-run
             setOrchestratorReady(true);
           }}
@@ -756,6 +971,9 @@ export default function DreamspaceCanvas() {
 
           {/* Search mode overlay - self-contained search functionality */}
           <SearchModeOverlay />
+
+          {/* Copilot mode overlay - self-contained copilot orchestration */}
+          <CopilotModeOverlay />
 
           {/* DreamNode editor - render when in 'edit' layout (metadata editing) */}
           <DreamNodeEditor3D />

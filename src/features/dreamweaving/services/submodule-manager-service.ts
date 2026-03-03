@@ -145,41 +145,27 @@ export class SubmoduleManagerService {
         throw new Error(`Cannot add submodule: ${actualSubmoduleName} does not have a Radicle ID. Initialize with Radicle first.`);
       }
 
-      // Determine submodule URL based on platform
-      // Windows: Use relative filesystem path (git-remote-rad not available yet)
-      // macOS/Linux: Use Radicle URL for network portability
-      let submoduleUrl: string;
-      const nodeProcess = (globalThis as any).process;
-      let execEnv = { ...nodeProcess?.env };
-
-      if (isWindows()) {
-        // Windows: Use relative path from parent to source
-        // Both repos are assumed to be in the vault root, so ../SubmoduleName works
-        submoduleUrl = `../${actualSubmoduleName}`;
-        console.log(`SubmoduleManagerService: [Windows] Using local path for submodule: ${submoduleUrl}`);
-        console.log(`SubmoduleManagerService: [Windows] Radicle ID stored in .udd for future migration: ${radicleId}`);
-      } else {
-        // macOS/Linux: Use Radicle URL for network portability
-        // Convert rad:zABC... to rad://zABC... format for git submodule
-        submoduleUrl = radicleId.replace(/^rad:/, 'rad://');
-        console.log(`SubmoduleManagerService: Using Radicle URL for submodule: ${submoduleUrl}`);
-
-        // CRITICAL: Add Radicle bin to PATH so git can find git-remote-rad helper
-        const homeDir = os.homedir();
-        const radicleGitHelperPaths = [
-          `${homeDir}/.radicle/bin`,
-          '/usr/local/bin',
-          '/opt/homebrew/bin'
-        ];
-        const enhancedPath = radicleGitHelperPaths.join(':') + ':' + (nodeProcess?.env?.PATH || '');
-        execEnv = { ...nodeProcess?.env, PATH: enhancedPath };
-      }
+      // Submodule remote always points to the local sovereign repo (all platforms).
+      // Radicle ID is tracked in .udd for identification and network resolution,
+      // but the git submodule itself clones from the local filesystem.
+      // This keeps the local universe self-contained — no network dependency for
+      // submodule operations. If a peer receives this DreamNode and needs to
+      // hydrate missing submodules, they resolve the Radicle ID from the network.
+      //
+      // Use relative path (../Name) instead of absolute filesystem paths.
+      // Git resolves relative submodule URLs against the remote named "origin".
+      // Since our remote is named "rad" (not "origin"), git falls back to
+      // filesystem resolution — so ../Name correctly resolves to the sibling
+      // sovereign repo at vault root. This makes the vault portable across machines.
+      const submoduleUrl = `../${path.basename(sourceFullPath)}`;
+      console.log(`SubmoduleManagerService: Using local sovereign path for submodule: ${submoduleUrl}`);
+      console.log(`SubmoduleManagerService: Radicle ID tracked in .udd for network resolution: ${radicleId}`);
 
       // Import the submodule (use --force to handle previously-removed submodules)
       const submoduleCommand = `git submodule add --force "${submoduleUrl}" "${actualSubmoduleName}"`;
-      await execAsync(submoduleCommand, { cwd: parentFullPath, env: execEnv });
+      await execAsync(submoduleCommand, { cwd: parentFullPath });
 
-      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName}${isWindows() ? ' (local path)' : ' (Radicle URL)'}`);
+      console.log(`SubmoduleManagerService: Successfully imported submodule ${actualSubmoduleName} (local sovereign)`);
       
       return {
         success: true,
@@ -330,10 +316,25 @@ export class SubmoduleManagerService {
         { skipRadicle }
       );
 
-      // Early exit: If all submodules already existed AND none removed, no git commit needed
+      // Early exit: If all submodules already existed AND none removed, no canvas rewrite needed.
+      // But relationship tracking may have updated submodule pointers or .udd — commit those.
       const newImports = importResults.filter(r => r.success && !r.alreadyExisted);
       if (newImports.length === 0 && removedSubmodules.length === 0) {
-        console.log(`SubmoduleManagerService: All submodules already synced - no git changes needed`);
+        console.log(`SubmoduleManagerService: No new imports or removals — checking for relationship tracking changes`);
+
+        // Commit any submodule pointer updates or .udd changes from relationship tracking
+        try {
+          const fullPath = this.getFullPath(analysis.dreamNodeBoundary);
+          const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: fullPath });
+          if (statusOutput.trim()) {
+            console.log(`SubmoduleManagerService: Committing relationship tracking updates`);
+            await execAsync('git add -A', { cwd: fullPath });
+            await execAsync('git commit -m "Sync submodule pointers to sovereign HEAD"', { cwd: fullPath });
+          }
+        } catch (error) {
+          console.warn(`SubmoduleManagerService: Could not commit tracking updates (non-fatal):`, error instanceof Error ? error.message : 'Unknown error');
+        }
+
         return {
           canvasPath,
           dreamNodePath: analysis.dreamNodeBoundary,
@@ -713,25 +714,42 @@ export class SubmoduleManagerService {
 
           console.log(`SubmoduleManagerService: Child Radicle ID: ${childRadicleId}`);
 
-          // NOTE: We no longer modify the sovereign's .udd file here at all.
-          // Both the .udd supermodules update AND the beacon commit are now created
-          // when the user explicitly "Shares Changes" via igniteBeacons().
-          // This prevents:
-          // 1. Modifying sovereign repos during editing (weave freely!)
-          // 2. Noisy beacon commits during editing
-          // 3. Force-pushing unpublished work in sovereign repos
-          // See: src/features/coherence-beacon/service.ts - igniteBeacons()
+          // Update sovereign's .udd with supermodule entry (local commit only)
+          // Sharing this commit to the Radicle network is deferred to igniteBeacons()
+          console.log(`SubmoduleManagerService: Adding supermodule relationship to sovereign ${result.submoduleName}`);
 
-          // STEP 2: Update submodule to point to latest sovereign commit with all metadata
+          const supermoduleEntry = {
+            radicleId: parentRadicleId,
+            title: parentTitle,
+            atCommit: '', // Populated by CoherenceBeacon when shared
+            addedAt: Date.now()
+          };
+
+          if (await UDDService.addSupermoduleEntry(sovereignPath, supermoduleEntry)) {
+            console.log(`SubmoduleManagerService: Added ${parentTitle} (${parentRadicleId}) to sovereign ${result.submoduleName}'s supermodules`);
+
+            // Commit the change in the sovereign repository (local only)
+            try {
+              await execAsync('git add .udd', { cwd: sovereignPath });
+              await execAsync(`git commit -m "Add supermodule relationship: ${parentTitle}"`, { cwd: sovereignPath });
+              console.log(`SubmoduleManagerService: Committed supermodule addition in sovereign ${result.submoduleName}`);
+            } catch (error) {
+              console.error(`SubmoduleManagerService: Failed to commit sovereign .udd changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          } else {
+            console.log(`SubmoduleManagerService: Supermodule relationship already exists in sovereign ${result.submoduleName}`);
+          }
+
+          // STEP 2: Update submodule to point to latest sovereign commit
+          // We fetch directly from the sovereign repo's local path (not Radicle origin,
+          // which may be stale). This ensures the submodule always reflects the sovereign's
+          // actual HEAD, including any local-only commits not yet pushed to Radicle.
           console.log(`SubmoduleManagerService: Updating submodule to latest sovereign state...`);
 
           try {
-            // Initialize submodule first (if not already)
             const nodeProcess = (globalThis as any).process;
             let execEnv = { ...nodeProcess?.env };
 
-            // On macOS/Linux, add Radicle bin to PATH for git-remote-rad helper
-            // On Windows, submodules use local paths so this isn't needed
             if (!isWindows()) {
               const homeDir = os.homedir();
               const radicleGitHelperPaths = [
@@ -743,23 +761,28 @@ export class SubmoduleManagerService {
               execEnv = { ...nodeProcess?.env, PATH: enhancedPath };
             }
 
-            await execAsync(`git submodule update --init "${result.submoduleName}"`, {
-              cwd: fullParentPath,
-              env: execEnv
-            });
-
-            // Update submodule to point to latest commit from sovereign (remote origin/main)
+            // Initialize submodule if not already initialized
             const submodulePath = path.join(fullParentPath, result.submoduleName);
-            await execAsync(`git fetch origin`, {
+            const submoduleGitExists = require('fs').existsSync(path.join(submodulePath, '.git'));
+            if (!submoduleGitExists) {
+              await execAsync(`git submodule update --init "${result.submoduleName}"`, {
+                cwd: fullParentPath,
+                env: execEnv
+              });
+            }
+
+            // Fetch from sovereign's local path and checkout its main HEAD
+            // This avoids stale Radicle remotes — the sovereign repo is the source of truth
+            await execAsync(`git fetch "${sovereignPath}" main`, {
               cwd: submodulePath,
               env: execEnv
             });
-            await execAsync(`git checkout origin/main`, {
+            await execAsync(`git checkout FETCH_HEAD`, {
               cwd: submodulePath,
               env: execEnv
             });
 
-            console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest with complete metadata`);
+            console.log(`SubmoduleManagerService: ✓ Submodule ${childTitle} updated to latest sovereign commit`);
           } catch (error) {
             console.warn(`SubmoduleManagerService: Could not update submodule ${result.submoduleName} (non-fatal):`, error instanceof Error ? error.message : 'Unknown error');
             console.warn(`SubmoduleManagerService: Continuing with relationship tracking...`);

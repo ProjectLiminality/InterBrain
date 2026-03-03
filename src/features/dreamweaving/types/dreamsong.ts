@@ -94,7 +94,7 @@ export interface MediaTextPair {
 
 // Flip animation state for DreamNode
 export interface FlipState {
-  isFlipped: boolean;
+  flipSide: 'front' | 'back';
   isFlipping: boolean; // Animation in progress
   flipDirection: 'front-to-back' | 'back-to-front';
   animationStartTime: number;

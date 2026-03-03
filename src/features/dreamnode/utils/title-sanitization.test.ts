@@ -26,7 +26,7 @@ describe('sanitizeTitleToPascalCase', () => {
   it('handles titles with numbers', () => {
     expect(sanitizeTitleToPascalCase('Dream 2.0')).toBe('Dream20');
     expect(sanitizeTitleToPascalCase('Version 3.14.159')).toBe('Version314159');
-    expect(sanitizeTitleToPascalCase('AI Model v2')).toBe('AiModelV2');
+    expect(sanitizeTitleToPascalCase('AI Model v2')).toBe('AIModelV2');
   });
 
   it('handles titles with special characters', () => {
@@ -36,9 +36,9 @@ describe('sanitizeTitleToPascalCase', () => {
   });
 
   it('handles mixed case input', () => {
-    expect(sanitizeTitleToPascalCase('thunderstorm GENERATOR')).toBe('ThunderstormGenerator');
-    expect(sanitizeTitleToPascalCase('DREAM node')).toBe('DreamNode');
-    expect(sanitizeTitleToPascalCase('MiXeD CaSe')).toBe('MixedCase');
+    expect(sanitizeTitleToPascalCase('thunderstorm GENERATOR')).toBe('ThunderstormGENERATOR');
+    expect(sanitizeTitleToPascalCase('DREAM node')).toBe('DREAMNode');
+    expect(sanitizeTitleToPascalCase('MiXeD CaSe')).toBe('MiXeDCaSe');
   });
 
   it('removes multiple consecutive spaces', () => {
@@ -77,12 +77,12 @@ describe('sanitizeTitleToPascalCase', () => {
 
   it('handles real-world example from ThunderstormGenerator', () => {
     expect(sanitizeTitleToPascalCase('Thunderstorm Generator UPDATED COMPLETE DIY BUILD'))
-      .toBe('ThunderstormGeneratorUpdatedCompleteDiyBuild');
+      .toBe('ThunderstormGeneratorUPDATEDCOMPLETEDIYBUILD');
   });
 
   it('handles alphanumeric combinations', () => {
     expect(sanitizeTitleToPascalCase('Project 2024 Q1')).toBe('Project2024Q1');
-    expect(sanitizeTitleToPascalCase('API v3.2')).toBe('ApiV32');
+    expect(sanitizeTitleToPascalCase('API v3.2')).toBe('APIV32');
   });
 });
 
@@ -160,7 +160,7 @@ describe('pascalCaseToTitle', () => {
 
   it('handles numbers', () => {
     expect(pascalCaseToTitle('Dream20')).toBe('Dream20');
-    expect(pascalCaseToTitle('ApiV32')).toBe('Api V32');
+    expect(pascalCaseToTitle('APIV32')).toBe('A P I V32');
   });
 
   it('handles empty strings', () => {

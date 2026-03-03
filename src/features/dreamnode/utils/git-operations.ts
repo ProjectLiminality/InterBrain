@@ -131,7 +131,7 @@ export class GitOperationsService {
    */
   async openInTerminal(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
-    return openInTerminalUtil(fullPath, 'claude --continue || claude');
+    return openInTerminalUtil(fullPath, 'claude --continue --allow-dangerously-skip-permissions || claude --allow-dangerously-skip-permissions');
   }
 
   /**

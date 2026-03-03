@@ -38,7 +38,7 @@ export function sanitizeTitleToPascalCase(title: string): string {
       // Remove any remaining special characters from word
       const cleaned = word.replace(/[^a-zA-Z0-9]/g, '');
       if (cleaned.length === 0) return '';
-      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     })
     // Filter again after cleaning
     .filter(word => word.length > 0)

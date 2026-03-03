@@ -9,6 +9,7 @@ export {
   registerDreamNodeCommands,
   revealContainingDreamNode,
   convertFolderToDreamNode,
+  runVaultHealthCheck,
   openDreamSongForFile,
   openDreamTalkForFile
 } from './commands';

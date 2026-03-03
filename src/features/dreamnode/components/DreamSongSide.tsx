@@ -1,27 +1,29 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DreamNode } from '../types/dreamnode';
 import { dreamNodeStyles, getNodeColors, getGoldenGlow, getMediaOverlayStyle } from '../styles/dreamNodeStyles';
-import { DreamSong } from '../../dreamweaving/components/DreamSong'; // Use pure DreamSong for 3D back side (embedded context)
+import { DreamSong } from '../../dreamweaving/components/DreamSong';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { useDreamSongData } from '../../dreamweaving/hooks/useDreamSongData';
 import { CanvasParserService } from '../../dreamweaving/services/canvas-parser-service';
 import { serviceManager } from '../../../core/services/service-manager';
 import { NodeActionButton } from './NodeActionButton';
+import { useCanvasFiles, BacksideContentItem } from '../hooks/useCanvasFiles';
+import { HolonView as _HolonView } from './HolonView';
+import { DreamExplorer } from '../../dream-explorer/components/DreamExplorer';
+import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../utils/html-loader';
 
 interface DreamSongSideProps {
   dreamNode: DreamNode;
   isHovered: boolean;
   isEditModeActive: boolean;
   isPendingRelationship: boolean;
-  isRelationshipEditMode?: boolean; // In relationship-edit layout (hover shows glow preview)
-  isTutorialHighlighted?: boolean; // Tutorial-triggered hover effect
+  isRelationshipEditMode?: boolean;
+  isTutorialHighlighted?: boolean;
   shouldShowFlipButton: boolean;
   shouldShowFullscreenButton: boolean;
   nodeSize: number;
   borderWidth: number;
-  glowIntensity?: number; // Distance-scaled glow intensity
-  // dreamSongData and isLoadingDreamSong removed - handled by hook
-  // isVisible removed - relying on CSS backface-visibility for optimization
+  glowIntensity?: number;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: (e: React.MouseEvent) => void;
@@ -29,6 +31,13 @@ interface DreamSongSideProps {
   onFlipClick: (e: React.MouseEvent) => void;
   onFullScreenClick?: (e: React.MouseEvent) => void;
 }
+
+/**
+ * Carousel view types:
+ * - Index 0: Holarchy view (submodules)
+ * - Index 1+: Individual .canvas files (DreamSongs)
+ */
+const HOLARCHY_VIEW_INDEX = 0;
 
 export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   dreamNode,
@@ -42,8 +51,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
   nodeSize: _nodeSize,
   borderWidth,
   glowIntensity = dreamNodeStyles.states.hover.glowIntensity,
-  // dreamSongData and isLoadingDreamSong removed - using hook
-  // isVisible parameter removed for simplicity
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -68,43 +75,208 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     return service;
   }, []);
 
+  // Scan for all backside content (index.html + .canvas files)
+  const { backsideItems, isLoading: isLoadingCanvasFiles } = useCanvasFiles(
+    dreamNode.repoPath,
+    vaultService
+  );
 
-  // Use the new hook for DreamSong data (with dreamNode for Songline feature detection)
-  const canvasPath = `${dreamNode.repoPath}/DreamSong.canvas`;
+  // Total carousel items: 1 (holarchy view) + backside items (html + canvas)
+  const totalItems = 1 + backsideItems.length;
+
+  // Get carousel state from store
+  const carouselIndex = useInterBrainStore(state => state.getCarouselIndex(dreamNode.id));
+  const cycleCarousel = useInterBrainStore(state => state.cycleCarousel);
+
+  // Determine if currently showing holarchy view or a content item
+  const isHolarchyView = carouselIndex === HOLARCHY_VIEW_INDEX;
+
+  // Get current backside item (could be canvas or html)
+  const currentItem: BacksideContentItem | null = !isHolarchyView && backsideItems.length > 0
+    ? backsideItems[carouselIndex - 1] // -1 because index 0 is holarchy
+    : null;
+
+  // Convenience booleans for current view type
+  const isCustomUIView = currentItem?.type === 'html';
+  const isCanvasView = currentItem?.type === 'canvas';
+
+  // Load HTML content as blob URL for custom UI views (file:// blocked by Chromium)
+  const [customUIBlobUrl, setCustomUIBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isCustomUIView || !currentItem) {
+      setCustomUIBlobUrl(null);
+      return;
+    }
+    let revoked = false;
+    const app = serviceManager.getApp();
+    if (!app) return;
+
+    createHtmlBlobUrl(app, currentItem.path).then(url => {
+      if (!revoked) setCustomUIBlobUrl(url);
+    });
+
+    return () => {
+      revoked = true;
+      setCustomUIBlobUrl(prev => { revokeHtmlBlobUrl(prev); return null; });
+    };
+  }, [isCustomUIView, currentItem?.path]);
+
+  // PRISM Bridge — start hybrid WebTorrent when a DreamNode has bridge.js
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const bridgeRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!isCustomUIView || !dreamNode.repoPath) return;
+
+    // Check if this DreamNode has a bridge.js (PRISM pattern)
+    const fs = require('fs');
+    const path = require('path');
+    const adapter = serviceManager.getApp()?.vault.adapter as any;
+    if (!adapter?.basePath) return;
+
+    const bridgePath = path.join(adapter.basePath, dreamNode.repoPath, 'bridge.js');
+    if (!fs.existsSync(bridgePath)) return;
+
+    // Check if node_modules/webtorrent exists
+    const wtPath = path.join(adapter.basePath, dreamNode.repoPath, 'node_modules', 'webtorrent');
+    if (!fs.existsSync(wtPath)) {
+      console.warn('[PRISM Bridge] webtorrent not installed in', dreamNode.repoPath, '— run npm install');
+      return;
+    }
+
+    let destroyed = false;
+
+    // Start the bridge
+    try {
+      const { PRISMBridge } = require(bridgePath);
+      const bridge = new PRISMBridge();
+      bridgeRef.current = bridge;
+
+      bridge.start().then((port: number) => {
+        if (destroyed) { bridge.destroy(); return; }
+        console.log(`[PRISM Bridge] started for ${dreamNode.name} on port ${port}`);
+
+        // Listen for probe messages from the iframe and respond with port
+        const handleMessage = (e: MessageEvent) => {
+          if (e.data?.type === 'prism-bridge-probe' && iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({ type: 'prism-bridge', port }, '*');
+          }
+        };
+        window.addEventListener('message', handleMessage);
+
+        // Also send immediately in case iframe already loaded
+        const sendPort = () => {
+          if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({ type: 'prism-bridge', port }, '*');
+          }
+        };
+        // Small delay to let iframe initialize
+        setTimeout(sendPort, 200);
+        setTimeout(sendPort, 600);
+
+        // Store cleanup
+        (bridge as any)._messageHandler = handleMessage;
+      }).catch((err: Error) => {
+        console.error('[PRISM Bridge] failed to start:', err);
+      });
+    } catch (err) {
+      console.error('[PRISM Bridge] failed to load:', err);
+    }
+
+    return () => {
+      destroyed = true;
+      if (bridgeRef.current) {
+        const handler = (bridgeRef.current as any)._messageHandler;
+        if (handler) window.removeEventListener('message', handler);
+        bridgeRef.current.destroy();
+        bridgeRef.current = null;
+      }
+    };
+  }, [isCustomUIView, dreamNode.repoPath, dreamNode.name]);
+
+  // Determine canvas path for the hook (only used when showing a canvas)
+  const canvasPath = isCanvasView && currentItem
+    ? currentItem.path
+    : `${dreamNode.repoPath}/DreamSong.canvas`; // Fallback for hook, won't be used if not canvas view
+
+  // Use DreamSong data hook (only used when showing a canvas)
   const { blocks, isLoading: isLoadingDreamSong, error } = useDreamSongData(
     canvasPath,
     dreamNode.repoPath,
     { canvasParser, vaultService, dreamNode },
     dreamNode.id
   );
+
   const nodeColors = getNodeColors(dreamNode.type);
 
-  // Glow conditions (no general hover glow - only specific contexts):
-  // 1. isPendingRelationship - already marked as pending relationship
-  // 2. isTutorialHighlighted - explicitly highlighted by tutorial system
-  // 3. Hover in relationship-edit mode - preview that clicking would add relationship
+  // Glow conditions
   const shouldShowGlow = isPendingRelationship || isTutorialHighlighted || (isHovered && isRelationshipEditMode);
 
   // Connect to store for media click navigation
   const dreamNodesMap = useInterBrainStore(state => state.dreamNodes);
-  const setSelectedNode = useInterBrainStore(state => state.setSelectedNode);
+  const requestNavigation = useInterBrainStore(state => state.requestNavigation);
 
-  // Convert dreamNodes Map to array (same pattern as DreamspaceCanvas)
+  // Convert dreamNodes Map to array
   const dreamNodes = Array.from(dreamNodesMap.values()).map(data => data.node);
 
-  // Handler for media click navigation
+  // Handler for media click navigation — routes through unified orchestration
+  // sourceDreamNodeId is a folder name extracted from the canvas file path (e.g., "OtherDreamNode")
+  // We match against repoPath (folder name), id (UUID), radicleId, and name (display title)
   const handleMediaClick = useCallback((sourceDreamNodeId: string) => {
-    // Find the DreamNode by ID or name
     const targetNode = dreamNodes?.find(node =>
-      node.id === sourceDreamNodeId || node.name === sourceDreamNodeId
+      node.repoPath === sourceDreamNodeId ||
+      node.id === sourceDreamNodeId ||
+      node.radicleId === sourceDreamNodeId ||
+      node.name === sourceDreamNodeId
     );
 
     if (targetNode) {
-      setSelectedNode(targetNode);
+      requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
     } else {
       console.warn(`DreamSongSide: No matching DreamNode found for "${sourceDreamNodeId}"`);
     }
-  }, [dreamNodes, setSelectedNode]);
+  }, [dreamNodes, requestNavigation]);
+
+  // Carousel navigation handlers
+  const handleCarouselLeft = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    cycleCarousel(dreamNode.id, 'left', totalItems);
+  }, [dreamNode.id, cycleCarousel, totalItems]);
+
+  const handleCarouselRight = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    cycleCarousel(dreamNode.id, 'right', totalItems);
+  }, [dreamNode.id, cycleCarousel, totalItems]);
+
+  // Should show carousel buttons (only if there are multiple items)
+  const shouldShowCarouselButtons = totalItems > 1;
+
+  // Carousel-aware fullscreen handler
+  // For custom UI (html), open CustomUIFullScreenView directly
+  // For canvas, delegate to the existing prop handler (open-dreamsong-fullscreen command)
+  const handleFullScreenClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isCustomUIView && currentItem) {
+      // Open custom UI in fullscreen leaf
+      try {
+        const leafManager = serviceManager.getLeafManagerService();
+        if (leafManager) {
+          await leafManager.openCustomUIFullScreen(dreamNode, currentItem.path);
+        }
+      } catch (err) {
+        console.error('Failed to open custom UI fullscreen:', err);
+      }
+    } else if (onFullScreenClick) {
+      // Delegate to existing DreamSong fullscreen handler
+      onFullScreenClick(e);
+    }
+  }, [isCustomUIView, currentItem, dreamNode, onFullScreenClick]);
+
+  // Read explorer focus state to suppress buttons during deep-dive
+  const explorerFocusActive = useInterBrainStore(state => state.dreamExplorer.explorerFocus);
+
+  // Only show fullscreen button when not on holarchy view
+  const shouldShowFullscreen = shouldShowFullscreenButton && !isHolarchyView;
 
   return (
     <div
@@ -119,7 +291,6 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
         cursor: 'pointer !important',
         transition: dreamNodeStyles.transitions.default,
         boxShadow: shouldShowGlow ? getGoldenGlow(glowIntensity) : 'none',
-        // CSS containment for better browser rendering with many nodes
         contain: 'layout style paint' as const,
         contentVisibility: 'auto' as const
       }}
@@ -145,11 +316,31 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
             width: '100%',
             height: '100%',
             overflow: 'auto',
-            pointerEvents: 'auto' // Enable scrolling interaction
+            pointerEvents: 'auto'
           }}
         >
-          {/* Always render DreamSong - it handles empty states internally */}
-          {isLoadingDreamSong ? (
+          {isHolarchyView ? (
+            // Embedded DreamExplorer - holarchy file navigator
+            <DreamExplorer
+              rootPath={dreamNode.repoPath}
+              rootName={dreamNode.name}
+              embedded={true}
+            />
+          ) : isCustomUIView && customUIBlobUrl ? (
+            // Custom UI view - iframe with blob URL (file:// blocked by Chromium)
+            <iframe
+              ref={iframeRef}
+              src={customUIBlobUrl}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                borderRadius: '50%',
+                background: '#000'
+              }}
+              title={`${dreamNode.name} Custom UI`}
+            />
+          ) : isLoadingDreamSong || isLoadingCanvasFiles ? (
             <div
               style={{
                 width: '100%',
@@ -161,7 +352,7 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
                 pointerEvents: 'auto'
               }}
             >
-              Loading DreamSong...
+              Loading...
             </div>
           ) : error ? (
             <div
@@ -202,21 +393,58 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
           )}
         </div>
 
-        {/* Fade-to-black overlay - always show for visual consistency */}
-        <div style={getMediaOverlayStyle()} />
+        {/* Fade-to-black overlay - skip for embedded DreamExplorer (it manages its own visuals) */}
+        {!isHolarchyView && <div style={getMediaOverlayStyle()} />}
       </div>
 
-      {/* Full-screen button (top-center, on back side) */}
-      {shouldShowFullscreenButton && onFullScreenClick && (
+      {/* Carousel navigation buttons (left/right) — hidden during explorer focus */}
+      {shouldShowCarouselButtons && !explorerFocusActive && (
+        <>
+          <NodeActionButton
+            icon="lucide-chevron-left"
+            position="left"
+            onClick={handleCarouselLeft}
+            size={64}
+            iconSize={28}
+          />
+          <NodeActionButton
+            icon="lucide-chevron-right"
+            position="right"
+            onClick={handleCarouselRight}
+            size={64}
+            iconSize={28}
+          />
+        </>
+      )}
+
+      {/* Full-screen button (top-center) — carousel-aware, only on content views */}
+      {shouldShowFullscreen && (
         <NodeActionButton
           icon="lucide-maximize"
           position="top"
-          onClick={onFullScreenClick}
+          onClick={handleFullScreenClick}
         />
       )}
 
-      {/* Flip button (bottom-center, on back side) */}
-      {shouldShowFlipButton && (
+      {/* Explorer Focus button (top-center) — only on holarchy view */}
+      {shouldShowFullscreenButton && isHolarchyView && (
+        <NodeActionButton
+          icon="lucide-compass"
+          position="top"
+          onClick={(e) => {
+            e.stopPropagation();
+            const explorerFocus = useInterBrainStore.getState().dreamExplorer.explorerFocus;
+            requestNavigation({
+              type: 'explorer-focus',
+              nodeId: dreamNode.id,
+              explorerFocusActive: !explorerFocus,
+            });
+          }}
+        />
+      )}
+
+      {/* Flip button (bottom-center) — hidden during explorer focus */}
+      {shouldShowFlipButton && !explorerFocusActive && (
         <NodeActionButton
           icon="lucide-rotate-3d"
           position="bottom"

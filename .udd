@@ -7,7 +7,20 @@
     "7a42db51-a60d-441b-b65d-8bc04dc50c78"
   ],
   "submodules": [],
-  "supermodules": [{"uuid": "3cae76ad-1300-45e6-b523-990bcdce5711", "title": "InterBrain Scalability", "atCommit": "", "addedAt": 1737132000000}],
+  "supermodules": [
+    {
+      "uuid": "3cae76ad-1300-45e6-b523-990bcdce5711",
+      "title": "InterBrain Scalability",
+      "atCommit": "",
+      "addedAt": 1737132000000
+    },
+    {
+      "radicleId": "rad:z3pJjtKCvs5BxzjV3khhbAS4PgGX4",
+      "title": "HolarchyNavigationUI",
+      "atCommit": "5a518398ad27f07754bdc4842d718bb0fe52e8ed",
+      "addedAt": 1769629008253
+    }
+  ],
   "githubRepoUrl": "https://github.com/ProjectLiminality/InterBrain",
   "radicleId": "rad:zJqVpsnnegqWgqY2sshQYnq8CkBR"
 }

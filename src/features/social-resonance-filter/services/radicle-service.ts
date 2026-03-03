@@ -249,7 +249,7 @@ export class RadicleServiceImpl implements RadicleService {
       env.RAD_PASSPHRASE = passphrase;
     }
 
-    const fs = require('fs');
+    const _fs = require('fs');
 
     try {
       // Use spawn instead of exec to provide proper stdin (bypasses TTY requirement)
@@ -582,7 +582,7 @@ export class RadicleServiceImpl implements RadicleService {
     }
   }
 
-  async clone(radicleId: string, destinationPath: string, passphrase?: string, peerNid?: string): Promise<{ repoName: string; alreadyExisted: boolean }> {
+  async clone(radicleId: string, destinationPath: string, passphrase?: string, _peerNid?: string): Promise<{ repoName: string; alreadyExisted: boolean }> {
     if (!await this.isAvailable()) {
       throw new Error('Radicle CLI not available. Please install Radicle: https://radicle.xyz');
     }
@@ -730,7 +730,7 @@ export class RadicleServiceImpl implements RadicleService {
       const { isPascalCase, pascalCaseToTitle } = await import('../../dreamnode/utils/title-sanitization');
 
       // Check if title needs normalization (kebab-case, snake_case, or PascalCase)
-      let titleNormalized = false;
+      let _titleNormalized = false;
       if (udd.title) {
         const originalTitle = udd.title;
 
@@ -746,12 +746,12 @@ export class RadicleServiceImpl implements RadicleService {
             })
             .join(' ')
             .trim();
-          titleNormalized = udd.title !== originalTitle;
+          _titleNormalized = udd.title !== originalTitle;
         }
         // If title is pure PascalCase (no separators), convert to spaced format
         else if (isPascalCase(udd.title)) {
           udd.title = pascalCaseToTitle(udd.title);
-          titleNormalized = udd.title !== originalTitle;
+          _titleNormalized = udd.title !== originalTitle;
         }
       }
 

@@ -11,6 +11,8 @@ import {
 	AIMessage,
 	AIResponse,
 	CompletionOptions,
+	StreamChunkCallback,
+	StreamCompletionMeta,
 	ProviderStatus,
 	TaskComplexity,
 	AIMagicConfig,
@@ -60,6 +62,74 @@ export interface InferenceResult extends AIResponse {
 	usedFallback: boolean;
 	/** Original provider that was tried first (if different from final) */
 	originalProvider?: string;
+}
+
+/**
+ * Options for streaming inference
+ */
+export interface StreamInferenceOptions extends InferenceOptions {
+	signal?: AbortSignal;
+}
+
+/**
+ * Result from streaming inference (content delivered via chunks)
+ */
+export interface StreamInferenceResult extends StreamCompletionMeta {
+	usedFallback: boolean;
+	originalProvider?: string;
+}
+
+/**
+ * Create a thinking tag stripper that wraps an onChunk callback.
+ * Buffers content until it can determine whether a <think> block is present,
+ * strips the block, and forwards everything after.
+ */
+function createThinkingTagStripper(onChunk: StreamChunkCallback): StreamChunkCallback {
+	let buffer = '';
+	let state: 'detecting' | 'inside_think' | 'passthrough' = 'detecting';
+
+	return (chunk: string) => {
+		if (state === 'passthrough') {
+			onChunk(chunk);
+			return;
+		}
+
+		buffer += chunk;
+
+		if (state === 'detecting') {
+			// Check if buffer starts with <think> (possibly with leading whitespace)
+			const trimmed = buffer.trimStart();
+			if (trimmed.startsWith('<think>')) {
+				state = 'inside_think';
+				// Fall through to inside_think handling
+			} else if (trimmed.length > 0 && !('<think>'.startsWith(trimmed.slice(0, 7)))) {
+				// Buffer content doesn't look like it could be <think>, flush and pass through
+				state = 'passthrough';
+				onChunk(buffer);
+				buffer = '';
+				return;
+			} else {
+				// Still ambiguous (buffer is a prefix of "<think>"), keep buffering
+				return;
+			}
+		}
+
+		if (state === 'inside_think') {
+			const closeIdx = buffer.indexOf('</think>');
+			if (closeIdx !== -1) {
+				// Found closing tag — skip everything up to and including </think>, forward the rest
+				const afterThink = buffer.slice(closeIdx + 8);
+				buffer = '';
+				state = 'passthrough';
+				// Trim leading whitespace/newlines after </think>
+				const trimmedAfter = afterThink.replace(/^\s*/, '');
+				if (trimmedAfter) {
+					onChunk(trimmedAfter);
+				}
+			}
+			// Still inside <think> block, keep buffering
+		}
+	};
 }
 
 /**
@@ -309,6 +379,133 @@ export class InferenceService {
 	}
 
 	/**
+	 * Streaming inference method
+	 *
+	 * Same provider routing and fallback logic as generate(), but streams tokens
+	 * via onChunk callback. Falls back to non-streaming if provider lacks streaming support.
+	 */
+	async generateStream(
+		messages: AIMessage[],
+		onChunk: StreamChunkCallback,
+		complexity: TaskComplexity = 'trivial',
+		options?: StreamInferenceOptions
+	): Promise<StreamInferenceResult> {
+		const preferLocal = options?.preferLocal ?? this.config.preferLocal;
+		const noFallback = options?.noFallback ?? false;
+		const wrappedOnChunk = createThinkingTagStripper(onChunk);
+
+		const providers = await this.getProviderOrder(preferLocal, complexity);
+
+		if (providers.length === 0) {
+			throw new Error('No AI providers available. Configure Claude API key or start Ollama.');
+		}
+
+		// Force specific provider if requested
+		if (options?.forceProvider) {
+			const forceKey = options.forceProvider.toLowerCase();
+			const forced = providers.find(p => {
+				const providerName = p.provider.name.toLowerCase();
+				return providerName === forceKey ||
+					providerName.startsWith(forceKey) ||
+					(forceKey === 'xai' && providerName.includes('grok')) ||
+					(forceKey === 'grok' && providerName.includes('grok'));
+			});
+			if (forced) {
+				return this.executeStream(forced.provider, messages, wrappedOnChunk, {
+					...options,
+					model: options?.model || forced.model
+				});
+			}
+			throw new Error(`Provider '${options.forceProvider}' not available`);
+		}
+
+		let lastError: Error | null = null;
+		let originalProvider: string | undefined;
+		let chunksDelivered = false;
+
+		// Wrap onChunk to track whether any content was already streamed to the client.
+		// If a provider delivers chunks but then errors, we must NOT fallback —
+		// the partial content is already in the user's UI and a second provider
+		// would produce interleaved/duplicate output.
+		const trackingOnChunk: StreamChunkCallback = (chunk: string) => {
+			chunksDelivered = true;
+			wrappedOnChunk(chunk);
+		};
+
+		for (let i = 0; i < providers.length; i++) {
+			const { provider, model } = providers[i];
+
+			if (i === 0) {
+				originalProvider = provider.name;
+			}
+
+			try {
+				console.log(`[AI Magic] Streaming via provider: ${provider.name}`);
+				const result = await this.executeStream(provider, messages, trackingOnChunk, {
+					...options,
+					model: options?.model || model
+				});
+
+				if (i > 0 && originalProvider) {
+					new Notice(`AI: ${originalProvider} unavailable, used ${provider.name} instead`);
+				}
+
+				return {
+					...result,
+					usedFallback: i > 0,
+					originalProvider: i > 0 ? originalProvider : undefined
+				};
+			} catch (error) {
+				// Don't fallback on intentional abort
+				if (error instanceof DOMException && error.name === 'AbortError') {
+					throw error;
+				}
+				lastError = error instanceof Error ? error : new Error(String(error));
+				console.warn(`Streaming provider ${provider.name} failed:`, lastError.message);
+
+				// If chunks were already delivered to the client, do NOT fallback.
+				// A second provider would produce interleaved/duplicate content.
+				if (chunksDelivered) {
+					console.warn(`[AI Magic] Provider ${provider.name} failed after delivering chunks — not falling back to avoid duplicate output`);
+					throw lastError;
+				}
+
+				if (noFallback) {
+					throw lastError;
+				}
+			}
+		}
+
+		throw lastError || new Error('All providers failed');
+	}
+
+	/**
+	 * Execute streaming for a single provider, falling back to non-streaming if needed
+	 */
+	private async executeStream(
+		provider: AIProvider,
+		messages: AIMessage[],
+		onChunk: StreamChunkCallback,
+		options?: StreamInferenceOptions
+	): Promise<StreamInferenceResult> {
+		if (provider.generateStreamingCompletion) {
+			const meta = await provider.generateStreamingCompletion(messages, onChunk, options);
+			return { ...meta, usedFallback: false };
+		}
+
+		// Fallback: non-streaming, deliver full response as single chunk
+		const response = await provider.generateCompletion(messages, options);
+		const cleanedContent = stripThinkingTags(response.content);
+		onChunk(cleanedContent);
+		return {
+			provider: response.provider,
+			model: response.model,
+			usage: response.usage,
+			usedFallback: false
+		};
+	}
+
+	/**
 	 * Get providers in order of preference
 	 */
 	private async getProviderOrder(
@@ -545,4 +742,16 @@ export async function generateAI(
 	options?: InferenceOptions
 ): Promise<AIResponse> {
 	return getInferenceService().generate(messages, complexity, options);
+}
+
+/**
+ * Convenience function for streaming inference calls
+ */
+export async function generateStreamAI(
+	messages: AIMessage[],
+	onChunk: StreamChunkCallback,
+	complexity: TaskComplexity = 'trivial',
+	options?: StreamInferenceOptions
+): Promise<StreamInferenceResult> {
+	return getInferenceService().generateStream(messages, onChunk, complexity, options);
 }
