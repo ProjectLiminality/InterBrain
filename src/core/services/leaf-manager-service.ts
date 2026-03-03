@@ -26,6 +26,7 @@ export class LeafManagerService {
   private dreamTalkLeaves: Map<string, WorkspaceLeaf> = new Map();
   private canvasLeaves: Map<string, WorkspaceLeaf> = new Map();
   private customUILeaves: Map<string, WorkspaceLeaf> = new Map();
+  private customUIInFlight: Set<string> = new Set();
   private dreamExplorerLeaf: WorkspaceLeaf | null = null;
   private rightPaneLeaf: WorkspaceLeaf | null = null;
 
@@ -512,6 +513,11 @@ export class LeafManagerService {
    */
   async openCustomUIFullScreen(dreamNode: DreamNode, htmlPath: string): Promise<void> {
     try {
+      // Prevent concurrent opens for the same node
+      if (this.customUIInFlight.has(dreamNode.id)) {
+        return;
+      }
+
       // Check if we already have a leaf for this DreamNode's custom UI
       const existingLeaf = this.customUILeaves.get(dreamNode.id);
 
@@ -528,31 +534,37 @@ export class LeafManagerService {
         }
       }
 
-      // Create new leaf in right split group
-      const leaf = this.getRightLeaf();
+      this.customUIInFlight.add(dreamNode.id);
 
-      // Set the view type
-      await leaf.setViewState({
-        type: CUSTOM_UI_FULLSCREEN_VIEW_TYPE,
-        state: {}
-      });
+      try {
+        // Create new leaf in right split group
+        const leaf = this.getRightLeaf();
 
-      // Get the view instance and update it
-      const view = leaf.view as CustomUIFullScreenView;
-      if (view && view.updateContent) {
-        view.updateContent(dreamNode, htmlPath);
+        // Set the view type
+        await leaf.setViewState({
+          type: CUSTOM_UI_FULLSCREEN_VIEW_TYPE,
+          state: {}
+        });
+
+        // Get the view instance and update it
+        const view = leaf.view as CustomUIFullScreenView;
+        if (view && view.updateContent) {
+          view.updateContent(dreamNode, htmlPath);
+        }
+
+        // Track this leaf
+        this.customUILeaves.set(dreamNode.id, leaf);
+
+        // Set up cleanup when leaf is closed
+        this.setupGenericLeafCleanup(this.customUILeaves, dreamNode.id, leaf, 'CustomUI');
+
+        // Reveal the leaf
+        this.app.workspace.revealLeaf(leaf);
+
+        console.log(`Opened Custom UI full-screen for: ${dreamNode.name}`);
+      } finally {
+        this.customUIInFlight.delete(dreamNode.id);
       }
-
-      // Track this leaf
-      this.customUILeaves.set(dreamNode.id, leaf);
-
-      // Set up cleanup when leaf is closed
-      this.setupGenericLeafCleanup(this.customUILeaves, dreamNode.id, leaf, 'CustomUI');
-
-      // Reveal the leaf
-      this.app.workspace.revealLeaf(leaf);
-
-      console.log(`Opened Custom UI full-screen for: ${dreamNode.name}`);
 
     } catch (error) {
       console.error('Failed to open Custom UI full-screen:', error);

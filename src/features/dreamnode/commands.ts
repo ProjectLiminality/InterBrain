@@ -252,40 +252,42 @@ export function registerDreamNodeCommands(
           return;
         }
 
-        // Use the useDreamSongData logic to determine if we should show canvas or README
-        const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
         const vaultService = serviceManager.getVaultService();
         if (!vaultService) {
           uiService.showError('Vault service not available');
           return;
         }
 
-        // Always open DreamSong fullscreen view - it handles empty states internally
+        // Prioritize custom UI (index.html) over DreamSong canvas
+        const customUIPath = `${selectedNode.repoPath}/index.html`;
+        const hasCustomUI = await vaultService.fileExists(customUIPath);
+
+        if (hasCustomUI) {
+          await leafManager.openCustomUIFullScreen(selectedNode, customUIPath);
+          uiService.showSuccess(`Opened Custom UI for ${selectedNode.name}`);
+          return;
+        }
+
+        // Fall back to DreamSong canvas
+        const canvasPath = `${selectedNode.repoPath}/DreamSong.canvas`;
         let blocks: any[] = [];
 
-        // Try to parse canvas if it exists
         const canvasExists = await vaultService.fileExists(canvasPath);
         if (canvasExists) {
           try {
-            // Use the new DreamSong service layer to parse blocks
             const { parseCanvasToBlocks, resolveMediaPaths } = await import('../dreamweaving/dreamsong/index');
             const canvasParserService = new (await import('../dreamweaving/services/canvas-parser-service')).CanvasParserService(
               vaultService
             );
 
-            // Parse canvas using new architecture
             const canvasData = await canvasParserService.parseCanvas(canvasPath);
             blocks = parseCanvasToBlocks(canvasData, selectedNode.id);
-
-            // Resolve media paths to data URLs
             blocks = await resolveMediaPaths(blocks, selectedNode.repoPath, vaultService);
           } catch (parseError) {
             console.error('Failed to parse DreamSong canvas:', parseError);
-            // Continue with empty blocks
           }
         }
 
-        // Open fullscreen view (with or without blocks)
         await leafManager.openDreamSongFullScreen(selectedNode, blocks);
         uiService.showSuccess(`Opened DreamSong for ${selectedNode.name}`);
 

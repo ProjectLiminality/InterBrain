@@ -73,6 +73,7 @@ export class URIHandlerService {
 				const nodeData = store.dreamNodes.get(uuid);
 				if (nodeData) {
 					store.setSelectedNode(nodeData.node);
+					store.requestNavigation({ type: 'liminal-web-focus', nodeId: nodeData.node.id });
 				} else {
 					console.warn(`[URIHandler] DreamNode not found for UUID: ${uuid}`);
 					new Notice(`DreamNode not found: ${uuid.slice(0, 8)}...`);

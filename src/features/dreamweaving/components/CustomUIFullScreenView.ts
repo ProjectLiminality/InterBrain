@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { DreamNode } from '../../dreamnode/types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
+import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../../dreamnode/utils/html-loader';
 import { generateAI, generateStreamAI } from '../../ai-magic/services/inference-service';
 import type { TaskComplexity } from '../../ai-magic/types';
@@ -268,6 +269,60 @@ export class CustomUIFullScreenView extends ItemView {
           controller.abort();
           this.activeStreams.delete(requestId);
         }
+        return;
+      }
+
+      // DreamNode selection — navigate dreamspace to focus on a node
+      if (data?.type === 'select-dreamnode') {
+        const { nodeId } = data;
+        if (nodeId) {
+          const store = useInterBrainStore.getState();
+          // Match by id, repoPath, radicleId, or name (same pattern as DreamSongSide)
+          const dreamNodes = Array.from(store.dreamNodes.values()).map(d => d.node);
+          const targetNode = dreamNodes.find(node =>
+            node.id === nodeId ||
+            node.repoPath === nodeId ||
+            node.radicleId === nodeId ||
+            node.name === nodeId
+          );
+          if (targetNode) {
+            store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
+          } else {
+            console.warn(`[CustomUI] select-dreamnode: No matching DreamNode for "${nodeId}"`);
+          }
+        }
+        return;
+      }
+
+      // DreamNode catalog — return all DreamNodes for autocomplete
+      if (data?.type === 'dreamnode-catalog-request') {
+        const store = useInterBrainStore.getState();
+        const adapter = serviceManager.getApp()?.vault.adapter as any;
+        const catalog = Array.from(store.dreamNodes.values()).map(d => {
+          const node = d.node;
+          // Resolve DreamTalk image to app:// URL for iframe use
+          let dreamTalkUrl = '';
+          if (node.dreamTalkMedia?.[0]?.absolutePath && adapter?.getResourcePath) {
+            const vaultPath = adapter.basePath || '';
+            let vaultRelative = node.dreamTalkMedia[0].absolutePath;
+            if (vaultRelative.startsWith(vaultPath)) {
+              vaultRelative = vaultRelative.slice(vaultPath.length);
+              if (vaultRelative.startsWith('/')) vaultRelative = vaultRelative.slice(1);
+            }
+            dreamTalkUrl = adapter.getResourcePath(vaultRelative);
+          }
+          return {
+            id: node.id,
+            title: node.name,
+            type: node.type,
+            repoPath: node.repoPath,
+            dreamTalkUrl,
+          };
+        });
+        this.iframeEl?.contentWindow?.postMessage({
+          type: 'dreamnode-catalog-response',
+          catalog,
+        }, '*');
         return;
       }
 
