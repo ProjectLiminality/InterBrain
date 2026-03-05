@@ -39,6 +39,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/d3-force": "^3.0.10",
     "@types/d3-hierarchy": "^3.1.7",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "^24.0.13",
@@ -57,7 +58,6 @@
   "dependencies": {
     "@react-three/drei": "^10.5.0",
     "@react-three/fiber": "^9.2.0",
-    "@types/d3-force": "^3.0.10",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@types/three": "^0.178.1",
