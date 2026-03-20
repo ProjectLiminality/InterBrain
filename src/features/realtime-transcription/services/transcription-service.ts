@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'child_process';
 import type InterBrainPlugin from '../../../main';
 import { UIService } from '../../../core/services/ui-service';
+import { getPluginDir } from '../../../core/services/vault-service';
 import type { ITranscriptionService, TranscriptionConfig } from '../types/transcription-types';
 
 /**
@@ -43,26 +44,8 @@ export class TranscriptionService implements ITranscriptionService {
 	 */
 	getScriptPath(): string {
 		const path = require('path');
-		const fs = require('fs');
-
-		// Use app.vault.adapter to get the vault's base path
-		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
-
-		// Plugin is installed at vault/.obsidian/plugins/interbrain
-		const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
-
-		// Resolve symlinks to get the actual source directory
-		const realPluginDir = fs.realpathSync(pluginDir);
-
-		const scriptPath = path.join(
-			realPluginDir,
-			'src',
-			'features',
-			'realtime-transcription',
-			'scripts',
-			'interbrain-transcribe.py'
-		);
-
+		const pluginDir = getPluginDir(this.plugin.app, this.plugin.manifest.id);
+		const scriptPath = path.join(pluginDir, 'scripts', 'realtime-transcription', 'interbrain-transcribe.py');
 		console.log('[Transcription] Script path resolved:', scriptPath);
 		return scriptPath;
 	}
@@ -76,36 +59,19 @@ export class TranscriptionService implements ITranscriptionService {
 		const fs = require('fs');
 
 		try {
-			// Use app.vault.adapter to get the vault's base path
-			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
-
-			// Plugin is installed at vault/.obsidian/plugins/interbrain
-			const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
-
-			// Resolve symlinks to get the actual source directory
-			const realPluginDir = fs.realpathSync(pluginDir);
-
 			const scriptsDir = path.join(
-				realPluginDir,
-				'src',
-				'features',
-				'realtime-transcription',
-				'scripts'
+				getPluginDir(this.plugin.app, this.plugin.manifest.id),
+				'scripts', 'realtime-transcription'
 			);
 
 			// eslint-disable-next-line no-undef
-			if (process.platform === 'win32') {
-				const venvPython = path.join(scriptsDir, 'venv', 'Scripts', 'python.exe');
-				if (fs.existsSync(venvPython)) {
-					console.log('[Transcription] Found venv Python (Windows):', venvPython);
-					return venvPython;
-				}
-			} else {
-				const venvPython = path.join(scriptsDir, 'venv', 'bin', 'python3');
-				if (fs.existsSync(venvPython)) {
-					console.log('[Transcription] Found venv Python (Unix):', venvPython);
-					return venvPython;
-				}
+			const venvPython = process.platform === 'win32'
+				? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
+				: path.join(scriptsDir, 'venv', 'bin', 'python3');
+
+			if (fs.existsSync(venvPython)) {
+				console.log('[Transcription] Found venv Python:', venvPython);
+				return venvPython;
 			}
 		} catch (error) {
 			console.warn('[Transcription] Error checking for venv:', error);
@@ -121,23 +87,14 @@ export class TranscriptionService implements ITranscriptionService {
 		const fs = require('fs');
 
 		try {
-			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
-			const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
-			const realPluginDir = fs.realpathSync(pluginDir);
-
 			const scriptsDir = path.join(
-				realPluginDir,
-				'src',
-				'features',
-				'realtime-transcription',
-				'scripts'
+				getPluginDir(this.plugin.app, this.plugin.manifest.id),
+				'scripts', 'realtime-transcription'
 			);
-
 			// eslint-disable-next-line no-undef
 			const venvPath = process.platform === 'win32'
 				? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
 				: path.join(scriptsDir, 'venv', 'bin', 'python3');
-
 			return fs.existsSync(venvPath);
 		} catch {
 			return false;
@@ -297,7 +254,6 @@ export class TranscriptionService implements ITranscriptionService {
 			console.log('[Transcription] Process spawned, waiting for output...');
 
 			// Monitor stdout for status updates and dual-stream output
-			// eslint-disable-next-line no-undef
 			this.currentProcess?.stdout?.on('data', (data: Buffer) => {
 				const rawOutput = data.toString();
 				// Process each line separately (data may contain multiple lines)
@@ -369,7 +325,6 @@ export class TranscriptionService implements ITranscriptionService {
 			});
 
 			// Monitor stderr for errors
-			// eslint-disable-next-line no-undef
 			this.currentProcess?.stderr?.on('data', (data: Buffer) => {
 				const error = data.toString().trim();
 				if (!error) return;

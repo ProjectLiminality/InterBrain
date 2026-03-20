@@ -11,6 +11,7 @@
  */
 
 import { App, Modal, Setting, Notice } from 'obsidian';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 import {
   PeerCommitGroup,
   PendingCommit,
@@ -705,8 +706,7 @@ export class CherryPickPreviewModal extends Modal {
     const clonedRepos: string[] = [];
 
     try {
-      const adapter = this.app.vault.adapter as any;
-      const vaultPath = adapter.basePath || '';
+      const vaultPath = getVaultBasePath(this.app);
       const path = require('path');
       const fs = require('fs').promises;
 
@@ -964,8 +964,7 @@ export class CherryPickPreviewModal extends Modal {
       if (clonedRepos.length > 0) {
         const fs = require('fs').promises;
         const path = require('path');
-        const adapter = this.app.vault.adapter as any;
-        const vaultPath = adapter.basePath || '';
+        const vaultPath = getVaultBasePath(this.app);
 
         for (const repoName of clonedRepos) {
           const repoPath = path.join(vaultPath, repoName);
@@ -1006,8 +1005,7 @@ export class CherryPickPreviewModal extends Modal {
     if (clonedRepos.length > 0) {
       const fs = require('fs').promises;
       const path = require('path');
-      const adapter = this.app.vault.adapter as any;
-      const vaultPath = adapter.basePath || '';
+      const vaultPath = getVaultBasePath(this.app);
 
       for (const repoName of clonedRepos) {
         const repoPath = path.join(vaultPath, repoName);
@@ -1620,8 +1618,7 @@ export class CherryPickPreviewModal extends Modal {
             const { exec } = require('child_process');
             const { promisify } = require('util');
             const execAsync = promisify(exec);
-            const adapter = this.app.vault.adapter as any;
-            const fullPath = require('path').join(adapter.basePath || '', this.config.dreamNodePath);
+            const fullPath = require('path').join(getVaultBasePath(this.app), this.config.dreamNodePath);
             let appliedHash = commit.originalHash;
             try {
               const { stdout } = await execAsync('git rev-parse HEAD', { cwd: fullPath });

@@ -12,6 +12,7 @@ import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
 import { PDFPreview } from './PDFPreview';
 import { serviceManager } from '../../../core/services/service-manager';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 /**
  * Get resource URL from absolutePath using Obsidian's getResourcePath
@@ -23,8 +24,7 @@ export function getMediaResourceUrl(absolutePath: string | undefined): string | 
   const app = serviceManager.getApp();
   if (!app) return null;
 
-  const adapter = app.vault.adapter as { basePath?: string };
-  const vaultPath = adapter.basePath || '';
+  const vaultPath = getVaultBasePath(app);
 
   if (!vaultPath) return null;
 

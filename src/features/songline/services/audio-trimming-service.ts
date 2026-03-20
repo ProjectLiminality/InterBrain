@@ -87,7 +87,14 @@ export class AudioTrimmingService {
     // Find ffmpeg executable
     const ffmpegPath = await this.findFfmpegPath();
     if (!ffmpegPath) {
-      throw new Error('ffmpeg not found. Please install ffmpeg and try again.');
+      // eslint-disable-next-line no-undef
+      const platform = process.platform;
+      const installHint = platform === 'darwin'
+        ? 'Install via Homebrew: brew install ffmpeg'
+        : platform === 'win32'
+          ? 'Download from https://ffmpeg.org/download.html and add to PATH'
+          : 'Install via your package manager, e.g.: sudo apt install ffmpeg';
+      throw new Error(`ffmpeg not found. ${installHint}`);
     }
 
     // Validate inputs

@@ -11,6 +11,7 @@ import { getPerspectiveService } from '../songline/services/perspective-service'
 import { getAudioTrimmingService } from '../songline/services/audio-trimming-service';
 import { getInferenceService } from '../ai-magic';
 import type InterBrainPlugin from '../../main';
+import { getVaultBasePath } from '../../core/services/vault-service';
 
 /**
  * Conversational copilot commands for markdown-based transcription and semantic search
@@ -92,7 +93,7 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
         }
 
         // Get absolute file system path for Python transcription
-        const vaultPath = (plugin.app.vault.adapter as any).basePath;
+        const vaultPath = getVaultBasePath(plugin.app);
         const path = require('path');
         const absoluteTranscriptPath = path.join(vaultPath, transcriptFile.path);
 
@@ -285,7 +286,7 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
                 const audioPath = await audioRecordingService.getRecordedAudioPath(partnerToFocus, transcriptFile.name);
 
                 let relativeAudioPath: string;
-                const vaultPath = (plugin.app.vault.adapter as any).basePath;
+                const vaultPath = getVaultBasePath(plugin.app);
                 const path = require('path');
 
                 if (!audioPath) {
@@ -417,7 +418,11 @@ export function registerConversationalCopilotCommands(plugin: InterBrainPlugin, 
                     successCount++;
                     console.log(`✅ [Songline] Created sovereign perspective ${successCount}/${clipSuggestions.length} for ${dreamNode.name}`);
                   } catch (error) {
+                    const msg = (error as Error).message;
                     console.error(`❌ [Songline] Failed to create perspective for ${clip.nodeName}:`, error);
+                    if (msg.includes('ffmpeg')) {
+                      uiService.showError(msg);
+                    }
                   }
                   }
 

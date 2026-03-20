@@ -17,6 +17,7 @@ import { DreamNodeConversionService } from './services/dreamnode-conversion-serv
 import { UDDService } from './services/udd-service';
 import { sanitizeTitleToPascalCase } from './utils/title-sanitization';
 import { DREAMSPACE_VIEW_TYPE } from '../../core/components/DreamspaceView';
+import { getVaultBasePath } from '../../core/services/vault-service';
 
 export function registerDreamNodeCommands(
   plugin: Plugin,
@@ -507,7 +508,7 @@ export async function runVaultHealthCheck(
 ): Promise<void> {
   const fs = require('fs');
   const path = require('path');
-  const vaultPath = (plugin.app.vault.adapter as any).basePath;
+  const vaultPath = getVaultBasePath(plugin.app);
   const dryRun = options.dryRun;
   const logPrefix = dryRun ? '[DRY RUN] ' : '';
 

@@ -8,6 +8,7 @@ import { webLinkAnalyzerService } from '../../web-link-analyzer';
 import { serviceManager } from '../../../core/services/service-manager';
 import { GitOperationsService } from '../utils/git-operations';
 import { UDDService } from './udd-service';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 // Access Node.js modules directly in Electron context
  
@@ -21,11 +22,6 @@ const crypto = require('crypto');
 const execAsync = promisify(exec);
 const fsPromises = fs.promises;
 
-// Type for accessing file system path from Obsidian vault adapter
-interface VaultAdapter {
-  path?: string;
-  basePath?: string;
-}
 
 /**
  * GitDreamNodeService - Real git-based DreamNode storage
@@ -43,35 +39,15 @@ export class GitDreamNodeService {
     this.plugin = plugin;
     this.gitOpsService = new GitOperationsService(plugin.app);
     // Get vault file system path for Node.js fs operations
-    const adapter = plugin.app.vault.adapter as VaultAdapter;
-    
-    // Try different ways to get the vault path
-    let vaultPath = '';
-    if (typeof adapter.path === 'string') {
-      vaultPath = adapter.path;
-    } else if (typeof adapter.basePath === 'string') {
-      vaultPath = adapter.basePath;
-    } else if (adapter.path && typeof adapter.path === 'object') {
-      // Sometimes path is an object with properties
-       
-      vaultPath = (adapter.path as any).path || (adapter.path as any).basePath || '';
-    }
-    
-    this.vaultPath = vaultPath;
-    
+    this.vaultPath = getVaultBasePath(plugin.app);
+
     // Template is packaged with the plugin in src/features/dreamnode/
     // Get the plugin directory path from Obsidian's plugin manifest
     if (this.vaultPath) {
       const pluginDir = path.join(this.vaultPath, '.obsidian', 'plugins', plugin.manifest.id);
       this.templatePath = path.join(pluginDir, 'src', 'features', 'dreamnode', 'DreamNode-template');
     } else {
-      // Fallback - try to get plugin directory from plugin object
-      // @ts-ignore - accessing private plugin properties
-      const adapter = plugin.app?.vault?.adapter as { basePath?: string };
-      const pluginDir = adapter?.basePath ?
-        path.join(adapter.basePath, '.obsidian', 'plugins', plugin.manifest.id) :
-        './src/features/dreamnode/DreamNode-template';
-      this.templatePath = path.join(pluginDir, 'src', 'features', 'dreamnode', 'DreamNode-template');
+      this.templatePath = './src/features/dreamnode/DreamNode-template';
       console.warn('GitDreamNodeService: Could not determine vault path, using fallback template path:', this.templatePath);
     }
     

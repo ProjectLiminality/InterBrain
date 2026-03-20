@@ -12,6 +12,7 @@
 import { Notice } from 'obsidian';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { ChildProcess, spawn } from 'child_process';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 const fs = require('fs');
 const path = require('path');
@@ -48,13 +49,10 @@ class WebLinkAnalyzerService {
 
   /**
    * Get the scripts directory path
-   * Uses pluginPath directly - works for both symlinked and normal installations
+   * Points to scripts/web-link-analyzer/ relative to the plugin root.
    */
   private getScriptsDir(): string {
-    return path.join(
-      this.pluginPath,
-      'src/features/web-link-analyzer/scripts'
-    );
+    return path.join(this.pluginPath, 'scripts', 'web-link-analyzer');
   }
 
   /**
@@ -104,14 +102,14 @@ class WebLinkAnalyzerService {
     // This happens when settings panel checks status before service is initialized
     try {
       // Try common Obsidian vault locations
-      const possibleVaultPaths = [
-        // Check if running in Obsidian context with window.app
-        (globalThis as any).app?.vault?.adapter?.basePath,
-      ].filter(Boolean);
+      const app = (globalThis as any).app;
+      const possibleVaultPaths = app
+        ? [getVaultBasePath(app)]
+        : [];
 
       for (const vaultPath of possibleVaultPaths) {
         const pluginPath = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
-        const scriptsDir = path.join(pluginPath, 'src/features/web-link-analyzer/scripts');
+        const scriptsDir = path.join(pluginPath, 'scripts', 'web-link-analyzer');
 
         const isWindows = process.platform === 'win32';
         const venvPython = isWindows
@@ -120,21 +118,6 @@ class WebLinkAnalyzerService {
 
         if (fs.existsSync(venvPython)) {
           return true;
-        }
-
-        // Also check if symlinked (resolve real path)
-        try {
-          const realPluginPath = fs.realpathSync(pluginPath);
-          const realScriptsDir = path.join(realPluginPath, 'src/features/web-link-analyzer/scripts');
-          const realVenvPython = isWindows
-            ? path.join(realScriptsDir, 'venv', 'Scripts', 'python.exe')
-            : path.join(realScriptsDir, 'venv', 'bin', 'python3');
-
-          if (fs.existsSync(realVenvPython)) {
-            return true;
-          }
-        } catch {
-          // Symlink resolution failed, continue
         }
       }
     } catch (error) {

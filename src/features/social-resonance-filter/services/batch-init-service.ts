@@ -2,6 +2,7 @@ import { Notice, Plugin } from 'obsidian';
 import { DreamNode } from '../../dreamnode';
 import { RadicleService } from './radicle-service';
 import { GitDreamNodeService } from '../../dreamnode/services/git-dreamnode-service';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 /**
  * Radicle Batch Initialization Service
@@ -125,8 +126,7 @@ export class RadicleBatchInitService {
 		try {
 			const path = require('path');
 			const fs = require('fs').promises;
-			const adapter = this.plugin.app.vault.adapter as any;
-			const vaultPath = adapter.basePath || '';
+			const vaultPath = getVaultBasePath(this.plugin.app);
 			const uddPath = path.join(vaultPath, node.repoPath, '.udd');
 			const fullRepoPath = path.join(vaultPath, node.repoPath);
 
@@ -183,8 +183,7 @@ export class RadicleBatchInitService {
 		}
 
 		// Get vault path
-		const adapter = this.plugin.app.vault.adapter as any;
-		const vaultPath = adapter.basePath || '';
+		const vaultPath = getVaultBasePath(this.plugin.app);
 		const path = require('path');
 
 		// CRITICAL: Serialize rad init to prevent race conditions

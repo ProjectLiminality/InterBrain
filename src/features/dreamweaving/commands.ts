@@ -1,6 +1,6 @@
 import { Plugin, TFile, FuzzySuggestModal, App } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
-import { VaultService } from '../../core/services/vault-service';
+import { VaultService, getVaultBasePath } from '../../core/services/vault-service';
 import { isLinkFile } from '../drag-and-drop';
 import { CanvasParserService } from './services/canvas-parser-service';
 import { CanvasLayoutService } from './services/canvas-layout-service';
@@ -78,16 +78,7 @@ export function registerDreamweavingCommands(
           const execAsync = promisify(exec);
           
           // Get vault path for git operations
-          const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-          let vaultPath = '';
-          if (typeof adapter.path === 'string') {
-            vaultPath = adapter.path;
-          } else if (typeof adapter.basePath === 'string') {
-            vaultPath = adapter.basePath;
-          } else if (adapter.path && typeof adapter.path === 'object') {
-            const pathObj = adapter.path as Record<string, string>;
-            vaultPath = pathObj.path || pathObj.basePath || '';
-          }
+          const vaultPath = getVaultBasePath(plugin.app);
           const fullRepoPath = require('path').join(vaultPath, selectedNode.repoPath);
           
           // Add and commit the canvas file
@@ -245,16 +236,7 @@ export function registerDreamweavingCommands(
               const execAsync = promisify(exec);
               
               // Get vault path for git operations
-              const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-              let vaultPath = '';
-              if (typeof adapter.path === 'string') {
-                vaultPath = adapter.path;
-              } else if (typeof adapter.basePath === 'string') {
-                vaultPath = adapter.basePath;
-              } else if (adapter.path && typeof adapter.path === 'object') {
-                const pathObj = adapter.path as Record<string, string>;
-                vaultPath = pathObj.path || pathObj.basePath || '';
-              }
+              const vaultPath = getVaultBasePath(plugin.app);
               const fullRepoPath = require('path').join(vaultPath, analysis.dreamNodeBoundary);
               
               // Add and commit the updated canvas file
@@ -328,16 +310,7 @@ export function registerDreamweavingCommands(
           const execAsync = promisify(exec);
 
           // Get vault path for git operations
-          const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-          let vaultPath = '';
-          if (typeof adapter.path === 'string') {
-            vaultPath = adapter.path;
-          } else if (typeof adapter.basePath === 'string') {
-            vaultPath = adapter.basePath;
-          } else if (adapter.path && typeof adapter.path === 'object') {
-            const pathObj = adapter.path as Record<string, string>;
-            vaultPath = pathObj.path || pathObj.basePath || '';
-          }
+          const vaultPath = getVaultBasePath(plugin.app);
 
           // Parse canvas to find the DreamNode boundary
           const analysis = await canvasParser.analyzeCanvasDependencies(canvasPath);

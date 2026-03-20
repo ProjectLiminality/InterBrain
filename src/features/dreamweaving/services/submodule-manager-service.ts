@@ -17,7 +17,7 @@ function isWindows(): boolean {
 
 import { App } from 'obsidian';
 import { GitOperationsService } from '../../dreamnode/utils/git-operations';
-import { VaultService } from '../../../core/services/vault-service';
+import { VaultService, getVaultBasePath } from '../../../core/services/vault-service';
 import { CanvasParserService, DependencyInfo, CanvasAnalysis } from './canvas-parser-service';
 import { UDDService } from '../../dreamnode/services/udd-service';
 import { RadicleService } from '../../social-resonance-filter/services/radicle-service';
@@ -64,20 +64,7 @@ export class SubmoduleManagerService {
   }
 
   private initializeVaultPath(app: App): void {
-    // Get vault file system path for Node.js fs operations (same pattern as GitService)
-    const adapter = app.vault.adapter as { path?: string; basePath?: string };
-    
-    let vaultPath = '';
-    if (typeof adapter.path === 'string') {
-      vaultPath = adapter.path;
-    } else if (typeof adapter.basePath === 'string') {
-      vaultPath = adapter.basePath;
-    } else if (adapter.path && typeof adapter.path === 'object') {
-      const pathObj = adapter.path as Record<string, string>;
-      vaultPath = pathObj.path || pathObj.basePath || '';
-    }
-    
-    this.vaultPath = vaultPath;
+    this.vaultPath = getVaultBasePath(app);
   }
 
   private getFullPath(repoPath: string): string {

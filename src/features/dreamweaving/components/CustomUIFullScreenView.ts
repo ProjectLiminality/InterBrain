@@ -5,6 +5,7 @@ import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../../dreamnode/utils/html-loader';
 import { generateAI, generateStreamAI } from '../../ai-magic/services/inference-service';
 import type { TaskComplexity } from '../../ai-magic/types';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 export const CUSTOM_UI_FULLSCREEN_VIEW_TYPE = 'custom-ui-fullscreen-view';
 
@@ -137,13 +138,15 @@ export class CustomUIFullScreenView extends ItemView {
     try {
       const fs = require('fs');
       const path = require('path');
-      const adapter = serviceManager.getApp()?.vault.adapter as any;
-      if (!adapter?.basePath) return;
+      const app = serviceManager.getApp();
+      if (!app) return;
+      const vaultPath = getVaultBasePath(app);
+      if (!vaultPath) return;
 
-      const bridgePath = path.join(adapter.basePath, this.dreamNode.repoPath, 'bridge.js');
+      const bridgePath = path.join(vaultPath, this.dreamNode.repoPath, 'bridge.js');
       if (!fs.existsSync(bridgePath)) return;
 
-      const wtPath = path.join(adapter.basePath, this.dreamNode.repoPath, 'node_modules', 'webtorrent');
+      const wtPath = path.join(vaultPath, this.dreamNode.repoPath, 'node_modules', 'webtorrent');
       if (!fs.existsSync(wtPath)) return;
 
       const { PRISMBridge } = require(bridgePath);
@@ -297,19 +300,20 @@ export class CustomUIFullScreenView extends ItemView {
       // DreamNode catalog — return all DreamNodes for autocomplete
       if (data?.type === 'dreamnode-catalog-request') {
         const store = useInterBrainStore.getState();
-        const adapter = serviceManager.getApp()?.vault.adapter as any;
+        const catalogApp = serviceManager.getApp();
+        const catalogAdapter = catalogApp?.vault.adapter as any;
+        const vaultPathForCatalog = catalogApp ? getVaultBasePath(catalogApp) : '';
         const catalog = Array.from(store.dreamNodes.values()).map(d => {
           const node = d.node;
           // Resolve DreamTalk image to app:// URL for iframe use
           let dreamTalkUrl = '';
-          if (node.dreamTalkMedia?.[0]?.absolutePath && adapter?.getResourcePath) {
-            const vaultPath = adapter.basePath || '';
+          if (node.dreamTalkMedia?.[0]?.absolutePath && catalogAdapter?.getResourcePath) {
             let vaultRelative = node.dreamTalkMedia[0].absolutePath;
-            if (vaultRelative.startsWith(vaultPath)) {
-              vaultRelative = vaultRelative.slice(vaultPath.length);
+            if (vaultRelative.startsWith(vaultPathForCatalog)) {
+              vaultRelative = vaultRelative.slice(vaultPathForCatalog.length);
               if (vaultRelative.startsWith('/')) vaultRelative = vaultRelative.slice(1);
             }
-            dreamTalkUrl = adapter.getResourcePath(vaultRelative);
+            dreamTalkUrl = catalogAdapter.getResourcePath(vaultRelative);
           }
           return {
             id: node.id,
@@ -339,10 +343,12 @@ export class CustomUIFullScreenView extends ItemView {
 
         const path = require('path');
         const { exec } = require('child_process');
-        const adapter = serviceManager.getApp()?.vault.adapter as any;
-        if (!adapter?.basePath) return;
+        const cliApp = serviceManager.getApp();
+        if (!cliApp) return;
+        const cliVaultPath = getVaultBasePath(cliApp);
+        if (!cliVaultPath) return;
 
-        const cwd = path.resolve(adapter.basePath, this.dreamNode.repoPath);
+        const cwd = path.resolve(cliVaultPath, this.dreamNode.repoPath);
 
         exec(cmd, {
           cwd,

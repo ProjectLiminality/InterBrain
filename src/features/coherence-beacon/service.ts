@@ -18,7 +18,7 @@ const execAsync = promisify(exec);
 
 import { App, Plugin } from 'obsidian';
 import { RadicleService } from '../social-resonance-filter/services/radicle-service';
-import { VaultService } from '../../core/services/vault-service';
+import { VaultService, getVaultBasePath } from '../../core/services/vault-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { getURIHandlerService } from '../uri-handler';
 import {
@@ -74,12 +74,7 @@ export class CoherenceBeaconService {
   }
 
   private initializeVaultPath(app: App): void {
-    const adapter = app.vault.adapter as { path?: string; basePath?: string };
-    if (typeof adapter.path === 'string') {
-      this.vaultPath = adapter.path;
-    } else if (typeof adapter.basePath === 'string') {
-      this.vaultPath = adapter.basePath;
-    }
+    this.vaultPath = getVaultBasePath(app);
   }
 
   /**

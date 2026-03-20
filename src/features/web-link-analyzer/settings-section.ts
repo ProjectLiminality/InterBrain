@@ -10,6 +10,7 @@ import type InterBrainPlugin from '../../main';
 import type { FeatureStatus } from '../settings/settings-status-service';
 import { SettingsStatusService } from '../settings/settings-status-service';
 import { webLinkAnalyzerService } from './services/web-link-analyzer-service';
+import { getPluginDir } from '../../core/services/vault-service';
 
 /**
  * Check web link analyzer feature status
@@ -138,15 +139,14 @@ export function createWebLinkAnalyzerSettingsSection(
 			buttonSetting.addButton(button => button
 				.setButtonText('Setup Environment')
 				.onClick(async () => {
-					const vaultPath = (plugin.app.vault.adapter as any).basePath;
+					const pluginPath = getPluginDir(plugin.app, plugin.manifest.id);
 
 					// Run setup script
 					const { exec } = require('child_process');
 					button.setButtonText('Setting up...');
 					button.setDisabled(true);
 
-					const pluginPath = `${vaultPath}/.obsidian/plugins/${plugin.manifest.id}`;
-					exec(`cd "${pluginPath}/src/features/web-link-analyzer/scripts" && bash setup.sh`,
+					exec(`cd "${pluginPath}/scripts/web-link-analyzer" && bash setup.sh`,
 						(error: Error | null, stdout: string, stderr: string) => {
 							if (error) {
 								console.error('Setup error:', error);
@@ -224,13 +224,12 @@ async function runWebLinkAnalyzerSetup(
 	plugin: InterBrainPlugin,
 	refreshDisplay: () => Promise<void>
 ): Promise<void> {
-	const vaultPath = (plugin.app.vault.adapter as any).basePath;
-	const pluginPath = `${vaultPath}/.obsidian/plugins/${plugin.manifest.id}`;
+	const pluginPath = getPluginDir(plugin.app, plugin.manifest.id);
 	const { exec } = require('child_process');
 
 	console.log('🔗 Running web link analyzer auto-setup...');
 
-	exec(`cd "${pluginPath}/src/features/web-link-analyzer/scripts" && bash setup.sh`,
+	exec(`cd "${pluginPath}/scripts/web-link-analyzer" && bash setup.sh`,
 		async (error: Error | null, stdout: string, stderr: string) => {
 			if (error) {
 				console.error('Web link analyzer setup error:', error);

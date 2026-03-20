@@ -16,12 +16,7 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 import { App } from 'obsidian';
-
-// Type for accessing file system path from Obsidian vault adapter
-interface VaultAdapter {
-  path?: string;
-  basePath?: string;
-}
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 /**
  * Information about a single commit
@@ -57,18 +52,7 @@ export class GitSyncService {
   }
 
   private initializeVaultPath(app: App): void {
-    const adapter = app.vault.adapter as VaultAdapter;
-
-    let vaultPath = '';
-    if (typeof adapter.path === 'string') {
-      vaultPath = adapter.path;
-    } else if (typeof adapter.basePath === 'string') {
-      vaultPath = adapter.basePath;
-    } else if (adapter.path && typeof adapter.path === 'object') {
-      vaultPath = (adapter.path as any).path || (adapter.path as any).basePath || '';
-    }
-
-    this.vaultPath = vaultPath;
+    this.vaultPath = getVaultBasePath(app);
   }
 
   private getFullPath(repoPath: string): string {

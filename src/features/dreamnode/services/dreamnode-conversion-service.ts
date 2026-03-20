@@ -14,6 +14,7 @@ import { UDDService } from './udd-service';
 import { UDDFile } from '../types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
 import { sanitizeTitleToPascalCase } from '../utils/title-sanitization';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 const path = require('path');
 const fs = require('fs');
@@ -60,7 +61,7 @@ export class DreamNodeConversionService {
   private pluginId: string;
 
   constructor(app: App, manifest: PluginManifest) {
-    this.vaultPath = (app.vault.adapter as any).basePath;
+    this.vaultPath = getVaultBasePath(app);
     this.pluginId = manifest.id;
   }
 

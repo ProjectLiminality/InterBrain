@@ -254,7 +254,7 @@ function createInstallScriptLink(containerEl: HTMLElement, dependencyName: strin
 /**
  * Create alias editor UI
  */
-function createAliasEditor(container: HTMLElement, identity: any, _radicleService: any): void {
+function createAliasEditor(container: HTMLElement, identity: any, radicleService: any): void {
 	const aliasContainer = container.createDiv({ cls: 'alias-container' });
 	aliasContainer.style.display = 'flex';
 	aliasContainer.style.alignItems = 'center';
@@ -326,8 +326,7 @@ function createAliasEditor(container: HTMLElement, identity: any, _radicleServic
 				const execAsync = promisify(exec);
 				const fs = require('fs').promises;
 
-				// Use 'rad' command directly - Radicle should be in PATH
-				const radCmd = 'rad';
+				const radCmd = await radicleService.getRadCommand();
 
 				// Get config file path
 				const configPath = (await execAsync(`"${radCmd}" self --config`)).stdout.trim();

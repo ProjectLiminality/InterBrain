@@ -18,6 +18,7 @@ const execAsync = promisify(exec);
 
 import { App } from 'obsidian';
 import { CommitInfo } from '../../social-resonance-filter/services/git-sync-service';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 import {
   CollaborationMemoryService,
   getCollaborationMemoryService
@@ -105,8 +106,7 @@ export class CherryPickWorkflowService {
 
   constructor(app: App) {
     this.app = app;
-    const adapter = app.vault.adapter as any;
-    this.vaultPath = adapter.basePath || adapter.path || '';
+    this.vaultPath = getVaultBasePath(app);
   }
 
   /**

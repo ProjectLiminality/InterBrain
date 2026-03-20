@@ -1,5 +1,6 @@
 import { App, Notice, Plugin } from 'obsidian';
 import { RadicleService } from '../social-resonance-filter/services/radicle-service';
+import { getVaultBasePath } from '../../core/services/vault-service';
 import { GitDreamNodeService } from '../dreamnode/services/git-dreamnode-service';
 import { UDDService } from '../dreamnode/services/udd-service';
 import { DreamSongRelationshipService } from '../dreamweaving/services/dreamsong-relationship-service';
@@ -538,8 +539,7 @@ export class URIHandlerService {
 	 */
 	public async cloneFromRadicle(radicleId: string, silent: boolean = false, peerNid?: string): Promise<{ status: 'success' | 'skipped' | 'error'; repoName?: string }> {
 		try {
-			const adapter = this.app.vault.adapter as any;
-			const vaultPath = adapter.basePath || '';
+			const vaultPath = getVaultBasePath(this.app);
 
 			if (!vaultPath) {
 				throw new Error('Could not determine vault path');
@@ -623,8 +623,7 @@ export class URIHandlerService {
 	 */
 	private async cloneFromGitHub(repoPath: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
-			const adapter = this.app.vault.adapter as any;
-			const vaultPath = adapter.basePath || '';
+			const vaultPath = getVaultBasePath(this.app);
 
 			if (!vaultPath) {
 				throw new Error('Could not determine vault path');

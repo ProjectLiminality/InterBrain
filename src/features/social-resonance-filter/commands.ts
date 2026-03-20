@@ -8,6 +8,7 @@
 import { Notice } from 'obsidian';
 import type InterBrainPlugin from '../../main';
 import { UIService } from '../../core/services/ui-service';
+import { getVaultBasePath } from '../../core/services/vault-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { serviceManager } from '../../core/services/service-manager';
 import { PassphraseManager } from './services/passphrase-manager';
@@ -18,15 +19,6 @@ import type { DreamNode } from '../dreamnode';
 const path = require('path');
 const fs = require('fs').promises;
 
-/**
- * Get vault path from plugin
- */
-function getVaultPath(plugin: InterBrainPlugin): string {
-  const adapter = plugin.app.vault.adapter as { path?: string; basePath?: string };
-  if (typeof adapter.path === 'string') return adapter.path;
-  if (typeof adapter.basePath === 'string') return adapter.basePath;
-  return '';
-}
 
 /**
  * Register all Radicle commands
@@ -50,7 +42,7 @@ export function registerRadicleCommands(
         return;
       }
 
-      const vaultPath = getVaultPath(plugin);
+      const vaultPath = getVaultBasePath(plugin.app);
       const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
       const radicleService = serviceManager.getRadicleService();
 
@@ -144,7 +136,7 @@ export function registerRadicleCommands(
         return;
       }
 
-      const vaultPath = getVaultPath(plugin);
+      const vaultPath = getVaultBasePath(plugin.app);
       const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
       const radicleService = serviceManager.getRadicleService();
 
@@ -218,7 +210,7 @@ export function registerRadicleCommands(
 
       if (!radicleId?.trim()) return;
 
-      const vaultPath = getVaultPath(plugin);
+      const vaultPath = getVaultBasePath(plugin.app);
       if (!vaultPath) {
         uiService.showError('Could not determine vault path');
         return;
@@ -325,7 +317,7 @@ export function registerRadicleCommands(
       new Notice('Discovering peer acceptances...');
 
       try {
-        const vaultPath = getVaultPath(plugin);
+        const vaultPath = getVaultBasePath(plugin.app);
         const peerSyncService = getPeerSyncService(radicleService);
         const result = await peerSyncService.discoverPeerAcceptances(vaultPath);
         new Notice(result.summary);
@@ -354,7 +346,7 @@ export function registerRadicleCommands(
       new Notice('Starting Radicle peer following sync...');
 
       try {
-        const vaultPath = getVaultPath(plugin);
+        const vaultPath = getVaultBasePath(plugin.app);
         const peerSyncService = getPeerSyncService(radicleService);
         const result = await peerSyncService.syncPeerFollowing(vaultPath, passphrase || undefined);
         new Notice(result.summary);

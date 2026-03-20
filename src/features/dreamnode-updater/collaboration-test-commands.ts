@@ -15,6 +15,7 @@
 
 import { Plugin, Notice } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
+import { getVaultBasePath } from '../../core/services/vault-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import {
   CherryPickPreviewModal,
@@ -107,8 +108,7 @@ async function setupTestEnvironment(
   uiService: UIService,
   scenario: TestScenario
 ): Promise<void> {
-  const adapter = (plugin.app.vault.adapter as any);
-  const vaultPath = adapter.basePath || '';
+  const vaultPath = getVaultBasePath(plugin.app);
   const testNodePath = path.join(vaultPath, TEST_NODE_PATH);
   const bobDreamerPath = path.join(vaultPath, BOB_DREAMER_PATH);
   const charlieDreamerPath = path.join(vaultPath, CHARLIE_DREAMER_PATH);
@@ -344,8 +344,7 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
         return;
       }
 
-      const adapter = (plugin.app.vault.adapter as any);
-      const vaultPath = adapter.basePath || '';
+      const vaultPath = getVaultBasePath(plugin.app);
       const fullPath = path.join(vaultPath, selectedNode.repoPath);
 
       const notice = uiService.showLoading('Fetching peer commits...');
@@ -542,8 +541,7 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
     id: 'reset-collaboration-test',
     name: 'Reset Collaboration Test',
     callback: async () => {
-      const adapter = (plugin.app.vault.adapter as any);
-      const vaultPath = adapter.basePath || '';
+      const vaultPath = getVaultBasePath(plugin.app);
       const testNodePath = path.join(vaultPath, TEST_NODE_PATH);
       const bobDreamerPath = path.join(vaultPath, BOB_DREAMER_PATH);
       const charlieDreamerPath = path.join(vaultPath, CHARLIE_DREAMER_PATH);
@@ -600,8 +598,7 @@ export function registerCollaborationTestCommands(plugin: Plugin, uiService: UIS
     id: 'cleanup-collaboration-test',
     name: 'Cleanup Collaboration Test',
     callback: async () => {
-      const adapter = (plugin.app.vault.adapter as any);
-      const vaultPath = adapter.basePath || '';
+      const vaultPath = getVaultBasePath(plugin.app);
 
       const confirmed = await uiService.showConfirmDialog(
         'Cleanup Test Environment',

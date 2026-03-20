@@ -8,6 +8,7 @@
 import type InterBrainPlugin from '../../../main';
 import type { DreamNode } from '../../dreamnode';
 import { getAudioStreamingService } from '../../dreamweaving/services/audio-streaming-service';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 /**
  * A Conversation represents a recorded audio conversation with transcript
@@ -69,7 +70,7 @@ export class ConversationsServiceImpl implements ConversationsService {
 		const fs = require('fs').promises;
 
 		// Get vault base path
-		const vaultBasePath = (this.plugin.app.vault.adapter as any).basePath;
+		const vaultBasePath = getVaultBasePath(this.plugin.app);
 		if (!vaultBasePath) {
 			console.error(`[Conversations] Cannot get vault base path`);
 			return [];

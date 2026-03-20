@@ -6,7 +6,7 @@
  */
 
 import type InterBrainPlugin from '../../../main';
-import { VaultService } from '../../../core/services/vault-service';
+import { VaultService, getVaultBasePath } from '../../../core/services/vault-service';
 import type { DreamNode } from '../../dreamnode';
 
 export interface AudioRecordingService {
@@ -47,7 +47,7 @@ export class AudioRecordingServiceImpl implements AudioRecordingService {
 		const path = require('path');
 
 		// Get vault base path for absolute path resolution
-		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+		const vaultPath = getVaultBasePath(this.plugin.app);
 
 		// Extract base name from transcript (e.g., "transcript-2025-10-23-14-30.md" -> "conversation-2025-10-23-14-30")
 		const baseName = transcriptFileName
@@ -67,7 +67,7 @@ export class AudioRecordingServiceImpl implements AudioRecordingService {
 		const fs = require('fs').promises;
 
 		// Get vault base path for absolute path resolution
-		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+		const vaultPath = getVaultBasePath(this.plugin.app);
 		const absoluteRepoPath = path.join(vaultPath, conversationPartner.repoPath);
 		const conversationsDir = path.join(absoluteRepoPath, 'conversations');
 
@@ -85,7 +85,7 @@ export class AudioRecordingServiceImpl implements AudioRecordingService {
 		const fs = require('fs').promises;
 
 		// Get vault base path for absolute path resolution
-		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+		const vaultPath = getVaultBasePath(this.plugin.app);
 
 		const baseName = transcriptFileName
 			.replace('transcript-', 'conversation-')

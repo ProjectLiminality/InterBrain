@@ -11,6 +11,7 @@ import { useCanvasFiles, BacksideContentItem } from '../hooks/useCanvasFiles';
 import { HolonView as _HolonView } from './HolonView';
 import { DreamExplorer } from '../../dream-explorer/components/DreamExplorer';
 import { createHtmlBlobUrl, revokeHtmlBlobUrl } from '../utils/html-loader';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 interface DreamSongSideProps {
   dreamNode: DreamNode;
@@ -131,14 +132,16 @@ export const DreamSongSide: React.FC<DreamSongSideProps> = ({
     // Check if this DreamNode has a bridge.js (PRISM pattern)
     const fs = require('fs');
     const path = require('path');
-    const adapter = serviceManager.getApp()?.vault.adapter as any;
-    if (!adapter?.basePath) return;
+    const app = serviceManager.getApp();
+    if (!app) return;
+    const vaultPath = getVaultBasePath(app);
+    if (!vaultPath) return;
 
-    const bridgePath = path.join(adapter.basePath, dreamNode.repoPath, 'bridge.js');
+    const bridgePath = path.join(vaultPath, dreamNode.repoPath, 'bridge.js');
     if (!fs.existsSync(bridgePath)) return;
 
     // Check if node_modules/webtorrent exists
-    const wtPath = path.join(adapter.basePath, dreamNode.repoPath, 'node_modules', 'webtorrent');
+    const wtPath = path.join(vaultPath, dreamNode.repoPath, 'node_modules', 'webtorrent');
     if (!fs.existsSync(wtPath)) {
       console.warn('[PRISM Bridge] webtorrent not installed in', dreamNode.repoPath, '— run npm install');
       return;

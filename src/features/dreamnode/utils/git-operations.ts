@@ -9,6 +9,7 @@ const path = require('path');
 
 import { App } from 'obsidian';
 import { GitStatus } from '../types/dreamnode';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 import {
   getGitStatus as getGitStatusUtil,
   hasUncommittedChanges as hasUncommittedChangesUtil,
@@ -23,11 +24,6 @@ import {
   runNpmBuild as runNpmBuildUtil
 } from './git-utils';
 
-// Type for accessing file system path from Obsidian vault adapter
-interface VaultAdapter {
-  path?: string;
-  basePath?: string;
-}
 
 export class GitOperationsService {
   private vaultPath: string = '';
@@ -39,18 +35,7 @@ export class GitOperationsService {
   }
 
   private initializeVaultPath(app: App): void {
-    const adapter = app.vault.adapter as VaultAdapter;
-
-    let vaultPath = '';
-    if (typeof adapter.path === 'string') {
-      vaultPath = adapter.path;
-    } else if (typeof adapter.basePath === 'string') {
-      vaultPath = adapter.basePath;
-    } else if (adapter.path && typeof adapter.path === 'object') {
-      vaultPath = (adapter.path as any).path || (adapter.path as any).basePath || '';
-    }
-
-    this.vaultPath = vaultPath;
+    this.vaultPath = getVaultBasePath(app);
   }
 
   private getFullPath(repoPath: string): string {

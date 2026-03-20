@@ -1,6 +1,7 @@
 import type InterBrainPlugin from '../../../main';
 import { getRealtimeTranscriptionService } from '../services/transcription-service';
 import { UIService } from '../../../core/services/ui-service';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 /**
  * Register real-time transcription commands
@@ -32,7 +33,7 @@ export function registerTranscriptionCommands(plugin: InterBrainPlugin): void {
 
 			// Get full file path (construct manually since getFullPath is private)
 			 
-			const vaultPath = (plugin.app.vault.adapter as any).basePath;
+			const vaultPath = getVaultBasePath(plugin.app);
 			const transcriptPath = require('path').join(vaultPath, activeFile.path);
 
 			// Start transcription with settings from plugin

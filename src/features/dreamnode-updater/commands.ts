@@ -7,6 +7,7 @@
 
 import { Plugin } from 'obsidian';
 import { UIService } from '../../core/services/ui-service';
+import { getVaultBasePath } from '../../core/services/vault-service';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { GitSyncService, type CommitInfo } from '../social-resonance-filter/services/git-sync-service';
 import {
@@ -82,8 +83,7 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       let submoduleUpdates: SubmoduleUpdate[] = [];
 
       // Get vault path for submodule checking
-      const adapter = (window as any).app.vault.adapter;
-      const vaultPath = adapter.basePath || '';
+      const vaultPath = getVaultBasePath(plugin.app);
       const parentPath = path.join(vaultPath, selectedNode.repoPath);
 
       try {

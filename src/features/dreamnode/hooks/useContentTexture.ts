@@ -16,6 +16,7 @@ import { DreamNode } from '../types/dreamnode';
 import { serviceManager } from '../../../core/services/service-manager';
 import { extractYouTubeVideoId } from '../../drag-and-drop';
 import { parseLinkFileContent, isLinkFile, getLinkThumbnail } from '../../drag-and-drop';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -129,8 +130,7 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
         // absolutePath is like: /Users/davidrug/ProjectLiminality/Campfire/Campfire.png
         // vaultPath is like: /Users/davidrug/ProjectLiminality
         // We need: Campfire/Campfire.png
-        const adapter = app.vault.adapter as { basePath?: string };
-        const vaultPath = adapter.basePath || '';
+        const vaultPath = getVaultBasePath(app);
 
         if (!vaultPath) {
           console.error(`[useContentTexture] ${dreamNode.name}: Could not determine vault path`);

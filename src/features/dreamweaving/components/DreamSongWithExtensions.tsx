@@ -20,6 +20,7 @@ import { MediaFile, DreamNode } from '../../dreamnode';
 import { Perspective, getPerspectiveService } from '../../songline/services/perspective-service';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { serviceManager } from '../../../core/services/service-manager';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 interface DreamSongWithExtensionsProps {
   blocks: DreamSongBlock[];
@@ -75,8 +76,8 @@ export const DreamSongWithExtensions: React.FC<DreamSongWithExtensionsProps> = (
     const app = serviceManager.getApp();
     if (!app) return dreamTalkMedia;
 
-    const adapter = app.vault.adapter as { basePath?: string; getResourcePath: (path: string) => string };
-    const vaultBasePath = adapter.basePath || '';
+    const adapter = app.vault.adapter as { getResourcePath: (path: string) => string };
+    const vaultBasePath = getVaultBasePath(app);
     if (!vaultBasePath) return dreamTalkMedia;
 
     return dreamTalkMedia.map(media => {

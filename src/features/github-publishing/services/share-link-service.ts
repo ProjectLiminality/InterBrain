@@ -9,6 +9,7 @@ import { DreamNode } from '../../dreamnode';
 import { URIHandlerService } from '../../uri-handler';
 import { serviceManager } from '../../../core/services/service-manager';
 import { getRadicleBatchInitService } from '../../social-resonance-filter/services/batch-init-service';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 export class ShareLinkService {
 	private app: App;
@@ -40,7 +41,7 @@ export class ShareLinkService {
 			// Read UUID from .udd file (don't trust store state)
 			const fs = require('fs').promises;
 			const path = require('path');
-			const uddPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath, '.udd');
+			const uddPath = path.join(getVaultBasePath(this.app), node.repoPath, '.udd');
 
 			let nodeUuid: string;
 			try {
@@ -94,7 +95,7 @@ export class ShareLinkService {
 				if (radicleId && recipientDid) {
 					// Fire-and-forget: Add recipient as delegate so they can push back
 					// This doesn't block link generation - clone works via --seed flag anyway
-					const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
+					const absoluteRepoPath = path.join(getVaultBasePath(this.app), node.repoPath);
 					radicleService.addDelegate(absoluteRepoPath, recipientDid).catch((err: Error) => {
 						console.warn('[ShareLink] Failed to add delegate (non-blocking):', err.message);
 					});
@@ -156,7 +157,7 @@ export class ShareLinkService {
 
 			if (radicleAvailable && identifier.startsWith('rad:')) {
 				const path = require('path');
-				const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, node.repoPath);
+				const absoluteRepoPath = path.join(getVaultBasePath(this.app), node.repoPath);
 
 				radicleService.seedInBackground(absoluteRepoPath, identifier);
 			}

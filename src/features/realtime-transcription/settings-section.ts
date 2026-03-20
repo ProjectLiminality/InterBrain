@@ -13,6 +13,7 @@ import { getRealtimeTranscriptionService } from './services/transcription-servic
 import { TranscriptionTestModal } from './ui/TranscriptionTestModal';
 import { SearchStreamTestModal } from './ui/SearchStreamTestModal';
 import type { WhisperModel, TranscriptionLanguage } from './types/transcription-types';
+import { getPluginDir } from '../../core/services/vault-service';
 
 /**
  * Check transcription feature status
@@ -111,35 +112,19 @@ function checkVenvExistsFallback(): boolean {
 	try {
 		const path = require('path');
 		const fs = require('fs');
+		const app = (globalThis as any).app;
+		if (!app) return false;
 
-		const vaultPath = (globalThis as any).app?.vault?.adapter?.basePath;
-		if (!vaultPath) return false;
-
-		const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
-
-		// Try direct path first
-		const scriptsDir = path.join(pluginDir, 'src', 'features', 'realtime-transcription', 'scripts');
+		const scriptsDir = path.join(
+			getPluginDir(app, 'interbrain'),
+			'scripts', 'realtime-transcription'
+		);
 		const isWindows = (globalThis as any).process?.platform === 'win32';
 		const venvPython = isWindows
 			? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
 			: path.join(scriptsDir, 'venv', 'bin', 'python3');
 
-		if (fs.existsSync(venvPython)) {
-			return true;
-		}
-
-		// Try with symlink resolution
-		try {
-			const realPluginDir = fs.realpathSync(pluginDir);
-			const realScriptsDir = path.join(realPluginDir, 'src', 'features', 'realtime-transcription', 'scripts');
-			const realVenvPython = isWindows
-				? path.join(realScriptsDir, 'venv', 'Scripts', 'python.exe')
-				: path.join(realScriptsDir, 'venv', 'bin', 'python3');
-
-			return fs.existsSync(realVenvPython);
-		} catch {
-			return false;
-		}
+		return fs.existsSync(venvPython);
 	} catch {
 		return false;
 	}
@@ -170,17 +155,18 @@ async function checkDependenciesInstalledFallback(): Promise<boolean> {
 	const { exec } = require('child_process');
 
 	try {
-		const vaultPath = (globalThis as any).app?.vault?.adapter?.basePath;
-		if (!vaultPath) return false;
+		const app = (globalThis as any).app;
+		if (!app) return false;
 
-		const pluginDir = path.join(vaultPath, '.obsidian', 'plugins', 'interbrain');
 		const isWindows = (globalThis as any).process?.platform === 'win32';
 
 		// Try to get venv Python path
 		let venvPython: string;
 		try {
-			const realPluginDir = fs.realpathSync(pluginDir);
-			const scriptsDir = path.join(realPluginDir, 'src', 'features', 'realtime-transcription', 'scripts');
+			const scriptsDir = path.join(
+				getPluginDir(app, 'interbrain'),
+				'scripts', 'realtime-transcription'
+			);
 			venvPython = isWindows
 				? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
 				: path.join(scriptsDir, 'venv', 'bin', 'python3');
@@ -369,15 +355,14 @@ export function createTranscriptionSettingsSection(
 				.addButton(button => button
 					.setButtonText('Setup Environment')
 					.onClick(async () => {
-						const vaultPath = (plugin.app.vault.adapter as any).basePath;
-						const pluginPath = `${vaultPath}/.obsidian/plugins/${plugin.manifest.id}`;
+						const pluginPath = getPluginDir(plugin.app, plugin.manifest.id);
 
 						// Run setup script
 						const { exec } = require('child_process');
 						button.setButtonText('Setting up...');
 						button.setDisabled(true);
 
-						exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
+						exec(`cd "${pluginPath}/scripts/realtime-transcription" && bash setup.sh`,
 							(error: Error | null, stdout: string, stderr: string) => {
 								if (error) {
 									console.error('Setup error:', error);
@@ -494,13 +479,12 @@ async function runTranscriptionSetup(
 	plugin: InterBrainPlugin,
 	refreshDisplay: () => Promise<void>
 ): Promise<void> {
-	const vaultPath = (plugin.app.vault.adapter as any).basePath;
-	const pluginPath = `${vaultPath}/.obsidian/plugins/${plugin.manifest.id}`;
+	const pluginPath = getPluginDir(plugin.app, plugin.manifest.id);
 	const { exec } = require('child_process');
 
 	console.log('🎙️ Running transcription auto-setup...');
 
-	exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
+	exec(`cd "${pluginPath}/scripts/realtime-transcription" && bash setup.sh`,
 		async (error: Error | null, stdout: string, stderr: string) => {
 			if (error) {
 				console.error('Transcription setup error:', error);

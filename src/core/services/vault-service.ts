@@ -26,6 +26,30 @@ export interface VaultFileStats {
   mtime: Date;
 }
 
+/**
+ * Get the vault's filesystem base path.
+ * Defensive wrapper around the undocumented adapter.basePath property.
+ * Use this instead of `(app.vault.adapter as any).basePath` directly.
+ */
+export function getVaultBasePath(app: App): string {
+  const adapter = app.vault.adapter as { path?: string; basePath?: string };
+  if (typeof adapter.path === 'string') return adapter.path;
+  if (typeof adapter.basePath === 'string') return adapter.basePath;
+  if (adapter.path && typeof adapter.path === 'object') {
+    const pathObj = adapter.path as Record<string, string>;
+    return pathObj.path || pathObj.basePath || '';
+  }
+  return '';
+}
+
+/**
+ * Get the plugin's installation directory.
+ * Works for both production installs and dev symlink installs.
+ */
+export function getPluginDir(app: App, manifestId: string): string {
+  return nodePath.join(getVaultBasePath(app), '.obsidian', 'plugins', manifestId);
+}
+
 export class VaultService {
   private vaultPath: string = '';
   

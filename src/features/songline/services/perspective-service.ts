@@ -6,7 +6,7 @@
  */
 
 import type InterBrainPlugin from '../../../main';
-import { VaultService } from '../../../core/services/vault-service';
+import { VaultService, getVaultBasePath } from '../../../core/services/vault-service';
 import type { DreamNode } from '../../dreamnode';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -87,7 +87,7 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 		const fs = require('fs').promises;
 
 		// Get vault base path for absolute path resolution
-		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+		const vaultPath = getVaultBasePath(this.plugin.app);
 		const absoluteRepoPath = path.join(vaultPath, dreamNode.repoPath);
 		const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
 
@@ -139,7 +139,7 @@ export class PerspectiveServiceImpl implements PerspectiveService {
 		const fs = require('fs').promises;
 
 		// Get vault base path for absolute path resolution
-		const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+		const vaultPath = getVaultBasePath(this.plugin.app);
 		const absoluteRepoPath = path.join(vaultPath, dreamNode.repoPath);
 		const perspectivesPath = path.join(absoluteRepoPath, 'perspectives.json');
 

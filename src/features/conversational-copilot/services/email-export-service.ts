@@ -10,6 +10,7 @@ import { ManualEmailModal } from '../ui/ManualEmailModal';
 // import { getPDFGeneratorService } from './pdf-generator-service';
 // import * as os from 'os';
 import * as path from 'path';
+import { getVaultBasePath } from '../../../core/services/vault-service';
 
 /**
  * Email Export Service
@@ -102,7 +103,7 @@ export class EmailExportService {
 					// CRITICAL: Trigger background seeding so node is discoverable via seeds
 					// This is the same step that copyShareLink() does but generateShareLink() skips
 					if (identifier.startsWith('rad:') && nodeData.node.repoPath) {
-						const absoluteRepoPath = path.join((this.app.vault.adapter as any).basePath, nodeData.node.repoPath);
+						const absoluteRepoPath = path.join(getVaultBasePath(this.app), nodeData.node.repoPath);
 						radicleService.seedInBackground(absoluteRepoPath, identifier);
 						console.log(`🌐 [EmailExport] Triggered background seeding for "${inv.nodeName}"`);
 					}

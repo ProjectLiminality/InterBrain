@@ -1,6 +1,7 @@
 import React from 'react';
 import { setIcon } from 'obsidian';
 import { useInterBrainStore } from '../../core/store/interbrain-store';
+import { getVaultBasePath } from '../../core/services/vault-service';
 
 /**
  * Check if a DreamNode is a GitHub-only repository where the user lacks push access
@@ -19,7 +20,7 @@ async function checkGitHubAccess(node: any): Promise<{ isGitHubOnly: boolean; ha
 
     // Get vault path
     const app = (window as any).app;
-    const vaultPath = (app?.vault?.adapter as any)?.basePath || '';
+    const vaultPath = app ? getVaultBasePath(app) : '';
     const fullPath = path.join(vaultPath, node.repoPath);
 
     // Check for remotes

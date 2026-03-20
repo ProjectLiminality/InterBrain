@@ -1,7 +1,7 @@
 import { Plugin, TFolder, TAbstractFile, Menu, Notice } from 'obsidian';
 import { UIService } from './core/services/ui-service';
 import { GitOperationsService } from './features/dreamnode/utils/git-operations';
-import { VaultService } from './core/services/vault-service';
+import { VaultService, getVaultBasePath, getPluginDir } from './core/services/vault-service';
 import { PassphraseManager } from './features/social-resonance-filter/services/passphrase-manager';
 import { serviceManager } from './core/services/service-manager';
 import { DreamspaceView, DREAMSPACE_VIEW_TYPE } from './core/components/DreamspaceView';
@@ -109,7 +109,7 @@ export default class InterBrainPlugin extends Plugin {
     const loadStartTime = Date.now();
 
     // Get vault path for all services
-    const vaultPath = (this.app.vault.adapter as any).basePath;
+    const vaultPath = getVaultBasePath(this.app);
 
     // =========================================================================
     // PHASE 1: BOOTSTRAP - Set context, load settings
@@ -521,11 +521,10 @@ export default class InterBrainPlugin extends Plugin {
    * Run transcription auto-setup in background on first launch
    */
   private async runTranscriptionAutoSetup(): Promise<void> {
-    const vaultPath = (this.app.vault.adapter as any).basePath;
-    const pluginPath = `${vaultPath}/.obsidian/plugins/${this.manifest.id}`;
+    const pluginPath = getPluginDir(this.app, this.manifest.id);
     const { exec } = require('child_process');
 
-    exec(`cd "${pluginPath}/src/features/realtime-transcription/scripts" && bash setup.sh`,
+    exec(`cd "${pluginPath}/scripts/realtime-transcription" && bash setup.sh`,
       async (error: Error | null) => {
         if (error) {
           this.uiService.showWarning('Transcription setup failed. You can retry from settings.');
@@ -610,7 +609,7 @@ export default class InterBrainPlugin extends Plugin {
     initializeAudioStreamingService(this);
 
     // Initialize collaboration services
-    const vaultPath = (this.app.vault.adapter as any).basePath;
+    const vaultPath = getVaultBasePath(this.app);
     initializeCollaborationMemoryService(vaultPath);
     initializeCherryPickWorkflowService(this.app);
     // Note: DreamSong relationship scan moved to post-lifecycle (after commands are registered)
@@ -638,7 +637,7 @@ export default class InterBrainPlugin extends Plugin {
           return;
         }
 
-        const vaultPath = (this.app.vault.adapter as any).basePath;
+        const vaultPath = getVaultBasePath(this.app);
 
         console.log('[Plugin] Starting background Radicle peer sync...');
         const peerSyncService = getPeerSyncService(radicleService);
