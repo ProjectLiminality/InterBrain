@@ -422,13 +422,9 @@ export async function revealContainingDreamNode(
     plugin.app.workspace.revealLeaf(dreamspaceLeaf);
   }
 
-  // Select the node
+  // Select the node and navigate via unified orchestration
   store.setSelectedNode(targetNode);
-
-  // Switch to liminal-web layout to show the selected node
-  if (store.spatialLayout !== 'liminal-web') {
-    store.setSpatialLayout('liminal-web');
-  }
+  store.requestNavigation({ type: 'liminal-web-focus', nodeId: targetNode.id });
 
   uiService.showInfo(`Revealed: ${targetNode.name}`);
 }

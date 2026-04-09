@@ -139,10 +139,11 @@ export class SubmoduleManagerService {
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
 
-      // Get Radicle ID for the submodule (stored in .udd for future migration)
+      // Get Radicle ID for the submodule (stored in .udd for future network resolution)
+      // Non-fatal: Radicle ID is optional — submodule uses local filesystem path regardless.
       const radicleId = await this.radicleService.getRadicleId(sourceFullPath);
       if (!radicleId) {
-        throw new Error(`Cannot add submodule: ${actualSubmoduleName} does not have a Radicle ID. Initialize with Radicle first.`);
+        console.warn(`SubmoduleManagerService: ${actualSubmoduleName} has no Radicle ID — importing via local path only`);
       }
 
       // Submodule remote always points to the local sovereign repo (all platforms).
@@ -159,7 +160,7 @@ export class SubmoduleManagerService {
       // sovereign repo at vault root. This makes the vault portable across machines.
       const submoduleUrl = `../${path.basename(sourceFullPath)}`;
       console.log(`SubmoduleManagerService: Using local sovereign path for submodule: ${submoduleUrl}`);
-      console.log(`SubmoduleManagerService: Radicle ID tracked in .udd for network resolution: ${radicleId}`);
+      if (radicleId) console.log(`SubmoduleManagerService: Radicle ID tracked in .udd for network resolution: ${radicleId}`);
 
       // Import the submodule (use --force to handle previously-removed submodules)
       const submoduleCommand = `git submodule add --force "${submoduleUrl}" "${actualSubmoduleName}"`;
