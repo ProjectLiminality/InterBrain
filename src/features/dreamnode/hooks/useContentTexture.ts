@@ -75,7 +75,9 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
       }
     };
 
-    const loadTexture = async () => {
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const loadTexture = async (attempt = 0) => {
       setIsLoading(true);
       setError(null);
 
@@ -188,16 +190,25 @@ export function useContentTexture(dreamNode: DreamNode): ContentTextureResult {
         setIsLoading(false);
 
       } catch (err) {
-        console.error(`[useContentTexture] ${dreamNode.name}: Failed to load texture:`, err);
-        setError(err instanceof Error ? err.message : 'Failed to load texture');
-        setTexture(null);
-        setIsLoading(false);
+        // Retry up to 5 times with 500ms delay — handles race where file isn't on disk yet
+        // (e.g. node created via drag-and-drop before createGitRepository finishes writing)
+        if (attempt < 5) {
+          retryTimeout = setTimeout(() => loadTexture(attempt + 1), 500);
+        } else {
+          console.error(`[useContentTexture] ${dreamNode.name}: Failed to load texture:`, err);
+          setError(err instanceof Error ? err.message : 'Failed to load texture');
+          setTexture(null);
+          setIsLoading(false);
+        }
       }
     };
 
     loadTexture();
 
-    return cleanup;
+    return () => {
+      if (retryTimeout) clearTimeout(retryTimeout);
+      cleanup();
+    };
   }, [dreamNode.id, dreamNode.dreamTalkMedia?.[0]?.absolutePath]);
 
   return { texture, isVideo, isLoading, error };
