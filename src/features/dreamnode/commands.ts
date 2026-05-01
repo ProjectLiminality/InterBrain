@@ -668,6 +668,31 @@ export async function runVaultHealthCheck(
   if (healthyCount > 0) summary += ` ${healthyCount} already healthy.`;
   if (failedCount > 0) summary += ` ${failedCount} failed.`;
 
+  // ========================================
+  // Phase 4: UUID consolidation migration (Radicle ID → UUID, .gitmodules → interbrain://)
+  // ========================================
+  try {
+    const { migrateRadicleIdsToUuids, formatMigrationReport } = await import('./utils/uuid-migration');
+    const migrationReport = await migrateRadicleIdsToUuids(vaultPath, { dryRun });
+    if (migrationReport.perNode.length > 0) {
+      const migrationSummary = formatMigrationReport(migrationReport, !!dryRun);
+      console.log(`[VaultHealthCheck] ${logPrefix}UUID migration: ${migrationSummary}`);
+      for (const node of migrationReport.perNode) {
+        console.log(`[VaultHealthCheck] ${logPrefix}  ${node.path}: ${node.changes.join(', ')}`);
+      }
+      summary += ` UUID migration: ${migrationReport.perNode.length} nodes ${dryRun ? 'would be' : ''} updated.`;
+    }
+    if (migrationReport.unresolvedSupermodules.length > 0 || migrationReport.unresolvedSubmodules.length > 0) {
+      console.warn(
+        `[VaultHealthCheck] ${migrationReport.unresolvedSupermodules.length} supermodule + ` +
+        `${migrationReport.unresolvedSubmodules.length} submodule references could not be resolved (likely external).`
+      );
+    }
+  } catch (err) {
+    console.error('[VaultHealthCheck] UUID migration failed:', err);
+    summary += ' UUID migration: FAILED (see console).';
+  }
+
   if (allChanges.length > 0) {
     console.log(`[VaultHealthCheck] ${logPrefix}Changes${dryRun ? ' that would be made' : ' made'}:`, allChanges);
   }

@@ -6,18 +6,30 @@
  */
 
 /**
- * Enhanced supermodule entry with historical tracking
- * Tracks which commit of the parent first included this as a dependency
+ * Enhanced supermodule entry with historical tracking.
+ * Tracks which commit of the parent first included this as a dependency.
+ *
+ * Identity: as of v0.16, `parentUuid` is the canonical identifier. The legacy
+ * `radicleId` field is kept readable for backwards compatibility with UDDs
+ * written before the migration, but new writes should populate `parentUuid`.
+ * The vault-health-check migration converts old entries on first run.
  */
 export interface SupermoduleEntry {
-  /** Radicle ID of the parent DreamNode */
-  radicleId: string;
+  /** UUID of the parent DreamNode (canonical as of v0.16). */
+  parentUuid?: string;
+  /** Legacy: Radicle ID of the parent DreamNode. Read-only; do not write new. */
+  radicleId?: string;
   /** Display title of the parent DreamNode */
   title: string;
   /** Commit hash in the parent repo when this was added as submodule */
   atCommit: string;
   /** Timestamp when this relationship was recorded */
   addedAt: number;
+}
+
+/** Get the canonical identifier for a SupermoduleEntry, preferring the new UUID form. */
+export function supermoduleEntryId(entry: SupermoduleEntry): string {
+  return entry.parentUuid ?? entry.radicleId ?? '';
 }
 
 /**

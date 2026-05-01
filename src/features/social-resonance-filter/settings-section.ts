@@ -95,135 +95,33 @@ export async function checkRadicleStatus(radiclePassphrase?: string): Promise<Fe
  */
 export function createRadicleSettingsSection(
 	containerEl: HTMLElement,
-	plugin: InterBrainPlugin,
-	status: FeatureStatus | undefined,
+	_plugin: InterBrainPlugin,
+	_status: FeatureStatus | undefined,
 	_refreshDisplay: () => Promise<void>
 ): void {
-	const header = containerEl.createEl('h2', { text: '🌐 Radicle Peer-to-Peer Network' });
+	const header = containerEl.createEl('h2', { text: '🌐 Peer-to-Peer Network' });
 	header.id = 'radicle-section';
 
-	if (status) {
-		createStatusDisplay(containerEl, status);
-	}
+	const notice = containerEl.createDiv({ cls: 'setting-item' });
+	notice.style.padding = '12px';
+	notice.style.background = 'var(--background-secondary)';
+	notice.style.borderRadius = '6px';
 
-	const radicleService = serviceManager.getRadicleService();
+	const heading = notice.createEl('p');
+	heading.style.fontWeight = '600';
+	heading.style.marginBottom = '6px';
+	heading.setText('Peer transport now lives in the InterBrain companion app.');
 
-	// Create placeholder for identity (will be populated asynchronously)
-	const identityPlaceholder = containerEl.createDiv({ cls: 'interbrain-radicle-identity-placeholder' });
-
-	// Show identity if available
-	if (radicleService && status?.available) {
-		radicleService.getIdentity().then((identity: any) => {
-			if (identity) {
-				// Clear placeholder and create identity div IN THE SAME LOCATION
-				identityPlaceholder.empty();
-				identityPlaceholder.addClass('interbrain-radicle-identity');
-				identityPlaceholder.removeClass('interbrain-radicle-identity-placeholder');
-
-				identityPlaceholder.createEl('p', { text: 'Your Identity:' });
-
-				const didContainer = identityPlaceholder.createDiv({ cls: 'did-container' });
-				didContainer.createSpan({ text: 'DID: ' });
-				didContainer.createEl('code', { text: identity.did });
-
-				// Add copy button
-				const copyButton = didContainer.createEl('button', {
-					text: '📋 Copy',
-					cls: 'did-copy-button'
-				});
-				copyButton.addEventListener('click', () => {
-					navigator.clipboard.writeText(identity.did).then(() => {
-						copyButton.textContent = '✅ Copied!';
-						setTimeout(() => {
-							copyButton.textContent = '📋 Copy';
-						}, 2000);
-					}).catch((err) => {
-						console.error('Failed to copy DID:', err);
-						copyButton.textContent = '❌ Failed';
-						setTimeout(() => {
-							copyButton.textContent = '📋 Copy';
-						}, 2000);
-					});
-				});
-
-				if (identity.alias) {
-					createAliasEditor(identityPlaceholder, identity, radicleService);
-				}
-			}
-		}).catch(() => {
-			// Identity not available, remove placeholder
-			identityPlaceholder.remove();
-		});
-	}
-
-	// Node status display
-	const nodeStatusDiv = containerEl.createDiv({ cls: 'interbrain-node-status' });
-	nodeStatusDiv.id = 'radicle-node-status';
-	updateNodeStatus(nodeStatusDiv, radicleService);
-
-	// Passphrase setting with validation
-	new Setting(containerEl)
-		.setName('Radicle Passphrase')
-		.setDesc('Enables automatic node startup for seamless DreamNode sharing')
-		.addText(text => {
-			text
-				.setPlaceholder('Enter passphrase...')
-				.setValue(plugin.settings.radiclePassphrase)
-				.onChange(async (value) => {
-					plugin.settings.radiclePassphrase = value;
-					await plugin.saveSettings();
-					// Clear validation state when passphrase changes
-					const validationEl = document.getElementById('passphrase-validation');
-					if (validationEl) {
-						validationEl.textContent = '';
-					}
-				});
-			text.inputEl.type = 'password';
-			return text;
-		})
-		.addButton(button => button
-			.setButtonText('Test Passphrase')
-			.setTooltip('Validate passphrase by starting the node')
-			.onClick(async () => {
-				await testRadiclePassphrase(plugin, radicleService, nodeStatusDiv);
-			}));
-
-	// Validation feedback element
-	const validationEl = containerEl.createDiv({ cls: 'passphrase-validation' });
-	validationEl.id = 'passphrase-validation';
-
-	// User email setting (for collaboration handshake)
-	new Setting(containerEl)
-		.setName('Email Address')
-		.setDesc('Used for collaboration handshake (FaceTime-compatible recommended). Auto-populated in DID backpropagation emails.')
-		.addText(text => text
-			.setPlaceholder('your.email@example.com')
-			.setValue(plugin.settings.userEmail)
-			.onChange(async (value) => {
-				plugin.settings.userEmail = value;
-				await plugin.saveSettings();
-			}));
-
-	// Node control buttons
-	new Setting(containerEl)
-		.setName('Node Control')
-		.setDesc('Manually start or stop the Radicle node')
-		.addButton(button => button
-			.setButtonText('Start Node')
-			.onClick(async () => {
-				await startRadicleNode(plugin, radicleService, nodeStatusDiv);
-			}))
-		.addButton(button => button
-			.setButtonText('Stop Node')
-			.onClick(async () => {
-				await stopRadicleNode(radicleService, nodeStatusDiv);
-			}));
-
-	// Installation instructions - link to install script section
-	const platform = (window as any).process?.platform || 'unknown';
-	if (status?.status === 'not-installed' && platform !== 'win32') {
-		createInstallScriptLink(containerEl, 'Radicle');
-	}
+	const body = notice.createEl('p');
+	body.style.fontSize = '13px';
+	body.style.color = 'var(--text-muted)';
+	body.style.margin = '0';
+	body.appendText(
+		'Radicle has been retired. Direct WebRTC peer transport now flows through the ' +
+		'menu-bar companion app via the git-remote-interbrain helper. Identity (your DID) ' +
+		'and peer signaling are managed there. Click the InterBrain icon in your menu bar ' +
+		'to view or change your identity.'
+	);
 }
 
 /**

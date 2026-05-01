@@ -194,27 +194,19 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   async isAvailable(): Promise<boolean> {
-    // Cache the result - CLI availability doesn't change during runtime
-    if (this._isAvailable !== null) {
-      return this._isAvailable;
-    }
-
-    // Platform check first
-    if (!this.isPlatformSupported()) {
-      console.log('RadicleService: Platform not supported');
+    // The Radicle integration was retired in v0.16. The InterBrain desktop
+    // companion now provides peer transport via WebRTC + the
+    // `git-remote-interbrain` helper, so all `rad` calls are inert.
+    //
+    // We keep the RadicleService surface intact (rather than ripping it out
+    // mid-shipment) because dozens of callsites guard themselves with
+    // `if (!await isAvailable()) return …` — forcing this to `false` makes
+    // every Radicle code path a no-op without breaking any caller.
+    if (this._isAvailable === null) {
       this._isAvailable = false;
-      return false;
+      console.log('RadicleService: disabled — Radicle has been retired in favor of WebRTC transport');
     }
-
-    // Find rad command
-    this._radCommand = await this.findRadCommand();
-    this._isAvailable = this._radCommand !== null;
-
-    if (!this._isAvailable) {
-      console.log('RadicleService: rad command not found in any standard location');
-    }
-
-    return this._isAvailable;
+    return false;
   }
 
   /**
