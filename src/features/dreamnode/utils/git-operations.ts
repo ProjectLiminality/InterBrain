@@ -127,11 +127,28 @@ export class GitOperationsService {
   }
 
   /**
-   * Open terminal at repository folder and run claude --continue command
+   * Open terminal at repository folder and run the configured coding-agent
+   * command. The command string lives in the desktop daemon's settings; if
+   * the daemon isn't running we fall back to the historical Claude Code
+   * default so contributors aren't blocked.
    */
   async openInTerminal(repoPath: string): Promise<void> {
     const fullPath = this.getFullPath(repoPath);
-    return openInTerminalUtil(fullPath, 'claude --continue --allow-dangerously-skip-permissions || claude --allow-dangerously-skip-permissions');
+    const fallback = 'claude --continue --allow-dangerously-skip-permissions || claude --allow-dangerously-skip-permissions';
+    let command = fallback;
+    try {
+      const { getBridge } = await import('../../desktop-bridge');
+      const bridge = getBridge();
+      if (bridge.isConnected() || (await bridge.connect(), bridge.isConnected())) {
+        const res = await bridge.request('get-settings', {});
+        if (res.settings?.codingAgentCommand) {
+          command = res.settings.codingAgentCommand;
+        }
+      }
+    } catch {
+      // Daemon not running; use fallback silently.
+    }
+    return openInTerminalUtil(fullPath, command);
   }
 
   /**
