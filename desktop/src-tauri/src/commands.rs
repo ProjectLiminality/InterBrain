@@ -19,6 +19,7 @@ pub struct AppState {
     pub ipc_port: Mutex<Option<u16>>,
     pub config_dir: PathBuf,
     pub bundled_plugin_dir: PathBuf,
+    pub event_bus: crate::ipc::EventBus,
 }
 
 impl AppState {
@@ -63,6 +64,7 @@ impl AppState {
             ipc_port: Mutex::new(None),
             config_dir,
             bundled_plugin_dir,
+            event_bus: crate::ipc::EventBus::new(),
         })
     }
 
@@ -202,6 +204,7 @@ pub fn close_first_run(handle: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn quit_app(handle: AppHandle) {
+    crate::request_quit();
     handle.exit(0);
 }
 
@@ -260,5 +263,8 @@ pub fn set_settings(
 ) -> Result<DaemonSettings, String> {
     *state.settings.lock().unwrap() = settings.clone();
     state.save_settings(&handle).map_err(|e| e.to_string())?;
+    state
+        .event_bus
+        .emit("settings-changed", serde_json::json!({ "settings": settings }));
     Ok(settings)
 }

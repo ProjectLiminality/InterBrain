@@ -14,12 +14,25 @@ mod settings;
 mod vaults;
 mod windows;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconEvent},
     Manager,
 };
+
+/// Set to true when the user has explicitly chosen Quit. Until then, we
+/// suppress exit events so closing a window doesn't terminate the daemon.
+static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+pub fn request_quit() {
+    QUIT_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+pub fn is_quit_requested() -> bool {
+    QUIT_REQUESTED.load(Ordering::SeqCst)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -86,15 +99,16 @@ pub fn run() {
                 })
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => { let _ = windows::toggle_tray_window(app); }
-                    "quit" => { app.exit(0); }
+                    "quit" => { request_quit(); app.exit(0); }
                     _ => {}
                 })
                 .build(app)?;
 
             // Start the IPC server in the background.
             let state_for_ipc = state.clone();
+            let handle_for_ipc = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = ipc::run_server(state_for_ipc).await {
+                if let Err(e) = ipc::run_server(state_for_ipc, handle_for_ipc).await {
                     tracing::error!("ipc server crashed: {e}");
                 }
             });
@@ -109,8 +123,11 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|_app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                // Keep running in tray when last window closes; only exit on explicit quit.
-                api.prevent_exit();
+                // Keep running in tray when a window closes — but honor explicit
+                // quits (Quit button, Cmd+Q, tray menu Quit).
+                if !is_quit_requested() {
+                    api.prevent_exit();
+                }
             }
         });
 }

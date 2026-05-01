@@ -168,8 +168,8 @@ function createProviderStatusItem(
 	container: HTMLElement,
 	status: ProviderStatus,
 	currentDefault: string,
-	plugin: InterBrainPlugin,
-	service: ReturnType<typeof getInferenceService>
+	_plugin: InterBrainPlugin,
+	_service: ReturnType<typeof getInferenceService>
 ): void {
 	const item = container.createDiv({ cls: 'status-item' });
 	item.style.display = 'flex';
@@ -179,27 +179,6 @@ function createProviderStatusItem(
 	const providerKey = PROVIDER_NAME_TO_KEY[status.name] || status.name.toLowerCase();
 	const isReady = status.status === 'ready';
 	const isDefault = currentDefault === providerKey;
-
-	// Radio button for default selection (only shown if ready)
-	const radioContainer = item.createDiv();
-	radioContainer.style.width = '20px';
-
-	if (isReady) {
-		const radio = radioContainer.createEl('input', {
-			type: 'radio',
-			attr: {
-				name: 'default-ai-provider',
-				value: providerKey
-			}
-		});
-		radio.checked = isDefault;
-		radio.style.cursor = 'pointer';
-		radio.addEventListener('change', async () => {
-			plugin.settings.defaultAIProvider = providerKey;
-			await plugin.saveSettings();
-			service.setDefaultProvider(providerKey as any);
-		});
-	}
 
 	const icon = status.status === 'ready' ? '✅' :
 		status.status === 'unavailable' ? '🔴' :
@@ -231,115 +210,38 @@ function createProviderStatusItem(
 }
 
 /**
- * Create remote providers section
+ * Create remote providers section.
+ *
+ * Note: API keys + default provider live in the InterBrain desktop companion
+ * app (system tray) as of v0.16. This section just informs the user where
+ * to manage them.
  */
 function createRemoteProvidersSection(
 	containerEl: HTMLElement,
-	plugin: InterBrainPlugin
+	_plugin: InterBrainPlugin
 ): void {
 	containerEl.createEl('h4', { text: 'Remote Providers' });
 
-	const service = getInferenceService();
+	const info = containerEl.createEl('div', { cls: 'setting-item' });
+	info.style.padding = '12px';
+	info.style.background = 'var(--background-secondary)';
+	info.style.borderRadius = '6px';
+	info.style.marginBottom = '12px';
 
-	// Claude API Key (primary)
-	new Setting(containerEl)
-		.setName('Claude API Key')
-		.setDesc('Anthropic Claude - highest quality AI inference (recommended)')
-		.addText(text => {
-			text
-				.setPlaceholder('sk-ant-...')
-				.setValue(plugin.settings.claudeApiKey)
-				.onChange(async (value) => {
-					plugin.settings.claudeApiKey = value;
-					await plugin.saveSettings();
-					service.setClaudeApiKey(value);
-				});
-			text.inputEl.type = 'password';
-			return text;
-		});
+	const heading = info.createEl('p');
+	heading.style.fontWeight = '600';
+	heading.style.marginBottom = '6px';
+	heading.setText('API keys live in the InterBrain companion app.');
 
-	const claudeLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
-	claudeLinkPara.style.marginBottom = '16px';
-	claudeLinkPara.createSpan({ text: 'Get your Claude API key: ' });
-	claudeLinkPara.createEl('a', {
-		text: 'console.anthropic.com/settings/keys',
-		href: 'https://console.anthropic.com/settings/keys'
-	});
-
-	// Groq API Key (blazing fast)
-	new Setting(containerEl)
-		.setName('Groq API Key')
-		.setDesc('Groq - blazing fast inference (sub-second responses)')
-		.addText(text => {
-			text
-				.setPlaceholder('gsk_...')
-				.setValue(plugin.settings.groqApiKey || '')
-				.onChange(async (value) => {
-					plugin.settings.groqApiKey = value;
-					await plugin.saveSettings();
-					service.setGroqApiKey(value);
-				});
-			text.inputEl.type = 'password';
-			return text;
-		});
-
-	const groqLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
-	groqLinkPara.style.marginBottom = '16px';
-	groqLinkPara.createSpan({ text: 'Get your Groq API key: ' });
-	groqLinkPara.createEl('a', {
-		text: 'console.groq.com/keys',
-		href: 'https://console.groq.com/keys'
-	});
-
-	// OpenAI API Key
-	new Setting(containerEl)
-		.setName('OpenAI API Key')
-		.setDesc('OpenAI GPT models (GPT-4o)')
-		.addText(text => {
-			text
-				.setPlaceholder('sk-...')
-				.setValue(plugin.settings.openaiApiKey || '')
-				.onChange(async (value) => {
-					plugin.settings.openaiApiKey = value;
-					await plugin.saveSettings();
-					service.setOpenAIApiKey(value);
-				});
-			text.inputEl.type = 'password';
-			return text;
-		});
-
-	const openaiLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
-	openaiLinkPara.style.marginBottom = '16px';
-	openaiLinkPara.createSpan({ text: 'Get your OpenAI API key: ' });
-	openaiLinkPara.createEl('a', {
-		text: 'platform.openai.com/api-keys',
-		href: 'https://platform.openai.com/api-keys'
-	});
-
-	// xAI Grok API Key
-	new Setting(containerEl)
-		.setName('xAI Grok API Key')
-		.setDesc('xAI Grok - advanced AI from xAI')
-		.addText(text => {
-			text
-				.setPlaceholder('xai-...')
-				.setValue(plugin.settings.xaiApiKey || '')
-				.onChange(async (value) => {
-					plugin.settings.xaiApiKey = value;
-					await plugin.saveSettings();
-					service.setXAIApiKey(value);
-				});
-			text.inputEl.type = 'password';
-			return text;
-		});
-
-	const xaiLinkPara = containerEl.createEl('p', { cls: 'setting-item-description' });
-	xaiLinkPara.style.marginBottom = '16px';
-	xaiLinkPara.createSpan({ text: 'Get your xAI API key: ' });
-	xaiLinkPara.createEl('a', {
-		text: 'console.x.ai',
-		href: 'https://console.x.ai'
-	});
+	const body = info.createEl('p');
+	body.style.fontSize = '13px';
+	body.style.color = 'var(--text-muted)';
+	body.style.margin = '0';
+	body.appendText(
+		'Your Claude / OpenAI / Groq / xAI keys and your default provider are now ' +
+		'managed in the menu-bar app so they apply across vaults and survive plugin reloads. ' +
+		'Click the InterBrain icon in your menu bar → Settings.'
+	);
 }
 
 /**

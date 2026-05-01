@@ -97,6 +97,7 @@ export default class InterBrainPlugin extends Plugin {
   public coherenceBeaconService!: CoherenceBeaconService;
   private leafManagerService!: LeafManagerService;
   private canvasObserverService!: CanvasObserverService;
+  private stopSettingsSync?: () => void;
 
   async onload() {
     // Suppress benign ResizeObserver loop warnings from flooding the console
@@ -401,6 +402,13 @@ export default class InterBrainPlugin extends Plugin {
 
     // Add settings tab
     this.addSettingTab(new InterBrainSettingTab(this.app, this));
+
+    // Start desktop-daemon settings sync. System-level settings (API keys,
+    // AI provider, Whisper config) live in the Tauri companion app and are
+    // mirrored into plugin.settings on connect + on remote change. Silently
+    // does nothing when the daemon isn't running.
+    const { startSettingsSync } = await import('./features/desktop-bridge/settings-sync');
+    this.stopSettingsSync = startSettingsSync(this);
 
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
@@ -1630,8 +1638,10 @@ export default class InterBrainPlugin extends Plugin {
   }
 
   async onunload() {
-    // Note: Passphrase is stored in settings, not cleared on unload
-    // This preserves user's passphrase configuration across reloads
+    // Stop daemon settings sync
+    if (this.stopSettingsSync) {
+      this.stopSettingsSync();
+    }
 
     // Stop canvas observer
     if (this.canvasObserverService) {

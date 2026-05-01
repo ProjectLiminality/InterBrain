@@ -6,8 +6,8 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 const TRAY_WINDOW_LABEL: &str = "tray";
 const FIRST_RUN_WINDOW_LABEL: &str = "first-run";
 
-const TRAY_W: f64 = 360.0;
-const TRAY_H: f64 = 460.0;
+const TRAY_W: f64 = 380.0;
+const TRAY_H: f64 = 620.0;
 const FIRST_RUN_W: f64 = 560.0;
 const FIRST_RUN_H: f64 = 540.0;
 

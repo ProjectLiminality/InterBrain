@@ -322,6 +322,11 @@ export function createTranscriptionSettingsSection(
 
 					await plugin.saveSettings();
 
+					// Mirror to daemon (system-level setting).
+					const { pushSettingToDaemon } = await import('../desktop-bridge/settings-sync');
+					await pushSettingToDaemon('transcriptionModel', value);
+					if (nowEnglishOnly) await pushSettingToDaemon('transcriptionLanguage', 'en');
+
 					// Only refresh if switching between multilingual <-> English-only
 					// (need to update language dropdown enabled state)
 					if (wasEnglishOnly !== nowEnglishOnly) {
@@ -356,6 +361,8 @@ export function createTranscriptionSettingsSection(
 				dropdown.onChange(async (value) => {
 					plugin.settings.transcriptionLanguage = value;
 					await plugin.saveSettings();
+					const { pushSettingToDaemon } = await import('../desktop-bridge/settings-sync');
+					await pushSettingToDaemon('transcriptionLanguage', value);
 					// No refresh needed for language change
 				});
 			});

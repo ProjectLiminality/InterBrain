@@ -8,14 +8,38 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tauri::AppHandle;
 use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 
 const PREFERRED_PORT: u16 = 51847;
 const FALLBACK_RANGE: std::ops::RangeInclusive<u16> = 51848..=51900;
 
-pub async fn run_server(state: Arc<AppState>) -> Result<()> {
+/// Broadcast bus for daemon-initiated events delivered to every connected
+/// IPC client (e.g. settings-changed when the dashboard updates settings).
+pub struct EventBus {
+    tx: broadcast::Sender<Value>,
+}
+
+impl EventBus {
+    pub fn new() -> Self {
+        let (tx, _) = broadcast::channel(64);
+        Self { tx }
+    }
+
+    pub fn emit(&self, name: &str, payload: Value) {
+        let frame = json!({ "kind": "event", "name": name, "payload": payload });
+        let _ = self.tx.send(frame);
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<Value> {
+        self.tx.subscribe()
+    }
+}
+
+pub async fn run_server(state: Arc<AppState>, app_handle: AppHandle) -> Result<()> {
     let (listener, port) = bind().await?;
     *state.ipc_port.lock().unwrap() = Some(port);
     let port_file = state.config_dir.join("ipc-port");
@@ -26,8 +50,9 @@ pub async fn run_server(state: Arc<AppState>) -> Result<()> {
 
     while let Ok((stream, _addr)) = listener.accept().await {
         let state = state.clone();
+        let app_handle = app_handle.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(state, stream).await {
+            if let Err(e) = handle_connection(state, app_handle, stream).await {
                 tracing::warn!("connection error: {e}");
             }
         });
@@ -51,39 +76,55 @@ async fn bind() -> Result<(TcpListener, u16)> {
 
 async fn handle_connection(
     state: Arc<AppState>,
+    app_handle: AppHandle,
     stream: tokio::net::TcpStream,
 ) -> Result<()> {
     let ws = accept_async(stream).await?;
     let (mut write, mut read) = ws.split();
-    while let Some(msg) = read.next().await {
-        let msg = msg?;
-        match msg {
-            Message::Text(text) => {
-                let parsed: Value = match serde_json::from_str(&text) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        let err = json!({
-                            "kind": "response",
-                            "id": "",
-                            "ok": false,
-                            "error": { "code": "parse_error", "message": e.to_string() }
-                        });
-                        write.send(Message::Text(err.to_string())).await?;
-                        continue;
+    let mut events = state.event_bus.subscribe();
+    loop {
+        tokio::select! {
+            // Inbound IPC request from the plugin.
+            msg = read.next() => {
+                let Some(msg) = msg else { break; };
+                let msg = msg?;
+                match msg {
+                    Message::Text(text) => {
+                        let parsed: Value = match serde_json::from_str(&text) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                let err = json!({
+                                    "kind": "response",
+                                    "id": "",
+                                    "ok": false,
+                                    "error": { "code": "parse_error", "message": e.to_string() }
+                                });
+                                write.send(Message::Text(err.to_string())).await?;
+                                continue;
+                            }
+                        };
+                        let response = dispatch(&state, &app_handle, parsed).await;
+                        write.send(Message::Text(response.to_string())).await?;
                     }
-                };
-                let response = dispatch(&state, parsed).await;
-                write.send(Message::Text(response.to_string())).await?;
+                    Message::Close(_) => break,
+                    Message::Ping(p) => write.send(Message::Pong(p)).await?,
+                    _ => {}
+                }
             }
-            Message::Close(_) => break,
-            Message::Ping(p) => write.send(Message::Pong(p)).await?,
-            _ => {}
+            // Daemon-initiated event broadcast.
+            evt = events.recv() => {
+                match evt {
+                    Ok(frame) => write.send(Message::Text(frame.to_string())).await?,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
         }
     }
     Ok(())
 }
 
-async fn dispatch(state: &Arc<AppState>, msg: Value) -> Value {
+async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> Value {
     let id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let op = msg.get("op").and_then(|v| v.as_str()).unwrap_or("");
     match op {
@@ -102,6 +143,25 @@ async fn dispatch(state: &Arc<AppState>, msg: Value) -> Value {
         "get-settings" => {
             let s = state.settings.lock().unwrap().clone();
             ok(&id, json!({ "settings": s }))
+        }
+        "set-settings" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let new_settings: Result<crate::settings::DaemonSettings, _> = payload
+                .get("settings")
+                .cloned()
+                .map(serde_json::from_value)
+                .unwrap_or_else(|| Err(serde::de::Error::custom("missing settings")));
+            match new_settings {
+                Ok(next) => {
+                    *state.settings.lock().unwrap() = next.clone();
+                    if let Err(e) = state.save_settings(app_handle) {
+                        return err(&id, "save_failed", &e.to_string());
+                    }
+                    state.event_bus.emit("settings-changed", json!({ "settings": next }));
+                    ok(&id, json!({ "settings": next }))
+                }
+                Err(e) => err(&id, "invalid_settings", &e.to_string()),
+            }
         }
         // Stubs — these light up once the WebRTC layer is wired.
         "clone" | "share" | "fetch-updates" => err(

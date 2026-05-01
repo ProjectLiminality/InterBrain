@@ -171,7 +171,66 @@ interface SettingsPaneProps {
   onSave: (s: DaemonSettings) => Promise<void>;
 }
 
+const AI_PROVIDERS = [
+  { value: 'claude', label: 'Claude' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'groq', label: 'Groq' },
+  { value: 'xai', label: 'xAI Grok' },
+  { value: 'ollama', label: 'Ollama (local)' },
+];
+
+const WHISPER_MODELS = [
+  { value: 'tiny', label: 'tiny — fastest, lowest accuracy' },
+  { value: 'base.en', label: 'base.en — English-only, very fast' },
+  { value: 'base', label: 'base — multilingual, very fast' },
+  { value: 'small.en', label: 'small.en — English-only, balanced' },
+  { value: 'small', label: 'small — multilingual, balanced (default)' },
+  { value: 'medium', label: 'medium — slower, higher accuracy' },
+  { value: 'large-v3', label: 'large-v3 — best accuracy, slow' },
+  { value: 'large-v3-turbo', label: 'large-v3-turbo — best/fast balance' },
+];
+
+const WHISPER_LANGS = [
+  { value: 'auto', label: 'Auto-detect' },
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'it', label: 'Italian' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'zh', label: 'Chinese' },
+];
+
 function SettingsPane({ settings, onSave }: SettingsPaneProps) {
+  return (
+    <div className="settings-pane">
+      <CodingAgentSection settings={settings} onSave={onSave} />
+      <SectionDivider />
+      <AIProviderSection settings={settings} onSave={onSave} />
+      <SectionDivider />
+      <ApiKeysSection settings={settings} onSave={onSave} />
+      <SectionDivider />
+      <LocalAISection settings={settings} onSave={onSave} />
+      <SectionDivider />
+      <TranscriptionSection settings={settings} onSave={onSave} />
+    </div>
+  );
+}
+
+function SectionDivider() {
+  return (
+    <div
+      style={{
+        margin: '14px 0 6px',
+        borderTop: '1px solid var(--ib-divider)',
+      }}
+    />
+  );
+}
+
+function CodingAgentSection({ settings, onSave }: SettingsPaneProps) {
   const matchingPreset = CODING_AGENT_PRESETS.find(p => p.command === settings.codingAgentCommand);
   const [presetLabel, setPresetLabel] = useState(matchingPreset?.label ?? 'Custom…');
   const [customCommand, setCustomCommand] = useState(settings.codingAgentCommand);
@@ -192,7 +251,7 @@ function SettingsPane({ settings, onSave }: SettingsPaneProps) {
   const isCustom = presetLabel === 'Custom…';
 
   return (
-    <div className="settings-pane">
+    <>
       <label className="setting-label">Coding agent</label>
       <select value={presetLabel} onChange={e => handlePresetChange(e.target.value)}>
         {CODING_AGENT_PRESETS.map(p => (
@@ -200,22 +259,155 @@ function SettingsPane({ settings, onSave }: SettingsPaneProps) {
         ))}
       </select>
       {isCustom && (
-        <>
-          <input
-            type="text"
-            value={customCommand}
-            onChange={e => setCustomCommand(e.target.value)}
-            onBlur={saveCustom}
-            placeholder="shell command…"
-            style={{ marginTop: 6 }}
-          />
-        </>
+        <input
+          type="text"
+          value={customCommand}
+          onChange={e => setCustomCommand(e.target.value)}
+          onBlur={saveCustom}
+          placeholder="shell command…"
+          style={{ marginTop: 6 }}
+        />
       )}
       <div className="setting-help">
-        Run when you click ▶ on a dev-mode vault, or trigger "Open coding agent"
-        on any DreamNode in Obsidian.
+        Runs when you click ▶ on a dev-mode vault, or trigger "Open coding agent"
+        on a DreamNode in Obsidian.
       </div>
+    </>
+  );
+}
+
+function AIProviderSection({ settings, onSave }: SettingsPaneProps) {
+  return (
+    <>
+      <label className="setting-label">Default AI provider</label>
+      <select
+        value={settings.defaultAIProvider}
+        onChange={e => onSave({ ...settings, defaultAIProvider: e.target.value })}
+      >
+        {AI_PROVIDERS.map(p => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+      </select>
+      <div className="setting-help">
+        Used by the InterBrain plugin for LLM calls. Local models (Ollama) need
+        no API key; remote providers require a key below.
+      </div>
+    </>
+  );
+}
+
+function ApiKeysSection({ settings, onSave }: SettingsPaneProps) {
+  function setKey(provider: 'claude' | 'openai' | 'groq' | 'xai', value: string) {
+    void onSave({
+      ...settings,
+      apiKeys: { ...settings.apiKeys, [provider]: value || undefined },
+    });
+  }
+
+  return (
+    <>
+      <label className="setting-label">API keys</label>
+      <ApiKeyInput
+        label="Claude (Anthropic)"
+        placeholder="sk-ant-..."
+        value={settings.apiKeys.claude ?? ''}
+        onCommit={v => setKey('claude', v)}
+      />
+      <ApiKeyInput
+        label="OpenAI"
+        placeholder="sk-..."
+        value={settings.apiKeys.openai ?? ''}
+        onCommit={v => setKey('openai', v)}
+      />
+      <ApiKeyInput
+        label="Groq"
+        placeholder="gsk_..."
+        value={settings.apiKeys.groq ?? ''}
+        onCommit={v => setKey('groq', v)}
+      />
+      <ApiKeyInput
+        label="xAI Grok"
+        placeholder="xai-..."
+        value={settings.apiKeys.xai ?? ''}
+        onCommit={v => setKey('xai', v)}
+      />
+      <div className="setting-help">
+        Stored locally on this machine. Saved to disk when you click outside the
+        field.
+      </div>
+    </>
+  );
+}
+
+function ApiKeyInput({
+  label, placeholder, value, onCommit,
+}: { label: string; placeholder: string; value: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ fontSize: 11, color: 'var(--ib-text-muted)', marginBottom: 2 }}>{label}</div>
+      <input
+        type="password"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => { if (draft !== value) onCommit(draft); }}
+        placeholder={placeholder}
+      />
     </div>
+  );
+}
+
+function LocalAISection({ settings, onSave }: SettingsPaneProps) {
+  const [draft, setDraft] = useState(settings.ollamaEndpoint);
+  useEffect(() => { setDraft(settings.ollamaEndpoint); }, [settings.ollamaEndpoint]);
+  return (
+    <>
+      <label className="setting-label">Ollama endpoint</label>
+      <input
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== settings.ollamaEndpoint) {
+            void onSave({ ...settings, ollamaEndpoint: draft });
+          }
+        }}
+        placeholder="http://localhost:11434"
+      />
+      <div className="setting-help">
+        Where the local Ollama server is reachable. Default is fine for most installs.
+      </div>
+    </>
+  );
+}
+
+function TranscriptionSection({ settings, onSave }: SettingsPaneProps) {
+  return (
+    <>
+      <label className="setting-label">Transcription (Whisper)</label>
+      <div style={{ fontSize: 11, color: 'var(--ib-text-muted)', marginBottom: 2 }}>Model</div>
+      <select
+        value={settings.whisperModel}
+        onChange={e => onSave({ ...settings, whisperModel: e.target.value })}
+      >
+        {WHISPER_MODELS.map(m => (
+          <option key={m.value} value={m.value}>{m.label}</option>
+        ))}
+      </select>
+      <div style={{ fontSize: 11, color: 'var(--ib-text-muted)', marginTop: 6, marginBottom: 2 }}>Language</div>
+      <select
+        value={settings.whisperLanguage}
+        onChange={e => onSave({ ...settings, whisperLanguage: e.target.value })}
+      >
+        {WHISPER_LANGS.map(l => (
+          <option key={l.value} value={l.value}>{l.label}</option>
+        ))}
+      </select>
+      <div className="setting-help">
+        Used by the conversational copilot and realtime transcription features.
+      </div>
+    </>
   );
 }
 

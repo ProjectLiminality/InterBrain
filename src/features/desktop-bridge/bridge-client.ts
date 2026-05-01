@@ -45,6 +45,28 @@ export class BridgeClient {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
 
+  /** Subscribe to connect events; fires every time the WS opens (initial + reconnects). */
+  onConnected(handler: () => void): () => void {
+    let set = this.connectHandlers;
+    if (!set) {
+      set = new Set();
+      this.connectHandlers = set;
+    }
+    set.add(handler);
+    if (this.isConnected()) {
+      try { handler(); } catch (err) { console.error('connect handler', err); }
+    }
+    return () => { set!.delete(handler); };
+  }
+
+  private connectHandlers: Set<() => void> | null = null;
+  private fireConnected() {
+    if (!this.connectHandlers) return;
+    for (const h of this.connectHandlers) {
+      try { h(); } catch (err) { console.error('connect handler', err); }
+    }
+  }
+
   /** Attempt connection. Safe to call repeatedly; idempotent. */
   async connect(): Promise<void> {
     if (this.isConnected()) return;
@@ -73,6 +95,7 @@ export class BridgeClient {
           clearTimeout(timeout);
           this.ws = ws;
           this.attachHandlers(ws);
+          this.fireConnected();
           resolve();
         });
         ws.addEventListener('error', err => {

@@ -144,3 +144,4 @@ signaling/.wrangler/
 
 # Tauri dev artifacts
 desktop/dist/
+.claude/
