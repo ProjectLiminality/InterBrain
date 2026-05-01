@@ -133,3 +133,14 @@ logs/
 
 # Runtime vault state
 vault-state.json
+
+# Rust / Tauri
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Cloudflare Wrangler
+signaling/.wrangler/
+.wrangler/
+
+# Tauri dev artifacts
+desktop/dist/

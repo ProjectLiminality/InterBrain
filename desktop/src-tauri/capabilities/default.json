@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for InterBrain windows",
+  "windows": ["tray", "first-run"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:webview:allow-create-webview-window",
+    "dialog:default",
+    "fs:default",
+    "shell:default",
+    "shell:allow-open",
+    "store:default"
+  ]
+}

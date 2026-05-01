@@ -3,11 +3,21 @@
   "version": "0.15.0",
   "description": "An Obsidian plugin that transforms Personal Knowledge Management into Collective Knowledge Gardening, transcending the traditional Second Brain paradigm",
   "main": "main.js",
+  "workspaces": [
+    "desktop",
+    "signaling"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && npm run build-github-viewer && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
-    "build:dev": "vite build && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
+    "build": "npm run build:plugin",
+    "build:plugin": "vite build && npm run build-github-viewer && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
+    "build:plugin:dev": "vite build && cp dist/main.js . && cat styles.base.css dist/main.css > styles.css",
+    "build:desktop": "cd desktop && npm run tauri:build",
+    "build:all": "npm run build:plugin && npm run build:desktop",
     "build-github-viewer": "cd src/features/github-publishing/dreamsong-standalone && vite build --config vite.config.ts --outDir ../viewer-bundle",
+    "dev:desktop": "cd desktop && npm run tauri:dev",
+    "dev:signaling": "cd signaling && npm run dev",
+    "deploy:signaling": "cd signaling && npm run deploy",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "check-all": "npm run lint && npm run typecheck && npm run test",
