@@ -2,6 +2,8 @@
 
 use crate::identity::{DiscoveredIdentity, IdentityManager};
 use crate::settings::{DaemonSettings, RegisteredVault};
+use crate::signaling::SignalingClient;
+use crate::uuid_index::UuidIndex;
 use crate::vaults::{self, VaultEntry};
 use crate::windows;
 use anyhow::Context;
@@ -20,6 +22,8 @@ pub struct AppState {
     pub config_dir: PathBuf,
     pub bundled_plugin_dir: PathBuf,
     pub event_bus: crate::ipc::EventBus,
+    pub uuid_index: Arc<UuidIndex>,
+    pub signaling: Arc<SignalingClient>,
 }
 
 impl AppState {
@@ -58,6 +62,21 @@ impl AppState {
                 p
             });
 
+        let uuid_index = Arc::new(UuidIndex::new());
+        // Initial scan from registered vaults.
+        let vault_paths: Vec<PathBuf> = settings
+            .vault_registry
+            .iter()
+            .map(|v| PathBuf::from(&v.path))
+            .collect();
+        if let Err(e) = uuid_index.rebuild_from_vaults(&vault_paths) {
+            tracing::warn!("[commands] initial uuid index scan: {e}");
+        }
+
+        let signaling = Arc::new(SignalingClient::new(
+            crate::signaling::DEFAULT_SIGNALING_BASE_URL,
+        ));
+
         Ok(Self {
             identity,
             settings: Mutex::new(settings),
@@ -65,7 +84,25 @@ impl AppState {
             config_dir,
             bundled_plugin_dir,
             event_bus: crate::ipc::EventBus::new(),
+            uuid_index,
+            signaling,
         })
+    }
+
+    /// Re-scan all registered vaults' UUID index. Call after vault add/remove
+    /// or significant filesystem change.
+    pub fn refresh_uuid_index(&self) {
+        let paths: Vec<PathBuf> = self
+            .settings
+            .lock()
+            .unwrap()
+            .vault_registry
+            .iter()
+            .map(|v| PathBuf::from(&v.path))
+            .collect();
+        if let Err(e) = self.uuid_index.rebuild_from_vaults(&paths) {
+            tracing::warn!("[commands] uuid index refresh: {e}");
+        }
     }
 
     pub fn save_settings(&self, handle: &AppHandle) -> anyhow::Result<()> {
@@ -145,6 +182,7 @@ pub fn set_dev_mode(
     }
     drop(s);
     state.save_settings(&handle).map_err(|e| e.to_string())?;
+    state.refresh_uuid_index();
     Ok(())
 }
 
@@ -247,6 +285,7 @@ pub fn install_plugin_into_vault(
     }
     drop(s);
     state.save_settings(&handle).map_err(|e| e.to_string())?;
+    state.refresh_uuid_index();
     Ok(())
 }
 

@@ -11,6 +11,9 @@ mod commands;
 mod identity;
 mod ipc;
 mod settings;
+mod signaling;
+mod transport;
+mod uuid_index;
 mod vaults;
 mod windows;
 

@@ -1,0 +1,383 @@
+//! WebRTC peer transport.
+//!
+//! Daemon-side connection management. Each connection to another peer is a
+//! single `RTCPeerConnection`; data channels are opened per-operation (one
+//! per git pack-protocol session). Cloudflare-hosted signaling is used for
+//! the initial SDP/ICE exchange; bytes thereafter flow direct peer-to-peer.
+
+use crate::signaling::{room_id_for, SignalingClient};
+use anyhow::{anyhow, Result};
+use base64::Engine;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{mpsc, Mutex};
+use webrtc::api::interceptor_registry::register_default_interceptors;
+use webrtc::api::media_engine::MediaEngine;
+use webrtc::api::APIBuilder;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::interceptor::registry::Registry;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
+
+/// Public STUN servers used for NAT discovery. Direct connections work for
+/// ~70% of peer pairs without TURN; the remaining 30% would need a TURN
+/// relay (Cloudflare Realtime, deferred).
+pub fn default_ice_servers() -> Vec<RTCIceServer> {
+    vec![
+        RTCIceServer { urls: vec!["stun:stun.l.google.com:19302".to_owned()], ..Default::default() },
+        RTCIceServer { urls: vec!["stun:stun.cloudflare.com:3478".to_owned()], ..Default::default() },
+    ]
+}
+
+/// One signaling envelope wraps either an SDP description or a single ICE
+/// candidate. We send each in a separate signed blob to the room.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum SignalEnvelope {
+    Offer { sdp: String },
+    Answer { sdp: String },
+    Ice { candidate: String },
+}
+
+pub struct PeerSession {
+    pub pc: Arc<RTCPeerConnection>,
+}
+
+impl PeerSession {
+    /// Open an outbound peer connection. We are the offerer.
+    ///
+    /// `signaling` is the live HTTP client to the Worker. `our_did` and
+    /// `peer_did` derive the room id. Returns once the data channel labeled
+    /// `git` is open (or an error if signaling/handshake times out).
+    pub async fn open_outbound(
+        signaling: Arc<SignalingClient>,
+        our_did: &str,
+        peer_did: &str,
+        timeout: Duration,
+    ) -> Result<(Self, Arc<RTCDataChannel>)> {
+        let room = room_id_for(our_did, peer_did);
+        tracing::info!("[transport] opening outbound to {peer_did} in room {room}");
+
+        let pc = build_peer_connection().await?;
+
+        // Open the data channel BEFORE creating the offer — the offer must
+        // include the data-channel section.
+        let dc = pc
+            .create_data_channel("git", None)
+            .await
+            .map_err(|e| anyhow!("create_data_channel: {e}"))?;
+
+        // Wire ICE candidates into the signaling room.
+        attach_ice_handler(pc.clone(), signaling.clone(), room.clone(), our_did.to_string());
+
+        // Create the offer and send it.
+        let offer = pc
+            .create_offer(None)
+            .await
+            .map_err(|e| anyhow!("create_offer: {e}"))?;
+        pc.set_local_description(offer.clone())
+            .await
+            .map_err(|e| anyhow!("set_local_description: {e}"))?;
+
+        let envelope = SignalEnvelope::Offer { sdp: offer.sdp.clone() };
+        post_signal(&signaling, &room, our_did, &envelope).await?;
+
+        // Wait for the answer + remote ICE.
+        let dc_open = data_channel_open_future(dc.clone());
+        let signaling_pump = pump_remote_signals(
+            signaling.clone(),
+            pc.clone(),
+            room.clone(),
+            our_did.to_string(),
+            /* expecting_offer = */ false,
+        );
+
+        tokio::select! {
+            res = dc_open => {
+                res?;
+                // Stop pumping signals — we're connected.
+                Ok((Self { pc }, dc))
+            }
+            res = signaling_pump => {
+                // Pump exited unexpectedly; if dc isn't open by now, that's an error.
+                res?;
+                anyhow::bail!("signaling pump exited before data channel opened");
+            }
+            _ = tokio::time::sleep(timeout) => {
+                anyhow::bail!("outbound handshake timed out after {:?}", timeout);
+            }
+        }
+    }
+
+    /// Accept an inbound peer connection. We are the answerer.
+    ///
+    /// Polls the signaling room for an offer from `peer_did`, then completes
+    /// the handshake and waits for the labeled data channel to open.
+    #[allow(dead_code)]
+    pub async fn accept_inbound(
+        signaling: Arc<SignalingClient>,
+        our_did: &str,
+        peer_did: &str,
+        timeout: Duration,
+    ) -> Result<(Self, Arc<RTCDataChannel>)> {
+        let room = room_id_for(our_did, peer_did);
+        tracing::info!("[transport] accepting inbound from {peer_did} in room {room}");
+
+        let pc = build_peer_connection().await?;
+
+        // We expect an inbound data channel; capture it via a callback.
+        let (dc_tx, mut dc_rx) = mpsc::channel::<Arc<RTCDataChannel>>(1);
+        let dc_tx = Arc::new(Mutex::new(Some(dc_tx)));
+        pc.on_data_channel(Box::new(move |dc| {
+            let dc_tx = dc_tx.clone();
+            Box::pin(async move {
+                if let Some(tx) = dc_tx.lock().await.take() {
+                    let _ = tx.send(dc).await;
+                }
+            })
+        }));
+
+        attach_ice_handler(pc.clone(), signaling.clone(), room.clone(), our_did.to_string());
+
+        let signaling_pump = pump_remote_signals(
+            signaling.clone(),
+            pc.clone(),
+            room.clone(),
+            our_did.to_string(),
+            /* expecting_offer = */ true,
+        );
+
+        tokio::select! {
+            res = signaling_pump => res?,
+            dc = dc_rx.recv() => {
+                let dc = dc.ok_or_else(|| anyhow!("data channel sender dropped"))?;
+                data_channel_open_future(dc.clone()).await?;
+                return Ok((Self { pc }, dc));
+            }
+            _ = tokio::time::sleep(timeout) => {
+                anyhow::bail!("inbound handshake timed out after {:?}", timeout);
+            }
+        }
+        anyhow::bail!("inbound completed without data channel");
+    }
+
+    pub async fn close(self) {
+        let _ = self.pc.close().await;
+    }
+}
+
+async fn build_peer_connection() -> Result<Arc<RTCPeerConnection>> {
+    let mut media = MediaEngine::default();
+    media.register_default_codecs().map_err(|e| anyhow!("register codecs: {e}"))?;
+    let mut interceptors = Registry::new();
+    interceptors = register_default_interceptors(interceptors, &mut media)
+        .map_err(|e| anyhow!("interceptors: {e}"))?;
+    let api = APIBuilder::new()
+        .with_media_engine(media)
+        .with_interceptor_registry(interceptors)
+        .build();
+    let config = RTCConfiguration {
+        ice_servers: default_ice_servers(),
+        ..Default::default()
+    };
+    let pc = api
+        .new_peer_connection(config)
+        .await
+        .map_err(|e| anyhow!("new_peer_connection: {e}"))?;
+    Ok(Arc::new(pc))
+}
+
+fn attach_ice_handler(
+    pc: Arc<RTCPeerConnection>,
+    signaling: Arc<SignalingClient>,
+    room: String,
+    our_did: String,
+) {
+    pc.on_ice_candidate(Box::new(move |cand: Option<RTCIceCandidate>| {
+        let signaling = signaling.clone();
+        let room = room.clone();
+        let our_did = our_did.clone();
+        Box::pin(async move {
+            if let Some(c) = cand {
+                if let Ok(json) = c.to_json() {
+                    let env = SignalEnvelope::Ice { candidate: json.candidate };
+                    if let Err(e) = post_signal(&signaling, &room, &our_did, &env).await {
+                        tracing::warn!("[transport] ICE post failed: {e}");
+                    }
+                }
+            }
+        })
+    }));
+}
+
+/// Background loop: poll the signaling room and apply remote envelopes to
+/// the peer connection. Returns when the handshake completes (data channel
+/// open) — caller should drop the future via tokio::select on data-channel-open.
+async fn pump_remote_signals(
+    signaling: Arc<SignalingClient>,
+    pc: Arc<RTCPeerConnection>,
+    room: String,
+    our_did: String,
+    expecting_offer: bool,
+) -> Result<()> {
+    let mut last_seq: u64 = 0;
+    let mut got_remote_description = !expecting_offer;
+    loop {
+        let blobs = signaling.list_blobs(&room).await?;
+        let new_blobs: Vec<_> = blobs
+            .into_iter()
+            .filter(|b| b.seq > last_seq && b.from != our_did)
+            .collect();
+        for blob in &new_blobs {
+            last_seq = blob.seq.max(last_seq);
+            let env: SignalEnvelope = match decode_envelope(&blob.data) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            match env {
+                SignalEnvelope::Offer { sdp } if expecting_offer && !got_remote_description => {
+                    let desc = RTCSessionDescription::offer(sdp)
+                        .map_err(|e| anyhow!("parse offer: {e}"))?;
+                    pc.set_remote_description(desc).await
+                        .map_err(|e| anyhow!("set_remote(offer): {e}"))?;
+                    got_remote_description = true;
+                    let answer = pc.create_answer(None).await
+                        .map_err(|e| anyhow!("create_answer: {e}"))?;
+                    pc.set_local_description(answer.clone()).await
+                        .map_err(|e| anyhow!("set_local(answer): {e}"))?;
+                    let env = SignalEnvelope::Answer { sdp: answer.sdp };
+                    post_signal(&signaling, &room, &our_did, &env).await?;
+                }
+                SignalEnvelope::Answer { sdp } if !expecting_offer && !got_remote_description => {
+                    let desc = RTCSessionDescription::answer(sdp)
+                        .map_err(|e| anyhow!("parse answer: {e}"))?;
+                    pc.set_remote_description(desc).await
+                        .map_err(|e| anyhow!("set_remote(answer): {e}"))?;
+                    got_remote_description = true;
+                }
+                SignalEnvelope::Ice { candidate } => {
+                    if got_remote_description {
+                        let init = webrtc::ice_transport::ice_candidate::RTCIceCandidateInit {
+                            candidate,
+                            ..Default::default()
+                        };
+                        if let Err(e) = pc.add_ice_candidate(init).await {
+                            tracing::warn!("[transport] add_ice failed: {e}");
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if last_seq > 0 {
+            let _ = signaling.clear_blobs(&room, last_seq).await;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+/// Wait for a data channel's `OnOpen` callback to fire. Returns when ready
+/// or errors if the channel closes before opening.
+fn data_channel_open_future(dc: Arc<RTCDataChannel>) -> impl std::future::Future<Output = Result<()>> {
+    async move {
+        let (tx, mut rx) = mpsc::channel::<Result<()>>(1);
+        let tx_open = Arc::new(Mutex::new(Some(tx.clone())));
+        let tx_close = Arc::new(Mutex::new(Some(tx.clone())));
+        dc.on_open(Box::new(move || {
+            let tx = tx_open.clone();
+            Box::pin(async move {
+                if let Some(tx) = tx.lock().await.take() {
+                    let _ = tx.send(Ok(())).await;
+                }
+            })
+        }));
+        dc.on_close(Box::new(move || {
+            let tx = tx_close.clone();
+            Box::pin(async move {
+                if let Some(tx) = tx.lock().await.take() {
+                    let _ = tx.send(Err(anyhow!("data channel closed before open"))).await;
+                }
+            })
+        }));
+        rx.recv().await.unwrap_or_else(|| Err(anyhow!("data channel sender dropped")))
+    }
+}
+
+async fn post_signal(
+    signaling: &SignalingClient,
+    room: &str,
+    our_did: &str,
+    env: &SignalEnvelope,
+) -> Result<()> {
+    let data = serde_json::to_string(env)?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
+    // Signature placeholder — real signing arrives when ed25519 identity is plumbed.
+    let sig = "unsigned";
+    signaling.post_blob(room, our_did, &encoded, sig).await?;
+    Ok(())
+}
+
+fn decode_envelope(data: &str) -> Result<SignalEnvelope> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data)?;
+    let env: SignalEnvelope = serde_json::from_slice(&bytes)?;
+    Ok(env)
+}
+
+/// Pump bytes between an opened data channel and an arbitrary
+/// AsyncRead/AsyncWrite stream. Used by the git helper to relay pack-protocol
+/// bytes between git's stdin/stdout and a remote peer's data channel.
+pub async fn pump_data_channel<R, W>(
+    dc: Arc<RTCDataChannel>,
+    mut reader: R,
+    mut writer: W,
+) -> Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+    W: tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    // Inbound: data channel → writer
+    let (in_tx, mut in_rx) = mpsc::channel::<Vec<u8>>(64);
+    dc.on_message(Box::new(move |msg: DataChannelMessage| {
+        let in_tx = in_tx.clone();
+        Box::pin(async move {
+            let _ = in_tx.send(msg.data.to_vec()).await;
+        })
+    }));
+
+    let writer_task = tokio::spawn(async move {
+        while let Some(buf) = in_rx.recv().await {
+            if buf.is_empty() { break; }
+            if writer.write_all(&buf).await.is_err() { break; }
+        }
+        let _ = writer.shutdown().await;
+    });
+
+    // Outbound: reader → data channel
+    let dc_for_send = dc.clone();
+    let reader_task = tokio::spawn(async move {
+        let mut buf = vec![0u8; 16 * 1024];
+        loop {
+            let n = match reader.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(_) => break,
+            };
+            if dc_for_send.send(&bytes::Bytes::copy_from_slice(&buf[..n])).await.is_err() {
+                break;
+            }
+        }
+        // Signal EOF by sending an empty payload — the remote interprets this
+        // as "writer closed."
+        let _ = dc_for_send.send(&bytes::Bytes::new()).await;
+    });
+
+    let _ = tokio::join!(writer_task, reader_task);
+    Ok(())
+}

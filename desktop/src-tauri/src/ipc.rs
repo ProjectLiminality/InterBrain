@@ -163,11 +163,44 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
                 Err(e) => err(&id, "invalid_settings", &e.to_string()),
             }
         }
-        // Stubs — these light up once the WebRTC layer is wired.
+        // Used by git-remote-interbrain to find a UUID locally before
+        // attempting peer transport.
+        "resolve-uuid" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let uuid = payload.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
+            if uuid.is_empty() {
+                return err(&id, "bad_request", "uuid required");
+            }
+            let vaults: Vec<std::path::PathBuf> = state
+                .settings
+                .lock()
+                .unwrap()
+                .vault_registry
+                .iter()
+                .map(|v| std::path::PathBuf::from(&v.path))
+                .collect();
+            let preferred = state.uuid_index.resolve_preferred(uuid, &vaults);
+            let all = state.uuid_index.resolve(uuid);
+            ok(&id, json!({
+                "preferred": preferred.map(|p| p.to_string_lossy().to_string()),
+                "all": all.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
+            }))
+        }
+
+        // Force a re-scan of the UUID index. Plugin can call after creating
+        // a new DreamNode so the helper sees it on the next resolution.
+        "refresh-uuid-index" => {
+            state.refresh_uuid_index();
+            ok(&id, json!({}))
+        }
+
+        // Transport ops — webrtc handshake + git pack-protocol pump. Only
+        // the helper binary calls these; they hold the connection open for
+        // the duration of the git operation.
         "clone" | "share" | "fetch-updates" => err(
             &id,
             "not_implemented",
-            "Transport layer not yet implemented in this build.",
+            "Use git-remote-interbrain helper to invoke transport.",
         ),
         other => err(&id, "unknown_op", &format!("Unknown op: {other}")),
     }
