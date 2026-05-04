@@ -72,7 +72,10 @@ jobs:
             Pre-release Tauri companion build for cross-platform install testing.
             Not code-signed; expect OS warnings on first launch.
             Internal use — not yet a public release.
-          releaseDraft: true
+          # Publish as a prerelease (not "Latest") so assets are immediately
+          # public-downloadable. Drafts hide assets behind repo collab auth,
+          # which we don't want for cross-machine install testing.
+          releaseDraft: false
           prerelease: true
           args: ${{ matrix.args }}
           includeUpdaterJson: false
