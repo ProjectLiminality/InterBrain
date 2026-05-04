@@ -59,16 +59,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Updater signing — placeholder until tauri signer generate is run
-          # and the resulting public/private keys are added as repo secrets.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: ./desktop
           tagName: ${{ github.ref_name }}
           releaseName: 'InterBrain ${{ github.ref_name }}'
-          releaseBody: 'See CHANGELOG for details.'
+          releaseBody: |
+            Pre-release Tauri companion build for cross-platform install testing.
+            Not code-signed; expect OS warnings on first launch.
+            Internal use — not yet a public release.
           releaseDraft: true
-          prerelease: false
+          prerelease: true
           args: ${{ matrix.args }}
-          includeUpdaterJson: true
+          includeUpdaterJson: false
