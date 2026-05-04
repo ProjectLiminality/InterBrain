@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
 
+# Required so the default GITHUB_TOKEN can create the GitHub Release that
+# tauri-action uploads artifacts to.
+permissions:
+  contents: write
+
 jobs:
   release:
     name: Build ${{ matrix.platform }}
