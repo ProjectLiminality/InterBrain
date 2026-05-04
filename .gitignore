@@ -101,10 +101,10 @@ dist
 # TernJS port file
 .tern-port
 
-# Built plugin files
-main.js
+# Built plugin files (root only — desktop has its own checked-in styles.css)
+/main.js
 *.zip
-styles.css
+/styles.css
 
 # macOS
 .DS_Store

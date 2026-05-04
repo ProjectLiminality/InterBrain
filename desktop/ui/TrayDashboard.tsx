@@ -343,17 +343,61 @@ function ApiKeyInput({
   label, placeholder, value, onCommit,
 }: { label: string; placeholder: string; value: string; onCommit: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
+  const [revealed, setRevealed] = useState(false);
   useEffect(() => { setDraft(value); }, [value]);
+  const dirty = draft !== value;
+
+  function commit() {
+    onCommit(draft);
+  }
+  function reset() {
+    setDraft(value);
+  }
+
   return (
     <div style={{ marginTop: 6 }}>
       <div style={{ fontSize: 11, color: 'var(--ib-text-muted)', marginBottom: 2 }}>{label}</div>
-      <input
-        type="password"
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { if (draft !== value) onCommit(draft); }}
-        placeholder={placeholder}
-      />
+      <div className="api-key-input-row">
+        <div className="api-key-input-wrapper">
+          <input
+            type={revealed ? 'text' : 'password'}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder={placeholder}
+          />
+          <button
+            type="button"
+            className="api-key-eye"
+            aria-label={revealed ? 'Hide value' : 'Show value'}
+            title={revealed ? 'Hide value' : 'Show value'}
+            onClick={() => setRevealed(r => !r)}
+          >
+            {revealed ? '🙈' : '👁'}
+          </button>
+        </div>
+        {dirty && (
+          <>
+            <button
+              type="button"
+              className="api-key-action save"
+              aria-label="Save"
+              title="Save"
+              onClick={commit}
+            >
+              ✓
+            </button>
+            <button
+              type="button"
+              className="api-key-action cancel"
+              aria-label="Discard changes"
+              title="Discard changes"
+              onClick={reset}
+            >
+              ✗
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

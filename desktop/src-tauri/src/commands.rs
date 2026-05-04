@@ -1,6 +1,6 @@
 //! Tauri commands — the surface invoked from the React UI via `invoke()`.
 
-use crate::identity::{DiscoveredIdentity, IdentityManager};
+use crate::identity::{DiscoveredIdentity, FreshIdentityResult, IdentityManager};
 use crate::settings::{DaemonSettings, RegisteredVault};
 use crate::signaling::SignalingClient;
 use crate::uuid_index::UuidIndex;
@@ -259,8 +259,29 @@ pub fn detect_existing_identity(state: State<Arc<AppState>>) -> Option<Discovere
 #[tauri::command]
 pub fn generate_fresh_identity(
     state: State<Arc<AppState>>,
-) -> Result<DiscoveredIdentity, String> {
-    state.identity.generate_fresh().map_err(|e| e.to_string())
+    passphrase: Option<String>,
+    store_in_keychain: bool,
+) -> Result<FreshIdentityResult, String> {
+    state
+        .identity
+        .generate_fresh(passphrase, store_in_keychain)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn probe_keychain() -> Result<(), String> {
+    IdentityManager::probe_keychain().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn detect_prerequisites() -> crate::prerequisites::PrerequisiteStatus {
+    crate::prerequisites::detect()
+}
+
+/// Tauri command wrapper around the private `open_url` helper.
+#[tauri::command(rename_all = "snake_case")]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    self::open_url(&url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

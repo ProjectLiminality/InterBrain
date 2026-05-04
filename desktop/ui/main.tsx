@@ -10,6 +10,9 @@ import { FirstRun } from './FirstRun';
 function App() {
   const mode = window.location.hash.replace('#', '') || 'tray';
   if (mode === 'first-run') return <FirstRun />;
+  // Add the tray-window class so the popover gets its thin border.
+  document.documentElement.classList.add('tray-window');
+  document.body.classList.add('tray-window');
   return <TrayDashboard />;
 }
 

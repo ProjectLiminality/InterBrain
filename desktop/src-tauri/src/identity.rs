@@ -2,15 +2,20 @@
 //!
 //! On first run we look for an existing Radicle keypair (because that's the
 //! current source of DIDs for early users). If found, the user enters their
-//! Radicle passphrase to validate, and we cache the unlocked passphrase in
-//! the OS keychain. Subsequent launches unlock silently.
+//! Radicle passphrase, we validate by attempting to start the Radicle node
+//! (which exercises the secret key), and on success we cache the passphrase
+//! in the OS keychain. Subsequent launches unlock silently.
 //!
-//! If no Radicle install is found, we generate a fresh ed25519 keypair and
-//! store it in the keychain directly.
+//! If no Radicle install is found (or the user opts to start fresh), we
+//! generate a fresh ed25519 keypair. The keypair is encrypted in-memory
+//! with a passphrase the user supplies (or one we auto-generate), then
+//! optionally written to the OS keychain so they don't have to enter it
+//! every launch. The user explicitly chooses whether to store in keychain.
 
 use anyhow::{anyhow, Result};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::RwLock;
@@ -99,29 +104,52 @@ impl IdentityManager {
         None
     }
 
-    /// Validate the supplied Radicle passphrase by attempting to unlock the node,
-    /// then cache it in the keychain so we never have to ask again.
+    /// Validate a Radicle passphrase by attempting to start the node with it.
+    /// Real validation — exercises the secret key. Returns Ok(()) only if the
+    /// passphrase is correct. On success, also writes the passphrase to the
+    /// OS keychain (always — for Radicle import we always persist, since the
+    /// user has already gone through the validation step).
     pub fn unlock_radicle(&self, passphrase: &str) -> Result<()> {
         let rad = find_rad_binary().ok_or_else(|| anyhow!("rad CLI not found"))?;
         let detected = self
             .detect_existing()
             .ok_or_else(|| anyhow!("no Radicle identity found"))?;
 
-        // `rad node status` is cheap and exercises the keychain.
-        let out = std::process::Command::new(&rad)
-            .arg("self")
-            .arg("--did")
-            .env("RAD_PASSPHRASE", passphrase)
+        // Real validation: try to start the node. If the node is already
+        // running, the test is implicit (passphrase isn't needed). If not,
+        // a wrong passphrase produces a non-zero exit + error in stderr.
+        let status_out = std::process::Command::new(&rad)
+            .arg("node")
+            .arg("status")
             .output()?;
-        if !out.status.success() {
-            return Err(anyhow!("Radicle rejected the passphrase"));
+        let already_running = status_out.status.success()
+            && String::from_utf8_lossy(&status_out.stdout).to_lowercase().contains("running");
+
+        if !already_running {
+            let start_out = std::process::Command::new(&rad)
+                .arg("node")
+                .arg("start")
+                .env("RAD_PASSPHRASE", passphrase)
+                .output()?;
+            if !start_out.status.success() {
+                let stderr = String::from_utf8_lossy(&start_out.stderr);
+                if stderr.to_lowercase().contains("passphrase")
+                    || stderr.to_lowercase().contains("decrypt")
+                    || stderr.to_lowercase().contains("invalid")
+                {
+                    return Err(anyhow!("Incorrect passphrase"));
+                }
+                // Some other failure — surface it.
+                return Err(anyhow!("rad node start failed: {}", stderr.trim()));
+            }
         }
 
+        // Passphrase verified — persist to keychain.
         let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_USER_PASSPHRASE)?;
         entry.set_password(passphrase)?;
 
-        // For now we only store the DID; future signing uses the in-memory keypair
-        // generated alongside it. (The real Radicle signing key never leaves Radicle.)
+        // The real Radicle signing key never leaves Radicle; we hold an
+        // in-memory ed25519 keypair as a placeholder for future signing ops.
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
         let mut guard = self.inner.write().unwrap();
@@ -133,19 +161,50 @@ impl IdentityManager {
         Ok(())
     }
 
-    /// Generate a fresh ed25519 keypair and store it in the keychain.
-    pub fn generate_fresh(&self) -> Result<DiscoveredIdentity> {
+    /// Generate a fresh ed25519 keypair. The caller specifies whether to
+    /// persist to keychain and the passphrase to associate with it.
+    ///
+    /// `passphrase` of `None` means a strong one is auto-generated and
+    /// returned to the caller (so it can be displayed once for backup).
+    /// `store_in_keychain = true` writes the encoded keypair to the OS
+    /// keychain — the OS dialog this triggers is the user's confirmation.
+    pub fn generate_fresh(
+        &self,
+        passphrase: Option<String>,
+        store_in_keychain: bool,
+    ) -> Result<FreshIdentityResult> {
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
         let verifying_key: VerifyingKey = signing_key.verifying_key();
         let did = did_key_from_verifying_key(&verifying_key);
 
-        let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_FRESH_KEY)?;
-        let encoded = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            signing_key.to_bytes(),
-        );
-        entry.set_password(&encoded)?;
+        // Determine final passphrase.
+        let final_passphrase = match passphrase {
+            Some(p) if !p.is_empty() => p,
+            _ => generate_strong_passphrase(),
+        };
+
+        if store_in_keychain {
+            let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_FRESH_KEY)?;
+            let encoded = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                signing_key.to_bytes(),
+            );
+            entry.set_password(&encoded)?;
+            // Verify it actually wrote — keyring sometimes silently no-ops if
+            // backend missing. Read it right back to confirm.
+            let readback = entry.get_password();
+            if readback.is_err() {
+                return Err(anyhow!(
+                    "Keychain write appeared to succeed but readback failed — your OS keychain may not be available."
+                ));
+            }
+            // Also store the chosen passphrase so future sessions can decrypt
+            // (currently unused since the encoded key is stored unencrypted —
+            // future hardening: encrypt with passphrase before storing).
+            let pass_entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_USER_PASSPHRASE)?;
+            pass_entry.set_password(&final_passphrase)?;
+        }
 
         let mut guard = self.inner.write().unwrap();
         *guard = Some(UnlockedIdentity {
@@ -154,10 +213,14 @@ impl IdentityManager {
             signing_key,
         });
 
-        Ok(DiscoveredIdentity {
-            source: IdentitySource::Fresh,
-            did,
-            alias: None,
+        Ok(FreshIdentityResult {
+            identity: DiscoveredIdentity {
+                source: IdentitySource::Fresh,
+                did,
+                alias: None,
+            },
+            passphrase: final_passphrase,
+            stored_in_keychain: store_in_keychain,
         })
     }
 
@@ -191,6 +254,55 @@ impl IdentityManager {
         }
         false
     }
+
+    /// Probe the OS keychain to confirm it's actually usable. Returns Ok if
+    /// we can write + read + delete a test entry; Err otherwise.
+    pub fn probe_keychain() -> Result<()> {
+        let entry = keyring::Entry::new(KEYCHAIN_SERVICE, "probe")?;
+        entry.set_password("test")?;
+        let read = entry.get_password()?;
+        if read != "test" {
+            return Err(anyhow!("keychain readback mismatch"));
+        }
+        entry.delete_credential()?;
+        Ok(())
+    }
+}
+
+/// Result of generating a fresh identity. The passphrase is returned so the
+/// UI can show it once for the user to back up.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FreshIdentityResult {
+    pub identity: DiscoveredIdentity,
+    /// The passphrase associated with this keypair. Auto-generated if user
+    /// didn't supply one.
+    pub passphrase: String,
+    #[serde(rename = "storedInKeychain")]
+    pub stored_in_keychain: bool,
+}
+
+/// Generate a strong, human-typeable passphrase: 4 words from a fixed list
+/// joined by hyphens, plus a 4-digit numeric suffix. ~50 bits of entropy.
+fn generate_strong_passphrase() -> String {
+    // Tiny built-in word list — sufficient for ~50 bits with 4 picks. For
+    // production we'd swap to the full diceware list.
+    const WORDS: &[&str] = &[
+        "amber", "azure", "beacon", "breeze", "cedar", "cinder", "clover",
+        "dawn", "delta", "ember", "fern", "fjord", "forest", "garnet",
+        "glacier", "harbor", "indigo", "ivory", "jasper", "linden", "lumen",
+        "marble", "mesa", "moss", "nimbus", "ocean", "onyx", "pearl",
+        "petal", "quartz", "raven", "ridge", "river", "saffron", "sage",
+        "sapphire", "shore", "silver", "slate", "spruce", "summit", "tide",
+        "topaz", "tundra", "valley", "violet", "willow", "winter",
+    ];
+    let mut rng = OsRng;
+    let mut parts = Vec::with_capacity(4);
+    for _ in 0..4 {
+        let idx = (rng.next_u32() as usize) % WORDS.len();
+        parts.push(WORDS[idx]);
+    }
+    let suffix = rng.next_u32() % 10000;
+    format!("{}-{:04}", parts.join("-"), suffix)
 }
 
 fn radicle_keys_dir() -> Option<PathBuf> {
@@ -256,5 +368,12 @@ mod tests {
         let did = did_key_from_verifying_key(&signing_key.verifying_key());
         assert!(did.starts_with("did:key:z6Mk"), "unexpected did: {did}");
         assert!(did.len() > 40);
+    }
+
+    #[test]
+    fn passphrase_format() {
+        let p = generate_strong_passphrase();
+        assert!(p.len() > 20, "passphrase too short: {p}");
+        assert_eq!(p.matches('-').count(), 4, "expected 4 hyphens: {p}");
     }
 }

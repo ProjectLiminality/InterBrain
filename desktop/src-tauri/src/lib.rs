@@ -10,6 +10,7 @@
 mod commands;
 mod identity;
 mod ipc;
+mod prerequisites;
 mod settings;
 mod signaling;
 mod transport;
@@ -44,6 +45,16 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        // Single-instance lock — if a second daemon launches (e.g., user starts
+        // it while one is already running), this callback fires in the existing
+        // instance and the second one exits immediately. Prevents duplicate
+        // tray icons.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            tracing::info!("[single-instance] second launch attempted; bringing existing window forward");
+            if let Err(e) = windows::toggle_tray_window(app) {
+                tracing::warn!("[single-instance] toggle window: {e}");
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -59,6 +70,9 @@ pub fn run() {
             commands::discover_obsidian_vaults,
             commands::detect_existing_identity,
             commands::generate_fresh_identity,
+            commands::probe_keychain,
+            commands::detect_prerequisites,
+            commands::open_external_url,
             commands::unlock_existing_identity,
             commands::install_plugin_into_vault,
             commands::close_first_run,
@@ -91,12 +105,20 @@ pub fn run() {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Err(e) = windows::toggle_tray_window(app) {
-                            tracing::error!("toggle_tray_window: {e}");
+                        // `rect.position` and `rect.size` are Position/Size
+                        // enums (Physical/Logical variants); convert to a
+                        // physical pixel pair for the window anchor.
+                        let pos = rect.position.to_physical::<f64>(1.0);
+                        let size = rect.size.to_physical::<f64>(1.0);
+                        let anchor_x = pos.x + size.width / 2.0;
+                        let anchor_y = pos.y + size.height;
+                        if let Err(e) = windows::toggle_tray_window_at(app, anchor_x, anchor_y) {
+                            tracing::error!("toggle_tray_window_at: {e}");
                         }
                     }
                 })

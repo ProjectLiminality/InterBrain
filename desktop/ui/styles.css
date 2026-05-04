@@ -1,0 +1,611 @@
+/* InterBrain palette — must match dreamNodeStyles.ts */
+:root {
+  --ib-black: #000000;
+  --ib-white: #ffffff;
+  --ib-blue: #479ff8;   /* dream */
+  --ib-red: #ff6b6b;    /* dreamer */
+  --ib-glow: #ffd700;   /* attention */
+  --ib-text-muted: #cccccc;
+  --ib-divider: rgba(255, 255, 255, 0.1);
+  --ib-input-bg: rgba(255, 255, 255, 0.04);
+  --ib-input-border: rgba(255, 255, 255, 0.18);
+  --ib-font: 'TeX Gyre Termes', Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ib-black);
+  color: var(--ib-white);
+  font-family: var(--ib-font);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  background: var(--ib-black);
+}
+
+/* ---------- Tray dashboard ---------- */
+
+/* Outer border for the tray popover so it stands out against dark backgrounds. */
+html.tray-window, body.tray-window {
+  background: var(--ib-black);
+}
+body.tray-window {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tray-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 14px 14px 10px;
+  gap: 10px;
+}
+
+.tray-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ib-divider);
+}
+
+.tray-header img {
+  width: 28px;
+  height: 28px;
+}
+
+.tray-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.tray-status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ib-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ib-blue);
+  box-shadow: 0 0 6px var(--ib-blue);
+}
+
+.status-dot.offline { background: var(--ib-red); box-shadow: 0 0 6px var(--ib-red); }
+
+/* ---------- Pane tabs ---------- */
+
+.pane-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+}
+
+.pane-tabs button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--ib-text-muted);
+  padding: 6px 10px;
+  font-family: var(--ib-font);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.pane-tabs button:hover { color: var(--ib-white); }
+.pane-tabs button.active {
+  background: rgba(71, 159, 248, 0.16);
+  color: var(--ib-blue);
+}
+
+/* ---------- Settings pane ---------- */
+
+.settings-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 4px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.setting-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ib-text-muted);
+  margin-bottom: 2px;
+}
+
+.setting-help {
+  font-size: 11px;
+  color: var(--ib-text-muted);
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.settings-pane select,
+.settings-pane input[type="text"] {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ---------- Vault list ---------- */
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ib-text-muted);
+  margin-top: 4px;
+}
+
+.vault-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.vault-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.vault-row:hover { background: rgba(71, 159, 248, 0.08); }
+
+.vault-name { flex: 1; font-size: 14px; }
+
+.vault-mode {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ib-divider);
+  color: var(--ib-text-muted);
+}
+
+.vault-mode.dev {
+  color: var(--ib-glow);
+  border-color: var(--ib-glow);
+}
+
+.vault-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--ib-input-border);
+  border-radius: 4px;
+  color: var(--ib-white);
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ib-font);
+  font-size: 13px;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.icon-btn:hover { border-color: var(--ib-blue); color: var(--ib-blue); }
+.icon-btn.dev:hover { border-color: var(--ib-glow); color: var(--ib-glow); }
+
+/* ---------- Footer actions ---------- */
+
+.tray-footer {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--ib-divider);
+}
+
+.tray-footer button {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--ib-input-border);
+  color: var(--ib-white);
+  padding: 8px 10px;
+  font-family: var(--ib-font);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.tray-footer button:hover { border-color: var(--ib-blue); color: var(--ib-blue); }
+.tray-footer button.danger:hover { border-color: var(--ib-red); color: var(--ib-red); }
+
+/* ---------- API key input row: eye + save/cancel ---------- */
+
+.api-key-input-row {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.api-key-input-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.api-key-input-wrapper input {
+  width: 100%;
+  padding-right: 32px;
+}
+
+.api-key-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--ib-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.api-key-eye:hover {
+  color: var(--ib-white);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.api-key-action {
+  background: transparent;
+  border: 1px solid var(--ib-input-border);
+  color: var(--ib-text-muted);
+  width: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--ib-font);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s ease, color 0.12s ease;
+  flex-shrink: 0;
+}
+
+.api-key-action.save:hover {
+  border-color: var(--ib-blue);
+  color: var(--ib-blue);
+}
+
+.api-key-action.cancel:hover {
+  border-color: var(--ib-red);
+  color: var(--ib-red);
+}
+
+/* ---------- First-run window: navigation chrome ---------- */
+
+.first-run {
+  position: relative;
+}
+
+.first-run-navbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  z-index: 10;
+}
+
+.nav-btn {
+  background: transparent;
+  border: 1px solid var(--ib-input-border);
+  color: var(--ib-white);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ib-font);
+  transition: border-color 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+
+.nav-btn:hover:not(:disabled) {
+  border-color: var(--ib-blue);
+  color: var(--ib-blue);
+}
+
+.nav-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* ---------- Identity step extras ---------- */
+
+.identity-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  max-width: 440px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ib-white);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.checkbox-row input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--ib-blue);
+  flex-shrink: 0;
+}
+
+.identity-summary {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ib-divider);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 8px 0 4px;
+  text-align: left;
+  width: 100%;
+  max-width: 440px;
+}
+
+.summary-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ib-text-muted);
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  display: block;
+  font-family: 'SF Mono', Menlo, Monaco, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--ib-white);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 8px;
+  border-radius: 4px;
+  user-select: text;
+}
+
+.error-msg {
+  color: var(--ib-red);
+  margin-top: 12px;
+  font-size: 13px;
+  max-width: 440px;
+}
+
+.warning-msg {
+  color: var(--ib-glow);
+  font-size: 12px;
+  max-width: 440px;
+  margin: 0;
+}
+
+/* ---------- Install checklist ---------- */
+
+.install-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 440px;
+  text-align: left;
+}
+
+.install-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ib-text-muted);
+  transition: color 0.18s ease;
+}
+
+.install-step.status-running { color: var(--ib-white); }
+.install-step.status-done { color: var(--ib-blue); }
+.install-step.status-failed { color: var(--ib-red); }
+
+.install-step-icon {
+  width: 18px;
+  text-align: center;
+}
+
+.install-step.status-running .install-step-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.install-step-detail {
+  margin-left: auto;
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ---------- First-run window ---------- */
+
+.first-run {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 36px 48px;
+  text-align: center;
+}
+
+.first-run img.logo {
+  width: 96px;
+  height: 96px;
+  margin-bottom: 18px;
+}
+
+.first-run h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.first-run p.tagline {
+  color: var(--ib-text-muted);
+  margin: 0 0 28px;
+  font-size: 14px;
+}
+
+.first-run h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+.first-run p.step-body {
+  color: var(--ib-text-muted);
+  margin: 0 0 24px;
+  font-size: 14px;
+  max-width: 420px;
+}
+
+.step-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.btn-primary {
+  background: var(--ib-blue);
+  color: var(--ib-black);
+  border: none;
+  padding: 10px 22px;
+  font-family: var(--ib-font);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+.btn-primary:hover { filter: brightness(1.1); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ib-white);
+  border: 1px solid var(--ib-input-border);
+  padding: 10px 22px;
+  font-family: var(--ib-font);
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.btn-secondary:hover { border-color: var(--ib-blue); color: var(--ib-blue); }
+
+.step-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+
+.step-progress span {
+  width: 24px;
+  height: 3px;
+  background: var(--ib-divider);
+  border-radius: 2px;
+  transition: background 0.18s ease;
+}
+
+.step-progress span.active { background: var(--ib-blue); }
+.step-progress span.done { background: var(--ib-white); }
+
+input[type="text"],
+input[type="password"],
+select {
+  background: var(--ib-input-bg);
+  border: 1px solid var(--ib-input-border);
+  color: var(--ib-white);
+  padding: 8px 10px;
+  font-family: var(--ib-font);
+  font-size: 14px;
+  border-radius: 4px;
+  min-width: 280px;
+}
+
+/* Suppress macOS native shiny 3D select chrome — render as a flat input. */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23cccccc' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+select option {
+  background: var(--ib-black);
+  color: var(--ib-white);
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--ib-blue);
+}
