@@ -169,24 +169,31 @@ pub fn run() {
                 }
             });
 
-            // Open first-run window if no identity exists yet. Otherwise,
-            // act as a launcher: if there's a registered vault, open it in
-            // Obsidian so the user gets straight to their dream space.
-            if !state.identity.has_unlocked_identity() {
-                windows::open_first_run(app.handle())?;
-            } else {
-                let first_vault = state
-                    .settings
-                    .lock()
-                    .unwrap()
-                    .vault_registry
-                    .first()
-                    .cloned();
-                if let Some(v) = first_vault {
-                    let path = v.path;
-                    tauri::async_runtime::spawn(async move {
-                        let url = format!("obsidian://open?path={}", urlencoding::encode(&path));
-                        // Native open via the platform default URL handler.
+            // Defer window creation until after the Tauri event loop is
+            // pumping. On Windows, creating a webview from inside .setup()
+            // sometimes races the platform message loop and fails with
+            // "Invalid window handle" (HRESULT 0x80070578). Posting it as a
+            // small async task on the main runtime ensures the loop is
+            // active before we ask WebView2 to attach.
+            let app_handle = app.handle().clone();
+            let state_for_setup = state.clone();
+            tauri::async_runtime::spawn(async move {
+                // Tiny yield so the platform event loop starts processing.
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                if !state_for_setup.identity.has_unlocked_identity() {
+                    if let Err(e) = windows::open_first_run(&app_handle) {
+                        tracing::error!("open_first_run: {e}");
+                    }
+                } else {
+                    let first_vault = state_for_setup
+                        .settings
+                        .lock()
+                        .unwrap()
+                        .vault_registry
+                        .first()
+                        .cloned();
+                    if let Some(v) = first_vault {
+                        let url = format!("obsidian://open?path={}", urlencoding::encode(&v.path));
                         #[cfg(target_os = "macos")]
                         let _ = std::process::Command::new("open").arg(&url).spawn();
                         #[cfg(target_os = "linux")]
@@ -197,9 +204,9 @@ pub fn run() {
                                 .args(["/C", "start", "", &url])
                                 .spawn();
                         }
-                    });
+                    }
                 }
-            }
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
