@@ -146,11 +146,16 @@ pub fn toggle_tray_window(app: &AppHandle) -> Result<()> {
 }
 
 pub fn open_first_run(app: &AppHandle) -> Result<()> {
+    // The first-run window is now declared statically in tauri.conf.json
+    // (created with visible=false) so Tauri creates it during proper init —
+    // avoiding the WebView2 race we were hitting on Windows when calling
+    // WebviewWindowBuilder.build() at runtime. We just show it here.
     if let Some(win) = app.get_webview_window(FIRST_RUN_WINDOW_LABEL) {
         win.show()?;
         win.set_focus()?;
         return Ok(());
     }
+    // Fallback (shouldn't be needed once the static config is in place).
     let win = WebviewWindowBuilder::new(
         app,
         FIRST_RUN_WINDOW_LABEL,
