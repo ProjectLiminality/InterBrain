@@ -185,25 +185,53 @@ impl IdentityManager {
         };
 
         if store_in_keychain {
-            let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_FRESH_KEY)?;
             let encoded = base64::Engine::encode(
                 &base64::engine::general_purpose::STANDARD,
                 signing_key.to_bytes(),
             );
+            let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_FRESH_KEY)?;
             entry.set_password(&encoded)?;
-            // Verify it actually wrote — keyring sometimes silently no-ops if
-            // backend missing. Read it right back to confirm.
-            let readback = entry.get_password();
-            if readback.is_err() {
-                return Err(anyhow!(
-                    "Keychain write appeared to succeed but readback failed — your OS keychain may not be available."
-                ));
+            // Verify persistence by re-opening a fresh handle and reading.
+            // If the readback fails or returns an empty string, the
+            // backend silently no-op'd (we've seen this on Windows when
+            // keyring features aren't right) — surface that loudly.
+            let fresh_entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_FRESH_KEY)?;
+            match fresh_entry.get_password() {
+                Ok(stored) if stored == encoded => {
+                    tracing::info!(
+                        target: "identity",
+                        bytes = encoded.len(),
+                        "keypair persisted to OS keychain (verified via fresh readback)"
+                    );
+                }
+                Ok(other) => {
+                    tracing::error!(
+                        target: "identity",
+                        expected_len = encoded.len(),
+                        got_len = other.len(),
+                        "keychain readback returned different content than written"
+                    );
+                    return Err(anyhow!(
+                        "Keychain write didn't persist correctly. Fresh readback returned different content."
+                    ));
+                }
+                Err(e) => {
+                    tracing::error!(target: "identity", error = %e, "keychain readback failed");
+                    return Err(anyhow!(
+                        "Keychain write appeared to succeed but persistence check failed: {e}. \
+                         The OS keychain backend isn't writing through. \
+                         (On Windows: verify with `vaultcmd /listcreds:\"Windows Credentials\"` and the Credential Manager GUI.)"
+                    ));
+                }
             }
-            // Also store the chosen passphrase so future sessions can decrypt
-            // (currently unused since the encoded key is stored unencrypted —
-            // future hardening: encrypt with passphrase before storing).
+            // Also store the chosen passphrase so future sessions can decrypt.
             let pass_entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_USER_PASSPHRASE)?;
             pass_entry.set_password(&final_passphrase)?;
+            // Verify the passphrase too.
+            let fresh_pass = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_USER_PASSPHRASE)?;
+            if fresh_pass.get_password().ok().as_deref() != Some(final_passphrase.as_str()) {
+                tracing::warn!(target: "identity", "passphrase keychain readback mismatch");
+            }
         }
 
         let mut guard = self.inner.write().unwrap();

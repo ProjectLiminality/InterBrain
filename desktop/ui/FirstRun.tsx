@@ -606,17 +606,98 @@ interface VaultStepProps {
 function VaultStep({
   vaults, setVaults, selected, onSelect, installSteps, setInstallSteps, error, onError, onComplete,
 }: VaultStepProps) {
+  type Mode = 'create' | 'pick';
+  const [mode, setMode] = useState<Mode>('create');
   const [busy, setBusy] = useState(false);
+  const [vaultParent, setVaultParent] = useState<string>('');
+  const [newVaultName, setNewVaultName] = useState('InterBrain');
+
+  // Fetch the default new-vault parent (~/) on mount so we can show the user
+  // what path would be used.
+  useEffect(() => {
+    invoke<string>('default_new_vault_parent').then(setVaultParent).catch(err => {
+      logEvent('warn', 'first-run.vault', 'default_new_vault_parent failed', { error: String(err) });
+    });
+  }, []);
+
+  // If there are existing Obsidian vaults, default to "pick" mode; otherwise "create".
+  useEffect(() => {
+    if (vaults.length > 0) setMode('pick');
+  }, [vaults.length]);
 
   async function pickVault() {
-    const path = await openDialog({ directory: true, multiple: false, title: 'Choose Obsidian vault' });
-    if (typeof path === 'string') {
-      onSelect(path);
-      if (!vaults.includes(path)) setVaults([...vaults, path]);
+    try {
+      const path = await openDialog({ directory: true, multiple: false, title: 'Choose Obsidian vault' });
+      if (typeof path === 'string') {
+        onSelect(path);
+        if (!vaults.includes(path)) setVaults([...vaults, path]);
+        logEvent('info', 'first-run.vault', 'vault picked via browse', { path });
+      }
+    } catch (e: unknown) {
+      logEvent('error', 'first-run.vault', 'browse dialog failed', { error: String(e) });
     }
   }
 
-  async function installPlugin() {
+  async function createAndInstall() {
+    if (!vaultParent || !newVaultName.trim()) return;
+    setBusy(true);
+    onError(null);
+
+    const steps: InstallStep[] = [
+      { label: `Create vault at ${vaultParent}/${newVaultName}`, status: 'pending' },
+      { label: 'Copy plugin files', status: 'pending' },
+      { label: 'Enable plugin in Obsidian', status: 'pending' },
+      { label: 'Register vault with daemon', status: 'pending' },
+    ];
+    setInstallSteps(steps);
+    function update(idx: number, status: InstallStep['status'], detail?: string) {
+      const next = steps.slice();
+      next[idx] = { ...next[idx], status, detail };
+      setInstallSteps(next);
+    }
+
+    let createdPath: string | null = null;
+    try {
+      update(0, 'running');
+      logEvent('info', 'first-run.vault', 'creating new vault', { parent: vaultParent, name: newVaultName });
+      createdPath = await invoke<string>('create_vault', {
+        parentDir: vaultParent,
+        name: newVaultName.trim(),
+      });
+      update(0, 'done');
+      onSelect(createdPath);
+
+      update(1, 'running');
+      await invoke('install_plugin_into_vault', { vaultPath: createdPath });
+      update(1, 'done');
+
+      update(2, 'running');
+      await sleep(150);
+      update(2, 'done');
+
+      update(3, 'running');
+      await sleep(150);
+      update(3, 'done');
+
+      logEvent('info', 'first-run.vault', 'create + install complete', { vaultPath: createdPath });
+      await sleep(300);
+      onComplete();
+    } catch (e: unknown) {
+      const msg = String(e);
+      onError(msg);
+      const idx = steps.findIndex(s => s.status === 'running');
+      if (idx >= 0) update(idx, 'failed', msg);
+      logEvent('error', 'first-run.vault', 'create + install failed', {
+        error: msg,
+        createdPath,
+        failedStep: idx,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function installIntoExisting() {
     if (!selected) return;
     setBusy(true);
     onError(null);
@@ -628,7 +709,6 @@ function VaultStep({
       { label: 'Register vault with daemon', status: 'pending' },
     ];
     setInstallSteps(steps);
-
     function update(idx: number, status: InstallStep['status'], detail?: string) {
       const next = steps.slice();
       next[idx] = { ...next[idx], status, detail };
@@ -636,9 +716,7 @@ function VaultStep({
     }
 
     try {
-      // The Tauri command is atomic, but we can pace the UI to give visible
-      // feedback. Real per-step progress would need a streaming command;
-      // the perceived transparency is the value here.
+      logEvent('info', 'first-run.vault', 'installing plugin into existing vault', { vaultPath: selected });
       update(0, 'running');
       await sleep(150);
       update(0, 'done');
@@ -655,6 +733,7 @@ function VaultStep({
       await sleep(120);
       update(3, 'done');
 
+      logEvent('info', 'first-run.vault', 'install into existing vault complete', { vaultPath: selected });
       await sleep(300);
       onComplete();
     } catch (e: unknown) {
@@ -662,6 +741,11 @@ function VaultStep({
       onError(msg);
       const idx = steps.findIndex(s => s.status === 'running');
       if (idx >= 0) update(idx, 'failed', msg);
+      logEvent('error', 'first-run.vault', 'install into existing vault failed', {
+        error: msg,
+        vaultPath: selected,
+        failedStep: idx,
+      });
     } finally {
       setBusy(false);
     }
@@ -671,25 +755,73 @@ function VaultStep({
     <>
       <h2>Choose your vault</h2>
       <p className="step-body">
-        InterBrain installs as a plugin in an Obsidian vault. Pick an existing
-        vault or browse to one.
+        InterBrain lives inside an Obsidian vault. Create a new one or pick
+        an existing one.
       </p>
-      {vaults.length > 0 && (
-        <select
-          value={selected ?? ''}
-          onChange={e => onSelect(e.target.value || null)}
-          style={{ marginBottom: 12 }}
+
+      <div className="vault-mode-tabs">
+        <button
+          className={mode === 'create' ? 'active' : ''}
+          onClick={() => { setMode('create'); onSelect(null); }}
+          disabled={busy}
         >
-          <option value="">— select a vault —</option>
-          {vaults.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-      )}
-      <div className="step-actions">
-        <button className="btn-secondary" onClick={pickVault}>Browse…</button>
-        <button className="btn-primary" onClick={installPlugin} disabled={!selected || busy}>
-          {busy ? 'Installing…' : 'Install plugin'}
+          Create new
+        </button>
+        <button
+          className={mode === 'pick' ? 'active' : ''}
+          onClick={() => setMode('pick')}
+          disabled={busy || vaults.length === 0}
+          title={vaults.length === 0 ? 'No existing Obsidian vaults found' : undefined}
+        >
+          Use existing
         </button>
       </div>
+
+      {mode === 'create' && (
+        <div className="vault-create-form">
+          <label className="setting-label">Name</label>
+          <input
+            type="text"
+            value={newVaultName}
+            onChange={e => setNewVaultName(e.target.value)}
+            disabled={busy}
+            spellCheck={false}
+          />
+          <div className="setting-help" style={{ marginTop: 4 }}>
+            Will be created at <code style={{ fontFamily: 'monospace' }}>{vaultParent}/{newVaultName.trim() || '…'}</code>
+          </div>
+          <div className="step-actions" style={{ marginTop: 14 }}>
+            <button
+              className="btn-primary"
+              onClick={createAndInstall}
+              disabled={busy || !newVaultName.trim() || !vaultParent}
+            >
+              {busy ? 'Creating…' : 'Create & install'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'pick' && (
+        <>
+          {vaults.length > 0 && (
+            <select
+              value={selected ?? ''}
+              onChange={e => onSelect(e.target.value || null)}
+              style={{ marginBottom: 12 }}
+            >
+              <option value="">— select a vault —</option>
+              {vaults.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          )}
+          <div className="step-actions">
+            <button className="btn-secondary" onClick={pickVault} disabled={busy}>Browse…</button>
+            <button className="btn-primary" onClick={installIntoExisting} disabled={!selected || busy}>
+              {busy ? 'Installing…' : 'Install plugin'}
+            </button>
+          </div>
+        </>
+      )}
 
       {installSteps.length > 0 && (
         <ul className="install-checklist">

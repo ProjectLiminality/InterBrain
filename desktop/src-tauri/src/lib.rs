@@ -96,6 +96,8 @@ pub fn run() {
             commands::open_first_run_window,
             commands::quit_app,
             commands::discover_obsidian_vaults,
+            commands::default_new_vault_parent,
+            commands::create_vault,
             commands::detect_existing_identity,
             commands::generate_fresh_identity,
             commands::probe_keychain,

@@ -252,6 +252,19 @@ pub fn discover_obsidian_vaults() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+pub fn default_new_vault_parent() -> String {
+    vaults::default_new_vault_parent().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+pub fn create_vault(parent_dir: String, name: String) -> Result<String, String> {
+    let path = vaults::create_vault(Path::new(&parent_dir), &name)
+        .map_err(|e| e.to_string())?;
+    tracing::info!(target: "vaults", path = %path.display(), "created new vault");
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn detect_existing_identity(state: State<Arc<AppState>>) -> Option<DiscoveredIdentity> {
     state.identity.detect_existing()
 }

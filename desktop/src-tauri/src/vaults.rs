@@ -26,6 +26,65 @@ pub struct VaultEntry {
     pub dev_mode: bool,
 }
 
+/// Create a fresh Obsidian vault at `parent_dir/name`. Builds the directory,
+/// the `.obsidian` subdir Obsidian needs to recognize it, and registers it
+/// in `obsidian.json` so Obsidian sees it on next launch.
+pub fn create_vault(parent_dir: &Path, name: &str) -> Result<PathBuf> {
+    let vault_path = parent_dir.join(name);
+    if vault_path.exists() {
+        bail!("a folder named {name} already exists at {}", parent_dir.display());
+    }
+    fs::create_dir_all(&vault_path)
+        .with_context(|| format!("create vault dir {}", vault_path.display()))?;
+    fs::create_dir_all(vault_path.join(".obsidian"))
+        .with_context(|| "create .obsidian dir")?;
+    register_vault_with_obsidian(&vault_path)?;
+    Ok(vault_path)
+}
+
+/// Add a vault path to Obsidian's known-vaults JSON so it appears in the
+/// vault picker on next Obsidian launch.
+fn register_vault_with_obsidian(vault_path: &Path) -> Result<()> {
+    let registry_path = obsidian_registry_path()?;
+    let mut registry: serde_json::Value = if registry_path.exists() {
+        let text = fs::read_to_string(&registry_path).unwrap_or_default();
+        serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({"vaults": {}}))
+    } else {
+        if let Some(parent) = registry_path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+        serde_json::json!({"vaults": {}})
+    };
+    let vaults = registry
+        .get_mut("vaults")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| anyhow!("malformed obsidian.json"))?;
+    // Obsidian uses a 16-char hex id; we generate a stable one from the path.
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(vault_path.to_string_lossy().as_bytes());
+    let id = hex::encode(&hasher.finalize()[..8]);
+    vaults.insert(
+        id,
+        serde_json::json!({
+            "path": vault_path.to_string_lossy(),
+            "ts": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+        }),
+    );
+    fs::write(&registry_path, serde_json::to_string_pretty(&registry)?)
+        .with_context(|| format!("write {}", registry_path.display()))?;
+    Ok(())
+}
+
+/// Default location for a new vault: `~/` on macOS/Linux,
+/// `%USERPROFILE%\` on Windows. Caller appends the desired vault name.
+pub fn default_new_vault_parent() -> PathBuf {
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+}
+
 /// Read Obsidian's vault registry from the standard per-platform location.
 pub fn discover_obsidian_vaults() -> Result<Vec<String>> {
     let registry_path = obsidian_registry_path()?;

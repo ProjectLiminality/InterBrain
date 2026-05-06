@@ -434,6 +434,54 @@ body.tray-window {
   margin: 0;
 }
 
+/* ---------- Vault mode tabs ---------- */
+
+.vault-mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.vault-mode-tabs button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--ib-text-muted);
+  padding: 6px 10px;
+  font-family: var(--ib-font);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.vault-mode-tabs button:hover:not(:disabled) { color: var(--ib-white); }
+.vault-mode-tabs button.active {
+  background: rgba(71, 159, 248, 0.16);
+  color: var(--ib-blue);
+}
+.vault-mode-tabs button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vault-create-form {
+  width: 100%;
+  max-width: 440px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+.vault-create-form input {
+  width: 100%;
+}
+
 /* ---------- Install checklist ---------- */
 
 .install-checklist {
