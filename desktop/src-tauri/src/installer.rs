@@ -16,6 +16,7 @@
 use crate::ipc::EventBus;
 use serde::Serialize;
 use std::sync::Arc;
+use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -39,6 +40,7 @@ pub struct InstallProgress {
 
 pub struct InstallContext {
     pub bus: Arc<EventBus>,
+    pub app: AppHandle,
     pub request_id: String,
 }
 
@@ -58,7 +60,12 @@ impl InstallContext {
             "requestId": self.request_id,
             "progress": payload,
         });
-        self.bus.emit("install-progress", value);
+        // Emit on BOTH busses:
+        //   1. EventBus → reaches plugin clients connected via WebSocket IPC.
+        //   2. Tauri app event bus → reaches the daemon's own webviews
+        //      (first-run window, tray dashboard) via @tauri-apps/api/event.
+        self.bus.emit("install-progress", value.clone());
+        let _ = self.app.emit("install-progress", &value);
     }
 }
 
@@ -86,6 +93,7 @@ async fn install_macos(dep: Dependency, ctx: &InstallContext) -> Result<(), Stri
     use std::path::Path;
 
     // 1. Ensure Homebrew is available.
+    ctx.report(dep, "checking", "Checking for Homebrew…", None);
     let brew_path = find_brew();
     if brew_path.is_none() {
         ctx.report(dep, "bootstrap", "Installing Homebrew (you'll be prompted for your password)", None);
@@ -95,17 +103,27 @@ async fn install_macos(dep: Dependency, ctx: &InstallContext) -> Result<(), Stri
     let brew = find_brew().ok_or("Homebrew still not found after bootstrap")?;
     let brew_str = brew.to_string_lossy().to_string();
 
-    // 2. Use brew to install the dependency.
+    // 2. Use brew to install the dependency. Treat "already installed" as success.
     match dep {
         Dependency::Git => {
-            ctx.report(dep, "installing", "Installing git via Homebrew", None);
-            run_capture(&brew_str, &["install", "git"]).await
-                .map_err(|e| format!("brew install git: {e}"))?;
+            ctx.report(dep, "installing", "Installing git via Homebrew…", None);
+            if let Err(e) = run_capture(&brew_str, &["install", "git"]).await {
+                if e.to_lowercase().contains("already installed") {
+                    ctx.report(dep, "done", "Already installed", Some(1.0));
+                    return Ok(());
+                }
+                return Err(format!("brew install git: {e}"));
+            }
         }
         Dependency::Obsidian => {
-            ctx.report(dep, "installing", "Installing Obsidian via Homebrew", None);
-            run_capture(&brew_str, &["install", "--cask", "obsidian"]).await
-                .map_err(|e| format!("brew install --cask obsidian: {e}"))?;
+            ctx.report(dep, "installing", "Installing Obsidian via Homebrew…", None);
+            if let Err(e) = run_capture(&brew_str, &["install", "--cask", "obsidian"]).await {
+                if e.to_lowercase().contains("already installed") {
+                    ctx.report(dep, "done", "Already installed", Some(1.0));
+                    return Ok(());
+                }
+                return Err(format!("brew install --cask obsidian: {e}"));
+            }
         }
     }
 
@@ -158,6 +176,7 @@ async fn bootstrap_homebrew() -> Result<(), String> {
 #[cfg(target_os = "windows")]
 async fn install_windows(dep: Dependency, ctx: &InstallContext) -> Result<(), String> {
     // 1. Ensure winget is on PATH.
+    ctx.report(dep, "checking", "Checking for winget…", None);
     if which::which("winget").is_err() {
         ctx.report(dep, "bootstrap", "Installing winget (App Installer)", None);
         bootstrap_winget(ctx).await?;
@@ -172,7 +191,7 @@ async fn install_windows(dep: Dependency, ctx: &InstallContext) -> Result<(), St
         Dependency::Git => "git",
         Dependency::Obsidian => "Obsidian",
     };
-    ctx.report(dep, "installing", &format!("Installing {label} via winget"), None);
+    ctx.report(dep, "downloading", &format!("Downloading {label}…"), None);
 
     // --silent suppresses installer GUI; --accept-* skips agreement prompts.
     // Note: many winget packages (Git in particular) ignore --scope user and
@@ -185,8 +204,21 @@ async fn install_windows(dep: Dependency, ctx: &InstallContext) -> Result<(), St
         "--accept-package-agreements",
         "--accept-source-agreements",
     ];
-    run_capture("winget", &args).await
-        .map_err(|e| format!("winget install {pkg}: {e}"))?;
+    ctx.report(dep, "installing", &format!("Installing {label} (you may see a UAC prompt)…"), None);
+    let result = run_capture("winget", &args).await;
+    match result {
+        Ok(_) => {}
+        Err(e) => {
+            // winget exit code 0x8a15002b = "package already installed and no
+            // newer version available". Treat as success — the user has the
+            // dependency, which is what we want.
+            if e.contains("0x8a15002b") || e.to_lowercase().contains("already installed") {
+                ctx.report(dep, "done", "Already installed", Some(1.0));
+                return Ok(());
+            }
+            return Err(format!("winget install {pkg}: {e}"));
+        }
+    }
 
     ctx.report(dep, "done", "Installed", Some(1.0));
     Ok(())

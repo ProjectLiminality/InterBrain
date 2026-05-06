@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { logEvent } from './log';
 
 type Step = 'welcome' | 'prereqs' | 'identity' | 'vault' | 'done';
 const ORDER: Step[] = ['welcome', 'prereqs', 'identity', 'vault', 'done'];
@@ -262,12 +263,16 @@ function PrereqsStep({
   async function installAndContinue() {
     setOrchestrating(true);
     setOverallError(null);
+    logEvent('info', 'first-run.prereqs', 'install-and-continue clicked', {
+      gitInstalled: status?.git.installed,
+      obsidianInstalled: status?.obsidian.installed,
+    });
     try {
       // Install in a fixed sequence — git first (smaller, faster, validates
       // the package-manager path), Obsidian second.
       if (status && !status.git.installed) {
         await installOne('git');
-        await onRefresh(); // refresh between to reflect partial progress
+        await onRefresh();
       }
       if (status && !status.obsidian.installed) {
         await installOne('obsidian');
@@ -275,10 +280,12 @@ function PrereqsStep({
       }
       // Final re-detect after everything to confirm both are now visible.
       await onRefresh();
-      // Auto-advance to the next step on success.
+      logEvent('info', 'first-run.prereqs', 'install-and-continue succeeded');
       onContinue();
     } catch (e: unknown) {
-      setOverallError(String(e));
+      const msg = String(e);
+      setOverallError(msg);
+      logEvent('error', 'first-run.prereqs', 'install-and-continue failed', { error: msg });
     } finally {
       setOrchestrating(false);
     }

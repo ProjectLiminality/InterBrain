@@ -278,8 +278,40 @@ pub fn detect_prerequisites() -> crate::prerequisites::PrerequisiteStatus {
     crate::prerequisites::detect()
 }
 
+/// Write a log entry from the frontend to the daemon's structured log.
+/// Use sparingly — for events that meaningfully advance state or surface
+/// user-facing errors. Routine UI reactions don't need this.
+#[tauri::command]
+pub fn log_event(level: String, source: String, message: String, fields: Option<serde_json::Value>) {
+    let lvl = level.to_lowercase();
+    match lvl.as_str() {
+        "error" => tracing::error!(target: "frontend", source = %source, fields = ?fields, "{message}"),
+        "warn"  => tracing::warn!(target: "frontend", source = %source, fields = ?fields, "{message}"),
+        "info"  => tracing::info!(target: "frontend", source = %source, fields = ?fields, "{message}"),
+        _       => tracing::debug!(target: "frontend", source = %source, fields = ?fields, "{message}"),
+    }
+}
+
+/// Reveal the daemon's log directory in the OS file manager so users can
+/// attach logs to bug reports.
+#[tauri::command]
+pub fn reveal_log_dir() -> Result<(), String> {
+    let dir = crate::default_log_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.to_string_lossy().to_string();
+    #[cfg(target_os = "macos")]
+    let cmd = ("open", vec![path.as_str()]);
+    #[cfg(target_os = "linux")]
+    let cmd = ("xdg-open", vec![path.as_str()]);
+    #[cfg(target_os = "windows")]
+    let cmd = ("explorer", vec![path.as_str()]);
+    std::process::Command::new(cmd.0).args(cmd.1).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn install_prerequisite(
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
     dependency: String,
     request_id: String,
@@ -290,7 +322,7 @@ pub async fn install_prerequisite(
         other => return Err(format!("unknown dependency: {other}")),
     };
     let bus = std::sync::Arc::new(state.event_bus.clone());
-    let ctx = crate::installer::InstallContext { bus, request_id };
+    let ctx = crate::installer::InstallContext { bus, app, request_id };
     crate::installer::install(dep, &ctx).await
 }
 

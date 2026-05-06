@@ -47,7 +47,11 @@ fn detect_obsidian() -> DependencyStatus {
         candidates.push(PathBuf::from("C:\\Program Files\\Obsidian\\Obsidian.exe"));
         candidates.push(PathBuf::from("C:\\Program Files (x86)\\Obsidian\\Obsidian.exe"));
         if let Some(local) = dirs::data_local_dir() {
-            candidates.push(local.join("Obsidian/Obsidian.exe"));
+            // %LOCALAPPDATA%\Programs\Obsidian\Obsidian.exe — the per-user
+            // install location that winget's `--scope user` (and Obsidian's
+            // own installer when run without admin) writes to.
+            candidates.push(local.join("Programs\\Obsidian\\Obsidian.exe"));
+            candidates.push(local.join("Obsidian\\Obsidian.exe"));
         }
     }
 

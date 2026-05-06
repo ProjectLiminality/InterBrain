@@ -11,6 +11,7 @@ mod commands;
 mod identity;
 mod installer;
 mod ipc;
+mod logging;
 mod prerequisites;
 mod settings;
 mod signaling;
@@ -31,6 +32,26 @@ use tauri::{
 /// suppress exit events so closing a window doesn't terminate the daemon.
 static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+const DAEMON_BUNDLE_ID: &str = "org.projectliminality.interbrain";
+
+pub fn default_log_dir() -> std::path::PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let base = if cfg!(target_os = "macos") {
+        home.join("Library/Application Support").join(DAEMON_BUNDLE_ID)
+    } else if cfg!(target_os = "windows") {
+        std::env::var_os("APPDATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData/Roaming"))
+            .join(DAEMON_BUNDLE_ID)
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| home.join(".config"))
+            .join(DAEMON_BUNDLE_ID)
+    };
+    base.join("logs")
+}
+
 pub fn request_quit() {
     QUIT_REQUESTED.store(true, Ordering::SeqCst);
 }
@@ -41,9 +62,15 @@ pub fn is_quit_requested() -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    // Logging needs the daemon's config dir, but Tauri's path API isn't
+    // available before .build(). Fall back to a hardcoded per-platform path
+    // matching what `app_config_dir()` would return for this bundle id.
+    let log_dir = default_log_dir();
+    let _log_guard = logging::init(log_dir);
+    // Hold the guard alive for the life of the app — leak it. The OS will
+    // reap on exit and the BufferedWorker flush-on-drop is moot in real-world
+    // process termination anyway.
+    Box::leak(Box::new(_log_guard));
 
     tauri::Builder::default()
         // Single-instance lock — if a second daemon launches (e.g., user starts
@@ -74,6 +101,8 @@ pub fn run() {
             commands::probe_keychain,
             commands::detect_prerequisites,
             commands::install_prerequisite,
+            commands::log_event,
+            commands::reveal_log_dir,
             commands::open_external_url,
             commands::unlock_existing_identity,
             commands::install_plugin_into_vault,
@@ -140,9 +169,36 @@ pub fn run() {
                 }
             });
 
-            // Open first-run window if no identity exists yet.
+            // Open first-run window if no identity exists yet. Otherwise,
+            // act as a launcher: if there's a registered vault, open it in
+            // Obsidian so the user gets straight to their dream space.
             if !state.identity.has_unlocked_identity() {
                 windows::open_first_run(app.handle())?;
+            } else {
+                let first_vault = state
+                    .settings
+                    .lock()
+                    .unwrap()
+                    .vault_registry
+                    .first()
+                    .cloned();
+                if let Some(v) = first_vault {
+                    let path = v.path;
+                    tauri::async_runtime::spawn(async move {
+                        let url = format!("obsidian://open?path={}", urlencoding::encode(&path));
+                        // Native open via the platform default URL handler.
+                        #[cfg(target_os = "macos")]
+                        let _ = std::process::Command::new("open").arg(&url).spawn();
+                        #[cfg(target_os = "linux")]
+                        let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                        #[cfg(target_os = "windows")]
+                        {
+                            let _ = std::process::Command::new("cmd")
+                                .args(["/C", "start", "", &url])
+                                .spawn();
+                        }
+                    });
+                }
             }
             Ok(())
         })

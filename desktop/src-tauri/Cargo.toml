@@ -1,6 +1,6 @@
 [package]
 name = "interbrain-desktop"
-version = "0.16.0-rc.3"
+version = "0.16.0-rc.4"
 description = "InterBrain — knowledge gardening companion"
 authors = ["Project Liminality"]
 license = "AGPL-3.0"
@@ -45,7 +45,8 @@ hex = "0.4"
 base64 = "0.22"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
 urlencoding = "2"
 webrtc = "0.8"
 tungstenite = "0.24"
