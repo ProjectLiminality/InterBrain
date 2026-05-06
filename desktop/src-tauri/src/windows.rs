@@ -37,7 +37,7 @@ pub fn toggle_tray_window_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) -> R
         }
         return Ok(());
     }
-    let win = WebviewWindowBuilder::new(
+    let mut builder = WebviewWindowBuilder::new(
         app,
         TRAY_WINDOW_LABEL,
         WebviewUrl::App("index.html#tray".into()),
@@ -47,11 +47,16 @@ pub fn toggle_tray_window_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) -> R
     .position(pos_x, pos_y)
     .resizable(false)
     .decorations(false)
-    .transparent(true)
     .always_on_top(true)
     .skip_taskbar(true)
-    .visible(true)
-    .build()?;
+    .visible(true);
+    // Transparent window only on macOS — on Windows, WebView2 rejects
+    // transparency (HRESULT 0x80070578) and the daemon crashes.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.transparent(true);
+    }
+    let win = builder.build()?;
     let _ = win.set_focus();
     Ok(())
 }
@@ -118,7 +123,7 @@ pub fn toggle_tray_window(app: &AppHandle) -> Result<()> {
             ((size.width as f64 / scale - TRAY_W) / 2.0, 32.0)
         })
         .unwrap_or((100.0, 32.0));
-    let win = WebviewWindowBuilder::new(
+    let mut builder = WebviewWindowBuilder::new(
         app,
         TRAY_WINDOW_LABEL,
         WebviewUrl::App("index.html#tray".into()),
@@ -128,11 +133,14 @@ pub fn toggle_tray_window(app: &AppHandle) -> Result<()> {
     .position(mx, my)
     .resizable(false)
     .decorations(false)
-    .transparent(true)
     .always_on_top(true)
     .skip_taskbar(true)
-    .visible(true)
-    .build()?;
+    .visible(true);
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.transparent(true);
+    }
+    let win = builder.build()?;
     let _ = win.set_focus();
     Ok(())
 }
