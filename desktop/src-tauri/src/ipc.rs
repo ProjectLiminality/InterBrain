@@ -19,6 +19,7 @@ const FALLBACK_RANGE: std::ops::RangeInclusive<u16> = 51848..=51900;
 
 /// Broadcast bus for daemon-initiated events delivered to every connected
 /// IPC client (e.g. settings-changed when the dashboard updates settings).
+#[derive(Clone)]
 pub struct EventBus {
     tx: broadcast::Sender<Value>,
 }

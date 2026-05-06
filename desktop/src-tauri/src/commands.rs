@@ -278,6 +278,22 @@ pub fn detect_prerequisites() -> crate::prerequisites::PrerequisiteStatus {
     crate::prerequisites::detect()
 }
 
+#[tauri::command]
+pub async fn install_prerequisite(
+    state: State<'_, Arc<AppState>>,
+    dependency: String,
+    request_id: String,
+) -> Result<(), String> {
+    let dep = match dependency.as_str() {
+        "git" => crate::installer::Dependency::Git,
+        "obsidian" => crate::installer::Dependency::Obsidian,
+        other => return Err(format!("unknown dependency: {other}")),
+    };
+    let bus = std::sync::Arc::new(state.event_bus.clone());
+    let ctx = crate::installer::InstallContext { bus, request_id };
+    crate::installer::install(dep, &ctx).await
+}
+
 /// Tauri command wrapper around the private `open_url` helper.
 #[tauri::command(rename_all = "snake_case")]
 pub fn open_external_url(url: String) -> Result<(), String> {

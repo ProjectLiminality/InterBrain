@@ -187,9 +187,66 @@ function NavBar({
   );
 }
 
+type DepKey = 'obsidian' | 'git';
+
+interface InstallProgressPayload {
+  requestId: string;
+  progress: {
+    dependency: DepKey;
+    stage: string;
+    progress: number | null;
+    message: string;
+  };
+}
+
 function PrereqsStep({
   status, onRefresh, onContinue,
 }: { status: PrereqsStatusType; onRefresh: () => void; onContinue: () => void }) {
+  const [installing, setInstalling] = useState<Record<DepKey, boolean>>({ obsidian: false, git: false });
+  const [progress, setProgress] = useState<Record<DepKey, string | null>>({ obsidian: null, git: null });
+  const [error, setError] = useState<Record<DepKey, string | null>>({ obsidian: null, git: null });
+
+  // Subscribe to install-progress events from the daemon. Tauri exposes
+  // events through @tauri-apps/api/event (built into the runtime), but
+  // since this codebase uses raw invoke() everywhere, we'll read events
+  // through the same WebSocket the plugin uses by polling the dispatcher.
+  // For the daemon-internal case (this UI is hosted in the daemon's own
+  // webview), Tauri's `listen` is the right channel.
+  useEffect(() => {
+    let cleanup: (() => void) | null = null;
+    (async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      const unlisten = await listen<InstallProgressPayload>('install-progress', evt => {
+        const dep = evt.payload.progress.dependency;
+        setProgress(prev => ({ ...prev, [dep]: evt.payload.progress.message }));
+        if (evt.payload.progress.stage === 'done') {
+          setInstalling(prev => ({ ...prev, [dep]: false }));
+          // Re-detect prereqs to reflect the install on the user's system.
+          onRefresh();
+        }
+      });
+      cleanup = unlisten;
+    })();
+    return () => { cleanup?.(); };
+  }, [onRefresh]);
+
+  async function installDep(dep: DepKey) {
+    setInstalling(prev => ({ ...prev, [dep]: true }));
+    setProgress(prev => ({ ...prev, [dep]: 'Starting…' }));
+    setError(prev => ({ ...prev, [dep]: null }));
+    try {
+      await invoke('install_prerequisite', {
+        dependency: dep,
+        requestId: `${dep}-${Date.now()}`,
+      });
+      onRefresh();
+    } catch (e: unknown) {
+      setError(prev => ({ ...prev, [dep]: String(e) }));
+    } finally {
+      setInstalling(prev => ({ ...prev, [dep]: false }));
+    }
+  }
+
   if (!status) {
     return <p className="step-body">Checking prerequisites…</p>;
   }
@@ -198,12 +255,26 @@ function PrereqsStep({
     <>
       <h2>Prerequisites</h2>
       <p className="step-body">
-        InterBrain needs Obsidian and git on this machine. Both are free and
-        widely installed — install whatever's missing, then come back.
+        InterBrain needs Obsidian and git. We can install both for you — or
+        if they're already on your system, we'll detect them.
       </p>
       <ul className="install-checklist" style={{ maxWidth: 460 }}>
-        <DependencyRow name="Obsidian" dep={status.obsidian} />
-        <DependencyRow name="git" dep={status.git} />
+        <DependencyRow
+          name="Obsidian"
+          dep={status.obsidian}
+          installing={installing.obsidian}
+          progress={progress.obsidian}
+          error={error.obsidian}
+          onInstall={() => installDep('obsidian')}
+        />
+        <DependencyRow
+          name="git"
+          dep={status.git}
+          installing={installing.git}
+          progress={progress.git}
+          error={error.git}
+          onInstall={() => installDep('git')}
+        />
       </ul>
       <div className="step-actions" style={{ marginTop: 16 }}>
         <button className="btn-secondary" onClick={onRefresh}>Re-check</button>
@@ -217,38 +288,48 @@ function PrereqsStep({
 
 type PrereqsStatusType = PrerequisiteStatus | null;
 
-function DependencyRow({ name, dep }: { name: string; dep: DependencyStatus }) {
+function DependencyRow({
+  name, dep, installing, progress, error, onInstall,
+}: {
+  name: string;
+  dep: DependencyStatus;
+  installing: boolean;
+  progress: string | null;
+  error: string | null;
+  onInstall: () => void;
+}) {
+  let status: 'done' | 'running' | 'failed' | 'pending' = dep.installed ? 'done' : 'pending';
+  if (installing) status = 'running';
+  if (error) status = 'failed';
+
   return (
-    <li className={`install-step status-${dep.installed ? 'done' : 'pending'}`} style={{ alignItems: 'center' }}>
-      <span className="install-step-icon">{dep.installed ? '✓' : '○'}</span>
+    <li className={`install-step status-${status}`} style={{ alignItems: 'center' }}>
+      <span className="install-step-icon">
+        {status === 'done' ? '✓' : status === 'running' ? '◌' : status === 'failed' ? '✗' : '○'}
+      </span>
       <span className="install-step-label" style={{ flex: '0 0 auto', minWidth: 70 }}>{name}</span>
-      {dep.installed ? (
-        <span className="install-step-detail" style={{ marginLeft: 'auto' }}>
-          {dep.detail || 'installed'}
-        </span>
-      ) : (
-        <span className="install-step-detail" style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {dep.installUrl && (
-            <button
-              className="btn-secondary"
-              style={{ padding: '4px 10px', fontSize: 12 }}
-              onClick={() => invoke('open_external_url', { url: dep.installUrl })}
-            >
-              Download
-            </button>
-          )}
-          {dep.installCommand && (
-            <button
-              className="btn-secondary"
-              style={{ padding: '4px 10px', fontSize: 12 }}
-              title={`Copy: ${dep.installCommand}`}
-              onClick={() => navigator.clipboard.writeText(dep.installCommand!)}
-            >
-              Copy command
-            </button>
-          )}
-        </span>
-      )}
+      <span className="install-step-detail" style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+        {dep.installed && !installing && (
+          <span style={{ fontStyle: 'italic' }}>{dep.detail || 'installed'}</span>
+        )}
+        {installing && (
+          <span style={{ fontStyle: 'italic' }}>{progress ?? 'Installing…'}</span>
+        )}
+        {error && (
+          <span style={{ color: 'var(--ib-red)', maxWidth: 220, fontSize: 11 }} title={error}>
+            {error.length > 60 ? error.slice(0, 60) + '…' : error}
+          </span>
+        )}
+        {!dep.installed && !installing && (
+          <button
+            className="btn-secondary"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+            onClick={onInstall}
+          >
+            Install
+          </button>
+        )}
+      </span>
     </li>
   );
 }

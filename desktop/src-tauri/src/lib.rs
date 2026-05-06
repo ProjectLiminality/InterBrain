@@ -9,6 +9,7 @@
 
 mod commands;
 mod identity;
+mod installer;
 mod ipc;
 mod prerequisites;
 mod settings;
@@ -72,6 +73,7 @@ pub fn run() {
             commands::generate_fresh_identity,
             commands::probe_keychain,
             commands::detect_prerequisites,
+            commands::install_prerequisite,
             commands::open_external_url,
             commands::unlock_existing_identity,
             commands::install_plugin_into_vault,
