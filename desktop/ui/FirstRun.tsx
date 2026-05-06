@@ -199,108 +199,156 @@ interface InstallProgressPayload {
   };
 }
 
+type PrereqsStatusType = PrerequisiteStatus | null;
+
+interface DepState {
+  installing: boolean;
+  message: string | null;
+  error: string | null;
+}
+
 function PrereqsStep({
   status, onRefresh, onContinue,
 }: { status: PrereqsStatusType; onRefresh: () => void; onContinue: () => void }) {
-  const [installing, setInstalling] = useState<Record<DepKey, boolean>>({ obsidian: false, git: false });
-  const [progress, setProgress] = useState<Record<DepKey, string | null>>({ obsidian: null, git: null });
-  const [error, setError] = useState<Record<DepKey, string | null>>({ obsidian: null, git: null });
+  const [state, setState] = useState<Record<DepKey, DepState>>({
+    obsidian: { installing: false, message: null, error: null },
+    git: { installing: false, message: null, error: null },
+  });
+  const [orchestrating, setOrchestrating] = useState(false);
+  const [overallError, setOverallError] = useState<string | null>(null);
 
-  // Subscribe to install-progress events from the daemon. Tauri exposes
-  // events through @tauri-apps/api/event (built into the runtime), but
-  // since this codebase uses raw invoke() everywhere, we'll read events
-  // through the same WebSocket the plugin uses by polling the dispatcher.
-  // For the daemon-internal case (this UI is hosted in the daemon's own
-  // webview), Tauri's `listen` is the right channel.
+  // Listen for install-progress events from the daemon to update the inline
+  // status messages while a backend install runs.
   useEffect(() => {
     let cleanup: (() => void) | null = null;
     (async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const unlisten = await listen<InstallProgressPayload>('install-progress', evt => {
         const dep = evt.payload.progress.dependency;
-        setProgress(prev => ({ ...prev, [dep]: evt.payload.progress.message }));
-        if (evt.payload.progress.stage === 'done') {
-          setInstalling(prev => ({ ...prev, [dep]: false }));
-          // Re-detect prereqs to reflect the install on the user's system.
-          onRefresh();
-        }
+        setState(prev => ({
+          ...prev,
+          [dep]: { ...prev[dep], message: evt.payload.progress.message },
+        }));
       });
       cleanup = unlisten;
     })();
     return () => { cleanup?.(); };
-  }, [onRefresh]);
+  }, []);
 
-  async function installDep(dep: DepKey) {
-    setInstalling(prev => ({ ...prev, [dep]: true }));
-    setProgress(prev => ({ ...prev, [dep]: 'Starting…' }));
-    setError(prev => ({ ...prev, [dep]: null }));
+  async function installOne(dep: DepKey): Promise<void> {
+    setState(prev => ({
+      ...prev,
+      [dep]: { installing: true, message: 'Starting…', error: null },
+    }));
     try {
       await invoke('install_prerequisite', {
         dependency: dep,
         requestId: `${dep}-${Date.now()}`,
       });
-      onRefresh();
+      setState(prev => ({
+        ...prev,
+        [dep]: { installing: false, message: null, error: null },
+      }));
     } catch (e: unknown) {
-      setError(prev => ({ ...prev, [dep]: String(e) }));
+      const msg = String(e);
+      setState(prev => ({
+        ...prev,
+        [dep]: { installing: false, message: null, error: msg },
+      }));
+      throw e;
+    }
+  }
+
+  async function installAndContinue() {
+    setOrchestrating(true);
+    setOverallError(null);
+    try {
+      // Install in a fixed sequence — git first (smaller, faster, validates
+      // the package-manager path), Obsidian second.
+      if (status && !status.git.installed) {
+        await installOne('git');
+        await onRefresh(); // refresh between to reflect partial progress
+      }
+      if (status && !status.obsidian.installed) {
+        await installOne('obsidian');
+        await onRefresh();
+      }
+      // Final re-detect after everything to confirm both are now visible.
+      await onRefresh();
+      // Auto-advance to the next step on success.
+      onContinue();
+    } catch (e: unknown) {
+      setOverallError(String(e));
     } finally {
-      setInstalling(prev => ({ ...prev, [dep]: false }));
+      setOrchestrating(false);
     }
   }
 
   if (!status) {
     return <p className="step-body">Checking prerequisites…</p>;
   }
+
   const allReady = status.obsidian.installed && status.git.installed;
+  const buttonLabel = orchestrating
+    ? 'Installing…'
+    : overallError
+      ? 'Retry install & continue'
+      : allReady
+        ? 'Continue'
+        : 'Install & continue';
+
+  function onPrimaryClick() {
+    if (allReady && !orchestrating) {
+      onContinue();
+    } else {
+      void installAndContinue();
+    }
+  }
+
   return (
     <>
       <h2>Prerequisites</h2>
       <p className="step-body">
-        InterBrain needs Obsidian and git. We can install both for you — or
-        if they're already on your system, we'll detect them.
+        InterBrain needs Obsidian and git. {allReady
+          ? "Both are already installed — you're good to go."
+          : 'Click below to install whatever is missing — we handle the rest in the background.'}
       </p>
       <ul className="install-checklist" style={{ maxWidth: 460 }}>
-        <DependencyRow
-          name="Obsidian"
-          dep={status.obsidian}
-          installing={installing.obsidian}
-          progress={progress.obsidian}
-          error={error.obsidian}
-          onInstall={() => installDep('obsidian')}
-        />
-        <DependencyRow
-          name="git"
-          dep={status.git}
-          installing={installing.git}
-          progress={progress.git}
-          error={error.git}
-          onInstall={() => installDep('git')}
-        />
+        <DependencyRow name="git" dep={status.git} state={state.git} />
+        <DependencyRow name="Obsidian" dep={status.obsidian} state={state.obsidian} />
       </ul>
+      {overallError && (
+        <p className="error-msg" style={{ maxWidth: 460, marginTop: 12 }}>
+          Install failed: {overallError}
+        </p>
+      )}
       <div className="step-actions" style={{ marginTop: 16 }}>
-        <button className="btn-secondary" onClick={onRefresh}>Re-check</button>
-        <button className="btn-primary" onClick={onContinue} disabled={!allReady}>
-          {allReady ? 'Continue' : 'Continue (install missing first)'}
+        <button
+          className="btn-primary"
+          onClick={onPrimaryClick}
+          disabled={orchestrating}
+        >
+          {buttonLabel}
         </button>
       </div>
     </>
   );
 }
 
-type PrereqsStatusType = PrerequisiteStatus | null;
-
 function DependencyRow({
-  name, dep, installing, progress, error, onInstall,
-}: {
-  name: string;
-  dep: DependencyStatus;
-  installing: boolean;
-  progress: string | null;
-  error: string | null;
-  onInstall: () => void;
-}) {
+  name, dep, state,
+}: { name: string; dep: DependencyStatus; state: DepState }) {
   let status: 'done' | 'running' | 'failed' | 'pending' = dep.installed ? 'done' : 'pending';
-  if (installing) status = 'running';
-  if (error) status = 'failed';
+  if (state.installing) status = 'running';
+  if (state.error) status = 'failed';
+
+  const detailText = dep.installed
+    ? (dep.detail || 'installed')
+    : state.installing
+      ? (state.message ?? 'Installing…')
+      : state.error
+        ? state.error
+        : 'not installed';
 
   return (
     <li className={`install-step status-${status}`} style={{ alignItems: 'center' }}>
@@ -308,27 +356,12 @@ function DependencyRow({
         {status === 'done' ? '✓' : status === 'running' ? '◌' : status === 'failed' ? '✗' : '○'}
       </span>
       <span className="install-step-label" style={{ flex: '0 0 auto', minWidth: 70 }}>{name}</span>
-      <span className="install-step-detail" style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-        {dep.installed && !installing && (
-          <span style={{ fontStyle: 'italic' }}>{dep.detail || 'installed'}</span>
-        )}
-        {installing && (
-          <span style={{ fontStyle: 'italic' }}>{progress ?? 'Installing…'}</span>
-        )}
-        {error && (
-          <span style={{ color: 'var(--ib-red)', maxWidth: 220, fontSize: 11 }} title={error}>
-            {error.length > 60 ? error.slice(0, 60) + '…' : error}
-          </span>
-        )}
-        {!dep.installed && !installing && (
-          <button
-            className="btn-secondary"
-            style={{ padding: '4px 10px', fontSize: 12 }}
-            onClick={onInstall}
-          >
-            Install
-          </button>
-        )}
+      <span
+        className="install-step-detail"
+        style={{ marginLeft: 'auto', maxWidth: 280, fontSize: 11, fontStyle: status === 'done' || status === 'pending' ? 'italic' : 'normal', color: status === 'failed' ? 'var(--ib-red)' : undefined }}
+        title={detailText}
+      >
+        {detailText.length > 60 ? detailText.slice(0, 60) + '…' : detailText}
       </span>
     </li>
   );

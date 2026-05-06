@@ -18,6 +18,9 @@ use serde::Serialize;
 use std::sync::Arc;
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Dependency {
@@ -172,12 +175,15 @@ async fn install_windows(dep: Dependency, ctx: &InstallContext) -> Result<(), St
     ctx.report(dep, "installing", &format!("Installing {label} via winget"), None);
 
     // --silent suppresses installer GUI; --accept-* skips agreement prompts.
+    // Note: many winget packages (Git in particular) ignore --scope user and
+    // install to Program Files anyway, triggering UAC. That's accurate
+    // behavior — we don't paper over it; the user sees one OS-native UAC
+    // prompt per install, which is the canonical pattern.
     let args = [
         "install", "--id", pkg,
         "--silent",
         "--accept-package-agreements",
         "--accept-source-agreements",
-        "--scope", "user",  // per-user install — no UAC required
     ];
     run_capture("winget", &args).await
         .map_err(|e| format!("winget install {pkg}: {e}"))?;
@@ -205,9 +211,14 @@ async fn bootstrap_winget(ctx: &InstallContext) -> Result<(), String> {
     ctx.report(Dependency::Git, "bootstrap", "Installing winget…", None);
     let dest_str: PathBuf = dest;
     let ps_arg = format!("Add-AppxPackage -Path '{}'", dest_str.display());
-    let out = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &ps_arg])
-        .output().await
+    let mut ps_cmd = Command::new("powershell");
+    ps_cmd.args(["-NoProfile", "-Command", &ps_arg]);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        ps_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = ps_cmd.output().await
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err(format!("Add-AppxPackage failed: {}", String::from_utf8_lossy(&out.stderr)));
@@ -315,7 +326,16 @@ async fn install_obsidian_appimage() -> Result<(), String> {
 // ============================================================================
 
 async fn run_capture(cmd: &str, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(cmd).args(args).output().await
+    let mut command = Command::new(cmd);
+    command.args(args);
+    // On Windows, suppress the console window that would otherwise pop up
+    // for each child process (winget, msiexec, installer .exe's).
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = command.output().await
         .map_err(|e| format!("spawn {cmd}: {e}"))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
