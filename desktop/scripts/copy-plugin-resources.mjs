@@ -16,20 +16,26 @@ const desktopDir = dirname(here);
 const repoRoot = dirname(desktopDir);
 const resourceDir = join(desktopDir, 'src-tauri', 'resources', 'plugin');
 
-const files = ['manifest.json', 'main.js', 'styles.css'];
+// (sourceRelativeToRepo, dstFilenameInResourceDir)
+const items = [
+  ['manifest.json', 'manifest.json'],
+  ['main.js', 'main.js'],
+  ['styles.css', 'styles.css'],
+  ['theme/interbrain.css', 'interbrain.css'],
+];
 
 mkdirSync(resourceDir, { recursive: true });
 
 const missing = [];
-for (const file of files) {
-  const src = join(repoRoot, file);
+for (const [rel, dstName] of items) {
+  const src = join(repoRoot, rel);
   if (!existsSync(src)) {
-    missing.push(file);
+    missing.push(rel);
     continue;
   }
-  const dst = join(resourceDir, file);
+  const dst = join(resourceDir, dstName);
   copyFileSync(src, dst);
-  console.log(`copied ${file} → ${dst}`);
+  console.log(`copied ${rel} → ${dst}`);
 }
 
 if (missing.length > 0) {

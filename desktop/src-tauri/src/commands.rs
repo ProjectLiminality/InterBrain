@@ -204,7 +204,7 @@ pub fn set_dev_mode(
 ) -> Result<(), String> {
     let path = PathBuf::from(&vault_path);
     if enabled {
-        vaults::enable_dev_mode(&path).map_err(|e| e.to_string())?;
+        vaults::enable_dev_mode(&path, &state.bundled_plugin_dir).map_err(|e| e.to_string())?;
     } else {
         vaults::disable_dev_mode(&path, &state.bundled_plugin_dir).map_err(|e| e.to_string())?;
     }
@@ -392,7 +392,23 @@ pub fn install_plugin_into_vault(
     vault_path: String,
 ) -> Result<(), String> {
     let path = PathBuf::from(&vault_path);
+
+    // Install plugin files into .obsidian/plugins/InterBrain
     vaults::install_managed(&path, &state.bundled_plugin_dir).map_err(|e| e.to_string())?;
+
+    // Also clone the InterBrain repo as a DreamNode at <vault>/InterBrain.
+    // This is the canonical "plugin code IS a DreamNode" pattern. Best-
+    // effort: if git isn't available or the clone fails, the plugin still
+    // works, but we surface the failure in the log.
+    if let Err(e) = vaults::ensure_interbrain_clone_in_vault(&path) {
+        tracing::warn!(
+            target: "vaults",
+            vault = %path.display(),
+            error = %e,
+            "InterBrain repo clone into vault failed (plugin still installed)"
+        );
+    }
+
     let mut s = state.settings.lock().unwrap();
     if !s.vault_registry.iter().any(|v| v.path == vault_path) {
         s.vault_registry.push(RegisteredVault { path: vault_path, dev_mode: false });

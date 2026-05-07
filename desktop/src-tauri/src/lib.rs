@@ -196,6 +196,23 @@ pub fn run() {
                         tracing::error!(target: "startup", error = %e, "open_first_run failed");
                     }
                 } else {
+                    // Health-check every registered vault. If any plugin
+                    // dir is missing or broken, restore from bundled.
+                    let vaults_to_check: Vec<std::path::PathBuf> = state_for_setup
+                        .settings
+                        .lock()
+                        .unwrap()
+                        .vault_registry
+                        .iter()
+                        .map(|v| std::path::PathBuf::from(&v.path))
+                        .collect();
+                    for vault in &vaults_to_check {
+                        match crate::vaults::ensure_plugin_health(vault, &state_for_setup.bundled_plugin_dir) {
+                            Ok(true) => tracing::info!(target: "startup", vault = %vault.display(), "plugin self-healed"),
+                            Ok(false) => {}
+                            Err(e) => tracing::error!(target: "startup", vault = %vault.display(), error = %e, "plugin health check failed"),
+                        }
+                    }
                     let first_vault = state_for_setup
                         .settings
                         .lock()
