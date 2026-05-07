@@ -1,7 +1,7 @@
 //! Window management — tray popover and first-run window.
 
 use anyhow::Result;
-use tauri::{AppHandle, LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 const TRAY_WINDOW_LABEL: &str = "tray";
 const FIRST_RUN_WINDOW_LABEL: &str = "first-run";
@@ -57,8 +57,32 @@ pub fn toggle_tray_window_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) -> R
         builder = builder.transparent(true);
     }
     let win = builder.build()?;
+    attach_tray_blur_handler(&win);
     let _ = win.set_focus();
     Ok(())
+}
+
+/// Wire the tray popover to auto-hide when it loses focus — established UX
+/// pattern for system-tray fly-out menus (matches the Windows 11 Calendar
+/// / Wi-Fi panels and macOS menu-bar app popovers like Spotify, Slack, etc.).
+fn attach_tray_blur_handler(win: &tauri::WebviewWindow) {
+    let win_handle = win.clone();
+    win.on_window_event(move |event| {
+        if let WindowEvent::Focused(false) = event {
+            // Brief delay so a click that opens a child dialog (e.g., a file
+            // picker) doesn't immediately collapse the parent.
+            let win_handle = win_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+                // Re-check focus state — if focus came back (e.g., picker
+                // closed and returned), don't hide.
+                if win_handle.is_focused().unwrap_or(false) {
+                    return;
+                }
+                let _ = win_handle.hide();
+            });
+        }
+    });
 }
 
 /// Compute a logical-pixel (x, y) position for the tray popover such that
@@ -141,6 +165,7 @@ pub fn toggle_tray_window(app: &AppHandle) -> Result<()> {
         builder = builder.transparent(true);
     }
     let win = builder.build()?;
+    attach_tray_blur_handler(&win);
     let _ = win.set_focus();
     Ok(())
 }

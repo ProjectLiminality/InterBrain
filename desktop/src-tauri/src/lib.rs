@@ -182,9 +182,18 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Tiny yield so the platform event loop starts processing.
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                if !state_for_setup.identity.has_unlocked_identity() {
+                let has_identity = state_for_setup.identity.has_unlocked_identity();
+                let vault_count = state_for_setup.settings.lock().unwrap().vault_registry.len();
+                tracing::info!(
+                    target: "startup",
+                    has_unlocked_identity = has_identity,
+                    registered_vaults = vault_count,
+                    "startup decision"
+                );
+                if !has_identity {
+                    tracing::info!(target: "startup", "opening first-run window");
                     if let Err(e) = windows::open_first_run(&app_handle) {
-                        tracing::error!("open_first_run: {e}");
+                        tracing::error!(target: "startup", error = %e, "open_first_run failed");
                     }
                 } else {
                     let first_vault = state_for_setup

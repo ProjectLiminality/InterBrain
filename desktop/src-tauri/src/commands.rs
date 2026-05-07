@@ -44,23 +44,55 @@ impl AppState {
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default();
 
-        // Resolve bundled plugin dir. When running `tauri dev`, the resource
-        // dir points at the dev tree; we look for the built plugin at the
-        // repo root. In production, files are bundled under `resources/`.
-        let bundled_plugin_dir = handle
-            .path()
-            .resource_dir()
-            .ok()
-            .map(|d| d.join("plugin"))
-            .filter(|p| p.exists())
-            .unwrap_or_else(|| {
-                // Dev fallback: navigate up from desktop/src-tauri to repo root.
-                let mut p = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                while p.parent().is_some() && !p.join("manifest.json").exists() {
-                    p = p.parent().unwrap().to_path_buf();
+        // Resolve bundled plugin dir.
+        //
+        //   Production builds:  ${resource_dir}/plugin/  (set up by
+        //     desktop/scripts/copy-plugin-resources.mjs which runs before
+        //     `tauri build` and copies the plugin files from the repo root
+        //     into desktop/src-tauri/resources/plugin/).
+        //
+        //   Dev (`tauri dev`):  walk up from CWD to find the repo root
+        //     (where manifest.json lives at the top level for Obsidian).
+        //
+        // If neither exists, log loudly and store the resource dir anyway —
+        // install_plugin_into_vault will surface a clear error to the UI.
+        let bundled_plugin_dir = {
+            let resource_path = handle
+                .path()
+                .resource_dir()
+                .ok()
+                .map(|d| d.join("plugin"));
+            if let Some(p) = resource_path.as_ref().filter(|p| p.exists()) {
+                tracing::info!(target: "commands", path = %p.display(), "bundled plugin: using resource dir");
+                p.clone()
+            } else {
+                // Dev fallback: walk up looking for manifest.json.
+                let mut walker = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                let mut found_dev = None;
+                loop {
+                    if walker.join("manifest.json").exists() {
+                        found_dev = Some(walker.clone());
+                        break;
+                    }
+                    match walker.parent() {
+                        Some(p) => walker = p.to_path_buf(),
+                        None => break,
+                    }
                 }
-                p
-            });
+                if let Some(p) = found_dev {
+                    tracing::info!(target: "commands", path = %p.display(), "bundled plugin: using dev tree (walk-up)");
+                    p
+                } else {
+                    let candidate = resource_path.unwrap_or_else(|| PathBuf::from("/__plugin_not_bundled__"));
+                    tracing::error!(
+                        target: "commands",
+                        candidate = %candidate.display(),
+                        "bundled plugin not found — install will fail until daemon is rebuilt with resources"
+                    );
+                    candidate
+                }
+            }
+        };
 
         let uuid_index = Arc::new(UuidIndex::new());
         // Initial scan from registered vaults.

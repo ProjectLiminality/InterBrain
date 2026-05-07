@@ -145,3 +145,6 @@ signaling/.wrangler/
 # Tauri dev artifacts
 desktop/dist/
 .claude/
+
+# Tauri resource staging — regenerated from repo root via copy-plugin-resources.mjs
+desktop/src-tauri/resources/plugin/

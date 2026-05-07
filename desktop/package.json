@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/copy-plugin-resources.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "node scripts/copy-plugin-resources.mjs && tauri build",
+    "copy:plugin": "node scripts/copy-plugin-resources.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.4.0",
