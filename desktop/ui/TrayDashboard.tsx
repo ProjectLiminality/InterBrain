@@ -114,38 +114,52 @@ export function TrayDashboard() {
               No vaults yet. Run setup to install InterBrain into a vault.
             </div>
           )}
-          {vaults.map(v => (
-            <div key={v.path} className="vault-row">
-              <div
-                className="vault-name"
-                onClick={() => openInObsidian(v.path)}
-                title={v.path}
-              >
-                {v.name}
-              </div>
-              <div className={`vault-mode ${v.devMode ? 'dev' : ''}`}>
-                {v.devMode ? 'dev' : 'managed'}
-              </div>
-              <div className="vault-actions">
-                {v.devMode && (
-                  <button
-                    className="icon-btn dev"
-                    onClick={() => openCodingAgent(v.path)}
-                    title="Open coding agent"
-                  >
-                    ▶
-                  </button>
-                )}
-                <button
-                  className="icon-btn"
-                  onClick={() => toggleDevMode(v.path, v.devMode)}
-                  title={v.devMode ? 'Switch to managed mode' : 'Switch to dev mode'}
+          {vaults.map(v => {
+            // Dev mode toggle is macOS-only for now — Windows junctions work
+            // but the build pipeline (npm install, npm build) inside the
+            // vault hasn't been hardened cross-platform yet.
+            const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac');
+            const devModeAvailable = isMac;
+            return (
+              <div key={v.path} className="vault-row">
+                <div
+                  className="vault-name"
+                  onClick={() => openInObsidian(v.path)}
+                  title={v.path}
                 >
-                  ⚙
-                </button>
+                  {v.name}
+                </div>
+                <div className={`vault-mode ${v.devMode ? 'dev' : ''}`}>
+                  {v.devMode ? 'dev' : 'managed'}
+                </div>
+                <div className="vault-actions">
+                  {v.devMode && (
+                    <button
+                      className="icon-btn dev"
+                      onClick={() => openCodingAgent(v.path)}
+                      title="Open coding agent"
+                    >
+                      ▶
+                    </button>
+                  )}
+                  <button
+                    className="icon-btn"
+                    onClick={() => devModeAvailable && toggleDevMode(v.path, v.devMode)}
+                    disabled={!devModeAvailable}
+                    title={
+                      !devModeAvailable
+                        ? 'Dev mode is macOS-only for now (coming soon on Windows)'
+                        : v.devMode
+                          ? 'Switch to managed mode'
+                          : 'Switch to dev mode'
+                    }
+                  >
+                    ⚙
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

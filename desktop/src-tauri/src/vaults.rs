@@ -13,6 +13,18 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Hide the console window that Windows would otherwise pop up briefly when
+/// we spawn child processes (git, npm, cmd, etc.) from the GUI app. No-op
+/// on Unix.
+#[cfg(windows)]
+fn suppress_console_window(cmd: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+#[cfg(not(windows))]
+fn suppress_console_window(_cmd: &mut std::process::Command) {}
+
 const PLUGIN_ID: &str = "interbrain";
 const PLUGIN_REPO_URL: &str = "https://github.com/ProjectLiminality/InterBrain.git";
 const THEME_FILENAME: &str = "interbrain.css";
@@ -211,8 +223,16 @@ fn install_theme(vault_path: &Path, bundled_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Add a CSS snippet to `<vault>/.obsidian/appearance.json`'s enabledCssSnippets
-/// list (filename without extension) so Obsidian applies it on launch.
+/// Configure `<vault>/.obsidian/appearance.json` with InterBrain defaults:
+///   - Enable our CSS snippet (filename without .css).
+///   - Set the InterBrain accent color (#00A2FF).
+///   - Use Obsidian's built-in default theme (no third-party theme).
+///
+/// Note on dark vs light: Obsidian's mode setting isn't reliably stored
+/// per-vault (varies across versions and OS appearance inheritance), so we
+/// don't try to force it via config. Instead, our snippet applies to BOTH
+/// .theme-dark and .theme-light selectors so the InterBrain visual
+/// identity (pitch-black DreamSpace) wins regardless of Obsidian's choice.
 fn enable_snippet(vault_path: &Path, filename: &str) -> Result<()> {
     let path = vault_path.join(".obsidian/appearance.json");
     let snippet_id = filename.trim_end_matches(".css").to_string();
@@ -221,9 +241,18 @@ fn enable_snippet(vault_path: &Path, filename: &str) -> Result<()> {
     } else {
         serde_json::json!({})
     };
-    let arr = data
+    let obj = data
         .as_object_mut()
-        .ok_or_else(|| anyhow!("appearance.json is not an object"))?
+        .ok_or_else(|| anyhow!("appearance.json is not an object"))?;
+
+    // Set defaults if not already present.
+    obj.entry("accentColor")
+        .or_insert_with(|| serde_json::json!("#00A2FF"));
+    obj.entry("theme")
+        .or_insert_with(|| serde_json::json!("obsidian"));
+
+    // Ensure the snippet is in the enabled list.
+    let arr = obj
         .entry("enabledCssSnippets")
         .or_insert_with(|| serde_json::json!([]));
     if let Some(list) = arr.as_array_mut() {
@@ -269,14 +298,14 @@ pub fn ensure_interbrain_clone_in_vault(vault_path: &Path) -> Result<PathBuf> {
     if clone_dir.exists() {
         return Ok(clone_dir);
     }
-    let status = std::process::Command::new("git")
-        .arg("clone")
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("clone")
         .arg("--depth")
         .arg("1")
         .arg(PLUGIN_REPO_URL)
-        .arg(&clone_dir)
-        .status()
-        .context("git clone InterBrain")?;
+        .arg(&clone_dir);
+    suppress_console_window(&mut cmd);
+    let status = cmd.status().context("git clone InterBrain")?;
     if !status.success() {
         bail!("git clone failed (status {})", status);
     }
@@ -295,18 +324,16 @@ pub fn enable_dev_mode(vault_path: &Path, bundled_dir: &Path) -> Result<()> {
 
     // Build the plugin if needed.
     if !clone_dir.join("main.js").exists() {
-        let install_status = std::process::Command::new("npm")
-            .arg("install")
-            .current_dir(&clone_dir)
-            .status()
-            .context("npm install")?;
+        let mut npm_install = std::process::Command::new("npm");
+        npm_install.arg("install").current_dir(&clone_dir);
+        suppress_console_window(&mut npm_install);
+        let install_status = npm_install.status().context("npm install")?;
         if !install_status.success() { bail!("npm install failed"); }
-        let build_status = std::process::Command::new("npm")
-            .arg("run")
-            .arg("build:plugin")
-            .current_dir(&clone_dir)
-            .status()
-            .context("npm run build:plugin")?;
+
+        let mut npm_build = std::process::Command::new("npm");
+        npm_build.arg("run").arg("build:plugin").current_dir(&clone_dir);
+        suppress_console_window(&mut npm_build);
+        let build_status = npm_build.status().context("npm run build:plugin")?;
         if !build_status.success() { bail!("npm run build failed"); }
     }
 
@@ -403,16 +430,10 @@ fn link_dir(src: &Path, dst: &Path) -> Result<()> {
 /// the IO Manager so app code (including Obsidian) sees it as a regular dir.
 #[cfg(windows)]
 fn link_dir(src: &Path, dst: &Path) -> Result<()> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-    let out = std::process::Command::new("cmd")
-        .args(["/C", "mklink", "/J"])
-        .arg(dst)
-        .arg(src)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .context("spawn mklink /J")?;
+    let mut cmd = std::process::Command::new("cmd");
+    cmd.args(["/C", "mklink", "/J"]).arg(dst).arg(src);
+    suppress_console_window(&mut cmd);
+    let out = cmd.output().context("spawn mklink /J")?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         let stdout = String::from_utf8_lossy(&out.stdout);

@@ -39,6 +39,19 @@ type IdentityChoice =
 
 type InstallStep = { label: string; status: 'pending' | 'running' | 'done' | 'failed'; detail?: string };
 
+interface DaemonStatus {
+  online: boolean;
+  did: string | null;
+  alias: string | null;
+}
+
+interface VaultEntry {
+  path: string;
+  name: string;
+  pluginInstalled: boolean;
+  devMode: boolean;
+}
+
 export function FirstRun() {
   const [step, setStep] = useState<Step>('welcome');
   const [vaults, setVaults] = useState<string[]>([]);
@@ -48,6 +61,7 @@ export function FirstRun() {
   const [installSteps, setInstallSteps] = useState<InstallStep[]>([]);
   const [keychainAvailable, setKeychainAvailable] = useState<boolean | null>(null);
   const [prereqs, setPrereqs] = useState<PrerequisiteStatus | null>(null);
+  const [alreadyConfigured, setAlreadyConfigured] = useState<{ did: string; vaults: VaultEntry[] } | null>(null);
 
   useEffect(() => {
     invoke<string[]>('discover_obsidian_vaults').then(setVaults).catch(console.error);
@@ -55,6 +69,20 @@ export function FirstRun() {
       .then(() => setKeychainAvailable(true))
       .catch(() => setKeychainAvailable(false));
     refreshPrereqs();
+
+    // Detect "already configured" state — daemon has unlocked identity AND
+    // at least one registered vault. If so, show a confirmation rather than
+    // walking the user through setup again.
+    Promise.all([
+      invoke<DaemonStatus>('get_status'),
+      invoke<VaultEntry[]>('list_vaults'),
+    ]).then(([status, vaultList]) => {
+      if (status.did && vaultList.length > 0) {
+        setAlreadyConfigured({ did: status.did, vaults: vaultList });
+      }
+    }).catch(err => {
+      logEvent('warn', 'first-run', 'failed to detect already-configured state', { error: String(err) });
+    });
   }, []);
 
   function refreshPrereqs() {
@@ -101,6 +129,45 @@ export function FirstRun() {
   }
 
   const idx = ORDER.indexOf(step);
+
+  // Already-configured branch: identity + at least one vault. Don't walk the
+  // user through setup again — show a small confirmation panel that opens
+  // their vault or lets them dismiss.
+  if (alreadyConfigured) {
+    return (
+      <div className="first-run">
+        <img className="logo" src="/icon-color.png" alt="InterBrain" />
+        <h2>You're already set up.</h2>
+        <p className="step-body">
+          Identity loaded, {alreadyConfigured.vaults.length === 1 ? '1 vault' : `${alreadyConfigured.vaults.length} vaults`} registered.
+        </p>
+        <div className="identity-summary">
+          <div className="summary-label">DID</div>
+          <code className="summary-value">{alreadyConfigured.did}</code>
+        </div>
+        <div className="step-actions" style={{ marginTop: 16 }}>
+          <button
+            className="btn-secondary"
+            onClick={() => invoke('close_first_run')}
+          >
+            Close
+          </button>
+          {alreadyConfigured.vaults[0] && (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                invoke('open_vault_in_obsidian', { vaultPath: alreadyConfigured.vaults[0].path })
+                  .then(() => invoke('close_first_run'))
+                  .catch(err => logEvent('error', 'first-run.already-configured', 'open vault failed', { error: String(err) }));
+              }}
+            >
+              Open {alreadyConfigured.vaults[0].name}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="first-run">
@@ -155,7 +222,12 @@ export function FirstRun() {
         />
       )}
 
-      {step === 'done' && <DoneStep onClose={() => invoke('close_first_run')} />}
+      {step === 'done' && (
+        <DoneStep
+          vaultPath={selectedVault}
+          onClose={() => invoke('close_first_run')}
+        />
+      )}
     </div>
   );
 }
@@ -840,16 +912,37 @@ function VaultStep({
   );
 }
 
-function DoneStep({ onClose }: { onClose: () => void }) {
+function DoneStep({ vaultPath, onClose }: { vaultPath: string | null; onClose: () => void }) {
+  // Auto-open the newly-created vault in Obsidian on mount, then close the
+  // first-run window after a short pause so the user sees the success state.
+  useEffect(() => {
+    let closed = false;
+    if (vaultPath) {
+      invoke('open_vault_in_obsidian', { vaultPath })
+        .then(() => {
+          logEvent('info', 'first-run.done', 'auto-opened vault', { vaultPath });
+          // Brief delay so user perceives the success state, then close.
+          setTimeout(() => {
+            if (!closed) onClose();
+          }, 1500);
+        })
+        .catch(err => {
+          logEvent('error', 'first-run.done', 'auto-open vault failed', { error: String(err) });
+        });
+    }
+    return () => { closed = true; };
+  }, [vaultPath, onClose]);
+
   return (
     <>
       <h2>You're set up.</h2>
       <p className="step-body">
-        InterBrain lives in your menu bar. Click the icon any time to open
-        your vault, change settings, or invite a friend in.
+        Opening your vault in Obsidian. InterBrain lives in your menu bar —
+        click the icon any time to open your vault, change settings, or
+        invite a friend in.
       </p>
       <div className="step-actions">
-        <button className="btn-primary" onClick={onClose}>Done</button>
+        <button className="btn-primary" onClick={onClose}>Close</button>
       </div>
     </>
   );

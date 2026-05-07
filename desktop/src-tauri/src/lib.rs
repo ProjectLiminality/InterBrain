@@ -34,6 +34,27 @@ static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 const DAEMON_BUNDLE_ID: &str = "org.projectliminality.interbrain";
 
+/// Open a URL or path with the platform default handler, hiding any
+/// transient console window on Windows.
+pub fn open_external(url_or_path: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    let (program, args): (&str, Vec<&str>) = ("open", vec![url_or_path]);
+    #[cfg(target_os = "linux")]
+    let (program, args): (&str, Vec<&str>) = ("xdg-open", vec![url_or_path]);
+    #[cfg(target_os = "windows")]
+    let (program, args): (&str, Vec<&str>) = ("cmd", vec!["/C", "start", "", url_or_path]);
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.spawn()?;
+    Ok(())
+}
+
 pub fn default_log_dir() -> std::path::PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     let base = if cfg!(target_os = "macos") {
@@ -222,16 +243,7 @@ pub fn run() {
                         .cloned();
                     if let Some(v) = first_vault {
                         let url = format!("obsidian://open?path={}", urlencoding::encode(&v.path));
-                        #[cfg(target_os = "macos")]
-                        let _ = std::process::Command::new("open").arg(&url).spawn();
-                        #[cfg(target_os = "linux")]
-                        let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
-                        #[cfg(target_os = "windows")]
-                        {
-                            let _ = std::process::Command::new("cmd")
-                                .args(["/C", "start", "", &url])
-                                .spawn();
-                        }
+                        let _ = open_external(&url);
                     }
                 }
             });

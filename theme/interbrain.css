@@ -1,5 +1,10 @@
 /* InterBrain Theme - CSS Snippet
- * Pitch black space aesthetic with vibrant accent colors
+ * Pitch black space aesthetic with vibrant accent colors.
+ *
+ * Applies to BOTH dark and light Obsidian modes by design — the InterBrain
+ * vault IS a dark space (pitch-black DreamSpace), so we override regardless
+ * of the user's OS-level appearance preference. Users who want light mode
+ * can disable the snippet via Obsidian Settings → Appearance → CSS snippets.
  *
  * Colors:
  * - Background: Pure black (#000000)
@@ -7,7 +12,7 @@
  * - Interactive: Red (#FF644E) and Blue (#00A2FF)
  */
 
-.theme-dark {
+.theme-dark, .theme-light {
   /* === BACKGROUNDS === */
   --background-primary: #000000;
   --background-primary-alt: #000000;

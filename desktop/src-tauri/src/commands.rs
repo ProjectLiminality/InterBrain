@@ -178,17 +178,25 @@ pub fn get_status(state: State<Arc<AppState>>) -> DaemonStatus {
 #[tauri::command]
 pub fn open_vault_in_obsidian(vault_path: String) -> Result<(), String> {
     let url = format!("obsidian://open?path={}", urlencoding::encode(&vault_path));
-    open_url(&url).map_err(|e| e.to_string())
+    crate::open_external(&url).map_err(|e| e.to_string())
 }
 
 fn open_url(url: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
-    let cmd = ("open", vec![url]);
+    let (program, args) = ("open", vec![url]);
     #[cfg(target_os = "linux")]
-    let cmd = ("xdg-open", vec![url]);
+    let (program, args) = ("xdg-open", vec![url]);
     #[cfg(target_os = "windows")]
-    let cmd = ("cmd", vec!["/C", "start", "", url]);
-    let status = std::process::Command::new(cmd.0).args(cmd.1).status()?;
+    let (program, args) = ("cmd", vec!["/C", "start", "", url]);
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let status = cmd.status()?;
     if !status.success() {
         anyhow::bail!("open failed");
     }

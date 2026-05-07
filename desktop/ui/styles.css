@@ -219,8 +219,9 @@ body.tray-window {
   transition: border-color 0.12s ease, color 0.12s ease;
 }
 
-.icon-btn:hover { border-color: var(--ib-blue); color: var(--ib-blue); }
-.icon-btn.dev:hover { border-color: var(--ib-glow); color: var(--ib-glow); }
+.icon-btn:hover:not(:disabled) { border-color: var(--ib-blue); color: var(--ib-blue); }
+.icon-btn.dev:hover:not(:disabled) { border-color: var(--ib-glow); color: var(--ib-glow); }
+.icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ---------- Footer actions ---------- */
 
