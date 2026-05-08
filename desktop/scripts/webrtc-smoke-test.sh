@@ -26,7 +26,17 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-HELPER="${INTERBRAIN_HELPER:-$REPO_ROOT/desktop/src-tauri/target/debug/git-remote-interbrain}"
+# Helper binary: prefer the installed app's bundled copy on macOS, then fall
+# back to the dev build. Override with $INTERBRAIN_HELPER.
+DEFAULT_HELPER_INSTALLED="/Applications/InterBrain.app/Contents/MacOS/git-remote-interbrain"
+DEFAULT_HELPER_DEV="$REPO_ROOT/desktop/src-tauri/target/debug/git-remote-interbrain"
+if [ -n "${INTERBRAIN_HELPER:-}" ]; then
+  HELPER="$INTERBRAIN_HELPER"
+elif [ -x "$DEFAULT_HELPER_INSTALLED" ]; then
+  HELPER="$DEFAULT_HELPER_INSTALLED"
+else
+  HELPER="$DEFAULT_HELPER_DEV"
+fi
 TEST_DIR="${TEST_DIR:-/tmp/interbrain-smoke-test}"
 TEST_REPO_NAME="${TEST_REPO_NAME:-smoke-square}"
 

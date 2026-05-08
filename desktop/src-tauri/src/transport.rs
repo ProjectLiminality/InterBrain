@@ -227,11 +227,20 @@ async fn pump_remote_signals(
 ) -> Result<()> {
     let mut last_seq: u64 = 0;
     let mut got_remote_description = !expecting_offer;
+    // The signaling Worker keeps blobs for 7 days. Old blobs from prior
+    // sessions are not harmful but they fail to apply (`add_ice failed:
+    // remote description is not set`) and clutter logs. Filter to blobs
+    // posted within the last ~60s relative to the most recent blob in the
+    // room — this aligns both peers on a "current session" without needing
+    // a session id in the protocol.
+    let session_window_secs: u64 = 60;
     loop {
         let blobs = signaling.list_blobs(&room).await?;
+        let max_received_at = blobs.iter().map(|b| b.received_at).max().unwrap_or(0);
+        let cutoff = max_received_at.saturating_sub(session_window_secs * 1000);
         let new_blobs: Vec<_> = blobs
             .into_iter()
-            .filter(|b| b.seq > last_seq && b.from != our_did)
+            .filter(|b| b.seq > last_seq && b.from != our_did && b.received_at >= cutoff)
             .collect();
         for blob in &new_blobs {
             last_seq = blob.seq.max(last_seq);
@@ -274,9 +283,11 @@ async fn pump_remote_signals(
                 _ => {}
             }
         }
-        if last_seq > 0 {
-            let _ = signaling.clear_blobs(&room, last_seq).await;
-        }
+        // NOTE: we intentionally do NOT call clear_blobs here. Both peers
+        // share the same room; each peer only processes blobs from the OTHER
+        // peer, so naively clearing up to last_seq would delete blobs the
+        // local peer posted that the remote peer hasn't yet read. Stale
+        // blobs are pruned by the Worker's 7-day TTL.
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
