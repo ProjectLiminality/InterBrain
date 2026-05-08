@@ -195,6 +195,31 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
             ok(&id, json!({}))
         }
 
+        // Generate a fresh ed25519 identity and unlock it in the running
+        // daemon. Mirrors the Tauri command of the same name; exposing it
+        // over IPC lets test scripts (and future headless deployments) do
+        // first-run without the GUI. Returns the new DID.
+        "generate-fresh-identity" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let passphrase = payload
+                .get("passphrase")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let store_in_keychain = payload
+                .get("storeInKeychain")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            match state.identity.generate_fresh(passphrase, store_in_keychain) {
+                Ok(result) => ok(&id, json!({
+                    "did": result.identity.did,
+                    "alias": result.identity.alias,
+                    "passphrase": result.passphrase,
+                    "storedInKeychain": result.stored_in_keychain,
+                })),
+                Err(e) => err(&id, "generate_failed", &e.to_string()),
+            }
+        }
+
         // Add a vault to the registry. Used by the smoke test scripts to
         // register a temp directory for UUID indexing. Production vault
         // registration goes through install_plugin_into_vault Tauri command.
