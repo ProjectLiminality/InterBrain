@@ -249,21 +249,32 @@ pub async fn run_inbound_listener(state: Arc<AppState>) {
         "inbound listener started"
     );
 
-    // Track which peers we already have an active accept task for, to avoid
-    // double-accepting when their offer blob is still in the room.
-    let mut active: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // Per-peer accept-attempt tracking: shared mutex so the spawned tasks
+    // can clear their own entries when they finish (and we back off on
+    // failure to avoid hot-spinning against the same offer).
+    let active: Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>> =
+        Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 
     loop {
         let peers = known_peer_dids(&state);
         for peer_did in peers {
-            if active.contains(&peer_did) {
-                continue;
+            let now = std::time::Instant::now();
+            // Skip if we already have an in-flight accept for this peer, or
+            // if we recently tried and need to back off.
+            {
+                let active_map = active.lock().await;
+                if let Some(t) = active_map.get(&peer_did) {
+                    if now.duration_since(*t) < Duration::from_secs(5) {
+                        continue;
+                    }
+                }
             }
             if peer_has_pending_offer(&state.signaling, &our_did, &peer_did).await {
-                active.insert(peer_did.clone());
+                active.lock().await.insert(peer_did.clone(), now);
                 let state_clone = state.clone();
                 let our_did_clone = our_did.clone();
                 let peer_did_clone = peer_did.clone();
+                let active_clone = active.clone();
                 tokio::spawn(async move {
                     let result = accept_one(state_clone, our_did_clone, peer_did_clone.clone()).await;
                     if let Err(e) = result {
@@ -274,17 +285,11 @@ pub async fn run_inbound_listener(state: Arc<AppState>) {
                             "inbound accept failed"
                         );
                     }
-                    // We don't release the active flag — by the time the task
-                    // ends, the offer should be cleared from signaling. A new
-                    // offer from the same peer can still trigger a fresh accept
-                    // because we re-check via `peer_has_pending_offer`.
+                    // Mark this peer as recently-tried so we back off briefly.
+                    active_clone.lock().await.insert(peer_did_clone, std::time::Instant::now());
                 });
             }
         }
-        // Cleanup: re-poll signaling lazily, drop entries from `active` whose
-        // tasks ended. Simpler: clear the set every cycle — `peer_has_pending_offer`
-        // is idempotent and cheap.
-        active.clear();
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
 }
@@ -308,10 +313,32 @@ async fn peer_has_pending_offer(
     peer_did: &str,
 ) -> bool {
     let room = crate::signaling::room_id_for(our_did, peer_did);
-    match signaling.list_blobs(&room).await {
-        Ok(blobs) => blobs.iter().any(|b| b.from == peer_did),
-        Err(_) => false,
+    let blobs = match signaling.list_blobs(&room).await {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+    if blobs.is_empty() {
+        return false;
     }
+    // Only react to recent blobs from the peer — stale blobs from prior
+    // sessions accumulate in the room until the Worker's TTL prunes them
+    // and would otherwise cause repeated false-positive accept attempts.
+    let max_received_at = blobs.iter().map(|b| b.received_at).max().unwrap_or(0);
+    let cutoff = max_received_at.saturating_sub(60_000); // 60s window in ms
+
+    blobs.iter().any(|b| {
+        if b.from != peer_did || b.received_at < cutoff {
+            return false;
+        }
+        // Decode just enough to know it's an offer (vs. answer/ICE).
+        use base64::Engine;
+        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&b.data) {
+            if let Ok(text) = std::str::from_utf8(&bytes) {
+                return text.contains("\"kind\":\"offer\"");
+            }
+        }
+        false
+    })
 }
 
 /// Accept one inbound connection from `peer_did` and serve the requested
