@@ -226,9 +226,20 @@ pub fn run() {
                     "startup decision"
                 );
                 if !has_identity {
-                    tracing::info!(target: "startup", "opening first-run window");
-                    if let Err(e) = windows::open_first_run(&app_handle) {
-                        tracing::error!(target: "startup", error = %e, "open_first_run failed");
+                    // Allow headless launches (e.g. SSH-driven testing) to
+                    // skip rendering the first-run window — WebView2 fails
+                    // outside an interactive logon session on Windows, and
+                    // the failure crashes the Tauri runtime. Setting
+                    // INTERBRAIN_HEADLESS=1 keeps the daemon alive so its
+                    // IPC server is reachable for headless first-run via
+                    // the generate-fresh-identity op.
+                    if std::env::var("INTERBRAIN_HEADLESS").ok().as_deref() == Some("1") {
+                        tracing::info!(target: "startup", "headless mode — skipping first-run window");
+                    } else {
+                        tracing::info!(target: "startup", "opening first-run window");
+                        if let Err(e) = windows::open_first_run(&app_handle) {
+                            tracing::error!(target: "startup", error = %e, "open_first_run failed");
+                        }
                     }
                 } else {
                     // Health-check every registered vault. If any plugin
