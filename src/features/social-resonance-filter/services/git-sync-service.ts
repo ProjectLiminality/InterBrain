@@ -194,10 +194,15 @@ export class GitSyncService {
       const { stdout: remoteVerbose } = await execAsync('git remote -v', { cwd: fullPath });
       const peerRemotes = new Set<string>();
 
+      // Match either legacy rad:// URLs or v0.16+ interbrain:// URLs.
+      // Both are peer remotes; both go through the appropriate transport.
+      const peerRemoteRegex = /^(\S+)\s+(rad:\/\/\S+|interbrain:\/\/\S+)/;
       for (const line of remoteVerbose.split('\n')) {
-        const match = line.match(/^(\S+)\s+rad:\/\/\S+\/(z6\w+)/);
+        const match = line.match(peerRemoteRegex);
         if (match) {
           const peerName = match[1];
+          // Skip `origin` if it happens to match (it shouldn't, but be safe).
+          if (peerName === 'origin') continue;
           peerRemotes.add(peerName);
         }
       }

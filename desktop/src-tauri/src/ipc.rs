@@ -195,14 +195,75 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
             ok(&id, json!({}))
         }
 
-        // Transport ops — webrtc handshake + git pack-protocol pump. Only
-        // the helper binary calls these; they hold the connection open for
-        // the duration of the git operation.
-        "clone" | "share" | "fetch-updates" => err(
-            &id,
-            "not_implemented",
-            "Use git-remote-interbrain helper to invoke transport.",
-        ),
+        // Add a vault to the registry. Used by the smoke test scripts to
+        // register a temp directory for UUID indexing. Production vault
+        // registration goes through install_plugin_into_vault Tauri command.
+        // Idempotent on path.
+        "add-vault" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if path.is_empty() {
+                return err(&id, "bad_request", "path required");
+            }
+            let mut s = state.settings.lock().unwrap();
+            if !s.vault_registry.iter().any(|v| v.path == path) {
+                s.vault_registry.push(crate::settings::RegisteredVault {
+                    path: path.clone(),
+                    dev_mode: false,
+                });
+            }
+            drop(s);
+            if let Err(e) = state.save_settings(app_handle) {
+                return err(&id, "save_failed", &e.to_string());
+            }
+            state.refresh_uuid_index();
+            ok(&id, json!({ "path": path }))
+        }
+
+        // Add a peer to the registry — populated by the friend-link flow,
+        // or manually via this op for testing. Idempotent on DID.
+        "add-peer" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let did = payload.get("did").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if did.is_empty() {
+                return err(&id, "bad_request", "did required");
+            }
+            let mut s = state.settings.lock().unwrap();
+            if !s.peer_registry.iter().any(|p| p.did == did) {
+                s.peer_registry.push(crate::settings::RegisteredPeer { did: did.clone(), name });
+            }
+            let snapshot = s.clone();
+            drop(s);
+            if let Err(e) = state.save_settings(app_handle) {
+                return err(&id, "save_failed", &e.to_string());
+            }
+            state.event_bus.emit("settings-changed", json!({ "settings": snapshot }));
+            ok(&id, json!({ "did": did }))
+        }
+
+        "list-peers" => {
+            let peers = state.settings.lock().unwrap().peer_registry.clone();
+            ok(&id, json!({ "peers": peers }))
+        }
+
+        // Helper-driven transport: opens a WebRTC channel to a peer, asks
+        // them to run `git-upload-pack` or `git-receive-pack` against a UUID,
+        // and bridges the bytes through a localhost TCP port. Returns the
+        // port the helper should connect to.
+        "open-peer-relay" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let peer_did = payload.get("peerDid").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let service = payload.get("service").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let uuid = payload.get("uuid").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if peer_did.is_empty() || service.is_empty() || uuid.is_empty() {
+                return err(&id, "bad_request", "peerDid, service, uuid required");
+            }
+            match crate::peer_relay::open_outbound_relay(state.clone(), peer_did, service, uuid).await {
+                Ok(port) => ok(&id, json!({ "port": port })),
+                Err(e) => err(&id, "relay_failed", &e.to_string()),
+            }
+        }
         other => err(&id, "unknown_op", &format!("Unknown op: {other}")),
     }
 }

@@ -14,8 +14,10 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use std::env;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::process::{Command, Stdio};
+use std::thread;
 use url::Url;
 
 const DAEMON_BUNDLE_ID: &str = "org.projectliminality.interbrain";
@@ -89,15 +91,40 @@ fn run() -> Result<()> {
                 return Ok(());
             }
 
-            // No local clone → would need WebRTC peer transport. The peer
-            // transport plumbing exists in the daemon (transport.rs +
-            // signaling.rs); wiring the helper to drive it through the IPC
-            // channel is the final integration step. For now, error clearly
-            // so callers know what's missing.
-            bail!(
-                "uuid {} not found locally and peer transport not yet wired through helper IPC",
-                parsed.uuid
-            );
+            // Local resolve failed → use WebRTC peer transport via daemon.
+            if parsed.peer_hints.is_empty() {
+                bail!(
+                    "uuid {} not found locally and no peer hints in url",
+                    parsed.uuid
+                );
+            }
+            let peer_did = parsed.peer_hints[0].clone();
+            let port = read_daemon_port()?;
+            let relay_payload = serde_json::json!({
+                "peerDid": peer_did,
+                "service": service,
+                "uuid": parsed.uuid,
+            });
+            let relay_resp = call_daemon(port, "open-peer-relay", relay_payload)?;
+            let relay_port = relay_resp
+                .get("port")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow!("relay response missing port: {relay_resp}"))?;
+
+            // Acknowledge connect to git: empty line on our stdout, then
+            // bridge stdin↔relay socket↔stdout. Git takes over our stdio
+            // for the pack-protocol exchange.
+            writeln!(stdout_writer)?;
+            stdout_writer.flush()?;
+            // Drop our stdin/stdout locks so the bridge threads can claim
+            // the underlying handles.
+            drop(stdin_reader);
+            drop(stdout_writer);
+
+            let tcp = TcpStream::connect(("127.0.0.1", relay_port as u16))
+                .with_context(|| format!("connect relay 127.0.0.1:{relay_port}"))?;
+            bridge_stdio_with_tcp(tcp)?;
+            return Ok(());
         }
 
         if cmd.is_empty() {
@@ -165,6 +192,52 @@ fn read_daemon_port() -> Result<u16> {
     let text = std::fs::read_to_string(&port_file)
         .with_context(|| format!("read {}", port_file.display()))?;
     text.trim().parse().with_context(|| format!("parse port: {}", text.trim()))
+}
+
+/// Bridge git's stdin/stdout against a TCP socket. Two threads: one copies
+/// bytes from stdin to the socket, the other from the socket to stdout.
+/// Returns when either side closes.
+fn bridge_stdio_with_tcp(tcp: TcpStream) -> Result<()> {
+    let tcp_read = tcp.try_clone().context("clone tcp for read thread")?;
+    let mut tcp_write = tcp;
+
+    // stdin -> tcp
+    let writer = thread::spawn(move || -> Result<()> {
+        let mut stdin = std::io::stdin();
+        let mut buf = vec![0u8; 16 * 1024];
+        loop {
+            let n = match stdin.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(_) => break,
+            };
+            if tcp_write.write_all(&buf[..n]).is_err() { break; }
+        }
+        // Half-close TCP write so the peer sees EOF on its read half.
+        let _ = tcp_write.shutdown(std::net::Shutdown::Write);
+        Ok(())
+    });
+
+    // tcp -> stdout
+    let reader = thread::spawn(move || -> Result<()> {
+        let mut tcp_read = tcp_read;
+        let mut stdout = std::io::stdout();
+        let mut buf = vec![0u8; 16 * 1024];
+        loop {
+            let n = match tcp_read.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(_) => break,
+            };
+            if stdout.write_all(&buf[..n]).is_err() { break; }
+            let _ = stdout.flush();
+        }
+        Ok(())
+    });
+
+    let _ = reader.join();
+    let _ = writer.join();
+    Ok(())
 }
 
 /// Make a single synchronous IPC request to the daemon over WebSocket.

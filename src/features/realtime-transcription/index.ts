@@ -20,7 +20,4 @@ export type {
 } from './types/transcription-types';
 
 // Settings section
-export {
-	createTranscriptionSettingsSection,
-	checkTranscriptionStatus
-} from './settings-section';
+export { createTranscriptionSettingsSection } from './settings-section';

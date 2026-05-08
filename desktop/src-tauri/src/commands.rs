@@ -445,3 +445,28 @@ pub fn set_settings(
         .emit("settings-changed", serde_json::json!({ "settings": settings }));
     Ok(settings)
 }
+
+#[tauri::command]
+pub fn gh_status() -> crate::github::GhStatus {
+    crate::github::gh_status()
+}
+
+#[tauri::command]
+pub async fn gh_begin_sign_in() -> Result<crate::github::DeviceFlowStart, String> {
+    crate::github::begin_device_flow().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn gh_complete_sign_in(
+    device_code: String,
+    interval: u64,
+) -> Result<String, String> {
+    crate::github::complete_device_flow(device_code, interval)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn gh_sign_out() -> Result<(), String> {
+    crate::github::gh_sign_out().map_err(|e| e.to_string())
+}

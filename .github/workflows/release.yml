@@ -60,6 +60,23 @@ jobs:
       - name: Build Obsidian plugin
         run: npm run build:plugin
 
+      # On macOS we ship a universal-apple-darwin .dmg. Tauri builds the main
+      # binary as universal but does NOT auto-build secondary [[bin]] entries
+      # for both archs — they're expected to already exist at the universal
+      # target path. So we build git-remote-interbrain for each arch and lipo
+      # them together before tauri-action runs.
+      - name: Build helper binary as universal (macOS only)
+        if: matrix.platform == 'macos-latest'
+        working-directory: desktop/src-tauri
+        run: |
+          cargo build --release --bin git-remote-interbrain --target aarch64-apple-darwin
+          cargo build --release --bin git-remote-interbrain --target x86_64-apple-darwin
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create \
+            target/aarch64-apple-darwin/release/git-remote-interbrain \
+            target/x86_64-apple-darwin/release/git-remote-interbrain \
+            -output target/universal-apple-darwin/release/git-remote-interbrain
+
       - name: Build & release Tauri app
         uses: tauri-apps/tauri-action@v0
         env:

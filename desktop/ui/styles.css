@@ -658,3 +658,121 @@ input:focus, select:focus {
   outline: none;
   border-color: var(--ib-blue);
 }
+
+/* ---------- Generic settings-pane button ---------- */
+
+.ib-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--ib-input-border);
+  color: var(--ib-white);
+  padding: 7px 12px;
+  font-family: var(--ib-font);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+.ib-btn:hover:not(:disabled) {
+  border-color: var(--ib-blue);
+  color: var(--ib-blue);
+}
+.ib-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ib-btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.ib-btn-link {
+  border-color: transparent;
+  padding: 4px 6px;
+  color: var(--ib-text-muted);
+  font-size: 12px;
+}
+.ib-btn-link:hover:not(:disabled) {
+  color: var(--ib-blue);
+  border-color: transparent;
+}
+
+/* ---------- Inline setting helpers (muted / error / faint) ---------- */
+
+.setting-muted {
+  font-size: 12px;
+  color: var(--ib-text-muted);
+}
+.setting-faint {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.setting-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ib-red);
+}
+
+/* ---------- GitHub section ---------- */
+
+.gh-identity {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--ib-white);
+}
+.gh-identity strong {
+  color: var(--ib-blue);
+  font-weight: 600;
+}
+
+.gh-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--ib-input-border);
+  border-radius: 6px;
+  background: var(--ib-input-bg);
+}
+.gh-flow-instruction {
+  font-size: 12px;
+  color: var(--ib-text-muted);
+}
+.gh-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gh-code {
+  flex: 1;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  color: var(--ib-blue);
+  background: rgba(71, 159, 248, 0.08);
+  border: 1px solid rgba(71, 159, 248, 0.3);
+  border-radius: 4px;
+  padding: 6px 10px;
+  text-align: center;
+  cursor: pointer;
+  user-select: text;
+}
+.gh-flow-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.gh-flow-hint {
+  font-style: italic;
+  text-align: center;
+}
+
+/* ---------- Eye/save/cancel icon buttons (refined) ---------- */
+
+.api-key-eye svg,
+.api-key-action svg {
+  display: block;
+}

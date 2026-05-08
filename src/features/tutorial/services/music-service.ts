@@ -11,10 +11,11 @@ export class MusicService {
   private volume = 0.3; // Default volume (30%)
   private fadeInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Path to music file (relative to plugin folder)
-  // Music: "Fractals" by Vincent Rubinetti from "The Music of 3Blue1Brown"
-  // https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
-  // TODO: Permission pending - see README.md for status
+  // Path to music file (relative to plugin folder).
+  // Tutorial music: "Fractals" by Vincent Rubinetti from "The Music of 3Blue1Brown".
+  //   Album:      https://vincerubinetti.bandcamp.com/album/the-music-of-3blue1brown
+  //   Artist:     https://vincentrubinetti.com/
+  //   Permission: https://vincerubinetti.github.io/using-the-music-of-3blue1brown/
   private musicPath = 'src/features/tutorial/assets/TutorialMusic.mp3';
 
   /**

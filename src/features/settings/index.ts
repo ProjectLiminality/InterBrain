@@ -1,5 +1,5 @@
 // Settings feature barrel export
-// Plugin settings UI, configuration schema, and status checking
+// Plugin-local settings UI + persistence schema.
 
 export * from './settings-tab';
-export * from './settings-status-service';
+export * from './settings-cache';

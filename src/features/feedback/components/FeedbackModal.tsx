@@ -12,7 +12,7 @@
 import { Modal, App, Setting, Notice } from 'obsidian';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { feedbackService } from '../services/feedback-service';
-import { settingsStatusService } from '../../settings/settings-status-service';
+import { getCachedSettings } from '../../settings/settings-cache';
 
 export class FeedbackModal extends Modal {
   private userDescription: string = '';
@@ -34,7 +34,7 @@ export class FeedbackModal extends Modal {
     const { contentEl } = this;
     const state = useInterBrainStore.getState();
     const currentError = state.feedback.currentError;
-    const hasApiKey = !!settingsStatusService.getSettings()?.claudeApiKey;
+    const hasApiKey = !!getCachedSettings()?.claudeApiKey;
 
     contentEl.empty();
     contentEl.addClass('interbrain-feedback-modal');

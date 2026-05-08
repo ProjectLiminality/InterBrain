@@ -10,9 +10,3 @@ export {
   checkSubmoduleUpdatesFromNetwork,
   updateSubmodulesFromStandalone
 } from './utils/submodule-sync';
-
-// Settings section
-export {
-	createRadicleSettingsSection,
-	checkRadicleStatus
-} from './settings-section';

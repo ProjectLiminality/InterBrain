@@ -28,6 +28,3 @@ export { FeedbackModal, showFeedbackModal } from './components/FeedbackModal';
 
 // Commands
 export { registerFeedbackCommands } from './commands';
-
-// Settings
-export { createFeedbackSettingsSection } from './settings-section';

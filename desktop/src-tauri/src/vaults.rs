@@ -17,13 +17,13 @@ use std::path::{Path, PathBuf};
 /// we spawn child processes (git, npm, cmd, etc.) from the GUI app. No-op
 /// on Unix.
 #[cfg(windows)]
-fn suppress_console_window(cmd: &mut std::process::Command) {
+pub(crate) fn suppress_console_window(cmd: &mut std::process::Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     cmd.creation_flags(CREATE_NO_WINDOW);
 }
 #[cfg(not(windows))]
-fn suppress_console_window(_cmd: &mut std::process::Command) {}
+pub(crate) fn suppress_console_window(_cmd: &mut std::process::Command) {}
 
 const PLUGIN_ID: &str = "interbrain";
 const PLUGIN_REPO_URL: &str = "https://github.com/ProjectLiminality/InterBrain.git";
@@ -291,13 +291,39 @@ fn remove_path(p: &Path) -> Result<()> {
 
 /// Clone the InterBrain repo into the vault at `<vault>/InterBrain` so the
 /// plugin source code lives alongside the user's data — the canonical
-/// "plugin code is a DreamNode" pattern. Idempotent; if the clone already
-/// exists, leave it alone (treat as the user's working copy).
+/// "plugin code is a DreamNode" pattern. Idempotent: clones if missing,
+/// fast-forwards if present. The fast-forward is best-effort — if the user
+/// has local commits or git isn't available, the existing clone is kept
+/// as-is. Non-git directories at the path are also left alone.
 pub fn ensure_interbrain_clone_in_vault(vault_path: &Path) -> Result<PathBuf> {
     let clone_dir = vault_path.join("InterBrain");
+
     if clone_dir.exists() {
+        // Only attempt to refresh if it's a real git repo. Anything else
+        // (a user's hand-made folder, broken state) we leave untouched.
+        if clone_dir.join(".git").exists() {
+            let mut cmd = std::process::Command::new("git");
+            cmd.arg("pull")
+                .arg("--ff-only")
+                .arg("--quiet")
+                .current_dir(&clone_dir);
+            suppress_console_window(&mut cmd);
+            match cmd.status() {
+                Ok(s) if s.success() => {
+                    tracing::info!(target: "vaults", path = %clone_dir.display(), "InterBrain DreamNode fast-forwarded");
+                }
+                Ok(s) => {
+                    // Non-zero exit (local commits, dirty tree, no upstream): not fatal.
+                    tracing::debug!(target: "vaults", path = %clone_dir.display(), status = %s, "InterBrain pull skipped");
+                }
+                Err(e) => {
+                    tracing::debug!(target: "vaults", path = %clone_dir.display(), error = %e, "git pull invocation failed");
+                }
+            }
+        }
         return Ok(clone_dir);
     }
+
     let mut cmd = std::process::Command::new("git");
     cmd.arg("clone")
         .arg("--depth")
@@ -347,7 +373,8 @@ pub fn enable_dev_mode(vault_path: &Path, bundled_dir: &Path) -> Result<()> {
     // Create the link FIRST at staging path. If it fails, target stays intact.
     if let Err(e) = link_dir(&clone_dir, &staging) {
         // Best-effort: restore from bundled if target was somehow lost.
-        let _ = ensure_plugin_health(vault_path, bundled_dir);
+        // Pass expects_dev_mode=false because the dev-mode attempt failed.
+        let _ = ensure_plugin_health(vault_path, bundled_dir, false);
         return Err(anyhow!(
             "failed to create dev-mode link: {e}. \
              Plugin restored to managed mode if it was missing. \
@@ -374,16 +401,38 @@ pub fn disable_dev_mode(vault_path: &Path, bundled_dir: &Path) -> Result<()> {
 }
 
 /// Verify a vault's plugin dir is healthy; reinstall managed files if not.
+///
+/// `expects_dev_mode` reflects the user's intent recorded in the vault
+/// registry. If false (the default), an unexpected symlink indicates a
+/// pre-companion-app legacy install — convert it to managed mode so the
+/// daemon controls plugin updates from here on. If true, a symlink is
+/// the correct state and only a broken target requires repair.
+///
 /// Returns true if a repair was performed.
-pub fn ensure_plugin_health(vault_path: &Path, bundled_dir: &Path) -> Result<bool> {
+pub fn ensure_plugin_health(
+    vault_path: &Path,
+    bundled_dir: &Path,
+    expects_dev_mode: bool,
+) -> Result<bool> {
     let plugin_dir = vault_path.join(".obsidian/plugins").join(PLUGIN_ID);
 
     let needs_repair = match fs::symlink_metadata(&plugin_dir) {
         Err(_) => true, // doesn't exist
         Ok(meta) => {
             if meta.file_type().is_symlink() {
-                // Working link must resolve to an existing dir.
-                !plugin_dir.is_dir()
+                if expects_dev_mode {
+                    // Working dev-mode link must resolve to an existing dir.
+                    !plugin_dir.is_dir()
+                } else {
+                    // Legacy install (pre-companion-app dev-mode pattern):
+                    // always convert to managed so the daemon owns plugin files.
+                    tracing::info!(
+                        target: "vaults",
+                        vault = %vault_path.display(),
+                        "legacy symlinked plugin detected — converting to managed install"
+                    );
+                    true
+                }
             } else if meta.is_dir() {
                 // Regular dir must contain manifest + main.js.
                 !plugin_dir.join("manifest.json").exists() || !plugin_dir.join("main.js").exists()

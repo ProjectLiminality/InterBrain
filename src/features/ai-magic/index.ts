@@ -43,11 +43,5 @@ export {
 	PROVIDER_DEFAULTS
 } from './services/openai-compatible-provider';
 
-// Settings
-export {
-	createAIMagicSettingsSection,
-	checkAIMagicStatus
-} from './settings-section';
-
 // Commands
 export { registerAIMagicCommands } from './commands';

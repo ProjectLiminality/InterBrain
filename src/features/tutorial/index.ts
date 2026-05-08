@@ -41,9 +41,6 @@ export { checkHitSphereIntersection, createHitDetectionTracker } from './utils/h
 // Commands
 export { registerTutorialCommands } from './TutorialCommands';
 
-// Settings
-export { createTutorialSettingsSection } from './settings-section';
-
 // Components
 export { TutorialOverlay } from './TutorialOverlay';
 export { TutorialModal } from './TutorialModal';

@@ -229,7 +229,46 @@ function SettingsPane({ settings, onSave }: SettingsPaneProps) {
       <LocalAISection settings={settings} onSave={onSave} />
       <SectionDivider />
       <TranscriptionSection settings={settings} onSave={onSave} />
+      <SectionDivider />
+      <GitHubSection />
     </div>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17.94 17.94A10.94 10.94 0 0112 19c-6.5 0-10-7-10-7a18.6 18.6 0 014.22-5.19" />
+      <path d="M9.9 4.24A10.94 10.94 0 0112 4c6.5 0 10 7 10 7a18.7 18.7 0 01-2.16 3.19" />
+      <path d="M9.88 9.88A3 3 0 0014.12 14.12" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
   );
 }
 
@@ -386,7 +425,7 @@ function ApiKeyInput({
             title={revealed ? 'Hide value' : 'Show value'}
             onClick={() => setRevealed(r => !r)}
           >
-            {revealed ? '🙈' : '👁'}
+            {revealed ? <EyeOffIcon /> : <EyeIcon />}
           </button>
         </div>
         {dirty && (
@@ -398,7 +437,7 @@ function ApiKeyInput({
               title="Save"
               onClick={commit}
             >
-              ✓
+              <CheckIcon />
             </button>
             <button
               type="button"
@@ -407,7 +446,7 @@ function ApiKeyInput({
               title="Discard changes"
               onClick={reset}
             >
-              ✗
+              <XIcon />
             </button>
           </>
         )}
@@ -464,6 +503,198 @@ function TranscriptionSection({ settings, onSave }: SettingsPaneProps) {
       </select>
       <div className="setting-help">
         Used by the conversational copilot and realtime transcription features.
+      </div>
+    </>
+  );
+}
+
+interface GhStatus {
+  installed: boolean;
+  authenticated: boolean;
+  username: string | null;
+  version: string | null;
+}
+
+interface DeviceFlowStart {
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+  deviceCode: string;
+}
+
+function GitHubSection() {
+  const [status, setStatus] = useState<GhStatus | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'starting' | 'awaiting' | 'finishing' | 'signing-out'>('idle');
+  const [flow, setFlow] = useState<DeviceFlowStart | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const refresh = async () => {
+    try {
+      const s = await invoke<GhStatus>('gh_status');
+      setStatus(s);
+    } catch (err) {
+      console.error('gh_status failed', err);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const signIn = async () => {
+    setError(null);
+    setCodeCopied(false);
+    setPhase('starting');
+    try {
+      const start = await invoke<DeviceFlowStart>('gh_begin_sign_in');
+      setFlow(start);
+      // Auto-copy the code so the user can paste it directly in the browser.
+      try {
+        await navigator.clipboard.writeText(start.userCode);
+        setCodeCopied(true);
+      } catch { /* clipboard may be blocked — code is still visible in UI */ }
+      setPhase('awaiting');
+      // Begin polling. This await resolves when the user finishes auth.
+      setPhase('finishing');
+      await invoke<string>('gh_complete_sign_in', {
+        deviceCode: start.deviceCode,
+        interval: start.interval,
+      });
+      await refresh();
+      setFlow(null);
+      setPhase('idle');
+    } catch (err) {
+      console.error('sign-in failed', err);
+      setError(typeof err === 'string' ? err : (err as Error).message);
+      setFlow(null);
+      setPhase('idle');
+    }
+  };
+
+  const cancelSignIn = () => {
+    // We don't have a server-side cancel, but the polling will time out.
+    // Just clear local state so the user can retry.
+    setFlow(null);
+    setPhase('idle');
+    setError(null);
+  };
+
+  const signOut = async () => {
+    setError(null);
+    setPhase('signing-out');
+    try {
+      await invoke('gh_sign_out');
+      await refresh();
+    } catch (err) {
+      console.error('gh_sign_out failed', err);
+      setError(typeof err === 'string' ? err : (err as Error).message);
+    } finally {
+      setPhase('idle');
+    }
+  };
+
+  const copyCode = async () => {
+    if (!flow) return;
+    try {
+      await navigator.clipboard.writeText(flow.userCode);
+      setCodeCopied(true);
+    } catch { /* ignore */ }
+  };
+
+  const reopenBrowser = async () => {
+    if (!flow) return;
+    try {
+      await invoke('open_external_url', { url: flow.verificationUri });
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <>
+      <label className="setting-label">GitHub</label>
+
+      {status === null && (
+        <div className="setting-muted">Checking…</div>
+      )}
+
+      {status && !status.installed && (
+        <div className="setting-muted">
+          gh CLI not installed.
+        </div>
+      )}
+
+      {/* Authenticated */}
+      {status && status.installed && status.authenticated && phase !== 'starting' && phase !== 'awaiting' && phase !== 'finishing' && (
+        <>
+          <div className="gh-identity">
+            Signed in as <strong>{status.username}</strong>
+          </div>
+          <button
+            type="button"
+            className="ib-btn"
+            onClick={signOut}
+            disabled={phase === 'signing-out'}
+          >
+            {phase === 'signing-out' ? 'Signing out…' : 'Sign out'}
+          </button>
+        </>
+      )}
+
+      {/* Not authenticated, no flow in progress */}
+      {status && status.installed && !status.authenticated && phase === 'idle' && (
+        <button type="button" className="ib-btn" onClick={signIn}>
+          Sign in with GitHub
+        </button>
+      )}
+
+      {/* Flow in progress: starting (briefly) */}
+      {phase === 'starting' && (
+        <div className="setting-muted">Opening browser…</div>
+      )}
+
+      {/* Flow in progress: awaiting / finishing — show device code + cancel */}
+      {(phase === 'awaiting' || phase === 'finishing') && flow && (
+        <div className="gh-flow">
+          <div className="gh-flow-instruction">
+            Enter this code in your browser:
+          </div>
+          <div className="gh-code-row">
+            <code className="gh-code" onClick={copyCode}>{flow.userCode}</code>
+            <button
+              type="button"
+              className="ib-btn ib-btn-small"
+              onClick={copyCode}
+            >
+              {codeCopied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <div className="gh-flow-actions">
+            <button type="button" className="ib-btn ib-btn-link" onClick={reopenBrowser}>
+              Reopen browser
+            </button>
+            <button type="button" className="ib-btn ib-btn-link" onClick={cancelSignIn}>
+              Cancel
+            </button>
+          </div>
+          <div className="setting-muted gh-flow-hint">
+            Waiting for authorization…
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="setting-error">{error}</div>
+      )}
+
+      {status?.version && (
+        <div className="setting-muted setting-faint">
+          gh {status.version}
+        </div>
+      )}
+
+      <div className="setting-help">
+        Used for publishing DreamSongs to GitHub Pages.
       </div>
     </>
   );

@@ -1358,14 +1358,24 @@ export class RadicleServiceImpl implements RadicleService {
   }
 
   /**
-   * Add a peer's fork as a git remote
+   * Add a peer's fork as a git remote.
+   *
+   * As of v0.16 the URL format is `interbrain://<uuid>?peer=<did>` — the
+   * git-remote-interbrain helper resolves it via the daemon's WebRTC
+   * transport. The legacy `radicleId` parameter is kept for caller
+   * compatibility but is no longer used in URL construction.
+   *
    * @returns true if remote was added, false if already exists
    */
-  async addPeerRemote(dreamNodePath: string, peerName: string, radicleId: string, peerDID: string): Promise<boolean> {
-    // Strip prefixes for git remote URL construction
-    const cleanRid = this.stripRadiclePrefix(radicleId);
+  async addPeerRemote(dreamNodePath: string, peerName: string, _radicleId: string, peerDID: string): Promise<boolean> {
+    // Read the DreamNode's UUID from its .udd — this identifies the repo
+    // across the WebRTC network.
+    const uuid = await this.readUuidFromDreamNode(dreamNodePath);
+    if (!uuid) {
+      throw new Error(`addPeerRemote: no UUID in .udd at ${dreamNodePath}`);
+    }
     const cleanDid = this.stripRadiclePrefix(peerDID);
-    const remoteUrl = `rad://${cleanRid}/${cleanDid}`;
+    const remoteUrl = `interbrain://${uuid}?peer=${encodeURIComponent(cleanDid)}`;
 
     try {
       // IDEMPOTENCY CHECK: Check if remote already exists
@@ -1381,6 +1391,22 @@ export class RadicleServiceImpl implements RadicleService {
       return true; // Successfully added
     } catch (error: any) {
       throw new Error(`Failed to add peer remote: ${error.message}`);
+    }
+  }
+
+  /**
+   * Read a DreamNode's UUID from its .udd file. Returns null if missing.
+   */
+  private async readUuidFromDreamNode(dreamNodePath: string): Promise<string | null> {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const uddPath = path.join(dreamNodePath, '.udd');
+    try {
+      const content = await fs.readFile(uddPath, 'utf-8');
+      const udd = JSON.parse(content);
+      return typeof udd.uuid === 'string' && udd.uuid ? udd.uuid : null;
+    } catch {
+      return null;
     }
   }
 
@@ -1450,12 +1476,20 @@ export class RadicleServiceImpl implements RadicleService {
       // Get current remotes
       const currentRemotes = await this.getRemotes(dreamNodePath);
 
-      // Build desired remote URLs (strip prefixes)
+      // Build desired remote URLs. As of v0.16 these are interbrain:// URLs
+      // resolved via the daemon's WebRTC transport. We need the DreamNode's
+      // UUID, not its Radicle ID — read once from .udd.
       const desiredRemotes = new Map<string, string>();
-      const cleanRid = this.stripRadiclePrefix(radicleId);
+      const uuid = await this.readUuidFromDreamNode(dreamNodePath);
+      if (!uuid) {
+        throw new Error(`reconcileRemotes: no UUID in .udd at ${dreamNodePath}`);
+      }
+      // Suppress lint: radicleId is part of the public API for callers but
+      // no longer used in URL construction.
+      void radicleId;
       for (const [peerName, peerDID] of desiredPeers) {
         const cleanDid = this.stripRadiclePrefix(peerDID);
-        desiredRemotes.set(peerName, `rad://${cleanRid}/${cleanDid}`);
+        desiredRemotes.set(peerName, `interbrain://${uuid}?peer=${encodeURIComponent(cleanDid)}`);
       }
 
       // Find remotes to add, update, or keep

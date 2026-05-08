@@ -71,7 +71,7 @@ import { InterBrainSettingTab, InterBrainSettings, DEFAULT_SETTINGS } from './fe
 import { closeIndexedDBConnection, setVaultId, gracefulShutdown, markHydrationComplete } from './core/store/indexeddb-storage';
 import { serviceLifecycleManager, LifecyclePhase } from './core/services/service-lifecycle-manager';
 import { vaultStateService } from './core/services/vault-state-service';
-import { SettingsStatusService } from './features/settings/settings-status-service';
+import { setCachedSettings } from './features/settings/settings-cache';
 import {
   registerFeedbackCommands,
   errorCaptureService,
@@ -124,9 +124,8 @@ export default class InterBrainPlugin extends Plugin {
       await this.loadSettings();
 
       // Cache settings for services that need runtime access
-      SettingsStatusService.setSettings({
+      setCachedSettings({
         claudeApiKey: this.settings.claudeApiKey,
-        radiclePassphrase: this.settings.radiclePassphrase,
       });
 
       // Initialize AI Magic inference service

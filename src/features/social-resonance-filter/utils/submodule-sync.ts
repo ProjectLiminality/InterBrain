@@ -57,10 +57,12 @@ export function parseGitmodules(content: string): ParsedSubmodule[] {
     else if (trimmed.startsWith('url = ') && currentSubmodule) {
       currentSubmodule.url = trimmed.substring(6).trim();
 
-      // Extract name from Radicle URL if not already set
-      if (!currentSubmodule.name && currentSubmodule.url.includes('rad://')) {
-        // For Radicle URLs, the name should match the standalone repo name
-        // We'll infer it from the path since that's how we clone them
+      // Extract name from network URL if not already set. Both rad:// and
+      // interbrain:// URLs are network references — name is inferred from
+      // the submodule path, since that's how we clone them locally.
+      const isNetworkUrl = currentSubmodule.url.includes('rad://') ||
+                           currentSubmodule.url.includes('interbrain://');
+      if (!currentSubmodule.name && isNetworkUrl) {
         currentSubmodule.name = path.basename(currentSubmodule.path);
       }
     }

@@ -89,6 +89,23 @@ export class SubmoduleManagerService {
   }
 
   /**
+   * Read the UUID from a DreamNode's .udd file. UUID is the canonical
+   * identifier across the WebRTC network — used in interbrain:// URLs.
+   */
+  private async readUuidFromUdd(repoPath: string): Promise<string | null> {
+    const fs = require('fs').promises;
+    const uddPath = path.join(repoPath, '.udd');
+    try {
+      const uddContent = await fs.readFile(uddPath, 'utf-8');
+      const udd = JSON.parse(uddContent);
+      return typeof udd.uuid === 'string' && udd.uuid ? udd.uuid : null;
+    } catch (error) {
+      console.error(`SubmoduleManagerService: Could not read .udd at ${uddPath}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Get Radicle ID from a DreamNode's .udd file
    * ASSUMPTION: All DreamNodes are guaranteed to have Radicle IDs (initialized on creation)
    */
@@ -139,28 +156,21 @@ export class SubmoduleManagerService {
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
 
-      // Get Radicle ID for the submodule (stored in .udd for future network resolution)
-      // Non-fatal: Radicle ID is optional — submodule uses local filesystem path regardless.
-      const radicleId = await this.radicleService.getRadicleId(sourceFullPath);
-      if (!radicleId) {
-        console.warn(`SubmoduleManagerService: ${actualSubmoduleName} has no Radicle ID — importing via local path only`);
+      // Read the child's UUID from its .udd — this is what identifies the
+      // DreamNode across the WebRTC network. The git-remote-interbrain helper
+      // resolves UUIDs locally first, then via WebRTC peer transport if the
+      // submodule isn't yet cloned on this machine.
+      const childUuid = await this.readUuidFromUdd(sourceFullPath);
+      if (!childUuid) {
+        throw new Error(`SubmoduleManagerService: child DreamNode at ${sourceFullPath} has no UUID in .udd — cannot create interbrain:// submodule URL`);
       }
 
-      // Submodule remote always points to the local sovereign repo (all platforms).
-      // Radicle ID is tracked in .udd for identification and network resolution,
-      // but the git submodule itself clones from the local filesystem.
-      // This keeps the local universe self-contained — no network dependency for
-      // submodule operations. If a peer receives this DreamNode and needs to
-      // hydrate missing submodules, they resolve the Radicle ID from the network.
-      //
-      // Use relative path (../Name) instead of absolute filesystem paths.
-      // Git resolves relative submodule URLs against the remote named "origin".
-      // Since our remote is named "rad" (not "origin"), git falls back to
-      // filesystem resolution — so ../Name correctly resolves to the sibling
-      // sovereign repo at vault root. This makes the vault portable across machines.
-      const submoduleUrl = `../${path.basename(sourceFullPath)}`;
-      console.log(`SubmoduleManagerService: Using local sovereign path for submodule: ${submoduleUrl}`);
-      if (radicleId) console.log(`SubmoduleManagerService: Radicle ID tracked in .udd for network resolution: ${radicleId}`);
+      // Submodule URL is interbrain://<uuid>. The helper resolves UUID via:
+      //   1. Local UUID index (any vault on this machine).
+      //   2. WebRTC peer transport (when present, against known peers).
+      // No peer hint needed — the daemon's peer registry knows where to look.
+      const submoduleUrl = `interbrain://${childUuid}`;
+      console.log(`SubmoduleManagerService: submodule URL ${submoduleUrl} (${actualSubmoduleName})`);
 
       // Import the submodule (use --force to handle previously-removed submodules)
       const submoduleCommand = `git submodule add --force "${submoduleUrl}" "${actualSubmoduleName}"`;

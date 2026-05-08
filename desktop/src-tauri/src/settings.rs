@@ -22,6 +22,18 @@ pub struct DaemonSettings {
     pub whisper_language: String,
     #[serde(rename = "vaultRegistry", default)]
     pub vault_registry: Vec<RegisteredVault>,
+    /// Peers we accept inbound WebRTC connections from and probe for
+    /// updates. Populated by the friend-link flow (or manually by IPC for
+    /// testing). Keyed by DID.
+    #[serde(rename = "peerRegistry", default)]
+    pub peer_registry: Vec<RegisteredPeer>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisteredPeer {
+    pub did: String,
+    #[serde(default)]
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -53,6 +65,7 @@ impl Default for DaemonSettings {
             whisper_model: "base.en".to_string(),
             whisper_language: "en".to_string(),
             vault_registry: Vec::new(),
+            peer_registry: Vec::new(),
         }
     }
 }

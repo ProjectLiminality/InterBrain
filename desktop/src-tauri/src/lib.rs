@@ -8,10 +8,12 @@
 //!   - System-level settings (API keys, coding agent, etc.)
 
 mod commands;
+mod github;
 mod identity;
 mod installer;
 mod ipc;
 mod logging;
+mod peer_relay;
 mod prerequisites;
 mod settings;
 mod signaling;
@@ -132,6 +134,10 @@ pub fn run() {
             commands::close_first_run,
             commands::get_settings,
             commands::set_settings,
+            commands::gh_status,
+            commands::gh_begin_sign_in,
+            commands::gh_complete_sign_in,
+            commands::gh_sign_out,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -192,6 +198,14 @@ pub fn run() {
                 }
             });
 
+            // Start the inbound WebRTC listener. Polls signaling for offers
+            // from registered peers; serves git operations against locally-
+            // resolved UUIDs.
+            let state_for_listener = state.clone();
+            tauri::async_runtime::spawn(async move {
+                peer_relay::run_inbound_listener(state_for_listener).await;
+            });
+
             // Defer window creation until after the Tauri event loop is
             // pumping. On Windows, creating a webview from inside .setup()
             // sometimes races the platform message loop and fails with
@@ -218,20 +232,26 @@ pub fn run() {
                     }
                 } else {
                     // Health-check every registered vault. If any plugin
-                    // dir is missing or broken, restore from bundled.
-                    let vaults_to_check: Vec<std::path::PathBuf> = state_for_setup
+                    // dir is missing, broken, or in legacy symlinked state,
+                    // restore from bundled. Also fast-forward the InterBrain
+                    // DreamNode clone so legacy vaults stay current.
+                    let vaults_to_check: Vec<(std::path::PathBuf, bool)> = state_for_setup
                         .settings
                         .lock()
                         .unwrap()
                         .vault_registry
                         .iter()
-                        .map(|v| std::path::PathBuf::from(&v.path))
+                        .map(|v| (std::path::PathBuf::from(&v.path), v.dev_mode))
                         .collect();
-                    for vault in &vaults_to_check {
-                        match crate::vaults::ensure_plugin_health(vault, &state_for_setup.bundled_plugin_dir) {
+                    for (vault, expects_dev_mode) in &vaults_to_check {
+                        match crate::vaults::ensure_plugin_health(vault, &state_for_setup.bundled_plugin_dir, *expects_dev_mode) {
                             Ok(true) => tracing::info!(target: "startup", vault = %vault.display(), "plugin self-healed"),
                             Ok(false) => {}
                             Err(e) => tracing::error!(target: "startup", vault = %vault.display(), error = %e, "plugin health check failed"),
+                        }
+                        // Best-effort fast-forward of the InterBrain DreamNode.
+                        if let Err(e) = crate::vaults::ensure_interbrain_clone_in_vault(vault) {
+                            tracing::warn!(target: "startup", vault = %vault.display(), error = %e, "InterBrain clone refresh failed");
                         }
                     }
                     let first_vault = state_for_setup

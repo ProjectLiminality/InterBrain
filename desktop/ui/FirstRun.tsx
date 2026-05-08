@@ -682,7 +682,7 @@ function VaultStep({
   const [mode, setMode] = useState<Mode>('create');
   const [busy, setBusy] = useState(false);
   const [vaultParent, setVaultParent] = useState<string>('');
-  const [newVaultName, setNewVaultName] = useState('InterBrain');
+  const [newVaultName, setNewVaultName] = useState('DreamVault');
 
   // Fetch the default new-vault parent (~/) on mount so we can show the user
   // what path would be used.
