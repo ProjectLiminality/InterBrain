@@ -65,6 +65,15 @@ jobs:
       # for both archs — they're expected to already exist at the universal
       # target path. So we build git-remote-interbrain for each arch and lipo
       # them together before tauri-action runs.
+      #
+      # Tauri's build.rs validates bundle.resources paths at compile time,
+      # so we must run copy-plugin-resources first to populate
+      # desktop/src-tauri/resources/plugin/ before any cargo build.
+      - name: Stage plugin resources for Tauri (macOS only)
+        if: matrix.platform == 'macos-latest'
+        working-directory: desktop
+        run: node scripts/copy-plugin-resources.mjs
+
       - name: Build helper binary as universal (macOS only)
         if: matrix.platform == 'macos-latest'
         working-directory: desktop/src-tauri
