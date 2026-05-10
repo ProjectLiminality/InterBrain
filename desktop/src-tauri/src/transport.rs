@@ -239,7 +239,17 @@ async fn pump_remote_signals(
     expecting_offer: bool,
 ) -> Result<()> {
     let mut last_seq: u64 = 0;
-    let mut got_remote_description = !expecting_offer;
+    // Both peers start without a remote description. The offerer waits for an
+    // Answer; the answerer waits for an Offer. Once received, ICE candidates
+    // can be applied. (Earlier this was initialized to `!expecting_offer`,
+    // which made the offerer skip Alice's Answer and never set the remote
+    // description — ICE then fired with no candidate pairs.)
+    let mut got_remote_description = false;
+    // Buffer ICE candidates that arrive before the remote description is set
+    // (race: Alice posts answer + ICE in quick succession; Bob's pump may see
+    // ICE in the same poll as the answer). Apply them as soon as remote desc
+    // lands.
+    let mut buffered_ice: Vec<String> = Vec::new();
     // The signaling Worker keeps blobs for 7 days. Old blobs from prior
     // sessions are not harmful but they fail to apply (`add_ice failed:
     // remote description is not set`) and clutter logs. Filter to blobs
@@ -274,6 +284,7 @@ async fn pump_remote_signals(
                         .map_err(|e| anyhow!("set_local(answer): {e}"))?;
                     let env = SignalEnvelope::Answer { sdp: answer.sdp };
                     post_signal(&signaling, &room, &our_did, &env).await?;
+                    flush_buffered_ice(&pc, &mut buffered_ice).await;
                 }
                 SignalEnvelope::Answer { sdp } if !expecting_offer && !got_remote_description => {
                     let desc = RTCSessionDescription::answer(sdp)
@@ -281,6 +292,7 @@ async fn pump_remote_signals(
                     pc.set_remote_description(desc).await
                         .map_err(|e| anyhow!("set_remote(answer): {e}"))?;
                     got_remote_description = true;
+                    flush_buffered_ice(&pc, &mut buffered_ice).await;
                 }
                 SignalEnvelope::Ice { candidate } => {
                     if got_remote_description {
@@ -291,6 +303,9 @@ async fn pump_remote_signals(
                         if let Err(e) = pc.add_ice_candidate(init).await {
                             tracing::warn!("[transport] add_ice failed: {e}");
                         }
+                    } else {
+                        // Buffer until remote description lands.
+                        buffered_ice.push(candidate);
                     }
                 }
                 _ => {}
@@ -302,6 +317,21 @@ async fn pump_remote_signals(
         // local peer posted that the remote peer hasn't yet read. Stale
         // blobs are pruned by the Worker's 7-day TTL.
         tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+/// Drain a buffer of pending ICE candidates into the peer connection. Called
+/// once the remote description lands. Failures are logged but not fatal —
+/// individual bad candidates shouldn't abort the handshake.
+async fn flush_buffered_ice(pc: &Arc<RTCPeerConnection>, buf: &mut Vec<String>) {
+    for candidate in buf.drain(..) {
+        let init = webrtc::ice_transport::ice_candidate::RTCIceCandidateInit {
+            candidate,
+            ..Default::default()
+        };
+        if let Err(e) = pc.add_ice_candidate(init).await {
+            tracing::warn!("[transport] buffered add_ice failed: {e}");
+        }
     }
 }
 
