@@ -249,48 +249,45 @@ pub async fn run_inbound_listener(state: Arc<AppState>) {
         "inbound listener started"
     );
 
-    // Per-peer accept-attempt tracking: shared mutex so the spawned tasks
-    // can clear their own entries when they finish (and we back off on
-    // failure to avoid hot-spinning against the same offer).
-    let active: Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>> =
+    // Per-peer state: which offer-seq we've already accepted (success or
+    // failure). Keyed by peer DID, value = highest seq we've attempted.
+    // Once we accept seq N, we never accept the same N again — only fresh
+    // offers at seq > N. This prevents re-running accept against a stale
+    // offer that's still in the signaling room.
+    let attempted: Arc<tokio::sync::Mutex<std::collections::HashMap<String, u64>>> =
         Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 
     loop {
         let peers = known_peer_dids(&state);
         for peer_did in peers {
-            let now = std::time::Instant::now();
-            // Skip if we already have an in-flight accept for this peer, or
-            // if we recently tried and need to back off.
+            let Some((offer_seq, _)) = latest_offer_from_peer(&state.signaling, &our_did, &peer_did).await
+            else {
+                continue;
+            };
+            // Skip if we've already attempted this offer (by seq).
             {
-                let active_map = active.lock().await;
-                if let Some(t) = active_map.get(&peer_did) {
-                    // Back-off must exceed HANDSHAKE_TIMEOUT (20s) so a still-
-                    // in-flight accept doesn't get re-spawned by a fresh poll.
-                    if now.duration_since(*t) < Duration::from_secs(25) {
+                let map = attempted.lock().await;
+                if let Some(&prev) = map.get(&peer_did) {
+                    if offer_seq <= prev {
                         continue;
                     }
                 }
             }
-            if peer_has_pending_offer(&state.signaling, &our_did, &peer_did).await {
-                active.lock().await.insert(peer_did.clone(), now);
-                let state_clone = state.clone();
-                let our_did_clone = our_did.clone();
-                let peer_did_clone = peer_did.clone();
-                let active_clone = active.clone();
-                tokio::spawn(async move {
-                    let result = accept_one(state_clone, our_did_clone, peer_did_clone.clone()).await;
-                    if let Err(e) = result {
-                        tracing::warn!(
-                            target: "peer_relay",
-                            peer_did = %peer_did_clone,
-                            error = %e,
-                            "inbound accept failed"
-                        );
-                    }
-                    // Mark this peer as recently-tried so we back off briefly.
-                    active_clone.lock().await.insert(peer_did_clone, std::time::Instant::now());
-                });
-            }
+            attempted.lock().await.insert(peer_did.clone(), offer_seq);
+            let state_clone = state.clone();
+            let our_did_clone = our_did.clone();
+            let peer_did_clone = peer_did.clone();
+            tokio::spawn(async move {
+                let result = accept_one(state_clone, our_did_clone, peer_did_clone.clone()).await;
+                if let Err(e) = result {
+                    tracing::warn!(
+                        target: "peer_relay",
+                        peer_did = %peer_did_clone,
+                        error = %e,
+                        "inbound accept failed"
+                    );
+                }
+            });
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
@@ -309,38 +306,36 @@ fn known_peer_dids(state: &Arc<AppState>) -> Vec<String> {
         .collect()
 }
 
-async fn peer_has_pending_offer(
+/// Find the most recent offer blob from `peer_did` in the room. Returns
+/// (seq, received_at_ms) if one exists within the session window, else None.
+/// "Most recent" by received_at — there may be multiple offers from
+/// multiple session attempts; we always take the freshest.
+async fn latest_offer_from_peer(
     signaling: &SignalingClient,
     our_did: &str,
     peer_did: &str,
-) -> bool {
+) -> Option<(u64, u64)> {
     let room = crate::signaling::room_id_for(our_did, peer_did);
-    let blobs = match signaling.list_blobs(&room).await {
-        Ok(b) => b,
-        Err(_) => return false,
-    };
+    let blobs = signaling.list_blobs(&room).await.ok()?;
     if blobs.is_empty() {
-        return false;
+        return None;
     }
-    // Only react to recent blobs from the peer — stale blobs from prior
-    // sessions accumulate in the room until the Worker's TTL prunes them
-    // and would otherwise cause repeated false-positive accept attempts.
     let max_received_at = blobs.iter().map(|b| b.received_at).max().unwrap_or(0);
     let cutoff = max_received_at.saturating_sub(60_000); // 60s window in ms
 
-    blobs.iter().any(|b| {
-        if b.from != peer_did || b.received_at < cutoff {
-            return false;
-        }
-        // Decode just enough to know it's an offer (vs. answer/ICE).
-        use base64::Engine;
-        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&b.data) {
-            if let Ok(text) = std::str::from_utf8(&bytes) {
-                return text.contains("\"kind\":\"offer\"");
-            }
-        }
-        false
-    })
+    use base64::Engine;
+    blobs
+        .into_iter()
+        .filter(|b| b.from == peer_did && b.received_at >= cutoff)
+        .filter(|b| {
+            base64::engine::general_purpose::STANDARD
+                .decode(&b.data)
+                .ok()
+                .and_then(|bytes| std::str::from_utf8(&bytes).ok().map(|s| s.contains("\"kind\":\"offer\"")))
+                .unwrap_or(false)
+        })
+        .max_by_key(|b| b.received_at)
+        .map(|b| (b.seq, b.received_at))
 }
 
 /// Accept one inbound connection from `peer_did` and serve the requested
