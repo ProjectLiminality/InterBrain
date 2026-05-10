@@ -264,7 +264,9 @@ pub async fn run_inbound_listener(state: Arc<AppState>) {
             {
                 let active_map = active.lock().await;
                 if let Some(t) = active_map.get(&peer_did) {
-                    if now.duration_since(*t) < Duration::from_secs(5) {
+                    // Back-off must exceed HANDSHAKE_TIMEOUT (20s) so a still-
+                    // in-flight accept doesn't get re-spawned by a fresh poll.
+                    if now.duration_since(*t) < Duration::from_secs(25) {
                         continue;
                     }
                 }

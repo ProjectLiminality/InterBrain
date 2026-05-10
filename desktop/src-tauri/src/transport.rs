@@ -14,6 +14,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
+use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
@@ -177,9 +178,21 @@ async fn build_peer_connection() -> Result<Arc<RTCPeerConnection>> {
     let mut interceptors = Registry::new();
     interceptors = register_default_interceptors(interceptors, &mut media)
         .map_err(|e| anyhow!("interceptors: {e}"))?;
+
+    // Disable mDNS host-candidate obfuscation. webrtc-rs defaults to wrapping
+    // local IPs as `*.local` mDNS hostnames for browser-style privacy. Native
+    // peers without an mDNS responder can't resolve them, so ICE falls back
+    // to srflx (STUN-discovered public IPs). On consumer routers without
+    // hairpin NAT, srflx-only fails for peers on the same LAN. Disabling
+    // mDNS lets ICE use real local IPs as host candidates, which connect
+    // directly when both peers are on the same network.
+    let mut settings = SettingEngine::default();
+    settings.set_ice_multicast_dns_mode(webrtc::ice::mdns::MulticastDnsMode::Disabled);
+
     let api = APIBuilder::new()
         .with_media_engine(media)
         .with_interceptor_registry(interceptors)
+        .with_setting_engine(settings)
         .build();
     let config = RTCConfiguration {
         ice_servers: default_ice_servers(),
