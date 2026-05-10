@@ -60,7 +60,7 @@ impl PeerSession {
         our_did: &str,
         peer_did: &str,
         timeout: Duration,
-    ) -> Result<(Self, Arc<RTCDataChannel>)> {
+    ) -> Result<(Self, Arc<RTCDataChannel>, mpsc::Receiver<Vec<u8>>)> {
         let room = room_id_for(our_did, peer_did);
         tracing::info!("[transport] opening outbound to {peer_did} in room {room}");
 
@@ -72,6 +72,11 @@ impl PeerSession {
             .create_data_channel("git", None)
             .await
             .map_err(|e| anyhow!("create_data_channel: {e}"))?;
+
+        // Install on_message NOW (before the data channel opens) so we don't
+        // race against the peer's first send. Bytes get pushed into in_rx,
+        // which the caller drains.
+        let in_rx = install_message_handler(&dc);
 
         // Wire ICE candidates into the signaling room.
         attach_ice_handler(pc.clone(), signaling.clone(), room.clone(), our_did.to_string());
@@ -102,7 +107,7 @@ impl PeerSession {
             res = dc_open => {
                 res?;
                 // Stop pumping signals — we're connected.
-                Ok((Self { pc }, dc))
+                Ok((Self { pc }, dc, in_rx))
             }
             res = signaling_pump => {
                 // Pump exited unexpectedly; if dc isn't open by now, that's an error.
@@ -125,20 +130,24 @@ impl PeerSession {
         our_did: &str,
         peer_did: &str,
         timeout: Duration,
-    ) -> Result<(Self, Arc<RTCDataChannel>)> {
+    ) -> Result<(Self, Arc<RTCDataChannel>, mpsc::Receiver<Vec<u8>>)> {
         let room = room_id_for(our_did, peer_did);
         tracing::info!("[transport] accepting inbound from {peer_did} in room {room}");
 
         let pc = build_peer_connection().await?;
 
-        // We expect an inbound data channel; capture it via a callback.
-        let (dc_tx, mut dc_rx) = mpsc::channel::<Arc<RTCDataChannel>>(1);
+        // Capture the inbound data channel AND install on_message synchronously
+        // before its OnOpen fires — otherwise the peer's first send (the JSON
+        // serve-request frame) can be lost in the gap between OnOpen and
+        // on_message-install.
+        let (dc_tx, mut dc_rx) = mpsc::channel::<(Arc<RTCDataChannel>, mpsc::Receiver<Vec<u8>>)>(1);
         let dc_tx = Arc::new(Mutex::new(Some(dc_tx)));
         pc.on_data_channel(Box::new(move |dc| {
             let dc_tx = dc_tx.clone();
             Box::pin(async move {
+                let in_rx = install_message_handler(&dc);
                 if let Some(tx) = dc_tx.lock().await.take() {
-                    let _ = tx.send(dc).await;
+                    let _ = tx.send((dc, in_rx)).await;
                 }
             })
         }));
@@ -155,10 +164,10 @@ impl PeerSession {
 
         tokio::select! {
             res = signaling_pump => res?,
-            dc = dc_rx.recv() => {
-                let dc = dc.ok_or_else(|| anyhow!("data channel sender dropped"))?;
+            entry = dc_rx.recv() => {
+                let (dc, in_rx) = entry.ok_or_else(|| anyhow!("data channel sender dropped"))?;
                 data_channel_open_future(dc.clone()).await?;
-                return Ok((Self { pc }, dc));
+                return Ok((Self { pc }, dc, in_rx));
             }
             _ = tokio::time::sleep(timeout) => {
                 anyhow::bail!("inbound handshake timed out after {:?}", timeout);
@@ -318,6 +327,20 @@ async fn pump_remote_signals(
         // blobs are pruned by the Worker's 7-day TTL.
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
+}
+
+/// Install an on_message handler on a data channel that pushes received
+/// bytes into a tokio mpsc channel. Returns the receiver. Must be called
+/// before the data channel opens to avoid losing the peer's first send.
+fn install_message_handler(dc: &Arc<RTCDataChannel>) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel::<Vec<u8>>(64);
+    dc.on_message(Box::new(move |msg: DataChannelMessage| {
+        let tx = tx.clone();
+        Box::pin(async move {
+            let _ = tx.send(msg.data.to_vec()).await;
+        })
+    }));
+    rx
 }
 
 /// Drain a buffer of pending ICE candidates into the peer connection. Called

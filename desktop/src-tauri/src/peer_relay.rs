@@ -95,7 +95,7 @@ pub async fn open_outbound_relay(
     );
 
     let signaling = state.signaling.clone();
-    let (session, dc) = PeerSession::open_outbound(
+    let (session, dc, in_rx) = PeerSession::open_outbound(
         signaling,
         &our_did,
         &peer_did,
@@ -123,7 +123,7 @@ pub async fn open_outbound_relay(
         // Accept exactly one helper connection on this port.
         match tokio::time::timeout(Duration::from_secs(30), listener.accept()).await {
             Ok(Ok((tcp, _))) => {
-                let _ = bridge_data_channel_with_tcp(dc_for_relay, tcp, true).await;
+                let _ = bridge_data_channel_with_tcp(dc_for_relay, in_rx, tcp, true).await;
             }
             Ok(Err(e)) => tracing::warn!(target: "peer_relay", "tcp accept failed: {e}"),
             Err(_) => tracing::warn!(target: "peer_relay", "helper never connected to relay port"),
@@ -140,18 +140,12 @@ pub async fn open_outbound_relay(
 /// first to confirm the peer accepted our serve request before piping bytes.
 async fn bridge_data_channel_with_tcp(
     dc: Arc<RTCDataChannel>,
+    mut in_rx: mpsc::Receiver<Vec<u8>>,
     tcp: TcpStream,
     expect_reply: bool,
 ) -> Result<()> {
-    // Inbound: data channel -> TCP write half.
-    let (in_tx, mut in_rx) = mpsc::channel::<Vec<u8>>(64);
-    dc.on_message(Box::new(move |msg: DataChannelMessage| {
-        let in_tx = in_tx.clone();
-        Box::pin(async move {
-            let _ = in_tx.send(msg.data.to_vec()).await;
-        })
-    }));
-
+    // Inbound stream is already wired by the caller (so on_message could be
+    // installed before the data channel opened).
     let (mut tcp_read, mut tcp_write) = tcp.into_split();
 
     // If the offerer needs to validate the answerer's reply, peel the first
@@ -342,22 +336,15 @@ async fn latest_offer_from_peer(
 /// git operation. Returns when the data channel closes.
 async fn accept_one(state: Arc<AppState>, our_did: String, peer_did: String) -> Result<()> {
     let signaling = state.signaling.clone();
-    let (session, dc) = PeerSession::accept_inbound(
+    let (session, dc, mut req_rx) = PeerSession::accept_inbound(
         signaling,
         &our_did,
         &peer_did,
         HANDSHAKE_TIMEOUT,
     )
     .await?;
-
-    // Read the first JSON line off the data channel — the serve request.
-    let (req_tx, mut req_rx) = mpsc::channel::<Vec<u8>>(32);
-    dc.on_message(Box::new(move |msg: DataChannelMessage| {
-        let req_tx = req_tx.clone();
-        Box::pin(async move {
-            let _ = req_tx.send(msg.data.to_vec()).await;
-        })
-    }));
+    // on_message is already installed inside accept_inbound (so we don't lose
+    // the peer's first send). We just consume from req_rx.
 
     let mut buf: Vec<u8> = Vec::new();
     let req: ServeRequest = loop {
