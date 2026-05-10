@@ -220,6 +220,16 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
             }
         }
 
+        // Scan all registered vaults for incoming commits from peers.
+        // For each DreamNode in each vault, runs `git fetch <peer>` against
+        // every interbrain:// remote and counts how many commits each peer
+        // is ahead of the local branch. Returns a flat list of activity
+        // entries the dashboard renders into the Activity feed.
+        "scan-updates" => {
+            let entries = crate::activity::scan_updates(state.clone()).await;
+            ok(&id, json!({ "entries": entries }))
+        }
+
         // Add a vault to the registry. Used by the smoke test scripts to
         // register a temp directory for UUID indexing. Production vault
         // registration goes through install_plugin_into_vault Tauri command.

@@ -7,6 +7,7 @@
 //!   - WebRTC transport (planned: webrtc-rs)
 //!   - System-level settings (API keys, coding agent, etc.)
 
+mod activity;
 mod commands;
 mod github;
 mod identity;
@@ -138,6 +139,7 @@ pub fn run() {
             commands::gh_begin_sign_in,
             commands::gh_complete_sign_in,
             commands::gh_sign_out,
+            commands::scan_updates_proxy,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

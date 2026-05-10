@@ -776,3 +776,54 @@ input:focus, select:focus {
 .api-key-action svg {
   display: block;
 }
+
+/* ---------- Activity pane ---------- */
+
+.activity-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 0 12px;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  border: 1px solid var(--ib-divider);
+  border-radius: 4px;
+}
+
+.activity-row {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: transparent;
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid var(--ib-divider);
+}
+.activity-row:last-child {
+  border-bottom: none;
+}
+.activity-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.activity-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ib-white);
+}
+.activity-detail {
+  font-size: 12px;
+  color: var(--ib-text-muted);
+  margin-top: 2px;
+}

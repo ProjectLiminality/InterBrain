@@ -447,6 +447,14 @@ pub fn set_settings(
 }
 
 #[tauri::command]
+pub async fn scan_updates_proxy(
+    state: State<'_, Arc<AppState>>,
+) -> Result<serde_json::Value, String> {
+    let entries = crate::activity::scan_updates(state.inner().clone()).await;
+    Ok(serde_json::json!({ "entries": entries }))
+}
+
+#[tauri::command]
 pub fn gh_status() -> crate::github::GhStatus {
     crate::github::gh_status()
 }
