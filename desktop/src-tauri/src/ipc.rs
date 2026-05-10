@@ -164,8 +164,8 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
                 Err(e) => err(&id, "invalid_settings", &e.to_string()),
             }
         }
-        // Used by git-remote-interbrain to find a UUID locally before
-        // attempting peer transport.
+        // Resolve a DreamNode UUID against any registered vault. Used by
+        // the plugin to find a DreamNode's on-disk path given just its UUID.
         "resolve-uuid" => {
             let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
             let uuid = payload.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
@@ -272,23 +272,6 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
             ok(&id, json!({ "peers": peers }))
         }
 
-        // Helper-driven transport: opens a WebRTC channel to a peer, asks
-        // them to run `git-upload-pack` or `git-receive-pack` against a UUID,
-        // and bridges the bytes through a localhost TCP port. Returns the
-        // port the helper should connect to.
-        "open-peer-relay" => {
-            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
-            let peer_did = payload.get("peerDid").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let service = payload.get("service").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let uuid = payload.get("uuid").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            if peer_did.is_empty() || service.is_empty() || uuid.is_empty() {
-                return err(&id, "bad_request", "peerDid, service, uuid required");
-            }
-            match crate::peer_relay::open_outbound_relay(state.clone(), peer_did, service, uuid).await {
-                Ok(port) => ok(&id, json!({ "port": port })),
-                Err(e) => err(&id, "relay_failed", &e.to_string()),
-            }
-        }
         other => err(&id, "unknown_op", &format!("Unknown op: {other}")),
     }
 }

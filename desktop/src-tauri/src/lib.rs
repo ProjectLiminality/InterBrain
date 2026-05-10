@@ -1,11 +1,14 @@
 //! InterBrain desktop daemon.
 //!
 //! The daemon runs in the system tray and owns:
-//!   - Identity (DID + keypair, stored in OS keychain)
+//!   - Identity (GitHub account via gh CLI, plus a keypair for legacy ops)
 //!   - Vault registry + plugin file management (managed vs dev mode)
 //!   - WebSocket IPC server for the Obsidian plugin
-//!   - WebRTC transport (planned: webrtc-rs)
 //!   - System-level settings (API keys, coding agent, etc.)
+//!
+//! Peer-to-peer transport (WebRTC) was prototyped on the
+//! `feature/webrtc-transport` branch and is preserved there for a future
+//! release. This branch ships with GitHub as the collaboration transport.
 
 mod commands;
 mod github;
@@ -13,11 +16,8 @@ mod identity;
 mod installer;
 mod ipc;
 mod logging;
-mod peer_relay;
 mod prerequisites;
 mod settings;
-mod signaling;
-mod transport;
 mod uuid_index;
 mod vaults;
 mod windows;
@@ -196,14 +196,6 @@ pub fn run() {
                 if let Err(e) = ipc::run_server(state_for_ipc, handle_for_ipc).await {
                     tracing::error!("ipc server crashed: {e}");
                 }
-            });
-
-            // Start the inbound WebRTC listener. Polls signaling for offers
-            // from registered peers; serves git operations against locally-
-            // resolved UUIDs.
-            let state_for_listener = state.clone();
-            tauri::async_runtime::spawn(async move {
-                peer_relay::run_inbound_listener(state_for_listener).await;
             });
 
             // Defer window creation until after the Tauri event loop is

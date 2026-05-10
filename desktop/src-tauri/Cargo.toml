@@ -15,10 +15,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "interbrain-desktop"
 path = "src/main.rs"
 
-[[bin]]
-name = "git-remote-interbrain"
-path = "src/bin/git_remote_interbrain.rs"
-
 [build-dependencies]
 tauri-build = { version = "2.4", features = [] }
 
@@ -48,13 +44,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 urlencoding = "2"
-webrtc = "0.8"
-tungstenite = "0.24"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
-url = "2"
-tokio-stream = "0.1"
-async-trait = "0.1"
-bytes = "1"
 
 [dev-dependencies]
 tempfile = "3"

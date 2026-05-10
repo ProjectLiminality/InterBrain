@@ -2,7 +2,6 @@
 
 use crate::identity::{DiscoveredIdentity, FreshIdentityResult, IdentityManager};
 use crate::settings::{DaemonSettings, RegisteredVault};
-use crate::signaling::SignalingClient;
 use crate::uuid_index::UuidIndex;
 use crate::vaults::{self, VaultEntry};
 use crate::windows;
@@ -23,7 +22,6 @@ pub struct AppState {
     pub bundled_plugin_dir: PathBuf,
     pub event_bus: crate::ipc::EventBus,
     pub uuid_index: Arc<UuidIndex>,
-    pub signaling: Arc<SignalingClient>,
 }
 
 impl AppState {
@@ -105,10 +103,6 @@ impl AppState {
             tracing::warn!("[commands] initial uuid index scan: {e}");
         }
 
-        let signaling = Arc::new(SignalingClient::new(
-            crate::signaling::DEFAULT_SIGNALING_BASE_URL,
-        ));
-
         Ok(Self {
             identity,
             settings: Mutex::new(settings),
@@ -117,7 +111,6 @@ impl AppState {
             bundled_plugin_dir,
             event_bus: crate::ipc::EventBus::new(),
             uuid_index,
-            signaling,
         })
     }
 
