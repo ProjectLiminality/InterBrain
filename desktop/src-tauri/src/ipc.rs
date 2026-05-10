@@ -245,18 +245,27 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
             ok(&id, json!({ "path": path }))
         }
 
-        // Add a peer to the registry — populated by the friend-link flow,
-        // or manually via this op for testing. Idempotent on DID.
+        // Add a peer to the registry. Identified by GitHub username.
+        // Accepts either `githubUsername` (preferred) or `did` (legacy).
+        // Idempotent on the canonical username.
         "add-peer" => {
             let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
-            let did = payload.get("did").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let username = payload
+                .get("githubUsername")
+                .or_else(|| payload.get("did"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            if did.is_empty() {
-                return err(&id, "bad_request", "did required");
+            if username.is_empty() {
+                return err(&id, "bad_request", "githubUsername required");
             }
             let mut s = state.settings.lock().unwrap();
-            if !s.peer_registry.iter().any(|p| p.did == did) {
-                s.peer_registry.push(crate::settings::RegisteredPeer { did: did.clone(), name });
+            if !s.peer_registry.iter().any(|p| p.github_username == username) {
+                s.peer_registry.push(crate::settings::RegisteredPeer {
+                    github_username: username.clone(),
+                    name,
+                });
             }
             let snapshot = s.clone();
             drop(s);
@@ -264,12 +273,32 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
                 return err(&id, "save_failed", &e.to_string());
             }
             state.event_bus.emit("settings-changed", json!({ "settings": snapshot }));
-            ok(&id, json!({ "did": did }))
+            ok(&id, json!({ "githubUsername": username }))
         }
 
         "list-peers" => {
             let peers = state.settings.lock().unwrap().peer_registry.clone();
             ok(&id, json!({ "peers": peers }))
+        }
+
+        // Resolve a UUID + peer hint to a concrete transport URL. The peer
+        // hint is `<github-username>/<repo-name>`; we map it to
+        // `https://github.com/<github-username>/<repo-name>`. The UUID is
+        // not used to construct the URL (the peer hint already locates the
+        // repo); it is verified after clone via the .udd file.
+        "resolve-peer-url" => {
+            let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
+            let peer = payload.get("peer").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if peer.is_empty() {
+                return err(&id, "bad_request", "peer required");
+            }
+            // Allow either `user/repo` or just a github URL passed through.
+            let url = if peer.starts_with("https://") || peer.starts_with("http://") {
+                peer
+            } else {
+                format!("https://github.com/{peer}")
+            };
+            ok(&id, json!({ "url": url }))
         }
 
         other => err(&id, "unknown_op", &format!("Unknown op: {other}")),

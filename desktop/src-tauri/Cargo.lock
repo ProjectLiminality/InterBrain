@@ -1934,6 +1934,8 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "tungstenite",
+ "url",
  "urlencoding",
  "which",
 ]

@@ -22,16 +22,20 @@ pub struct DaemonSettings {
     pub whisper_language: String,
     #[serde(rename = "vaultRegistry", default)]
     pub vault_registry: Vec<RegisteredVault>,
-    /// Peers we accept inbound WebRTC connections from and probe for
-    /// updates. Populated by the friend-link flow (or manually by IPC for
-    /// testing). Keyed by DID.
+    /// Peers we follow — we fetch from their GitHub repos and probe for
+    /// updates. Populated by the friend-add flow (or manually by IPC for
+    /// testing).
     #[serde(rename = "peerRegistry", default)]
     pub peer_registry: Vec<RegisteredPeer>,
 }
 
+/// A friend / peer we collaborate with. `github_username` is the canonical
+/// identity. `name` is a human-readable label (defaults to the username).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisteredPeer {
-    pub did: String,
+    /// GitHub username (e.g. "alice"). Canonical identifier.
+    #[serde(rename = "githubUsername", alias = "did", default)]
+    pub github_username: String,
     #[serde(default)]
     pub name: String,
 }
