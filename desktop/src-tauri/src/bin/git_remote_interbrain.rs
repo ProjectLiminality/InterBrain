@@ -92,24 +92,59 @@ fn run() -> Result<()> {
             }
 
             // Local resolve failed → use WebRTC peer transport via daemon.
-            if parsed.peer_hints.is_empty() {
+            // Build the candidate peer list: explicit URL peer hints first,
+            // then every peer in the daemon's registry. Try each in order
+            // until one succeeds.
+            let port = read_daemon_port()?;
+            let mut candidates: Vec<String> = parsed.peer_hints.clone();
+            if candidates.is_empty() {
+                // Ask the daemon for its known peers.
+                let peers_resp = call_daemon(port, "list-peers", serde_json::json!({}))?;
+                if let Some(arr) = peers_resp.get("peers").and_then(|v| v.as_array()) {
+                    for p in arr {
+                        if let Some(did) = p.get("did").and_then(|v| v.as_str()) {
+                            candidates.push(did.to_string());
+                        }
+                    }
+                }
+            }
+            if candidates.is_empty() {
                 bail!(
-                    "uuid {} not found locally and no peer hints in url",
+                    "uuid {} not found locally; no peer hints in url and no peers registered",
                     parsed.uuid
                 );
             }
-            let peer_did = parsed.peer_hints[0].clone();
-            let port = read_daemon_port()?;
-            let relay_payload = serde_json::json!({
-                "peerDid": peer_did,
-                "service": service,
-                "uuid": parsed.uuid,
-            });
-            let relay_resp = call_daemon(port, "open-peer-relay", relay_payload)?;
-            let relay_port = relay_resp
-                .get("port")
-                .and_then(|v| v.as_u64())
-                .ok_or_else(|| anyhow!("relay response missing port: {relay_resp}"))?;
+
+            // Try each candidate; first one whose relay opens wins.
+            let mut last_err: Option<String> = None;
+            let mut relay_port: Option<u64> = None;
+            for peer_did in &candidates {
+                let relay_payload = serde_json::json!({
+                    "peerDid": peer_did,
+                    "service": service,
+                    "uuid": parsed.uuid,
+                });
+                match call_daemon(port, "open-peer-relay", relay_payload) {
+                    Ok(resp) => {
+                        if let Some(p) = resp.get("port").and_then(|v| v.as_u64()) {
+                            relay_port = Some(p);
+                            break;
+                        }
+                        last_err = Some(format!("relay response missing port: {resp}"));
+                    }
+                    Err(e) => {
+                        last_err = Some(format!("peer {peer_did}: {e}"));
+                        // Try the next candidate.
+                    }
+                }
+            }
+            let relay_port = relay_port.ok_or_else(|| {
+                anyhow!(
+                    "no peer could serve uuid {}: {}",
+                    parsed.uuid,
+                    last_err.unwrap_or_else(|| "unknown".into())
+                )
+            })?;
 
             // Acknowledge connect to git: empty line on our stdout, then
             // bridge stdin↔relay socket↔stdout. Git takes over our stdio
