@@ -140,6 +140,13 @@ export interface OpMap {
   'fetch-updates': { req: FetchUpdatesRequest; res: FetchUpdatesResponse };
   'get-settings': { req: GetSettingsRequest; res: GetSettingsResponse };
   'set-settings': { req: SetSettingsRequest; res: SetSettingsResponse };
+  /**
+   * Force a rebuild of the daemon's UUID index. The plugin calls this
+   * after creating a DreamNode so the helper can immediately resolve
+   * `interbrain://<uuid>` for the new node (otherwise weaving it as a
+   * submodule fails with "uuid not found locally" until daemon restart).
+   */
+  'refresh-uuid-index': { req: Record<string, never>; res: Record<string, never> };
 }
 
 export type OpName = keyof OpMap;

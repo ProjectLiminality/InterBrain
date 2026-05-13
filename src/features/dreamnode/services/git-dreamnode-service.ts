@@ -150,7 +150,21 @@ export class GitDreamNodeService {
     // Create git repository in parallel (non-blocking)
     this.createGitRepository(repoPath, uuid, title, type, dreamTalk, additionalFiles, metadata)
       .then(async () => {
-        // Index the new node after git repository is created
+        // Tell the daemon to rescan its UUID index so the helper can
+        // resolve interbrain://<uuid> for this freshly-created node.
+        // Without this, weaving the new node as a submodule fails with
+        // "uuid not found locally" until daemon restart.
+        try {
+          const { getBridge } = await import('../../desktop-bridge');
+          const bridge = getBridge();
+          if (bridge.isConnected()) {
+            await bridge.request('refresh-uuid-index', {});
+          }
+        } catch (error) {
+          console.warn('Failed to refresh daemon UUID index (non-fatal):', error);
+        }
+
+        // Index the new node for semantic search
         try {
           await indexingService.indexNode(node);
         } catch (error) {
