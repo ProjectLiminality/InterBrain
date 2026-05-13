@@ -14,6 +14,13 @@ interface DaemonStatus {
   alias: string | null;
 }
 
+interface GhStatus {
+  installed: boolean;
+  authenticated: boolean;
+  username: string | null;
+  version: string | null;
+}
+
 interface DaemonSettings {
   codingAgentCommand: string;
   defaultAIProvider: string;
@@ -39,6 +46,7 @@ type Pane = 'vaults' | 'settings';
 export function TrayDashboard() {
   const [vaults, setVaults] = useState<VaultEntry[]>([]);
   const [status, setStatus] = useState<DaemonStatus>({ online: true, did: null, alias: null });
+  const [gh, setGh] = useState<GhStatus | null>(null);
   const [pane, setPane] = useState<Pane>('vaults');
   const [settings, setSettings] = useState<DaemonSettings | null>(null);
 
@@ -60,6 +68,8 @@ export function TrayDashboard() {
       setVaults(v);
       const s = await invoke<DaemonStatus>('get_status');
       setStatus(s);
+      const g = await invoke<GhStatus>('gh_status');
+      setGh(g);
     } catch (err) {
       console.error('refresh failed', err);
     }
@@ -98,7 +108,9 @@ export function TrayDashboard() {
         <div className="tray-title">InterBrain</div>
         <div className="tray-status">
           <span className={`status-dot ${status.online ? '' : 'offline'}`} />
-          {status.alias ?? (status.did ? short(status.did) : 'no identity')}
+          {gh?.authenticated && gh.username
+            ? `@${gh.username}`
+            : (status.alias ?? (status.did ? short(status.did) : 'signed out'))}
         </div>
       </div>
 
