@@ -99,15 +99,33 @@ fn run() -> Result<()> {
             // daemon translates to `https://github.com/<that>`. The UUID is
             // verified after clone via the .udd file.
             let port = read_daemon_port()?;
-            if parsed.peer_hints.is_empty() {
+
+            // Build the candidate peer-hint list. Start with explicit hints
+            // from the URL (`?peer=<owner>/<repo>`); fall back to deriving
+            // a hint from the *parent* repo's origin URL via parent-origin
+            // transitivity (per the rc.21 spec). When git invokes us for a
+            // submodule clone, cwd is the parent's working tree — we can
+            // read `git config remote.origin.url` to learn which GitHub
+            // owner served the parent, then try that owner with the
+            // submodule's path-derived name.
+            let mut hints: Vec<String> = parsed.peer_hints.clone();
+            if hints.is_empty() {
+                if let Some(transitive) = derive_transitive_peer_hint(&args[1]) {
+                    eprintln!(
+                        "git-remote-interbrain: trying parent-origin transitive hint: {transitive}"
+                    );
+                    hints.push(transitive);
+                }
+            }
+            if hints.is_empty() {
                 bail!(
-                    "uuid {} not found locally and url has no peer hints — cannot resolve",
+                    "uuid {} not found locally and url has no peer hints (parent-origin transitivity didn't resolve either) — cannot resolve",
                     parsed.uuid
                 );
             }
             let mut last_err: Option<String> = None;
             let mut resolved_url: Option<String> = None;
-            for peer in &parsed.peer_hints {
+            for peer in &hints {
                 let payload = serde_json::json!({
                     "uuid": parsed.uuid,
                     "peer": peer,
@@ -192,6 +210,46 @@ fn parse_interbrain_url(raw: &str) -> Result<ParsedUrl> {
         .map(|(_, v)| v.into_owned())
         .collect();
     Ok(ParsedUrl { uuid, peer_hints })
+}
+
+/// Parent-origin transitivity: when called for a submodule whose URL is
+/// a bare `interbrain://<uuid>` with no peer hints, derive an implicit
+/// hint from the parent repo's `origin` remote.
+///
+/// We expect to be called inside the parent's working tree (git's
+/// remote-helper protocol guarantees cwd = repo toplevel). The submodule
+/// name git hands us (`remote_name` arg) is whatever `.gitmodules` calls
+/// the submodule — typically the same as its path basename (e.g.,
+/// `Circle`).
+///
+/// Returns `Some("<owner>/<remote_name>")` if the parent's origin is a
+/// GitHub URL we can parse, else `None`. The daemon's `resolve-peer-url`
+/// IPC will translate that to `https://github.com/<owner>/<remote_name>`
+/// and the actual transfer falls to git-remote-https.
+fn derive_transitive_peer_hint(remote_name: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let origin_url = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if origin_url.is_empty() {
+        return None;
+    }
+    // Match https://github.com/<owner>/<repo>(.git)? and git@github.com:<owner>/<repo>(.git)?
+    let parts: Option<&str> = origin_url
+        .strip_prefix("https://github.com/")
+        .or_else(|| origin_url.strip_prefix("http://github.com/"))
+        .or_else(|| origin_url.strip_prefix("git@github.com:"));
+    let path = parts?;
+    let mut segs = path.splitn(2, '/');
+    let owner = segs.next()?;
+    if owner.is_empty() {
+        return None;
+    }
+    Some(format!("{owner}/{remote_name}"))
 }
 
 fn resolve_locally(uuid: &str) -> Result<Option<String>> {

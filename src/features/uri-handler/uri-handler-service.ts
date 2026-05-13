@@ -666,6 +666,22 @@ export class URIHandlerService {
 			const githubUrl = `https://${repoPath}`;
 			await githubService.clone(githubUrl, destinationPath);
 
+			// Tell the daemon to re-scan its UUID index so the freshly-cloned
+			// DreamNode is discoverable when its siblings' submodule URLs
+			// (`interbrain://<uuid>`) get resolved by the helper. Without
+			// this, a later recursive submodule init on a supermodule that
+			// references this UUID will fail with "uuid not found locally"
+			// until daemon restart.
+			try {
+				const { getBridge } = await import('../desktop-bridge');
+				const bridge = getBridge();
+				if (bridge.isConnected()) {
+					await bridge.request('refresh-uuid-index', {});
+				}
+			} catch (err) {
+				console.warn('[URIHandler] daemon UUID index refresh failed (non-fatal):', err);
+			}
+
 			// Recursively init submodules. The cloned repo's .gitmodules
 			// likely contains `interbrain://<uuid>` URLs that the daemon's
 			// helper resolves; the helper must be on PATH (see
