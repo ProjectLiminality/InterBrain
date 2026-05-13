@@ -630,13 +630,22 @@ export class URIHandlerService {
 				throw new Error('Could not determine vault path');
 			}
 
-			// Extract repo name from path
-			const match = repoPath.match(/github\.com\/[^/]+\/([^/\s]+)/);
+			// Accept either form:
+			//   - github.com/<owner>/<repo>  (from obsidian://interbrain-clone?ids=...)
+			//   - <owner>/<repo>             (from beacon `parentPeerRepo`)
+			//   - https://github.com/<owner>/<repo>(.git)?
+			const match =
+				repoPath.match(/github\.com\/([^/]+)\/([^/\s]+)/) ||
+				repoPath.match(/^([^/\s]+)\/([^/\s]+)$/);
 			if (!match) {
 				throw new Error(`Invalid GitHub repository path: ${repoPath}`);
 			}
-
-			const repoName = match[1].replace(/\.git$/, '');
+			// match[2] is the repo name; match[1] is the owner.
+			const owner = match[1];
+			const repoName = match[2].replace(/\.git$/, '');
+			// Normalize to the canonical github.com/<owner>/<repo> form for
+			// later operations that build URLs from it.
+			repoPath = `github.com/${owner}/${repoName}`;
 			const destinationPath = `${vaultPath}/${repoName}`;
 
 			// Check if already exists - use Obsidian vault API
