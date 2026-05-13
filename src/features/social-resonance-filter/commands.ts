@@ -392,6 +392,22 @@ export function registerRadicleCommands(
         } else {
           new Notice(`Pushed ${selectedNode.name}`);
         }
+
+        // After a successful push, ignite coherence beacons for every
+        // submodule of this DreamNode. Each beacon is a blank commit in
+        // the child's sovereign repo that signals "you are part of this
+        // supermodule, here's where to find it". Receivers detect them
+        // via Check for Updates on the child. Failure here is non-fatal
+        // — the share itself already succeeded.
+        try {
+          const beaconResults = await plugin.coherenceBeaconService.igniteBeacons(selectedNode.repoPath);
+          const created = beaconResults.filter(r => r.status === 'created').length;
+          if (created > 0) {
+            new Notice(`Lit ${created} beacon${created > 1 ? 's' : ''}`);
+          }
+        } catch (beaconError) {
+          console.error('[ShareChanges] Beacon ignition failed:', beaconError);
+        }
       } catch (error) {
         notice.hide();
         console.error('[ShareChanges] Failed:', error);
