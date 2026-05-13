@@ -6,12 +6,6 @@ import { logEvent } from './log';
 type Step = 'welcome' | 'prereqs' | 'identity' | 'vault' | 'done';
 const ORDER: Step[] = ['welcome', 'prereqs', 'identity', 'vault', 'done'];
 
-interface DiscoveredIdentity {
-  source: 'radicle' | 'fresh';
-  did: string;
-  alias: string | null;
-}
-
 interface DependencyStatus {
   installed: boolean;
   detail: string | null;
@@ -24,26 +18,29 @@ interface PrerequisiteStatus {
   git: DependencyStatus;
 }
 
-interface FreshIdentityResult {
-  identity: DiscoveredIdentity;
-  passphrase: string;
-  storedInKeychain: boolean;
+interface GhStatus {
+  installed: boolean;
+  authenticated: boolean;
+  username: string | null;
+  version: string | null;
 }
 
-type IdentityChoice =
-  | { kind: 'unset' }
-  | { kind: 'radicle-detected'; identity: DiscoveredIdentity }
-  | { kind: 'radicle-unlocked'; identity: DiscoveredIdentity }
-  | { kind: 'fresh-pending' } // user chose fresh; configuring options
-  | { kind: 'fresh-created'; result: FreshIdentityResult };
+interface DeviceFlowStart {
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+  deviceCode: string;
+}
+
+type GhIdentityState =
+  | { kind: 'checking' }
+  | { kind: 'not-installed' }
+  | { kind: 'signed-out' }
+  | { kind: 'authorizing'; flow: DeviceFlowStart }
+  | { kind: 'signed-in'; username: string };
 
 type InstallStep = { label: string; status: 'pending' | 'running' | 'done' | 'failed'; detail?: string };
-
-interface DaemonStatus {
-  online: boolean;
-  did: string | null;
-  alias: string | null;
-}
 
 interface VaultEntry {
   path: string;
@@ -56,29 +53,25 @@ export function FirstRun() {
   const [step, setStep] = useState<Step>('welcome');
   const [vaults, setVaults] = useState<string[]>([]);
   const [selectedVault, setSelectedVault] = useState<string | null>(null);
-  const [identity, setIdentity] = useState<IdentityChoice>({ kind: 'unset' });
+  const [identity, setIdentity] = useState<GhIdentityState>({ kind: 'checking' });
   const [error, setError] = useState<string | null>(null);
   const [installSteps, setInstallSteps] = useState<InstallStep[]>([]);
-  const [keychainAvailable, setKeychainAvailable] = useState<boolean | null>(null);
   const [prereqs, setPrereqs] = useState<PrerequisiteStatus | null>(null);
-  const [alreadyConfigured, setAlreadyConfigured] = useState<{ did: string; vaults: VaultEntry[] } | null>(null);
+  const [alreadyConfigured, setAlreadyConfigured] = useState<{ username: string; vaults: VaultEntry[] } | null>(null);
 
   useEffect(() => {
     invoke<string[]>('discover_obsidian_vaults').then(setVaults).catch(console.error);
-    invoke('probe_keychain')
-      .then(() => setKeychainAvailable(true))
-      .catch(() => setKeychainAvailable(false));
     refreshPrereqs();
 
-    // Detect "already configured" state — daemon has unlocked identity AND
-    // at least one registered vault. If so, show a confirmation rather than
-    // walking the user through setup again.
+    // Detect "already configured" state — daemon's gh CLI is signed in AND
+    // at least one registered vault exists. If so, show a confirmation
+    // rather than walking the user through setup again.
     Promise.all([
-      invoke<DaemonStatus>('get_status'),
+      invoke<GhStatus>('gh_status'),
       invoke<VaultEntry[]>('list_vaults'),
-    ]).then(([status, vaultList]) => {
-      if (status.did && vaultList.length > 0) {
-        setAlreadyConfigured({ did: status.did, vaults: vaultList });
+    ]).then(([gh, vaultList]) => {
+      if (gh.authenticated && gh.username && vaultList.length > 0) {
+        setAlreadyConfigured({ username: gh.username, vaults: vaultList });
       }
     }).catch(err => {
       logEvent('warn', 'first-run', 'failed to detect already-configured state', { error: String(err) });
@@ -89,16 +82,17 @@ export function FirstRun() {
     invoke<PrerequisiteStatus>('detect_prerequisites').then(setPrereqs).catch(console.error);
   }
 
-  // When we enter the identity step, attempt to detect an existing Radicle id.
+  // On entering the identity step: check current GitHub auth state.
   useEffect(() => {
-    if (step !== 'identity' || identity.kind !== 'unset') return;
-    invoke<DiscoveredIdentity | null>('detect_existing_identity')
-      .then(found => {
-        if (found) setIdentity({ kind: 'radicle-detected', identity: found });
-        else setIdentity({ kind: 'fresh-pending' });
+    if (step !== 'identity') return;
+    invoke<GhStatus>('gh_status')
+      .then(gh => {
+        if (!gh.installed) setIdentity({ kind: 'not-installed' });
+        else if (gh.authenticated && gh.username) setIdentity({ kind: 'signed-in', username: gh.username });
+        else setIdentity({ kind: 'signed-out' });
       })
       .catch(err => setError(String(err)));
-  }, [step, identity.kind]);
+  }, [step]);
 
   function go(next: Step) {
     setError(null);
@@ -116,7 +110,7 @@ export function FirstRun() {
       case 'prereqs':
         return prereqs?.obsidian.installed === true && prereqs?.git.installed === true;
       case 'identity':
-        return identity.kind === 'radicle-unlocked' || identity.kind === 'fresh-created';
+        return identity.kind === 'signed-in';
       case 'vault':
         return false; // forward is "Install plugin" button explicitly
       case 'done': return false;
@@ -142,8 +136,8 @@ export function FirstRun() {
           Identity loaded, {alreadyConfigured.vaults.length === 1 ? '1 vault' : `${alreadyConfigured.vaults.length} vaults`} registered.
         </p>
         <div className="identity-summary">
-          <div className="summary-label">DID</div>
-          <code className="summary-value">{alreadyConfigured.did}</code>
+          <div className="summary-label">GitHub</div>
+          <code className="summary-value">@{alreadyConfigured.username}</code>
         </div>
         <div className="step-actions" style={{ marginTop: 16 }}>
           <button
@@ -197,13 +191,11 @@ export function FirstRun() {
       )}
 
       {step === 'identity' && (
-        <IdentityStep
+        <GitHubIdentityStep
           state={identity}
-          keychainAvailable={keychainAvailable}
+          setState={setIdentity}
           error={error}
           onError={setError}
-          onIdentityResolved={setIdentity}
-          onChooseFresh={() => setIdentity({ kind: 'fresh-pending' })}
           onContinue={() => go('vault')}
         />
       )}
@@ -463,205 +455,143 @@ function WelcomeStep({ onBegin }: { onBegin: () => void }) {
   );
 }
 
-interface IdentityStepProps {
-  state: IdentityChoice;
-  keychainAvailable: boolean | null;
+interface GitHubIdentityStepProps {
+  state: GhIdentityState;
+  setState: (s: GhIdentityState) => void;
   error: string | null;
   onError: (e: string | null) => void;
-  onIdentityResolved: (state: IdentityChoice) => void;
-  onChooseFresh: () => void;
   onContinue: () => void;
 }
 
-function IdentityStep({
-  state, keychainAvailable, error, onError, onIdentityResolved, onChooseFresh, onContinue,
-}: IdentityStepProps) {
-  const [passphrase, setPassphrase] = useState('');
+function GitHubIdentityStep({ state, setState, error, onError, onContinue }: GitHubIdentityStepProps) {
   const [busy, setBusy] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
-  // Fresh-creation form state
-  const [useCustomPassphrase, setUseCustomPassphrase] = useState(false);
-  const [customPassphrase, setCustomPassphrase] = useState('');
-  const [storeInKeychain, setStoreInKeychain] = useState(true);
-
-  if (state.kind === 'unset') {
-    return <p className="step-body">Looking for an existing identity…</p>;
-  }
-
-  if (state.kind === 'radicle-detected') {
-    return (
-      <>
-        <h2>Existing identity found</h2>
-        <p className="step-body">
-          We detected an existing Radicle identity on this machine. Enter your
-          Radicle passphrase to reuse it — your existing connections and shared
-          DreamNodes continue uninterrupted.
-        </p>
-        <div style={{ fontSize: 12, color: 'var(--ib-text-muted)', marginBottom: 14, fontFamily: 'monospace' }}>
-          {state.identity.did}
-        </div>
-        <input
-          type="password"
-          placeholder="Radicle passphrase"
-          value={passphrase}
-          onChange={e => setPassphrase(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && passphrase) tryUnlock(); }}
-        />
-        <div className="step-actions">
-          <button className="btn-secondary" onClick={onChooseFresh} disabled={busy}>
-            Start fresh instead
-          </button>
-          <button className="btn-primary" onClick={tryUnlock} disabled={busy || !passphrase}>
-            {busy ? 'Verifying…' : 'Unlock'}
-          </button>
-        </div>
-        {error && <p className="error-msg">{error}</p>}
-      </>
-    );
-
-    async function tryUnlock() {
-      setBusy(true);
-      onError(null);
+  async function startSignIn() {
+    setBusy(true);
+    onError(null);
+    setCodeCopied(false);
+    try {
+      const flow = await invoke<DeviceFlowStart>('gh_begin_sign_in');
       try {
-        await invoke('unlock_existing_identity', { passphrase });
-        onIdentityResolved({ kind: 'radicle-unlocked', identity: (state as { identity: DiscoveredIdentity }).identity });
-        onContinue();
-      } catch (e: unknown) {
-        const msg = String(e);
-        if (msg.toLowerCase().includes('incorrect')) {
-          onError('That passphrase is incorrect. Try again or start fresh.');
-        } else {
-          onError(msg);
-        }
-      } finally {
-        setBusy(false);
-      }
+        await navigator.clipboard.writeText(flow.userCode);
+        setCodeCopied(true);
+      } catch { /* clipboard may be blocked */ }
+      setState({ kind: 'authorizing', flow });
+      // Poll until the user completes the device flow in the browser.
+      const username = await invoke<string>('gh_complete_sign_in', {
+        deviceCode: flow.deviceCode,
+        interval: flow.interval,
+      });
+      setState({ kind: 'signed-in', username });
+      logEvent('info', 'first-run.identity', 'github sign-in complete', { username });
+    } catch (err: unknown) {
+      onError(typeof err === 'string' ? err : (err as Error).message);
+      setState({ kind: 'signed-out' });
+    } finally {
+      setBusy(false);
     }
   }
 
-  if (state.kind === 'radicle-unlocked') {
+  async function copyCode() {
+    if (state.kind !== 'authorizing') return;
+    try {
+      await navigator.clipboard.writeText(state.flow.userCode);
+      setCodeCopied(true);
+    } catch { /* ignore */ }
+  }
+
+  async function reopenBrowser() {
+    if (state.kind !== 'authorizing') return;
+    try { await invoke('open_external_url', { url: state.flow.verificationUri }); } catch { /* ignore */ }
+  }
+
+  function cancel() {
+    setState({ kind: 'signed-out' });
+    onError(null);
+  }
+
+  if (state.kind === 'checking') {
+    return <p className="step-body">Checking GitHub auth state…</p>;
+  }
+
+  if (state.kind === 'not-installed') {
     return (
       <>
-        <h2>Identity unlocked</h2>
-        <p className="step-body">Your Radicle identity is loaded. You can continue.</p>
-        <div style={{ fontSize: 12, color: 'var(--ib-text-muted)', marginBottom: 14, fontFamily: 'monospace' }}>
-          {state.identity.did}
-        </div>
-        <div className="step-actions">
+        <h2>GitHub CLI required</h2>
+        <p className="step-body">
+          InterBrain uses your GitHub account to host and share your DreamNodes
+          (each DreamNode lives in a private GitHub repo on your account).
+          You'll need the <code>gh</code> command-line tool installed.
+        </p>
+        <p className="step-body">
+          Install it from <a href="https://cli.github.com" target="_blank" rel="noreferrer">cli.github.com</a>,
+          then come back to this step.
+        </p>
+      </>
+    );
+  }
+
+  if (state.kind === 'signed-in') {
+    return (
+      <>
+        <h2>Signed in as @{state.username}</h2>
+        <p className="step-body">
+          InterBrain will use your GitHub account to host DreamNodes you share
+          with others. You can sign out anytime from the daemon dashboard.
+        </p>
+        <div className="step-actions" style={{ marginTop: 16 }}>
           <button className="btn-primary" onClick={onContinue}>Continue</button>
         </div>
       </>
     );
   }
 
-  if (state.kind === 'fresh-pending') {
+  if (state.kind === 'authorizing') {
     return (
       <>
-        <h2>Create your identity</h2>
+        <h2>Authorize InterBrain on GitHub</h2>
         <p className="step-body">
-          A new cryptographic identity (a public/private keypair) will be generated
-          for you. Your friends will recognize you by the public part — your DID.
-          The private part needs to be protected by a passphrase, just like a
-          password.
+          We've opened your browser at <code>{state.flow.verificationUri}</code>.
+          Enter this code there to grant access:
         </p>
-
-        <div className="identity-options">
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={useCustomPassphrase}
-              onChange={e => setUseCustomPassphrase(e.target.checked)}
-            />
-            <span>Use my own passphrase (otherwise one will be generated)</span>
-          </label>
-          {useCustomPassphrase && (
-            <input
-              type="password"
-              placeholder="Choose a strong passphrase"
-              value={customPassphrase}
-              onChange={e => setCustomPassphrase(e.target.value)}
-              style={{ marginTop: 8 }}
-            />
-          )}
-
-          <label className="checkbox-row" style={{ marginTop: 14 }}>
-            <input
-              type="checkbox"
-              checked={storeInKeychain}
-              disabled={keychainAvailable === false}
-              onChange={e => setStoreInKeychain(e.target.checked)}
-            />
-            <span>
-              Save to {macOSorWindowsLabel()} (recommended — you won't have to type it again)
-            </span>
-          </label>
-          {keychainAvailable === false && (
-            <p className="warning-msg" style={{ marginTop: 6 }}>
-              Your system keychain isn't available right now. The passphrase will be shown
-              to you once so you can save it yourself.
-            </p>
-          )}
-          {storeInKeychain && keychainAvailable !== false && (
-            <p className="setting-help" style={{ marginTop: 6 }}>
-              Your operating system will prompt you for permission when we save it.
-            </p>
-          )}
-        </div>
-
-        <div className="step-actions">
-          <button className="btn-primary" onClick={createFresh} disabled={busy || (useCustomPassphrase && !customPassphrase)}>
-            {busy ? 'Creating…' : 'Create identity'}
+        <div className="device-code-row">
+          <code className="device-code" onClick={copyCode}>{state.flow.userCode}</code>
+          <button className="btn-secondary" onClick={copyCode}>
+            {codeCopied ? 'Copied' : 'Copy'}
           </button>
         </div>
+        <div className="step-actions" style={{ marginTop: 12 }}>
+          <button className="btn-secondary" onClick={reopenBrowser}>Reopen browser</button>
+          <button className="btn-secondary" onClick={cancel}>Cancel</button>
+        </div>
+        <p className="step-body" style={{ marginTop: 12, fontStyle: 'italic', opacity: 0.7 }}>
+          Waiting for authorization…
+        </p>
         {error && <p className="error-msg">{error}</p>}
       </>
     );
-
-    async function createFresh() {
-      setBusy(true);
-      onError(null);
-      try {
-        const result = await invoke<FreshIdentityResult>('generate_fresh_identity', {
-          passphrase: useCustomPassphrase ? customPassphrase : null,
-          storeInKeychain,
-        });
-        onIdentityResolved({ kind: 'fresh-created', result });
-      } catch (e: unknown) {
-        onError(String(e));
-      } finally {
-        setBusy(false);
-      }
-    }
   }
 
-  if (state.kind === 'fresh-created') {
-    return (
-      <>
-        <h2>Identity created</h2>
-        <p className="step-body">
-          {state.result.storedInKeychain
-            ? `Saved to ${macOSorWindowsLabel()}. You won't need to enter the passphrase again.`
-            : 'Save this passphrase somewhere safe. You will need it to use this identity from another machine, or after a system reset.'}
-        </p>
-        <div className="identity-summary">
-          <div className="summary-label">DID</div>
-          <code className="summary-value">{state.result.identity.did}</code>
-          {!state.result.storedInKeychain && (
-            <>
-              <div className="summary-label" style={{ marginTop: 12 }}>Passphrase</div>
-              <code className="summary-value">{state.result.passphrase}</code>
-            </>
-          )}
-        </div>
-        <div className="step-actions">
-          <button className="btn-primary" onClick={onContinue}>Continue</button>
-        </div>
-      </>
-    );
-  }
-
-  return null;
+  // signed-out
+  return (
+    <>
+      <h2>Sign in with GitHub</h2>
+      <p className="step-body">
+        InterBrain uses your GitHub account as your identity and to host the
+        DreamNodes you share. Friends collaborate by following each other's
+        GitHub repos — no separate accounts to manage.
+      </p>
+      <div className="step-actions" style={{ marginTop: 16 }}>
+        <button className="btn-primary" onClick={startSignIn} disabled={busy}>
+          {busy ? 'Opening browser…' : 'Sign in with GitHub'}
+        </button>
+      </div>
+      {error && <p className="error-msg">{error}</p>}
+    </>
+  );
 }
+
 
 interface VaultStepProps {
   vaults: string[];
@@ -955,14 +885,6 @@ function stepIcon(status: InstallStep['status']): string {
     case 'done': return '✓';
     case 'failed': return '✗';
   }
-}
-
-function macOSorWindowsLabel(): string {
-  if (typeof navigator !== 'undefined') {
-    if (navigator.platform.startsWith('Mac')) return 'macOS Keychain';
-    if (navigator.platform.startsWith('Win')) return 'Windows Credential Manager';
-  }
-  return 'system keychain';
 }
 
 function sleep(ms: number) {

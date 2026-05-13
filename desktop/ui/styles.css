@@ -776,3 +776,27 @@ input:focus, select:focus {
 .api-key-action svg {
   display: block;
 }
+
+/* ---------- First-run device code (GitHub OAuth) ---------- */
+
+.device-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+.device-code {
+  flex: 1;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 22px;
+  letter-spacing: 0.22em;
+  font-weight: 600;
+  color: var(--ib-blue);
+  background: rgba(71, 159, 248, 0.08);
+  border: 1px solid rgba(71, 159, 248, 0.3);
+  border-radius: 6px;
+  padding: 10px 14px;
+  text-align: center;
+  cursor: pointer;
+  user-select: text;
+}

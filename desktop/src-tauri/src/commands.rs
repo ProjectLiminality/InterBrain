@@ -170,7 +170,14 @@ pub fn get_status(state: State<Arc<AppState>>) -> DaemonStatus {
 
 #[tauri::command]
 pub fn open_vault_in_obsidian(vault_path: String) -> Result<(), String> {
-    let url = format!("obsidian://open?path={}", urlencoding::encode(&vault_path));
+    // Obsidian's URL handler resolves vaults by NAME, not path. Vault name
+    // = basename of the path. The vault must already be registered with
+    // Obsidian (which create_vault / install_plugin_into_vault arranges).
+    let vault_name = std::path::Path::new(&vault_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("invalid vault path: {vault_path}"))?;
+    let url = format!("obsidian://open?vault={}", urlencoding::encode(vault_name));
     crate::open_external(&url).map_err(|e| e.to_string())
 }
 

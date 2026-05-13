@@ -265,7 +265,12 @@ pub fn run() {
                         .first()
                         .cloned();
                     if let Some(v) = first_vault {
-                        let url = format!("obsidian://open?path={}", urlencoding::encode(&v.path));
+                        // Obsidian's URL handler resolves vaults by NAME, not path.
+                        let vault_name = std::path::Path::new(&v.path)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(&v.path);
+                        let url = format!("obsidian://open?vault={}", urlencoding::encode(vault_name));
                         let _ = open_external(&url);
                     }
                 }
