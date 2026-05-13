@@ -225,13 +225,40 @@ fn parse_interbrain_url(raw: &str) -> Result<ParsedUrl> {
 ///
 /// Returns hints in the order git printed the remotes, deduplicated by
 /// owner.
+///
+/// Implementation note: git invokes the remote helper with cwd set to the
+/// SUBMODULE's pre-clone directory (not the parent's toplevel). So plain
+/// `git remote -v` returns nothing — there's no git dir at cwd. We need
+/// to walk up to find the parent's `.git` and run from there.
 fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
+    let parent_repo = match find_parent_repo() {
+        Some(p) => p,
+        None => {
+            eprintln!("git-remote-interbrain: could not locate parent repo for transitivity");
+            return Vec::new();
+        }
+    };
+    eprintln!(
+        "git-remote-interbrain: deriving transitive hints from parent {}",
+        parent_repo.display()
+    );
     let out = match std::process::Command::new("git")
+        .current_dir(&parent_repo)
         .args(["remote", "-v"])
         .output()
     {
         Ok(o) if o.status.success() => o,
-        _ => return Vec::new(),
+        Ok(o) => {
+            eprintln!(
+                "git-remote-interbrain: git remote -v in parent failed: {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            );
+            return Vec::new();
+        }
+        Err(e) => {
+            eprintln!("git-remote-interbrain: git spawn failed: {e}");
+            return Vec::new();
+        }
     };
     let text = String::from_utf8_lossy(&out.stdout);
 
@@ -261,6 +288,30 @@ fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
         hints.push(format!("{owner}/{remote_name}"));
     }
     hints
+}
+
+/// Walk up from cwd looking for a `.git` directory (or file, for submodule
+/// gitdirs). Returns the path of the containing repo, or None if we're
+/// outside any repo.
+///
+/// Submodule pre-clone dirs typically look like:
+///   /vault/Parent/SubmoduleName/   (empty, not yet a repo)
+/// Parent typically has `.git/` one level up.
+fn find_parent_repo() -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut here = cwd.as_path();
+    // First skip the cwd itself — if cwd happens to be a git repo it'd be the
+    // wrong one (it'd be the submodule we're trying to clone INTO, but only
+    // if init has already partially run; for clean clones cwd has no .git).
+    // Walk strictly upward.
+    while let Some(parent) = here.parent() {
+        let dot_git = parent.join(".git");
+        if dot_git.exists() {
+            return Some(parent.to_path_buf());
+        }
+        here = parent;
+    }
+    None
 }
 
 fn resolve_locally(uuid: &str) -> Result<Option<String>> {
