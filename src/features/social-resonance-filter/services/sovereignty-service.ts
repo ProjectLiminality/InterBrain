@@ -119,10 +119,16 @@ export class SovereigntyService {
 
     const transportUrl = `interbrain://${udd.uuid}?peer=${parsed.owner}/${parsed.repo}`;
     // Clickable Obsidian-protocol invite that the URI handler already
-    // understands (routes to cloneFromGitHub).
+    // understands (routes to cloneFromGitHub). We pass senderName AND
+    // senderDid (both set to the gh username) so the URI handler's
+    // existing collaboration handshake fires and creates a Dreamer node
+    // for the sender on the recipient's side. Under rc.21, the gh
+    // username is the canonical peer identity and replaces the legacy
+    // did:key string in `.udd.did`.
     let inviteUrl = `obsidian://interbrain-clone?ids=github.com/${parsed.owner}/${parsed.repo}`;
     if (senderName) {
       inviteUrl += `&senderName=${encodeURIComponent(senderName)}`;
+      inviteUrl += `&senderDid=${encodeURIComponent(senderName)}`;
     }
     return { inviteUrl, githubUrl: originUrl, transportUrl };
   }
