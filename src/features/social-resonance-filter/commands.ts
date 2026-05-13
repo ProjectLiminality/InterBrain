@@ -365,55 +365,70 @@ export function registerRadicleCommands(
     }
   });
 
-  // Push current DreamNode to network (Intelligent: Radicle → GitHub → Other)
+  // Share Changes — push current DreamNode to the user's GitHub outbox.
+  // Creates the outbox on first use; otherwise just pushes.
   plugin.addCommand({
     id: 'push-to-network',
-    name: 'Push Current DreamNode to Network',
+    name: 'Share Changes (push to your GitHub outbox)',
     callback: async () => {
       const store = useInterBrainStore.getState();
       const selectedNode = store.selectedNode;
-
       if (!selectedNode) {
         new Notice('No DreamNode selected');
         return;
       }
 
-      new Notice(`Detecting available remote for ${selectedNode.name}...`);
+      const vaultPath = getVaultPath(plugin);
+      const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
 
+      const notice = new Notice(`Sharing ${selectedNode.name}…`, 0);
       try {
-        const { GitSyncService } = await import('./services/git-sync-service');
-        const gitSyncService = new GitSyncService(plugin.app);
-
-        // Get Radicle passphrase from settings for automatic node start
-        const passphrase = await passphraseManager.getPassphrase();
-        if (passphrase === null) return;
-
-        const result = await gitSyncService.pushToAvailableRemote(selectedNode.repoPath, passphrase || undefined);
-
-        // Show success with remote type
-        const remoteTypeLabel =
-          result.type === 'dual' ? 'Radicle + GitHub' :
-          result.type === 'radicle' ? 'Radicle' :
-          result.type === 'github' ? 'GitHub' :
-          'remote';
-        new Notice(`Pushed ${selectedNode.name} to ${remoteTypeLabel}!`);
-
-        // After successful push, ignite coherence beacons for submodules
-        // This creates beacon commits in sovereign repos signaling the relationship
-        try {
-          const beaconResults = await plugin.coherenceBeaconService.igniteBeacons(selectedNode.repoPath);
-
-          const created = beaconResults.filter(r => r.status === 'created').length;
-          if (created > 0) {
-            new Notice(`Shared relationship to ${created} DreamNode${created > 1 ? 's' : ''}`);
-          }
-        } catch (beaconError) {
-          // Beacon ignition is secondary - don't fail the entire push
-          console.error('[RadicleCommands] Beacon ignition failed:', beaconError);
+        const { getSovereigntyService } = await import('./services/sovereignty-service');
+        const sovereignty = getSovereigntyService();
+        const result = await sovereignty.shareChanges(fullRepoPath, selectedNode.name);
+        notice.hide();
+        if (result.createdOutbox) {
+          new Notice(`Created outbox + pushed ${selectedNode.name}`);
+        } else {
+          new Notice(`Pushed ${selectedNode.name}`);
         }
       } catch (error) {
-        console.error('[RadicleCommands] Push failed:', error);
-        new Notice(`Failed to push: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        notice.hide();
+        console.error('[ShareChanges] Failed:', error);
+        new Notice(`Share failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  });
+
+  // Invite Collaborators — generate an interbrain://<uuid>?peer=<owner>/<repo>
+  // URL pointing at the user's outbox, and copy it to the clipboard.
+  plugin.addCommand({
+    id: 'invite-collaborators',
+    name: 'Invite Collaborators (copy interbrain:// link)',
+    callback: async () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+      if (!selectedNode) {
+        new Notice('No DreamNode selected');
+        return;
+      }
+
+      const vaultPath = getVaultPath(plugin);
+      const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+
+      const notice = new Notice('Preparing invite…', 0);
+      try {
+        const { getSovereigntyService } = await import('./services/sovereignty-service');
+        const sovereignty = getSovereigntyService();
+        const sender = await sovereignty.getCurrentUser().catch(() => undefined);
+        const { inviteUrl } = await sovereignty.buildInvite(fullRepoPath, selectedNode.name, sender);
+        await navigator.clipboard.writeText(inviteUrl);
+        notice.hide();
+        new Notice(`Invite copied to clipboard`);
+      } catch (error) {
+        notice.hide();
+        console.error('[InviteCollaborators] Failed:', error);
+        new Notice(`Invite failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   });

@@ -320,6 +320,14 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     }
   },
   {
+    id: 'invite-collaborators',
+    iconName: 'lucide-link-2',
+    commandId: 'interbrain:invite-collaborators',
+    label: 'Invite Collaborators',
+    // Hide for InterBrain system node
+    shouldShow: (node) => node?.id !== INTERBRAIN_UUID
+  },
+  {
     id: 'check-updates',
     iconName: 'lucide-refresh-cw',
     commandId: 'interbrain:preview-updates', // Production update preview
