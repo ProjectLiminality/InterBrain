@@ -44,6 +44,16 @@ fn run() -> Result<()> {
     // Resolve via daemon — local first, then peer's GitHub repo.
     let local_path = resolve_locally(&parsed.uuid)?;
 
+    // If local resolve failed, we need to delegate to git-remote-https.
+    // Do this BEFORE entering the helper protocol loop — once we start
+    // responding to git's `capabilities` / `connect` commands, git
+    // commits to talking to *us* and won't restart the conversation
+    // with the helper we exec'd. The only way to delegate cleanly is to
+    // replace ourselves with git-remote-https before reading any stdin.
+    if local_path.is_none() {
+        return delegate_to_https(&args, &parsed);
+    }
+
     let stdin = std::io::stdin();
     let mut stdin_reader = BufReader::new(stdin.lock());
     let stdout = std::io::stdout();
@@ -72,121 +82,26 @@ fn run() -> Result<()> {
                 bail!("unsupported service: {service}");
             }
 
-            if let Some(path) = local_path.as_ref() {
-                // Acknowledge connect (empty line per protocol), then exec
-                // the git service against the local path with stdin/stdout
-                // inherited.
-                writeln!(stdout_writer)?;
-                stdout_writer.flush()?;
-
-                let status = Command::new(service)
-                    .arg(path)
-                    .stdin(Stdio::inherit())
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit())
-                    .status()
-                    .with_context(|| format!("spawn {service}"))?;
-                if !status.success() {
-                    bail!("{service} exited {status}");
-                }
-                return Ok(());
-            }
-
-            // Local resolve failed → resolve to a GitHub URL via the daemon
-            // and delegate to git's native HTTPS helper (`git-remote-https`).
-            //
-            // Peer-hint format is `<github-username>/<repo-name>`, which the
-            // daemon translates to `https://github.com/<that>`. The UUID is
-            // verified after clone via the .udd file.
-            let port = read_daemon_port()?;
-
-            // Build the candidate peer-hint list. Start with explicit hints
-            // from the URL (`?peer=<owner>/<repo>`); fall back to deriving
-            // hints from EVERY GitHub remote on the parent repo (origin +
-            // each peer remote). The submodule name git hands us is the
-            // path basename from `.gitmodules` — same name across all
-            // peers' outboxes under the rc.21 naming convention. We try
-            // them in declaration order; first success wins.
-            let mut hints: Vec<String> = parsed.peer_hints.clone();
-            if hints.is_empty() {
-                // Determine the submodule's repo name. Git passes `origin`
-                // as args[1] for submodule clones — useless. Look up the
-                // UUID in the parent repo's `.gitmodules` to find the
-                // actual submodule path/name (e.g., "Circle"), which by
-                // convention matches the repo name on each peer's outbox.
-                let submodule_name = lookup_submodule_name(&parsed.uuid)
-                    .unwrap_or_else(|| {
-                        eprintln!(
-                            "git-remote-interbrain: could not find submodule name in .gitmodules; falling back to args[1]={}",
-                            &args[1]
-                        );
-                        args[1].clone()
-                    });
-                eprintln!("git-remote-interbrain: submodule name resolved to: {submodule_name}");
-                for transitive in derive_transitive_peer_hints(&submodule_name) {
-                    eprintln!(
-                        "git-remote-interbrain: trying transitive hint: {transitive}"
-                    );
-                    hints.push(transitive);
-                }
-            }
-            if hints.is_empty() {
-                bail!(
-                    "uuid {} not found locally and url has no peer hints (parent-origin transitivity didn't resolve either) — cannot resolve",
-                    parsed.uuid
-                );
-            }
-            let mut last_err: Option<String> = None;
-            let mut resolved_url: Option<String> = None;
-            for peer in &hints {
-                let payload = serde_json::json!({
-                    "uuid": parsed.uuid,
-                    "peer": peer,
-                });
-                match call_daemon(port, "resolve-peer-url", payload) {
-                    Ok(resp) => {
-                        if let Some(u) = resp.get("url").and_then(|v| v.as_str()) {
-                            resolved_url = Some(u.to_string());
-                            break;
-                        }
-                        last_err = Some(format!("response missing url: {resp}"));
-                    }
-                    Err(e) => {
-                        last_err = Some(format!("peer {peer}: {e}"));
-                    }
-                }
-            }
-            let url = resolved_url.ok_or_else(|| {
-                anyhow!(
-                    "could not resolve uuid {} via any peer: {}",
-                    parsed.uuid,
-                    last_err.unwrap_or_else(|| "unknown".into())
-                )
-            })?;
-
-            // Acknowledge connect to git, then delegate to git-remote-https.
-            // git's native HTTPS helper handles auth via the configured
-            // credential helper (gh CLI sets up `osxkeychain` / `manager` /
-            // `cache` depending on platform after `gh auth login`).
+            // Local path resolved → acknowledge connect, exec the git
+            // service (upload-pack/receive-pack) against the local path.
+            // This continues the protocol git already started talking
+            // with us. (The GitHub-delegation case was handled before
+            // entering this loop.)
+            let path = local_path
+                .as_ref()
+                .expect("local_path must be Some by this point — None case branched above");
             writeln!(stdout_writer)?;
             stdout_writer.flush()?;
-            drop(stdin_reader);
-            drop(stdout_writer);
 
-            // Re-issue the connect handshake against the HTTPS URL by exec'ing
-            // git-remote-https with the resolved URL. Git's stdio is inherited;
-            // the HTTPS helper picks up where we left off.
-            let status = Command::new("git")
-                .arg("remote-https")
-                .arg(&args[1]) // remote name
-                .arg(&url)
+            let status = Command::new(service)
+                .arg(path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .status()
-                .with_context(|| format!("exec git remote-https {url}"))?;
+                .with_context(|| format!("spawn {service}"))?;
             if !status.success() {
-                bail!("git remote-https exited {status}");
+                bail!("{service} exited {status}");
             }
             return Ok(());
         }
@@ -319,6 +234,90 @@ fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
         hints.push(format!("{owner}/{remote_name}"));
     }
     hints
+}
+
+/// Resolve the UUID to a GitHub HTTPS URL via the daemon, then replace
+/// ourselves with `git remote-https <remote-name> <https-url>`. Git
+/// invoked us; from git's perspective we vanish and git-remote-https
+/// takes over the helper protocol from scratch — clean handshake, no
+/// risk of stdin/stdout deadlock from us having half-consumed the
+/// conversation.
+fn delegate_to_https(args: &[String], parsed: &ParsedUrl) -> Result<()> {
+    let port = read_daemon_port()?;
+
+    // Build the candidate peer-hint list. Start with explicit hints from
+    // the URL (`?peer=<owner>/<repo>`); fall back to transitivity from
+    // every GitHub remote on the parent repo.
+    let mut hints: Vec<String> = parsed.peer_hints.clone();
+    if hints.is_empty() {
+        let submodule_name = lookup_submodule_name(&parsed.uuid).unwrap_or_else(|| {
+            eprintln!(
+                "git-remote-interbrain: could not find submodule name in .gitmodules; falling back to args[1]={}",
+                &args[1]
+            );
+            args[1].clone()
+        });
+        eprintln!("git-remote-interbrain: submodule name resolved to: {submodule_name}");
+        for transitive in derive_transitive_peer_hints(&submodule_name) {
+            eprintln!("git-remote-interbrain: trying transitive hint: {transitive}");
+            hints.push(transitive);
+        }
+    }
+    if hints.is_empty() {
+        bail!(
+            "uuid {} not found locally and no peer hints (explicit or transitive) — cannot resolve",
+            parsed.uuid
+        );
+    }
+
+    // Ask the daemon to verify each hint resolves to a reachable GitHub
+    // repo. First success wins.
+    let mut last_err: Option<String> = None;
+    let mut resolved_url: Option<String> = None;
+    for peer in &hints {
+        let payload = serde_json::json!({ "uuid": parsed.uuid, "peer": peer });
+        match call_daemon(port, "resolve-peer-url", payload) {
+            Ok(resp) => {
+                if let Some(u) = resp.get("url").and_then(|v| v.as_str()) {
+                    resolved_url = Some(u.to_string());
+                    break;
+                }
+                last_err = Some(format!("response missing url: {resp}"));
+            }
+            Err(e) => last_err = Some(format!("peer {peer}: {e}")),
+        }
+    }
+    let url = resolved_url.ok_or_else(|| {
+        anyhow!(
+            "could not resolve uuid {} via any peer: {}",
+            parsed.uuid,
+            last_err.unwrap_or_else(|| "unknown".into())
+        )
+    })?;
+
+    eprintln!("git-remote-interbrain: delegating to git-remote-https with url: {url}");
+
+    // Replace ourselves with git-remote-https. Git's stdin/stdout/stderr
+    // are inherited; the HTTPS helper starts a fresh helper-protocol
+    // conversation with git from the top (capabilities, list, fetch, ...).
+    //
+    // On Unix we'd `exec` for true PID replacement. On Windows there's
+    // no exec; we spawn and wait, then propagate exit status. Either way
+    // we MUST NOT touch our own stdin or write to stdout — git's bytes
+    // need to flow uninterrupted to/from git-remote-https.
+    let status = Command::new("git")
+        .arg("remote-https")
+        .arg(&args[1])
+        .arg(&url)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| format!("exec git remote-https {url}"))?;
+    if !status.success() {
+        bail!("git remote-https exited {status}");
+    }
+    Ok(())
 }
 
 /// Find the submodule name in the parent's `.gitmodules` whose URL matches
