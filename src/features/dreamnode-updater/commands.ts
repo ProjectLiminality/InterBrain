@@ -87,7 +87,10 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       const parentPath = path.join(vaultPath, selectedNode.repoPath);
 
       try {
-        // Check root repo for updates
+        // Fetch from all peer remotes so the modal can show whatever lives
+        // there — both pending commits and ones the user has previously
+        // accepted/rejected (filtered out by getPendingCommits but visible
+        // in the modal's "already processed" tab).
         const fetchResult = await gitSyncService.fetchUpdates(selectedNode.repoPath);
         if (fetchResult.hasUpdates) {
           store.setNodeUpdateStatus(selectedNode.id, fetchResult);
@@ -95,62 +98,22 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
           store.clearNodeUpdateStatus(selectedNode.id);
         }
 
-        // Check submodules for updates from their standalone repos
+        // Best-effort submodule fetch — doesn't gate modal opening either.
         submoduleUpdates = await checkSubmoduleUpdatesFromNetwork(parentPath, vaultPath);
-
       } catch (error) {
-        console.error('[UpdatePreview] Fetch failed:', error);
-        fetchNotice.hide();
-        uiService.showError('Failed to check for updates');
-        return;
+        // Fetch failures are non-fatal: the modal still opens and shows
+        // whatever was reachable. Surface the error inline rather than
+        // aborting the whole flow.
+        console.warn('[UpdatePreview] Fetch had issues (continuing):', error);
       }
       fetchNotice.hide();
+      // Silence "unused variable" — kept for the existing telemetry trail
+      // until the unified scanner replaces this command.
+      void submoduleUpdates;
 
-      const updateStatus = store.getNodeUpdateStatus(selectedNode.id);
-
-      // Check if EITHER root has updates OR submodules have updates
-      const hasRootUpdates = updateStatus && updateStatus.hasUpdates;
-      const hasSubmoduleUpdates = submoduleUpdates && submoduleUpdates.length > 0;
-
-      if (!hasRootUpdates && !hasSubmoduleUpdates) {
-        uiService.showInfo(`${selectedNode.name} is up to date`);
-        return;
-      }
-
-      // If only submodules have updates (no root updates), show simple dialog
-      if (!hasRootUpdates && hasSubmoduleUpdates) {
-        const submoduleList = submoduleUpdates.map(s => `  - ${s.name}: ${s.commitsAhead} commit(s)`).join('\n');
-        const confirmed = await uiService.showConfirmDialog(
-          'Submodule Updates Available',
-          `${selectedNode.name} has no direct updates, but these submodules have updates:\n\n${submoduleList}\n\nUpdate submodules now?`,
-          'Update Submodules',
-          'Cancel'
-        );
-
-        if (confirmed) {
-          const updateNotice = uiService.showLoading('Updating submodules...');
-          try {
-            const result = await updateSubmodulesFromStandalone(parentPath, vaultPath, submoduleUpdates);
-            updateNotice.hide();
-
-            if (result.success) {
-              uiService.showSuccess(`Updated ${result.updated.length} submodule(s)`);
-              // Trigger vault rescan to update UI
-              const { serviceManager } = await import('../../core/services/service-manager');
-              await serviceManager.scanVault();
-            } else {
-              uiService.showError(`Updated ${result.updated.length}, failed: ${result.failed.join(', ')}`);
-            }
-          } catch (error) {
-            updateNotice.hide();
-            console.error('[UpdatePreview] Submodule update failed:', error);
-            uiService.showError('Failed to update submodules');
-          }
-        }
-        return;
-      }
-
-      // DreamNode: Cherry-pick workflow with commit selection
+      // Cherry-pick workflow with commit selection. Always open the modal
+      // — when there's nothing to do it still surfaces previously accepted
+      // / rejected commits so the user can revisit them.
       initializeCherryPickWorkflowService(plugin.app);
 
       // Get peer remotes from the repo
@@ -179,19 +142,15 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
         }];
       }
 
-      // Use getPendingCommits to filter out already accepted/rejected commits
+      // Use getPendingCommits to filter out already accepted/rejected commits.
+      // Even when this returns no pending groups we still open the modal —
+      // it exposes the rejected commits tab so the user can undo a past
+      // rejection if they change their mind.
       const peerGroups = await workflowService.getPendingCommits(
         selectedNode.repoPath,
         selectedNode.id,
         peers
       );
-
-      // If no pending commits after filtering, show up-to-date message
-      const totalPending = peerGroups.reduce((sum, g) => sum + g.commits.length, 0);
-      if (totalPending === 0) {
-        uiService.showInfo(`${selectedNode.name} is up to date (all commits already processed)`);
-        return;
-      }
 
       const config: CherryPickPreviewConfig = {
         dreamNodePath: selectedNode.repoPath,
