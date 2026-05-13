@@ -27,6 +27,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 pub enum Dependency {
     Git,
     Obsidian,
+    Gh,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,6 +50,7 @@ impl InstallContext {
         let dep_str = match dep {
             Dependency::Git => "git",
             Dependency::Obsidian => "obsidian",
+            Dependency::Gh => "gh",
         };
         let payload = InstallProgress {
             dependency: dep_str.to_string(),
@@ -125,6 +127,16 @@ async fn install_macos(dep: Dependency, ctx: &InstallContext) -> Result<(), Stri
                 return Err(format!("brew install --cask obsidian: {e}"));
             }
         }
+        Dependency::Gh => {
+            ctx.report(dep, "installing", "Installing GitHub CLI via Homebrew…", None);
+            if let Err(e) = run_capture(&brew_str, &["install", "gh"]).await {
+                if e.to_lowercase().contains("already installed") {
+                    ctx.report(dep, "done", "Already installed", Some(1.0));
+                    return Ok(());
+                }
+                return Err(format!("brew install gh: {e}"));
+            }
+        }
     }
 
     ctx.report(dep, "done", "Installed", Some(1.0));
@@ -186,10 +198,12 @@ async fn install_windows(dep: Dependency, ctx: &InstallContext) -> Result<(), St
     let pkg = match dep {
         Dependency::Git => "Git.Git",
         Dependency::Obsidian => "Obsidian.Obsidian",
+        Dependency::Gh => "GitHub.cli",
     };
     let label = match dep {
         Dependency::Git => "git",
         Dependency::Obsidian => "Obsidian",
+        Dependency::Gh => "GitHub CLI",
     };
     ctx.report(dep, "downloading", &format!("Downloading {label}…"), None);
 
@@ -292,6 +306,26 @@ async fn install_linux(dep: Dependency, ctx: &InstallContext) -> Result<(), Stri
             // place in ~/Applications. No package manager dependency.
             ctx.report(dep, "installing", "Downloading Obsidian AppImage", None);
             install_obsidian_appimage().await?;
+        }
+        Dependency::Gh => {
+            ctx.report(dep, "installing", &format!("Installing gh via {distro:?}"), None);
+            match distro {
+                LinuxDistro::DebianFamily => {
+                    run_capture_sudo("apt-get", &["install", "-y", "gh"]).await
+                        .map_err(|e| format!("apt-get install gh: {e}"))?;
+                }
+                LinuxDistro::Fedora => {
+                    run_capture_sudo("dnf", &["install", "-y", "gh"]).await
+                        .map_err(|e| format!("dnf install gh: {e}"))?;
+                }
+                LinuxDistro::Arch => {
+                    run_capture_sudo("pacman", &["-S", "--noconfirm", "github-cli"]).await
+                        .map_err(|e| format!("pacman install github-cli: {e}"))?;
+                }
+                LinuxDistro::Unknown => {
+                    return Err("Unknown Linux distro — install gh manually from https://cli.github.com/".into());
+                }
+            }
         }
     }
 

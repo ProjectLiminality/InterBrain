@@ -1,8 +1,9 @@
-//! Prerequisite detection: Obsidian + git.
+//! Prerequisite detection: Obsidian + git + GitHub CLI.
 //!
-//! Both must be installed before InterBrain can do anything useful. Neither
-//! ships inside the bundle (Obsidian for license/size; git because it's
-//! universally available via OS-native installers). The daemon detects what's
+//! All three must be installed before InterBrain can do anything useful. None
+//! ship inside the bundle (Obsidian for license/size; git because it's
+//! universally available via OS-native installers; gh because it owns its
+//! own credential keystore on each platform). The daemon detects what's
 //! missing and points the user at the right install path per platform.
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ use std::path::{Path, PathBuf};
 pub struct PrerequisiteStatus {
     pub obsidian: DependencyStatus,
     pub git: DependencyStatus,
+    pub gh: DependencyStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +34,7 @@ pub fn detect() -> PrerequisiteStatus {
     PrerequisiteStatus {
         obsidian: detect_obsidian(),
         git: detect_git(),
+        gh: detect_gh(),
     }
 }
 
@@ -110,6 +113,63 @@ fn detect_git() -> DependencyStatus {
         (
             Some("https://git-scm.com/download/linux".to_string()),
             Some("sudo apt-get install -y git".to_string()),
+        )
+    };
+
+    DependencyStatus {
+        installed: false,
+        detail: None,
+        install_url: url,
+        install_command: cmd,
+    }
+}
+
+fn detect_gh() -> DependencyStatus {
+    // Try common install locations first (some Windows installs leave gh off
+    // PATH for non-interactive shells), then fall back to PATH.
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if cfg!(target_os = "windows") {
+        candidates.push(PathBuf::from("C:\\Program Files\\GitHub CLI\\gh.exe"));
+        candidates.push(PathBuf::from("C:\\Program Files (x86)\\GitHub CLI\\gh.exe"));
+        if let Some(local) = dirs::data_local_dir() {
+            candidates.push(local.join("Programs\\GitHub CLI\\gh.exe"));
+        }
+    } else if cfg!(target_os = "macos") {
+        candidates.push(PathBuf::from("/opt/homebrew/bin/gh"));
+        candidates.push(PathBuf::from("/usr/local/bin/gh"));
+    }
+
+    let resolved = candidates.into_iter()
+        .find(|p| p.exists())
+        .or_else(|| which::which("gh").ok());
+
+    if let Some(p) = resolved {
+        let version = std::process::Command::new(&p)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|o| if o.status.success() {
+                String::from_utf8_lossy(&o.stdout).lines().next().map(|s| s.to_string())
+            } else { None });
+        return DependencyStatus {
+            installed: true,
+            detail: version,
+            install_url: None,
+            install_command: None,
+        };
+    }
+
+    let (url, cmd) = if cfg!(target_os = "macos") {
+        (
+            Some("https://cli.github.com/".to_string()),
+            Some("brew install gh".to_string()),
+        )
+    } else if cfg!(target_os = "windows") {
+        (Some("https://cli.github.com/".to_string()), None)
+    } else {
+        (
+            Some("https://cli.github.com/".to_string()),
+            Some("sudo apt-get install -y gh".to_string()),
         )
     };
 

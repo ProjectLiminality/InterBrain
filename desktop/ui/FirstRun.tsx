@@ -16,6 +16,7 @@ interface DependencyStatus {
 interface PrerequisiteStatus {
   obsidian: DependencyStatus;
   git: DependencyStatus;
+  gh: DependencyStatus;
 }
 
 interface GhStatus {
@@ -252,7 +253,7 @@ function NavBar({
   );
 }
 
-type DepKey = 'obsidian' | 'git';
+type DepKey = 'obsidian' | 'git' | 'gh';
 
 interface InstallProgressPayload {
   requestId: string;
@@ -278,6 +279,7 @@ function PrereqsStep({
   const [state, setState] = useState<Record<DepKey, DepState>>({
     obsidian: { installing: false, message: null, error: null },
     git: { installing: false, message: null, error: null },
+    gh: { installing: false, message: null, error: null },
   });
   const [orchestrating, setOrchestrating] = useState(false);
   const [overallError, setOverallError] = useState<string | null>(null);
@@ -330,19 +332,24 @@ function PrereqsStep({
     logEvent('info', 'first-run.prereqs', 'install-and-continue clicked', {
       gitInstalled: status?.git.installed,
       obsidianInstalled: status?.obsidian.installed,
+      ghInstalled: status?.gh.installed,
     });
     try {
-      // Install in a fixed sequence — git first (smaller, faster, validates
-      // the package-manager path), Obsidian second.
+      // Install in a fixed sequence — git first (smallest, validates the
+      // package-manager path), gh second, Obsidian last (biggest download).
       if (status && !status.git.installed) {
         await installOne('git');
+        await onRefresh();
+      }
+      if (status && !status.gh.installed) {
+        await installOne('gh');
         await onRefresh();
       }
       if (status && !status.obsidian.installed) {
         await installOne('obsidian');
         await onRefresh();
       }
-      // Final re-detect after everything to confirm both are now visible.
+      // Final re-detect after everything to confirm all three are visible.
       await onRefresh();
       logEvent('info', 'first-run.prereqs', 'install-and-continue succeeded');
       onContinue();
@@ -359,7 +366,7 @@ function PrereqsStep({
     return <p className="step-body">Checking prerequisites…</p>;
   }
 
-  const allReady = status.obsidian.installed && status.git.installed;
+  const allReady = status.obsidian.installed && status.git.installed && status.gh.installed;
   const buttonLabel = orchestrating
     ? 'Installing…'
     : overallError
@@ -380,12 +387,13 @@ function PrereqsStep({
     <>
       <h2>Prerequisites</h2>
       <p className="step-body">
-        InterBrain needs Obsidian and git. {allReady
-          ? "Both are already installed — you're good to go."
+        InterBrain needs Obsidian, git, and the GitHub CLI. {allReady
+          ? "All three are already installed — you're good to go."
           : 'Click below to install whatever is missing — we handle the rest in the background.'}
       </p>
       <ul className="install-checklist" style={{ maxWidth: 460 }}>
         <DependencyRow name="git" dep={status.git} state={state.git} />
+        <DependencyRow name="GitHub CLI" dep={status.gh} state={state.gh} />
         <DependencyRow name="Obsidian" dep={status.obsidian} state={state.obsidian} />
       </ul>
       {overallError && (
@@ -518,15 +526,13 @@ function GitHubIdentityStep({ state, setState, error, onError, onContinue }: Git
   if (state.kind === 'not-installed') {
     return (
       <>
-        <h2>GitHub CLI required</h2>
+        <h2>GitHub CLI missing</h2>
         <p className="step-body">
-          InterBrain uses your GitHub account to host and share your DreamNodes
-          (each DreamNode lives in a private GitHub repo on your account).
-          You'll need the <code>gh</code> command-line tool installed.
-        </p>
-        <p className="step-body">
-          Install it from <a href="https://cli.github.com" target="_blank" rel="noreferrer">cli.github.com</a>,
-          then come back to this step.
+          The <code>gh</code> command-line tool isn't visible on PATH. It
+          should have been installed in the previous step — go back and
+          re-run prerequisites, or install manually from{' '}
+          <a href="https://cli.github.com" target="_blank" rel="noreferrer">cli.github.com</a>{' '}
+          and return here.
         </p>
       </>
     );

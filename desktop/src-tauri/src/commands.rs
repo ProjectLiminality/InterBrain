@@ -377,6 +377,7 @@ pub async fn install_prerequisite(
     let dep = match dependency.as_str() {
         "git" => crate::installer::Dependency::Git,
         "obsidian" => crate::installer::Dependency::Obsidian,
+        "gh" => crate::installer::Dependency::Gh,
         other => return Err(format!("unknown dependency: {other}")),
     };
     let bus = std::sync::Arc::new(state.event_bus.clone());
