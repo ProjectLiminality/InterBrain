@@ -705,65 +705,101 @@ export class CherryPickPreviewModal extends Modal {
     const clonedRepos: string[] = [];
 
     try {
-      const adapter = this.app.vault.adapter as any;
+      const adapter = this.app.vault.adapter as { basePath?: string };
       const vaultPath = adapter.basePath || '';
       const path = require('path');
       const fs = require('fs').promises;
 
-      // Read the .udd file to get submodule Radicle IDs
-      const uddPath = path.join(vaultPath, repoName, '.udd');
-      let uddContent: string;
+      // rc.21: read submodules from .gitmodules (URL-based) rather than
+      // the legacy .udd.submodules array (which held Radicle IDs). Each
+      // entry's URL is `interbrain://<uuid>`; the submodule's path under
+      // the parent doubles as its sovereign repo name at the vault root.
+      const gitmodulesPath = path.join(vaultPath, repoName, '.gitmodules');
+      let gitmodulesContent: string;
       try {
-        uddContent = await fs.readFile(uddPath, 'utf-8');
+        gitmodulesContent = await fs.readFile(gitmodulesPath, 'utf-8');
       } catch {
-        console.log(`[BeaconPreview] No .udd file found for ${repoName}, skipping submodule scan`);
+        console.log(`[BeaconPreview] No .gitmodules in ${repoName}, skipping submodule scan`);
         return clonedRepos;
       }
 
-      const udd = JSON.parse(uddContent);
-      const submoduleIds: string[] = udd.submodules || [];
+      // Parse `[submodule "Name"]` blocks. We need both `path` and `url`.
+      type ParsedSub = { name: string; path: string; uuid: string };
+      const submodules: ParsedSub[] = [];
+      const sectionRegex = /\[submodule "([^"]+)"\]([\s\S]*?)(?=\n\[|$)/g;
+      let m: RegExpExecArray | null;
+      while ((m = sectionRegex.exec(gitmodulesContent)) !== null) {
+        const name = m[1];
+        const body = m[2];
+        const pathMatch = body.match(/^\s*path\s*=\s*(.+)$/m);
+        const urlMatch = body.match(/^\s*url\s*=\s*interbrain:\/\/([0-9a-fA-F-]+)/m);
+        if (pathMatch && urlMatch) {
+          submodules.push({ name, path: pathMatch[1].trim(), uuid: urlMatch[1].trim() });
+        }
+      }
 
-      if (submoduleIds.length === 0) {
-        console.log(`[BeaconPreview] No submodules in ${repoName}`);
+      if (submodules.length === 0) {
+        console.log(`[BeaconPreview] No interbrain:// submodules in ${repoName}/.gitmodules`);
         return clonedRepos;
       }
 
-      console.log(`[BeaconPreview] Found ${submoduleIds.length} submodule(s) in ${repoName}: ${submoduleIds.join(', ')}`);
+      console.log(`[BeaconPreview] Found ${submodules.length} submodule(s) in ${repoName}: ${submodules.map(s => s.name).join(', ')}`);
 
-      // Get existing repos in vault to check what's already there
+      // Existing top-level DreamNodes (by UUID — id === udd.uuid in the store).
       const store = useInterBrainStore.getState();
-      const existingRadicleIds = new Set(
-        Array.from(store.dreamNodes.values())
-          .map(data => data.node.radicleId)
-          .filter(id => id)
+      const existingUuids = new Set(
+        Array.from(store.dreamNodes.values()).map(data => data.node.id)
       );
 
       const uriHandler = getURIHandlerService();
 
-      for (const radicleId of submoduleIds) {
-        // Check if already exists by Radicle ID
-        if (existingRadicleIds.has(radicleId)) {
-          console.log(`[BeaconPreview] Submodule ${radicleId} already exists, skipping`);
+      // Where to fetch this submodule from when the parent's transitivity
+      // would have applied. We mirror the same logic the helper uses:
+      // derive owner from one of the parent's GitHub remotes.
+      const parentFullPath = path.join(vaultPath, repoName);
+      const peerCandidates = await this.deriveOwnersFromGitRemotes(parentFullPath);
+      if (peerCandidates.length === 0) {
+        console.warn(`[BeaconPreview] No GitHub remotes on ${repoName} — can't derive submodule clone sources`);
+        return clonedRepos;
+      }
+
+      for (const sub of submodules) {
+        if (existingUuids.has(sub.uuid)) {
+          console.log(`[BeaconPreview] Submodule "${sub.name}" (uuid=${sub.uuid}) already in vault, skipping sovereign clone`);
           continue;
         }
 
-        // Clone the submodule
-        console.log(`[BeaconPreview] Cloning missing submodule: ${radicleId}`);
-        this.showProcessing(`Cloning submodule...`);
+        // The submodule's repo name on each peer's outbox matches its
+        // .gitmodules name by rc.21 convention (we ship Circle as
+        // <owner>/Circle).
+        let cloned: 'success' | 'skipped' | 'error' = 'error';
+        let actualName = sub.name;
+        for (const owner of peerCandidates) {
+          const repoPath = `${owner}/${sub.name}`;
+          console.log(`[BeaconPreview] Trying sovereign clone: ${repoPath}`);
+          this.showProcessing(`Cloning ${sub.name}…`);
+          try {
+            const status = await uriHandler.cloneFromGitHub(repoPath, true);
+            if (status === 'success' || status === 'skipped') {
+              cloned = status;
+              actualName = sub.name;
+              break;
+            }
+          } catch (cloneError) {
+            console.warn(`[BeaconPreview] cloneFromGitHub(${repoPath}) threw:`, cloneError);
+          }
+        }
 
-        const result = await uriHandler.cloneFromRadicle(radicleId, true); // silent mode
-
-        if (result.status === 'success' && result.repoName) {
-          console.log(`[BeaconPreview] Cloned submodule: ${radicleId} → "${result.repoName}"`);
-          clonedRepos.push(result.repoName);
-
-          // Recursively clone nested submodules
-          const nestedClones = await this.cloneMissingSubmodules(result.repoName);
-          clonedRepos.push(...nestedClones);
-        } else if (result.status === 'skipped') {
-          console.log(`[BeaconPreview] Submodule ${radicleId} already existed as "${result.repoName}"`);
+        if (cloned === 'success') {
+          console.log(`[BeaconPreview] Cloned "${actualName}" sovereign at vault root`);
+          clonedRepos.push(actualName);
+          // Recurse — newly arrived node may have its own submodules.
+          const nested = await this.cloneMissingSubmodules(actualName);
+          clonedRepos.push(...nested);
+        } else if (cloned === 'skipped') {
+          console.log(`[BeaconPreview] Submodule "${actualName}" already cloned at vault root`);
         } else {
-          console.warn(`[BeaconPreview] Failed to clone submodule ${radicleId}`);
+          console.warn(`[BeaconPreview] Failed to sovereign-clone "${sub.name}" from any peer`);
         }
       }
     } catch (error) {
@@ -771,6 +807,35 @@ export class CherryPickPreviewModal extends Modal {
     }
 
     return clonedRepos;
+  }
+
+  /**
+   * Read a git repo's remotes and extract the GitHub owner from each.
+   * Used to figure out where to fetch a sovereign submodule from.
+   */
+  private async deriveOwnersFromGitRemotes(repoPath: string): Promise<string[]> {
+    try {
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      const { stdout } = await execAsync('git remote -v', { cwd: repoPath });
+      const owners: string[] = [];
+      const seen = new Set<string>();
+      for (const line of (stdout as string).split('\n')) {
+        // line: "<name>\t<url> (fetch|push)"
+        const parts = line.split(/\s+/);
+        if (parts.length < 2) continue;
+        const url = parts[1];
+        const m = url.match(/github\.com[/:]([^/]+)\//);
+        if (m && !seen.has(m[1])) {
+          seen.add(m[1]);
+          owners.push(m[1]);
+        }
+      }
+      return owners;
+    } catch {
+      return [];
+    }
   }
 
   /**
