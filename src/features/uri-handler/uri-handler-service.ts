@@ -671,6 +671,23 @@ export class URIHandlerService {
 				console.warn('[URIHandler] submodule init failed (non-fatal):', err);
 			}
 
+			// Apply the sovereignty pattern: rename the just-cloned origin
+			// (which points at the sender's repo) to a peer remote named
+			// after the sender, and create the recipient's own outbox.
+			// This is what makes Bob's local Square become *his* sovereign
+			// copy rather than a read-only fetch of Alice's. Receivers
+			// can then Share Changes — pushing to their own outbox — and
+			// other peers can fetch their version via the rename-derived
+			// peer remote.
+			try {
+				const { getSovereigntyService } = await import('../social-resonance-filter/services/sovereignty-service');
+				const sovereignty = getSovereigntyService();
+				const repoName = repoPath.split('/').pop()?.replace(/\.git$/, '') || 'cloned-node';
+				await sovereignty.shareChanges(destinationPath, repoName);
+			} catch (err) {
+				console.warn('[URIHandler] sovereignty handover failed (non-fatal):', err);
+			}
+
 			// Create .udd file for InterBrain compatibility if the cloned
 			// repo doesn't already have one. NB: we do NOT write
 			// .udd.githubRepoUrl — that field is meant for the OWN outbox
