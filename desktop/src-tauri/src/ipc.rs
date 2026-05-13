@@ -135,10 +135,18 @@ async fn dispatch(state: &Arc<AppState>, app_handle: &AppHandle, msg: Value) -> 
                 .current()
                 .map(|(d, a)| (Some(d), a))
                 .unwrap_or((None, None));
+            // helperDir: the directory containing `git-remote-interbrain`. The
+            // plugin prepends this to its child-process PATH so any `git fetch`
+            // / `git submodule update --init` it runs against an
+            // interbrain://<uuid> URL can find the helper.
+            let helper_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.to_string_lossy().to_string()));
             ok(&id, json!({
                 "daemonVersion": env!("CARGO_PKG_VERSION"),
                 "protocolVersion": 1,
-                "identity": { "did": did, "alias": alias }
+                "identity": { "did": did, "alias": alias },
+                "helperDir": helper_dir
             }))
         }
         "get-settings" => {

@@ -39,10 +39,22 @@ export class BridgeClient {
   private nextId = 1;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectingPromise: Promise<void> | null = null;
+  private _helperDir: string | null = null;
 
   /** True when a live WebSocket is open. */
   isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Directory containing the daemon's `git-remote-interbrain` binary, as
+   * reported in the most recent `hello` handshake. Null until the plugin
+   * has connected at least once. The plugin prepends this to its
+   * child-process PATH so git operations against `interbrain://` URLs can
+   * find the helper.
+   */
+  helperDir(): string | null {
+    return this._helperDir;
   }
 
   /** Subscribe to connect events; fires every time the WS opens (initial + reconnects). */
@@ -95,7 +107,17 @@ export class BridgeClient {
           clearTimeout(timeout);
           this.ws = ws;
           this.attachHandlers(ws);
-          this.fireConnected();
+          // Fire hello to capture helperDir, then announce connection. We
+          // don't await — request() requires isConnected() which is now
+          // true. The result lands asynchronously and any callers that
+          // need helperDir before that should listen to onConnected().
+          this.request('hello', { pluginVersion: '0.16.0' }).then(res => {
+            this._helperDir = (res as { helperDir?: string }).helperDir ?? null;
+            this.fireConnected();
+          }).catch(err => {
+            console.warn('[bridge] hello failed:', err);
+            this.fireConnected();
+          });
           resolve();
         });
         ws.addEventListener('error', err => {

@@ -57,6 +57,13 @@ export interface HelloResponse {
   daemonVersion: string;
   protocolVersion: number;
   identity: { did: string | null; alias: string | null };
+  /**
+   * Absolute path to the directory containing the `git-remote-interbrain`
+   * binary. The plugin prepends this to its child-process PATH so git
+   * operations against `interbrain://<uuid>` URLs can find the helper.
+   * Optional only for backward compatibility with older daemons.
+   */
+  helperDir?: string;
 }
 
 /** `clone` — clone a DreamNode by uuid from a peer. */

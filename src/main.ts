@@ -98,6 +98,7 @@ export default class InterBrainPlugin extends Plugin {
   private leafManagerService!: LeafManagerService;
   private canvasObserverService!: CanvasObserverService;
   private stopSettingsSync?: () => void;
+  private stopHelperPathSync?: () => void;
 
   async onload() {
     // Suppress benign ResizeObserver loop warnings from flooding the console
@@ -408,6 +409,12 @@ export default class InterBrainPlugin extends Plugin {
     // does nothing when the daemon isn't running.
     const { startSettingsSync } = await import('./features/desktop-bridge/settings-sync');
     this.stopSettingsSync = startSettingsSync(this);
+
+    // Prepend daemon's binary dir to PATH so `git-remote-interbrain` is
+    // discoverable by every child-process `git` call the plugin runs. The
+    // daemon advertises its install dir in the `hello` handshake.
+    const { startHelperPathSync } = await import('./features/desktop-bridge/helper-path-sync');
+    this.stopHelperPathSync = startHelperPathSync();
 
     // Register view types
     this.registerView(DREAMSPACE_VIEW_TYPE, (leaf) => new DreamspaceView(leaf));
@@ -1640,6 +1647,9 @@ export default class InterBrainPlugin extends Plugin {
     // Stop daemon settings sync
     if (this.stopSettingsSync) {
       this.stopSettingsSync();
+    }
+    if (this.stopHelperPathSync) {
+      this.stopHelperPathSync();
     }
 
     // Stop canvas observer

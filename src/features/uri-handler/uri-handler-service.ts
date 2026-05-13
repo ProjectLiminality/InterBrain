@@ -657,10 +657,28 @@ export class URIHandlerService {
 			const githubUrl = `https://${repoPath}`;
 			await githubService.clone(githubUrl, destinationPath);
 
-			// Create .udd file for InterBrain compatibility using UDDService
+			// Recursively init submodules. The cloned repo's .gitmodules
+			// likely contains `interbrain://<uuid>` URLs that the daemon's
+			// helper resolves; the helper must be on PATH (see
+			// helper-path-sync.ts). If init fails the parent clone still
+			// succeeded, so we treat it as non-fatal.
+			try {
+				const { exec } = require('child_process');
+				const { promisify } = require('util');
+				const execAsync = promisify(exec);
+				await execAsync('git submodule update --init --recursive', { cwd: destinationPath });
+			} catch (err) {
+				console.warn('[URIHandler] submodule init failed (non-fatal):', err);
+			}
+
+			// Create .udd file for InterBrain compatibility if the cloned
+			// repo doesn't already have one. NB: we do NOT write
+			// .udd.githubRepoUrl — that field is meant for the OWN outbox
+			// (which `origin` represents after SovereigntyService.ensureOwnOutbox
+			// runs). Writing the sender's URL here would mislead later
+			// publish flows into thinking we've already shared this node.
 			try {
 				if (!UDDService.uddExists(destinationPath)) {
-					// Use Web Crypto API for UUID generation (available in Electron)
 					const uuid = globalThis.crypto.randomUUID();
 					const title = await this.normalizeRepoNameToTitle(repoName);
 
@@ -670,11 +688,6 @@ export class URIHandlerService {
 						type: 'dream',
 						dreamTalk: ''
 					});
-
-					// Add GitHub URL to the UDD (createUDD doesn't support this field)
-					const udd = await UDDService.readUDD(destinationPath);
-					(udd as any).githubRepoUrl = githubUrl;
-					await UDDService.writeUDD(destinationPath, udd);
 				}
 			} catch {
 				// Non-critical - clone succeeded
