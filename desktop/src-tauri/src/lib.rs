@@ -211,11 +211,17 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Tiny yield so the platform event loop starts processing.
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                let has_identity = state_for_setup.identity.has_unlocked_identity();
+                // Identity is "is gh CLI authenticated?" Not the legacy
+                // ed25519 keychain entry (which is what `has_unlocked_identity`
+                // would have asked, and which would have triggered a macOS
+                // consent prompt at every relaunch).
+                let gh = github::gh_status();
+                let has_identity = gh.authenticated;
                 let vault_count = state_for_setup.settings.lock().unwrap().vault_registry.len();
                 tracing::info!(
                     target: "startup",
-                    has_unlocked_identity = has_identity,
+                    gh_authenticated = has_identity,
+                    gh_username = gh.username.as_deref().unwrap_or(""),
                     registered_vaults = vault_count,
                     "startup decision"
                 );

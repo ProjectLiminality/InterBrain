@@ -32,8 +32,13 @@ impl AppState {
             .context("app_config_dir")?;
         std::fs::create_dir_all(&config_dir).ok();
 
+        // Identity is now GitHub via gh CLI — see github.rs / GitHubIdentityStep
+        // in FirstRun. The legacy ed25519 IdentityManager is kept only to
+        // satisfy the few remaining `state.identity` lookups; we do NOT call
+        // `try_restore()` because that triggers an OS-keychain consent prompt
+        // on every relaunch (macOS treats each unsigned dev build as a new
+        // application requesting the secret).
         let identity = IdentityManager::new();
-        identity.try_restore();
 
         // Settings load.
         let store = handle.store(SETTINGS_FILENAME).context("open settings store")?;
