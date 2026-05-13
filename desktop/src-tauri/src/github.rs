@@ -203,7 +203,12 @@ pub async fn complete_device_flow(device_code: String, interval: u64) -> Result<
 }
 
 /// Pipe a token into `gh auth login --with-token` so the existing
-/// publishing code paths (which call `gh` directly) pick it up.
+/// publishing code paths (which call `gh` directly) pick it up. Then
+/// also wire git itself to use gh as its credential provider via
+/// `gh auth setup-git` — without this, every HTTPS git operation
+/// (clone, push, fetch from a peer remote) triggers Git Credential
+/// Manager's "Sign in to GitHub" dialog instead of using the token
+/// we just stored.
 fn store_token_in_gh(token: &str) -> Result<()> {
     let mut cmd = Command::new(gh_path());
     cmd.arg("auth")
@@ -226,6 +231,34 @@ fn store_token_in_gh(token: &str) -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         bail!("gh auth login --with-token failed: {}", stderr.trim());
     }
+
+    // Wire git's credential helper to use gh. Best-effort — if it fails
+    // (e.g. git not on PATH yet, or the user runs git with a custom
+    // helper config), publishing still works through `gh` directly and
+    // we'll surface the GCM prompt on the first push. Non-fatal.
+    let mut setup_cmd = Command::new(gh_path());
+    setup_cmd
+        .arg("auth")
+        .arg("setup-git")
+        .arg("--hostname")
+        .arg("github.com");
+    suppress_console_window(&mut setup_cmd);
+    match setup_cmd.output() {
+        Ok(o) if o.status.success() => {
+            tracing::info!(target: "github", "gh auth setup-git: configured git credential helper");
+        }
+        Ok(o) => {
+            tracing::warn!(
+                target: "github",
+                stderr = %String::from_utf8_lossy(&o.stderr).trim(),
+                "gh auth setup-git failed (non-fatal; GCM may still prompt)"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(target: "github", error = %e, "gh auth setup-git spawn failed (non-fatal)");
+        }
+    }
+
     Ok(())
 }
 
