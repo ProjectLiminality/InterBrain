@@ -163,28 +163,63 @@ export class SovereigntyService {
       }
     }
 
-    const newOriginUrl = await this.createOutbox(cwd, repoName);
-    return { originUrl: newOriginUrl, createdOutbox: true };
+    const { originUrl, created } = await this.ensureOutbox(cwd, me, repoName);
+    return { originUrl, createdOutbox: created };
   }
 
-  private async createOutbox(cwd: string, repoName: string): Promise<string> {
+  /**
+   * Ensure a GitHub repo named `<me>/<repoName>` exists and is wired up as
+   * `origin` on the local repo. Idempotent across runs:
+   *   - repo doesn't exist on GitHub → create + push (gh repo create --push)
+   *   - repo exists on GitHub, no origin locally → add origin + push
+   *   - both exist and match → no-op (we shouldn't end up here; caller
+   *     short-circuits when origin already points at me/repo)
+   */
+  private async ensureOutbox(
+    cwd: string,
+    me: string,
+    repoName: string
+  ): Promise<{ originUrl: string; created: boolean }> {
     const gh = await this.detectGhPath();
-    // --push pushes the current branch as part of creation.
+    const expectedUrl = `https://github.com/${me}/${repoName}`;
+
+    // Does the repo already exist on GitHub under this user?
+    let remoteExists = false;
+    try {
+      await execAsync(`"${gh}" repo view ${shellQuote(`${me}/${repoName}`)} --json name`);
+      remoteExists = true;
+    } catch {
+      // Doesn't exist (or no read access) — we'll create it below.
+    }
+
+    if (remoteExists) {
+      // Wire it as origin and push current HEAD. Use git, not gh, so we
+      // don't trigger "repo already exists" from `gh repo create`.
+      await this.ensureRemote(cwd, 'origin', expectedUrl);
+      const branch = await this.currentBranch(cwd);
+      // Push may fail with "Updates were rejected" if the remote has
+      // diverged from local. That's a real conflict the user must resolve
+      // — surface it rather than silently lose.
+      await execAsync(`git push -u origin ${shellQuote(branch)}`, { cwd });
+      return { originUrl: expectedUrl, created: false };
+    }
+
+    // Fresh create. `--push` does the initial push as part of creation.
     const { stdout } = await execAsync(
       `"${gh}" repo create ${shellQuote(repoName)} --public --source=. --remote=origin --push`,
       { cwd }
     );
     const match = stdout.match(/https:\/\/github\.com\/[^\s]+/);
     if (!match) {
-      // Some gh versions only print "✓ Created repository ...".
-      // Fall back to reading origin.
+      // Some gh versions only print "✓ Created repository ..."; fall back
+      // to reading origin (gh sets it as part of --remote=origin).
       const url = await this.tryGetRemoteUrl(cwd, 'origin');
       if (!url) {
         throw new Error('Created repo but could not determine its URL.');
       }
-      return url;
+      return { originUrl: url.replace(/\.git$/, ''), created: true };
     }
-    return match[0].replace(/\.git$/, '');
+    return { originUrl: match[0].replace(/\.git$/, ''), created: true };
   }
 
   private async ensureRemote(cwd: string, name: string, url: string): Promise<void> {
