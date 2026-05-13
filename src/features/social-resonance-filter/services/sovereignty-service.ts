@@ -171,7 +171,7 @@ export class SovereigntyService {
     const gh = await this.detectGhPath();
     // --push pushes the current branch as part of creation.
     const { stdout } = await execAsync(
-      `"${gh}" repo create ${shellQuote(repoName)} --private --source=. --remote=origin --push`,
+      `"${gh}" repo create ${shellQuote(repoName)} --public --source=. --remote=origin --push`,
       { cwd }
     );
     const match = stdout.match(/https:\/\/github\.com\/[^\s]+/);
