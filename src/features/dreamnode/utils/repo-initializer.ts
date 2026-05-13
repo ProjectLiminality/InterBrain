@@ -47,15 +47,18 @@ export async function createRepoDirectory(repoPath: string): Promise<void> {
 export async function initGitWithTemplate(repoPath: string, templatePath: string): Promise<void> {
   await execAsync(`git init --template="${templatePath}" "${repoPath}"`);
 
-  // Make hooks executable
-  const hooksDir = path.join(repoPath, '.git', 'hooks');
-  const preCommitHook = path.join(hooksDir, 'pre-commit');
+  // Make hooks executable (no-op on Windows; Git for Windows runs
+  // `#!/bin/sh` hooks regardless of the +x bit).
+  if (process.platform !== 'win32') {
+    const hooksDir = path.join(repoPath, '.git', 'hooks');
+    const preCommitHook = path.join(hooksDir, 'pre-commit');
 
-  try {
-    await fsPromises.access(preCommitHook);
-    await execAsync(`chmod +x "${preCommitHook}"`);
-  } catch {
-    // Hook doesn't exist, that's fine
+    try {
+      await fsPromises.access(preCommitHook);
+      await execAsync(`chmod +x "${preCommitHook}"`);
+    } catch {
+      // Hook doesn't exist, that's fine
+    }
   }
 }
 

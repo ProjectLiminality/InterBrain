@@ -465,10 +465,14 @@ export class GitDreamNodeService {
       // Initialize git with template
       await execAsync(`git init --template="${this.templatePath}" "${repoPath}"`);
       
-      // Make sure hooks are executable
-      const hooksDir = path.join(repoPath, '.git', 'hooks');
-      if (await this.fileExists(hooksDir)) {
-        await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: repoPath });
+      // Make sure hooks are executable. Windows has no chmod and treats
+      // file executability by extension anyway — Git for Windows' bundled
+      // bash runs `#!/bin/sh` hooks regardless of the +x bit.
+      if (process.platform !== 'win32') {
+        const hooksDir = path.join(repoPath, '.git', 'hooks');
+        if (await this.fileExists(hooksDir)) {
+          await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: repoPath });
+        }
       }
       
       // Write dreamTalk file if provided

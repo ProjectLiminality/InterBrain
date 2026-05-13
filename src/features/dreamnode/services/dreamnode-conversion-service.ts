@@ -269,12 +269,15 @@ export class DreamNodeConversionService {
     );
     await execAsync(`git init --template="${templatePath}" "${folderPath}"`);
 
-    // Make hooks executable
-    const hooksDir = path.join(folderPath, '.git', 'hooks');
-    if (fs.existsSync(hooksDir)) {
-      await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: folderPath });
-      await execAsync(`chmod +x "${path.join(hooksDir, 'post-commit')}"`, { cwd: folderPath });
-      console.log('[ConvertToDreamNode] Made hooks executable');
+    // Make hooks executable (no-op on Windows; Git for Windows runs
+    // `#!/bin/sh` hooks regardless of the +x bit).
+    if (process.platform !== 'win32') {
+      const hooksDir = path.join(folderPath, '.git', 'hooks');
+      if (fs.existsSync(hooksDir)) {
+        await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: folderPath });
+        await execAsync(`chmod +x "${path.join(hooksDir, 'post-commit')}"`, { cwd: folderPath });
+        console.log('[ConvertToDreamNode] Made hooks executable');
+      }
     }
   }
 
