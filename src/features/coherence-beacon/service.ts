@@ -355,7 +355,28 @@ export class CoherenceBeaconService {
             continue;
           }
 
-          // Create the beacon commit using non-invasive push
+          // Ensure the submodule has its own GitHub outbox before adding a
+          // beacon commit. Without this, igniting beacons on a fresh
+          // submodule that was never explicitly Share-Changes'd would
+          // leave the beacon as a local-only commit (with `hasRemote=false`
+          // in createBeaconCommit, the push step is skipped). Receivers
+          // would never see the signal.
+          //
+          // This makes "Share Changes on the parent" the single
+          // idempotent operation that brings the whole graph into a
+          // coherent shareable state.
+          try {
+            const { getSovereigntyService } = await import('../social-resonance-filter/services/sovereignty-service');
+            const sovereignty = getSovereigntyService();
+            await sovereignty.shareChanges(sovereignPath, submodule.name);
+          } catch (outboxError) {
+            console.warn(`[CoherenceBeacon] Failed to ensure outbox for ${submodule.name}:`, outboxError);
+            // Continue anyway — createBeaconCommit will gracefully degrade
+            // to a local-only beacon if there's still no remote.
+          }
+
+          // Create the beacon commit using non-invasive push (stash →
+          // detach → commit → push → rebase → restore).
           await this.createBeaconCommit(
             sovereignPath,
             parentUuid,
