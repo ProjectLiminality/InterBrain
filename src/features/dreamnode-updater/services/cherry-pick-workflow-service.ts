@@ -29,10 +29,20 @@ import {
 } from './smart-merge-service';
 
 /**
- * Coherence beacon metadata embedded in a commit
+ * Coherence beacon metadata embedded in a commit.
+ *
+ * rc.21 shape: `parentUuid` + optional `parentPeerRepo`. Legacy beacons
+ * stored the parent UUID under `radicleId` — we keep that key populated
+ * for backward compat with any UI code paths that still read it.
  */
 export interface BeaconData {
   type: 'supermodule';
+  /** UUID of the parent (supermodule) DreamNode. */
+  parentUuid: string;
+  /** `<owner>/<repo>` of the parent's GitHub outbox, if known. */
+  parentPeerRepo?: string;
+  /** Legacy alias for parentUuid. Always equal to parentUuid; kept so older
+   *  UI call sites keep working until they're migrated. */
   radicleId: string;
   title: string;
   atCommit?: string;
@@ -128,9 +138,15 @@ export class CherryPickWorkflowService {
     try {
       const data = JSON.parse(match[1]);
       if (data.type === 'supermodule') {
+        const parentUuid = data.parentUuid ?? data.radicleId;
+        if (!parentUuid) return undefined;
         return {
           type: 'supermodule',
-          radicleId: data.radicleId,
+          parentUuid,
+          parentPeerRepo: data.parentPeerRepo,
+          // Mirror parentUuid into the legacy field so older readers keep
+          // resolving to the right value until they're migrated.
+          radicleId: parentUuid,
           title: data.title,
           atCommit: data.atCommit
         };

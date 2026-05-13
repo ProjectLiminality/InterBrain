@@ -621,7 +621,7 @@ export class URIHandlerService {
 	/**
 	 * Clone a DreamNode from GitHub
 	 */
-	private async cloneFromGitHub(repoPath: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
+	public async cloneFromGitHub(repoPath: string, silent: boolean = false): Promise<'success' | 'skipped' | 'error'> {
 		try {
 			const adapter = this.app.vault.adapter as any;
 			const vaultPath = adapter.basePath || '';

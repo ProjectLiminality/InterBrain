@@ -32,7 +32,17 @@ import { pushToRadicle } from '../dreamnode/utils/git-utils';
 
 export interface CoherenceBeacon {
   type: 'supermodule';
-  radicleId: string;
+  /**
+   * UUID of the parent (supermodule) DreamNode. Canonical identity that
+   * survives transport changes.
+   */
+  parentUuid: string;
+  /**
+   * GitHub repo (`<owner>/<repo>`) where the parent's outbox lives. Used
+   * by the accept flow to construct the clone URL when the parent isn't
+   * already known to the local UUID index.
+   */
+  parentPeerRepo?: string;
   title: string;
   commitHash: string;
   commitMessage: string;
@@ -45,7 +55,7 @@ export interface CoherenceBeacon {
  */
 export interface BeaconRejectionInfo {
   commitHash: string;
-  radicleId: string;
+  parentUuid: string;
   title: string;
   rejectedAt: string;
 }
@@ -151,13 +161,19 @@ export class CoherenceBeaconService {
           const beaconData = JSON.parse(match[1]);
 
           if (beaconData.type === 'supermodule') {
+            // Accept both rc.21 (parentUuid) and legacy (radicleId) shapes.
+            // Legacy beacons are still valid pointers; they just won't have a
+            // GitHub repo hint, so accept will fall back to UUID-only lookup.
+            const parentUuid = beaconData.parentUuid ?? beaconData.radicleId;
+            if (!parentUuid) continue;
             beacons.push({
               type: 'supermodule',
-              radicleId: beaconData.radicleId,
+              parentUuid,
+              parentPeerRepo: beaconData.parentPeerRepo,
               title: beaconData.title,
               commitHash: commit.hash,
               commitMessage: commit.subject,
-              atCommit: beaconData.atCommit // Preserve parent commit reference
+              atCommit: beaconData.atCommit
             });
           }
         } catch {
@@ -178,10 +194,12 @@ export class CoherenceBeaconService {
     const fullPath = path.join(this.vaultPath, dreamNodePath);
 
     try {
-      // Check if already applied
+      // Check if already applied (match on parentUuid in commit body).
       const { stdout: currentCommitMsg } = await execAsync('git log -1 --format="%b"', { cwd: fullPath });
-      if (currentCommitMsg.includes(`COHERENCE_BEACON: {"type":"supermodule","radicleId":"${beacon.radicleId}"`)) {
-        // Verify DreamNode exists
+      const alreadyApplied =
+        currentCommitMsg.includes(`"parentUuid":"${beacon.parentUuid}"`) ||
+        currentCommitMsg.includes(`"radicleId":"${beacon.parentUuid}"`); // legacy
+      if (alreadyApplied) {
         const dreamNodeUddPath = path.join(this.vaultPath, beacon.title, '.udd');
         if (await fileExists(dreamNodeUddPath)) {
           return; // Already fully applied
@@ -189,23 +207,23 @@ export class CoherenceBeaconService {
         // Beacon commit exists but DreamNode not cloned - continue
       }
 
-      // PHASE 1: Clone supermodule
-      const uriHandler = getURIHandlerService();
-      const cloneResult = await uriHandler.cloneFromRadicle(beacon.radicleId, false);
-
-      if (cloneResult.status === 'error') {
+      // PHASE 1: Clone the supermodule. Prefer the GitHub repo hint from
+      // the beacon; fall back to UUID-only (works when the parent already
+      // exists in some other registered vault).
+      if (!beacon.parentPeerRepo) {
         throw new Error(
-          `Failed to clone "${beacon.title}" from Radicle network.\n\n` +
-          `NETWORK DELAY: Repositories may take 2-5 minutes to propagate.\n\n` +
-          `WHAT TO DO:\n` +
-          `• Wait a few minutes and run "Check for Updates" again\n` +
-          `• The beacon commit remains unmerged - you can safely retry\n\n` +
-          `Radicle ID: ${beacon.radicleId}`
+          `Beacon for "${beacon.title}" has no parent repo hint and the UUID isn't ` +
+          `in any registered vault. The beacon may be from a legacy build.`
         );
       }
+      const uriHandler = getURIHandlerService();
+      const cloneStatus = await uriHandler.cloneFromGitHub(beacon.parentPeerRepo, false);
+      if (cloneStatus === 'error') {
+        throw new Error(`Failed to clone "${beacon.title}" from ${beacon.parentPeerRepo}.`);
+      }
 
-      // Use actual repo name from clone result (may differ from beacon.title)
-      const actualRepoName = cloneResult.repoName || beacon.title;
+      // The cloned repo name on disk derives from the repo path.
+      const actualRepoName = beacon.parentPeerRepo.split('/').pop() || beacon.title;
       const clonedNodePath = path.join(this.vaultPath, actualRepoName);
 
       // PHASE 2: Initialize submodules (using dreamnode utilities)
@@ -248,7 +266,7 @@ export class CoherenceBeaconService {
     // Future: dreamnode-updater will handle unified commit rejection tracking
     return {
       commitHash: beacon.commitHash,
-      radicleId: beacon.radicleId,
+      parentUuid: beacon.parentUuid,
       title: beacon.title,
       rejectedAt: new Date().toISOString()
     };
@@ -276,12 +294,27 @@ export class CoherenceBeaconService {
     try {
       // Get parent's info
       const parentUDD = await UDDService.readUDD(parentFullPath);
-      const parentRadicleId = parentUDD.radicleId;
+      const parentUuid = parentUDD.uuid;
       const parentTitle = parentUDD.title;
 
-      if (!parentRadicleId) {
-        console.warn('[CoherenceBeacon] Cannot ignite beacons - parent has no Radicle ID');
+      if (!parentUuid) {
+        console.warn('[CoherenceBeacon] Cannot ignite beacons - parent has no UUID');
         return results;
+      }
+
+      // Look up the parent's GitHub outbox so receivers can clone it.
+      // Read directly from git remote (don't read .udd.githubRepoUrl which
+      // can lag behind the source of truth).
+      let parentPeerRepo: string | undefined;
+      try {
+        const { stdout: originUrl } = await execAsync('git remote get-url origin', { cwd: parentFullPath });
+        const m = originUrl.trim().match(/github\.com[/:]([^/]+)\/([^/.\s]+)(?:\.git)?$/);
+        if (m) parentPeerRepo = `${m[1]}/${m[2]}`;
+      } catch {
+        // No origin yet — beacon will still ignite but receivers won't have a clone hint.
+      }
+      if (!parentPeerRepo) {
+        console.warn('[CoherenceBeacon] Parent has no GitHub origin — beacons will lack clone hint');
       }
 
       // Get current parent commit (the one that includes these submodules)
@@ -312,7 +345,7 @@ export class CoherenceBeaconService {
           }
 
           // Check if beacon already exists for this parent
-          const alreadyExists = await UDDService.hasSupermodule(sovereignPath, parentRadicleId);
+          const alreadyExists = await UDDService.hasSupermodule(sovereignPath, parentUuid);
           if (alreadyExists) {
             results.push({
               submoduleName: submodule.name,
@@ -325,9 +358,10 @@ export class CoherenceBeaconService {
           // Create the beacon commit using non-invasive push
           await this.createBeaconCommit(
             sovereignPath,
-            parentRadicleId,
+            parentUuid,
             parentTitle,
-            atCommit
+            atCommit,
+            parentPeerRepo
           );
 
           results.push({
@@ -365,9 +399,10 @@ export class CoherenceBeaconService {
    */
   private async createBeaconCommit(
     sovereignPath: string,
-    parentRadicleId: string,
+    parentUuid: string,
     parentTitle: string,
-    atCommit: string
+    atCommit: string,
+    parentPeerRepo: string | undefined
   ): Promise<void> {
     let stashCreated = false;
     let originalBranch = '';
@@ -425,23 +460,31 @@ export class CoherenceBeaconService {
         console.log('[CoherenceBeacon] Detached to last pushed commit');
       }
 
-      // 4. Update .udd with supermodule entry
+      // 4. Update .udd with supermodule entry. SupermoduleEntry's
+      // historical key is still `radicleId` for backward compat with
+      // existing .udd files; we put the parent UUID there under rc.21.
       const entry = {
-        radicleId: parentRadicleId,
+        radicleId: parentUuid,
         title: parentTitle,
         atCommit: atCommit,
         addedAt: Date.now()
       };
       await UDDService.addSupermoduleEntry(sovereignPath, entry);
 
-      // 5. Create beacon commit
-      const beaconData = JSON.stringify({
+      // 5. Create beacon commit. Beacon JSON shape is rc.21-native:
+      // parentUuid + optional parentPeerRepo. Receivers parse both new
+      // and legacy `radicleId` keys (see checkCommitsForBeacons).
+      const beaconData: Record<string, string> = {
         type: 'supermodule',
-        radicleId: parentRadicleId,
+        parentUuid,
         title: parentTitle,
-        atCommit: atCommit
-      });
-      const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconData}`;
+        atCommit
+      };
+      if (parentPeerRepo) {
+        beaconData.parentPeerRepo = parentPeerRepo;
+      }
+      const beaconJson = JSON.stringify(beaconData);
+      const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconJson}`;
 
       await execAsync('git add .udd', { cwd: sovereignPath });
       await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
@@ -522,13 +565,16 @@ export class CoherenceBeaconService {
         try {
           const beaconData = JSON.parse(match[1]);
           if (beaconData.type === 'supermodule') {
+            const parentUuid = beaconData.parentUuid ?? beaconData.radicleId;
+            if (!parentUuid) continue;
             beacons.push({
               type: beaconData.type,
-              radicleId: beaconData.radicleId,
+              parentUuid,
+              parentPeerRepo: beaconData.parentPeerRepo,
               title: beaconData.title,
               commitHash: hash,
               commitMessage: fullMessage,
-              atCommit: beaconData.atCommit // Preserve parent commit reference
+              atCommit: beaconData.atCommit
             });
           }
         } catch {

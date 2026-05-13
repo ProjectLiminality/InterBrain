@@ -796,23 +796,30 @@ export class CherryPickPreviewModal extends Modal {
     const clonedRepos: string[] = []; // Track newly cloned repos for cleanup
 
     try {
-      // Clone the supermodule repository (will skip if already exists)
+      // Clone the supermodule repository from its GitHub outbox.
+      // rc.21 beacons carry `parentPeerRepo` (e.g. "alice/Cylinder");
+      // we route through cloneFromGitHub which the URI handler also
+      // uses for plain invite links.
       const uriHandler = getURIHandlerService();
-      const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, false);
-
-      if (cloneResult.status === 'error') {
-        console.error(`[BeaconPreview] Failed to clone/find ${commit.beaconData.radicleId}`);
-        this.showMessage(`Failed to access repository. It may still be propagating on the network.`, true);
+      if (!commit.beaconData.parentPeerRepo) {
+        console.error(`[BeaconPreview] Beacon has no parentPeerRepo hint`);
+        this.showMessage(`This beacon is from an older build and can't be cloned directly. Ask the sender to push a new beacon.`, true);
+        this.isProcessing = false;
+        return;
+      }
+      const cloneStatus = await uriHandler.cloneFromGitHub(commit.beaconData.parentPeerRepo, false);
+      if (cloneStatus === 'error') {
+        console.error(`[BeaconPreview] Failed to clone ${commit.beaconData.parentPeerRepo}`);
+        this.showMessage(`Failed to clone ${commit.beaconData.parentPeerRepo}.`, true);
         this.isProcessing = false;
         return;
       }
 
-      // Use the actual repo name from clone result (Radicle ID is source of truth)
-      const actualRepoName = cloneResult.repoName || commit.beaconData.title;
-      console.log(`[BeaconPreview] Repository resolved: ${commit.beaconData.radicleId} → "${actualRepoName}"`);
+      const actualRepoName = commit.beaconData.parentPeerRepo.split('/').pop() || commit.beaconData.title;
+      console.log(`[BeaconPreview] Repository resolved: ${commit.beaconData.parentPeerRepo} → "${actualRepoName}"`);
 
       // Track if this was a new clone (not skipped = already existed)
-      if (cloneResult.status === 'success') {
+      if (cloneStatus === 'success') {
         clonedRepos.push(actualRepoName);
       }
 
@@ -1394,17 +1401,21 @@ export class CherryPickPreviewModal extends Modal {
 
       try {
         const uriHandler = getURIHandlerService();
-        // Use silent=true to prevent auto-focus changing selection
-        const cloneResult = await uriHandler.cloneFromRadicle(commit.beaconData.radicleId, true);
-
-        if (cloneResult.status === 'error') {
-          this.showMessage(`Failed to access repository. It may still be propagating.`, true);
+        if (!commit.beaconData.parentPeerRepo) {
+          this.showMessage(`This beacon is from an older build and can't be cloned directly.`, true);
+          this.isProcessing = false;
+          return;
+        }
+        // silent=true prevents auto-focus from changing selection mid-accept.
+        const cloneStatus = await uriHandler.cloneFromGitHub(commit.beaconData.parentPeerRepo, true);
+        if (cloneStatus === 'error') {
+          this.showMessage(`Failed to clone ${commit.beaconData.parentPeerRepo}.`, true);
           this.isProcessing = false;
           return;
         }
 
-        const repoName = cloneResult.repoName || commit.beaconData.title;
-        console.log(`[AcceptBeacon] Repository resolved: ${commit.beaconData.radicleId} → "${repoName}"`);
+        const repoName = commit.beaconData.parentPeerRepo.split('/').pop() || commit.beaconData.title;
+        console.log(`[AcceptBeacon] Repository resolved: ${commit.beaconData.parentPeerRepo} → "${repoName}"`);
 
         // Clone any missing submodules (same as preview flow)
         await this.cloneMissingSubmodules(repoName);
