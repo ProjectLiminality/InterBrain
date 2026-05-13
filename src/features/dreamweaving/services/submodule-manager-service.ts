@@ -156,19 +156,20 @@ export class SubmoduleManagerService {
       // Check for naming conflicts
       await this.checkSubmoduleNameConflict(parentFullPath, actualSubmoduleName);
 
-      // Read the child's UUID from its .udd — this is what identifies the
-      // DreamNode across the WebRTC network. The git-remote-interbrain helper
-      // resolves UUIDs locally first, then via WebRTC peer transport if the
-      // submodule isn't yet cloned on this machine.
+      // Read the child's UUID from its .udd — this is the canonical
+      // identity of the idea, transport-agnostic. The git-remote-interbrain
+      // helper resolves UUIDs to actual transport URLs at clone/fetch time.
       const childUuid = await this.readUuidFromUdd(sourceFullPath);
       if (!childUuid) {
         throw new Error(`SubmoduleManagerService: child DreamNode at ${sourceFullPath} has no UUID in .udd — cannot create interbrain:// submodule URL`);
       }
 
       // Submodule URL is interbrain://<uuid>. The helper resolves UUID via:
-      //   1. Local UUID index (any vault on this machine).
-      //   2. WebRTC peer transport (when present, against known peers).
-      // No peer hint needed — the daemon's peer registry knows where to look.
+      //   1. Local UUID index (any vault on this machine — offline-friendly).
+      //   2. Parent-repo-origin transitivity (if parent came from alice's
+      //      GitHub, try alice's GitHub for the child too).
+      //   3. Daemon's peer registry (iterate known peers' GitHub repos).
+      // No peer hint in the URL — peer resolution happens at fetch time.
       const submoduleUrl = `interbrain://${childUuid}`;
       console.log(`SubmoduleManagerService: submodule URL ${submoduleUrl} (${actualSubmoduleName})`);
 

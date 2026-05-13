@@ -51,6 +51,14 @@ pub fn create_vault(parent_dir: &Path, name: &str) -> Result<PathBuf> {
         .with_context(|| format!("create vault dir {}", vault_path.display()))?;
     fs::create_dir_all(vault_path.join(".obsidian"))
         .with_context(|| "create .obsidian dir")?;
+    // Write a minimal app.json — Obsidian's URL handler treats the presence
+    // of this file as the canonical "this is a real vault" marker. Without
+    // it, an entry in obsidian.json gets rejected as "Vault not found".
+    let app_json = vault_path.join(".obsidian/app.json");
+    if !app_json.exists() {
+        fs::write(&app_json, "{}")
+            .with_context(|| format!("write {}", app_json.display()))?;
+    }
     register_vault_with_obsidian(&vault_path)?;
     Ok(vault_path)
 }
@@ -185,6 +193,13 @@ pub fn install_managed(vault_path: &Path, bundled_dir: &Path) -> Result<()> {
 
     let plugins_root = vault_path.join(".obsidian/plugins");
     fs::create_dir_all(&plugins_root)?;
+    // Ensure the canonical Obsidian vault marker exists. Without app.json,
+    // Obsidian's URL handler rejects `obsidian://open?vault=<name>` even
+    // when the entry is in obsidian.json. Idempotent on existing vaults.
+    let app_json = vault_path.join(".obsidian/app.json");
+    if !app_json.exists() {
+        fs::write(&app_json, "{}").ok();
+    }
     let target = plugins_root.join(PLUGIN_ID);
     let staging = plugins_root.join(format!("{PLUGIN_ID}.new"));
 
@@ -449,6 +464,99 @@ pub fn ensure_plugin_health(
     } else {
         Ok(false)
     }
+}
+
+/// One-time migration: walk every DreamNode in `vault_path`, find any
+/// .gitmodules with legacy relative-path submodule URLs (`url = ../<Name>`),
+/// resolve each to its UUID via the sibling .udd, and rewrite to
+/// `url = interbrain://<uuid>`. Idempotent — already-migrated entries are
+/// left alone. Commits the rewrite locally so future fetches use the new URL.
+pub fn migrate_legacy_gitmodules(vault_path: &Path) -> Result<usize> {
+    let mut migrated_count = 0;
+    let read = match fs::read_dir(vault_path) {
+        Ok(r) => r,
+        Err(_) => return Ok(0),
+    };
+    for entry in read.flatten() {
+        let dreamnode_path = entry.path();
+        if !dreamnode_path.is_dir() { continue; }
+        let gitmodules = dreamnode_path.join(".gitmodules");
+        if !gitmodules.exists() { continue; }
+
+        let content = match fs::read_to_string(&gitmodules) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        // Parse the existing .gitmodules. We rewrite line-by-line; preserving
+        // formatting beats a full re-render for an idempotent migration.
+        let mut new_lines: Vec<String> = Vec::new();
+        let mut changed_in_repo = false;
+        let mut current_path: Option<String> = None;
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("[submodule ") {
+                current_path = None;
+                new_lines.push(line.to_string());
+                continue;
+            }
+            if let Some(rest) = trimmed.strip_prefix("path = ") {
+                current_path = Some(rest.to_string());
+                new_lines.push(line.to_string());
+                continue;
+            }
+            if let Some(rest) = trimmed.strip_prefix("url = ") {
+                // Already interbrain://? keep.
+                if rest.starts_with("interbrain://") {
+                    new_lines.push(line.to_string());
+                    continue;
+                }
+                // Try to migrate: relative path to a sibling DreamNode dir.
+                if let Some(sub_path) = &current_path {
+                    let sub_full = dreamnode_path.join(sub_path);
+                    let udd = sub_full.join(".udd");
+                    if let Ok(udd_text) = fs::read_to_string(&udd) {
+                        if let Ok(udd_val) = serde_json::from_str::<serde_json::Value>(&udd_text) {
+                            if let Some(uuid) = udd_val.get("uuid").and_then(|v| v.as_str()) {
+                                // Preserve the leading-whitespace from the original line.
+                                let leading: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+                                new_lines.push(format!("{leading}url = interbrain://{uuid}"));
+                                changed_in_repo = true;
+                                continue;
+                            }
+                        }
+                    }
+                }
+                // Couldn't migrate this entry — leave as-is.
+                new_lines.push(line.to_string());
+                continue;
+            }
+            new_lines.push(line.to_string());
+        }
+
+        if !changed_in_repo { continue; }
+
+        let new_content = new_lines.join("\n") + "\n";
+        if let Err(e) = fs::write(&gitmodules, &new_content) {
+            tracing::warn!(target: "vaults", error = %e, path = %gitmodules.display(), "gitmodules migration write failed");
+            continue;
+        }
+
+        // Commit the rewrite locally so the change is preserved.
+        let _ = std::process::Command::new("git")
+            .args(["add", ".gitmodules"])
+            .current_dir(&dreamnode_path)
+            .status();
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(["commit", "-m", "Migrate submodule URLs to interbrain:// scheme"])
+            .current_dir(&dreamnode_path);
+        suppress_console_window(&mut cmd);
+        let _ = cmd.status();
+        migrated_count += 1;
+        tracing::info!(target: "vaults", path = %dreamnode_path.display(), "migrated .gitmodules to interbrain:// URLs");
+    }
+    Ok(migrated_count)
 }
 
 /// Add the plugin id to `<vault>/.obsidian/community-plugins.json`. Idempotent.

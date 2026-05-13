@@ -10,6 +10,7 @@
 //! `feature/webrtc-transport` branch and is preserved there for a future
 //! release. This branch ships with GitHub as the collaboration transport.
 
+mod activity;
 mod commands;
 mod github;
 mod identity;
@@ -138,6 +139,7 @@ pub fn run() {
             commands::gh_begin_sign_in,
             commands::gh_complete_sign_in,
             commands::gh_sign_out,
+            commands::scan_updates_proxy,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -255,6 +257,14 @@ pub fn run() {
                         // Best-effort fast-forward of the InterBrain DreamNode.
                         if let Err(e) = crate::vaults::ensure_interbrain_clone_in_vault(vault) {
                             tracing::warn!(target: "startup", vault = %vault.display(), error = %e, "InterBrain clone refresh failed");
+                        }
+                        // One-shot migration: rewrite legacy relative-path
+                        // submodule URLs to interbrain://<uuid>. Idempotent;
+                        // no-op once nothing in the vault still uses ../<Name>.
+                        match crate::vaults::migrate_legacy_gitmodules(vault) {
+                            Ok(n) if n > 0 => tracing::info!(target: "startup", vault = %vault.display(), count = n, "migrated .gitmodules entries"),
+                            Ok(_) => {}
+                            Err(e) => tracing::warn!(target: "startup", vault = %vault.display(), error = %e, ".gitmodules migration failed"),
                         }
                     }
                     let first_vault = state_for_setup
