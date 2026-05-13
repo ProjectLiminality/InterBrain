@@ -8,7 +8,9 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use crate::vaults::suppress_console_window;
@@ -29,6 +31,40 @@ pub struct GhStatus {
     pub version: Option<String>,
 }
 
+/// Locate the `gh` binary. Some Windows installs leave `gh` off the daemon's
+/// non-interactive PATH even though `Program Files\GitHub CLI\gh.exe` is
+/// present. Mirrors `prerequisites::detect_gh()`'s candidate sweep so the
+/// two stay in sync. Cached after first hit.
+fn gh_path() -> PathBuf {
+    static CACHED: OnceLock<PathBuf> = OnceLock::new();
+    CACHED.get_or_init(|| {
+        if let Ok(p) = which::which("gh") {
+            return p;
+        }
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        if cfg!(target_os = "windows") {
+            candidates.push(PathBuf::from("C:\\Program Files\\GitHub CLI\\gh.exe"));
+            candidates.push(PathBuf::from("C:\\Program Files (x86)\\GitHub CLI\\gh.exe"));
+            if let Some(local) = dirs::data_local_dir() {
+                candidates.push(local.join("Programs\\GitHub CLI\\gh.exe"));
+            }
+        } else if cfg!(target_os = "macos") {
+            candidates.push(PathBuf::from("/opt/homebrew/bin/gh"));
+            candidates.push(PathBuf::from("/usr/local/bin/gh"));
+        }
+        for c in candidates {
+            if c.exists() {
+                return c;
+            }
+        }
+        // Last resort: hand back "gh" so the spawn fails with a clear "not found"
+        // rather than panicking here. Callers report None / Err and the UI
+        // surfaces it.
+        PathBuf::from("gh")
+    })
+    .clone()
+}
+
 pub fn gh_status() -> GhStatus {
     let version = gh_version();
     let installed = version.is_some();
@@ -40,7 +76,7 @@ pub fn gh_status() -> GhStatus {
 }
 
 fn gh_version() -> Option<String> {
-    let mut cmd = Command::new("gh");
+    let mut cmd = Command::new(gh_path());
     cmd.arg("--version");
     suppress_console_window(&mut cmd);
     let output = cmd.output().ok()?;
@@ -55,7 +91,7 @@ fn gh_version() -> Option<String> {
 }
 
 fn gh_username() -> Option<String> {
-    let mut cmd = Command::new("gh");
+    let mut cmd = Command::new(gh_path());
     cmd.arg("api").arg("user").arg("--jq").arg(".login");
     suppress_console_window(&mut cmd);
     let output = cmd.output().ok()?;
@@ -169,7 +205,7 @@ pub async fn complete_device_flow(device_code: String, interval: u64) -> Result<
 /// Pipe a token into `gh auth login --with-token` so the existing
 /// publishing code paths (which call `gh` directly) pick it up.
 fn store_token_in_gh(token: &str) -> Result<()> {
-    let mut cmd = Command::new("gh");
+    let mut cmd = Command::new(gh_path());
     cmd.arg("auth")
         .arg("login")
         .arg("--hostname")
@@ -196,7 +232,7 @@ fn store_token_in_gh(token: &str) -> Result<()> {
 /// Sign out non-interactively. With `--user` provided, gh skips the prompt.
 pub fn gh_sign_out() -> Result<()> {
     let username = gh_username().ok_or_else(|| anyhow!("not signed in"))?;
-    let mut cmd = Command::new("gh");
+    let mut cmd = Command::new(gh_path());
     cmd.arg("auth")
         .arg("logout")
         .arg("--hostname")
