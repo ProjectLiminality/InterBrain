@@ -11,8 +11,7 @@ import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { GitSyncService, type CommitInfo } from '../social-resonance-filter/services/git-sync-service';
 import {
   type SubmoduleUpdate,
-  checkSubmoduleUpdatesFromNetwork,
-  updateSubmodulesFromStandalone
+  checkSubmoduleUpdatesFromNetwork
 } from '../social-resonance-filter/utils/submodule-sync';
 import { GitOperationsService } from '../dreamnode/utils/git-operations';
 import { InterBrainUpdateModal } from './ui/interbrain-update-modal';
