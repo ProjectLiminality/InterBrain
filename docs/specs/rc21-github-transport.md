@@ -142,6 +142,50 @@ All 14 pass → rc.21 ships.
 
 `npm run build:daemon` runs `tauri build --no-bundle` for production-cfg builds. Plain `cargo build` produces dev-cfg binaries that load the dashboard from `localhost:1420` instead of the bundled `dist/` — root cause of the "blank tray window" issue we chased earlier. Always use the npm script.
 
+## Dry-run blocker report (2026-05-13)
+
+Static trace of the 14-step demo path against current code on `feature/desktop-companion`. Three blockers found, all in the recipient (Bob) side of the flow.
+
+### B1 — Plugin doesn't put `git-remote-interbrain` on PATH
+
+The plugin invokes git in many places (e.g. `git submodule update --init --recursive` in `dreamweaving/commands.ts:416,525`, `coherence-beacon/service.ts:589`, `dreamnode-conversion-service.ts:956,971`). None of these enhance PATH to include the daemon install dir. Any git operation that touches an `interbrain://` URL will fail with "fatal: Unable to find remote helper for 'interbrain'".
+
+The daemon's `activity.rs:188` does PATH enhancement for its own scan — that pattern needs to be lifted into a shared plugin-side helper and applied at every git invocation site (or, simpler, the plugin asks the daemon for the helper dir once at startup and prepends it to `process.env.PATH` for the whole Electron process).
+
+**Severity:** blocks demo step 9 (Bob recursive-clones Cylinder + submodules) and any later submodule fetch.
+
+### B2 — `cloneFromGitHub` doesn't init submodules
+
+`uri-handler-service.ts:658` runs `githubService.clone()` which is plain `git clone --single-branch`. After it returns, no `git submodule update --init --recursive`. Cylinder arrives with empty `Square/` and `Circle/` directories.
+
+**Severity:** blocks demo step 9.
+
+**Fix:** add `git submodule update --init --recursive` (with B1's PATH fix in place) right after the clone succeeds, before the .udd-create branch.
+
+### B3 — `cloneFromGitHub` writes stale `githubRepoUrl`
+
+`uri-handler-service.ts:676` writes `udd.githubRepoUrl = githubUrl` — that's the SENDER's repo URL, persisted into Bob's local .udd. Misleads UI ("Already shared!") and would break supermodule-transitivity if any code path keys off it. Worse: the existing `publish-dreamnode-github` command at `github-publishing/commands.ts:451` will short-circuit if it sees a non-empty `githubRepoUrl` and never offer to create Bob's own outbox.
+
+**Severity:** subtle but corrupting. Self-heals on first Share Changes because `SovereigntyService.ensureOwnOutbox` ignores `.udd` and goes by git remote, but the stale `.udd` field will linger.
+
+**Fix:** don't write `githubRepoUrl` in the clone path at all. SovereigntyService is the authority on what origin points to; reading `.udd` for this is wrong.
+
+### What's already clean
+
+- DreamNode creation (step 1): no Radicle dependency. `RadicleService.isAvailable()` is hardcoded `false`, so all `rad init` calls in `git-dreamnode-service.ts` are inert.
+- Share Changes (steps 2, 7, 10): handled by `SovereigntyService`. Auto-commits, ensures own outbox, pushes.
+- Invite Collaborators (steps 3, 8): copies `obsidian://interbrain-clone?ids=github.com/...` to clipboard.
+- `fetchUpdates` (step 11): prefers `origin`/`github` over `rad`, gracefully skips rad if CLI absent. Works as-is.
+- `.gitmodules` writing (step 6): submodule-manager-service.ts:173 writes `interbrain://<uuid>` correctly.
+
+### Order of fixes for ship
+
+1. B1 first (PATH for helper) — unblocks B2's fix and all submodule-touching operations.
+2. B2 (recursive init after clone) — small additive change.
+3. B3 (drop stale `githubRepoUrl` write) — small subtractive change.
+
+After all three, redo the static trace; if clean, do live Mac↔Windows run.
+
 ## Compaction-resilient pointers
 
 - Current uncommitted work in working tree: FirstRun GitHubIdentityStep + obsidian:// vault-name fix (commit before doing more).
