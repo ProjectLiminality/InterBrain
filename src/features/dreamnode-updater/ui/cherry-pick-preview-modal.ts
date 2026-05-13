@@ -1230,6 +1230,42 @@ export class CherryPickPreviewModal extends Modal {
     try {
       const workflowService = getCherryPickWorkflowService();
 
+      // Beacon commits need their supermodule cloned BEFORE the cherry-pick
+      // lands — otherwise the .udd supermodule entry is written but the
+      // referenced parent DreamNode isn't on disk and the holarchy view
+      // breaks. Walk the selection first, clone any beacon parents that
+      // aren't already in the vault.
+      const uriHandler = getURIHandlerService();
+      for (const group of selectedGroups) {
+        for (const commit of group.commits) {
+          if (!commit.beaconData?.parentPeerRepo) continue;
+          const repoName = commit.beaconData.parentPeerRepo.split('/').pop() || commit.beaconData.title;
+          this.showProcessing(`Cloning supermodule ${repoName}…`);
+          try {
+            const cloneStatus = await uriHandler.cloneFromGitHub(commit.beaconData.parentPeerRepo, true);
+            if (cloneStatus === 'error') {
+              this.showMessage(`Failed to clone ${commit.beaconData.parentPeerRepo}.`, true);
+              this.isProcessing = false;
+              return;
+            }
+            await this.cloneMissingSubmodules(repoName);
+          } catch (cloneError: unknown) {
+            const msg = cloneError instanceof Error ? cloneError.message : String(cloneError);
+            this.showMessage(`Clone failed: ${msg}`, true);
+            this.isProcessing = false;
+            return;
+          }
+        }
+      }
+      // Rescan once after any beacon clones so the in-memory store knows
+      // about the newly arrived supermodules + their submodules.
+      const beaconCount = selectedGroups.flatMap(g => g.commits).filter(c => !!c.beaconData).length;
+      if (beaconCount > 0) {
+        const { serviceManager } = await import('../../../core/services/service-manager');
+        await serviceManager.scanVault();
+      }
+
+      this.showProcessing('Accepting commits...');
       for (const group of selectedGroups) {
         const result = await workflowService.acceptCommits(
           this.config.dreamNodePath,
