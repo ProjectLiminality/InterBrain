@@ -109,7 +109,21 @@ fn run() -> Result<()> {
             // them in declaration order; first success wins.
             let mut hints: Vec<String> = parsed.peer_hints.clone();
             if hints.is_empty() {
-                for transitive in derive_transitive_peer_hints(&args[1]) {
+                // Determine the submodule's repo name. Git passes `origin`
+                // as args[1] for submodule clones — useless. Look up the
+                // UUID in the parent repo's `.gitmodules` to find the
+                // actual submodule path/name (e.g., "Circle"), which by
+                // convention matches the repo name on each peer's outbox.
+                let submodule_name = lookup_submodule_name(&parsed.uuid)
+                    .unwrap_or_else(|| {
+                        eprintln!(
+                            "git-remote-interbrain: could not find submodule name in .gitmodules; falling back to args[1]={}",
+                            &args[1]
+                        );
+                        args[1].clone()
+                    });
+                eprintln!("git-remote-interbrain: submodule name resolved to: {submodule_name}");
+                for transitive in derive_transitive_peer_hints(&submodule_name) {
                     eprintln!(
                         "git-remote-interbrain: trying transitive hint: {transitive}"
                     );
@@ -305,6 +319,49 @@ fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
         hints.push(format!("{owner}/{remote_name}"));
     }
     hints
+}
+
+/// Find the submodule name in the parent's `.gitmodules` whose URL matches
+/// the interbrain UUID we're being asked to resolve. Returns None if no
+/// match (e.g., this isn't actually a submodule clone, just a manual
+/// `git fetch interbrain://<uuid>`).
+fn lookup_submodule_name(uuid: &str) -> Option<String> {
+    let parent = find_parent_repo()?;
+    let gitmodules = parent.join(".gitmodules");
+    if !gitmodules.exists() {
+        return None;
+    }
+    let needle_url = format!("interbrain://{uuid}");
+    // Use git config to parse — it handles whitespace and section names
+    // correctly. `--get-regexp` returns lines like `submodule.Circle.url <url>`.
+    let out = std::process::Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        .env_remove("GIT_COMMON_DIR")
+        .args(["config", "--file"])
+        .arg(&gitmodules)
+        .args(["--get-regexp", r"submodule\..*\.url"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        // line: "submodule.<NAME>.url <URL>"
+        let mut parts = line.splitn(2, ' ');
+        let key = parts.next()?;
+        let url = parts.next()?.trim();
+        if url == needle_url {
+            // key is `submodule.<NAME>.url` — extract NAME.
+            let rest = key.strip_prefix("submodule.")?;
+            let name = rest.strip_suffix(".url")?;
+            return Some(name.to_string());
+        }
+    }
+    None
 }
 
 /// Walk up from cwd looking for a `.git` directory or gitlink file.
