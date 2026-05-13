@@ -102,17 +102,16 @@ fn run() -> Result<()> {
 
             // Build the candidate peer-hint list. Start with explicit hints
             // from the URL (`?peer=<owner>/<repo>`); fall back to deriving
-            // a hint from the *parent* repo's origin URL via parent-origin
-            // transitivity (per the rc.21 spec). When git invokes us for a
-            // submodule clone, cwd is the parent's working tree — we can
-            // read `git config remote.origin.url` to learn which GitHub
-            // owner served the parent, then try that owner with the
-            // submodule's path-derived name.
+            // hints from EVERY GitHub remote on the parent repo (origin +
+            // each peer remote). The submodule name git hands us is the
+            // path basename from `.gitmodules` — same name across all
+            // peers' outboxes under the rc.21 naming convention. We try
+            // them in declaration order; first success wins.
             let mut hints: Vec<String> = parsed.peer_hints.clone();
             if hints.is_empty() {
-                if let Some(transitive) = derive_transitive_peer_hint(&args[1]) {
+                for transitive in derive_transitive_peer_hints(&args[1]) {
                     eprintln!(
-                        "git-remote-interbrain: trying parent-origin transitive hint: {transitive}"
+                        "git-remote-interbrain: trying transitive hint: {transitive}"
                     );
                     hints.push(transitive);
                 }
@@ -212,44 +211,56 @@ fn parse_interbrain_url(raw: &str) -> Result<ParsedUrl> {
     Ok(ParsedUrl { uuid, peer_hints })
 }
 
-/// Parent-origin transitivity: when called for a submodule whose URL is
-/// a bare `interbrain://<uuid>` with no peer hints, derive an implicit
-/// hint from the parent repo's `origin` remote.
+/// Transitivity: when called for a submodule whose URL is a bare
+/// `interbrain://<uuid>` with no peer hints, derive implicit hints from
+/// EVERY GitHub remote on the parent repo (origin first, then each peer
+/// remote in declaration order). Under rc.21's sovereignty model the
+/// parent has both:
+///   - origin → recipient's own outbox (e.g., InterfaceGuy/Cylinder1)
+///   - peer remotes → senders' outboxes (e.g., projectliminality →
+///     ProjectLiminality/Cylinder1)
+/// Submodules share names across peers (Circle is always called Circle),
+/// so trying `<each-owner>/<submodule-name>` covers the cases where
+/// either the recipient or any peer has the submodule's outbox.
 ///
-/// We expect to be called inside the parent's working tree (git's
-/// remote-helper protocol guarantees cwd = repo toplevel). The submodule
-/// name git hands us (`remote_name` arg) is whatever `.gitmodules` calls
-/// the submodule — typically the same as its path basename (e.g.,
-/// `Circle`).
-///
-/// Returns `Some("<owner>/<remote_name>")` if the parent's origin is a
-/// GitHub URL we can parse, else `None`. The daemon's `resolve-peer-url`
-/// IPC will translate that to `https://github.com/<owner>/<remote_name>`
-/// and the actual transfer falls to git-remote-https.
-fn derive_transitive_peer_hint(remote_name: &str) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(["config", "--get", "remote.origin.url"])
+/// Returns hints in the order git printed the remotes, deduplicated by
+/// owner.
+fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
+    let out = match std::process::Command::new("git")
+        .args(["remote", "-v"])
         .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return Vec::new(),
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    let mut seen = std::collections::HashSet::new();
+    let mut hints = Vec::new();
+    for line in text.lines() {
+        // line: "<remote-name>\t<url> (fetch|push)"
+        let url = match line.split_whitespace().nth(1) {
+            Some(u) => u,
+            None => continue,
+        };
+        let parts = url
+            .strip_prefix("https://github.com/")
+            .or_else(|| url.strip_prefix("http://github.com/"))
+            .or_else(|| url.strip_prefix("git@github.com:"));
+        let path = match parts {
+            Some(p) => p,
+            None => continue,
+        };
+        let owner = match path.splitn(2, '/').next() {
+            Some(o) if !o.is_empty() => o,
+            _ => continue,
+        };
+        if !seen.insert(owner.to_string()) {
+            continue;
+        }
+        hints.push(format!("{owner}/{remote_name}"));
     }
-    let origin_url = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if origin_url.is_empty() {
-        return None;
-    }
-    // Match https://github.com/<owner>/<repo>(.git)? and git@github.com:<owner>/<repo>(.git)?
-    let parts: Option<&str> = origin_url
-        .strip_prefix("https://github.com/")
-        .or_else(|| origin_url.strip_prefix("http://github.com/"))
-        .or_else(|| origin_url.strip_prefix("git@github.com:"));
-    let path = parts?;
-    let mut segs = path.splitn(2, '/');
-    let owner = segs.next()?;
-    if owner.is_empty() {
-        return None;
-    }
-    Some(format!("{owner}/{remote_name}"))
+    hints
 }
 
 fn resolve_locally(uuid: &str) -> Result<Option<String>> {
