@@ -271,7 +271,7 @@ export class DreamNodeConversionService {
 
     // Make hooks executable (no-op on Windows; Git for Windows runs
     // `#!/bin/sh` hooks regardless of the +x bit).
-    if (process.platform !== 'win32') {
+    if ((globalThis as any).process.platform !== 'win32') {
       const hooksDir = path.join(folderPath, '.git', 'hooks');
       if (fs.existsSync(hooksDir)) {
         await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: folderPath });

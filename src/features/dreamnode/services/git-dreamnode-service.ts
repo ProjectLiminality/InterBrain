@@ -468,7 +468,7 @@ export class GitDreamNodeService {
       // Make sure hooks are executable. Windows has no chmod and treats
       // file executability by extension anyway — Git for Windows' bundled
       // bash runs `#!/bin/sh` hooks regardless of the +x bit.
-      if (process.platform !== 'win32') {
+      if ((globalThis as any).process.platform !== 'win32') {
         const hooksDir = path.join(repoPath, '.git', 'hooks');
         if (await this.fileExists(hooksDir)) {
           await execAsync(`chmod +x "${path.join(hooksDir, 'pre-commit')}"`, { cwd: repoPath });

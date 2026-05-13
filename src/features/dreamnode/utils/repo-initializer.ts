@@ -49,7 +49,7 @@ export async function initGitWithTemplate(repoPath: string, templatePath: string
 
   // Make hooks executable (no-op on Windows; Git for Windows runs
   // `#!/bin/sh` hooks regardless of the +x bit).
-  if (process.platform !== 'win32') {
+  if ((globalThis as any).process.platform !== 'win32') {
     const hooksDir = path.join(repoPath, '.git', 'hooks');
     const preCommitHook = path.join(hooksDir, 'pre-commit');
 
