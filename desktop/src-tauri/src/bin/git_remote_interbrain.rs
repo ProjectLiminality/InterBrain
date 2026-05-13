@@ -231,10 +231,16 @@ fn parse_interbrain_url(raw: &str) -> Result<ParsedUrl> {
 /// `git remote -v` returns nothing — there's no git dir at cwd. We need
 /// to walk up to find the parent's `.git` and run from there.
 fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
+    let cwd_dbg = std::env::current_dir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "<unknown>".into());
+    eprintln!("git-remote-interbrain: helper cwd = {cwd_dbg}");
     let parent_repo = match find_parent_repo() {
         Some(p) => p,
         None => {
-            eprintln!("git-remote-interbrain: could not locate parent repo for transitivity");
+            eprintln!(
+                "git-remote-interbrain: could not locate parent repo for transitivity (cwd={cwd_dbg})"
+            );
             return Vec::new();
         }
     };
@@ -290,26 +296,25 @@ fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
     hints
 }
 
-/// Walk up from cwd looking for a `.git` directory (or file, for submodule
-/// gitdirs). Returns the path of the containing repo, or None if we're
-/// outside any repo.
-///
-/// Submodule pre-clone dirs typically look like:
-///   /vault/Parent/SubmoduleName/   (empty, not yet a repo)
-/// Parent typically has `.git/` one level up.
+/// Walk up from cwd looking for a `.git` directory or gitlink file.
+/// Returns the path of the containing repo, or None if we're outside any
+/// repo.
 fn find_parent_repo() -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
-    let mut here = cwd.as_path();
-    // First skip the cwd itself — if cwd happens to be a git repo it'd be the
-    // wrong one (it'd be the submodule we're trying to clone INTO, but only
-    // if init has already partially run; for clean clones cwd has no .git).
-    // Walk strictly upward.
-    while let Some(parent) = here.parent() {
-        let dot_git = parent.join(".git");
-        if dot_git.exists() {
-            return Some(parent.to_path_buf());
+    eprintln!("git-remote-interbrain: walking up from {}", cwd.display());
+    let mut here: Option<&std::path::Path> = Some(cwd.as_path());
+    while let Some(dir) = here {
+        let dot_git = dir.join(".git");
+        let exists = dot_git.exists();
+        eprintln!(
+            "git-remote-interbrain:   check {} → .git exists={}",
+            dir.display(),
+            exists
+        );
+        if exists {
+            return Some(dir.to_path_buf());
         }
-        here = parent;
+        here = dir.parent();
     }
     None
 }
