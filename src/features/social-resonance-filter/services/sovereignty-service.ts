@@ -197,9 +197,6 @@ export class SovereigntyService {
       // don't trigger "repo already exists" from `gh repo create`.
       await this.ensureRemote(cwd, 'origin', expectedUrl);
       const branch = await this.currentBranch(cwd);
-      // Push may fail with "Updates were rejected" if the remote has
-      // diverged from local. That's a real conflict the user must resolve
-      // — surface it rather than silently lose.
       await execAsync(`git push -u origin ${shellQuote(branch)}`, { cwd });
       return { originUrl: expectedUrl, created: false };
     }
