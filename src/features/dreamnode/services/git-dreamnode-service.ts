@@ -464,7 +464,14 @@ export class GitDreamNodeService {
       
       // Initialize git with template
       await execAsync(`git init --template="${this.templatePath}" "${repoPath}"`);
-      
+
+      // Make sure git can attribute the initial commit. Fresh Windows installs
+      // usually have no global user.{name,email}; without these, `git commit`
+      // fails with "Author identity unknown". Set them per-repo as a fallback
+      // — global config (if present) still wins because the user explicitly
+      // set it. We derive identity from the signed-in gh user.
+      await this.ensureGitAuthorIdentity(repoPath);
+
       // Make sure hooks are executable. Windows has no chmod and treats
       // file executability by extension anyway — Git for Windows' bundled
       // bash runs `#!/bin/sh` hooks regardless of the +x bit.
@@ -622,6 +629,56 @@ export class GitDreamNodeService {
     }
   }
   
+  /**
+   * Ensure the DreamNode repo has a usable git author identity. Fresh
+   * Windows installs ship without global user.name/user.email, which
+   * causes the initial commit to fail with "Author identity unknown".
+   *
+   * We set per-repo config (not global) so a user who has their own
+   * global identity isn't overridden. The identity falls back to the
+   * signed-in gh username + GitHub no-reply email — that way commits are
+   * attributable to the user's real GitHub account without leaking a
+   * personal email.
+   */
+  private async ensureGitAuthorIdentity(repoPath: string): Promise<void> {
+    // If the user already has both globally, do nothing.
+    const haveName = await this.gitConfigHas('user.name', repoPath);
+    const haveEmail = await this.gitConfigHas('user.email', repoPath);
+    if (haveName && haveEmail) return;
+
+    // Derive identity from gh CLI. Best-effort — failures fall back to
+    // a generic placeholder that's still better than the broken state.
+    let name = 'InterBrain User';
+    let email = 'noreply@interbrain.local';
+    try {
+      const { stdout } = await execAsync('gh api user --jq "[.login,.name] | @tsv"');
+      const [login, displayName] = stdout.trim().split('\t');
+      if (login) {
+        name = displayName || login;
+        email = `${login}@users.noreply.github.com`;
+      }
+    } catch {
+      // gh not available or not signed in — keep placeholder.
+    }
+
+    if (!haveName) {
+      await execAsync(`git config user.name "${name.replace(/"/g, '\\"')}"`, { cwd: repoPath });
+    }
+    if (!haveEmail) {
+      await execAsync(`git config user.email "${email}"`, { cwd: repoPath });
+    }
+  }
+
+  /** Return true if `git config <key>` resolves to a non-empty value. */
+  private async gitConfigHas(key: string, cwd: string): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync(`git config ${key}`, { cwd });
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Replace template placeholders in files
    */
