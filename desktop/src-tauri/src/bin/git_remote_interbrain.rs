@@ -248,8 +248,19 @@ fn derive_transitive_peer_hints(remote_name: &str) -> Vec<String> {
         "git-remote-interbrain: deriving transitive hints from parent {}",
         parent_repo.display()
     );
+    // CRITICAL: When git invokes the helper during a submodule clone, it
+    // sets GIT_DIR / GIT_WORK_TREE pointing at the submodule's gitdir-to-be
+    // (e.g., Cylinder1/.git/modules/Circle). If we inherit those env vars
+    // when shelling out to git, our `git remote -v` reads config from
+    // THAT gitdir, not from cwd's. Result: empty remote list silently.
+    // Unset them so git falls back to cwd-based discovery.
     let out = match std::process::Command::new("git")
         .current_dir(&parent_repo)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        .env_remove("GIT_COMMON_DIR")
         .args(["remote", "-v"])
         .output()
     {
