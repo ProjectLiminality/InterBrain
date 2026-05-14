@@ -1,6 +1,19 @@
-# rc.21 — Operational Context (recovered)
+# Operational Context — cross-platform development
 
-Extracted from the pre-compaction transcript at `/Users/davidrug/.claude/projects/-Users-davidrug-RealDealVault-InterBrain/81c78cce-1fca-4f43-af65-02e15a88042e.jsonl` on 2026-05-13. This is the granular operational record covering yesterday's WebRTC build + Mac↔Windows validation through today's "Great Simplification" pivot. For the architectural why-and-what see [rc21-github-transport.md](./rc21-github-transport.md); for the WebRTC stack see the `feature/webrtc-transport` branch and git history. Everything below is the procedural how-to: SSH bridge, build pipeline, rc-by-rc fixes, file:line replacement maps, and Windows gotchas. Written to be re-derivable from cold storage.
+The granular operational how-to for InterBrain development: the
+Mac↔Windows SSH bridge, the Tauri build pipeline, Windows-specific
+platform gotchas, and the file:line maps from the v0.16.0 GitHub-transport
+pivot. **This is the deep reference — start at [CLAUDE.md](../../CLAUDE.md)
+for the index, come here when you need the procedural detail.**
+
+History: originally captured during the v0.16.0 "Great Simplification"
+pivot (the rc.1–rc.23 iteration that replaced Radicle with GitHub as the
+collaboration transport). The architectural why-and-what for that pivot
+lives in [../specs/rc21-github-transport.md](../specs/rc21-github-transport.md);
+the retired WebRTC prototype is preserved on the `feature/webrtc-transport`
+branch. Section 5's rc-by-rc ledger is frozen as a historical record;
+everything else (SSH bridge, build pipeline, Windows gotchas) is live and
+maintained.
 
 ---
 
