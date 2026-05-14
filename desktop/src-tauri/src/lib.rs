@@ -215,21 +215,25 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Tiny yield so the platform event loop starts processing.
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                // Identity is "is gh CLI authenticated?" Not the legacy
-                // ed25519 keychain entry (which is what `has_unlocked_identity`
-                // would have asked, and which would have triggered a macOS
-                // consent prompt at every relaunch).
+                // First-run gate keys off InterBrain's OWN setup state —
+                // specifically: has the plugin been installed into at least
+                // one vault? That's the whole purpose of the first-run
+                // flow. gh authentication is just a *step* within first-run,
+                // not the gate for it: a user who already has gh
+                // authenticated for unrelated reasons must still see the
+                // setup screen.
                 let gh = github::gh_status();
-                let has_identity = gh.authenticated;
                 let vault_count = state_for_setup.settings.lock().unwrap().vault_registry.len();
+                let needs_first_run = vault_count == 0;
                 tracing::info!(
                     target: "startup",
-                    gh_authenticated = has_identity,
+                    gh_authenticated = gh.authenticated,
                     gh_username = gh.username.as_deref().unwrap_or(""),
                     registered_vaults = vault_count,
+                    needs_first_run = needs_first_run,
                     "startup decision"
                 );
-                if !has_identity {
+                if needs_first_run {
                     // Allow headless launches (e.g. SSH-driven testing) to
                     // skip rendering the first-run window — WebView2 fails
                     // outside an interactive logon session on Windows, and

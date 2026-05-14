@@ -433,6 +433,77 @@ export class URIHandlerService {
 	}
 
 	/**
+	 * Ensure the inviting peer's GitHub outbox is registered as a peer
+	 * remote on an already-cloned DreamNode. This is the reciprocal half
+	 * of the sovereignty handover: when both peers have invited each
+	 * other, each one's repo tracks the other's outbox as a fetch source.
+	 *
+	 * Peer remotes use the native `https://github.com/<owner>/<repo>` URL
+	 * (NOT `interbrain://` — that namespace is for `.gitmodules`, where
+	 * UUID indirection is needed; a peer remote is already a concrete,
+	 * known location). The remote is named after the owner.
+	 *
+	 * Returns true if a new peer remote was added, false if it was
+	 * already present (or the owner is the current user — you don't peer
+	 * with yourself).
+	 */
+	private async ensurePeerRemote(repoFullPath: string, owner: string, repoName: string): Promise<boolean> {
+		try {
+			const { exec } = require('child_process');
+			const { promisify } = require('util');
+			const execAsync = promisify(exec);
+
+			// Don't add a peer remote pointing at our own outbox.
+			try {
+				const { getSovereigntyService } = await import('../social-resonance-filter/services/sovereignty-service');
+				const me = await getSovereigntyService().getCurrentUser();
+				if (me && me.toLowerCase() === owner.toLowerCase()) {
+					return false;
+				}
+			} catch {
+				// Couldn't determine current user — proceed; worst case we
+				// add a redundant remote, which is harmless.
+			}
+
+			const peerUrl = `https://github.com/${owner}/${repoName}`;
+			const { stdout: remotesOut } = await execAsync('git remote -v', { cwd: repoFullPath });
+
+			// Already have a remote pointing at this exact URL?
+			if (remotesOut.includes(peerUrl)) {
+				return false;
+			}
+
+			// Pick a remote name. Prefer the owner login; if that name is
+			// taken by a *different* URL, suffix it.
+			let remoteName = owner;
+			const existingNames = new Set(
+				remotesOut.split('\n')
+					.map((l: string) => l.split('\t')[0]?.trim())
+					.filter(Boolean)
+			);
+			if (existingNames.has(remoteName)) {
+				let n = 2;
+				while (existingNames.has(`${remoteName}-${n}`)) n++;
+				remoteName = `${remoteName}-${n}`;
+			}
+
+			await execAsync(`git remote add ${remoteName} ${peerUrl}`, { cwd: repoFullPath });
+			// Best-effort fetch so the peer's commits are immediately
+			// visible to Check for Updates.
+			try {
+				await execAsync(`git fetch ${remoteName}`, { cwd: repoFullPath });
+			} catch (fetchErr) {
+				console.warn(`[URIHandler] peer remote ${remoteName} added but fetch failed (non-fatal):`, fetchErr);
+			}
+			console.log(`[URIHandler] added peer remote "${remoteName}" -> ${peerUrl}`);
+			return true;
+		} catch (err) {
+			console.warn('[URIHandler] ensurePeerRemote failed (non-fatal):', err);
+			return false;
+		}
+	}
+
+	/**
 	 * Index a newly cloned node for semantic search
 	 */
 	private async indexNewNode(repoName: string): Promise<void> {
@@ -650,11 +721,26 @@ export class URIHandlerService {
 
 			// Check if already exists - use Obsidian vault API
 			if (await this.app.vault.adapter.exists(repoName)) {
+				// The DreamNode is already in this vault — but the invite is
+				// still meaningful: it's the *reciprocal* half of the
+				// sovereignty handover. If Alice accepted Bob's invite, then
+				// Bob sends his link back, accepting it should register
+				// Alice's outbox (`github.com/<owner>/<repo>`) as a peer
+				// remote so Bob can follow Alice's updates too.
+				//
+				// Only truly skip if that peer remote is already present.
+				const peerAdded = await this.ensurePeerRemote(destinationPath, owner, repoName);
 				if (!silent) {
-					new Notice(`DreamNode "${repoName}" already cloned!`);
+					if (peerAdded) {
+						new Notice(`Now following ${owner}'s "${repoName}"`);
+					} else {
+						new Notice(`Already following ${owner}'s "${repoName}"`);
+					}
 					await this.autoFocusNode(repoName, silent);
 				}
-				return 'skipped';
+				// 'success' when we wired a new peer, 'skipped' when nothing
+				// changed — keeps the caller's accounting honest.
+				return peerAdded ? 'success' : 'skipped';
 			}
 
 			if (!silent) {
@@ -852,10 +938,18 @@ export class URIHandlerService {
 		const isRadicleId = identifier.startsWith('rad:');
 		const isGitHubUrl = identifier.includes('github.com/');
 
-		// Normalize GitHub URL if needed (remove protocol, .git suffix)
-		const normalizedGitHubUrl = isGitHubUrl
-			? identifier.replace(/^https?:\/\//, '').replace(/\.git$/, '')
-			: null;
+		// For a GitHub identifier, the cloned DreamNode lives at vault path
+		// `<repo>` — that's literally how cloneFromGitHub names the
+		// destination dir. So match on repoPath, NOT githubRepoUrl: under
+		// rc.21 we deliberately stopped writing .udd.githubRepoUrl on clone
+		// (it would be the sender's URL, and the sovereignty handover
+		// repoints origin to the recipient's own outbox anyway), so
+		// githubRepoUrl is undefined on freshly-cloned nodes.
+		let githubRepoName: string | null = null;
+		if (isGitHubUrl) {
+			const m = identifier.match(/github\.com\/[^/]+\/([^/\s]+)/);
+			if (m) githubRepoName = m[1].replace(/\.git$/, '');
+		}
 
 		for (const node of allNodes) {
 			// Check Radicle ID (available on DreamNode from vault scan)
@@ -864,10 +958,17 @@ export class URIHandlerService {
 				return node;
 			}
 
-			// Check GitHub URL (available on DreamNode from vault scan)
+			// Check GitHub identifier: cloned node's repoPath === <repo>.
+			if (githubRepoName && node.repoPath === githubRepoName) {
+				(node as any).uuid = node.id;
+				return node;
+			}
+
+			// Fallback: legacy nodes that still carry githubRepoUrl in .udd.
 			if (isGitHubUrl && node.githubRepoUrl) {
 				const normalizedUddUrl = node.githubRepoUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '');
-				if (normalizedUddUrl === normalizedGitHubUrl) {
+				const normalizedIdentifier = identifier.replace(/^https?:\/\//, '').replace(/\.git$/, '');
+				if (normalizedUddUrl === normalizedIdentifier) {
 					(node as any).uuid = node.id;
 					return node;
 				}
