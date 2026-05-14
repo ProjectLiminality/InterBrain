@@ -73,6 +73,22 @@ After the NSIS uninstaller runs, an empty `%LOCALAPPDATA%\InterBrain\`
 directory shell sometimes can't be deleted (Defender/Explorer transient
 handle). Harmless — NSIS reinstalls over it cleanly; clears on reboot.
 
+### Dev-environment housekeeping after v0.16.0 validation *(2026-05-14)*
+
+Loose ends from the cross-platform validation push, safe to clear
+whenever convenient — none of it blocks anything:
+
+- **Dev snapshots / backups**: Mac has `~/interbrain-dev-snapshot-20260514-092808`
+  (config dir + app bundle + obsidian.json from before the clean-install
+  test). Windows has `*.dev-backup-<stamp>` siblings of the install dir,
+  config dir, and dev vaults. Discard once confident the CI-installed
+  build is healthy.
+- **Orphaned GitHub test repos**: the Square/Circle/Cylinder iterations
+  created throwaway repos under the test accounts. Bulk-delete via
+  `gh repo list` + `gh repo delete`.
+- **gh accounts**: if any were logged out during clean-slate testing,
+  re-add them with `gh auth login`.
+
 ---
 
 ## Planned Features
