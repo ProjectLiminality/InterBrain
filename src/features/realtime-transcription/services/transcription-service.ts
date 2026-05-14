@@ -93,7 +93,7 @@ export class TranscriptionService implements ITranscriptionService {
 				'scripts'
 			);
 
-			// eslint-disable-next-line no-undef
+			 
 			if (process.platform === 'win32') {
 				const venvPython = path.join(scriptsDir, 'venv', 'Scripts', 'python.exe');
 				if (fs.existsSync(venvPython)) {
@@ -133,7 +133,7 @@ export class TranscriptionService implements ITranscriptionService {
 				'scripts'
 			);
 
-			// eslint-disable-next-line no-undef
+			 
 			const venvPath = process.platform === 'win32'
 				? path.join(scriptsDir, 'venv', 'Scripts', 'python.exe')
 				: path.join(scriptsDir, 'venv', 'bin', 'python3');
@@ -174,7 +174,7 @@ export class TranscriptionService implements ITranscriptionService {
 		return new Promise((resolve) => {
 			try {
 				const { exec } = require('child_process');
-				// eslint-disable-next-line no-undef
+				 
 				const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
 				exec(`${pythonCommand} --version`, (error: Error | null) => {
 					resolve(!error);
@@ -245,7 +245,7 @@ export class TranscriptionService implements ITranscriptionService {
 		// Build command arguments
 		// Prefer venv Python if available, otherwise use system Python
 		const venvPython = this.getVenvPython();
-		// eslint-disable-next-line no-undef
+		 
 		const basePythonCommand = venvPython || (process.platform === 'win32' ? 'python' : 'python3');
 		const scriptPath = this.getScriptPath();
 		const model = config.model || 'small.en';
@@ -262,7 +262,7 @@ export class TranscriptionService implements ITranscriptionService {
 		let pythonCommand = basePythonCommand;
 		let args: string[];
 
-		// eslint-disable-next-line no-undef
+		 
 		if (process.platform === 'darwin') {
 			const wrapperScript = path.join(path.dirname(scriptPath), 'run-with-libs.sh');
 			pythonCommand = wrapperScript;
@@ -297,7 +297,7 @@ export class TranscriptionService implements ITranscriptionService {
 			console.log('[Transcription] Process spawned, waiting for output...');
 
 			// Monitor stdout for status updates and dual-stream output
-			// eslint-disable-next-line no-undef
+			 
 			this.currentProcess?.stdout?.on('data', (data: Buffer) => {
 				const rawOutput = data.toString();
 				// Process each line separately (data may contain multiple lines)
@@ -369,7 +369,7 @@ export class TranscriptionService implements ITranscriptionService {
 			});
 
 			// Monitor stderr for errors
-			// eslint-disable-next-line no-undef
+			 
 			this.currentProcess?.stderr?.on('data', (data: Buffer) => {
 				const error = data.toString().trim();
 				if (!error) return;

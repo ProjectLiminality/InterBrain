@@ -2044,7 +2044,7 @@ const SpatialOrchestrator = forwardRef<SpatialOrchestratorRef, SpatialOrchestrat
   // in-progress animated transitions with instant teleports.
   useEffect(() => {
     onOrchestratorReady?.();
-  // eslint-disable-next-line
+   
   }, []);
   
   // This component renders nothing - it's purely for orchestration

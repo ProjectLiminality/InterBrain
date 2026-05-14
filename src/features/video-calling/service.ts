@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+ 
 // Access Node.js modules directly in Electron context
 const { exec } = require('child_process');
 const { promisify } = require('util');

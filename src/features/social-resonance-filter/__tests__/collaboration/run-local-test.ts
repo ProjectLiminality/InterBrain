@@ -13,7 +13,7 @@ import { localHarness } from './local-harness';
 import { runAllPeersSequentially } from './scenario';
 import { PeerIdentity } from './types';
 
-/* eslint-disable no-undef */
+ 
 
 async function main() {
   const args = process.argv.slice(2);

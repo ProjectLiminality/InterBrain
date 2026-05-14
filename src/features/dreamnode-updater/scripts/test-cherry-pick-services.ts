@@ -6,7 +6,7 @@
  * Prerequisites: Run setup-cherry-pick-test.sh first
  */
 
-/* eslint-disable no-undef */
+ 
 
 import {
   CollaborationMemoryService,

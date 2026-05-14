@@ -24,17 +24,19 @@
 import type InterBrainPlugin from '../../main';
 import { getBridge } from './bridge-client';
 
-const SYSTEM_LEVEL_KEYS = [
-  'claudeApiKey',
-  'openaiApiKey',
-  'groqApiKey',
-  'xaiApiKey',
-  'defaultAIProvider',
-  'transcriptionModel',
-  'transcriptionLanguage',
-] as const;
-
-type SystemLevelKey = typeof SYSTEM_LEVEL_KEYS[number];
+/**
+ * Plugin-settings keys that are owned by the daemon (system-level config:
+ * API keys, AI provider, transcription settings). Pure type — no runtime
+ * value, since these are only referenced in the typed `set()` helper below.
+ */
+type SystemLevelKey =
+  | 'claudeApiKey'
+  | 'openaiApiKey'
+  | 'groqApiKey'
+  | 'xaiApiKey'
+  | 'defaultAIProvider'
+  | 'transcriptionModel'
+  | 'transcriptionLanguage';
 
 interface DaemonSettingsShape {
   codingAgentCommand: string;

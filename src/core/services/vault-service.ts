@@ -273,7 +273,12 @@ export class VaultService {
     try {
       const dir = nodePath.dirname(fullPath);
       fs.mkdirSync(dir, { recursive: true });
-      await fsPromises.writeFile(fullPath, globalThis.Buffer.from(buffer));
+      // Buffer.from has distinct overloads for ArrayBuffer vs Uint8Array;
+      // TS can't resolve the call against the bare union, so normalize to
+      // a Uint8Array view first (zero-copy for ArrayBuffer, identity for
+      // an existing Uint8Array).
+      const view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      await fsPromises.writeFile(fullPath, globalThis.Buffer.from(view));
     } catch (error) {
       throw new Error(`Failed to write binary file: ${filePath} (${error})`);
     }

@@ -30,7 +30,7 @@ export class EmailExportService {
 	 * Check if running on macOS
 	 */
 	private isMacOS(): boolean {
-		// eslint-disable-next-line no-undef
+		 
 		return process.platform === 'darwin';
 	}
 

@@ -51,7 +51,9 @@ export default [
         MessageEvent: 'readonly',
         Blob: 'readonly',
         URL: 'readonly',
-        Buffer: 'readonly'
+        Buffer: 'readonly',
+        WebSocket: 'readonly',
+        process: 'readonly'
       }
     },
     plugins: {
