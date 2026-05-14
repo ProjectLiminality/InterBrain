@@ -8,14 +8,14 @@ The InterBrain is an innovative knowledge gardening system that aims to revoluti
 
 ## 🚀 Ready to Install & Try
 
-The InterBrain is work-in-progress software with basic functionality now installable as an Obsidian plugin. You can download and install the plugin to start building your liminal web using the existing features, while other capabilities are still in development and the full vision has yet to be comprehensively implemented.
+The InterBrain is work-in-progress software, now installable as a proper desktop app that sets up an Obsidian plugin for you. You can download it for macOS, Windows, or Linux and start building your liminal web using the existing features, while other capabilities are still in development and the full vision has yet to be comprehensively implemented.
 
 **[→ Installation Guide](#installation--setup)**
 
 ## Project Status & Roadmap
 
-> ⚡️ **Current Status: 7 Foundation Epics Complete, Epic 8 In Progress**
-Epics 1-7 are complete (plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot). Epic 8 (Coherence Beacon System) is currently in development with automatic relationship discovery, bidirectional tracking, and Radicle network integration.
+> ⚡️ **Current Status: 8 Foundation Epics Complete + Desktop App**
+Epics 1-8 are complete: plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot, and the Coherence Beacon System (automatic relationship discovery and bidirectional tracking). The latest milestone ships InterBrain as a cross-platform desktop app with GitHub as the collaboration transport — bringing full macOS, Windows, and Linux parity.
 
 > 🔬 **Previous Exploration:**
 Earlier exploration work including screenshots and recordings can be found at [**InterBrain-Prototype**](https://github.com/ProjectLiminality/InterBrain-Prototype). This repository contains the conceptual foundation and visual demonstrations that inform the current development approach.
@@ -24,11 +24,11 @@ Earlier exploration work including screenshots and recordings can be found at [*
 The InterBrain is designed as the foundation for **DreamOS** — a decentralized, AI-agent-powered operating system for collective sensemaking and human-computer symbiosis.
 
 > 💡 **Development Roadmap:**
-- ✅ Epics 1-7: Complete foundation (plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot)
-- 🚧 Epic 8: Coherence Beacon System (in progress)
+- ✅ Epics 1-8: Complete foundation (plugin infrastructure, 3D visualization, DreamNode management, liminal web, semantic search, dreamweaving, conversational copilot, coherence beacon)
+- ✅ Desktop app + GitHub-based collaboration transport (full cross-platform support)
 - 🪐 DreamOS system (future evolution)
 
-Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2). For detailed achievement history, see [CHANGELOG.md](CHANGELOG.md).
+Current development progress is tracked through [**GitHub Issues**](https://github.com/ProjectLiminality/InterBrain/issues) and [**Project Board**](https://github.com/users/ProjectLiminality/projects/2). For detailed achievement history, see [CHANGELOG.md](CHANGELOG.md). For known issues and the near-term backlog, see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Installation & Setup
 
@@ -43,39 +43,28 @@ InterBrain is currently in **private beta**. We're gathering feedback from early
 
 ### Platform Support
 
-InterBrain runs on **macOS, Linux, and Windows**. See [Platform Support Documentation](src/features/social-resonance-filter/docs/platform-support.md) for full details.
+InterBrain runs on **macOS, Windows, and Linux**. The collaboration transport is built on GitHub, so peer-to-peer sharing works the same on every platform. Linux is fully built but is still completing its end-to-end shakedown — see [docs/ROADMAP.md](docs/ROADMAP.md) for current validation status.
 
-| Feature | macOS | Linux | Windows |
-|---------|-------|-------|---------|
+| Feature | macOS | Windows | Linux |
+|---------|-------|---------|-------|
 | Create & edit DreamNodes | ✅ | ✅ | ✅ |
 | DreamSong canvas playback | ✅ | ✅ | ✅ |
 | Submodule import (dreamweaving) | ✅ | ✅ | ✅ |
 | Semantic search (Ollama) | ✅ | ✅ | ✅ |
 | GitHub publishing | ✅ | ✅ | ✅ |
-| **P2P collaboration (Radicle)** | ✅ | ✅ | 🔜 |
-
-**Windows P2P Note**: Radicle's `git-remote-rad` and `radicle-node` are not yet available on Windows. Once Radicle ships these components, InterBrain will automatically enable full P2P collaboration. See [Platform Support](src/features/social-resonance-filter/docs/platform-support.md) for details on expressing interest to the Radicle team.
+| Peer-to-peer collaboration | ✅ | ✅ | ✅ |
 
 ### Quick Install
 
-**macOS / Linux:**
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.sh)
-```
+Download the installer for your platform from the [**latest release**](https://github.com/ProjectLiminality/InterBrain/releases/latest):
 
-**Windows:**
-```powershell
-irm https://raw.githubusercontent.com/ProjectLiminality/InterBrain/main/install.ps1 | iex
-```
+- **macOS** — `InterBrain_*_universal.dmg`
+- **Windows** — `InterBrain_*_x64-setup.exe`
+- **Linux** — `InterBrain_*_amd64.AppImage` or `.deb`
 
-The install script will automatically install and configure all dependencies:
-- Obsidian (if not already installed)
-- Git (required for DreamNode versioning)
-- Ollama (for semantic search with local AI)
-- Radicle (for peer-to-peer sharing - macOS/Linux)
-- InterBrain plugin and vault setup
+Run the installer and the InterBrain desktop app guides you through setup: it checks for prerequisites (Git, the GitHub CLI), installs anything missing, connects your GitHub account, and drops the plugin into an Obsidian vault for you. The app then lives in your system tray as a small background companion to the Obsidian plugin.
 
-> 💡 **Tip**: If the install script encounters issues, you can safely re-run it. It's designed to be idempotent and may resolve transient problems on subsequent runs.
+> 💡 **Tip**: If first-run setup hits a snag, you can safely re-run it — the setup steps are idempotent.
 
 ---
 
@@ -213,7 +202,7 @@ Easily open any given DreamNode in your favorite git client of your choice.
 
 Share your DreamNodes with the world via GitHub Pages. With one action, publish a DreamNode to GitHub - the system creates a repository, generates an interactive viewer bundle, and deploys it to GitHub Pages. Recipients can view the DreamTalk and DreamSong in their browser, and easily clone it into their own InterBrain.
 
-*Complements the peer-to-peer Radicle sharing for cases where you want public, web-accessible sharing.*
+*Complements peer-to-peer collaboration for cases where you want public, web-accessible sharing.*
 
 ### 📊 Organic Content Visualization
 
