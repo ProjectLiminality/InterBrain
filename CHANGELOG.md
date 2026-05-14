@@ -5,6 +5,70 @@ All notable changes to the InterBrain project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-05-14 - The Desktop App & Full Windows Support
+
+### Overview
+
+InterBrain ships as a proper cross-platform desktop app. Setup is no longer a terminal script — you download an installer for macOS, Windows, or Linux, and a guided first-run flow installs prerequisites, connects your GitHub account, and drops the plugin into an Obsidian vault for you. A small background daemon then lives in the system tray as the plugin's companion.
+
+The collaboration transport moved from Radicle (peer-to-peer) to GitHub. The InterBrain's collaboration *model* is unchanged — the social resonance filter, each peer keeping their own sovereign copy of every DreamNode, the cherry-pick flow for choosing what to integrate — only the pipes underneath changed. InterBrain keeps its own `interbrain://<uuid>` URL namespace layered on top, so the conceptual model stays transport-agnostic. This is what unblocked full Windows parity: Radicle had no native Windows support, GitHub works everywhere.
+
+The end-to-end flow — install, setup, create DreamNodes, weave DreamSongs, share changes, receive a peer's coherence beacon, recursively clone a supermodule and its submodules — was validated Mac ↔ Windows on real hardware with real GitHub accounts.
+
+### Added
+
+**Desktop companion app** (`desktop/`)
+- Tauri-based daemon (Rust) that runs in the system tray
+- Guided first-run flow: prerequisite detection + install, GitHub sign-in, vault setup
+- System-level settings dashboard
+- Local WebSocket IPC bridge between the Obsidian plugin and the daemon
+- `git-remote-interbrain` helper binary — resolves `interbrain://<uuid>` URLs to GitHub repos at git-invocation time (local UUID index first, then parent-origin transitivity, then peer registry)
+- Cross-platform installers: `.dmg` (macOS universal), `.exe` + `.msi` (Windows), `.deb` + `.AppImage` (Linux)
+- GitHub Actions Release workflow — tag-triggered 3-OS matrix build
+
+**GitHub-as-transport collaboration** (`src/features/social-resonance-filter/`, `src/features/uri-handler/`)
+- `SovereigntyService` — every peer has their own GitHub repo per DreamNode; `origin` is your own outbox, peer remotes are fetch-only
+- Clone-accept sovereignty handover: rename the cloned `origin` to a peer remote, create your own outbox as the new `origin`
+- "Share Changes" and "Invite Collaborators" action buttons on DreamNodes
+- Reciprocal invites — accepting a peer's return invite wires their outbox as a peer remote
+- Coherence beacons propagate over GitHub: `git commit -F` beacon commits, parent-origin transitivity for resolving bare `interbrain://` submodule URLs
+- Activity scanner backend (`desktop/src-tauri/src/activity.rs`) — walks all vaults, fetches peer remotes, counts pending commits
+
+**DreamNode template bundling**
+- The DreamNode git-init template (`.udd`, hooks, README) is bundled into the plugin install dir as a Tauri resource, so DreamNode creation works on fresh installs without the InterBrain repo's `src/` tree
+
+### Changed
+
+**Identity** — GitHub-based
+- First-run uses GitHub CLI device-flow sign-in instead of ed25519 keypair generation
+- `gh auth setup-git` wired automatically so git HTTPS operations use the gh-stored token (no credential-manager prompts)
+- Peer registry keyed on GitHub username instead of Radicle DID
+
+**Dreamweaving submodule URLs**
+- `.gitmodules` entries written as `interbrain://<uuid>` (was: relative paths) — portable, committed, transport-agnostic
+
+**First-run gate** — keys off InterBrain's own setup state (`vault_count == 0`), not whether `gh` happens to be authenticated for unrelated reasons
+
+**Cross-platform fixes**
+- DreamNode `git init` pinned to `init.defaultBranch=main` (Git for Windows defaults to `master`, which broke peer fetches)
+- `chmod +x` on git hooks skipped on Windows (no-op there; Git for Windows runs hooks regardless)
+- Auto-set per-repo git `user.name`/`user.email` from the gh account so the initial commit doesn't fail on fresh installs without global git config
+- LeafManager normalizes backslash paths to forward slashes for Obsidian's vault API
+- Vault auto-registration with Obsidian's `obsidian.json` on vault create
+
+### Removed
+
+- WebRTC transport prototype (preserved on the `feature/webrtc-transport` branch for a future release)
+- Radicle as the collaboration transport — most Radicle code is now inert; a focused removal pass is tracked in `docs/ROADMAP.md`
+- `install.sh` / `install.ps1` shell installers — replaced by the desktop app's first-run flow
+- Radicle-era CI jobs (`install-script-syntax`, `install-verify-*`); the P2P collaboration E2E workflow is parked in `.github/workflows-disabled/` pending a GitHub-transport rewrite
+
+### Technical
+
+- 419 tests passing
+- Zero lint errors, zero TypeScript errors
+- New living docs: `docs/ROADMAP.md` (known issues + backlog), `docs/development/operational-context.md` (cross-platform dev), `docs/specs/rc21-github-transport.md` (transport architecture)
+
 ## [0.15.0] - 2026-03-03 - Holarchy Navigation & Vault Health
 
 ### Overview
