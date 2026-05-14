@@ -7,7 +7,7 @@
  *
  * Run automatically before `tauri build` and `vite build`.
  */
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, cpSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,6 +24,16 @@ const items = [
   ['theme/interbrain.css', 'interbrain.css'],
 ];
 
+// Directories to copy wholesale (sourceRelativeToRepo, dstNameInResourceDir).
+const dirItems = [
+  // The DreamNode git-init template. assemble-plugin.mjs stages it at the
+  // repo root; we carry it into the Tauri resource bundle so the installed
+  // plugin can find it at <pluginDir>/DreamNode-template. Must NOT depend
+  // on the InterBrain DreamNode repo — that's cloned from `main` on fresh
+  // installs and has no `src/` tree.
+  ['DreamNode-template', 'DreamNode-template'],
+];
+
 mkdirSync(resourceDir, { recursive: true });
 
 const missing = [];
@@ -36,6 +46,17 @@ for (const [rel, dstName] of items) {
   const dst = join(resourceDir, dstName);
   copyFileSync(src, dst);
   console.log(`copied ${rel} → ${dst}`);
+}
+
+for (const [rel, dstName] of dirItems) {
+  const src = join(repoRoot, rel);
+  if (!existsSync(src)) {
+    missing.push(rel);
+    continue;
+  }
+  const dst = join(resourceDir, dstName);
+  cpSync(src, dst, { recursive: true });
+  console.log(`copied dir ${rel} → ${dst}`);
 }
 
 if (missing.length > 0) {

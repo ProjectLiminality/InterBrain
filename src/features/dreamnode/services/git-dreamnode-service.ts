@@ -58,24 +58,28 @@ export class GitDreamNodeService {
     }
     
     this.vaultPath = vaultPath;
-    
-    // Template lives in the InterBrain DreamNode that the daemon clones
-    // into every registered vault. Path: <vault>/InterBrain/src/features/
-    // dreamnode/DreamNode-template/. Used by `git init --template=…` to
-    // seed each new DreamNode's `.git/` directory with `udd` + hooks +
-    // README.md placeholders.
+
+    // The DreamNode git-init template ships INSIDE the plugin install dir
+    // (<vault>/.obsidian/plugins/<id>/DreamNode-template/). It's bundled
+    // there by assemble-plugin.mjs + copy-plugin-resources.mjs. Used by
+    // `git init --template=…` to seed each new DreamNode's `.git/` with
+    // the `udd` placeholder + hooks.
+    //
+    // It must NOT key off the InterBrain DreamNode repo: on a fresh
+    // install the daemon clones that repo from `main`, which is docs-only
+    // and has no `src/` tree — so the template would never resolve.
     if (this.vaultPath) {
       this.templatePath = path.join(
-        this.vaultPath, 'InterBrain', 'src', 'features', 'dreamnode', 'DreamNode-template'
+        this.vaultPath, '.obsidian', 'plugins', plugin.manifest.id, 'DreamNode-template'
       );
     } else {
-      // Pre-onload edge case (vault path not resolvable yet) — fall back to
-      // a repo-relative path that only works in dev. Production loads the
-      // adapter basePath synchronously so this branch never fires.
-      this.templatePath = './InterBrain/src/features/dreamnode/DreamNode-template';
+      // Pre-onload edge case (vault path not resolvable yet) — fall back
+      // to a repo-relative path that only works in dev. Production loads
+      // the adapter basePath synchronously so this branch never fires.
+      this.templatePath = './src/features/dreamnode/DreamNode-template';
       console.warn('GitDreamNodeService: Could not determine vault path, using fallback template path:', this.templatePath);
     }
-    
+
   }
   
   /**

@@ -105,6 +105,10 @@ dist
 /main.js
 *.zip
 /styles.css
+# Staged copy of the DreamNode git-init template — assemble-plugin.mjs
+# copies it here from src/features/dreamnode/DreamNode-template/ (the
+# source of truth) so it gets bundled into the plugin install dir.
+/DreamNode-template/
 
 # macOS
 .DS_Store

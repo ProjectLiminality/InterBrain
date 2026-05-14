@@ -211,6 +211,23 @@ pub fn install_managed(vault_path: &Path, bundled_dir: &Path) -> Result<()> {
         fs::copy(bundled_dir.join(file), staging.join(file))?;
     }
 
+    // Carry the DreamNode git-init template into the plugin install dir.
+    // The plugin reads it from <pluginDir>/DreamNode-template at runtime
+    // for `git init --template=…`. Best-effort: older bundles may not
+    // ship it, in which case DreamNode creation would fail with a clear
+    // error — but every rc.21+ build includes it.
+    let template_src = bundled_dir.join("DreamNode-template");
+    if template_src.is_dir() {
+        copy_dir_recursive(&template_src, &staging.join("DreamNode-template"))
+            .with_context(|| "stage DreamNode-template into plugin dir")?;
+    } else {
+        tracing::warn!(
+            target: "vaults",
+            path = %template_src.display(),
+            "bundled DreamNode-template missing — DreamNode creation will fail until rebuilt"
+        );
+    }
+
     // Now replace the live target — only AFTER staging is fully populated.
     if target.exists() {
         remove_path(&target)?;
@@ -300,6 +317,27 @@ fn remove_path(p: &Path) -> Result<()> {
         fs::remove_dir_all(p).with_context(|| format!("remove_dir_all {}", p.display()))?;
     } else {
         fs::remove_file(p).with_context(|| format!("remove_file {}", p.display()))?;
+    }
+    Ok(())
+}
+
+/// Recursively copy a directory tree. Used to stage the bundled
+/// DreamNode-template into a vault's plugin dir. Plain file/dir copy —
+/// no symlink following, no special handling; the template is just a
+/// few small files (udd, hooks/, LICENSE, README).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)
+        .with_context(|| format!("create_dir_all {}", dst.display()))?;
+    for entry in fs::read_dir(src).with_context(|| format!("read_dir {}", src.display()))? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            fs::copy(&from, &to)
+                .with_context(|| format!("copy {} -> {}", from.display(), to.display()))?;
+        }
     }
     Ok(())
 }
@@ -449,8 +487,13 @@ pub fn ensure_plugin_health(
                     true
                 }
             } else if meta.is_dir() {
-                // Regular dir must contain manifest + main.js.
-                !plugin_dir.join("manifest.json").exists() || !plugin_dir.join("main.js").exists()
+                // Regular dir must contain manifest + main.js + the bundled
+                // DreamNode-template (added rc.21+; an older managed install
+                // won't have it and needs a re-stage so DreamNode creation
+                // works).
+                !plugin_dir.join("manifest.json").exists()
+                    || !plugin_dir.join("main.js").exists()
+                    || !plugin_dir.join("DreamNode-template").is_dir()
             } else {
                 true
             }
