@@ -35,6 +35,19 @@ export class LeafManagerService {
   }
 
   /**
+   * Normalize a path for Obsidian's vault API.
+   *
+   * Obsidian's `getAbstractFileByPath` always expects forward-slash,
+   * vault-relative paths. On Windows, paths built from `dreamNode.repoPath`
+   * (or other fs-derived values) can carry backslashes, which makes the
+   * lookup silently return null. Collapse `\` → `/` and strip any leading
+   * slash so the path is always vault-relative.
+   */
+  private normalizeVaultPath(p: string): string {
+    return p.replace(/\\/g, '/').replace(/^\/+/, '');
+  }
+
+  /**
    * Find the dreamspace leaf in the workspace
    */
   private findDreamspaceLeaf(): WorkspaceLeaf | null {
@@ -141,7 +154,7 @@ export class LeafManagerService {
       }
 
       // Handle file-based media (existing logic)
-      const fullPath = `${dreamNode.repoPath}/${mediaFile.path}`;
+      const fullPath = this.normalizeVaultPath(`${dreamNode.repoPath}/${mediaFile.path}`);
       console.log(`Looking for file at vault path: ${fullPath}`);
 
       // Get the file from the vault
@@ -290,6 +303,9 @@ export class LeafManagerService {
    */
   async openFileInRightPane(filePath: string, trackingId?: string): Promise<boolean> {
     try {
+      // Callers may pass fs-style paths (backslashes on Windows); the vault
+      // API needs forward slashes.
+      filePath = this.normalizeVaultPath(filePath);
       console.log(`[LeafManager] Opening file in right pane: ${filePath}`);
 
       // Check if we already have a leaf for this file (if tracking ID provided)
@@ -369,7 +385,7 @@ export class LeafManagerService {
       }
 
       // Construct the README path
-      const readmePath = `${dreamNode.repoPath}/README.md`;
+      const readmePath = this.normalizeVaultPath(`${dreamNode.repoPath}/README.md`);
       console.log(`Looking for README at vault path: ${readmePath}`);
 
       // Get the file from the vault
@@ -460,6 +476,8 @@ export class LeafManagerService {
    */
   async openDreamSongCanvas(dreamNode: DreamNode, canvasPath: string): Promise<void> {
     try {
+      // Normalize fs-style paths (backslashes on Windows) for the vault API.
+      canvasPath = this.normalizeVaultPath(canvasPath);
       console.log(`Opening DreamSong canvas for ${dreamNode.name}:`, canvasPath);
 
       // Check if we already have a leaf for this DreamNode's canvas

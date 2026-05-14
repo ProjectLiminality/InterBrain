@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/copy-plugin-resources.mjs",
+    "build:plugin": "npm --prefix .. run build:plugin",
+    "build": "npm run build:plugin && vite build && node scripts/copy-plugin-resources.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "node scripts/copy-plugin-resources.mjs && tauri build",
+    "tauri:build": "npm run build:plugin && node scripts/copy-plugin-resources.mjs && tauri build",
     "build:daemon": "npm run build && tauri build --no-bundle",
     "copy:plugin": "node scripts/copy-plugin-resources.mjs"
   },
