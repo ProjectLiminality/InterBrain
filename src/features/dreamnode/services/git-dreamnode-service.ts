@@ -480,8 +480,12 @@ export class GitDreamNodeService {
       // Create directory
       await fsPromises.mkdir(repoPath, { recursive: true });
       
-      // Initialize git with template
-      await execAsync(`git init --template="${this.templatePath}" "${repoPath}"`);
+      // Initialize git with template. Pin the default branch to `main`
+      // via `-c init.defaultBranch=main` — the user's git config may
+      // still default to `master` (pre-2.28 git, or never changed),
+      // which would break peer fetch: a `master` DreamNode and a `main`
+      // one can't see each other's commits.
+      await execAsync(`git -c init.defaultBranch=main init --template="${this.templatePath}" "${repoPath}"`);
 
       // Make sure git can attribute the initial commit. Fresh Windows installs
       // usually have no global user.{name,email}; without these, `git commit`

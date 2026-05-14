@@ -234,10 +234,13 @@ export async function commitAllChanges(repoPath: string, commitMessage: string):
  */
 export async function initRepo(repoPath: string, templatePath?: string): Promise<void> {
   try {
+    // `-c init.defaultBranch=main` pins the branch regardless of the
+    // user's git config (which may still default to `master`). A master
+    // DreamNode and a main one can't see each other's commits on fetch.
     if (templatePath) {
-      await execAsync(`git init --template="${templatePath}"`, { cwd: repoPath });
+      await execAsync(`git -c init.defaultBranch=main init --template="${templatePath}"`, { cwd: repoPath });
     } else {
-      await execAsync('git init', { cwd: repoPath });
+      await execAsync('git -c init.defaultBranch=main init', { cwd: repoPath });
     }
   } catch (error) {
     throw new Error(`Failed to init repo: ${error instanceof Error ? error.message : 'Unknown error'}`);

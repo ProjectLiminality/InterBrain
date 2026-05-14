@@ -189,20 +189,27 @@ export class GitSyncService {
         throw fetchError;
       }
 
-      // ALSO fetch from peer remotes (for pure p2p collaboration)
+      // ALSO fetch from peer remotes (for pure p2p collaboration).
+      //
+      // A peer remote is simply "any remote that isn't `origin`". `origin`
+      // is the user's own sovereign outbox; every other remote is a peer
+      // whose version we may want to pull from. We do NOT sniff for a URL
+      // scheme: peer remotes are plain `https://github.com/...` URLs (the
+      // clone-accept sovereignty handover renames the cloned origin to a
+      // peer remote, keeping git's native URL). The `interbrain://` scheme
+      // is reserved for `.gitmodules` — shared, portable content that
+      // needs UUID indirection — not for local remote config, which is
+      // already concrete.
       console.log(`GitSyncService: Checking for peer remotes...`);
       const { stdout: remoteVerbose } = await execAsync('git remote -v', { cwd: fullPath });
       const peerRemotes = new Set<string>();
 
-      // Match either legacy rad:// URLs or v0.16+ interbrain:// URLs.
-      // Both are peer remotes; both go through the appropriate transport.
-      const peerRemoteRegex = /^(\S+)\s+(rad:\/\/\S+|interbrain:\/\/\S+)/;
+      // `git remote -v` lines: "<name>\t<url> (fetch|push)"
       for (const line of remoteVerbose.split('\n')) {
-        const match = line.match(peerRemoteRegex);
+        const match = line.match(/^(\S+)\s+\S+\s+\((?:fetch|push)\)$/);
         if (match) {
           const peerName = match[1];
-          // Skip `origin` if it happens to match (it shouldn't, but be safe).
-          if (peerName === 'origin') continue;
+          if (peerName === 'origin') continue; // origin = own outbox, not a peer
           peerRemotes.add(peerName);
         }
       }

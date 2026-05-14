@@ -45,7 +45,9 @@ export async function createRepoDirectory(repoPath: string): Promise<void> {
  * Initialize a git repository with a template
  */
 export async function initGitWithTemplate(repoPath: string, templatePath: string): Promise<void> {
-  await execAsync(`git init --template="${templatePath}" "${repoPath}"`);
+  // Pin default branch to `main` — see git-dreamnode-service.ts for why
+  // (peer fetch breaks when a master DreamNode meets a main one).
+  await execAsync(`git -c init.defaultBranch=main init --template="${templatePath}" "${repoPath}"`);
 
   // Make hooks executable (no-op on Windows; Git for Windows runs
   // `#!/bin/sh` hooks regardless of the +x bit).

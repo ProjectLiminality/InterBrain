@@ -267,7 +267,9 @@ export class DreamNodeConversionService {
       'dreamnode',
       'DreamNode-template'
     );
-    await execAsync(`git init --template="${templatePath}" "${folderPath}"`);
+    // Pin default branch to `main` (the user's git config may default to
+    // `master`, which breaks peer fetch — see git-dreamnode-service.ts).
+    await execAsync(`git -c init.defaultBranch=main init --template="${templatePath}" "${folderPath}"`);
 
     // Make hooks executable (no-op on Windows; Git for Windows runs
     // `#!/bin/sh` hooks regardless of the +x bit).
