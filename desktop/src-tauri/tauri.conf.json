@@ -26,13 +26,6 @@
     "macOSPrivateApi": true,
     "security": {
       "csp": null
-    },
-    "trayIcon": {
-      "id": "main",
-      "iconPath": "icons/tray-template.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false,
-      "tooltip": "InterBrain"
     }
   },
   "bundle": {

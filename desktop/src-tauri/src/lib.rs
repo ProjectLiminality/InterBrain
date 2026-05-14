@@ -157,10 +157,14 @@ pub fn run() {
                 ],
             )?;
 
-            let tray_icon_bytes = include_bytes!("../icons/tray-template.png");
+            // Full-color downscaled InterBrain logo (32x32, from the
+            // 512x512 source). NOT a template image — we want the actual
+            // colored mark in the tray, not a monochrome mask.
+            let tray_icon_bytes = include_bytes!("../icons/tray-icon.png");
             let _tray = tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(Image::from_bytes(tray_icon_bytes)?)
-                .icon_as_template(true)
+                .icon_as_template(false)
+                .tooltip("InterBrain")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(move |tray, event| {
