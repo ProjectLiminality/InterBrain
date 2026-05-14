@@ -508,7 +508,26 @@ export class CoherenceBeaconService {
       const commitMessage = `Add supermodule relationship: ${parentTitle}\n\nCOHERENCE_BEACON: ${beaconJson}`;
 
       await execAsync('git add .udd', { cwd: sovereignPath });
-      await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: sovereignPath });
+
+      // Write the commit message to a temp file and use `git commit -F`.
+      // The message is multi-line AND the COHERENCE_BEACON body contains
+      // JSON (braces, quotes). Passing that through a shell-quoted
+      // `git commit -m "..."` string is fragile — on Windows cmd the
+      // body was being dropped entirely, leaving only the subject line
+      // (which is why receivers saw a plain commit, not a beacon). A
+      // message file sidesteps all shell quoting + newline interpretation.
+      const fs = require('fs');
+      const os = require('os');
+      const pathMod = require('path');
+      const msgFile = pathMod.join(os.tmpdir(), `interbrain-beacon-msg-${Date.now()}.txt`);
+      // commitMessage is a JS template literal — its \n are already real
+      // newline characters. Write it verbatim.
+      fs.writeFileSync(msgFile, commitMessage, 'utf8');
+      try {
+        await execAsync(`git commit -F "${msgFile}"`, { cwd: sovereignPath });
+      } finally {
+        try { fs.unlinkSync(msgFile); } catch { /* best-effort cleanup */ }
+      }
       console.log('[CoherenceBeacon] Created beacon commit');
 
       // Get the beacon commit hash (we're in detached HEAD, so HEAD is the beacon)
