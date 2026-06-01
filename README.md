@@ -2,6 +2,8 @@
 
 ![InterBrain Logo](./InterBrain.png)
 
+> **At a glance (for engineers):** A cross-platform desktop app + Obsidian plugin for relational knowledge work. **TypeScript / React / React Three Fiber** (3D spatial UI) with **Zustand** state, packaged as a **Tauri** (Rust) desktop app for macOS / Windows / Linux. Local-first **semantic search via Ollama embeddings**, a conversational copilot, and an automatic relationship-discovery system ("Coherence Beacon"). GitHub as the peer-to-peer collaboration transport. Built and tested with Vite / Vitest / ESLint, developed in the open. AGPL-3.0. Architecture notes: [`src/core/orchestration/ARCHITECTURE.md`](src/core/orchestration/ARCHITECTURE.md).
+
 ## Introduction
 
 The InterBrain is an innovative knowledge gardening system that aims to revolutionize the way we collectively relate to our ideas and stories. It transcends the traditional "Second Brain" paradigm, popularized by PKM tools like Obsidian, shifting to a dynamic, relational approach to organizing knowledge as opposed to static, top-down categorization.
