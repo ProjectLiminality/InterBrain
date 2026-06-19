@@ -314,7 +314,3 @@ Interested in contributing or understanding the technical architecture?
 ## License
 
 Project Liminality is released under the [GNU AFFERO GENERAL PUBLIC LICENSE](LICENSE).
-
-## Acknowledgements
-
-Much of the philosophical foundation for this project has been created in conversation with my co-visionary and dear friend Anna Ziegler. Check out her one-of-a-kind work at https://goodfairy.gift
