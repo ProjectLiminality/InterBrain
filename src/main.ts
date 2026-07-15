@@ -1393,7 +1393,9 @@ export default class InterBrainPlugin extends Plugin {
     this.addCommand({
       id: 'undo-layout-change',
       name: 'Undo Layout Change',
-      hotkeys: [{ modifiers: ['Mod'], key: 'z' }],
+      // No default hotkey: Mod+Z is handled by the DreamSpace view's Scope
+      // (DreamspaceView), so it only fires when the DreamSpace has focus and
+      // never shadows the editor's text undo (#404).
       callback: async () => {
         const store = useInterBrainStore.getState();
         const { history, currentIndex } = store.navigationHistory;
@@ -1469,7 +1471,7 @@ export default class InterBrainPlugin extends Plugin {
     this.addCommand({
       id: 'redo-layout-change',
       name: 'Redo Layout Change',
-      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'z' }],
+      // No default hotkey — see undo-layout-change above (#404).
       callback: async () => {
         const store = useInterBrainStore.getState();
         const { history, currentIndex } = store.navigationHistory;
