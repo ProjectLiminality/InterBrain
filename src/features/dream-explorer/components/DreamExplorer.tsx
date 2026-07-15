@@ -17,6 +17,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { Notice } from 'obsidian';
 import { useInterBrainStore } from '../../../core/store/interbrain-store';
 import { serviceManager } from '../../../core/services/service-manager';
 import { scanDirectory } from '../services/file-scanner-service';
@@ -601,7 +602,8 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
     [positioned, containerRadius, explorerNavigateTo, isZooming, layoutMode, currentPath]
   );
 
-  // Open a file in Obsidian right pane, or fallback to system default
+  // Open a file in Obsidian right pane, or fallback to system default.
+  // Every failure path surfaces a Notice — an open that does nothing is a bug.
   const openFile = useCallback(async (item: ExplorerItem) => {
     const leafManager = serviceManager.getLeafManagerService();
     if (leafManager) {
@@ -609,13 +611,27 @@ export const DreamExplorer: React.FC<DreamExplorerProps> = ({
       if (opened) return;
     }
 
-    if (item.absolutePath) {
-      try {
-        const { shell } = require('electron');
-        shell.openPath(item.absolutePath);
-      } catch (err) {
-        console.error('[DreamExplorer] Failed to open file externally:', err);
+    // Fall back to the OS default app. The scanner populates absolutePath,
+    // but derive it defensively — a missing path must not become a silent no-op.
+    const absolutePath =
+      item.absolutePath ?? serviceManager.getVaultService()?.getFullPath(item.path);
+    if (!absolutePath) {
+      console.error(`[DreamExplorer] No absolute path for: ${item.path}`);
+      new Notice(`Could not open ${item.name}`, 3000);
+      return;
+    }
+
+    try {
+      const { shell } = require('electron');
+      // shell.openPath does NOT throw — it resolves with an error string on failure.
+      const errorMessage: string = await shell.openPath(absolutePath);
+      if (errorMessage) {
+        console.error(`[DreamExplorer] OS open failed for ${absolutePath}: ${errorMessage}`);
+        new Notice(`Could not open ${item.name}: ${errorMessage}`, 3000);
       }
+    } catch (err) {
+      console.error('[DreamExplorer] Failed to open file externally:', err);
+      new Notice(`Could not open ${item.name}`, 3000);
     }
   }, []);
 
