@@ -6,6 +6,7 @@ import { useInterBrainStore } from '../../core/store/interbrain-store';
 import { useOrchestrator } from '../../core/context/orchestrator-context';
 import { UIService } from '../../core/services/ui-service';
 import { saveEditModeChanges, getFreshNodeData, cancelEditMode } from './services/editor-service';
+import { normalizeGithubUsername } from './utils/github-username';
 import { deriveFocusIntent, buildLayoutContext } from '../../core/orchestration/intent-helpers';
 
 const uiService = new UIService();
@@ -50,10 +51,7 @@ export default function DreamNodeEditor3D() {
 
   // Local UI state for immediate responsiveness
   const [localTitle, setLocalTitle] = useState(editingNode?.name || '');
-  const [localEmail, setLocalEmail] = useState('');
-  const [localPhone, setLocalPhone] = useState('');
-  const [localDid, setLocalDid] = useState('');
-  const [localRadicleId, setLocalRadicleId] = useState('');
+  const [localGithubUsername, setLocalGithubUsername] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -132,20 +130,14 @@ export default function DreamNodeEditor3D() {
     }
   }, [editingNode?.name]);
 
-  // Load contact info for dreamer nodes
+  // Load GitHub identity for dreamer nodes (#392 — the one editable identity)
   useEffect(() => {
     if (!editingNode || editingNode.type !== 'dreamer') {
-      setLocalEmail('');
-      setLocalPhone('');
-      setLocalDid('');
-      setLocalRadicleId('');
+      setLocalGithubUsername('');
       return;
     }
 
-    setLocalEmail(editingNode.email || '');
-    setLocalPhone(editingNode.phone || '');
-    setLocalDid(editingNode.did || '');
-    setLocalRadicleId(editingNode.radicleId || '');
+    setLocalGithubUsername(editingNode.githubUsername || '');
   }, [editingNode?.id, editingNode?.type]);
 
   // Debounced store update (must be before early return - rules of hooks)
@@ -178,22 +170,10 @@ export default function DreamNodeEditor3D() {
     }, 300) as unknown as number;
   };
 
-  const handleEmailChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    const email = e.target.value;
-    setLocalEmail(email);
-    updateEditingNodeMetadata({ email });
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    const phone = e.target.value;
-    setLocalPhone(phone);
-    updateEditingNodeMetadata({ phone });
-  };
-
-  const handleDidChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
-    const did = e.target.value;
-    setLocalDid(did);
-    updateEditingNodeMetadata({ did });
+  const handleGithubUsernameChange = (e: React.ChangeEvent<globalThis.HTMLInputElement>) => {
+    // Store the normalized bare username ("@handle" / profile URL → handle)
+    setLocalGithubUsername(e.target.value);
+    updateEditingNodeMetadata({ githubUsername: normalizeGithubUsername(e.target.value) });
   };
 
   // File handling
@@ -416,16 +396,11 @@ export default function DreamNodeEditor3D() {
               />
             )}
 
-            {/* Contact Info Fields (dreamer only) */}
+            {/* GitHub identity (dreamer only, #392) */}
             {editingNode.type === 'dreamer' && (
-              <ContactFields
-                email={localEmail}
-                phone={localPhone}
-                did={localDid}
-                radicleId={localRadicleId}
-                onEmailChange={handleEmailChange}
-                onPhoneChange={handlePhoneChange}
-                onDidChange={handleDidChange}
+              <GitHubIdentityField
+                githubUsername={localGithubUsername}
+                onGithubUsernameChange={handleGithubUsernameChange}
                 nodeSize={nodeSize}
                 hasError={!!validationErrors.title}
                 opacity={animatedUIOpacity}
@@ -455,14 +430,9 @@ export default function DreamNodeEditor3D() {
 // SUB-COMPONENTS
 // ============================================================================
 
-function ContactFields({ email, phone, did, radicleId, onEmailChange, onPhoneChange, onDidChange, nodeSize, hasError, opacity }: {
-  email: string;
-  phone: string;
-  did: string;
-  radicleId: string;
-  onEmailChange: (e: React.ChangeEvent<globalThis.HTMLInputElement>) => void;
-  onPhoneChange: (e: React.ChangeEvent<globalThis.HTMLInputElement>) => void;
-  onDidChange: (e: React.ChangeEvent<globalThis.HTMLInputElement>) => void;
+function GitHubIdentityField({ githubUsername, onGithubUsernameChange, nodeSize, hasError, opacity }: {
+  githubUsername: string;
+  onGithubUsernameChange: (e: React.ChangeEvent<globalThis.HTMLInputElement>) => void;
   nodeSize: number;
   hasError: boolean;
   opacity: number;
@@ -496,44 +466,14 @@ function ContactFields({ email, phone, did, radicleId, onEmailChange, onPhoneCha
       }}
     >
       <input
-        type="email"
-        value={email}
-        onChange={onEmailChange}
-        placeholder="Email (optional)"
-        style={inputStyle}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      />
-      <input
-        type="tel"
-        value={phone}
-        onChange={onPhoneChange}
-        placeholder="Phone (optional)"
-        style={inputStyle}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      />
-      <input
         type="text"
-        value={did}
-        onChange={onDidChange}
-        placeholder="DID (optional)"
+        value={githubUsername}
+        onChange={onGithubUsernameChange}
+        placeholder="GitHub username"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
         style={inputStyle}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      />
-      <input
-        type="text"
-        value={radicleId}
-        disabled
-        placeholder="Radicle ID (auto-generated)"
-        style={{
-          ...inputStyle,
-          background: 'rgba(0,0,0,0.4)',
-          border: '1px solid rgba(255,255,255,0.25)',
-          color: 'rgba(255,255,255,0.6)',
-          cursor: 'not-allowed'
-        }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       />

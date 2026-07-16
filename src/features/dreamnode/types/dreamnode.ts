@@ -60,16 +60,27 @@ export interface UDDFile {
    */
   supermodules: (string | SupermoduleEntry)[];
 
-  /** Optional contact email (for dreamer-type nodes) */
+  /**
+   * GitHub username — the canonical peer identity for dreamer-type nodes
+   * as of the GitHub-transport era (#392).
+   */
+  githubUsername?: string;
+
+  /**
+   * Legacy identity fields (pre-#392): read-only for backwards compatibility
+   * with UDDs written before the GitHub-identity migration. Preserved from
+   * disk on rewrite, never written for new dreamers, no longer editable.
+   */
+  /** @deprecated Legacy contact email. Read/preserve only. */
   email?: string;
 
-  /** Optional contact phone number (for dreamer-type nodes) */
+  /** @deprecated Legacy contact phone. Read/preserve only. */
   phone?: string;
 
-  /** Optional Radicle ID (RID) of this DreamNode's repository */
+  /** @deprecated Legacy Radicle ID (RID). Read/preserve only. */
   radicleId?: string;
 
-  /** Optional Radicle DID for peer identity (for dreamer-type nodes only) */
+  /** @deprecated Legacy Radicle DID peer identity. Read/preserve only. */
   did?: string;
 
   /** Optional GitHub repository URL for fallback sharing */
@@ -114,16 +125,19 @@ export interface DreamNode {
   /** Git status information for visual indicators */
   gitStatus?: GitStatus;
 
-  /** Optional contact email (for dreamer-type nodes) */
+  /** GitHub username — canonical peer identity for dreamer-type nodes (#392) */
+  githubUsername?: string;
+
+  /** @deprecated Legacy contact email. Read/preserve only. */
   email?: string;
 
-  /** Optional contact phone number (for dreamer-type nodes) */
+  /** @deprecated Legacy contact phone. Read/preserve only. */
   phone?: string;
 
-  /** Optional Radicle ID (RID) of this DreamNode's repository */
+  /** @deprecated Legacy Radicle ID (RID). Read/preserve only. */
   radicleId?: string;
 
-  /** Optional Radicle DID for peer identity (for dreamer-type nodes only) */
+  /** @deprecated Legacy Radicle DID peer identity. Read/preserve only. */
   did?: string;
 
   /** Optional GitHub repository URL for fallback sharing */
