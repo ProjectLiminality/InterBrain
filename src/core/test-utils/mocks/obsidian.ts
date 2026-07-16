@@ -83,13 +83,27 @@ export class WorkspaceLeaf {
   app: any = {}
 }
 
+// Mock Scope class (view-scoped keymaps)
+export class Scope {
+  constructor(public parent?: Scope) {}
+  register = vi.fn()
+  unregister = vi.fn()
+}
+
 // Mock ItemView class
 export class ItemView {
   containerEl = {
     children: [{}, {}]
   }
-  
-  constructor(public leaf: WorkspaceLeaf) {}
+
+  // Real Obsidian views receive `app` via their leaf; mirror that so view
+  // constructors can touch this.app (e.g. new Scope(this.app.scope)).
+  app: any
+  scope: Scope | null = null
+
+  constructor(public leaf: WorkspaceLeaf) {
+    this.app = (leaf as unknown as { app?: unknown })?.app ?? {}
+  }
   
   getViewType(): string {
     return ''

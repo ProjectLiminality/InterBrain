@@ -139,10 +139,57 @@ describe('DreamspaceView', () => {
 
     it('should add dreamspace-container class', async () => {
       const container = mockContainer.children[1];
-      
+
       await view.onOpen();
-      
+
       expect(container.classList.contains('dreamspace-container')).toBe(true);
+    });
+  });
+
+  describe('view-scoped undo/redo keymap (#404)', () => {
+    // Mod+Z must be scoped to the DreamSpace view — a global default hotkey
+    // shadows the editor's text undo (the original bug).
+    let executeCommandById: ReturnType<typeof vi.fn>;
+    let scopedView: DreamspaceView;
+
+    beforeEach(() => {
+      executeCommandById = vi.fn();
+      const leaf = {
+        view: null,
+        app: { scope: {}, commands: { executeCommandById } },
+      } as unknown as WorkspaceLeaf;
+      scopedView = new DreamspaceView(leaf);
+    });
+
+    function handlerFor(modifiers: string[]): (evt: { preventDefault: () => void }) => unknown {
+      const register = scopedView.scope!.register as ReturnType<typeof vi.fn>;
+      const call = register.mock.calls.find(
+        ([mods, key]) => key === 'z' && JSON.stringify(mods) === JSON.stringify(modifiers)
+      );
+      expect(call).toBeDefined();
+      return call![2];
+    }
+
+    it('registers Mod+Z and Mod+Shift+Z on the view scope, not globally', () => {
+      expect(scopedView.scope).not.toBeNull();
+      handlerFor(['Mod']);
+      handlerFor(['Mod', 'Shift']);
+    });
+
+    it('Mod+Z executes the undo-layout-change command', () => {
+      const evt = { preventDefault: vi.fn() };
+      const result = handlerFor(['Mod'])(evt);
+      expect(evt.preventDefault).toHaveBeenCalled();
+      expect(executeCommandById).toHaveBeenCalledWith('interbrain:undo-layout-change');
+      expect(result).toBe(false);
+    });
+
+    it('Mod+Shift+Z executes the redo-layout-change command', () => {
+      const evt = { preventDefault: vi.fn() };
+      const result = handlerFor(['Mod', 'Shift'])(evt);
+      expect(evt.preventDefault).toHaveBeenCalled();
+      expect(executeCommandById).toHaveBeenCalledWith('interbrain:redo-layout-change');
+      expect(result).toBe(false);
     });
   });
 });

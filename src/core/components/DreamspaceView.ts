@@ -1,7 +1,8 @@
-import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Scope } from 'obsidian';
 import { Root, createRoot } from 'react-dom/client';
 import { StrictMode, createElement, Suspense, lazy } from 'react';
 import { useInterBrainStore } from '../store/interbrain-store';
+import { AppWithCommands } from '../types/obsidian-extensions';
 
 // Lazy load DreamspaceCanvas to prevent it from being parsed/evaluated
 // until the lifecycle is actually ready
@@ -52,6 +53,23 @@ export class DreamspaceView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
+
+    // View-scoped undo/redo (#404): Mod+Z means layout-undo only while the
+    // DreamSpace is focused. Claiming a global Mod+Z default hotkey fights
+    // Obsidian's core editor undo — the conflict resolves unpredictably and
+    // breaks text undo in markdown panes. A view Scope is the canonical fix:
+    // its keymap is active exactly when this view has focus.
+    this.scope = new Scope(this.app.scope);
+    this.scope.register(['Mod'], 'z', (evt) => {
+      evt.preventDefault();
+      (this.app as AppWithCommands).commands.executeCommandById('interbrain:undo-layout-change');
+      return false;
+    });
+    this.scope.register(['Mod', 'Shift'], 'z', (evt) => {
+      evt.preventDefault();
+      (this.app as AppWithCommands).commands.executeCommandById('interbrain:redo-layout-change');
+      return false;
+    });
   }
 
   getViewType(): string {
