@@ -42,11 +42,10 @@ export async function saveEditModeChanges(): Promise<{ success: boolean; error?:
       name: editingNode.name
     };
 
-    // Include contact info only for dreamer-type nodes
+    // Include identity only for dreamer-type nodes — GitHub username is the
+    // single editable identity (#392); legacy contact fields are read-only.
     if (editingNode.type === 'dreamer') {
-      updates.email = editingNode.email;
-      updates.phone = editingNode.phone;
-      updates.did = editingNode.did;
+      updates.githubUsername = editingNode.githubUsername;
     }
 
     await dreamNodeService.update(editingNode.id, updates);

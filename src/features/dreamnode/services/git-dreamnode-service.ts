@@ -91,7 +91,7 @@ export class GitDreamNodeService {
     dreamTalk?: globalThis.File,
     position?: [number, number, number],
     additionalFiles?: globalThis.File[],
-    metadata?: { did?: string; email?: string; phone?: string }
+    metadata?: { githubUsername?: string; did?: string; email?: string; phone?: string }
   ): Promise<DreamNode> {
     // Generate unique ID and repo path
     const uuid = crypto.randomUUID();
@@ -137,6 +137,7 @@ export class GitDreamNodeService {
       repoPath: repoName, // Relative to vault
       hasUnsavedChanges: false,
       gitStatus: await this.gitOpsService.getGitStatus(repoPath),
+      githubUsername: metadata?.githubUsername,
       email: metadata?.email,
       phone: metadata?.phone,
       did: metadata?.did
@@ -251,7 +252,7 @@ export class GitDreamNodeService {
     });
     
     // If metadata changed, update .udd file and auto-commit
-    if (changes.name || changes.type || changes.dreamTalkMedia || changes.email !== undefined || changes.phone !== undefined || changes.did !== undefined) {
+    if (changes.name || changes.type || changes.dreamTalkMedia || changes.githubUsername !== undefined) {
       await this.updateUDDFile(updatedNode);
 
       // Auto-commit changes if enabled (only for actual file changes, not position)
@@ -474,7 +475,7 @@ export class GitDreamNodeService {
     type: 'dream' | 'dreamer',
     dreamTalk?: globalThis.File,
     additionalFiles?: globalThis.File[],
-    metadata?: { did?: string; email?: string; phone?: string }
+    metadata?: { githubUsername?: string; did?: string; email?: string; phone?: string }
   ): Promise<void> {
     try {
       // Create directory
@@ -712,7 +713,7 @@ export class GitDreamNodeService {
       type: string;
       dreamTalk: string;
     },
-    metadata?: { did?: string; email?: string; phone?: string }
+    metadata?: { githubUsername?: string; did?: string; email?: string; phone?: string }
   ): Promise<void> {
     // Update the udd file while it's still in the .git directory
     // The pre-commit hook will move it to .udd in the working directory
@@ -727,9 +728,12 @@ export class GitDreamNodeService {
       .replace('TEMPLATE_DREAMTALK_PLACEHOLDER', values.dreamTalk)
       .replace('TEMPLATE_RADICLE_ID_PLACEHOLDER', ''); // Empty initially, filled after rad init
 
-    // Add optional metadata fields for Dreamer nodes
+    // Add optional metadata fields for Dreamer nodes.
+    // githubUsername is the canonical identity (#392); the legacy fields are
+    // still accepted for the Radicle-era URI-handshake path until it's stripped.
     if (metadata) {
       const udd = JSON.parse(uddContent);
+      if (metadata.githubUsername) udd.githubUsername = metadata.githubUsername;
       if (metadata.did) udd.did = metadata.did;
       if (metadata.email) udd.email = metadata.email;
       if (metadata.phone) udd.phone = metadata.phone;
@@ -845,6 +849,7 @@ export class GitDreamNodeService {
       liminalWebConnections: relationships,
       repoPath: repoName,
       hasUnsavedChanges: false,
+      githubUsername: udd.githubUsername,
       email: udd.email,
       phone: udd.phone,
       radicleId: udd.radicleId,
@@ -904,11 +909,13 @@ export class GitDreamNodeService {
       updated = true;
     }
 
-    // Check metadata changes (type, contact fields, radicleId, did, and GitHub URLs - name synced from .udd)
-    if (node.type !== udd.type || node.email !== udd.email || node.phone !== udd.phone ||
+    // Check metadata changes (type, identity fields, and GitHub URLs - name synced from .udd)
+    if (node.type !== udd.type || node.githubUsername !== udd.githubUsername ||
+        node.email !== udd.email || node.phone !== udd.phone ||
         node.radicleId !== udd.radicleId || node.did !== udd.did ||
         node.githubRepoUrl !== udd.githubRepoUrl || node.githubPagesUrl !== udd.githubPagesUrl) {
       node.type = udd.type;
+      node.githubUsername = udd.githubUsername;
       node.email = udd.email;
       node.phone = udd.phone;
       node.radicleId = udd.radicleId;
@@ -986,17 +993,15 @@ export class GitDreamNodeService {
       supermodules: existingUdd.supermodules || []
     };
 
-    // Include contact fields only for dreamer nodes
+    // Include identity fields only for dreamer nodes.
+    // GitHub username is the one editable identity (#392); the legacy
+    // email/phone/did fields are no longer written from the node — the
+    // ...existingUdd spread above preserves whatever is on disk, so old
+    // dreamers keep their legacy contact info untouched.
     // IMPORTANT: Allow empty strings - check !== undefined, not truthiness
     if (node.type === 'dreamer') {
-      if (node.email !== undefined) {
-        udd.email = node.email; // Preserve empty strings
-      }
-      if (node.phone !== undefined) {
-        udd.phone = node.phone; // Preserve empty strings
-      }
-      if (node.did !== undefined) {
-        udd.did = node.did; // Preserve empty strings
+      if (node.githubUsername !== undefined) {
+        udd.githubUsername = node.githubUsername; // Preserve empty strings
       }
     }
 
