@@ -4,6 +4,7 @@ import { vi } from 'vitest'
 export class App {
   vault = {
     getAbstractFileByPath: vi.fn(),
+    getFiles: vi.fn().mockReturnValue([]),
     read: vi.fn(),
     create: vi.fn(),
     modify: vi.fn(),

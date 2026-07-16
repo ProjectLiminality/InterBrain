@@ -48,6 +48,24 @@ export class LeafManagerService {
   }
 
   /**
+   * Resolve a vault-relative path to a TFile, tolerating case mismatches.
+   *
+   * `getAbstractFileByPath` is case-sensitive, but macOS/Windows filesystems
+   * are not — a stale-cased `repoPath` (e.g. from before a PascalCase rename)
+   * works for every fs operation yet silently misses the vault index. On the
+   * exact-lookup miss, rescue by scanning the index case-insensitively.
+   */
+  private resolveVaultFile(filePath: string): TFile | null {
+    const normalized = this.normalizeVaultPath(filePath);
+    const exact = this.app.vault.getAbstractFileByPath(normalized);
+    if (exact instanceof TFile) return exact;
+    if (exact) return null; // exists but is a folder — not openable as a file
+
+    const lower = normalized.toLowerCase();
+    return this.app.vault.getFiles().find((f) => f.path.toLowerCase() === lower) ?? null;
+  }
+
+  /**
    * Find the dreamspace leaf in the workspace
    */
   private findDreamspaceLeaf(): WorkspaceLeaf | null {
@@ -157,19 +175,12 @@ export class LeafManagerService {
       const fullPath = this.normalizeVaultPath(`${dreamNode.repoPath}/${mediaFile.path}`);
       console.log(`Looking for file at vault path: ${fullPath}`);
 
-      // Get the file from the vault
-      const file = this.app.vault.getAbstractFileByPath(fullPath);
+      // Get the file from the vault (case-insensitive rescue included)
+      const file = this.resolveVaultFile(fullPath);
 
       if (!file) {
         console.error(`File not found in vault: ${fullPath}`);
         new Notice(`File not found: ${mediaFile.path}`, 3000);
-        return;
-      }
-
-      // Check if it's actually a file (not a folder)
-      if (file.path !== fullPath) {
-        console.error(`Path mismatch - expected: ${fullPath}, got: ${file.path}`);
-        new Notice(`Invalid file path: ${mediaFile.path}`, 3000);
         return;
       }
 
@@ -318,32 +329,27 @@ export class LeafManagerService {
         }
       }
 
-      // Get the file from the vault
-      const file = this.app.vault.getAbstractFileByPath(filePath);
+      // Get the file from the vault (case-insensitive rescue included)
+      const file = this.resolveVaultFile(filePath);
 
       if (!file) {
         console.error(`[LeafManager] File not found in vault: ${filePath}`);
         return false;
       }
 
-      // Check if it's actually a file (not a folder)
-      if (!(file instanceof TFile)) {
-        console.error(`[LeafManager] Path is not a file: ${filePath}`);
-        return false;
-      }
-
       // Check if this file is already open in any leaf - if so, just reveal it
+      // (compare against the resolved path — it may differ in casing from the input)
       let existingLeafForFile: WorkspaceLeaf | null = null;
       this.app.workspace.iterateAllLeaves((leaf) => {
         const viewState = leaf.getViewState();
-        if (viewState.state?.file === filePath) {
+        if (viewState.state?.file === file.path) {
           existingLeafForFile = leaf;
         }
       });
 
       if (existingLeafForFile) {
         this.app.workspace.revealLeaf(existingLeafForFile);
-        console.log(`[LeafManager] File already open, revealed existing leaf: ${filePath}`);
+        console.log(`[LeafManager] File already open, revealed existing leaf: ${file.path}`);
         return true;
       }
 
@@ -388,8 +394,8 @@ export class LeafManagerService {
       const readmePath = this.normalizeVaultPath(`${dreamNode.repoPath}/README.md`);
       console.log(`Looking for README at vault path: ${readmePath}`);
 
-      // Get the file from the vault
-      const file = this.app.vault.getAbstractFileByPath(readmePath);
+      // Get the file from the vault (case-insensitive rescue included)
+      const file = this.resolveVaultFile(readmePath);
 
       if (!file) {
         console.error(`README not found in vault: ${readmePath}`);
@@ -490,19 +496,12 @@ export class LeafManagerService {
         return;
       }
 
-      // Get the file from the vault
-      const file = this.app.vault.getAbstractFileByPath(canvasPath);
+      // Get the file from the vault (case-insensitive rescue included)
+      const file = this.resolveVaultFile(canvasPath);
 
       if (!file) {
         console.error(`Canvas file not found in vault: ${canvasPath}`);
         new Notice(`Canvas file not found: ${canvasPath}`, 3000);
-        return;
-      }
-
-      // Check if it's actually a file (not a folder)
-      if (file.path !== canvasPath) {
-        console.error(`Path mismatch - expected: ${canvasPath}, got: ${file.path}`);
-        new Notice(`Invalid canvas file path: ${canvasPath}`, 3000);
         return;
       }
 
