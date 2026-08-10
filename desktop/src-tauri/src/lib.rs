@@ -139,7 +139,9 @@ pub fn run() {
             commands::gh_begin_sign_in,
             commands::gh_complete_sign_in,
             commands::gh_sign_out,
-            commands::scan_updates_proxy,
+            commands::activity_get,
+            commands::activity_scan,
+            commands::activity_share,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -202,6 +204,15 @@ pub fn run() {
                 if let Err(e) = ipc::run_server(state_for_ipc, handle_for_ipc).await {
                     tracing::error!("ipc server crashed: {e}");
                 }
+            });
+
+            // Activity feed (#393): periodic background scan of every vault's
+            // inbox (peer commits) + outbox (unpushed work). First scan runs
+            // shortly after launch; interval configurable via settings.
+            let state_for_activity = state.clone();
+            let handle_for_activity = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                activity::run_scheduler(state_for_activity, handle_for_activity).await;
             });
 
             // Defer window creation until after the Tauri event loop is

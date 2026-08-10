@@ -22,6 +22,9 @@ pub struct AppState {
     pub bundled_plugin_dir: PathBuf,
     pub event_bus: crate::ipc::EventBus,
     pub uuid_index: Arc<UuidIndex>,
+    /// Last activity scan (inbox + outbox), cached so the dashboard's
+    /// Activity tab renders instantly. None until the first scan completes.
+    pub activity: Mutex<Option<crate::activity::ActivityScanResult>>,
 }
 
 impl AppState {
@@ -116,6 +119,7 @@ impl AppState {
             bundled_plugin_dir,
             event_bus: crate::ipc::EventBus::new(),
             uuid_index,
+            activity: Mutex::new(None),
         })
     }
 
@@ -452,15 +456,33 @@ pub fn set_settings(
     Ok(settings)
 }
 
-/// Dashboard's "Scan for updates" button. Returns a list of DreamNode/peer
-/// pairs that have at least one new commit pending. The dashboard renders
-/// this as the Activity feed.
+/// Activity feed (#393): cached result of the last scan — the Activity tab
+/// renders this instantly on open. None until the first scan completes.
 #[tauri::command]
-pub async fn scan_updates_proxy(
+pub fn activity_get(
     state: tauri::State<'_, Arc<AppState>>,
-) -> Result<serde_json::Value, String> {
-    let entries = crate::activity::scan_updates(state.inner().clone()).await;
-    Ok(serde_json::json!({ "entries": entries }))
+) -> Option<crate::activity::ActivityScanResult> {
+    state.activity.lock().unwrap().clone()
+}
+
+/// Activity feed: force a fresh scan now (the dashboard's Refresh button).
+/// Also refreshes the derived peer registry and the tray indicator.
+#[tauri::command]
+pub async fn activity_scan(
+    app: AppHandle,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<crate::activity::ActivityScanResult, String> {
+    Ok(crate::activity::scan_all(state.inner().clone(), Some(&app)).await)
+}
+
+/// Activity feed: publish a DreamNode's committed-but-unpushed work
+/// (the "[Share]" button on outbox rows) — pushes the node's origin.
+#[tauri::command]
+pub fn activity_share(
+    state: tauri::State<'_, Arc<AppState>>,
+    dreamnode_path: String,
+) -> Result<(), String> {
+    crate::activity::share_node(&state, &dreamnode_path)
 }
 
 #[tauri::command]

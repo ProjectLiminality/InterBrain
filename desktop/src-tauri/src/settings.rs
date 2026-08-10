@@ -22,11 +22,19 @@ pub struct DaemonSettings {
     pub whisper_language: String,
     #[serde(rename = "vaultRegistry", default)]
     pub vault_registry: Vec<RegisteredVault>,
-    /// Peers we follow — we fetch from their GitHub repos and probe for
-    /// updates. Populated by the friend-add flow (or manually by IPC for
-    /// testing).
+    /// Peers we follow — a derived cache refreshed by activity scans (and
+    /// writable via IPC). Per-repo git remotes are the source of truth for
+    /// who collaborates on what; this is never authoritative.
     #[serde(rename = "peerRegistry", default)]
     pub peer_registry: Vec<RegisteredPeer>,
+    /// Minutes between background activity scans (inbox/outbox feed).
+    /// 0 disables scheduled scans; manual Refresh still works.
+    #[serde(rename = "activityScanIntervalMinutes", default = "default_activity_scan_interval")]
+    pub activity_scan_interval_minutes: u32,
+}
+
+fn default_activity_scan_interval() -> u32 {
+    45
 }
 
 /// A friend / peer we collaborate with. `github_username` is the canonical
@@ -70,6 +78,7 @@ impl Default for DaemonSettings {
             whisper_language: "en".to_string(),
             vault_registry: Vec::new(),
             peer_registry: Vec::new(),
+            activity_scan_interval_minutes: default_activity_scan_interval(),
         }
     }
 }
