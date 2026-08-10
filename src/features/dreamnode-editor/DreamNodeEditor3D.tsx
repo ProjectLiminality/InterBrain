@@ -151,6 +151,17 @@ export default function DreamNodeEditor3D() {
     return null;
   }
 
+  // Diagnostic (#392 follow-up): a one-off report saw the GitHub-username
+  // field vanish for all dreamers until plugin reload. The field's render
+  // gate is `type === 'dreamer'` — if type ever arrives corrupted, say so
+  // loudly instead of silently hiding identity fields.
+  if (editingNode.type !== 'dream' && editingNode.type !== 'dreamer') {
+    console.warn(
+      `[DreamNodeEditor] editingNode has unexpected type "${String(editingNode.type)}" ` +
+      `(id: ${editingNode.id}) — identity fields will not render. Please report this.`
+    );
+  }
+
   const nodeColors = getNodeColors(editingNode.type);
   const nodeSize = dreamNodeStyles.dimensions.nodeSizeThreeD;
   const borderWidth = dreamNodeStyles.dimensions.borderWidth;
