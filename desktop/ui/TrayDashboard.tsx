@@ -41,7 +41,30 @@ const CODING_AGENT_PRESETS: { label: string; command: string }[] = [
   { label: 'Custom…', command: 'CUSTOM' },
 ];
 
-type Pane = 'vaults' | 'settings';
+interface ActivityEntry {
+  vaultPath: string;
+  dreamnodePath: string;
+  dreamnodeUuid: string;
+  dreamnodeName: string;
+  peerName: string;
+  commitsAhead: number;
+}
+
+interface OutboxEntry {
+  vaultPath: string;
+  dreamnodePath: string;
+  dreamnodeUuid: string;
+  dreamnodeName: string;
+  commitsUnpushed: number;
+}
+
+interface ActivityScanResult {
+  incoming: ActivityEntry[];
+  outgoing: OutboxEntry[];
+  scannedAtMs: number;
+}
+
+type Pane = 'vaults' | 'activity' | 'settings';
 
 export function TrayDashboard() {
   const [vaults, setVaults] = useState<VaultEntry[]>([]);
@@ -49,6 +72,8 @@ export function TrayDashboard() {
   const [gh, setGh] = useState<GhStatus | null>(null);
   const [pane, setPane] = useState<Pane>('vaults');
   const [settings, setSettings] = useState<DaemonSettings | null>(null);
+  const [activity, setActivity] = useState<ActivityScanResult | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -70,8 +95,33 @@ export function TrayDashboard() {
       setStatus(s);
       const g = await invoke<GhStatus>('gh_status');
       setGh(g);
+      // Cached last scan — cheap; picks up scheduled-scan results as they land.
+      const a = await invoke<ActivityScanResult | null>('activity_get');
+      setActivity(a);
     } catch (err) {
       console.error('refresh failed', err);
+    }
+  }
+
+  async function scanActivityNow() {
+    setScanning(true);
+    try {
+      const a = await invoke<ActivityScanResult>('activity_scan');
+      setActivity(a);
+    } catch (err) {
+      console.error('activity scan failed', err);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function shareNode(dreamnodePath: string) {
+    try {
+      await invoke('activity_share', { dreamnodePath });
+      const a = await invoke<ActivityScanResult | null>('activity_get');
+      setActivity(a);
+    } catch (err) {
+      console.error('share failed', err);
     }
   }
 
@@ -116,6 +166,9 @@ export function TrayDashboard() {
 
       <div className="pane-tabs">
         <button className={pane === 'vaults' ? 'active' : ''} onClick={() => setPane('vaults')}>Vaults</button>
+        <button className={pane === 'activity' ? 'active' : ''} onClick={() => setPane('activity')}>
+          Activity{activity && activity.incoming.length > 0 ? ` (${activity.incoming.length})` : ''}
+        </button>
         <button className={pane === 'settings' ? 'active' : ''} onClick={() => setPane('settings')}>Settings</button>
       </div>
 
@@ -175,6 +228,15 @@ export function TrayDashboard() {
         </div>
       )}
 
+      {pane === 'activity' && (
+        <ActivityPane
+          activity={activity}
+          scanning={scanning}
+          onScan={scanActivityNow}
+          onShare={shareNode}
+        />
+      )}
+
       {pane === 'settings' && settings && (
         <SettingsPane settings={settings} onSave={saveSettings} />
       )}
@@ -188,6 +250,81 @@ export function TrayDashboard() {
         <button onClick={openFirstRun}>Setup</button>
         <button className="danger" onClick={quitApp}>Quit</button>
       </div>
+    </div>
+  );
+}
+
+interface ActivityPaneProps {
+  activity: ActivityScanResult | null;
+  scanning: boolean;
+  onScan: () => void;
+  onShare: (dreamnodePath: string) => void;
+}
+
+/**
+ * Activity feed (#393): the global lens on what flows in and out across all
+ * vaults. Incoming = peer commits pending per DreamNode; Unshared = your
+ * committed-but-unpushed work, publishable via [Share]. Rows reuse the
+ * vault-list styling so the tab reads like the Vaults pane.
+ */
+function ActivityPane({ activity, scanning, onScan, onShare }: ActivityPaneProps) {
+  const muted = { color: 'var(--ib-text-muted)', fontSize: 13, padding: '8px 10px' } as const;
+  const sectionLabel = {
+    color: 'var(--ib-text-muted)',
+    fontSize: 11,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    padding: '10px 10px 4px',
+  };
+
+  return (
+    <div className="vault-list">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 0' }}>
+        <span style={{ color: 'var(--ib-text-muted)', fontSize: 12 }}>
+          {scanning
+            ? 'Scanning…'
+            : activity
+              ? `Last scan ${new Date(activity.scannedAtMs).toLocaleTimeString()}`
+              : 'No scan yet'}
+        </span>
+        <button className="icon-btn" onClick={onScan} disabled={scanning} title="Scan now">
+          ↻
+        </button>
+      </div>
+
+      {!activity && !scanning && (
+        <div style={muted}>The first background scan runs shortly after launch — or scan now.</div>
+      )}
+
+      {activity && (
+        <>
+          <div style={sectionLabel}>Incoming</div>
+          {activity.incoming.length === 0 && <div style={muted}>Nothing new from your peers.</div>}
+          {activity.incoming.map(e => (
+            <div key={`${e.dreamnodePath}:${e.peerName}`} className="vault-row">
+              <div className="vault-name" title={e.dreamnodePath}>{e.dreamnodeName}</div>
+              <div className="vault-mode" title={`from ${e.peerName}`}>@{e.peerName}</div>
+              <div className="vault-actions" style={{ color: 'var(--ib-text-muted)', fontSize: 12 }}>
+                {e.commitsAhead} new
+              </div>
+            </div>
+          ))}
+
+          <div style={sectionLabel}>Unshared</div>
+          {activity.outgoing.length === 0 && <div style={muted}>Everything you've committed is shared.</div>}
+          {activity.outgoing.map(e => (
+            <div key={e.dreamnodePath} className="vault-row">
+              <div className="vault-name" title={e.dreamnodePath}>{e.dreamnodeName}</div>
+              <div className="vault-mode">{e.commitsUnpushed} commit{e.commitsUnpushed === 1 ? '' : 's'}</div>
+              <div className="vault-actions">
+                <button className="icon-btn" onClick={() => onShare(e.dreamnodePath)} title="Push to your outbox (origin)">
+                  Share
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
