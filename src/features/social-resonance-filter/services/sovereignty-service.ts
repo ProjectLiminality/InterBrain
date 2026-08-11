@@ -166,9 +166,16 @@ export class SovereigntyService {
         } catch {
           // Repo missing on GitHub — drop the stale origin and fall through
           // to outbox creation, KEEPING the name the URL already declared.
+          // Restore the old origin if creation fails, so a transient error
+          // doesn't leave the node remoteless.
           await execAsync(`git remote remove origin`, { cwd });
-          const { originUrl, created } = await this.ensureOutbox(cwd, me, parsed.repo);
-          return { originUrl, createdOutbox: created };
+          try {
+            const { originUrl, created } = await this.ensureOutbox(cwd, me, parsed.repo);
+            return { originUrl, createdOutbox: created };
+          } catch (creationError) {
+            await this.ensureRemote(cwd, 'origin', existingOrigin).catch(() => {});
+            throw creationError;
+          }
         }
       }
       // Origin is someone else's (or non-GitHub). Preserve the link by
