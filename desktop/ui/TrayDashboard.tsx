@@ -74,6 +74,11 @@ export function TrayDashboard() {
   const [settings, setSettings] = useState<DaemonSettings | null>(null);
   const [activity, setActivity] = useState<ActivityScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
+  // "+ Add vault" inline picker state (Vaults pane)
+  const [addingVault, setAddingVault] = useState(false);
+  const [discovered, setDiscovered] = useState<string[] | null>(null);
+  const [installingVault, setInstallingVault] = useState<string | null>(null);
+  const [addVaultError, setAddVaultError] = useState<string | null>(null);
 
   useEffect(() => {
     refresh();
@@ -122,6 +127,37 @@ export function TrayDashboard() {
       setActivity(a);
     } catch (err) {
       console.error('share failed', err);
+    }
+  }
+
+  async function toggleAddVault() {
+    setAddVaultError(null);
+    if (addingVault) {
+      setAddingVault(false);
+      return;
+    }
+    setAddingVault(true);
+    try {
+      const found = await invoke<string[]>('discover_obsidian_vaults');
+      setDiscovered(found);
+    } catch (err) {
+      console.error('vault discovery failed', err);
+      setDiscovered([]);
+    }
+  }
+
+  async function addVault(vaultPath: string) {
+    setInstallingVault(vaultPath);
+    setAddVaultError(null);
+    try {
+      await invoke('install_plugin_into_vault', { vaultPath });
+      await refresh();
+      setAddingVault(false);
+    } catch (err) {
+      console.error('install into vault failed', err);
+      setAddVaultError(String(err));
+    } finally {
+      setInstallingVault(null);
     }
   }
 
@@ -174,9 +210,9 @@ export function TrayDashboard() {
 
       {pane === 'vaults' && (
         <div className="vault-list">
-          {vaults.length === 0 && (
+          {vaults.length === 0 && !addingVault && (
             <div style={{ color: 'var(--ib-text-muted)', fontSize: 13, padding: '8px 10px' }}>
-              No vaults yet. Run setup to install InterBrain into a vault.
+              No vaults yet. Add one below, or run Setup for the guided flow.
             </div>
           )}
           {vaults.map(v => {
@@ -225,6 +261,57 @@ export function TrayDashboard() {
               </div>
             );
           })}
+
+          {/* Add a vault without going through the full Setup flow. */}
+          <div style={{ padding: '6px 10px' }}>
+            <button className="icon-btn" onClick={toggleAddVault} title="Install InterBrain into another Obsidian vault">
+              {addingVault ? '× Cancel' : '+ Add vault'}
+            </button>
+          </div>
+          {addingVault && (
+            <>
+              {discovered === null && (
+                <div style={{ color: 'var(--ib-text-muted)', fontSize: 13, padding: '4px 10px' }}>
+                  Looking for Obsidian vaults…
+                </div>
+              )}
+              {discovered !== null && (() => {
+                const registered = new Set(vaults.map(v => v.path));
+                const candidates = discovered.filter(p => !registered.has(p));
+                if (candidates.length === 0) {
+                  return (
+                    <div style={{ color: 'var(--ib-text-muted)', fontSize: 13, padding: '4px 10px' }}>
+                      No other Obsidian vaults found. Use Setup to create a new one.
+                    </div>
+                  );
+                }
+                return candidates.map(p => {
+                  const name = p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+                  const busy = installingVault === p;
+                  return (
+                    <div key={p} className="vault-row">
+                      <div className="vault-name" title={p}>{name}</div>
+                      <div className="vault-actions">
+                        <button
+                          className="icon-btn"
+                          disabled={installingVault !== null}
+                          onClick={() => addVault(p)}
+                          title={`Install InterBrain into ${p}`}
+                        >
+                          {busy ? 'Installing…' : 'Add'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+              {addVaultError && (
+                <div style={{ color: 'var(--ib-danger, #e06c75)', fontSize: 12, padding: '4px 10px' }}>
+                  {addVaultError}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
