@@ -46,8 +46,72 @@ export class URIHandlerService {
 				'interbrain',
 				this.handleCommand.bind(this)
 			);
+
+			// Activity-feed deep link (#393): obsidian://interbrain-activity?vault=<name>&uuid=<uuid>&mode=inbox|outbox
+			// From the daemon dashboard: select the DreamNode, then open the
+			// Check-for-Updates modal (inbox) or the Share-Changes modal (outbox).
+			this.plugin.registerObsidianProtocolHandler(
+				'interbrain-activity',
+				this.handleActivity.bind(this)
+			);
 		} catch (error) {
 			console.error('[URIHandler] Failed to register handlers:', error);
+		}
+	}
+
+	/**
+	 * Activity-feed deep link (#393) — the daemon dashboard's click-through.
+	 * Format: obsidian://interbrain-activity?vault=<name>&uuid=<uuid>&mode=inbox|outbox
+	 *
+	 * Obsidian itself routes the `vault` param (opening/focusing the vault),
+	 * so by the time this fires we're in the right vault — but possibly COLD:
+	 * the vault may just be launching and the store not yet hydrated. Wait for
+	 * the node to appear before selecting, then open the matching modal:
+	 * inbox → Check-for-Updates (preview-updates), outbox → Share-Changes
+	 * (preview-share). The dashboard never acts directly; these modals own
+	 * the flows.
+	 */
+	private async handleActivity(params: Record<string, string>): Promise<void> {
+		try {
+			const uuid = params.uuid;
+			if (!uuid) {
+				new Notice('Invalid activity link: missing uuid');
+				return;
+			}
+			const mode = params.mode === 'outbox' ? 'outbox' : 'inbox';
+
+			const node = await this.waitForNode(uuid, 15000);
+			if (!node) {
+				new Notice(`DreamNode not found: ${uuid.slice(0, 8)}…`);
+				return;
+			}
+
+			const store = useInterBrainStore.getState();
+			store.setSelectedNode(node);
+			store.requestNavigation({ type: 'liminal-web-focus', nodeId: node.id });
+
+			// Let the spatial navigation settle before the modal covers it.
+			const commandId = mode === 'inbox' ? 'interbrain:preview-updates' : 'interbrain:preview-share';
+			globalThis.setTimeout(() => {
+				(this.app as any).commands.executeCommandById(commandId);
+			}, 500);
+		} catch (error) {
+			console.error('[URIHandler] Failed to handle activity link:', error);
+			new Notice(`Failed to open activity entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
+	/**
+	 * Wait for a DreamNode to appear in the store — covers the cold-launch
+	 * case where the URI arrives while the vault is still scanning.
+	 */
+	private async waitForNode(uuid: string, timeoutMs: number): Promise<any | null> {
+		const deadline = Date.now() + timeoutMs;
+		for (;;) {
+			const nodeData = useInterBrainStore.getState().dreamNodes.get(uuid);
+			if (nodeData) return nodeData.node;
+			if (Date.now() > deadline) return null;
+			await new Promise(r => globalThis.setTimeout(r, 300));
 		}
 	}
 

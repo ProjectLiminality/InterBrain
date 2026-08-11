@@ -365,6 +365,30 @@ export function registerRadicleCommands(
     }
   });
 
+  // Share Changes preview (#393) — the outbound mirror of Check-for-Updates:
+  // review the committed-but-unpushed commits before publishing. Sharing from
+  // the modal delegates to push-to-network below.
+  plugin.addCommand({
+    id: 'preview-share',
+    name: 'Review & Share Changes',
+    callback: async () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+      if (!selectedNode) {
+        new Notice('Please select a DreamNode first');
+        return;
+      }
+      const vaultPath = getVaultPath(plugin);
+      const path = require('path');
+      const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+      const { ShareChangesModal } = await import('./ui/share-changes-modal');
+      new ShareChangesModal(plugin.app, {
+        fullRepoPath,
+        dreamNodeName: selectedNode.name,
+      }).open();
+    }
+  });
+
   // Share Changes — push current DreamNode to the user's GitHub outbox.
   // Creates the outbox on first use; otherwise just pushes.
   plugin.addCommand({
