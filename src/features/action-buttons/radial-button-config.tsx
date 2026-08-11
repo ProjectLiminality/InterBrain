@@ -265,26 +265,26 @@ export const RADIAL_BUTTON_CONFIGS: RadialButtonConfig[] = [
     label: 'Create DreamSong Canvas'
   },
   {
+    // Sharing IS publishing (#409): the Publish/Unpublish verb dissolved —
+    // every Share pushes the outbox and (re)publishes the Pages site. This
+    // button is just the window onto the result.
     id: 'github-publish',
     iconName: 'lucide-github',
-    commandId: 'interbrain:publish-dreamnode-github',
-    label: 'Publish to GitHub',
+    commandId: 'interbrain:view-published-page',
+    label: 'View Published Page',
     // Show for dream-type nodes OR InterBrain (which links to repo)
     shouldShow: (node) => node?.type === 'dream' || node?.id === INTERBRAIN_UUID,
-    // Dynamic label and command based on node and publish state
     getDynamicLabel: (node) => {
       if (node?.id === INTERBRAIN_UUID) {
         return 'View on GitHub';
       }
-      return node?.githubRepoUrl ? 'Unpublish from GitHub' : 'Publish to GitHub';
+      return 'View Published Page';
     },
     getDynamicCommand: (node) => {
       if (node?.id === INTERBRAIN_UUID) {
         return 'interbrain:open-github-repo';
       }
-      return node?.githubRepoUrl
-        ? 'interbrain:unpublish-dreamnode-github'
-        : 'interbrain:publish-dreamnode-github';
+      return 'interbrain:view-published-page';
     }
   },
   {

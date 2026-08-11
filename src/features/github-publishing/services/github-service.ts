@@ -937,10 +937,10 @@ export class GitHubService {
         // Branch doesn't exist locally
       }
 
-      // Check if gh-pages exists on remote (use 'github' remote name)
+      // Check if gh-pages exists on remote (origin = the outbox, #409)
       let remoteGhPagesExists = false;
       try {
-        await execAsync(`git ls-remote --exit-code --heads github gh-pages`, { cwd: dreamNodePath });
+        await execAsync(`git ls-remote --exit-code --heads origin gh-pages`, { cwd: dreamNodePath });
         remoteGhPagesExists = true;
       } catch {
         // Remote branch doesn't exist
@@ -1023,9 +1023,9 @@ export class GitHubService {
             { cwd: worktreeDir }
           );
 
-          // Push to remote (use 'github' remote name)
+          // Push to the outbox (origin, #409)
           await execAsync(
-            `git push github gh-pages`,
+            `git push origin gh-pages`,
             { cwd: worktreeDir }
           );
         } else {
@@ -1176,7 +1176,7 @@ export class GitHubService {
     // Commit .udd update in submodule
     try {
       await execAsync(
-        'git add .udd && git commit -m "Add GitHub URLs to .udd" && git push github main || true',
+        'git add .udd && git commit -m "Add GitHub URLs to .udd" && git push origin main || true',
         { cwd: submodulePath }
       );
     } catch (error) {

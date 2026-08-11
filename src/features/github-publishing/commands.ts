@@ -230,7 +230,7 @@ export function registerGitHubCommands(
             const execAsync = promisify(exec);
 
             try {
-              await execAsync('git add .udd && git commit -m "Update .udd with GitHub URLs" && git push github main', {
+              await execAsync('git add .udd && git commit -m "Update .udd with GitHub URLs" && git push origin main', {
                 cwd: fullRepoPath
               });
             } catch (gitError) {

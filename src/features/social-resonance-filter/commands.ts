@@ -365,6 +365,41 @@ export function registerRadicleCommands(
     }
   });
 
+  // View the published page (#409): sharing is publishing, so the Publish
+  // verb dissolved — this is its replacement. Derives the Pages URL from
+  // the origin remote (never from .udd fields).
+  plugin.addCommand({
+    id: 'view-published-page',
+    name: 'View Published Page',
+    callback: async () => {
+      const store = useInterBrainStore.getState();
+      const selectedNode = store.selectedNode;
+      if (!selectedNode) {
+        new Notice('Please select a DreamNode first');
+        return;
+      }
+      const vaultPath = getVaultPath(plugin);
+      const path = require('path');
+      const fullRepoPath = path.join(vaultPath, selectedNode.repoPath);
+      try {
+        const { promisify } = require('util');
+        const { exec } = require('child_process');
+        const execAsync = promisify(exec);
+        const { stdout } = await execAsync('git config remote.origin.url', { cwd: fullRepoPath });
+        const url = stdout.trim();
+        const match = url.match(/github\.com[/:]([^/]+)\/([^/\s.]+)(?:\.git)?/);
+        if (!match) {
+          new Notice('Share this DreamNode first — its page appears once it has an outbox');
+          return;
+        }
+        const pagesUrl = `https://${match[1]}.github.io/${match[2]}`;
+        window.open(pagesUrl);
+      } catch {
+        new Notice('Share this DreamNode first — its page appears once it has an outbox');
+      }
+    }
+  });
+
   // Share Changes preview (#393) — the outbound mirror of Check-for-Updates:
   // review the committed-but-unpushed commits before publishing. Sharing from
   // the modal delegates to push-to-network below.
@@ -431,6 +466,26 @@ export function registerRadicleCommands(
           }
         } catch (beaconError) {
           console.error('[ShareChanges] Beacon ignition failed:', beaconError);
+        }
+
+        // Sharing is publishing (#409 invariant 4): the outbox repo IS the
+        // published site. DreamSong present → build + deploy the static
+        // site to gh-pages; README-only → Pages serves main directly
+        // (GitHub renders the README). Non-fatal — the share succeeded.
+        try {
+          const fs = require('fs');
+          const hasCanvas = fs
+            .readdirSync(fullRepoPath)
+            .some((f: string) => f.endsWith('.canvas'));
+          if (hasCanvas) {
+            const { githubService } = await import('../github-publishing/services/github-service');
+            await githubService.rebuildGitHubPages(fullRepoPath);
+            await sovereignty.ensurePages(fullRepoPath, 'gh-pages');
+          } else {
+            await sovereignty.ensurePages(fullRepoPath, 'main');
+          }
+        } catch (pagesError) {
+          console.warn('[ShareChanges] Pages publish failed (non-fatal):', pagesError);
         }
       } catch (error) {
         notice.hide();

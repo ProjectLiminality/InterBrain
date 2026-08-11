@@ -96,6 +96,47 @@ export class SovereigntyService {
   }
 
   /**
+   * Sharing is publishing (#409 invariant 4): make sure GitHub Pages serves
+   * this node's outbox. `sourceBranch` is 'main' for README-only nodes
+   * (GitHub renders the README natively) or 'gh-pages' when a DreamSong
+   * static build exists. Idempotent; Pages failures are non-fatal (the
+   * share itself already succeeded).
+   *
+   * Returns the pages URL, or null when it couldn't be derived.
+   */
+  async ensurePages(cwd: string, sourceBranch: 'main' | 'gh-pages'): Promise<string | null> {
+    const originUrl = await this.tryGetRemoteUrl(cwd, 'origin');
+    if (!originUrl) return null;
+    const parsed = parseGitHubUrl(originUrl);
+    if (!parsed) return null;
+    const { owner, repo } = parsed;
+    const pagesUrl = `https://${owner}.github.io/${repo}`;
+    const gh = await this.detectGhPath();
+    const target = `repos/${owner}/${repo}/pages`;
+    try {
+      await execAsync(
+        `"${gh}" api -X POST "${target}" -f "source[branch]=${sourceBranch}" -f "source[path]=/"`
+      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message.toLowerCase() : '';
+      if (msg.includes('409') || msg.includes('already exists')) {
+        // Pages already enabled — make sure the source matches (e.g. the
+        // node grew its first DreamSong and moves from main to gh-pages).
+        try {
+          await execAsync(
+            `"${gh}" api -X PUT "${target}" -f "source[branch]=${sourceBranch}" -f "source[path]=/"`
+          );
+        } catch (putError) {
+          console.warn('[Sovereignty] Pages source update failed (non-fatal):', putError);
+        }
+      } else {
+        console.warn('[Sovereignty] Pages enable failed (non-fatal):', error);
+      }
+    }
+    return pagesUrl;
+  }
+
+  /**
    * Produce a clickable invite for this DreamNode. Requires that the user
    * already has their own outbox (origin must point to a repo we own); if
    * not, we create one first so the link is immediately resolvable.
