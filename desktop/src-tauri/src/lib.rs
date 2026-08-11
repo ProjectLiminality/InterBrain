@@ -143,6 +143,14 @@ pub fn run() {
             commands::activity_scan,
         ])
         .setup(|app| {
+            // Menu-bar app contract (macOS): Accessory activation policy —
+            // no Dock icon, and REQUIRED for the tray popover to appear
+            // over other apps' fullscreen Spaces (a regular-policy app
+            // switches Spaces instead of floating its window) and for
+            // tiling managers to leave its windows unmanaged.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let handle = app.handle().clone();
 
             // Initialize state.

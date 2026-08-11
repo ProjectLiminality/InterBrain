@@ -155,7 +155,21 @@ export class SovereigntyService {
     if (existingOrigin) {
       const parsed = parseGitHubUrl(existingOrigin);
       if (parsed && parsed.owner.toLowerCase() === me.toLowerCase()) {
-        return { originUrl: existingOrigin, createdOutbox: false };
+        // Origin claims to be my repo — but VERIFY it exists on GitHub
+        // before trusting it. A node can carry an origin URL for a repo
+        // that was never created (or was deleted); blindly returning here
+        // makes the subsequent push fail with "Repository not found".
+        const gh = await this.detectGhPath();
+        try {
+          await execAsync(`"${gh}" repo view ${shellQuote(`${parsed.owner}/${parsed.repo}`)} --json name`);
+          return { originUrl: existingOrigin, createdOutbox: false };
+        } catch {
+          // Repo missing on GitHub — drop the stale origin and fall through
+          // to outbox creation, KEEPING the name the URL already declared.
+          await execAsync(`git remote remove origin`, { cwd });
+          const { originUrl, created } = await this.ensureOutbox(cwd, me, parsed.repo);
+          return { originUrl, createdOutbox: created };
+        }
       }
       // Origin is someone else's (or non-GitHub). Preserve the link by
       // renaming it to a peer remote, then create our own outbox.
