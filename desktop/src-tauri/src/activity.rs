@@ -368,8 +368,12 @@ fn read_udd(udd_path: &Path) -> Option<NodeMeta> {
 /// interbrain:// URLs count as peers via their ?peer= owner hint. Returns
 /// (remote name, extracted GitHub username when derivable).
 fn list_peer_remotes(repo: &Path, my_username: Option<&str>) -> Vec<(String, Option<String>)> {
+    // Read DECLARED remote URLs from config, not `git remote -v` — the
+    // latter applies url.<base>.insteadOf rewrites, which are transport
+    // plumbing (https↔ssh swaps, local test mirrors) and mustn't change
+    // WHO a remote is.
     let mut cmd = Command::new("git");
-    cmd.arg("remote").arg("-v").current_dir(repo);
+    cmd.args(["config", "--get-regexp", r"^remote\..*\.url$"]).current_dir(repo);
     suppress_console_window(&mut cmd);
     let out = match cmd.output() {
         Ok(o) if o.status.success() => o,
@@ -377,13 +381,13 @@ fn list_peer_remotes(repo: &Path, my_username: Option<&str>) -> Vec<(String, Opt
     };
     let mut seen: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
     for line in String::from_utf8_lossy(&out.stdout).lines() {
-        // line: "<name>\t<url> (fetch|push)"
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
+        // line: "remote.<name>.url <url>"
+        let Some(rest) = line.strip_prefix("remote.") else { continue };
+        let Some((name, url)) = rest.split_once(".url ") else { continue };
+        let (name, url) = (name.trim(), url.trim());
+        if url.is_empty() {
             continue;
         }
-        let name = parts[0];
-        let url = parts[1];
         if name == "origin" {
             continue;
         }

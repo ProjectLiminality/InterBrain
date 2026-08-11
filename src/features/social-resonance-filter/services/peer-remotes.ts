@@ -78,13 +78,19 @@ export function isPeerRemote(name: string, url: string, myUsername: string | nul
 /**
  * List the peer remotes of a repo (names only), applying the invariant-2
  * classification.
+ *
+ * Reads the DECLARED remote URLs from git config rather than `git remote
+ * -v`: the latter shows URLs after `url.<base>.insteadOf` rewrites, but
+ * rewrites are transport plumbing (https↔ssh swaps, local test mirrors) —
+ * they change where bytes come from, not WHO a remote is.
  */
 export async function listPeerRemotes(cwd: string): Promise<string[]> {
   const myUsername = await getOwnGithubUsername();
-  const { stdout } = await execAsync('git remote -v', { cwd });
+  const { stdout } = await execAsync("git config --get-regexp '^remote\\..*\\.url$'", { cwd });
   const peers = new Set<string>();
   for (const line of stdout.split('\n')) {
-    const match = line.match(/^(\S+)\s+(\S+)\s+\((?:fetch|push)\)$/);
+    // line: "remote.<name>.url <url>"
+    const match = line.match(/^remote\.(.+)\.url\s+(\S+)$/);
     if (!match) continue;
     const [, name, url] = match;
     if (isPeerRemote(name, url, myUsername)) peers.add(name);
