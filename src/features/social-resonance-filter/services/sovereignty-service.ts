@@ -143,6 +143,12 @@ export class SovereigntyService {
     cwd: string,
     repoName: string
   ): Promise<{ originUrl: string; createdOutbox: boolean }> {
+    // One name convention everywhere (#409): the GitHub repo name is the
+    // same PascalCase sanitization as the vault folder name. Callers pass
+    // the display title; sanitize at this single choke point (also fixes
+    // unquoted `gh repo create` args for titles with spaces).
+    const { sanitizeTitleToPascalCase } = await import('../../dreamnode/utils/title-sanitization');
+    repoName = sanitizeTitleToPascalCase(repoName) || repoName;
     const me = await this.getCurrentUser();
     const existingOrigin = await this.tryGetRemoteUrl(cwd, 'origin');
 
@@ -160,6 +166,26 @@ export class SovereigntyService {
       } else {
         // Non-GitHub origin (e.g., legacy rad). Just drop it.
         await execAsync(`git remote remove origin`, { cwd });
+      }
+    }
+
+    // Self-heal (#409): adopt a legacy pre-v0.16 `github` remote as origin
+    // when it points at MY repo — those nodes were "published" under the
+    // old split and already have their outbox; creating a fresh repo would
+    // double them up. Someone else's `github` remote becomes a peer remote.
+    const legacyGithub = await this.tryGetRemoteUrl(cwd, 'github');
+    if (legacyGithub) {
+      const parsed = parseGitHubUrl(legacyGithub);
+      if (parsed && parsed.owner.toLowerCase() === me.toLowerCase()) {
+        await execAsync(`git remote rename github origin`, { cwd });
+        const branch = await this.currentBranch(cwd);
+        await execAsync(`git push -u origin ${shellQuote(branch)}`, { cwd });
+        return { originUrl: legacyGithub.replace(/\.git$/, ''), createdOutbox: false };
+      }
+      if (parsed) {
+        const peerName = sanitizePeerRemoteName(parsed.owner);
+        await this.ensureRemote(cwd, peerName, legacyGithub);
+        await execAsync(`git remote remove github`, { cwd });
       }
     }
 

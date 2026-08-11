@@ -19,9 +19,6 @@ import { CherryPickPreviewModal, CherryPickPreviewConfig } from './ui/cherry-pic
 import { initializeCherryPickWorkflowService } from './services/cherry-pick-workflow-service';
 
 const path = require('path');
-const { promisify } = require('util');
-const { exec } = require('child_process');
-const execAsync = promisify(exec);
 
 // InterBrain's fixed UUID for routing decisions
 const INTERBRAIN_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -119,13 +116,15 @@ export function registerUpdateCommands(plugin: Plugin, uiService: UIService): vo
       const { getCherryPickWorkflowService } = await import('./services/cherry-pick-workflow-service');
       const workflowService = getCherryPickWorkflowService();
 
-      // Build peer list from git remotes (excluding origin)
+      // Build peer list from git remotes — a peer is a GitHub remote owned
+      // by someone who isn't me (#409 invariant 2; legacy github/rad
+      // remotes are not peers).
       const fullPath = path.join(vaultPath, selectedNode.repoPath);
       let peers: Array<{ uuid: string; name: string; repoPath: string }> = [];
 
       try {
-        const { stdout: remoteOutput } = await execAsync('git remote', { cwd: fullPath });
-        const remotes = remoteOutput.trim().split('\n').filter((r: string) => r && r !== 'origin');
+        const { listPeerRemotes } = await import('../social-resonance-filter/services/peer-remotes');
+        const remotes = await listPeerRemotes(fullPath);
 
         peers = remotes.map((remote: string) => ({
           uuid: remote,

@@ -191,28 +191,13 @@ export class GitSyncService {
 
       // ALSO fetch from peer remotes (for pure p2p collaboration).
       //
-      // A peer remote is simply "any remote that isn't `origin`". `origin`
-      // is the user's own sovereign outbox; every other remote is a peer
-      // whose version we may want to pull from. We do NOT sniff for a URL
-      // scheme: peer remotes are plain `https://github.com/...` URLs (the
-      // clone-accept sovereignty handover renames the cloned origin to a
-      // peer remote, keeping git's native URL). The `interbrain://` scheme
-      // is reserved for `.gitmodules` — shared, portable content that
-      // needs UUID indirection — not for local remote config, which is
-      // already concrete.
+      // A peer remote is a GitHub remote owned by someone who isn't me
+      // (#409 invariant 2). Legacy `github` remotes pointing at MY OWN
+      // published repo and dead `rad://` remotes are NOT peers — the old
+      // "any remote that isn't origin" rule misread both.
       console.log(`GitSyncService: Checking for peer remotes...`);
-      const { stdout: remoteVerbose } = await execAsync('git remote -v', { cwd: fullPath });
-      const peerRemotes = new Set<string>();
-
-      // `git remote -v` lines: "<name>\t<url> (fetch|push)"
-      for (const line of remoteVerbose.split('\n')) {
-        const match = line.match(/^(\S+)\s+\S+\s+\((?:fetch|push)\)$/);
-        if (match) {
-          const peerName = match[1];
-          if (peerName === 'origin') continue; // origin = own outbox, not a peer
-          peerRemotes.add(peerName);
-        }
-      }
+      const { listPeerRemotes } = await import('./peer-remotes');
+      const peerRemotes = new Set<string>(await listPeerRemotes(fullPath));
 
       if (peerRemotes.size > 0) {
         console.log(`GitSyncService: Found ${peerRemotes.size} peer remote(s): ${Array.from(peerRemotes).join(', ')}`);

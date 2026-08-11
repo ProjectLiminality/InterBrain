@@ -108,10 +108,19 @@ pub async fn scan_all(state: Arc<AppState>, handle: Option<&AppHandle>) -> Activ
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
+    // Peer classification (#409 invariant 2) needs to know who "me" is:
+    // a peer remote is a GitHub remote owned by someone who ISN'T me.
+    let my_username = task::spawn_blocking(|| crate::github::gh_status().username)
+        .await
+        .ok()
+        .flatten()
+        .map(|u| u.to_lowercase());
+
     let mut handles = Vec::new();
     for vault in vault_paths {
         let helper_dir = helper_dir.clone();
-        handles.push(task::spawn_blocking(move || scan_vault(&vault, helper_dir.as_deref())));
+        let me = my_username.clone();
+        handles.push(task::spawn_blocking(move || scan_vault(&vault, helper_dir.as_deref(), me.as_deref())));
     }
 
     let mut incoming = Vec::new();
@@ -239,6 +248,7 @@ fn update_tray_indicator(handle: &AppHandle, result: &ActivityScanResult) {
 fn scan_vault(
     vault: &Path,
     helper_dir: Option<&Path>,
+    my_username: Option<&str>,
 ) -> (Vec<IncomingEntry>, Vec<OutboxEntry>, HashSet<String>) {
     let mut incoming = Vec::new();
     let mut outgoing = Vec::new();
@@ -293,7 +303,7 @@ fn scan_vault(
         // Inbox: fetch each peer remote, aggregate commit counts per node.
         let mut total: u32 = 0;
         let mut peers: Vec<String> = Vec::new();
-        for (remote, peer_hint) in list_peer_remotes(&path) {
+        for (remote, peer_hint) in list_peer_remotes(&path, my_username) {
             if let Some(user) = peer_hint {
                 usernames.insert(user);
             }
@@ -351,11 +361,13 @@ fn read_udd(udd_path: &Path) -> Option<NodeMeta> {
     Some(NodeMeta { uuid, name, node_type, dream_talk })
 }
 
-/// List peer remotes: every non-origin remote. Native GitHub URLs are the
-/// GitHub-transport canon (peer remotes named after the peer); legacy
-/// interbrain:// URLs are accepted too. Returns (remote name, extracted
-/// GitHub username when derivable).
-fn list_peer_remotes(repo: &Path) -> Vec<(String, Option<String>)> {
+/// List peer remotes (#409 invariant 2): a peer is a GitHub remote owned by
+/// someone who ISN'T me. Legacy `github` remotes pointing at my own repo,
+/// dead `rad://` remotes, and filesystem-path remotes are NOT peers (the
+/// old "any non-origin remote" rule misread all three). Legacy
+/// interbrain:// URLs count as peers via their ?peer= owner hint. Returns
+/// (remote name, extracted GitHub username when derivable).
+fn list_peer_remotes(repo: &Path, my_username: Option<&str>) -> Vec<(String, Option<String>)> {
     let mut cmd = Command::new("git");
     cmd.arg("remote").arg("-v").current_dir(repo);
     suppress_console_window(&mut cmd);
@@ -375,8 +387,20 @@ fn list_peer_remotes(repo: &Path) -> Vec<(String, Option<String>)> {
         if name == "origin" {
             continue;
         }
-        seen.entry(name.to_string())
-            .or_insert_with(|| peer_username_from_url(url));
+        let is_github = url.starts_with("https://github.com/")
+            || url.starts_with("http://github.com/")
+            || url.starts_with("git@github.com:");
+        let is_interbrain = url.starts_with("interbrain://");
+        if !is_github && !is_interbrain {
+            continue; // rad://, local paths, etc. — unresolvable legacy config
+        }
+        let owner = peer_username_from_url(url);
+        if let (Some(me), Some(o)) = (my_username, owner.as_deref()) {
+            if o.eq_ignore_ascii_case(me) {
+                continue; // my own repo (legacy `github` remote) — not a peer
+            }
+        }
+        seen.entry(name.to_string()).or_insert(owner);
     }
     seen.into_iter().collect()
 }
