@@ -165,7 +165,10 @@ body.tray-window {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 220px;
+  /* Fill the dashboard between tabs and footer; scroll internally.
+     (A fixed max-height clipped the Activity feed at half height.) */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 

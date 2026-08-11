@@ -6,6 +6,32 @@ use tauri::{AppHandle, LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilde
 const TRAY_WINDOW_LABEL: &str = "tray";
 const FIRST_RUN_WINDOW_LABEL: &str = "first-run";
 
+/// Make the tray popover behave like a real macOS menu-bar popover
+/// (BetterTouchTool/Spotify style): visible on every Space INCLUDING other
+/// apps' fullscreen Spaces, excluded from Cmd+Tab window cycling, and at
+/// pop-up-menu level so tiling managers leave it alone. Tauri doesn't
+/// expose NSWindow.collectionBehavior / level, so we set them directly.
+///
+/// Idempotent — safe to call on every show.
+#[cfg(target_os = "macos")]
+fn configure_as_popover(win: &tauri::WebviewWindow) {
+    use objc::{msg_send, sel, sel_impl, runtime::Object};
+    if let Ok(ptr) = win.ns_window() {
+        let ns = ptr as *mut Object;
+        unsafe {
+            // NSWindowCollectionBehavior:
+            //   canJoinAllSpaces (1<<0) | ignoresCycle (1<<6) | fullScreenAuxiliary (1<<8)
+            let behavior: u64 = (1 << 0) | (1 << 6) | (1 << 8);
+            let _: () = msg_send![ns, setCollectionBehavior: behavior];
+            // NSPopUpMenuWindowLevel = 101 — above fullscreen app windows.
+            let _: () = msg_send![ns, setLevel: 101i64];
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_as_popover(_win: &tauri::WebviewWindow) {}
+
 const TRAY_W: f64 = 380.0;
 const TRAY_H: f64 = 620.0;
 const FIRST_RUN_W: f64 = 560.0;
@@ -32,6 +58,7 @@ pub fn toggle_tray_window_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) -> R
         if win.is_visible().unwrap_or(false) {
             win.hide()?;
         } else {
+            configure_as_popover(&win);
             win.show()?;
             win.set_focus()?;
         }
@@ -57,6 +84,7 @@ pub fn toggle_tray_window_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) -> R
         builder = builder.transparent(true);
     }
     let win = builder.build()?;
+    configure_as_popover(&win);
     attach_tray_blur_handler(&win);
     let _ = win.set_focus();
     Ok(())
@@ -133,6 +161,7 @@ pub fn toggle_tray_window(app: &AppHandle) -> Result<()> {
         if win.is_visible().unwrap_or(false) {
             win.hide()?;
         } else {
+            configure_as_popover(&win);
             win.show()?;
             win.set_focus()?;
         }
@@ -165,6 +194,7 @@ pub fn toggle_tray_window(app: &AppHandle) -> Result<()> {
         builder = builder.transparent(true);
     }
     let win = builder.build()?;
+    configure_as_popover(&win);
     attach_tray_blur_handler(&win);
     let _ = win.set_focus();
     Ok(())
